@@ -1,0 +1,60 @@
+---
+title: Diagrama de Secuencia - Restricción de Acceso por Suscripción Cancelada
+---
+sequenceDiagram
+    autonumber
+    actor Alumno as 👤 Alumno
+    participant BFF as 🖥️ BFF Web
+    participant API as ⚙️ API pública (1 JAR)
+    participant App as 🧩 api:app Orchestrator
+    participant Virtual as 📚 Módulo Virtual
+    participant Billing as 💳 Módulo Billing
+    participant MySQL as 🗄️ MySQL 8 (schema lógico Virtual)
+
+    Alumno->>BFF: GET /courses/{hashId} (Ver página principal del curso)
+    BFF->>BFF: Obtener JWT token de la sesión del alumno
+    
+    BFF->>API: GET /api/v1/virtual/courses/{hashId}
+    Note over BFF, API: Cabecera Authorization: Bearer {token}
+    API->>App: Consultar curso y nivel de acceso
+    
+    Virtual->>Virtual: Decodificar JWT y obtener userId
+    
+    App->>Billing: Consultar suscripción mediante contrato neutral de shared
+    Note over App, Billing: Comprobar estado de suscripción para el curso
+    Billing-->>App: {status: "CANCELLED", active: false, expiresAt: "2026-05-01T00:00:00Z"}
+    App->>Virtual: Consultar curso con AccessContext neutral
+
+    Virtual->>MySQL: Consultar estructura del curso (módulos y lecciones)
+    MySQL-->>Virtual: Lista de módulos (algunos con preview_only = true, otros premium)
+
+    rect rgb(245, 245, 245)
+        Note over Virtual: Lógica de Filtrado de Contenido
+        loop Para cada Módulo
+            alt es módulo gratuito / preview_only
+                Virtual->>Virtual: Set locked = false
+            else requiere suscripción de pago
+                Virtual->>Virtual: Set locked = true
+            end
+        end
+    end
+
+    Virtual-->>App: Resultado del curso y nivel de acceso
+    App-->>API: Resultado orquestado
+    API-->>BFF: Retorna JSON del curso {id, title, accessLevel: PREVIEW_ONLY, modules: [{id:1, title:"Intro", locked:false}, {id:2, title:"Clase Avanzada", locked:true}]}
+    
+    rect rgb(240, 248, 255)
+        Note over BFF: Motor Thymeleaf (Renderizado de UI)
+        BFF->>BFF: Inyectar alerta: "Solo podrás acceder al contenido de muestra gratis..."
+        BFF->>BFF: Inyectar botón de redirección a /plans
+        loop Iteración de Módulos en course.html
+            alt module.locked == true
+                BFF->>BFF: Renderizar icono de candado 🔒 al lado del título
+                BFF->>BFF: Deshabilitar hipervínculo de navegación a las lecciones
+            else module.locked == false
+                BFF->>BFF: Renderizar módulo activo y accesible de forma normal
+            end
+        end
+    end
+
+    BFF-->>Alumno: Retorna HTML renderizado con las restricciones visuales ✓

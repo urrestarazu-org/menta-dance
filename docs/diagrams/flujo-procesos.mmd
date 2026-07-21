@@ -1,0 +1,96 @@
+---
+title: Diagramas de Flujo y Procesos de Negocio Críticos
+---
+flowchart TD
+    %% PROCESO 1: Registro y Activación de Cuenta
+    subgraph P1 ["🔐 Proceso: Registro y Activación de Cuenta (Seguridad)"]
+        direction TB
+        start1([Usuario solicita Registro]) --> reg_input[Ingresar Datos y Email]
+        reg_input --> reg_db[Crear User en DB<br/>• Estado: PENDIENTE<br/>• Código de Activación UUID<br/>• Expiración: 48 hs<br/>• failedActivationAttempts = 0]
+        reg_db --> reg_mail[Enviar Email con Código]
+        
+        reg_mail --> act_input[Usuario ingresa Código de Activación]
+        act_input --> act_check_exp{"¿Código Expirado?<br/><i>(receivedAt > 48h)</i>"}
+        
+        act_check_exp -- Sí --> act_expired[Error: Código Expirado<br/>Ofrecer botón 'Reenviar Código']
+        act_expired --> act_resend[Usuario solicita Reenvío]
+        act_resend --> reg_db
+        
+        act_check_exp -- No --> act_check_val{¿Código Válido?}
+        
+        act_check_val -- No (Inválido) --> act_fail_inc[Incrementar failedActivationAttempts]
+        act_fail_inc --> act_limit{"¿Intentos Fallidos >= 5?"}
+        
+        act_limit -- Sí --> act_block[Bloquear Cuenta<br/>• Estado: BLOQUEADO o INACTIVO<br/>• Notificar por Email<br/>• Requiere Soporte Admin]
+        act_limit -- No --> act_retry[Error: Código Inválido<br/>Permitir reintento]
+        act_retry --> act_input
+        
+        act_check_val -- Sí (Válido) --> act_success[Activar Cuenta<br/>• Estado: ACTIVO<br/>• Reset failedActivationAttempts = 0<br/>• Limpiar código de activación]
+        act_success --> end1([Cuenta Activada - Permite Login])
+    end
+
+    %% PROCESO 3: Pago presencial y asignación automática
+    subgraph P3 ["💃 Proceso: Pago de Clase Presencial"]
+        direction TB
+        start3([Alumno elige curso y modalidad]) --> app_quote[api:app inicia la cotización]
+        app_quote --> sessions[Physical devuelve sesiones programadas y capacidad]
+        sessions --> has_sessions{¿El período contiene sesiones y hay cupo para todas?}
+        has_sessions -- No --> reject_quote[Rechazar cotización o pago]
+        has_sessions -- Sí --> quote[Billing calcula y guarda snapshot<br/>mensualidad, cantidad, efectivo, recargo y total]
+        quote --> async{¿Pago asíncrono?}
+        async -- Sí --> hold[api:app solicita a Physical un hold técnico breve]
+        async -- No --> payment[Billing inicia Payment PENDING]
+        hold --> payment
+        payment --> approved{¿Movimiento externo confirmado?}
+        approved -- No --> release[Physical libera o deja expirar el hold]
+        approved -- Sí --> assign[api:app solicita asignación idempotente<br/>y conversión del hold]
+        assign --> capacity_ok{¿Se asignó todo el snapshot?}
+        capacity_ok -- Sí --> complete[Billing marca Payment COMPLETED<br/>y Purchase CAPACITY_ASSIGNED]
+        capacity_ok -- No --> manual[Payment REQUIRES_MANUAL_REVIEW<br/>Purchase EXCEPTION; sin reembolso automático]
+        complete --> end3([Cupo garantizado en sesiones del snapshot])
+        manual --> end3manual([Excepción para resolución manual])
+        release --> end3fail([Sin asignación de cupo])
+    end
+
+    %% PROCESO 2: Control de Acceso a Lecciones
+    subgraph P2 ["📚 Proceso: Control de Acceso a Lección (Negocio)"]
+        direction TB
+        start2([Alumno solicita acceso a Lección]) --> check_plans{¿El Curso tiene<br/>Planes Activos asociados?}
+        
+        check_plans -- No (Curso Abierto) --> grant_free[Acceso Abierto<br/>• AccessLevel: FULL_ACCESS<br/>• Permite ver video completo]
+        
+        check_plans -- Sí (Curso de Pago) --> check_preview{¿Es Lección de Prueba?<br/>• Es la primera lección<br/>• O Módulo es Free Preview}
+        
+        check_preview -- Sí --> grant_preview[Acceso de Prueba<br/>• AccessLevel: PREVIEW_ONLY<br/>• Permite ver video de preview]
+        
+        check_preview -- No (Contenido Protegido) --> check_sub{"¿Tiene Suscripción Activa<br/>para algún Plan del Curso?<br/><i>(Subscription.status == ACTIVE)</i>"}
+        
+        check_sub -- Sí --> grant_paid[Acceso Total Pago<br/>• AccessLevel: FULL_ACCESS<br/>• Permite ver video completo y marcar completado]
+        
+        check_sub -- No (Inactiva / Vencida) --> deny_access[Acceso Denegado<br/>• AccessLevel: NO_ACCESS<br/>• Ocultar video completo<br/>• Mostrar botones de Compra / Planes]
+        
+        grant_free --> end2([Conceder Acceso])
+        grant_preview --> end2
+        grant_paid --> end2
+        deny_access --> end2_deny([Redirigir a Catálogo de Planes])
+    end
+
+    %% Estilos de los Rombos de Decisión
+    style act_check_exp fill:#f9ebae,stroke:#e67e22,stroke-width:2px
+    style act_check_val fill:#f9ebae,stroke:#e67e22,stroke-width:2px
+    style act_limit fill:#f9ebae,stroke:#e67e22,stroke-width:2px
+    style check_plans fill:#f9ebae,stroke:#e67e22,stroke-width:2px
+    style check_preview fill:#f9ebae,stroke:#e67e22,stroke-width:2px
+    style check_sub fill:#f9ebae,stroke:#e67e22,stroke-width:2px
+    style has_sessions fill:#f9ebae,stroke:#e67e22,stroke-width:2px
+    style async fill:#f9ebae,stroke:#e67e22,stroke-width:2px
+    style approved fill:#f9ebae,stroke:#e67e22,stroke-width:2px
+    style capacity_ok fill:#f9ebae,stroke:#e67e22,stroke-width:2px
+
+    %% Estilos de Éxito / Bloqueo
+    style act_success fill:#d4edda,stroke:#28a745,stroke-width:2px
+    style act_block fill:#f8d7da,stroke:#dc3545,stroke-width:2px
+    style grant_free fill:#d4edda,stroke:#28a745,stroke-width:2px
+    style grant_preview fill:#e8f4fd,stroke:#2196f3,stroke-width:2px
+    style grant_paid fill:#d4edda,stroke:#28a745,stroke-width:2px
+    style deny_access fill:#f8d7da,stroke:#dc3545,stroke-width:2px

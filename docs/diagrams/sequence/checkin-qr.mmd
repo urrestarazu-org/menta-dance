@@ -1,0 +1,68 @@
+---
+title: Diagrama de Secuencia - Check-in Automático mediante Lector QR (IoT)
+---
+sequenceDiagram
+    autonumber
+    actor Alumno as 📱 Alumno (App)
+    participant QR as 📟 Lector QR (Puerta)
+    participant API as ⚙️ API pública (1 JAR)
+    participant Physical as 🏢 Módulo Physical
+    participant Redis as ⚡ Redis Cache
+    participant MySQL as 🗄️ MySQL 8 (schema lógico Physical)
+    participant FCM as 🔔 Firebase FCM
+
+    Note over Alumno, Physical: Paso 1: Generación del Código QR en la App del Alumno
+    Alumno->>API: GET /api/v1/physical/sessions/{sessionId}/check-in-qr
+    API->>Physical: Invocar caso de uso mediante puerto Java
+    Physical->>Physical: Generar JWT firmado {jti, userId, sessionId, iat, exp}
+    Physical-->>API: QR temporal generado
+    API-->>Alumno: Retorna {qrCode: "eyJ...", expiresIn: 300} (Válido por 5 minutos)
+    Note over Alumno: La App renderiza el código QR en pantalla
+
+    Note over Alumno, QR: Paso 2: Escaneo en el Lector Físico
+    Alumno->>QR: Muestra el QR frente al escáner de la puerta
+    QR->>API: POST /api/v1/physical/sessions/{sessionId}/check-ins {qrCode: "eyJ...", deviceToken: "reader_sec_token"}
+    API->>Physical: Invocar caso de uso mediante puerto Java
+    
+    rect rgb(240, 248, 255)
+        Note over Physical: Todas las validaciones ocurren antes del lock
+        Physical->>Physical: Autenticar deviceToken y verificar firma JWT
+        Physical->>Physical: Validar expiración, ventana y claims userId/sessionId
+        Physical->>MySQL: Consultar CapacityAssignment y ClassSession habilitada
+        MySQL-->>Physical: Asignación y sesión válidas
+        Physical->>MySQL: Buscar attendance por qrJti
+        MySQL-->>Physical: Existente o ausente
+    end
+
+    alt Attendance ya existe para el mismo qrJti
+        Physical-->>API: Resultado idempotente existente
+        API-->>QR: 200 OK {status: "access_granted"}
+    else Primer intento
+        Physical->>Redis: SET checkin:{qrJti}:{userId}:{sessionId} {lockNonce} NX EX 300
+        alt Lock adquirido
+            Redis-->>Physical: OK
+            Physical->>MySQL: INSERT attendance {assignmentId, userId, sessionId, qrJti, status: PRESENT}
+            alt Transacción confirmada
+                MySQL-->>Physical: Attendance creada
+                Physical-->>API: Check-in autorizado
+                API-->>QR: 201 Created {status: "access_granted", studentName: "Juan Pérez", class: "Salsa"}
+                Physical->>FCM: Enviar confirmación (asíncrono)
+                FCM-->>Alumno: Notificación push ✓
+            else INSERT o transacción falla
+                MySQL-->>Physical: Error / rollback
+                Physical->>Redis: Compare-and-delete solo si value == lockNonce
+                Redis-->>Physical: Lock propio eliminado o ya expirado
+                Physical-->>API: Error reintentable
+            end
+        else Lock concurrente
+            Redis-->>Physical: No adquirido
+            Physical->>MySQL: Reconsultar attendance por qrJti
+            alt Attendance ya fue confirmada
+                Physical-->>API: Resultado idempotente existente
+                API-->>QR: 200 OK {status: "access_granted"}
+            else Sigue en proceso
+                Physical-->>API: QR_ALREADY_USED
+                API-->>QR: 409 Conflict
+            end
+        end
+    end

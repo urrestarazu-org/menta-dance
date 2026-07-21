@@ -1,0 +1,87 @@
+---
+title: Diagrama de Contenedores y Componentes - Monolito Modular
+---
+flowchart TB
+    subgraph Clientes["Clientes"]
+        browser["Navegador - Alumnos"]
+        admin["Navegador - Panel de administración"]
+        android["App Android\nClean + MVVM"]
+        qr["Lector QR"]
+    end
+
+    edge["Reverse proxy / TLS"]
+    bff["BFF Web - 1 JAR\nSpring Boot + Thymeleaf\n:8080"]
+
+    subgraph api["API - 1 JAR Spring Boot :8081"]
+        app[":api:app\nComposition root + orquestación cross-module"]
+        http["Adaptadores de entrada HTTP"]
+
+        subgraph auth[":api:auth"]
+            auth_core["Domain + Application"]
+            auth_infra["Persistencia / JWT / Email"]
+        end
+        subgraph virtual[":api:virtual"]
+            virtual_core["Domain + Application"]
+            virtual_infra["Persistencia / Video"]
+        end
+        subgraph physical[":api:physical"]
+            physical_core["Domain + Application"]
+            physical_infra["Persistencia / Calendar / FCM"]
+        end
+        subgraph billing[":api:billing - owner financiero"]
+            billing_core["Planes, precios, cotizaciones,\ncompras y pagos"]
+            billing_infra["Persistencia / Mercado Pago / archivos"]
+        end
+        shared[":api:shared\nContratos neutrales de colaboración"]
+
+        app -. "ensambla" .-> http
+        app -. "ensambla" .-> auth_core
+        app -. "ensambla" .-> virtual_core
+        app -. "ensambla" .-> physical_core
+        app -. "ensambla" .-> billing_core
+        http --> auth_core
+        http --> virtual_core
+        http --> physical_core
+        http --> billing_core
+        auth_infra --> auth_core
+        virtual_infra --> virtual_core
+        physical_infra --> physical_core
+        billing_infra --> billing_core
+        auth_core --> shared
+        virtual_core --> shared
+        physical_core --> shared
+        billing_core --> shared
+        app -. "orquesta contratos shared" .-> billing_core
+        app -. "orquesta contratos shared" .-> physical_core
+        app -. "orquesta contratos shared" .-> auth_core
+    end
+
+    mysql[("MySQL 8\nSchemas lógicos por módulo")]
+    redis[("Redis\nCache y sesiones si aplica")]
+    mp["Mercado Pago"]
+    bunny["Bunny.net"]
+    calendar["Google Calendar"]
+    fcm["Firebase FCM"]
+    smtp["SMTP"]
+
+    browser -->|HTTPS| edge
+    admin -->|HTTPS| edge
+    edge -->|Web| bff
+    bff -->|HTTP REST| http
+    android -->|HTTPS REST| edge
+    qr -->|HTTPS REST| edge
+    edge -->|/api/*| http
+
+    auth_infra -->|schema Auth| mysql
+    virtual_infra -->|schema Virtual| mysql
+    physical_infra -->|schema Physical| mysql
+    billing_infra -->|schema Billing| mysql
+    auth_infra -->|cache si aplica| redis
+    bff -->|sesión si aplica| redis
+
+    auth_infra --> smtp
+    virtual_infra --> bunny
+    physical_infra --> calendar
+    physical_infra --> fcm
+    billing_infra --> mp
+    billing_infra --> smtp
