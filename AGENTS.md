@@ -34,3 +34,38 @@
 - Branching follows Git Flow: `feature/*` → `develop`; releases originate from `release/*`, merged into `master` then back to `develop`; hotfixes start from `master`.
 - Use Conventional Commits for both commit messages and PR titles. Releases are tagged `vMAJOR.MINOR.PATCH` and publish JAR + GHCR images using immutable digests.
 - PRs merge via squash once CI is green; never add AI attributions in commit trailers. Deployment workflows must pin every GitHub Action to a full SHA (no `latest`).
+
+# Model selection guidelines
+
+Before starting a task, suggest the appropriate model based on complexity:
+
+## Anthropic Claude Models
+
+| Model | Best For | Avoid For |
+|-------|----------|-----------|
+| **Fable 5** | Research, multi-day tasks, most capable reasoning | Quick edits, cost-sensitive tasks |
+| **Opus 4.8** | Complex projects, agentic workflows, programming | Simple Q&A, documentation |
+| **Sonnet 5** | Daily tasks, writing, balanced cost/performance | Deep architectural analysis |
+| **Haiku 4.5** | Fast responses, high volume, low cost | Complex reasoning, multi-file refactors |
+
+### Task-to-Model Mapping
+
+| Task Type | Recommended Model |
+|-----------|-------------------|
+| Scaffold new module | Opus 4.8 |
+| Multi-file refactoring | Opus 4.8 / Fable 5 |
+| Architecture design | Fable 5 |
+| Single-file edit | Sonnet 5 / Haiku 4.5 |
+| Documentation updates | Sonnet 5 |
+| Quick status checks | Haiku 4.5 |
+| Code review | Opus 4.8 |
+| Debug complex issue | Opus 4.8 / Fable 5 |
+| Research / investigation | Fable 5 |
+
+## Google Gemini Models
+
+| Model | Best For |
+|-------|----------|
+| **Gemini Flash** | Simple edits, single-file updates, quick checks |
+| **Gemini Pro** | Architectural design, multi-module refactoring, deep analysis |
+

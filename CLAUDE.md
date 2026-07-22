@@ -113,3 +113,22 @@ public class SubscriptionUseCase {
 - `feature/{description}`
 - `bugfix/{description}`
 - `hotfix/{description}`
+
+## Model Selection
+
+Before starting a task, consider the appropriate model:
+
+| Model | Best For | Cost |
+|-------|----------|------|
+| **Fable 5** | Research, multi-day tasks, most capable | $$$ |
+| **Opus 4.8** | Complex projects, agents, programming | $$ |
+| **Sonnet 5** | Daily tasks, writing, balanced | $ |
+| **Haiku 4.5** | Fast responses, high volume | ¢ |
+
+### Quick Reference
+
+- **Scaffold/refactor multi-file** → Opus 4.8
+- **Architecture design** → Fable 5
+- **Single-file edit** → Sonnet 5
+- **Documentation** → Sonnet 5
+- **Quick check** → Haiku 4.5
