@@ -54,17 +54,17 @@ flowchart TB
 flowchart LR
     subgraph allowed["✓ Permitido"]
         direction TB
-        A1[Módulo] --> A2[Shared]
-        A3[api:app] --> A4[Cualquier módulo]
-        A5[infrastructure] --> A6[application]
-        A7[application] --> A8[domain]
+        A1["Módulo"] --> A2["Shared"]
+        A3["api:app"] --> A4["Cualquier módulo"]
+        A5["infrastructure"] --> A6["application"]
+        A7["application"] --> A8["domain"]
     end
 
     subgraph forbidden["✗ Prohibido"]
         direction TB
-        B1[Módulo A] -.x.-> B2[Módulo B]
-        B3[domain] -.x.-> B4[infrastructure]
-        B5[Módulo] -.x.-> B6[api:app]
+        B1["Módulo A"] -.->|X| B2["Módulo B"]
+        B3["domain"] -.->|X| B4["infrastructure"]
+        B5["Módulo"] -.->|X| B6["api:app"]
     end
 
     style allowed fill:#c8e6c9
@@ -212,9 +212,9 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    I[infrastructure] --> A[application] --> D[domain]
+    I["infrastructure"] --> A["application"] --> D["domain"]
 
-    I -.x.-> D
+    I -.->|X| D
 
     style D fill:#c8e6c9
     style A fill:#fff3e0
