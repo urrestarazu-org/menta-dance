@@ -1,127 +1,84 @@
-# Historias de Usuario - Detalle
+# Backlog de Historias de Usuario
 
-[← Volver al índice principal](../README.md)
+Las historias se implementarán después del scaffold de Fase 0. Ante conflicto,
+prevalecen los contratos de API, ADRs y documentos de dominio vigentes.
 
----
+## Reglas transversales
 
-Este directorio contiene historias detalladas por módulo del monolito. Para pagos
-presenciales, la autoridad funcional es
-[Pagos de Clases Presenciales](../28-PHYSICAL-CLASS-PAYMENTS.md).
+- Errores HTTP: `application/problem+json` (RFC 9457).
+- Roles: ALUMNO, PROFESOR, RECEPCIONISTA, ADMIN; QR reader = dispositivo técnico.
+- Web no expone tokens; Android usa refresh en Keystore y `X-Refresh-Token`.
+- No hay reservas manuales de clases: pago confirmado asigna cupo.
+- Un timeout de pago se concilia; no se reintenta crear el pago.
+- Progreso de curso se deriva de la finalización explícita de lecciones.
+- El catálogo de consulta es único (`/api/v1/catalog/courses`), pero compras y
+  cotizaciones permanecen separadas por modalidad.
 
-Las historias de Billing y Physical están alineadas con esa autoridad. Las de
-Auth y Virtual continúan pendientes de revisión funcional.
+Las prioridades reflejan el campo MoSCoW de cada historia cuando está declarado;
+para las historias concisas que no lo serializan, se derivan de sus criterios de
+aceptación: los flujos necesarios para operar el producto son `Must Have` y los
+complementarios son `Should Have`.
+
+## Índice de Historias
+
+### Auth (7 historias)
+
+| ID | Título | Módulo | Prioridad |
+|---|---|---|---|
+| [US-AUTH-001](US-AUTH-001.md) | Registro de usuario | Auth | Must Have |
+| [US-AUTH-002](US-AUTH-002.md) | Inicio de sesión | Auth | Must Have |
+| [US-AUTH-003](US-AUTH-003.md) | Activación de cuenta | Auth | Must Have |
+| [US-AUTH-004](US-AUTH-004.md) | Renovación de sesión | Auth | Should Have |
+| [US-AUTH-005](US-AUTH-005.md) | Solicitud de recuperación de contraseña | Auth | Must Have |
+| [US-AUTH-006](US-AUTH-006.md) | Reset de contraseña | Auth | Must Have |
+| [US-AUTH-007](US-AUTH-007.md) | Logout y revocación | Auth | Must Have |
+
+### Billing (9 historias)
+
+| ID | Título | Módulo | Prioridad |
+|---|---|---|---|
+| [US-BILLING-001](US-BILLING-001.md) | Ver planes disponibles | Billing | Must Have |
+| [US-BILLING-002](US-BILLING-002.md) | Confirmación de pago por webhook | Billing | Must Have |
+| [US-BILLING-003](US-BILLING-003.md) | Suscripción con transferencia bancaria | Billing | Should Have |
+| [US-BILLING-004](US-BILLING-004.md) | Consulta de estado de suscripción | Billing | Must Have |
+| [US-BILLING-005](US-BILLING-005.md) | Verificación de pagos manuales (Admin) | Billing | Must Have |
+| [US-BILLING-006](US-BILLING-006.md) | Cotización de curso presencial | Billing | Must Have |
+| [US-BILLING-007](US-BILLING-007.md) | Compra presencial y pago individual | Billing, Physical y api:app | Must Have |
+| [US-BILLING-008](US-BILLING-008.md) | Transferencia presencial y excepción de capacidad | Billing, Physical y api:app | Should Have |
+| [US-BILLING-009](US-BILLING-009.md) | Administración y auditoría de pricing presencial | Billing | Must Have |
+
+### Virtual (8 historias)
+
+| ID | Título | Módulo | Prioridad |
+|---|---|---|---|
+| [US-VIRTUAL-001](US-VIRTUAL-001.md) | Ver catálogo de cursos | Virtual | Must Have |
+| [US-VIRTUAL-002](US-VIRTUAL-002.md) | Ver detalle de curso | Virtual | Must Have |
+| [US-VIRTUAL-003](US-VIRTUAL-003.md) | Ver lección gratuita | Virtual | Must Have |
+| [US-VIRTUAL-004](US-VIRTUAL-004.md) | Reproducir video con suscripción | Virtual | Must Have |
+| [US-VIRTUAL-005](US-VIRTUAL-005.md) | Guardar y completar progreso de lección | Virtual | Should Have |
+| [US-VIRTUAL-006](US-VIRTUAL-006.md) | Gestión de cursos virtuales | Virtual | Must Have |
+| [US-VIRTUAL-007](US-VIRTUAL-007.md) | Acceso de suscripción al contenido virtual | Virtual | Must Have |
+| [US-VIRTUAL-008](US-VIRTUAL-008.md) | Continuar curso | Virtual | Should Have |
+
+### Physical (8 historias)
+
+| ID | Título | Módulo | Prioridad |
+|---|---|---|---|
+| [US-PHYSICAL-001](US-PHYSICAL-001.md) | Check-in con código QR | Physical | Must Have |
+| [US-PHYSICAL-002](US-PHYSICAL-002.md) | Ver historial de asistencia | Physical | Should Have |
+| [US-PHYSICAL-003](US-PHYSICAL-003.md) | Ver clases y sesiones disponibles | Physical | Must Have |
+| [US-PHYSICAL-004](US-PHYSICAL-004.md) | Compra y asignación automática de cupo | Billing y Physical | Must Have |
+| [US-PHYSICAL-005](US-PHYSICAL-005.md) | Gestión de cursos presenciales | Physical | Must Have |
+| [US-PHYSICAL-006](US-PHYSICAL-006.md) | Gestión de sesiones de clase | Physical | Must Have |
+| [US-PHYSICAL-007](US-PHYSICAL-007.md) | Gestión de dispositivos QR | Physical | Must Have |
+| [US-PHYSICAL-008](US-PHYSICAL-008.md) | Check-in manual por recepcionista | Physical | Must Have |
 
 ## Resumen
 
-| API | Historias | Escenarios | Prioridad |
-|-----|-----------|------------|-----------|
-| Auth API | 7 | 36 | Must Have |
-| Billing | 9 | Ver cada historia | Must/Should Have |
-| Virtual API | 8 | 42 | Must/Should Have |
-| Physical | 4 | Ver cada historia | Must/Should Have |
-| **Total** | **28** | **Ver cada historia** | - |
-
----
-
-## Auth API (EP-01: Autenticación)
-
-| ID | Historia | Escenarios | Prioridad |
-|----|----------|------------|-----------|
-| [US-AUTH-001](./US-AUTH-001.md) | Registro de usuario | 4 | Must Have |
-| [US-AUTH-002](./US-AUTH-002.md) | Inicio de sesión | 7 | Must Have |
-| [US-AUTH-003](./US-AUTH-003.md) | Activación de cuenta | 5 | Must Have |
-| [US-AUTH-004](./US-AUTH-004.md) | Refresh Token | 5 | Must Have |
-| [US-AUTH-005](./US-AUTH-005.md) | Solicitud de recuperación de contraseña | 5 | Must Have |
-| [US-AUTH-006](./US-AUTH-006.md) | Reset de contraseña | 6 | Must Have |
-| [US-AUTH-007](./US-AUTH-007.md) | Logout y revocación de tokens | 4 | Should Have |
-
----
-
-## Billing API (EP-03: Suscripciones)
-
-| ID | Historia | Escenarios | Prioridad |
-|----|----------|------------|-----------|
-| [US-BILLING-001](./US-BILLING-001.md) | Ver planes disponibles | 5 | Must Have |
-| [US-BILLING-002](./US-BILLING-002.md) | Suscripción con Mercado Pago | 6 | Must Have |
-| [US-BILLING-003](./US-BILLING-003.md) | Suscripción con transferencia bancaria | 6 | Should Have |
-| [US-BILLING-004](./US-BILLING-004.md) | Consulta de estado de suscripción | 6 | Must Have |
-| [US-BILLING-005](./US-BILLING-005.md) | Verificación de pagos manuales | 6 | Must Have |
-| [US-BILLING-006](./US-BILLING-006.md) | Cotización de curso presencial | — | Must Have |
-| [US-BILLING-007](./US-BILLING-007.md) | Compra presencial y pago individual | — | Must Have |
-| [US-BILLING-008](./US-BILLING-008.md) | Transferencia presencial y excepción | — | Should Have |
-| [US-BILLING-009](./US-BILLING-009.md) | Administración y auditoría de pricing | — | Must Have |
-
----
-
-## Virtual API (EP-02: Catálogo Virtual)
-
-| ID | Historia | Escenarios | Prioridad |
-|----|----------|------------|-----------|
-| [US-VIRTUAL-001](./US-VIRTUAL-001.md) | Ver catálogo de cursos | 5 | Must Have |
-| [US-VIRTUAL-002](./US-VIRTUAL-002.md) | Ver detalle de curso | 5 | Must Have |
-| [US-VIRTUAL-003](./US-VIRTUAL-003.md) | Ver lección gratuita | 5 | Must Have |
-| [US-VIRTUAL-004](./US-VIRTUAL-004.md) | Reproducir video con suscripción | 6 | Must Have |
-| [US-VIRTUAL-005](./US-VIRTUAL-005.md) | Guardar progreso de lección | 6 | Should Have |
-| [US-VIRTUAL-006](./US-VIRTUAL-006.md) | Gestión de cursos (Admin) | 7 | Must Have |
-| [US-VIRTUAL-007](./US-VIRTUAL-007.md) | Vista de curso con suscripción cancelada | 4 | Must Have |
-| [US-VIRTUAL-008](./US-VIRTUAL-008.md) | Continuar última lección desde el Dashboard | 3 | Should Have |
-
----
-
-## Physical API (EP-04: Academia Física)
-
-| ID | Historia | Escenarios | Prioridad |
-|----|----------|------------|-----------|
-| [US-PHYSICAL-001](./US-PHYSICAL-001.md) | Check-in con código QR | — | Must Have |
-| [US-PHYSICAL-002](./US-PHYSICAL-002.md) | Ver historial de asistencia | — | Should Have |
-| [US-PHYSICAL-003](./US-PHYSICAL-003.md) | Ver clases y sesiones disponibles | — | Must Have |
-| [US-PHYSICAL-004](./US-PHYSICAL-004.md) | Compra y asignación automática de cupo | — | Must Have |
-
----
-
-## Estructura de cada Historia
-
-Cada historia de usuario sigue el formato estándar:
-
-1. **Encabezado**: ID, título, módulo, prioridad, estado, épica
-2. **Historia de Usuario**: Formato "Como... Quiero... Para..."
-3. **Criterios de Aceptación (BDD)**: Escenarios Given-When-Then
-4. **Requisitos No Funcionales**: Seguridad, rendimiento, rate limiting
-5. **Notas Técnicas**: Endpoints, request/response, tablas de BD
-6. **Definition of Done**: Checklist de finalización
-
----
-
-## Priorización MoSCoW
-
-### Must Have (MVP)
-
-- Todas las historias de Auth API (autenticación es core)
-- US-BILLING-001, US-BILLING-002, US-BILLING-004, US-BILLING-005
-- US-BILLING-006, US-BILLING-007, US-BILLING-009
-- US-VIRTUAL-001 a US-VIRTUAL-004, US-VIRTUAL-006
-- US-PHYSICAL-001, US-PHYSICAL-003, US-PHYSICAL-004
-
-### Should Have
-
-- US-AUTH-007 (Logout)
-- US-BILLING-003 (Transferencia bancaria)
-- US-BILLING-008 (Transferencia presencial y excepción)
-- US-VIRTUAL-005 (Progreso)
-- US-PHYSICAL-002 (Historial asistencia)
-
-### Could Have
-
-- Notificaciones push
-- Certificados de finalización
-- Gamification (badges, rankings)
-
-### Won't Have (MVP)
-
-- App iOS
-- Multi-idioma
-- Chat en vivo
-
----
-
-*Última actualización: Julio 2026*
+| Módulo | Total | Must Have | Should Have |
+|---|---:|---:|---:|
+| Auth | 7 | 6 | 1 |
+| Billing | 9 | 7 | 2 |
+| Virtual | 8 | 6 | 2 |
+| Physical | 8 | 7 | 1 |
+| **Total** | **32** | **26** | **6** |

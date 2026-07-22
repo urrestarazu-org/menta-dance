@@ -23,10 +23,14 @@
 
 * **Dado que (Given):** Un usuario recibió un email con el link de reset de contraseña.
 * **Cuando (When):** Accede al enlace y envía `POST /api/v1/auth/reset-password` con el token y la nueva contraseña.
-* **Entonces (Then):** El sistema debe validar que el token existe y no está expirado.
+* **Entonces (Then):** El sistema debe hashear el token recibido y validar que su
+  hash existe, no está expirado ni fue usado.
 * **Y (And):** Debe actualizar la contraseña del usuario (cifrada con BCrypt).
 * **Y (And):** Debe marcar el token como usado (`used_at = NOW()`).
-* **Y (And):** Debe invalidar TODOS los refresh tokens del usuario (cerrar otras sesiones).
+* **Y (And):** Debe invalidar TODOS los refresh tokens e incrementar
+  `auth_users.token_version` para cerrar también los access tokens anteriores,
+  primero en MySQL. Si Redis no refleja la revocación, `AUTH_DEGRADED` bloquea
+  tráfico autenticado hasta la recuperación durable.
 * **Y (And):** Debe reiniciar `failedLoginAttempts` a 0 y desbloquear la cuenta si estaba bloqueada por intentos.
 * **Y (And):** Debe devolver un código HTTP `200 OK` con mensaje de éxito.
 
@@ -73,7 +77,8 @@
 * **Seguridad / Autorización:**
   * Endpoint público (el token actúa como autorización temporal).
   * La nueva contraseña debe cumplir requisitos: mínimo 8 caracteres, 1 mayúscula, 1 número.
-  * Al cambiar contraseña, invalidar todas las sesiones activas (refresh tokens).
+  * Al cambiar contraseña, invalidar todas las sesiones activas (refresh tokens)
+    e incrementar `token_version` mediante revocación MySQL-first y reflexión Redis.
   * El token es de un solo uso.
 * **Rendimiento / Rate Limiting:**
   * Máximo 5 intentos de reset por token (para permitir errores de validación).
@@ -105,17 +110,18 @@
   ```
 
 * **Tablas de BD (Schemas):**
-  * `menta_auth.password_reset_tokens` - Validar y marcar token como usado
-  * `menta_auth.users` - Actualizar `password_hash`
-  * `menta_auth.refresh_tokens` - Eliminar todos los tokens del usuario
+  * `auth_password_reset_tokens` - Validar hash y marcar token como usado
+  * `auth_users` - Actualizar `password_hash`
+  * `auth_refresh_tokens` - Eliminar todos los tokens del usuario
 * **Flujo de Seguridad:**
-  1. Validar token existe y no expirado
+  1. Hashear token y validar hash existente/no expirado
   2. Validar token no usado
   3. Validar nueva contraseña cumple requisitos
   4. Validar nueva contraseña != contraseña actual
   5. Actualizar contraseña
   6. Marcar token como usado
-  7. Invalidar refresh tokens
+  7. Invalidar refresh tokens e incrementar `token_version` en MySQL; reflejarlo
+     en Redis o activar `AUTH_DEGRADED` hasta recuperación
   8. Log del evento
 
 ---

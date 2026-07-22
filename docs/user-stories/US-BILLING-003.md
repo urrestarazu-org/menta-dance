@@ -24,7 +24,7 @@
 * **Dado que (Given):** Un usuario autenticado seleccionó un plan.
 * **Cuando (When):** Envía `POST /api/v1/billing/subscriptions` con `paymentMethod: BANK_TRANSFER`.
 * **Entonces (Then):** El sistema debe crear una suscripción en estado `PENDING`.
-* **Y (And):** Debe crear un pago en estado `PENDING_VERIFICATION`.
+* **Y (And):** Debe crear un pago `PENDING/AWAITING_MANUAL_VERIFICATION`.
 * **Y (And):** Debe devolver los datos bancarios para realizar la transferencia.
 * **Y (And):** Debe devolver un código HTTP `201 Created`.
 
@@ -61,7 +61,7 @@
 
 **Escenario 6: Pago expirado por timeout**
 
-* **Dado que (Given):** Un pago está en `PENDING_VERIFICATION` sin comprobante.
+* **Dado que (Given):** Un pago está en `PENDING/AWAITING_MANUAL_VERIFICATION` sin comprobante.
 * **Cuando (When):** Pasan más de 72 horas desde la creación.
 * **Entonces (Then):** El sistema debe marcar el pago como `EXPIRED`.
 * **Y (And):** Debe cancelar la suscripción pendiente asociada.
@@ -125,9 +125,9 @@
   * Content-Type: `multipart/form-data`
   * Field: `proof` (archivo de imagen)
 * **Tablas de BD (Schemas):**
-  * `menta_billing.subscriptions` - Suscripciones
-  * `menta_billing.payments` - Pagos con referencia a comprobante
-  * `menta_billing.payment_proofs` - Metadatos de comprobantes
+  * `billing_subscriptions` - Suscripciones
+  * `billing_payments` - Pagos con referencia a comprobante
+  * `billing_payment_proofs` - Metadatos de comprobantes
 * **Storage:**
   * Comprobantes en File System Local Seguro (Volumen Docker) para el MVP.
 

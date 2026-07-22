@@ -29,7 +29,7 @@ Describe los escenarios y flujos (tanto exitosos como de error) utilizando el fo
 **Escenario 2: [Ej. Flujo de error - Email duplicado]**
 
 * **Dado que (Given):** [ej. un usuario anónimo]
-* **Cuando (When):** [ej. intenta registrar un email que ya existe en la tabla `menta_auth.users`]
+* **Cuando (When):** [ej. intenta registrar un email que ya existe en la tabla `auth_users`]
 * **Entonces (Then):** [ej. el sistema rechaza la petición devolviendo un HTTP 409 Conflict con el mensaje "Email en uso"]
 
 *(Agrega tantos escenarios como sean necesarios para cubrir validaciones, casos límite y errores).*
@@ -47,7 +47,7 @@ Describe los escenarios y flujos (tanto exitosos como de error) utilizando el fo
 ## 4. Notas Técnicas (Arquitectura)
 
 * **Endpoints Involucrados:** [ej. `POST /api/v1/auth/register`]
-* **Tablas de BD (Schemas):** [ej. `menta_auth.users`, `menta_auth.roles`]
+* **Tablas de BD (Schemas):** [ej. `auth_users`, `auth_roles`]
 * **Integraciones:** [ej. Si requiere llamar de forma síncrona a otra API, o si usa un servicio externo como Mercado Pago].
 
 ---
@@ -60,5 +60,6 @@ Para considerar esta Historia de Usuario como terminada (lista para despliegue),
 * [ ] Se han escrito **Pruebas Unitarias** para la lógica de negocio (Mockeando BD).
 * [ ] Se han escrito **Pruebas de Integración** probando la ruta HTTP real.
 * [ ] El endpoint cumple con la guía de estilo REST y está en el contrato **OpenAPI/Swagger**.
+* [ ] El endpoint se probó manualmente con **Bruno** y el request queda en `bruno/`.
 * [ ] El código pasa la validación de Checkstyle y ArchUnit (Reglas de arquitectura).
 * [ ] No introduce nuevos "Issues" severos en SonarCloud.

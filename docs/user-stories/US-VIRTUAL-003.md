@@ -22,11 +22,18 @@
 **Escenario 1: Acceso a lección gratuita (visitante)**
 
 * **Dado que (Given):** Un visitante sin autenticación accede a una lección gratuita.
-* **Cuando (When):** Envía `GET /api/v1/virtual/lessons/{hashId}` donde `isFree = true`.
+* **Cuando (When):** Envía `GET /api/v1/virtual/lessons/{lessonId}` donde `isFree = true`.
 * **Entonces (Then):** El sistema debe devolver el detalle completo de la lección.
-* **Y (And):** Debe incluir URL del video de Bunny.net.
+* **Y (And):** No debe incluir una URL de video.
 * **Y (And):** Debe incluir descripción, duración, y materiales adicionales.
 * **Y (And):** Debe devolver un código HTTP `200 OK`.
+
+* **Y (And):** Al solicitar `GET /api/v1/virtual/lessons/{lessonId}/stream`,
+  debe devolver una URL firmada y temporal de Bunny.net.
+
+* **Y (And):** Cada material adicional debe referenciar
+  `GET /api/v1/virtual/materials/{materialId}`, que valida el acceso a la
+  lección y devuelve una URL de descarga firmada y temporal.
 
 **Escenario 2: Acceso a lección gratuita (usuario sin suscripción)**
 
@@ -53,8 +60,8 @@
 
 **Escenario 5: Lección no encontrada**
 
-* **Dado que (Given):** El usuario solicita una lección con hashId inválido.
-* **Cuando (When):** El hashId no existe o no es decodificable.
+* **Dado que (Given):** El usuario solicita una lección con lessonId inválido.
+* **Cuando (When):** El lessonId no existe.
 * **Entonces (Then):** El sistema debe devolver un código HTTP `404 Not Found`.
 * **Y (And):** El mensaje debe indicar "Lección no encontrada".
 
@@ -64,8 +71,8 @@
 
 * **Seguridad / Autorización:**
   * Lecciones gratuitas son públicas.
-  * URLs de video de Bunny.net deben ser signed/temporales.
-  * No cachear URLs de video en respuestas.
+  * Sólo `/stream` devuelve URLs de video de Bunny.net, siempre firmadas y temporales.
+  * No cachear URLs de video.
 * **Rendimiento / Rate Limiting:**
   * Máximo 30 requests por minuto por IP para video streams.
   * Respuesta de metadata debe ser < 150ms.
@@ -78,31 +85,30 @@
 ## 4. Notas Técnicas (Arquitectura)
 
 * **Endpoints Involucrados:**
-  * `GET /api/v1/virtual/lessons/{hashId}` - Detalle de lección
+  * `GET /api/v1/virtual/lessons/{lessonId}` - Detalle de lección
+  * `GET /api/v1/virtual/lessons/{lessonId}/stream` - URL firmada de streaming
+  * `GET /api/v1/virtual/materials/{materialId}` - URL firmada de descarga,
+    autorizada por el acceso a la lección asociada
 * **Response Body (lección gratuita - acceso permitido):**
 
   ```json
   {
     "lesson": {
-      "hashId": "les456",
+      "lessonId": "3da66c0c-7fbf-45f1-a830-b19f5bfd0001",
       "title": "Historia del Tango",
       "description": "En esta lección aprenderás sobre los orígenes...",
       "duration": "10:30",
       "isFree": true,
       "order": 1,
       "module": {
-        "hashId": "mod123",
+        "moduleId": "9c1c9477-249d-44d4-a4f1-cd9942c15001",
         "title": "Introducción al Tango"
       },
       "course": {
-        "hashId": "xvb5D1e0",
+        "courseId": "b6bb98d6-179e-49d0-9dda-6c03a16998f0",
         "title": "Tango Básico"
       },
-      "video": {
-        "url": "https://cdn.bunny.net/video/abc123?token=xyz&expires=1705312800",
-        "thumbnailUrl": "https://cdn.bunny.net/thumbs/abc123.jpg",
-        "quality": ["1080p", "720p", "480p"]
-      },
+      "thumbnailUrl": "https://cdn.bunny.net/thumbs/abc123.jpg",
       "materials": [
         {
           "name": "Guía de pasos básicos",
@@ -114,7 +120,7 @@
     "navigation": {
       "previousLesson": null,
       "nextLesson": {
-        "hashId": "les789",
+        "lessonId": "3da66c0c-7fbf-45f1-a830-b19f5bfd0002",
         "title": "Postura básica",
         "isFree": false
       }
@@ -131,7 +137,7 @@
   ```json
   {
     "lesson": {
-      "hashId": "les789",
+      "lessonId": "3da66c0c-7fbf-45f1-a830-b19f5bfd0002",
       "title": "Postura básica",
       "description": "Descripción breve...",
       "duration": "15:00",
@@ -148,9 +154,9 @@
   ```
 
 * **Tablas de BD (Schemas):**
-  * `menta_virtual.lessons` - Lecciones
-  * `menta_virtual.videos` - Referencias a Bunny.net
-  * `menta_virtual.lesson_materials` - Materiales descargables
+  * `virtual_lessons` - Lecciones
+  * `virtual_videos` - Referencias a Bunny.net
+  * `virtual_lesson_materials` - Materiales descargables
 * **Integraciones:**
   * Bunny.net CDN para streaming de video.
   * Generación de signed URLs.

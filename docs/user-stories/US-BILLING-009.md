@@ -18,7 +18,7 @@
 **Escenario 1: actualización válida**
 
 - **Dado** un profesor responsable del curso con una configuración vigente.
-- **Cuando** envío `PUT /api/v1/billing/physical-course-pricing/{courseId}` con
+- **Cuando** envío `PUT /api/v1/billing/physical/courses/{courseId}/pricing` con
   `monthlyPrice`, `individualSurchargePercent` y motivo.
 - **Entonces** Billing valida ownership del profesor mediante `api:app`, incrementa
   versión y agrega una revisión append-only con valores anteriores y nuevos.
@@ -43,7 +43,10 @@
 
 ## 4. Notas Técnicas
 
-La tabla `physical_course_pricing_revisions` es append-only. No se permiten
+Contratos canónicos: `GET /api/v1/billing/physical/courses/{courseId}/pricing`
+y `PUT /api/v1/billing/physical/courses/{courseId}/pricing`.
+
+La tabla `billing_physical_course_pricing_revisions` es append-only. No se permiten
 `UPDATE` o `DELETE` sobre revisiones desde la aplicación.
 
 ## 5. Definition of Done

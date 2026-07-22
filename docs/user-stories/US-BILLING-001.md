@@ -101,8 +101,8 @@
   ```
 
 * **Tablas de BD (Schemas):**
-  * `menta_billing.plans` - Planes de suscripción
-  * `menta_billing.plan_courses` - Relación plan-cursos
+  * `billing_plans` - Planes de suscripción
+  * `billing_plan_courses` - Relación plan-cursos
 
 ---
 

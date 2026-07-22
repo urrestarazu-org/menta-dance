@@ -2,7 +2,7 @@
 
 **ID:** US-VIRTUAL-001
 **Título:** Consulta del catálogo de cursos virtuales
-**Módulo / API:** Virtual API
+**Módulo / API:** Catálogo
 **Prioridad (MoSCoW):** Must Have
 **Estado:** Draft
 **Épica:** EP-02 Catálogo Virtual
@@ -22,7 +22,7 @@
 **Escenario 1: Listar cursos públicos**
 
 * **Dado que (Given):** Un visitante accede a la página de cursos.
-* **Cuando (When):** Envía `GET /api/v1/virtual/courses`.
+* **Cuando (When):** Envía `GET /api/v1/catalog/courses`.
 * **Entonces (Then):** El sistema debe devolver todos los cursos con `status = PUBLISHED`.
 * **Y (And):** Cada curso debe incluir: título, descripción corta, imagen, indicador de gratuito/premium.
 * **Y (And):** No debe incluir módulos ni lecciones (solo resumen).
@@ -31,14 +31,14 @@
 **Escenario 2: Filtrar cursos por categoría**
 
 * **Dado que (Given):** El usuario quiere ver cursos de una categoría específica.
-* **Cuando (When):** Envía `GET /api/v1/virtual/courses?category=tango`.
+* **Cuando (When):** Envía `GET /api/v1/catalog/courses?category=tango`.
 * **Entonces (Then):** El sistema debe devolver solo cursos de esa categoría.
 * **Y (And):** Debe mantener el orden por relevancia o fecha.
 
 **Escenario 3: Buscar cursos por texto**
 
 * **Dado que (Given):** El usuario quiere buscar un curso específico.
-* **Cuando (When):** Envía `GET /api/v1/virtual/courses?search=básico`.
+* **Cuando (When):** Envía `GET /api/v1/catalog/courses?search=básico`.
 * **Entonces (Then):** El sistema debe buscar en título y descripción.
 * **Y (And):** Debe devolver coincidencias ordenadas por relevancia.
 
@@ -71,14 +71,14 @@
   * Resultados cacheables por 5 minutos.
   * Invalidar caché cuando se publique/despublique un curso.
 * **SEO:**
-  * Los hashIds deben usarse en URLs públicas.
+  * Los `courseId` UUID globales deben usarse en URLs públicas.
 
 ---
 
 ## 4. Notas Técnicas (Arquitectura)
 
 * **Endpoints Involucrados:**
-  * `GET /api/v1/virtual/courses` - Listar cursos
+  * `GET /api/v1/catalog/courses` - Listar cursos
 * **Query Parameters:**
   * `category` (string, opcional) - Filtrar por categoría
   * `search` (string, opcional) - Búsqueda de texto
@@ -90,7 +90,7 @@
   {
     "courses": [
       {
-        "hashId": "xvb5D1e0",
+        "courseId": "b6bb98d6-179e-49d0-9dda-6c03a16998f0",
         "title": "Tango Básico",
         "shortDescription": "Aprende los pasos fundamentales del tango argentino",
         "thumbnailUrl": "https://cdn.bunny.net/courses/tango-basico.jpg",
@@ -112,9 +112,9 @@
   ```
 
 * **Tablas de BD (Schemas):**
-  * `menta_virtual.courses` - Cursos
-  * `menta_virtual.modules` - Para contar módulos
-  * `menta_virtual.lessons` - Para contar lecciones
+  * `virtual_courses` - Cursos
+  * `virtual_modules` - Para contar módulos
+  * `virtual_lessons` - Para contar lecciones
 
 ---
 
@@ -127,4 +127,4 @@
 * [ ] El código pasa la validación de Checkstyle y ArchUnit.
 * [ ] No introduce nuevos "Issues" severos en SonarCloud.
 * [ ] El caché funciona correctamente.
-* [ ] Los hashIds se generan consistentemente.
+* [ ] Los `courseId` UUID se generan globalmente sin colisiones de modalidad.

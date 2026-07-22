@@ -2,7 +2,7 @@
 
 **ID:** US-VIRTUAL-002
 **Título:** Consulta del detalle completo de un curso
-**Módulo / API:** Virtual API
+**Módulo / API:** Catálogo
 **Prioridad (MoSCoW):** Must Have
 **Estado:** Draft
 **Épica:** EP-02 Catálogo Virtual
@@ -22,7 +22,7 @@
 **Escenario 1: Ver detalle de curso (visitante)**
 
 * **Dado que (Given):** Un visitante navega a un curso específico.
-* **Cuando (When):** Envía `GET /api/v1/virtual/courses/{hashId}`.
+* **Cuando (When):** Envía `GET /api/v1/catalog/courses/{courseId}`.
 * **Entonces (Then):** El sistema debe devolver el detalle completo del curso.
 * **Y (And):** Debe incluir: título, descripción completa, módulos con títulos, lecciones (solo títulos).
 * **Y (And):** Debe indicar cuáles lecciones son gratuitas.
@@ -32,29 +32,29 @@
 **Escenario 2: Ver detalle de curso (usuario con suscripción)**
 
 * **Dado que (Given):** Un usuario con suscripción activa accede al curso.
-* **Cuando (When):** Envía `GET /api/v1/virtual/courses/{hashId}` autenticado.
+* **Cuando (When):** Envía `GET /api/v1/catalog/courses/{courseId}` autenticado.
 * **Entonces (Then):** El sistema debe devolver el detalle con acceso completo.
 * **Y (And):** Debe incluir indicador de progreso del usuario en cada lección.
 * **Y (And):** Debe indicar última lección vista.
 
 **Escenario 3: Curso no encontrado**
 
-* **Dado que (Given):** El usuario solicita un curso con hashId inválido.
-* **Cuando (When):** El hashId no existe o no es decodificable.
+* **Dado que (Given):** El usuario solicita un curso con courseId inválido.
+* **Cuando (When):** El courseId no existe o no es válido.
 * **Entonces (Then):** El sistema debe devolver un código HTTP `404 Not Found`.
 * **Y (And):** El mensaje debe indicar "Curso no encontrado".
 
 **Escenario 4: Curso no publicado (visitante)**
 
 * **Dado que (Given):** Un visitante intenta acceder a un curso con `status != PUBLISHED`.
-* **Cuando (When):** Envía `GET /api/v1/virtual/courses/{hashId}`.
+* **Cuando (When):** Envía `GET /api/v1/catalog/courses/{courseId}`.
 * **Entonces (Then):** El sistema debe devolver un código HTTP `404 Not Found`.
 * **Y (And):** No debe revelar que el curso existe pero no está publicado.
 
 **Escenario 5: Curso no publicado (admin)**
 
 * **Dado que (Given):** Un administrador accede a un curso en borrador.
-* **Cuando (When):** Envía `GET /api/v1/virtual/courses/{hashId}` autenticado como admin.
+* **Cuando (When):** Envía `GET /api/v1/admin/virtual/courses/{courseId}` autenticado como admin.
 * **Entonces (Then):** El sistema debe devolver el detalle del curso.
 * **Y (And):** Debe indicar el estado actual del curso.
 
@@ -80,13 +80,13 @@
 ## 4. Notas Técnicas (Arquitectura)
 
 * **Endpoints Involucrados:**
-  * `GET /api/v1/virtual/courses/{hashId}` - Detalle de curso
+  * `GET /api/v1/catalog/courses/{courseId}` - Detalle público de curso
 * **Response Body (visitante):**
 
   ```json
   {
     "course": {
-      "hashId": "xvb5D1e0",
+      "courseId": "b6bb98d6-179e-49d0-9dda-6c03a16998f0",
       "title": "Tango Básico",
       "description": "Descripción completa del curso...",
       "thumbnailUrl": "https://cdn.bunny.net/courses/tango-basico.jpg",
@@ -99,19 +99,19 @@
       },
       "modules": [
         {
-          "hashId": "mod123",
+          "moduleId": "8e7d8e6f-169c-4e7e-9f9e-3f3f798de111",
           "title": "Introducción al Tango",
           "order": 1,
           "lessons": [
             {
-              "hashId": "les456",
+              "lessonId": "3da66c0c-7fbf-45f1-a830-b19f5bfd0001",
               "title": "Historia del Tango",
               "duration": "10:30",
               "isFree": true,
               "order": 1
             },
             {
-              "hashId": "les789",
+              "lessonId": "3da66c0c-7fbf-45f1-a830-b19f5bfd0002",
               "title": "Postura básica",
               "duration": "15:00",
               "isFree": false,
@@ -138,7 +138,7 @@
       "totalLessons": 20,
       "percentComplete": 25,
       "lastWatched": {
-        "lessonHashId": "les789",
+        "lessonId": "3da66c0c-7fbf-45f1-a830-b19f5bfd0002",
         "lessonTitle": "Postura básica",
         "watchedAt": "2024-01-15T10:30:00Z"
       }
@@ -147,10 +147,10 @@
   ```
 
 * **Tablas de BD (Schemas):**
-  * `menta_virtual.courses` - Cursos
-  * `menta_virtual.modules` - Módulos
-  * `menta_virtual.lessons` - Lecciones
-  * `menta_virtual.user_progress` - Progreso del usuario
+  * `virtual_courses` - Cursos
+  * `virtual_modules` - Módulos
+  * `virtual_lessons` - Lecciones
+  * `virtual_lesson_progress` y `virtual_course_progress` - Progreso del usuario
 
 ---
 

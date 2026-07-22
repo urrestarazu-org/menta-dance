@@ -17,18 +17,18 @@
 
 **Escenario 1: pago mensual confirmado**
 
-- **Dado** un quote mensual vigente y capacidad para todas sus sesiones.
+- **Dado** un quote mensual vigente y un Payment `PENDING`.
 - **Cuando** el pago externo se acredita.
-- **Entonces** `api:app` coordina la asignación completa, convierte el hold y solo
-  después cambia `paymentStatus` a `COMPLETED` y `purchaseStatus` a
-  `CAPACITY_ASSIGNED`.
+- **Entonces** Payment pasa a `COMPLETED` como liquidación y Purchase a
+  `PENDING_FULFILLMENT`; `api:app` calcula cobertura/sesiones, revalida
+  capacidad/hold y sólo entonces cambia Purchase a `ASSIGNED`.
 
 **Escenario 2: pago individual confirmado**
 
 - **Dado** un quote individual vigente para `selectedSessionId`.
 - **Cuando** el proveedor confirma el movimiento externo.
 - **Entonces** Physical asigna exactamente `selectedSessionId` y ningún otro, y
-  Billing completa Payment únicamente después de esa asignación.
+  Billing deja la Purchase `ASSIGNED` después de esa asignación.
 
 **Escenario 3: idempotencia**
 
@@ -46,7 +46,7 @@
 
 ## 4. Notas Técnicas
 
-`POST /api/v1/billing/physical-purchases` recibe `quoteId`, `paymentMethod` y una
+`POST /api/v1/billing/physical/purchases` recibe `quoteId`, `paymentMethod` y una
 clave de idempotencia. Los estados de Payment, Purchase y CapacityHold son
 autómatas separados.
 

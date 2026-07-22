@@ -1,430 +1,56 @@
 # Pipeline CI/CD
 
-[← Volver al índice](./README.md) | [← Matriz de Riesgos](./15-RISK-MATRIX.md)
-
----
-
-## 1. Visión General
-
-Pipeline de Integración Continua y Despliegue Continuo para el monorepo Menta Dance.
-
-### 1.1 Objetivos
-
-- Automatizar build, test y deploy
-- Detectar errores temprano (fail fast)
-- Garantizar calidad antes de merge
-- Deploys reproducibles y auditables
-
-### 1.2 Herramientas
-
-| Herramienta | Propósito |
-|-------------|-----------|
-| **GitHub Actions** | CI/CD principal |
-| **Gradle** | Build y tests backend |
-| **Node/npm** | Build assets BFF (Tailwind) |
-| **Docker** | Containerización |
-| **Checkstyle** | Estilo de código |
-| **JaCoCo** | Cobertura de código |
-| **SonarCloud** | Análisis estático y seguridad |
-| **Trivy** | Escaneo de vulnerabilidades |
-| **Playwright** | Tests E2E (BFF) |
-| **Gatling** | Tests de carga |
-
-> Ver [ADR-0024](./adr/0024-technology-baseline.md) para versiones exactas.
-
----
-
-## 2. Arquitectura del Pipeline
-
-```
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│   Commit    │───▶│    Build    │───▶│    Test     │───▶│   Analyze   │
-│             │    │  (Gradle)   │    │  (JUnit)    │    │  (JaCoCo+   │
-│             │    │             │    │             │    │   Trivy)    │
-└─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
-                                                                │
-                         ┌──────────────────────────────────────┘
-                         ▼
-              ┌─────────────────────┐
-              │   Quality Gate?     │
-              │   Coverage > 80%?   │
-              │   Vulnerabilities?  │
-              └─────────────────────┘
-                    │         │
-                 PASS       FAIL
-                    │         │
-                    ▼         ▼
-         ┌──────────────┐  ┌──────────────┐
-         │ Build Docker │  │ Block Merge  │
-         │    Images    │  │   + Notify   │
-         └──────────────┘  └──────────────┘
-                    │
-                    ▼ (solo main)
-         ┌──────────────┐
-         │   Deploy to  │
-         │   Staging    │
-         └──────────────┘
-```
-
----
-
-## 3. Workflows de GitHub Actions
-
-### 3.1 CI - Pull Requests
-
-**Archivo:** `.github/workflows/ci.yml`
-
-```yaml
-name: CI Pipeline
-
-on:
-  pull_request:
-    branches: [main, develop]
-  push:
-    branches: [main, develop]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: test
-          MYSQL_DATABASE: menta_test
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=3
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Java 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '21'
-          cache: 'gradle'
-
-      - name: Grant execute permission
-        run: chmod +x gradlew
-
-      - name: Setup Node.js (BFF assets)
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: bff/package-lock.json
-
-      - name: Build BFF assets (Tailwind)
-        run: |
-          cd bff
-          npm ci
-          npm run build:css
-
-      - name: Run Checkstyle
-        run: ./gradlew checkstyleMain checkstyleTest
-
-      - name: Build project
-        run: ./gradlew build -x test
-
-      - name: Run tests
-        run: ./gradlew test
-
-      - name: Generate coverage report
-        run: ./gradlew jacocoTestReport
-
-      - name: Check coverage threshold
-        run: ./gradlew jacocoTestCoverageVerification
-
-      - name: SonarCloud analysis
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: ./gradlew sonar
-
-      - name: Upload test results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: test-results
-          path: '**/build/reports/tests/'
-
-  security-scan:
-    runs-on: ubuntu-latest
-    needs: build
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          severity: 'HIGH,CRITICAL'
-          exit-code: '1'
-          format: 'table'
-
-  architecture-test:
-    runs-on: ubuntu-latest
-    needs: build
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Java 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '21'
-          cache: 'gradle'
-
-      - name: Run ArchUnit tests
-        run: ./gradlew test --tests "*ArchitectureTest"
-
-  e2e-test:
-    runs-on: ubuntu-latest
-    needs: build
-
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: test
-          MYSQL_DATABASE: menta_test
-        ports:
-          - 3306:3306
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Java 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '21'
-          cache: 'gradle'
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install Playwright
-        run: npx playwright install --with-deps chromium
-
-      - name: Start API and BFF
-        run: |
-          ./gradlew :api:app:bootRun &
-          ./gradlew :bff:bootRun &
-          sleep 30
-
-      - name: Run E2E tests
-        run: npx playwright test
-        working-directory: e2e
-
-      - name: Upload Playwright report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: playwright-report
-          path: e2e/playwright-report/
-
-  load-test:
-    runs-on: ubuntu-latest
-    needs: [build, e2e-test]
-    if: github.ref == 'refs/heads/main'
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Java 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '21'
-          cache: 'gradle'
-
-      - name: Run Gatling tests
-        run: ./gradlew gatlingRun
-        env:
-          TARGET_URL: ${{ secrets.STAGING_URL }}
-
-      - name: Upload Gatling report
-        uses: actions/upload-artifact@v4
-        with:
-          name: gatling-report
-          path: build/reports/gatling/
-```
-
-### 3.2 Deploy - Staging
-
-**Archivo:** `.github/workflows/deploy-staging.yml`
-
-```yaml
-name: Deploy to Staging
-
-on:
-  push:
-    branches: [main]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    environment: staging
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Java 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '21'
-          cache: 'gradle'
-
-      - name: Build API JAR
-        run: ./gradlew :api:app:bootJar -x test
-
-      - name: Build BFF JAR
-        run: ./gradlew :bff:bootJar -x test
-
-      - name: Build Docker images
-        run: |
-          docker build -t menta-api:${{ github.sha }} -f api/Dockerfile .
-          docker build -t menta-bff:${{ github.sha }} -f bff/Dockerfile .
-
-      - name: Deploy to staging server
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.STAGING_HOST }}
-          username: ${{ secrets.STAGING_USER }}
-          key: ${{ secrets.STAGING_SSH_KEY }}
-          script: |
-            cd /opt/menta
-            docker-compose pull
-            docker-compose up -d --force-recreate
-            docker system prune -f
-
-      - name: Verify deployment
-        run: |
-          sleep 30
-          curl -f http://${{ secrets.STAGING_HOST }}:8081/actuator/health || exit 1
-          curl -f http://${{ secrets.STAGING_HOST }}:8080/actuator/health || exit 1
-```
-
----
-
-## 4. Secrets Requeridos
-
-| Secret | Descripción |
-|--------|-------------|
-| `STAGING_HOST` | IP/hostname del servidor staging |
-| `STAGING_USER` | Usuario SSH |
-| `STAGING_SSH_KEY` | Clave privada SSH |
-| `STAGING_URL` | URL base para tests de carga |
-| `SONAR_TOKEN` | Token de SonarCloud |
-
----
-
-## 5. Branch Protection Rules
-
-### Reglas para `main`
-
-- [x] Require pull request reviews (1 approval)
-- [x] Require status checks to pass:
-  - `build` (incluye Checkstyle, JaCoCo, SonarCloud)
-  - `security-scan`
-  - `architecture-test`
-  - `e2e-test`
-- [x] Require branches to be up to date
-
-### Reglas para `develop`
-
-- [x] Require status checks to pass:
-  - `build`
-
----
-
-## 6. Estrategia de Branches
-
-```
-main (producción)
-   │
-   ├── hotfix/critical-bug
-   │
-develop (integración)
-   │
-   ├── feature/auth-module
-   ├── feature/billing-module
-   └── bugfix/login-error
-```
-
-### Convenciones de Nombres
-
-| Tipo | Patrón | Ejemplo |
-|------|--------|---------|
-| Feature | `feature/{descripcion}` | `feature/auth-jwt` |
-| Bugfix | `bugfix/{descripcion}` | `bugfix/login-timeout` |
-| Hotfix | `hotfix/{descripcion}` | `hotfix/critical-security` |
-
----
-
-## 7. Comandos Gradle para CI
-
-```bash
-# Build completo
-./gradlew build
-
-# Solo tests
-./gradlew test
-
-# Tests de arquitectura
-./gradlew test --tests "*ArchitectureTest"
-
-# Cobertura
-./gradlew jacocoTestReport
-./gradlew jacocoTestCoverageVerification
-
-# Build JARs
-./gradlew :api:app:bootJar
-./gradlew :bff:bootJar
-```
-
----
-
-## 8. Checklist Pre-Deploy
-
-### Staging
-
-- [ ] CI pipeline verde
-- [ ] Cobertura ≥ 80% (capas domain/application)
-- [ ] Sin vulnerabilidades HIGH/CRITICAL
-- [ ] ArchUnit tests pasan
-- [ ] Changelog actualizado
-
-### Production
-
-- [ ] Staging testeado y aprobado
-- [ ] Backup de base de datos realizado
-- [ ] Plan de rollback revisado
-- [ ] Monitoreo activo durante deploy
-
----
-
-## Referencias
-
-- [ADR-0018: CI/CD con GitHub Actions](./adr/0018-cicd-github-actions-gitflow.md)
-- [14-TEST-STRATEGY.md](./14-TEST-STRATEGY.md)
+## GitHub Actions y permisos
+
+GitHub Actions es la única plataforma de CI/CD. El workflow de Pull Request usa
+`contents: read` y no recibe secretos de despliegue ni `packages:write`. El de
+release recibe permisos mínimos, incluido `packages:write`, y secretos sólo
+mediante GitHub Secrets.
+
+Todas las actions se fijan a un **SHA de commit completo**; dependencias,
+plugins e imágenes se fijan a versiones exactas. No se permiten `latest`,
+`master` ni rangos de versión.
+
+## CI de Pull Request
+
+En cada PR contra `develop` o `master`:
+
+1. compilar backend, BFF y Android;
+2. ejecutar Checkstyle, tests, JaCoCo, SonarCloud y ArchUnit;
+3. construir assets Node/Tailwind con lockfile;
+4. ejecutar Playwright, Gatling acordado y Trivy;
+5. publicar resultados sin publicar artefactos ni desplegar.
+
+CI verde es obligatorio para mergear. Los PR son registro de trabajo individual:
+no requieren aprobación humana y se integran con **squash merge**.
+
+## Git Flow y releases
+
+- `feature/*` nace de `develop`.
+- `release/*` nace de `develop` y se mergea a `master`.
+- Después, `master` se mergea de regreso a `develop`.
+- `hotfix/*` nace de `master`; su merge vuelve también a `develop`.
+
+Los commits y títulos de PR siguen Conventional Commits 1.0.0. La versión de
+release es SemVer `vMAJOR.MINOR.PATCH` y etiqueta el mismo commit, JAR, imagen y
+GitHub Release.
+
+## Release a producción
+
+El merge `release/* -> master` o `hotfix/* -> master` dispara automáticamente:
+
+1. crear tag SemVer;
+2. publicar el JAR versionado en GitHub Packages y la imagen en GHCR;
+3. registrar y desplegar el **digest inmutable** de la imagen, nunca una tag;
+4. ejecutar migraciones Flyway hacia adelante, etiquetadas como
+   `backward-compatible` o `manual-recovery-only`, y health checks;
+5. si falla el health check, volver automáticamente al digest de la release
+   anterior.
+
+No existe rollback automático de base de datos. Si Flyway falla, se detiene la
+release y se interviene manualmente. El rollback automático de imagen sólo se
+permite con evidencia de compatibilidad: la aplicación anterior debe funcionar
+contra el schema migrado y los datos escritos por la release nueva. La etiqueta
+`backward-compatible` no sustituye esa prueba; sin evidencia se detiene para
+recuperación manual. Las migraciones destructivas se ejecutan sólo en una release
+posterior a dejar de usar los datos/columnas.

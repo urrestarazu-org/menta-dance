@@ -18,11 +18,12 @@
 **Escenario 1: cotización mensual**
 
 - **Dado** un curso con precio, recargo positivo y sesiones disponibles.
-- **Cuando** envío `POST /api/v1/billing/physical-course-quotes` con
+- **Cuando** envío `POST /api/v1/billing/physical/quotes` con
   `purchaseType: MONTHLY`.
-- **Entonces** Billing fija `coverageStartDate`, calcula
-  `coverageEndExclusive = coverageStartDate.plusMonths(1)` y persiste un quote
-  con lista no vacía de `sessionIds` y sin `selectedSessionId`.
+- **Entonces** Billing persiste un quote con el importe mensual y parámetros de
+  precio snapshot, sin fijar cobertura ni `sessionIds`; éstos se calculan al
+  confirmarse el pago. El quote no tiene `selectedSessionId` e incluye una
+  proyección informativa de disponibilidad, sin reservar cupos.
 
 **Escenario 2: cotización individual**
 
@@ -39,6 +40,13 @@
 - **Cuando** solicito una cotización para el curso.
 - **Entonces** responde `422 NO_SCHEDULED_SESSIONS` y no persiste un quote pagable.
 
+**Escenario 4: cupo no disponible en la proyección**
+
+- **Dado** sesiones programadas sin disponibilidad proyectada.
+- **Cuando** solicito una cotización.
+- **Entonces** el quote puede informar `availability: UNAVAILABLE`, sin reservar
+  capacidad ni prometer que su estado se mantendrá hasta el checkout.
+
 ## 3. Requisitos No Funcionales y Restricciones
 
 - Billing fija la fecha autoritativa; el cliente no puede enviarla.
@@ -47,14 +55,18 @@
   `effectiveRounded + currencyMinorUnit` después del redondeo.
 - El snapshot persiste los operandos redondeados y configurados necesarios para
   auditar/recomputar; no persiste cocientes periódicos como si fueran exactos.
-- El quote expira y es inmutable. Un pago no iniciado antes de expirar requiere
-  otro quote.
+- El quote es informativo, inmutable y válido por una hora; no reserva cupo. Un
+  pago no iniciado antes de expirar requiere otro quote. Sólo el importe y sus
+  parámetros de precio quedan fijados; cobertura y sesiones elegibles se
+  calculan/revalidan desde el timestamp de confirmación.
+- La proyección de disponibilidad sólo orienta la UI. El checkout crea un hold
+  atómico o rechaza con `409 CAPACITY_UNAVAILABLE` antes de crear un Payment.
 
 ## 4. Notas Técnicas
 
 ```json
 {
-  "courseId": 10,
+  "courseId": "b6bb98d6-179e-49d0-9dda-6c03a16998f0",
   "purchaseType": "INDIVIDUAL",
   "selectedSessionId": 101
 }

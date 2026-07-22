@@ -120,8 +120,8 @@
   ```
 
 * **Tablas de BD (Schemas):**
-  * `menta_billing.subscriptions` - Suscripciones del usuario
-  * `menta_billing.plans` - Información del plan
+  * `billing_subscriptions` - Suscripciones del usuario
+  * `billing_plans` - Información del plan
 
 ---
 

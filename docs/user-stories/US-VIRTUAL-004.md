@@ -22,11 +22,13 @@
 **Escenario 1: Reproducción autorizada**
 
 * **Dado que (Given):** Un usuario con suscripción `ACTIVE` que incluye el curso.
-* **Cuando (When):** Envía `GET /api/v1/virtual/lessons/{hashId}` autenticado.
+* **Cuando (When):** Envía `GET /api/v1/virtual/lessons/{lessonId}` autenticado.
 * **Entonces (Then):** El sistema debe devolver el detalle completo de la lección.
-* **Y (And):** Debe incluir URL firmada del video de Bunny.net.
-* **Y (And):** Debe incluir múltiples calidades disponibles.
+* **Y (And):** No debe incluir una URL de video.
 * **Y (And):** Debe devolver un código HTTP `200 OK`.
+
+* **Y (And):** Al solicitar `GET /api/v1/virtual/lessons/{lessonId}/stream`,
+  debe devolver la URL firmada del video y las calidades disponibles.
 
 **Escenario 2: Suscripción expirada**
 
@@ -47,7 +49,7 @@
 **Escenario 4: Obtener URL de streaming**
 
 * **Dado que (Given):** Un usuario con acceso autorizado al video.
-* **Cuando (When):** Envía `GET /api/v1/virtual/lessons/{hashId}/stream`.
+* **Cuando (When):** Envía `GET /api/v1/virtual/lessons/{lessonId}/stream`.
 * **Entonces (Then):** El sistema debe devolver una URL de streaming válida.
 * **Y (And):** La URL debe expirar en 4 horas.
 * **Y (And):** Debe soportar adaptive bitrate streaming.
@@ -91,8 +93,8 @@
 ## 4. Notas Técnicas (Arquitectura)
 
 * **Endpoints Involucrados:**
-  * `GET /api/v1/virtual/lessons/{hashId}` - Detalle con acceso autorizado
-  * `GET /api/v1/virtual/lessons/{hashId}/stream` - Obtener URL de streaming
+  * `GET /api/v1/virtual/lessons/{lessonId}` - Detalle con acceso autorizado
+  * `GET /api/v1/virtual/lessons/{lessonId}/stream` - Obtener URL de streaming
 * **Response Body (streaming):**
 
   ```json
@@ -109,7 +111,7 @@
       "expiresAt": "2024-01-15T18:00:00Z"
     },
     "lesson": {
-      "hashId": "les789",
+      "lessonId": "3da66c0c-7fbf-45f1-a830-b19f5bfd0002",
       "title": "Postura básica",
       "duration": "15:00"
     },
@@ -128,11 +130,10 @@
   ```
 
 * **Tablas de BD (Schemas):**
-  * `menta_virtual.lessons` - Lecciones
-  * `menta_virtual.videos` - Referencias a Bunny.net
-  * `menta_billing.subscriptions` - Verificar acceso
-  * `menta_billing.plan_courses` - Verificar que plan incluye curso
-  * `menta_virtual.user_progress` - Progreso del usuario
+  * `virtual_lessons` - Lecciones
+  * `virtual_videos` - Referencias a Bunny.net
+  * `SubscriptionAccessPort` - Verificar acceso y alcance de la suscripción
+  * `virtual_lesson_progress` y `virtual_course_progress` - Progreso del usuario
 * **Integraciones:**
   * Bunny.net Stream API.
   * Generación de tokens HMAC.

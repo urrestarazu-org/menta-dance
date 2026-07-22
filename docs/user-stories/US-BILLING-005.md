@@ -22,7 +22,7 @@
 **Escenario 1: Listar pagos pendientes de verificación**
 
 * **Dado que (Given):** Un administrador accede al panel de pagos.
-* **Cuando (When):** Envía `GET /api/v1/billing/admin/payments?status=PENDING_VERIFICATION`.
+* **Cuando (When):** Envía `GET /api/v1/billing/admin/payments?status=PENDING&substatus=AWAITING_MANUAL_VERIFICATION`.
 * **Entonces (Then):** El sistema debe devolver todos los pagos pendientes de verificación.
 * **Y (And):** Debe incluir: usuario, monto, fecha, plan, link al comprobante.
 * **Y (And):** Debe ordenarlos por fecha de creación (más antiguos primero).
@@ -71,6 +71,12 @@
 * **Entonces (Then):** El sistema debe devolver un código HTTP `400 Bad Request`.
 * **Y (And):** El mensaje debe indicar "El motivo de rechazo es obligatorio".
 
+**Escenario 7: Corrección excepcional auditada**
+
+* **Dado que (Given):** Un pago está en `PENDING/RECONCILIATION_REQUIRED` y existe evidencia verificable.
+* **Cuando (When):** Un administrador envía `POST /api/v1/billing/admin/payments/{paymentId}/corrections` con motivo y evidencia.
+* **Entonces (Then):** El sistema aplica sólo la corrección autorizada y registra una auditoría append-only.
+
 ---
 
 ## 3. Requisitos No Funcionales y Restricciones
@@ -94,6 +100,7 @@
   * `GET /api/v1/billing/admin/payments/{paymentId}` - Detalle de pago
   * `POST /api/v1/billing/admin/payments/{paymentId}/approve` - Aprobar pago
   * `POST /api/v1/billing/admin/payments/{paymentId}/reject` - Rechazar pago
+  * `POST /api/v1/billing/admin/payments/{paymentId}/corrections` - Corregir excepción auditada
 * **Request Body (rechazar):**
 
   ```json
@@ -115,7 +122,8 @@
         "planName": "Plan Mensual",
         "amount": 15000.00,
         "currency": "ARS",
-        "status": "PENDING_VERIFICATION",
+        "status": "PENDING",
+        "substatus": "AWAITING_MANUAL_VERIFICATION",
         "hasProof": true,
         "createdAt": "2024-01-15T10:30:00Z"
       }
@@ -129,9 +137,9 @@
   ```
 
 * **Tablas de BD (Schemas):**
-  * `menta_billing.payments` - Pagos
-  * `menta_billing.payment_audits` - Auditoría de acciones
-  * `menta_billing.subscriptions` - Para activar/cancelar
+  * `billing_payments` - Pagos
+  * `billing_audit_log` - Auditoría append-only de acciones y correcciones
+  * `billing_subscriptions` - Para activar/cancelar
 * **Notificaciones:**
   * Email al usuario tras aprobación/rechazo.
   * Template distinto para cada caso.
