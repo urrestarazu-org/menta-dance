@@ -1,6 +1,6 @@
 # Documentación Complementaria TFM
 
-**Módulo 12: Proyecto Final — Máster de Desarrollo con IA (BIG School)**
+**Proyecto Final — Máster de Desarrollo con IA (BIG School)**
 
 ---
 
