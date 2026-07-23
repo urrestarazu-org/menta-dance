@@ -36,6 +36,27 @@ Spanish / English):
 - The current branch has been pushed to the remote (the skill will push it if
   necessary)
 
+## Language Rules
+
+**Todo el contenido generado debe estar en español**, incluyendo:
+- Descripción del PR (body)
+- Secciones del checklist
+- Mensajes de confirmación al usuario
+- Output de cada paso
+
+**Excepciones (siempre en inglés)**:
+- Título del PR (Conventional Commits requiere inglés)
+- Labels de GitHub
+- Nombres de branches
+- Comandos técnicos
+
+Ejemplo correcto:
+```
+Title: feat(auth): add OAuth2 login flow     ← inglés
+Body:  ## Resumen                            ← español
+       Implementa el flujo de login...       ← español
+```
+
 ---
 
 ## Execution Flow
@@ -328,32 +349,32 @@ git log <base>..<head> --oneline | grep -E "^[a-f0-9]+ \w+!:"
   ┌────────────────────────────────────────────────────┐
   │ ## ⚠️ Breaking Changes                             │
   │                                                    │
-  │ - **What breaks**: User response format changed    │
-  │ - **Migration**: See docs/migration-v2.md          │
-  │ - **Affected consumers**: Mobile app, BFF          │
+  │ - **Qué rompe**: Formato de respuesta de usuario   │
+  │ - **Migración**: Ver docs/migration-v2.md          │
+  │ - **Consumidores afectados**: App móvil, BFF       │
   └────────────────────────────────────────────────────┘
 ```
 
-### PR Body Template for Breaking Changes
+### Template del Body para Breaking Changes
 
-When breaking changes are detected, add this section to the PR body:
+Cuando se detectan breaking changes, agregar esta sección al body del PR:
 
 ```markdown
 ## ⚠️ Breaking Changes
 
-### What breaks
-- [Description of what API/behavior changed]
+### Qué rompe
+- [Descripción de qué API/comportamiento cambió]
 
-### Migration path
-- [Steps to migrate existing code]
+### Ruta de migración
+- [Pasos para migrar código existente]
 
-### Affected consumers
-- [ ] Mobile app (android/)
+### Consumidores afectados
+- [ ] App móvil (android/)
 - [ ] BFF (bff/)
-- [ ] External integrations
+- [ ] Integraciones externas
 
-### Rollback plan
-- [How to revert if needed]
+### Plan de rollback
+- [Cómo revertir si es necesario]
 ```
 
 ---
@@ -431,66 +452,66 @@ If the base branch is protected, remind the user that:
 
 Build the PR metadata based on the selected Conventional Commits type.
 
-#### Body sections
+#### Secciones del Body (en español)
 
-1. **Summary** — one-paragraph overview of the change.
-2. **Changes** — bullet list of the files / logic modified.
-3. **Type-specific section** — see table below.
-4. **Checklist** (use `[x]` to mark items):
-   - [ ] Tests added or updated
-   - [ ] Documentation updated
-   - [ ] No breaking changes (or breaking changes documented)
-   - [ ] CI passes
-   - [ ] Self-review completed
-5. **Linked issues** — `Closes #<issue>` or `Relates to #<issue>` if applicable.
+1. **Resumen** — descripción de un párrafo del cambio.
+2. **Cambios** — lista de archivos / lógica modificada.
+3. **Sección específica del tipo** — ver tabla abajo.
+4. **Checklist** (usar `[x]` para marcar):
+   - [ ] Tests agregados o actualizados
+   - [ ] Documentación actualizada
+   - [ ] Sin breaking changes (o breaking changes documentados)
+   - [ ] CI pasa
+   - [ ] Auto-revisión completada
+5. **Issues relacionados** — `Closes #<issue>` o `Relacionado con #<issue>` si aplica.
 
-Type-specific body templates:
+Templates específicos por tipo:
 
 - **feat**
-  - Motivation / user story
-  - Acceptance criteria
-  - Screenshots, loom link, or demo steps
+  - Motivación / historia de usuario
+  - Criterios de aceptación
+  - Capturas, link de loom, o pasos de demo
 - **fix**
-  - Root cause analysis
-  - Reproduction steps (before the fix)
-  - Verification steps (after the fix)
+  - Análisis de causa raíz
+  - Pasos de reproducción (antes del fix)
+  - Pasos de verificación (después del fix)
 - **hotfix**
-  - Incident / ticket link
-  - Urgency justification
-  - Rollback plan
-  - Post-merge monitoring checklist
+  - Link de incidente / ticket
+  - Justificación de urgencia
+  - Plan de rollback
+  - Checklist de monitoreo post-merge
 - **docs**
-  - What documentation changed and why
-  - Preview URL or path
-  - Reviewer notes (what to focus on)
+  - Qué documentación cambió y por qué
+  - URL de preview o path
+  - Notas para el reviewer (en qué enfocarse)
 - **style**
-  - Scope of formatting changes
-  - Tool used (e.g. prettier, checkstyle)
-  - No functional change confirmation
+  - Alcance de cambios de formato
+  - Herramienta usada (ej: prettier, checkstyle)
+  - Confirmación de que no hay cambios funcionales
 - **refactor**
-  - Scope of the refactor
-  - Motivation (tech-debt, performance, readability)
-  - Test plan and performance impact (if any)
+  - Alcance del refactor
+  - Motivación (deuda técnica, performance, legibilidad)
+  - Plan de tests e impacto en performance (si aplica)
 - **perf**
-  - Benchmarks (before / after)
-  - Profiling method
-  - Risk / regression assessment
+  - Benchmarks (antes / después)
+  - Método de profiling
+  - Evaluación de riesgo / regresión
 - **test**
-  - What gap is being covered
-  - How to run the new tests
-  - Coverage delta or results
+  - Qué gap se está cubriendo
+  - Cómo ejecutar los nuevos tests
+  - Delta de cobertura o resultados
 - **build**
-  - What changed in the build system
-  - Dependencies added / removed
-  - Build verification steps
+  - Qué cambió en el sistema de build
+  - Dependencias agregadas / removidas
+  - Pasos de verificación del build
 - **ci**
-  - What workflow or pipeline changed
-  - Why the change was needed
-  - Test runs or validations
+  - Qué workflow o pipeline cambió
+  - Por qué fue necesario el cambio
+  - Ejecuciones de test o validaciones
 - **chore**
-  - Context (dependency bump, file move, etc.)
-  - Risk assessment
-  - Validation steps
+  - Contexto (bump de dependencias, movimiento de archivos, etc.)
+  - Evaluación de riesgo
+  - Pasos de validación
 
 ### 5. Open the PR
 
@@ -550,35 +571,35 @@ After the PR is created, capture the PR URL and optionally:
 - Prefer `--fill` only when commits are already perfectly formatted; otherwise
   craft the title and body explicitly to guarantee quality.
 
-## Example
+## Ejemplo
 
-**User:** "I need to create a PR for the auth fix"
+**Usuario:** "Necesito crear un PR para el fix de auth"
 
-**Skill execution:**
+**Ejecución del skill:**
 
 ```bash
 gh pr create \
   --title "fix(auth): resolve null pointer on oauth callback" \
-  --body "## Summary
-Fixes a null pointer exception when the OAuth provider returns an empty state parameter.
+  --body "## Resumen
+Corrige una excepción de null pointer cuando el proveedor OAuth retorna un parámetro state vacío.
 
-## Root Cause
-The OAuth2StateFilter assumed state was always non-null after PR #123.
+## Causa Raíz
+El OAuth2StateFilter asumía que state nunca era null después del PR #123.
 
-## Changes
-- Added null-check in OAuth2StateFilter.java
-- Added unit test for empty state scenario
+## Cambios
+- Agregado null-check en OAuth2StateFilter.java
+- Agregado test unitario para escenario de state vacío
 
-## Verification
-- [x] Reproduced locally with provider X
-- [x] Unit test passes
-- [ ] QA on staging
+## Verificación
+- [x] Reproducido localmente con proveedor X
+- [x] Test unitario pasa
+- [ ] QA en staging
 
 ## Checklist
-- [x] Tests added
-- [ ] Documentation updated
-- [x] No breaking changes
-- [x] Self-review completed
+- [x] Tests agregados
+- [ ] Documentación actualizada
+- [x] Sin breaking changes
+- [x] Auto-revisión completada
 
 Closes #456" \
   --base develop \
@@ -586,13 +607,13 @@ Closes #456" \
   --label bug
 ```
 
-## Notes
+## Notas
 
-- For **stacked / dependent PRs**, mention the dependency in the body:
-  `Depends on #<pr-number>`.
-- If the user does not know the PR type, default to `chore` and let them adjust
-  before submitting.
-- Keep the body concise but complete; reviewers should understand the change
-  without opening the code diff.
-- Refer to [Conventional Commits v1.0.0](https://www.conventionalcommits.org/en/v1.0.0/)
-  for any edge cases or specification details.
+- Para **PRs apilados / dependientes**, mencionar la dependencia en el body:
+  `Depende de #<pr-number>`.
+- Si el usuario no sabe el tipo de PR, usar `chore` por defecto y dejar que
+  ajuste antes de enviar.
+- Mantener el body conciso pero completo; los reviewers deben entender el cambio
+  sin abrir el diff del código.
+- Consultar [Conventional Commits v1.0.0](https://www.conventionalcommits.org/en/v1.0.0/)
+  para casos edge o detalles de la especificación.
