@@ -1,71 +1,76 @@
-# Repo snapshot (read first)
-- Repo is **documentation-only today**. Before writing code, review `docs/02-ARCHITECTURE.md`, `docs/27-CLEAN-ARCHITECTURE-GUIDE.md`, `docs/24-LOCAL-DEV-SETUP.md`, and relevant ADRs; the scaffold you create must satisfy those contracts.
-- Target stack: Java 21 + Spring Boot 3 modular monolith (`api`) composed by `api:app`, Kotlin + Jetpack Compose Android client, Node 20.11.1 for web assets, Docker Compose for infra helpers.
+# Estado del repositorio (leer primero)
 
-# Module boundaries & ownership
-- API is a single JAR built from modules `auth`, `billing`, `virtual`, `physical`, plus `api:shared` for slim cross-module contracts. `api:app` wires everything; it may host orchestration but **no domain logic**.
-- The web interface is a separate BFF JAR that talks to the API over HTTP; browser clients never talk to the API directly or store tokens.
-- Each backend module must follow `domain -> application -> infrastructure` (no reverse deps). `domain` stays framework-free, `application` exposes ports/use cases, `infrastructure` owns adapters, controllers, persistence, config.
-- Cross-module collaboration always goes through Java interfaces (typically defined in `api:shared`). Prohibited: sharing JPA entities, repositories, SQL joins, HTTP calls, messaging, or any infrastructure from another module.
-- Android mirrors the same direction (`presentation -> domain <- data`), with Hilt wiring isolated in `di`.
+- El repositorio es **solo documentación hoy**. Antes de escribir código, revisar `docs/02-ARCHITECTURE.md`, `docs/27-CLEAN-ARCHITECTURE-GUIDE.md`, `docs/24-LOCAL-DEV-SETUP.md` y los ADRs relevantes; el scaffold que crees debe satisfacer esos contratos.
+- Stack objetivo: Java 21 + Spring Boot 3 monolito modular (`api`) compuesto por `api:app`, cliente Android Kotlin + Jetpack Compose, Node 20.11.1 para assets web, Docker Compose para helpers de infraestructura.
 
-# Data & migrations
-- Single MySQL schema `menta`; tables are prefixed per module (`auth_`, `billing_`, etc.). Foreign keys and queries must never cross module prefixes.
-- Flyway in `api:app` is the only component allowed to change the schema. Hibernate stays on `ddl-auto:validate`; failed migrations are fixed via new migrations, not rollbacks.
-- Redis is required with `maxmemory-policy noeviction` for locks/blacklists; Caffeine caches only rebuildable data.
+# Boundaries y ownership de módulos
 
-# Local environment
-- Required tooling: JDK 21, Node 20.11.1, Docker Compose, Gradle wrapper (generate in Fase 0), Bruno HTTP client (`bruno/` collection is versioned). Do **not** rely on globally installed Gradle.
-- `docker compose up -d` must start MySQL 8 (`menta` DB, non-root app user), Redis, and the observability stack (OTel/Loki). Credentials come from a non-versioned `.env`.
-- Once scaffolded, the baseline commands expected to exist are:
+- La API es un único JAR construido desde los módulos `auth`, `billing`, `virtual`, `physical`, más `api:shared` para contratos cross-module mínimos. `api:app` conecta todo; puede hospedar orquestación pero **sin lógica de dominio**.
+- La interfaz web es un JAR BFF separado que habla con la API por HTTP; los clientes del navegador nunca hablan directamente con la API ni almacenan tokens.
+- Cada módulo backend debe seguir `domain -> application -> infrastructure` (sin dependencias inversas). `domain` permanece libre de frameworks, `application` expone puertos/casos de uso, `infrastructure` posee adaptadores, controllers, persistencia y config.
+- La colaboración entre módulos siempre va a través de interfaces Java (típicamente definidas en `api:shared`). Prohibido: compartir entidades JPA, repositorios, SQL joins, llamadas HTTP, messaging, o cualquier infraestructura de otro módulo.
+- Android replica la misma dirección (`presentation -> domain <- data`), con el wiring de Hilt aislado en `di`.
+
+# Datos y migraciones
+
+- Schema único de MySQL `menta`; las tablas tienen prefijo por módulo (`auth_`, `billing_`, etc.). Las foreign keys y queries nunca deben cruzar prefijos de módulo.
+- Flyway en `api:app` es el único componente autorizado a modificar el schema. Hibernate permanece en `ddl-auto:validate`; las migraciones fallidas se arreglan con nuevas migraciones, no rollbacks.
+- Redis es requerido con `maxmemory-policy noeviction` para locks/blacklists; Caffeine cachea solo datos reconstruibles.
+
+# Entorno local
+
+- Herramientas requeridas: JDK 21, Node 20.11.1, Docker Compose, Gradle wrapper (generar en Fase 0), cliente HTTP Bruno (colección `bruno/` versionada). **No** depender de Gradle instalado globalmente.
+- `docker compose up -d` debe iniciar MySQL 8 (DB `menta`, usuario app no-root), Redis, y el stack de observabilidad (OTel/Loki). Las credenciales vienen de un `.env` no versionado.
+- Una vez scaffoldeado, los comandos base esperados son:
   ```bash
   docker compose up -d
-  ./gradlew check      # runs style + tests + ArchUnit + quality gates
+  ./gradlew check      # ejecuta style + tests + ArchUnit + quality gates
   ./gradlew :api:app:bootRun
   ./gradlew :bff:bootRun
   ```
 
-# Quality gates & testing
-- Each module must ship ArchUnit tests enforcing: no Spring/JPA in `domain`/`application`, no access to foreign infrastructure or repositories, controllers delegating through ports only.
-- CI (GitHub Actions) is expected to run: backend build, Checkstyle, unit + ArchUnit tests, JaCoCo, SonarCloud, Playwright, Gatling, and Trivy before merge. Wire these into `./gradlew check`/workflows as code lands.
-- Observability (Logback JSON + OpenTelemetry) is part of the definition of done—ensure new services emit `correlationId` and respect 90-day retention rules outlined in docs.
+# Quality gates y testing
 
-# Workflow & delivery
-- Branching follows Git Flow: `feature/*` → `develop`; releases originate from `release/*`, merged into `master` then back to `develop`; hotfixes start from `master`.
-- Use Conventional Commits for both commit messages and PR titles. Releases are tagged `vMAJOR.MINOR.PATCH` and publish JAR + GHCR images using immutable digests.
-- PRs merge via squash once CI is green; never add AI attributions in commit trailers. Deployment workflows must pin every GitHub Action to a full SHA (no `latest`).
+- Cada módulo debe incluir tests de ArchUnit que refuercen: sin Spring/JPA en `domain`/`application`, sin acceso a infraestructura o repositorios foráneos, controllers delegando solo a través de puertos.
+- CI (GitHub Actions) debe ejecutar: build backend, Checkstyle, tests unitarios + ArchUnit, JaCoCo, SonarCloud, Playwright, Gatling, y Trivy antes del merge. Conectar estos en `./gradlew check`/workflows mientras el código aterriza.
+- Observabilidad (Logback JSON + OpenTelemetry) es parte de la definición de done—asegurar que los nuevos servicios emitan `correlationId` y respeten las reglas de retención de 90 días descritas en docs.
 
-# Model selection guidelines
+# Workflow y delivery
 
-Before starting a task, suggest the appropriate model based on complexity:
+- El branching sigue Git Flow: `feature/*` → `develop`; los releases originan de `release/*`, se mergean a `master` y luego de vuelta a `develop`; hotfixes inician desde `master`.
+- Usar Conventional Commits tanto para mensajes de commit como títulos de PR. Los releases se tagean `vMAJOR.MINOR.PATCH` y publican JAR + imágenes GHCR usando digests inmutables.
+- Los PRs se mergean via squash una vez que CI está verde; nunca agregar atribuciones de AI en trailers de commit. Los workflows de deployment deben pinear cada GitHub Action a un SHA completo (sin `latest`).
 
-## Anthropic Claude Models
+# Guía de selección de modelos
 
-| Model | Best For | Avoid For |
-|-------|----------|-----------|
-| **Fable 5** | Research, multi-day tasks, most capable reasoning | Quick edits, cost-sensitive tasks |
-| **Opus 4.8** | Complex projects, agentic workflows, programming | Simple Q&A, documentation |
-| **Sonnet 5** | Daily tasks, writing, balanced cost/performance | Deep architectural analysis |
-| **Haiku 4.5** | Fast responses, high volume, low cost | Complex reasoning, multi-file refactors |
+Antes de iniciar una tarea, sugerir el modelo apropiado según la complejidad:
 
-### Task-to-Model Mapping
+## Modelos Anthropic Claude
 
-| Task Type | Recommended Model |
-|-----------|-------------------|
-| Scaffold new module | Opus 4.8 |
-| Multi-file refactoring | Opus 4.8 / Fable 5 |
-| Architecture design | Fable 5 |
-| Single-file edit | Sonnet 5 / Haiku 4.5 |
-| Documentation updates | Sonnet 5 |
-| Quick status checks | Haiku 4.5 |
+| Modelo | Mejor para | Evitar para |
+|--------|------------|-------------|
+| **Fable 5** | Investigación, tareas de varios días, razonamiento más capaz | Ediciones rápidas, tareas sensibles al costo |
+| **Opus 4.8** | Proyectos complejos, flujos agénticos, programación | Q&A simple, documentación |
+| **Sonnet 5** | Tareas diarias, escritura, balance costo/rendimiento | Análisis arquitectónico profundo |
+| **Haiku 4.5** | Respuestas rápidas, alto volumen, bajo costo | Razonamiento complejo, refactors multi-archivo |
+
+### Mapeo Tarea-Modelo
+
+| Tipo de Tarea | Modelo Recomendado |
+|---------------|-------------------|
+| Scaffold de nuevo módulo | Opus 4.8 |
+| Refactoring multi-archivo | Opus 4.8 / Fable 5 |
+| Diseño de arquitectura | Fable 5 |
+| Edición de archivo único | Sonnet 5 / Haiku 4.5 |
+| Actualizaciones de documentación | Sonnet 5 |
+| Verificaciones rápidas de estado | Haiku 4.5 |
 | Code review | Opus 4.8 |
-| Debug complex issue | Opus 4.8 / Fable 5 |
-| Research / investigation | Fable 5 |
+| Debug de issue complejo | Opus 4.8 / Fable 5 |
+| Investigación | Fable 5 |
 
-## Google Gemini Models
+## Modelos Google Gemini
 
-| Model | Best For |
-|-------|----------|
-| **Gemini Flash** | Simple edits, single-file updates, quick checks |
-| **Gemini Pro** | Architectural design, multi-module refactoring, deep analysis |
-
+| Modelo | Mejor para |
+|--------|------------|
+| **Gemini Flash** | Ediciones simples, actualizaciones de archivo único, verificaciones rápidas |
+| **Gemini Pro** | Diseño arquitectónico, refactoring multi-módulo, análisis profundo |

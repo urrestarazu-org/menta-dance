@@ -1,134 +1,134 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Este archivo proporciona guía a Claude Code (claude.ai/code) al trabajar con código en este repositorio.
 
-## Project Overview
+## Visión General del Proyecto
 
-Menta Dance is a dance academy management system with two business lines:
-- **Virtual**: Online courses (modules, lessons, videos)
-- **Physical**: In-person classes (schedules, attendance, check-in)
+Menta Dance es un sistema de gestión de academia de danza con dos líneas de negocio:
+- **Virtual**: Cursos online (módulos, lecciones, videos)
+- **Physical**: Clases presenciales (horarios, asistencia, check-in)
 
-## Architecture
+## Arquitectura
 
-**Monorepo + Modular Monolith** with Gradle multi-module.
+**Monorepo + Monolito Modular** con Gradle multi-módulo.
 
 ```
 menta-dance/
 ├── api/                     # Backend API (Spring Boot 3)
-│   ├── shared/              # :api:shared — common code
-│   ├── auth/                # :api:auth — authentication
-│   ├── virtual/             # :api:virtual — online courses
-│   ├── physical/            # :api:physical — in-person classes
-│   ├── billing/             # :api:billing — payments
-│   └── app/                 # :api:app — assembles everything
-├── bff/                     # Web frontend (Thymeleaf)
-└── android/                 # Mobile app (Kotlin)
+│   ├── shared/              # :api:shared — código común
+│   ├── auth/                # :api:auth — autenticación
+│   ├── virtual/             # :api:virtual — cursos online
+│   ├── physical/            # :api:physical — clases presenciales
+│   ├── billing/             # :api:billing — pagos
+│   └── app/                 # :api:app — ensambla todo
+├── bff/                     # Frontend web (Thymeleaf)
+└── android/                 # App móvil (Kotlin)
 ```
 
-## Tech Stack
+## Stack Tecnológico
 
 - **API/BFF**: Java 21, Spring Boot 3, Gradle (Kotlin DSL)
 - **Android**: Kotlin, Jetpack Compose, Hilt
-- **Database**: MySQL 8.0
+- **Base de datos**: MySQL 8.0
 - **Testing**: JUnit 5, Mockito, Testcontainers, ArchUnit
 
-## Clean Architecture (Mandatory)
+## Clean Architecture (Obligatoria)
 
-Every module follows Clean Architecture with three layers:
+Cada módulo sigue Clean Architecture con tres capas:
 
 ```
 module/
 └── src/main/java/com/menta/{module}/
-    ├── domain/           # Entities (POJOs), Value Objects, Domain Services
-    ├── application/      # Use Cases, Ports, DTOs
-    └── infrastructure/   # Controllers, JPA, External services
+    ├── domain/           # Entidades (POJOs), Value Objects, Servicios de Dominio
+    ├── application/      # Casos de Uso, Puertos, DTOs
+    └── infrastructure/   # Controllers, JPA, Servicios externos
 ```
 
-**Dependency Rule**: `domain ← application ← infrastructure`
+**Regla de Dependencia**: `domain ← application ← infrastructure`
 
-- `domain` has NO external dependencies (no Spring, no JPA)
-- `application` depends only on `domain`
-- `infrastructure` depends on `application` and `domain`
+- `domain` NO tiene dependencias externas (sin Spring, sin JPA)
+- `application` depende solo de `domain`
+- `infrastructure` depende de `application` y `domain`
 
-**Enforced with ArchUnit** — tests fail if violated.
+**Validado con ArchUnit** — los tests fallan si se viola.
 
-## Build Commands
+## Comandos de Build
 
 ```bash
-# Full build
+# Build completo
 ./gradlew build
 
-# Run API
+# Ejecutar API
 ./gradlew :api:app:bootRun
 
-# Run BFF
+# Ejecutar BFF
 ./gradlew :bff:bootRun
 
 # Tests
-./gradlew test                                    # All tests
-./gradlew :api:auth:test                          # Module tests
-./gradlew test --tests "*.UserServiceTest"        # Single class
-./gradlew test --tests "*ArchitectureTest"        # Architecture tests
+./gradlew test                                    # Todos los tests
+./gradlew :api:auth:test                          # Tests de módulo
+./gradlew test --tests "*.UserServiceTest"        # Clase específica
+./gradlew test --tests "*ArchitectureTest"        # Tests de arquitectura
 
-# Coverage
+# Cobertura
 ./gradlew jacocoTestReport
 ./gradlew jacocoTestCoverageVerification
 ```
 
-## Test Strategy (100/80/0)
+## Estrategia de Tests (100/80/0)
 
-- **100% coverage**: `billing.domain`, `billing.application`, `auth.domain`, `auth.application`
-- **80% coverage**: `virtual.*`, `physical.*`
-- **0% unit tests**: DTOs, configs, JPA repository interfaces
+- **100% cobertura**: `billing.domain`, `billing.application`, `auth.domain`, `auth.application`
+- **80% cobertura**: `virtual.*`, `physical.*`
+- **0% tests unitarios**: DTOs, configs, interfaces de repositorio JPA
 
-## Module Communication
+## Comunicación entre Módulos
 
-Modules communicate via **Java interfaces** (not HTTP):
+Los módulos se comunican via **interfaces Java** (no HTTP):
 
 ```java
-// In billing module
+// En módulo billing
 @RequiredArgsConstructor
 public class SubscriptionUseCase {
-    private final UserQueryPort userQuery; // Interface from shared
+    private final UserQueryPort userQuery; // Interface de shared
     // ...
 }
 ```
 
-## Key ADRs
+## ADRs Clave
 
 - [ADR-0019](docs/adr/0019-monorepo-structure.md): Monorepo
-- [ADR-0020](docs/adr/0020-modular-monolith.md): Modular Monolith
+- [ADR-0020](docs/adr/0020-modular-monolith.md): Monolito Modular
 - [ADR-0021](docs/adr/0021-clean-architecture-mandatory.md): Clean Architecture
 
-## Ports
+## Puertos
 
-| Service | Port |
-|---------|------|
-| API     | 8081 |
-| BFF     | 8080 |
-| MySQL   | 3306 |
+| Servicio | Puerto |
+|----------|--------|
+| API      | 8081   |
+| BFF      | 8080   |
+| MySQL    | 3306   |
 
-## Branch Naming
+## Nomenclatura de Branches
 
-- `feature/{description}`
-- `bugfix/{description}`
-- `hotfix/{description}`
+- `feature/{descripcion}`
+- `bugfix/{descripcion}`
+- `hotfix/{descripcion}`
 
-## Model Selection
+## Selección de Modelo
 
-Before starting a task, consider the appropriate model:
+Antes de iniciar una tarea, considerar el modelo apropiado:
 
-| Model | Best For | Cost |
-|-------|----------|------|
-| **Fable 5** | Research, multi-day tasks, most capable | $$$ |
-| **Opus 4.8** | Complex projects, agents, programming | $$ |
-| **Sonnet 5** | Daily tasks, writing, balanced | $ |
-| **Haiku 4.5** | Fast responses, high volume | ¢ |
+| Modelo | Mejor para | Costo |
+|--------|------------|-------|
+| **Fable 5** | Investigación, tareas de varios días, más capaz | $$$ |
+| **Opus 4.8** | Proyectos complejos, agentes, programación | $$ |
+| **Sonnet 5** | Tareas diarias, escritura, balanceado | $ |
+| **Haiku 4.5** | Respuestas rápidas, alto volumen | ¢ |
 
-### Quick Reference
+### Referencia Rápida
 
-- **Scaffold/refactor multi-file** → Opus 4.8
-- **Architecture design** → Fable 5
-- **Single-file edit** → Sonnet 5
-- **Documentation** → Sonnet 5
-- **Quick check** → Haiku 4.5
+- **Scaffold/refactor multi-archivo** → Opus 4.8
+- **Diseño de arquitectura** → Fable 5
+- **Edición de archivo único** → Sonnet 5
+- **Documentación** → Sonnet 5
+- **Verificación rápida** → Haiku 4.5
