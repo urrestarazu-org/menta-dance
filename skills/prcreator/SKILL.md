@@ -39,22 +39,27 @@ Spanish / English):
 ## Language Rules
 
 **Todo el contenido generado debe estar en español**, incluyendo:
+- Título del PR (descripción en español)
 - Descripción del PR (body)
 - Secciones del checklist
 - Mensajes de confirmación al usuario
 - Output de cada paso
 
 **Excepciones (siempre en inglés)**:
-- Título del PR (Conventional Commits requiere inglés)
+- Prefijo del tipo (`feat`, `fix`, `docs`, etc.) — requerido por Conventional Commits
+- Scope entre paréntesis (`auth`, `billing`, etc.)
 - Labels de GitHub
 - Nombres de branches
 - Comandos técnicos
 
 Ejemplo correcto:
 ```
-Title: feat(auth): add OAuth2 login flow     ← inglés
-Body:  ## Resumen                            ← español
-       Implementa el flujo de login...       ← español
+Title: feat(auth): agregar flujo de login OAuth2
+       ↑     ↑              ↑
+       tipo  scope          descripción en español
+
+Body:  ## Resumen
+       Implementa el flujo de login...
 ```
 
 ---
@@ -579,7 +584,7 @@ After the PR is created, capture the PR URL and optionally:
 
 ```bash
 gh pr create \
-  --title "fix(auth): resolve null pointer on oauth callback" \
+  --title "fix(auth): corregir null pointer en callback oauth" \
   --body "## Resumen
 Corrige una excepción de null pointer cuando el proveedor OAuth retorna un parámetro state vacío.
 
