@@ -108,11 +108,17 @@ public class SubscriptionUseCase {
 | BFF      | 8080   |
 | MySQL    | 3306   |
 
-## Nomenclatura de Branches
+## Git Flow
 
-- `feature/{descripcion}`
-- `bugfix/{descripcion}`
-- `hotfix/{descripcion}`
+| Rama | Propósito |
+|------|-----------|
+| `main` | Producción (protegida, requiere PR) |
+| `develop` | Integración (rama default) |
+| `feature/*` | Nuevas funcionalidades |
+| `release/*` | Preparación de release |
+| `hotfix/*` | Fixes urgentes |
+
+**Flujo**: `feature/*` → `develop` → `release/*` → `main` → tag `vX.Y.Z`
 
 ## Selección de Modelo
 
