@@ -37,9 +37,34 @@
 
 # Workflow y delivery
 
-- El branching sigue Git Flow: `feature/*` → `develop`; los releases originan de `release/*`, se mergean a `master` y luego de vuelta a `develop`; hotfixes inician desde `master`.
-- Usar Conventional Commits tanto para mensajes de commit como títulos de PR. Los releases se tagean `vMAJOR.MINOR.PATCH` y publican JAR + imágenes GHCR usando digests inmutables.
-- Los PRs se mergean via squash una vez que CI está verde; nunca agregar atribuciones de AI en trailers de commit. Los workflows de deployment deben pinear cada GitHub Action a un SHA completo (sin `latest`).
+## Git Flow
+
+El proyecto sigue Git Flow con las siguientes ramas:
+
+| Rama | Propósito | Protección |
+|------|-----------|------------|
+| `main` | Producción estable | Requiere PR, sin force push, historial lineal |
+| `develop` | Integración (rama default) | PRs apuntan acá por defecto |
+| `feature/*` | Desarrollo de funcionalidades | Temporal, se elimina post-merge |
+| `release/*` | Preparación de release | Temporal, se elimina post-merge |
+| `hotfix/*` | Fixes urgentes en producción | Temporal, se elimina post-merge |
+
+### Flujo de trabajo
+
+```
+1. feature/* → PR → develop       (desarrollo normal)
+2. develop → release/vX.Y.Z       (preparar release)
+3. release/* → PR → main          (publicar)
+4. Crear tag vX.Y.Z en main       (versionar)
+5. main → PR → develop            (sync back)
+```
+
+### Reglas
+
+- **Commits**: Usar Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`).
+- **PRs**: Mergear via squash una vez que CI está verde. Nunca agregar atribuciones de AI.
+- **Tags**: Releases se tagean `vMAJOR.MINOR.PATCH` y publican JAR + imágenes GHCR usando digests inmutables.
+- **Actions**: Los workflows de deployment deben pinear cada GitHub Action a un SHA completo (sin `latest`).
 
 # Guía de selección de modelos
 
