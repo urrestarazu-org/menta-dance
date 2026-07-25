@@ -52,6 +52,30 @@ module/
 
 **Validado con ArchUnit** — los tests fallan si se viola.
 
+## Convenciones de Código
+
+### Idioma
+
+**Regla**: Código en **inglés**, UI/documentación en **español** (idioma del negocio).
+
+- ✅ **Código** (clases, métodos, variables, enums, constantes): **Inglés**
+  ```java
+  public enum Role { ADMIN, INSTRUCTOR, STUDENT }
+  public class UserService { ... }
+  private String firstName;
+  ```
+
+- ✅ **UI/Mensajes al usuario**: **Español**
+  ```java
+  throw new ValidationException("El email ya está registrado");
+  return ResponseEntity.badRequest().body("Contraseña inválida");
+  ```
+
+- ✅ **Documentación pública** (READMEs, guías de usuario): **Español**
+- ✅ **Comentarios técnicos/JavaDoc**: **Inglés** (opcional español para lógica de negocio compleja)
+
+**Justificación**: Esta es una best practice universal que facilita colaboración internacional, reutilización de código, y onboarding de nuevos desarrolladores.
+
 ## Comandos de Build
 
 ```bash
