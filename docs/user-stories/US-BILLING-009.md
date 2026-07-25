@@ -1,16 +1,16 @@
 # US-BILLING-009: Administración y auditoría de pricing presencial
 
-**ID:** US-BILLING-009  
-**Título:** Configuración versionada de precio mensual y recargo individual  
-**Módulo / API:** Billing  
-**Prioridad (MoSCoW):** Must Have  
-**Estado:** Draft  
+**ID:** US-BILLING-009
+**Título:** Configuración versionada de precio mensual y recargo individual
+**Módulo / API:** Billing
+**Prioridad (MoSCoW):** Must Have
+**Estado:** Draft
 **Épica:** EP-05 Administración
 
 ## 1. Historia de Usuario
 
-> **Como** profesor responsable de un curso  
-> **Quiero** definir su mensualidad y recargo individual  
+> **Como** profesor responsable de un curso
+> **Quiero** definir su mensualidad y recargo individual
 > **Para** publicar precios trazables sin alterar cotizaciones existentes.
 
 ## 2. Criterios de Aceptación (BDD)

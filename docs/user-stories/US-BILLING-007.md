@@ -1,16 +1,16 @@
 # US-BILLING-007: Compra presencial y pago individual
 
-**ID:** US-BILLING-007  
-**Título:** Compra mensual o de sesión individual con asignación automática  
-**Módulos:** Billing, Physical y api:app  
-**Prioridad (MoSCoW):** Must Have  
-**Estado:** Draft  
+**ID:** US-BILLING-007
+**Título:** Compra mensual o de sesión individual con asignación automática
+**Módulos:** Billing, Physical y api:app
+**Prioridad (MoSCoW):** Must Have
+**Estado:** Draft
 **Épica:** EP-04 Academia Física
 
 ## 1. Historia de Usuario
 
-> **Como** alumno  
-> **Quiero** pagar un quote mensual o individual  
+> **Como** alumno
+> **Quiero** pagar un quote mensual o individual
 > **Para** recibir automáticamente los cupos de sus sesiones.
 
 ## 2. Criterios de Aceptación (BDD)

@@ -1,8 +1,8 @@
 # US-PHYSICAL-001: Check-in con código QR
 
-**ID:** US-PHYSICAL-001  
-**Módulo:** Physical  
-**Prioridad:** Must Have  
+**ID:** US-PHYSICAL-001
+**Módulo:** Physical
+**Prioridad:** Must Have
 **Estado:** Draft
 
 ## Historia de usuario

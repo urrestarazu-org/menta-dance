@@ -1,9 +1,9 @@
 # Plantilla de Historia de Usuario
 
-**ID:** [Ej. US-AUTH-001]  
-**Título:** [Un título corto y descriptivo, ej. Registro de nuevo alumno]  
-**Módulo / API:** [Auth API | Virtual API | Physical API | Billing API | BFF]  
-**Prioridad (MoSCoW):** [Must have | Should have | Could have | Won't have]  
+**ID:** [Ej. US-AUTH-001]
+**Título:** [Un título corto y descriptivo, ej. Registro de nuevo alumno]
+**Módulo / API:** [Auth API | Virtual API | Physical API | Billing API | BFF]
+**Prioridad (MoSCoW):** [Must have | Should have | Could have | Won't have]
 **Estado:** [Draft | Ready for Dev | In Progress | In Testing | Done]
 
 ---
