@@ -104,7 +104,7 @@ subprojects {
 
         checkstyle {
             toolVersion = checkstyleVersion
-            configFile = rootProject.file("config/checkstyle/checkstyle.xml")
+            configFile = rootProject.file("config/checkstyle/google_checks.xml")
         }
 
         jacoco {

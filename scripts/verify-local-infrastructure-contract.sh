@@ -25,7 +25,7 @@ reject() {
 }
 
 require '^spring-boot = "3\.5\.14"$' gradle/libs.versions.toml
-require '^checkstyle = "10\.23\.0"$' gradle/libs.versions.toml
+require '^checkstyle = "13\.8\.0"$' gradle/libs.versions.toml
 require 'activateDependencyLocking\(\)' build.gradle.kts
 require 'MYSQL_DATABASE: menta' docker-compose.yml
 require 'MYSQL_USER: \$\{MYSQL_APP_USER' docker-compose.yml

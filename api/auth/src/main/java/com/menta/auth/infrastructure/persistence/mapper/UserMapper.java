@@ -9,7 +9,11 @@ import com.menta.shared.domain.vo.Email;
  * Mapper between User domain entity and UserJpaEntity.
  * Manual mapping to avoid framework dependencies in domain.
  */
-public class UserMapper {
+public final class UserMapper {
+
+    private UserMapper() {
+        // Utility class - prevent instantiation
+    }
 
     public static UserJpaEntity toJpaEntity(User user) {
         if (user == null) {

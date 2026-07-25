@@ -12,6 +12,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 @SpringBootApplication(scanBasePackages = "com.menta")
 @EnableJpaRepositories(basePackages = "com.menta")
 @EntityScan(basePackages = "com.menta")
+@SuppressWarnings("checkstyle:HideUtilityClassConstructor")
 public class MentaDanceApplication {
 
     public static void main(String[] args) {
