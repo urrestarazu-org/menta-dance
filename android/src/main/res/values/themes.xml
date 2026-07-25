@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style
-        name="Theme.MentaDance"
-        parent="@android:style/Theme.DeviceDefault.DayNight.NoActionBar" />
+    <!-- Base application theme for Jetpack Compose.
+         Using a simple NoActionBar theme since Compose handles its own theming. -->
+    <style name="Theme.MentaDance" parent="android:Theme.Material.Light.NoActionBar" />
 </resources>
