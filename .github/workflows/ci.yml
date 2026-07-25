@@ -28,19 +28,19 @@ jobs:
         run: ./gradlew clean build
 
       - name: Run tests
-        run: ./gradlew test
+        run: ./gradlew test -x :android:testDebugUnitTest
 
       - name: Run architecture tests
-        run: ./gradlew test --tests "*ArchitectureTest" -x :android:testDebugUnitTest -x :android:testReleaseUnitTest
+        run: ./gradlew :api:auth:test :api:billing:test :api:physical:test :api:virtual:test --tests "*ArchitectureTest"
 
       - name: Generate JaCoCo report
-        run: ./gradlew jacocoTestReport -x :android:testDebugUnitTest -x :android:testReleaseUnitTest
+        run: ./gradlew jacocoTestReport -x :android:testDebugUnitTest
 
       - name: Check code coverage
-        run: ./gradlew jacocoTestCoverageVerification -x :android:testDebugUnitTest -x :android:testReleaseUnitTest
+        run: ./gradlew jacocoTestCoverageVerification -x :android:testDebugUnitTest
 
       - name: Run Checkstyle
-        run: ./gradlew checkstyleMain checkstyleTest -x :android:checkstyleMain -x :android:checkstyleTest
+        run: ./gradlew :api:auth:checkstyleMain :api:auth:checkstyleTest :api:billing:checkstyleMain :api:billing:checkstyleTest :api:physical:checkstyleMain :api:physical:checkstyleTest :api:virtual:checkstyleMain :api:virtual:checkstyleTest :api:shared:checkstyleMain :api:shared:checkstyleTest :api:app:checkstyleMain :api:app:checkstyleTest :bff:checkstyleMain :bff:checkstyleTest
 
       - name: Upload test results
         if: always()
