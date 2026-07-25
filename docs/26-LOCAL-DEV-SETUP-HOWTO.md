@@ -17,10 +17,10 @@ cp .env.example .env
 ./scripts/start-infra.sh
 
 # 3. Levantar API
-./scripts/start-api.sh
+./gradlew :api:app:bootRun
 
 # 4. Levantar BFF (opcional, en otra terminal)
-./scripts/start-bff.sh
+./gradlew :bff:bootRun
 
 # 5. Ver logs en Grafana (opcional)
 # Abrí http://localhost:3000 → Explore → Loki
@@ -264,22 +264,22 @@ El proyecto incluye scripts para facilitar el manejo de servicios:
 
 ```bash
 ./scripts/start-infra.sh   # Levantar MySQL, Redis, OTEL, Loki, Grafana
-./scripts/stop-infra.sh    # Detener toda la infraestructura
+docker compose down    # Detener toda la infraestructura
 ```
 
 ### API (Backend)
 
 ```bash
-./scripts/start-api.sh     # Levantar API en puerto 8081
-./scripts/stop-api.sh      # Detener API
-./scripts/restart-api.sh   # Reiniciar API (útil después de cambios de código)
+./gradlew :api:app:bootRun     # Levantar API en puerto 8081
+pkill -f 'api:app:bootRun'      # Detener API
+pkill -f 'api:app:bootRun' && sleep 2 && ./gradlew :api:app:bootRun   # Reiniciar API (útil después de cambios de código)
 ```
 
 ### BFF (Frontend Web)
 
 ```bash
-./scripts/start-bff.sh     # Levantar BFF en puerto 8080
-./scripts/stop-bff.sh      # Detener BFF
+./gradlew :bff:bootRun     # Levantar BFF en puerto 8080
+pkill -f 'bff:bootRun'      # Detener BFF
 ```
 
 **Ejemplo de flujo de trabajo:**
@@ -287,16 +287,16 @@ El proyecto incluye scripts para facilitar el manejo de servicios:
 ```bash
 # Levantar todo
 ./scripts/start-infra.sh
-./scripts/start-api.sh
+./gradlew :api:app:bootRun
 
 # Hacer cambios en el código...
 
 # Reiniciar API para aplicar cambios
-./scripts/restart-api.sh
+pkill -f 'api:app:bootRun' && sleep 2 && ./gradlew :api:app:bootRun
 
 # Detener todo
-./scripts/stop-api.sh
-./scripts/stop-infra.sh
+pkill -f 'api:app:bootRun'
+docker compose down
 ```
 
 ---
@@ -306,9 +306,9 @@ El proyecto incluye scripts para facilitar el manejo de servicios:
 ### Usando scripts (recomendado)
 
 ```bash
-./scripts/stop-api.sh      # Detener API
-./scripts/stop-bff.sh      # Detener BFF
-./scripts/stop-infra.sh    # Detener infraestructura
+pkill -f 'api:app:bootRun'      # Detener API
+pkill -f 'bff:bootRun'      # Detener BFF
+docker compose down    # Detener infraestructura
 ```
 
 ### Forma manual
