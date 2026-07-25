@@ -1,16 +1,16 @@
 # US-BILLING-008: Transferencia presencial y excepción de capacidad
 
-**ID:** US-BILLING-008  
-**Título:** Pago presencial por transferencia con tratamiento manual de excepción  
-**Módulos:** Billing, Physical y api:app  
-**Prioridad (MoSCoW):** Should Have  
-**Estado:** Draft  
+**ID:** US-BILLING-008
+**Título:** Pago presencial por transferencia con tratamiento manual de excepción
+**Módulos:** Billing, Physical y api:app
+**Prioridad (MoSCoW):** Should Have
+**Estado:** Draft
 **Épica:** EP-03 Suscripciones y pagos
 
 ## 1. Historia de Usuario
 
-> **Como** alumno  
-> **Quiero** pagar por transferencia  
+> **Como** alumno
+> **Quiero** pagar por transferencia
 > **Para** adquirir un curso presencial con comprobante verificable.
 
 ## 2. Criterios de Aceptación (BDD)

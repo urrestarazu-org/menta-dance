@@ -1,8 +1,8 @@
 # US-PHYSICAL-002: Ver historial de asistencia
 
-**ID:** US-PHYSICAL-002  
-**Módulo:** Physical  
-**Prioridad:** Should Have  
+**ID:** US-PHYSICAL-002
+**Módulo:** Physical
+**Prioridad:** Should Have
 **Estado:** Draft
 
 ## Historia de usuario
@@ -40,4 +40,3 @@
 - [ ] Pruebas para meses con cuatro y cinco sesiones.
 - [ ] Pruebas de autorización, paginación y cálculo de porcentaje.
 - [ ] Contrato OpenAPI actualizado.
-

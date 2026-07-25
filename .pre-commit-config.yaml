@@ -1,0 +1,41 @@
+# Pre-commit hooks configuration
+# See https://pre-commit.com for more information
+repos:
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-xml
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+
+  # Gradle wrapper validation
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-executables-have-shebangs
+
+  # Local hooks using Gradle
+  - repo: local
+    hooks:
+      # Run Checkstyle on staged Java files
+      - id: checkstyle
+        name: Checkstyle
+        entry: ./gradlew checkstyleMain checkstyleTest
+        language: system
+        files: \.java$
+        pass_filenames: false
+
+      # Run architecture tests (fast validation)
+      - id: archunit-tests
+        name: ArchUnit Tests
+        entry: bash -c './gradlew :api:auth:test :api:billing:test :api:physical:test :api:virtual:test --tests "*ArchitectureTest"'
+        language: system
+        files: \.java$
+        pass_filenames: false

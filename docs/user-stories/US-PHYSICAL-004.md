@@ -1,8 +1,8 @@
 # US-PHYSICAL-004: Compra y asignación automática de cupo
 
-**ID:** US-PHYSICAL-004  
-**Módulos:** Billing y Physical  
-**Prioridad:** Must Have  
+**ID:** US-PHYSICAL-004
+**Módulos:** Billing y Physical
+**Prioridad:** Must Have
 **Estado:** Draft
 
 ## Historia de usuario

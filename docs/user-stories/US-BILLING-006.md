@@ -1,16 +1,16 @@
 # US-BILLING-006: Cotización de curso presencial
 
-**ID:** US-BILLING-006  
-**Título:** Cotización mensual o individual de clases presenciales  
-**Módulo / API:** Billing  
-**Prioridad (MoSCoW):** Must Have  
-**Estado:** Draft  
+**ID:** US-BILLING-006
+**Título:** Cotización mensual o individual de clases presenciales
+**Módulo / API:** Billing
+**Prioridad (MoSCoW):** Must Have
+**Estado:** Draft
 **Épica:** EP-03 Suscripciones y pagos
 
 ## 1. Historia de Usuario
 
-> **Como** alumno  
-> **Quiero** obtener una cotización persistible para una modalidad concreta  
+> **Como** alumno
+> **Quiero** obtener una cotización persistible para una modalidad concreta
 > **Para** conocer exactamente qué sesiones, precio y vigencia voy a pagar.
 
 ## 2. Criterios de Aceptación (BDD)

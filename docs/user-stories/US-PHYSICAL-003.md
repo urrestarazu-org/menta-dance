@@ -1,8 +1,8 @@
 # US-PHYSICAL-003: Ver clases y sesiones disponibles
 
-**ID:** US-PHYSICAL-003  
-**Módulo:** Physical  
-**Prioridad:** Must Have  
+**ID:** US-PHYSICAL-003
+**Módulo:** Physical
+**Prioridad:** Must Have
 **Estado:** Draft
 
 ## Historia de usuario
