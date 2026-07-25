@@ -99,3 +99,23 @@ Antes de iniciar una tarea, sugerir el modelo apropiado según la complejidad:
 |--------|------------|
 | **Gemini Flash** | Ediciones simples, actualizaciones de archivo único, verificaciones rápidas |
 | **Gemini Pro** | Diseño arquitectónico, refactoring multi-módulo, análisis profundo |
+
+# Project Skills
+
+Los siguientes skills están disponibles en este proyecto:
+
+## prcreator
+
+**Path:** `skills/prcreator/SKILL.md`
+
+**Trigger:** create a PR, open a pull request, gh pr create, crear un PR, hacer pull request
+
+**Descripción:** Orquesta la creación de Pull Requests en GitHub usando el CLI `gh` local. Aplica formato Conventional Commits v1.0.0, detecta automáticamente scope desde los archivos modificados, respeta branch protection, y genera body estructurado según el tipo de PR (feat, fix, hotfix, docs, etc.).
+
+**Características:**
+- Auto-detección de tipo de PR desde commits y branch name
+- Scope inferido automáticamente desde paths modificados (auth, billing, virtual, physical, etc.)
+- Detección de breaking changes (BREAKING CHANGE: o `!`)
+- Templates específicos por tipo con checklist en español
+- Respeta Git Flow (feature/* → develop, hotfix/* → main)
+- Validación de ambiente (gh auth, branch pushed, etc.)
