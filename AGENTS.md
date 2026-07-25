@@ -1,6 +1,6 @@
 # Estado del repositorio (leer primero)
 
-- El repositorio es **solo documentación hoy**. Antes de escribir código, revisar `docs/02-ARCHITECTURE.md`, `docs/27-CLEAN-ARCHITECTURE-GUIDE.md`, `docs/24-LOCAL-DEV-SETUP.md` y los ADRs relevantes; el scaffold que crees debe satisfacer esos contratos.
+- El repositorio es **solo documentación hoy**. Antes de escribir código, revisar `docs/02-ARCHITECTURE.md`, `docs/27-CLEAN-ARCHITECTURE-GUIDE.md`, `docs/24-LOCAL-DEV-SETUP-REQUIREMENTS.md` y los ADRs relevantes; el scaffold que crees debe satisfacer esos contratos.
 - Stack objetivo: Java 21 + Spring Boot 3 monolito modular (`api`) compuesto por `api:app`, cliente Android Kotlin + Jetpack Compose, Node 20.11.1 para assets web, Docker Compose para helpers de infraestructura.
 
 # Boundaries y ownership de módulos
