@@ -19,6 +19,7 @@ release.properties
 # Gradle
 .gradle/
 **/build/
+**/bin/
 !gradle/wrapper/gradle-wrapper.jar
 
 # Spring Boot
@@ -60,6 +61,7 @@ Thumbs.db
 desktop.ini
 
 # Temporary files
+tmp/
 *.tmp
 *.swp
 *.swo
