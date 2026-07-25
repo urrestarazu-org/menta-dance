@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: menta-dance-bff
+
+  # Thymeleaf configuration
+  thymeleaf:
+    cache: false
+    prefix: classpath:/templates/
+    suffix: .html
+
+# Server configuration
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+# API backend URL
+menta:
+  api:
+    base-url: http://localhost:8081
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+# Logging
+logging:
+  level:
+    root: INFO
+    com.menta: DEBUG
