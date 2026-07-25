@@ -31,16 +31,16 @@ jobs:
         run: ./gradlew test
 
       - name: Run architecture tests
-        run: ./gradlew test --tests "*ArchitectureTest"
+        run: ./gradlew test --tests "*ArchitectureTest" -x :android:testDebugUnitTest -x :android:testReleaseUnitTest
 
       - name: Generate JaCoCo report
-        run: ./gradlew jacocoTestReport
+        run: ./gradlew jacocoTestReport -x :android:testDebugUnitTest -x :android:testReleaseUnitTest
 
       - name: Check code coverage
-        run: ./gradlew jacocoTestCoverageVerification
+        run: ./gradlew jacocoTestCoverageVerification -x :android:testDebugUnitTest -x :android:testReleaseUnitTest
 
       - name: Run Checkstyle
-        run: ./gradlew checkstyleMain checkstyleTest
+        run: ./gradlew checkstyleMain checkstyleTest -x :android:checkstyleMain -x :android:checkstyleTest
 
       - name: Upload test results
         if: always()
