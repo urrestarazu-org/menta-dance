@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "Menta Dance API",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}

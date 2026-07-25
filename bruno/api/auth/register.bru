@@ -1,0 +1,38 @@
+meta {
+  name: Register User
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/{{apiVersion}}/users/register
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "student@example.com",
+    "password": "SecurePass123!",
+    "role": "STUDENT"
+  }
+}
+
+docs {
+  Register a new user in the system.
+
+  Available roles:
+  - STUDENT: Regular student
+  - INSTRUCTOR: Dance instructor
+  - ADMIN: System administrator
+}
+
+tests {
+  test("Status is 201", function() {
+    expect(res.getStatus()).to.equal(201);
+  });
+
+  test("Response has user ID", function() {
+    expect(res.getBody().id).to.be.a('number');
+  });
+}
