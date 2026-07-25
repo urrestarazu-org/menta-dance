@@ -22,13 +22,13 @@ menta-dance/
 │   ├── billing/             # :api:billing — pagos
 │   └── app/                 # :api:app — ensambla todo
 ├── bff/                     # Frontend web (Thymeleaf)
-└── android/                 # App móvil (Kotlin)
+└── android/                 # App móvil (Kotlin + Compose + Hilt)
 ```
 
 ## Stack Tecnológico
 
 - **API/BFF**: Java 21, Spring Boot 3, Gradle (Kotlin DSL)
-- **Android**: Kotlin, Jetpack Compose, Hilt
+- **Android**: Kotlin, Jetpack Compose, Hilt, Clean Architecture (`presentation/domain/data/di`)
 - **Base de datos**: MySQL 8.0
 - **Testing**: JUnit 5, Mockito, Testcontainers, ArchUnit
 
