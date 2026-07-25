@@ -372,7 +372,7 @@ presentation -> domain <- data
 ```
 
 ```text
-android/app/src/main/java/com/menta/
+android/src/main/java/com/menta/android/
 ├── domain/        # modelos, puertos y casos de uso puros
 ├── data/          # Retrofit, Room, DTOs, mappers y repositorios
 ├── presentation/  # ViewModels, estado de UI y pantallas Compose

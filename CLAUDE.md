@@ -22,13 +22,13 @@ menta-dance/
 │   ├── billing/             # :api:billing — pagos
 │   └── app/                 # :api:app — ensambla todo
 ├── bff/                     # Frontend web (Thymeleaf)
-└── android/                 # App móvil (Kotlin)
+└── android/                 # App móvil (Kotlin + Compose + Hilt)
 ```
 
 ## Stack Tecnológico
 
 - **API/BFF**: Java 21, Spring Boot 3, Gradle (Kotlin DSL)
-- **Android**: Kotlin, Jetpack Compose, Hilt
+- **Android**: Kotlin, Jetpack Compose, Hilt, Clean Architecture (`presentation/domain/data/di`)
 - **Base de datos**: MySQL 8.0
 - **Testing**: JUnit 5, Mockito, Testcontainers, ArchUnit
 
@@ -51,6 +51,30 @@ module/
 - `infrastructure` depende de `application` y `domain`
 
 **Validado con ArchUnit** — los tests fallan si se viola.
+
+## Convenciones de Código
+
+### Idioma
+
+**Regla**: Código en **inglés**, UI/documentación en **español** (idioma del negocio).
+
+- ✅ **Código** (clases, métodos, variables, enums, constantes): **Inglés**
+  ```java
+  public enum Role { ADMIN, INSTRUCTOR, STUDENT }
+  public class UserService { ... }
+  private String firstName;
+  ```
+
+- ✅ **UI/Mensajes al usuario**: **Español**
+  ```java
+  throw new ValidationException("El email ya está registrado");
+  return ResponseEntity.badRequest().body("Contraseña inválida");
+  ```
+
+- ✅ **Documentación pública** (READMEs, guías de usuario): **Español**
+- ✅ **Comentarios técnicos/JavaDoc**: **Inglés** (opcional español para lógica de negocio compleja)
+
+**Justificación**: Esta es una best practice universal que facilita colaboración internacional, reutilización de código, y onboarding de nuevos desarrolladores.
 
 ## Comandos de Build
 

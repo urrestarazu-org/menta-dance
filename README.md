@@ -59,7 +59,7 @@ Las academias de danza suelen operar con herramientas fragmentadas: WhatsApp par
 | Kotlin | Lenguaje principal |
 | Jetpack Compose | UI declarativa |
 | Hilt | Inyección de dependencias |
-| Retrofit | Cliente HTTP |
+| Clean Architecture Android | `presentation/domain/data/di` |
 | Android Keystore | Almacenamiento seguro de tokens |
 
 ### Infraestructura
@@ -204,10 +204,11 @@ menta-dance/
 ├── bff/                          # Backend for Frontend (Thymeleaf)
 │
 ├── android/                      # Aplicación móvil
-│   ├── app/                      # Módulo principal
-│   ├── domain/                   # Lógica de negocio
-│   ├── data/                     # Repositorios y APIs
-│   └── di/                       # Inyección de dependencias (Hilt)
+│   └── src/main/java/com/menta/android/
+│       ├── presentation/         # ViewModels, UI state y pantallas Compose
+│       ├── domain/               # Casos de uso, modelos y puertos
+│       ├── data/                 # Repositorios y adaptadores
+│       └── di/                   # Wiring con Hilt
 │
 ├── docs/                         # Documentación técnica
 │   ├── adr/                      # Architecture Decision Records

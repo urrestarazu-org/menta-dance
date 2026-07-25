@@ -8,7 +8,7 @@ primer entregable debe ser ejecutable, repetible y verificable.
 ## Fase 0 — Scaffold y plataforma
 
 1. Crear monorepo Gradle: `api:shared`, `api:auth`, `api:billing`,
-   `api:virtual`, `api:physical`, `api:app`, `bff` y `android:app`.
+   `api:virtual`, `api:physical`, `api:app`, `bff` y `android`.
 2. Configurar Java 21, Spring Boot 3.5.14, wrapper, catálogo/version locking,
    Checkstyle, JaCoCo, SonarCloud y ArchUnit.
 3. Crear `docker-compose.yml` local para MySQL, Redis y auxiliares; usar usuario

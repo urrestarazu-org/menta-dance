@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [ develop, main ]
+  pull_request:
+    branches: [ develop, main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build with Gradle
+        run: ./gradlew clean build
+
+      - name: Run tests
+        run: ./gradlew test -x :android:testDebugUnitTest
+
+      - name: Run architecture tests
+        run: ./gradlew :api:auth:test :api:billing:test :api:physical:test :api:virtual:test --tests "*ArchitectureTest"
+
+      - name: Generate JaCoCo report
+        run: ./gradlew jacocoTestReport -x :android:testDebugUnitTest
+
+      - name: Check code coverage
+        run: ./gradlew jacocoTestCoverageVerification -x :android:testDebugUnitTest
+
+      - name: Run Checkstyle
+        run: ./gradlew :api:auth:checkstyleMain :api:auth:checkstyleTest :api:billing:checkstyleMain :api:billing:checkstyleTest :api:physical:checkstyleMain :api:physical:checkstyleTest :api:virtual:checkstyleMain :api:virtual:checkstyleTest :api:shared:checkstyleMain :api:shared:checkstyleTest :api:app:checkstyleMain :api:app:checkstyleTest :bff:checkstyleMain :bff:checkstyleTest
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: '**/build/test-results/test/*.xml'
+
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: '**/build/reports/jacoco/test/html/**'

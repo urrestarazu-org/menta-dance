@@ -19,6 +19,7 @@ release.properties
 # Gradle
 .gradle/
 **/build/
+**/bin/
 !gradle/wrapper/gradle-wrapper.jar
 
 # Spring Boot
@@ -46,7 +47,8 @@ captures/
 *.iml
 *.ipr
 *.iws
-out/
+/out/
+!**/port/out/
 
 # Visual Studio Code
 .vscode/
@@ -60,6 +62,7 @@ Thumbs.db
 desktop.ini
 
 # Temporary files
+tmp/
 *.tmp
 *.swp
 *.swo

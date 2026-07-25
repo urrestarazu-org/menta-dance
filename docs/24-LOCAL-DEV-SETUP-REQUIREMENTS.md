@@ -49,3 +49,7 @@ docker compose up -d
 
 Antes de que exista el scaffold, estos comandos son el contrato de Fase 0 y no
 se consideran ejecutables todavía.
+
+## Ver también
+
+- [26-LOCAL-DEV-SETUP-HOWTO.md](26-LOCAL-DEV-SETUP-HOWTO.md) — guía práctica con scripts, troubleshooting y operación local paso a paso.
