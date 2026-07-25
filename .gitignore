@@ -47,7 +47,8 @@ captures/
 *.iml
 *.ipr
 *.iws
-out/
+/out/
+!**/port/out/
 
 # Visual Studio Code
 .vscode/
