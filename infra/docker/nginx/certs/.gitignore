@@ -1,0 +1,9 @@
+# Ignorar certificados SSL
+*.crt
+*.key
+*.pem
+*.csr
+
+# Excepto el .gitkeep
+!.gitkeep
+!.gitignore
