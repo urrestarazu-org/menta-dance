@@ -1,0 +1,51 @@
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Environment files
+.env
+.env.*
+*.env
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+*~
+
+# Build artifacts
+build/
+target/
+.gradle/
+gradle-app.setting
+!gradle-wrapper.jar
+
+# Logs
+*.log
+logs/
+
+# Documentation
+*.md
+docs/
+
+# Testing
+.pre-commit-config.yaml
+
+# Docker
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+
+# CI/CD
+.github/
+
+# macOS
+.DS_Store
+
+# Android specific (if not needed in API/BFF builds)
+*.apk
+*.aab
+local.properties
