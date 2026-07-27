@@ -55,3 +55,119 @@ jobs:
         with:
           name: coverage-reports
           path: '**/build/reports/jacoco/test/html/**'
+
+  nginx-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate NGINX configuration syntax
+        run: |
+          docker run --rm \
+            --add-host menta-api:127.0.0.1 \
+            --add-host menta-bff:127.0.0.1 \
+            -v $(pwd)/infra/docker/nginx/conf/nginx.conf:/etc/nginx/nginx.conf:ro \
+            -v $(pwd)/infra/docker/nginx/conf/conf.d:/etc/nginx/conf.d:ro \
+            nginx:1.27.3-alpine \
+            nginx -t
+
+      - name: Validate production NGINX configuration syntax
+        run: |
+          mkdir -p /tmp/nginx-certs
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -subj '/CN=mentadance.com' \
+            -keyout /tmp/nginx-certs/mentadance.com.key \
+            -out /tmp/nginx-certs/mentadance.com-fullchain.crt
+          docker run --rm \
+            --add-host menta-api:127.0.0.1 \
+            --add-host menta-bff:127.0.0.1 \
+            -v $(pwd)/infra/docker/nginx/conf/nginx.production.conf:/etc/nginx/nginx.conf:ro \
+            -v $(pwd)/infra/docker/nginx/conf/conf.d:/etc/nginx/conf.d:ro \
+            -v /tmp/nginx-certs:/etc/nginx/certs:ro \
+            nginx:1.27.3-alpine \
+            nginx -t
+
+      - name: Validate all locations resolve
+        run: |
+          docker run --rm \
+            --add-host menta-api:127.0.0.1 \
+            --add-host menta-bff:127.0.0.1 \
+            -v $(pwd)/infra/docker/nginx/conf/nginx.conf:/etc/nginx/nginx.conf:ro \
+            -v $(pwd)/infra/docker/nginx/conf/conf.d:/etc/nginx/conf.d:ro \
+            nginx:1.27.3-alpine \
+            sh -c "nginx -T | grep -E 'location|upstream' || exit 1"
+
+      - name: Fail on remaining TODOs in nginx config
+        run: |
+          # Bloquea merge si hay TODOs sin resolver en config crítica
+          if grep -nE 'TODO|FIXME|XXX' infra/docker/nginx/conf/*.conf infra/docker/nginx/conf/conf.d/*.conf; then
+            echo "::error::TODOs sin resolver en config nginx"
+            exit 1
+          fi
+
+  docker-compose-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate database compose
+        working-directory: infra/docker/database
+        run: |
+          export MYSQL_ROOT_PASSWORD=test
+          export MYSQL_APP_PASSWORD=test
+          docker compose config > /dev/null
+
+      - name: Validate nginx compose
+        working-directory: infra/docker/nginx
+        run: |
+          export MYSQL_ROOT_PASSWORD=test
+          export MYSQL_APP_PASSWORD=test
+          docker compose config > /dev/null
+
+      - name: Validate production nginx compose overlay
+        working-directory: infra/docker/nginx
+        run: |
+          export MYSQL_ROOT_PASSWORD=test
+          export MYSQL_APP_PASSWORD=test
+          ENVIRONMENT=production docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.production.yml \
+            config > /dev/null
+
+      - name: Validate app compose
+        working-directory: infra/docker/app
+        run: |
+          export MYSQL_ROOT_PASSWORD=test
+          export MYSQL_APP_PASSWORD=test
+          docker compose config > /dev/null
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install ShellCheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Validate shell scripts
+        run: |
+          shellcheck infra/docker/manage.sh
+          shellcheck infra/docker/deploy.sh
+          shellcheck infra/docker/quick-deploy.sh
+
+  hadolint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Hadolint
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: |
+            infra/docker/app/Dockerfile.api
+            infra/docker/app/Dockerfile.bff
+          failure-threshold: warning

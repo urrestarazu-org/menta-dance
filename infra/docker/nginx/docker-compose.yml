@@ -1,6 +1,6 @@
 services:
   nginx:
-    image: nginx:alpine
+    image: nginx:1.27.3-alpine
     container_name: menta-nginx
     restart: unless-stopped
     ports:
@@ -31,7 +31,7 @@ services:
       start_period: 10s
 
   api:
-    image: menta-api:latest
+    image: menta-api:${IMAGE_VERSION:-latest}
     container_name: menta-api
     restart: unless-stopped
     expose:
@@ -71,7 +71,7 @@ services:
       start_period: 60s
 
   bff:
-    image: menta-bff:latest
+    image: menta-bff:${IMAGE_VERSION:-latest}
     container_name: menta-bff
     restart: unless-stopped
     expose:

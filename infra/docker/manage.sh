@@ -328,9 +328,18 @@ health() {
 
 # Limpiar contenedores detenidos
 clean() {
-    log_info "Limpiando contenedores detenidos, redes y volúmenes huérfanos..."
-    docker system prune -f
-    log_success "Limpieza completada"
+    log_info "Limpiando recursos del proyecto..."
+
+    # Solo limpiar volúmenes del proyecto
+    docker volume ls --filter "name=menta-" --format "{{.Name}}" | \
+        xargs -r docker volume rm 2>/dev/null || true
+
+    # Solo limpiar redes del proyecto
+    docker network ls --filter "name=menta-" --format "{{.Name}}" | \
+        grep -v bridge | \
+        xargs -r docker network rm 2>/dev/null || true
+
+    log_success "Recursos del proyecto limpiados"
 }
 
 # Main

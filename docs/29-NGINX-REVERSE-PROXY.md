@@ -443,6 +443,9 @@ MYSQL_APP_PASSWORD=your_app_password_here
 # Spring Boot Profiles
 SPRING_PROFILES_ACTIVE=docker
 
+# Docker Image Versioning (reproducible builds)
+IMAGE_VERSION=1.0.0
+
 # JVM Options (opcional)
 JAVA_OPTS=-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC
 EOF

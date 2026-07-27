@@ -68,14 +68,14 @@ build_docker_images() {
     # Build API
     log_info "Construyendo imagen menta-api..."
     docker build \
-        -t menta-api:latest \
+        -t "menta-api:${IMAGE_VERSION:-latest}" \
         -f "${SCRIPT_DIR}/app/Dockerfile.api" \
         "${PROJECT_ROOT}"
 
     # Build BFF
     log_info "Construyendo imagen menta-bff..."
     docker build \
-        -t menta-bff:latest \
+        -t "menta-bff:${IMAGE_VERSION:-latest}" \
         -f "${SCRIPT_DIR}/app/Dockerfile.bff" \
         "${PROJECT_ROOT}"
 
