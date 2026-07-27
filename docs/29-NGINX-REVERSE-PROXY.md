@@ -526,7 +526,18 @@ cd infra/docker
 
 Para habilitar HTTPS en producción:
 
-1. **Obtener certificados SSL**:
+1. **Copiar template de configuración de producción**:
+
+```bash
+cd infra/docker/nginx/conf
+cp nginx.production.conf.example nginx.production.conf
+
+# Editar valores específicos del ambiente si es necesario
+# (dominio, paths de certificados, etc.)
+vim nginx.production.conf
+```
+
+2. **Obtener certificados SSL**:
 
 ```bash
 # Con Let's Encrypt (en servidor producción)
@@ -535,7 +546,7 @@ sudo certbot certonly --standalone \
     -d www.mentadance.com
 ```
 
-2. **Copiar certificados**:
+3. **Copiar certificados**:
 
 ```bash
 sudo cp /etc/letsencrypt/live/mentadance.com/fullchain.pem \
@@ -545,7 +556,7 @@ sudo cp /etc/letsencrypt/live/mentadance.com/privkey.pem \
     infra/docker/nginx/certs/mentadance.com.key
 ```
 
-3. **Seleccionar el modo de producción**:
+4. **Seleccionar el modo de producción**:
 
 ```bash
 ENVIRONMENT=production ./manage.sh start
@@ -554,7 +565,11 @@ ENVIRONMENT=production ./manage.sh start
 El script verifica ambos certificados antes de levantar servicios y aplica
 `docker-compose.production.yml`, que monta `nginx.production.conf`.
 
-4. **Recargar Nginx**:
+**Nota**: `nginx.production.conf` NO está versionado en git (solo su template
+`.example`). Esto permite tener configuraciones específicas por ambiente sin
+conflictos. Similar al patrón `.env` / `.env.example`.
+
+5. **Recargar Nginx**:
 
 ```bash
 docker exec menta-nginx nginx -s reload

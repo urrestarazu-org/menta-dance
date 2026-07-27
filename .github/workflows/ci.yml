@@ -12,10 +12,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
         with:
           java-version: '21'
           distribution: 'temurin'
@@ -44,14 +44,14 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: test-results
           path: '**/build/test-results/test/*.xml'
 
       - name: Upload coverage reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: coverage-reports
           path: '**/build/reports/jacoco/test/html/**'
@@ -60,7 +60,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Validate NGINX configuration syntax
         run: |
@@ -82,7 +82,7 @@ jobs:
           docker run --rm \
             --add-host menta-api:127.0.0.1 \
             --add-host menta-bff:127.0.0.1 \
-            -v $(pwd)/infra/docker/nginx/conf/nginx.production.conf:/etc/nginx/nginx.conf:ro \
+            -v $(pwd)/infra/docker/nginx/conf/nginx.production.conf.example:/etc/nginx/nginx.conf:ro \
             -v $(pwd)/infra/docker/nginx/conf/conf.d:/etc/nginx/conf.d:ro \
             -v /tmp/nginx-certs:/etc/nginx/certs:ro \
             nginx:1.27.3-alpine \
@@ -110,7 +110,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Validate database compose
         working-directory: infra/docker/database
@@ -147,7 +147,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Install ShellCheck
         run: sudo apt-get install -y shellcheck
@@ -162,12 +162,45 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Run Hadolint
-        uses: hadolint/hadolint-action@v3.1.0
+        uses: hadolint/hadolint-action@54c9adbab1582c2ef04b2016b760714a4bfde3cf # v3.1.0
         with:
-          dockerfile: |
-            infra/docker/app/Dockerfile.api
-            infra/docker/app/Dockerfile.bff
+          dockerfile: infra/docker/app/Dockerfile.api
           failure-threshold: warning
+
+      - name: Run Hadolint for BFF Dockerfile
+        uses: hadolint/hadolint-action@54c9adbab1582c2ef04b2016b760714a4bfde3cf # v3.1.0
+        with:
+          dockerfile: infra/docker/app/Dockerfile.bff
+          failure-threshold: warning
+
+  nginx-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Build application images
+        run: |
+          docker build -t menta-api:ci -f infra/docker/app/Dockerfile.api .
+          docker build -t menta-bff:ci -f infra/docker/app/Dockerfile.bff .
+
+      - name: Start test stack
+        run: |
+          cp .env.example .env
+          sed -i 's/^MYSQL_ROOT_PASSWORD=.*/MYSQL_ROOT_PASSWORD=test-root-password/' .env
+          sed -i 's/^MYSQL_APP_PASSWORD=.*/MYSQL_APP_PASSWORD=test-app-password/' .env
+          IMAGE_VERSION=ci docker compose --env-file .env \
+            -f infra/docker/nginx/docker-compose.yml up -d
+
+      - name: Verify NGINX routing and security headers
+        run: |
+          timeout 180 bash -c 'until curl --fail --silent http://localhost/health > /dev/null; do sleep 2; done'
+          curl --fail --silent http://localhost/api/actuator/health > /dev/null
+          curl --fail --silent --head http://localhost/health | grep -qi '^X-Frame-Options:'
+
+      - name: Stop test stack
+        if: always()
+        run: docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml down || true
