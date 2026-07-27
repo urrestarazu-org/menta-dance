@@ -81,30 +81,19 @@ services:
       SERVER_PORT: 8080
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-docker}
 
-      # Database (si BFF necesita acceso directo)
-      SPRING_DATASOURCE_URL: jdbc:mysql://menta-mysql:3306/menta?serverTimezone=UTC&useSSL=false
-      SPRING_DATASOURCE_USERNAME: ${MYSQL_APP_USER:-menta_app}
-      SPRING_DATASOURCE_PASSWORD: ${MYSQL_APP_PASSWORD:?Set MYSQL_APP_PASSWORD in .env}
-
-      # Redis
-      SPRING_DATA_REDIS_HOST: menta-redis
-      SPRING_DATA_REDIS_PORT: 6379
-
       # Observability
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://menta-otel-collector:4318/v1/traces
       MANAGEMENT_OTLP_LOGS_ENDPOINT: http://menta-otel-collector:4318/v1/logs
 
-      # API interna (si BFF consume API)
-      API_BASE_URL: http://menta-api:8081/api
+      # API Backend (BFF solo consume API via HTTP)
+      MENTA_API_BASE_URL: http://api:8081
 
       # JVM Opts
       JAVA_OPTS: ${JAVA_OPTS:--XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC}
     networks:
       - menta-network
     depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
+      api:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
@@ -123,8 +112,8 @@ services:
       MYSQL_DATABASE: menta
       MYSQL_USER: ${MYSQL_APP_USER:-menta_app}
       MYSQL_PASSWORD: ${MYSQL_APP_PASSWORD:?Set MYSQL_APP_PASSWORD in .env}
-    ports:
-      - "3306:3306"
+    expose:
+      - "3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
@@ -141,8 +130,8 @@ services:
     container_name: menta-redis
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
-    ports:
-      - "6379:6379"
+    expose:
+      - "6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -160,9 +149,9 @@ services:
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     volumes:
       - ../../../observability/otel-collector-config.yml:/etc/otelcol-contrib/config.yaml:ro
-    ports:
-      - "4317:4317"
-      - "4318:4318"
+    expose:
+      - "4317"
+      - "4318"
     depends_on:
       loki:
         condition: service_started
@@ -177,8 +166,8 @@ services:
     volumes:
       - ../../../observability/loki-config.yml:/etc/loki/config.yml:ro
       - loki_data:/loki
-    ports:
-      - "3100:3100"
+    expose:
+      - "3100"
     networks:
       - menta-network
 
@@ -188,14 +177,14 @@ services:
     restart: unless-stopped
     environment:
       - GF_AUTH_ANONYMOUS_ENABLED=true
-      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
-      - GF_AUTH_DISABLE_LOGIN_FORM=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - GF_AUTH_DISABLE_LOGIN_FORM=false
       - GF_SECURITY_ALLOW_EMBEDDING=true
     volumes:
       - ../../../observability/grafana/provisioning:/etc/grafana/provisioning:ro
       - grafana_data:/var/lib/grafana
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
     depends_on:
       - loki
     networks:

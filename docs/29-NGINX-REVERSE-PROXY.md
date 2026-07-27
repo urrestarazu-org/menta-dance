@@ -703,6 +703,8 @@ docker logs menta-nginx 2>&1 | grep -i ssl
 
 ## Correcciones de Seguridad Aplicadas
 
+### PR1 - Operacional (2026-07-26)
+
 Basado en revisión de seguridad (MiniMax-M3), se aplicaron las siguientes correcciones críticas:
 
 ### 🔴 Críticos
@@ -777,16 +779,19 @@ Ambos servidores (HTTP y HTTPS) incluyen `locations.conf`, garantizando configur
 
 **Problema**: Módulos `auth` y `billing` expuestos sin protección contra credential stuffing y card-testing.
 
-**Solución aplicada**:
+**Solución aplicada** (actualizada en PR2):
 ```nginx
 # nginx.conf (líneas 61-62)
 limit_req_zone $binary_remote_addr zone=auth:10m rate=10r/s;
 limit_req_zone $binary_remote_addr zone=billing:30m rate=5r/s;
 
-# locations.conf
-location /api/auth/    { limit_req zone=auth burst=20 nodelay; ... }
-location /api/billing/ { limit_req zone=billing burst=10; ... }
+# locations.conf — Paths reales confirmados en controllers (no DEAD CODE)
+location ~ ^/api/v1/users/register { limit_req zone=auth burst=10 nodelay; ... }
+location ~ ^/api/v1/auth/          { limit_req zone=auth burst=20 nodelay; ... }
+location ~ ^/api/v1/billing/       { limit_req zone=billing burst=10; ... }
 ```
+
+**Corrección PR2**: Los paths originales `/api/auth/` y `/api/billing/` eran DEAD CODE (no matcheaban ningún controller real). Actualizado a paths reales `/api/v1/*` confirmados en `UserController.java`.
 
 **Defensa en profundidad** contra ataques conocidos, no YAGNI.
 
@@ -848,6 +853,118 @@ location /api/billing/upload {
 
 ---
 
+### PR2 - Seguridad y Arquitectura (2026-07-27)
+
+Correcciones arquitecturales y de seguridad identificadas en revisión post-PR1.
+
+#### 1. Servicios Internos Sin Exposición al Host
+
+**Problema**: MySQL, Redis, OTLP Collector, Loki y Grafana publicaban puertos al host, haciéndolos accesibles fuera del stack Docker.
+
+**Solución aplicada**:
+```yaml
+# ANTES
+mysql:
+  ports:
+    - "3306:3306"
+
+# DESPUÉS
+mysql:
+  expose:
+    - "3306"  # Solo visible en la red Docker menta-network
+```
+
+**Servicios corregidos**: MySQL (3306), Redis (6379), OTLP Collector (4317, 4318), Loki (3100), Grafana (3000).
+
+**Único puerto expuesto al host**: Nginx (80, 443).
+
+#### 2. BFF Sin Credenciales de Base de Datos (Violación Arquitectural)
+
+**Problema**: BFF recibía credenciales directas de MySQL y Redis, violando el contrato arquitectural de `docs/AGENTS.md` (BFF solo debe comunicarse con API vía HTTP).
+
+**Solución aplicada**:
+```yaml
+# ELIMINADAS del servicio BFF
+SPRING_DATASOURCE_URL
+SPRING_DATASOURCE_USERNAME
+SPRING_DATASOURCE_PASSWORD
+SPRING_DATA_REDIS_HOST
+SPRING_DATA_REDIS_PORT
+
+# CORREGIDA variable API
+MENTA_API_BASE_URL: http://api:8081  # Antes: API_BASE_URL: http://menta-api:8081/api
+```
+
+**Dependencias corregidas**: BFF ahora depende solo de `api:service_healthy`, no de MySQL ni Redis.
+
+#### 3. Grafana Acceso Anónimo Restringido
+
+**Problema**: Grafana permitía acceso anónimo como Administrador, exponiendo modificación de dashboards y configuración sin autenticación.
+
+**Solución aplicada**:
+```yaml
+# ANTES
+GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+GF_AUTH_DISABLE_LOGIN_FORM=true
+
+# DESPUÉS
+GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+GF_AUTH_DISABLE_LOGIN_FORM=false
+```
+
+**Impacto**: Acceso anónimo solo lectura, login requerido para modificaciones.
+
+#### 4. HTTPS Habilitado con Redirección HTTP→HTTPS
+
+**Problema**: Producción funcionaba solo por HTTP, bloque HTTPS comentado.
+
+**Solución aplicada**:
+- Bloque HTTPS descomentado (puerto 443) con certificados en convención documentada: `mentadance.com-fullchain.crt` y `mentadance.com.key`
+- Redirección HTTP→HTTPS automática para `mentadance.com` y `www.mentadance.com`
+- Servidor HTTP solo responde a `localhost` (desarrollo local)
+- Agregado `proxy_hide_header X-Powered-By;` para ocultar header de Spring Boot
+
+**Configuración SSL**:
+```nginx
+server {
+    listen 80;
+    server_name mentadance.com www.mentadance.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name mentadance.com;
+
+    ssl_certificate /etc/nginx/certs/mentadance.com-fullchain.crt;
+    ssl_certificate_key /etc/nginx/certs/mentadance.com.key;
+
+    # ... SSL config, HSTS, security headers
+}
+```
+
+#### 5. Rate Limiting Corregido (DEAD CODE Eliminado)
+
+**Problema**: Rate limiting en `/api/auth/` y `/api/billing/` era DEAD CODE — ningún controller Spring Boot exponía esos prefijos. Paths reales son `/api/v1/users/register` (UserController.java) y `/api/v1/billing/*` (futuro).
+
+**Solución aplicada**:
+```nginx
+# ELIMINADO (DEAD CODE)
+location /api/auth/    { limit_req zone=auth burst=20 nodelay; ... }
+location /api/billing/ { limit_req zone=billing burst=10; ... }
+
+# REEMPLAZADO con paths reales confirmados en controllers
+location ~ ^/api/v1/users/register { limit_req zone=auth burst=10 nodelay; ... }
+location ~ ^/api/v1/auth/          { limit_req zone=auth burst=20 nodelay; ... }
+location ~ ^/api/v1/billing/       { limit_req zone=billing burst=10; ... }
+```
+
+**Validación**: Paths confirmados con `grep -rn "@RequestMapping" api/auth/src/.../controller/`.
+
+**Impacto**: Protección real contra credential stuffing en endpoints sensibles.
+
+---
+
 ## Decisiones Pendientes
 
 ### 1. Cache Busting para Assets Estáticos
@@ -903,8 +1020,9 @@ location /api/billing/upload {
 | 2026-07-26 | Implementación completada: estructura, Dockerfiles, nginx.conf, scripts | Alejandro Urrestarazu |
 | 2026-07-26 | **Correcciones de seguridad críticas aplicadas** (revisión MiniMax-M3) | Alejandro Urrestarazu |
 | 2026-07-26 | Arquitectura modular con archivos compartidos (conf.d/) | Alejandro Urrestarazu |
+| 2026-07-27 | **PR2 - Seguridad y arquitectura**: Servicios internos sin exposición al host, Grafana Viewer, BFF sin credenciales DB, HTTPS habilitado, rate limiting corregido | Alejandro Urrestarazu |
 
 ---
 
-**Estado**: ✅ **Hardening de seguridad completado** (pendiente: cache busting, testing, SSL)
-**Última actualización**: 2026-07-26
+**Estado**: ✅ **Hardening de seguridad completado (PR2)** | 🟡 Pendiente: cache busting, SSL en producción
+**Última actualización**: 2026-07-27
