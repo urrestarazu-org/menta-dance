@@ -167,8 +167,8 @@ networks:
 ### Decisión 5: SSL/TLS en Desarrollo vs Producción
 
 **Decisión**:
-- **Desarrollo local**: Sin Nginx (acceso directo a 8080/8081)
-- **Staging/Production**: Con Nginx + SSL
+- **Desarrollo local**: Nginx usa `nginx.conf`, sin certificados ni TLS.
+- **Staging/Production**: Nginx usa `nginx.production.conf`, con TLS obligatorio.
 
 **Justificación**:
 - Desarrollo local no requiere complejidad de SSL
@@ -176,11 +176,11 @@ networks:
 
 **Implementación**:
 ```bash
-# Desarrollo (sin nginx)
-./manage.sh start --no-nginx
+# Desarrollo local con Nginx HTTP
+ENVIRONMENT=local ./manage.sh start
 
-# Producción (con nginx)
-./manage.sh start
+# Producción (con Nginx + TLS)
+ENVIRONMENT=production ./manage.sh start
 ```
 
 ### Decisión 6: Certificados SSL
@@ -542,11 +542,14 @@ sudo cp /etc/letsencrypt/live/mentadance.com/privkey.pem \
     infra/docker/nginx/certs/mentadance.com.key
 ```
 
-3. **Descomentar configuración HTTPS en nginx.conf**:
+3. **Seleccionar el modo de producción**:
 
-- Descomentar servidor HTTPS (línea ~240)
-- Descomentar redirect HTTP → HTTPS (línea ~40)
-- Descomentar redirect www → non-www (línea ~48)
+```bash
+ENVIRONMENT=production ./manage.sh start
+```
+
+El script verifica ambos certificados antes de levantar servicios y aplica
+`docker-compose.production.yml`, que monta `nginx.production.conf`.
 
 4. **Recargar Nginx**:
 
@@ -919,9 +922,11 @@ GF_AUTH_DISABLE_LOGIN_FORM=false
 **Problema**: Producción funcionaba solo por HTTP, bloque HTTPS comentado.
 
 **Solución aplicada**:
-- Bloque HTTPS descomentado (puerto 443) con certificados en convención documentada: `mentadance.com-fullchain.crt` y `mentadance.com.key`
-- Redirección HTTP→HTTPS automática para `mentadance.com` y `www.mentadance.com`
-- Servidor HTTP solo responde a `localhost` (desarrollo local)
+- `nginx.production.conf` habilita HTTPS (puerto 443) con certificados en la convención documentada: `mentadance.com-fullchain.crt` y `mentadance.com.key`
+- `docker-compose.production.yml` se aplica únicamente con `ENVIRONMENT=production`
+- `manage.sh` rechaza el arranque de producción cuando faltan los certificados
+- `nginx.conf` mantiene el servidor HTTP local sin requerir certificados
+- Redirección HTTP→HTTPS automática para `mentadance.com` y `www.mentadance.com` en producción
 - Agregado `proxy_hide_header X-Powered-By;` para ocultar header de Spring Boot
 
 **Configuración SSL**:

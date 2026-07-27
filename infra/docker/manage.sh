@@ -14,9 +14,11 @@ NC='\033[0m' # No Color
 
 # Directorios
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 DATABASE_DIR="${SCRIPT_DIR}/database"
 APP_DIR="${SCRIPT_DIR}/app"
 NGINX_DIR="${SCRIPT_DIR}/nginx"
+ENV_FILE="${PROJECT_ROOT}/.env"
 
 # Flags
 USE_NGINX=true
@@ -60,12 +62,11 @@ check_docker() {
 
 # Verificar que .env exista
 check_env() {
-    local env_file="${SCRIPT_DIR}/.env"
-    if [[ ! -f "$env_file" ]]; then
-        log_warning "Archivo .env no encontrado en ${SCRIPT_DIR}"
+    if [[ ! -f "$ENV_FILE" ]]; then
+        log_warning "Archivo .env no encontrado en ${PROJECT_ROOT}"
         log_info "Copiando .env.example a .env..."
-        if [[ -f "${SCRIPT_DIR}/.env.example" ]]; then
-            cp "${SCRIPT_DIR}/.env.example" "${SCRIPT_DIR}/.env"
+        if [[ -f "${PROJECT_ROOT}/.env.example" ]]; then
+            cp "${PROJECT_ROOT}/.env.example" "$ENV_FILE"
             log_success ".env creado. Por favor, edita las variables necesarias."
         else
             log_error ".env.example no encontrado. Crea manualmente .env con las variables necesarias."
@@ -74,15 +75,56 @@ check_env() {
     fi
 }
 
+load_environment() {
+    if [[ -z "${ENVIRONMENT:-}" && -f "$ENV_FILE" ]]; then
+        ENVIRONMENT="$(sed -n 's/^ENVIRONMENT=//p' "$ENV_FILE" | tail -n 1)"
+    fi
+
+    ENVIRONMENT="${ENVIRONMENT:-local}"
+    if [[ "$ENVIRONMENT" != "local" && "$ENVIRONMENT" != "production" ]]; then
+        log_error "ENVIRONMENT debe ser local o production"
+        exit 1
+    fi
+    export ENVIRONMENT
+}
+
+docker_compose() {
+    local compose_dir="$1"
+    shift
+    (cd "$compose_dir" && docker compose --env-file "$ENV_FILE" "$@")
+}
+
+nginx_compose() {
+    if [[ "$ENVIRONMENT" == "production" ]]; then
+        docker_compose "$NGINX_DIR" -f docker-compose.yml -f docker-compose.production.yml "$@"
+    else
+        docker_compose "$NGINX_DIR" "$@"
+    fi
+}
+
+validate_production() {
+    if [[ "$ENVIRONMENT" == "production" ]]; then
+        local certificate="${NGINX_DIR}/certs/mentadance.com-fullchain.crt"
+        local private_key="${NGINX_DIR}/certs/mentadance.com.key"
+        if [[ ! -f "$certificate" || ! -f "$private_key" ]]; then
+            log_error "Production mode requires TLS certificates"
+            log_error "Missing: $certificate or $private_key"
+            exit 1
+        fi
+    fi
+}
+
 # Iniciar servicios
 start() {
     log_info "Iniciando servicios de Menta Dance..."
-    check_docker
     check_env
+    load_environment
+    validate_production
+    check_docker
 
     # 1. Iniciar infraestructura (MySQL, Redis, Observability)
     log_info "Iniciando servicios de infraestructura (MySQL, Redis, Observability)..."
-    (cd "${DATABASE_DIR}" && docker compose up -d)
+    docker_compose "$DATABASE_DIR" up -d
 
     # 2. Esperar a que MySQL esté healthy
     log_info "Esperando a que MySQL esté listo..."
@@ -105,10 +147,10 @@ start() {
     # 3. Iniciar aplicaciones (API + BFF)
     if [[ "$USE_NGINX" == true ]]; then
         log_info "Iniciando aplicaciones con Nginx..."
-        (cd "${NGINX_DIR}" && docker compose up -d)
+        nginx_compose up -d
     else
         log_info "Iniciando aplicaciones sin Nginx (desarrollo local)..."
-        (cd "${APP_DIR}" && docker compose up -d)
+        docker_compose "$APP_DIR" up -d
     fi
 
     log_success "Todos los servicios iniciados"
@@ -123,17 +165,18 @@ stop() {
     # Detener nginx/app primero
     if [[ "$USE_NGINX" == true ]] && docker ps -q --filter "name=menta-nginx" > /dev/null 2>&1; then
         log_info "Deteniendo servicios con Nginx..."
-        (cd "${NGINX_DIR}" && docker compose down)
+        load_environment
+        nginx_compose down
     fi
 
     if docker ps -q --filter "name=menta-api" > /dev/null 2>&1; then
         log_info "Deteniendo aplicaciones..."
-        (cd "${APP_DIR}" && docker compose down)
+        docker_compose "$APP_DIR" down
     fi
 
     # Detener infraestructura
     log_info "Deteniendo servicios de infraestructura..."
-    (cd "${DATABASE_DIR}" && docker compose down)
+    docker_compose "$DATABASE_DIR" down
 
     log_success "Todos los servicios detenidos"
 }
