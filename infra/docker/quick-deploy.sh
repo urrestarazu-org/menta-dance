@@ -62,15 +62,15 @@ check_containers() {
 
 # Build JARs con Gradle
 build_jars() {
-    local gradle_args="bootJar"
+    local -a gradle_args=()
 
     if [[ "$SKIP_TESTS" == true ]]; then
-        gradle_args="$gradle_args -x test"
+        gradle_args+=(-x test)
         log_warning "Skipping tests"
     fi
 
     log_info "Compilando JARs con Gradle..."
-    (cd "${PROJECT_ROOT}" && ./gradlew :api:app:bootJar :bff:bootJar $gradle_args)
+    (cd "${PROJECT_ROOT}" && ./gradlew :api:app:bootJar :bff:bootJar "${gradle_args[@]}")
     log_success "JARs compilados"
 }
 
@@ -79,7 +79,8 @@ copy_jars() {
     log_info "Copiando JARs a contenedores..."
 
     # Copiar API JAR
-    local api_jar=$(find "${PROJECT_ROOT}/api/app/build/libs" -name "app-*.jar" | head -n 1)
+    local api_jar
+    api_jar=$(find "${PROJECT_ROOT}/api/app/build/libs" -name "menta-dance-api.jar" | head -n 1)
     if [[ -z "$api_jar" ]]; then
         log_error "JAR de API no encontrado"
         exit 1
@@ -89,7 +90,8 @@ copy_jars() {
     docker cp "$api_jar" menta-api:/app/app.jar
 
     # Copiar BFF JAR
-    local bff_jar=$(find "${PROJECT_ROOT}/bff/build/libs" -name "bff-*.jar" | head -n 1)
+    local bff_jar
+    bff_jar=$(find "${PROJECT_ROOT}/bff/build/libs" -name "bff-*.jar" | head -n 1)
     if [[ -z "$bff_jar" ]]; then
         log_error "JAR de BFF no encontrado"
         exit 1
