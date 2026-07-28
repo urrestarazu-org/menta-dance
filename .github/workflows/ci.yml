@@ -200,8 +200,8 @@ jobs:
 
           docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml ps --no-trunc || true
           if [ "$compose_status" -ne 0 ]; then
-            echo "=== menta-api logs ==="
-            docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml logs menta-api --no-color || true
+            echo "=== api logs ==="
+            docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml logs api --no-color || true
             echo "=== compose logs ==="
             docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml logs --no-color || true
             exit "$compose_status"
@@ -224,7 +224,7 @@ jobs:
         if: failure()
         run: |
           docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml ps --no-trunc || true
-          docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml logs menta-api --no-color || true
+          docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml logs api --no-color || true
           docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml logs --no-color || true
 
       - name: Stop test stack

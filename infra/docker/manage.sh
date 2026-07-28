@@ -209,7 +209,8 @@ status() {
         IFS=':' read -r container_name display_name <<< "$container_info"
 
         if docker ps --format '{{.Names}}' | grep -q "^${container_name}$"; then
-            local health_status=$(docker inspect --format='{{.State.Health.Status}}' "${container_name}" 2>/dev/null || echo "N/A")
+            local health_status
+            health_status=$(docker inspect --format='{{.State.Health.Status}}' "${container_name}" 2>/dev/null || echo "N/A")
             local status_icon="✅"
             local status_text="RUNNING"
 
@@ -307,7 +308,8 @@ health() {
 
     for container in "${containers[@]}"; do
         if docker ps --format '{{.Names}}' | grep -q "^${container}$"; then
-            local health_status=$(docker inspect --format='{{.State.Health.Status}}' "${container}" 2>/dev/null || echo "N/A")
+            local health_status
+            health_status=$(docker inspect --format='{{.State.Health.Status}}' "${container}" 2>/dev/null || echo "N/A")
 
             if [[ "$health_status" == "healthy" ]]; then
                 log_success "${container}: HEALTHY"
