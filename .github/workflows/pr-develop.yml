@@ -1,15 +1,21 @@
-name: CI
+name: PR to Develop (Fast Feedback)
 
+# Workflow optimizado para PRs a develop: solo checks rápidos
+# Objetivo: feedback inmediato (<5 min) para iterar rápido
 on:
-  push:
-    branches: [ develop, main ]
   pull_request:
-    branches: [ develop, main ]
+    branches: [develop]
+  # Mantiene CI para merges/direct pushes a develop. Las ramas feature/* solo
+  # activan pull_request, por lo que una PR no duplica esta ejecución.
+  push:
+    branches: [develop]
+
+permissions:
+  contents: read
 
 jobs:
-  build-and-test:
+  quick-build-and-test:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         # SHA pinning: fija una revisión inmutable de la acción y mitiga el retargeting de tags
@@ -29,36 +35,19 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew clean build
 
-      - name: Run tests
+      - name: Run unit tests
+        # -x :android:testDebugUnitTest: excluye tests Android (más lentos)
         run: ./gradlew test -x :android:testDebugUnitTest
 
       - name: Run architecture tests
+        # ArchUnit: valida Clean Architecture (domain ← application ← infrastructure)
         run: ./gradlew :api:auth:test :api:billing:test :api:physical:test :api:virtual:test --tests "*ArchitectureTest"
 
-      - name: Generate JaCoCo report
-        run: ./gradlew jacocoTestReport -x :android:testDebugUnitTest
-
-      - name: Check code coverage
-        run: ./gradlew jacocoTestCoverageVerification -x :android:testDebugUnitTest
-
       - name: Run Checkstyle
+        # Checkstyle: valida estilo de código (Google Java Style)
         run: ./gradlew :api:auth:checkstyleMain :api:auth:checkstyleTest :api:billing:checkstyleMain :api:billing:checkstyleTest :api:physical:checkstyleMain :api:physical:checkstyleTest :api:virtual:checkstyleMain :api:virtual:checkstyleTest :api:shared:checkstyleMain :api:shared:checkstyleTest :api:app:checkstyleMain :api:app:checkstyleTest :bff:checkstyleMain :bff:checkstyleTest
 
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: test-results
-          path: '**/build/test-results/test/*.xml'
-
-      - name: Upload coverage reports
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: coverage-reports
-          path: '**/build/reports/jacoco/test/html/**'
-
-  # Job independiente que corre en paralelo con build-and-test
+  # Job independiente que corre en paralelo con quick-build-and-test
   nginx-validation:
     runs-on: ubuntu-latest
     steps:
@@ -197,72 +186,3 @@ jobs:
         with:
           dockerfile: infra/docker/app/Dockerfile.bff
           failure-threshold: warning
-
-  # Integration test: levanta stack completo y verifica comportamiento real
-  nginx-integration:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - name: Build application images
-        # Construye imágenes con tag :ci (no :latest, para evitar colisiones)
-        run: |
-          docker build -t menta-api:ci -f infra/docker/app/Dockerfile.api .
-          docker build -t menta-bff:ci -f infra/docker/app/Dockerfile.bff .
-
-      - name: Start test stack
-        run: |
-          cp .env.example .env
-          # sed -i: edita archivo in-place (modifica el .env directamente)
-          sed -i 's/^MYSQL_ROOT_PASSWORD=.*/MYSQL_ROOT_PASSWORD=test-root-password/' .env
-          sed -i 's/^MYSQL_APP_PASSWORD=.*/MYSQL_APP_PASSWORD=test-app-password/' .env
-          # set +e: deshabilita "exit on error" temporalmente
-          # Permite capturar exit code sin abortar el script
-          set +e
-          IMAGE_VERSION=ci docker compose --env-file .env \
-            -f infra/docker/nginx/docker-compose.yml up -d
-          compose_status=$?  # Captura exit code del comando anterior
-          set -e  # Re-habilita "exit on error"
-
-          # || true: previene que el comando falle el step (diagnóstico)
-          docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml ps --no-trunc || true
-          if [ "$compose_status" -ne 0 ]; then
-            # Si compose up falló, dumpeamos logs antes de salir
-            echo "=== api logs ==="
-            docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml logs api --no-color || true
-            echo "=== compose logs ==="
-            docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml logs --no-color || true
-            exit "$compose_status"
-          fi
-
-      - name: Verify NGINX routing and security headers
-        run: |
-          # Retry loop: espera hasta 3 minutos (90 intentos × 2s) a que servicios estén listos
-          # Simula healthcheck antes de proceder con las pruebas
-          for attempt in $(seq 1 90); do
-            if curl --fail --silent http://localhost/health > /dev/null; then
-              break
-            fi
-            echo "Waiting for NGINX health endpoint (attempt $attempt/90)..."
-            sleep 2
-          done
-          # Pruebas de routing: verifica que NGINX proxy funciona correctamente
-          curl --fail --silent http://localhost/health > /dev/null
-          curl --fail --silent http://localhost/api/actuator/health > /dev/null
-          # Verificación de security headers: grep -qi = case-insensitive
-          curl --fail --silent --head http://localhost/health | grep -qi '^X-Frame-Options:'
-
-      - name: Dump stack diagnostics on failure
-        # if: failure() → solo ejecuta si algún step previo falló (conditional execution)
-        if: failure()
-        run: |
-          docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml ps --no-trunc || true
-          docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml logs api --no-color || true
-          docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml logs --no-color || true
-
-      - name: Stop test stack
-        # if: always() → ejecuta siempre (éxito o fallo) para cleanup
-        # Importante: evita dejar contenedores corriendo en runner
-        if: always()
-        run: docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml down || true
