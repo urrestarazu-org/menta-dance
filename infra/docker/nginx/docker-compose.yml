@@ -42,7 +42,7 @@ services:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-docker}
 
       # Database
-      SPRING_DATASOURCE_URL: jdbc:mysql://menta-mysql:3306/menta?serverTimezone=UTC&useSSL=false
+      SPRING_DATASOURCE_URL: jdbc:mysql://menta-mysql:3306/menta?serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true
       SPRING_DATASOURCE_USERNAME: ${MYSQL_APP_USER:-menta_app}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_APP_PASSWORD:?Set MYSQL_APP_PASSWORD in .env}
 
