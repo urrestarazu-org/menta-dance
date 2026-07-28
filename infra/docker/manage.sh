@@ -333,10 +333,16 @@ clean() {
     log_info "Limpiando recursos del proyecto..."
 
     # Solo limpiar volúmenes del proyecto
+    # --filter "name=menta-": scope a recursos del proyecto (evita borrar otros proyectos)
+    # --format "{{.Name}}": output solo nombres (formato Go template)
+    # xargs -r: ejecuta comando solo si stdin no está vacío (-r = --no-run-if-empty)
+    # 2>/dev/null: suprime errores (volúmenes en uso)
+    # || true: previene exit 1 si algún comando falla
     docker volume ls --filter "name=menta-" --format "{{.Name}}" | \
         xargs -r docker volume rm 2>/dev/null || true
 
     # Solo limpiar redes del proyecto
+    # grep -v bridge: excluye la red "bridge" default de Docker
     docker network ls --filter "name=menta-" --format "{{.Name}}" | \
         grep -v bridge | \
         xargs -r docker network rm 2>/dev/null || true
