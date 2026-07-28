@@ -192,14 +192,40 @@ jobs:
           cp .env.example .env
           sed -i 's/^MYSQL_ROOT_PASSWORD=.*/MYSQL_ROOT_PASSWORD=test-root-password/' .env
           sed -i 's/^MYSQL_APP_PASSWORD=.*/MYSQL_APP_PASSWORD=test-app-password/' .env
+          set +e
           IMAGE_VERSION=ci docker compose --env-file .env \
             -f infra/docker/nginx/docker-compose.yml up -d
+          compose_status=$?
+          set -e
+
+          docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml ps --no-trunc || true
+          if [ "$compose_status" -ne 0 ]; then
+            echo "=== menta-api logs ==="
+            docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml logs menta-api --no-color || true
+            echo "=== compose logs ==="
+            docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml logs --no-color || true
+            exit "$compose_status"
+          fi
 
       - name: Verify NGINX routing and security headers
         run: |
-          timeout 180 bash -c 'until curl --fail --silent http://localhost/health > /dev/null; do sleep 2; done'
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent http://localhost/health > /dev/null; then
+              break
+            fi
+            echo "Waiting for NGINX health endpoint (attempt $attempt/90)..."
+            sleep 2
+          done
+          curl --fail --silent http://localhost/health > /dev/null
           curl --fail --silent http://localhost/api/actuator/health > /dev/null
           curl --fail --silent --head http://localhost/health | grep -qi '^X-Frame-Options:'
+
+      - name: Dump stack diagnostics on failure
+        if: failure()
+        run: |
+          docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml ps --no-trunc || true
+          docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml logs menta-api --no-color || true
+          docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml logs --no-color || true
 
       - name: Stop test stack
         if: always()
