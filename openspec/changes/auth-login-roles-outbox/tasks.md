@@ -42,14 +42,14 @@ Chain strategy: feature-branch-chain
 
 ## Phase 3: Infrastructure adapters
 
-- [ ] 3.1 RED `JwtServiceTest` HS256+jti+tokenVersion. GREEN Create `infrastructure/security/JwtService.java` (jjwt 0.12.6).
-- [ ] 3.2 RED `TokenBlacklistPortImplTest` Redis mock. GREEN Create `infrastructure/security/TokenBlacklistPortImpl.java`.
-- [ ] 3.3 Create `infrastructure/persistence/entity/RefreshTokenJpaEntity.java` + `repository/RefreshTokenJpaRepository.java` + `adapter/RefreshTokenRepositoryAdapter.java` + `mapper/RefreshTokenJpaMapper.java`.
-- [ ] 3.4 Create `infrastructure/persistence/entity/{OutboxEventJpaEntity,OutboxIdMarker}.java` + repository + adapter.
-- [ ] 3.5 Create `infrastructure/security/{RoleAuthorizationManager,TokenUserDetailsService,JwtAuthenticationFilter}.java`.
-- [ ] 3.6 RED `OutboxJpaAppenderTest` scenario "Inserción duplicada rechazada". GREEN Create `infrastructure/outbox/OutboxJpaAppender.java`.
-- [ ] 3.7 Create `api/app/src/main/java/com/menta/app/outbox/OutboxBlacklistReconciler.java` `@Scheduled` pull-batch PENDING → SET + COMPLETED; FAILED+backoff.
-- [ ] 3.8 RED `OutboxBlacklistReconcilerTest` scenarios "procesa lote", "Redis caído FAILED", "Crash retoma". GREEN.
+- [x] 3.1 RED `JwtServiceTest` HS256+jti+tokenVersion. GREEN Create `infrastructure/security/JwtService.java` (jjwt 0.12.6).
+- [x] 3.2 RED `TokenBlacklistPortImplTest` Redis mock. GREEN Create `infrastructure/security/TokenBlacklistPortImpl.java`.
+- [x] 3.3 Create `infrastructure/persistence/entity/RefreshTokenJpaEntity.java` + `repository/RefreshTokenJpaRepository.java` + `adapter/RefreshTokenRepositoryAdapter.java` + `mapper/RefreshTokenJpaMapper.java`.
+- [x] 3.4 Create `infrastructure/persistence/entity/{OutboxEventJpaEntity,OutboxIdMarker}.java` + repository.
+- [x] 3.5 Create `infrastructure/security/{RoleAuthorizationManager,TokenUserDetailsService,JwtAuthenticationFilter}.java`.
+- [x] 3.6 RED `OutboxJpaAppenderTest` scenario "Inserción duplicada rechazada". GREEN Create `infrastructure/outbox/OutboxJpaAppender.java`.
+- [x] 3.7 Create `api/app/src/main/java/com/menta/app/outbox/OutboxBlacklistReconciler.java` `@Scheduled` pull-batch PENDING → SET + COMPLETED; FAILED+backoff.
+- [x] 3.8 RED `OutboxBlacklistReconcilerTest` scenarios "procesa lote", "Redis caído FAILED", "Crash retoma". GREEN.
 
 ## Phase 4: Wiring
 

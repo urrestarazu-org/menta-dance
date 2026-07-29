@@ -119,6 +119,33 @@ public class RefreshToken {
     }
 
     /**
+     * Reconstitute a RefreshToken from persisted state.
+     *
+     * Distinct from {@link #newFamily} and {@link #rotate} which mint new
+     * tokens with strict invariants. RefreshTokenJpaMapper uses this to
+     * hydrate a row that already carries arbitrary status / rotatedAt /
+     * revokedAt values from MySQL. Domain invariants (status non-null,
+     * hash non-blank, etc.) are still enforced by the private constructor.
+     */
+    public static RefreshToken reconstitute(
+        UUID id,
+        UUID familyId,
+        String tokenHash,
+        UserId userId,
+        RefreshTokenStatus status,
+        long tokenVersion,
+        Instant expiresAt,
+        Instant createdAt,
+        Instant rotatedAt,
+        Instant revokedAt
+    ) {
+        return new RefreshToken(
+            id, familyId, tokenHash, userId, status, tokenVersion,
+            expiresAt, createdAt, rotatedAt, revokedAt
+        );
+    }
+
+    /**
      * Behavior: ACTIVE -> USED. Idempotent guard: only succeeds from ACTIVE.
      * After this call the token is compromised-tokens-present; any future
      * presentation triggers family revocation.
