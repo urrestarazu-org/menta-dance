@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
 
 # deploy.sh - Deployment completo con rebuild de imágenes
-# Uso: ./deploy.sh [--no-nginx] [--rebuild]
+# Uso: ./deploy.sh [--no-nginx]
 
 set -euo pipefail
 
 # Colores
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
@@ -18,17 +17,12 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 # Flags
 USE_NGINX=true
-FORCE_REBUILD=false
 
 # Parsear argumentos
 for arg in "$@"; do
     case $arg in
         --no-nginx)
             USE_NGINX=false
-            shift
-            ;;
-        --rebuild)
-            FORCE_REBUILD=true
             shift
             ;;
     esac
@@ -68,14 +62,14 @@ build_docker_images() {
     # Build API
     log_info "Construyendo imagen menta-api..."
     docker build \
-        -t menta-api:latest \
+        -t "menta-api:${IMAGE_VERSION:-latest}" \
         -f "${SCRIPT_DIR}/app/Dockerfile.api" \
         "${PROJECT_ROOT}"
 
     # Build BFF
     log_info "Construyendo imagen menta-bff..."
     docker build \
-        -t menta-bff:latest \
+        -t "menta-bff:${IMAGE_VERSION:-latest}" \
         -f "${SCRIPT_DIR}/app/Dockerfile.bff" \
         "${PROJECT_ROOT}"
 

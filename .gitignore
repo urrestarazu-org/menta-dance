@@ -32,6 +32,9 @@ application-local.properties
 application-local.yml
 application-local.yaml
 
+# NGINX production config (copy from .example)
+infra/docker/nginx/conf/nginx.production.conf
+
 # Android
 local.properties
 captures/

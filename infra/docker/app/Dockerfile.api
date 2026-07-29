@@ -32,7 +32,7 @@ RUN addgroup -g 1000 menta && \
     adduser -D -u 1000 -G menta menta
 
 # Copy JAR from build stage
-COPY --from=build /app/api/app/build/libs/app-*.jar /app/app.jar
+COPY --from=build /app/api/app/build/libs/menta-dance-api.jar /app/app.jar
 
 # Change ownership
 RUN chown -R menta:menta /app
@@ -51,4 +51,6 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=5 --start-period=60s \
 ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC"
 
 # Run application
-CMD java $JAVA_OPTS -jar /app/app.jar
+# sh -c expande $JAVA_OPTS antes de ejecutar Java
+# El exec interno reemplaza el shell para que Java sea PID 1
+CMD ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]

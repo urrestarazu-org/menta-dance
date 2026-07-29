@@ -1,6 +1,8 @@
 services:
   nginx:
-    image: nginx:alpine
+    # Tag fijo (1.27.3) en vez de :latest para reducir el drift de versiones
+    # alpine: imagen minimalista (~10MB vs ~150MB de nginx:latest)
+    image: nginx:1.27.3-alpine
     container_name: menta-nginx
     restart: unless-stopped
     ports:
@@ -31,7 +33,10 @@ services:
       start_period: 10s
 
   api:
-    image: menta-api:latest
+    # ${IMAGE_VERSION:-latest}: variable con default
+    # En CI: IMAGE_VERSION=ci (tags específicos por build)
+    # En dev: usa :latest (no requiere export IMAGE_VERSION)
+    image: menta-api:${IMAGE_VERSION:-latest}
     container_name: menta-api
     restart: unless-stopped
     expose:
@@ -42,7 +47,7 @@ services:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-docker}
 
       # Database
-      SPRING_DATASOURCE_URL: jdbc:mysql://menta-mysql:3306/menta?serverTimezone=UTC&useSSL=false
+      SPRING_DATASOURCE_URL: jdbc:mysql://menta-mysql:3306/menta?serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true
       SPRING_DATASOURCE_USERNAME: ${MYSQL_APP_USER:-menta_app}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_APP_PASSWORD:?Set MYSQL_APP_PASSWORD in .env}
 
@@ -71,7 +76,7 @@ services:
       start_period: 60s
 
   bff:
-    image: menta-bff:latest
+    image: menta-bff:${IMAGE_VERSION:-latest}
     container_name: menta-bff
     restart: unless-stopped
     expose:

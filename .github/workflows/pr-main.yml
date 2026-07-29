@@ -1,0 +1,284 @@
+name: PR to Main (Full Pipeline)
+
+# Workflow completo para PRs a main y releases
+# Incluye todos los checks de pr-develop.yml + coverage + integration tests
+# GitHub filtra pull_request por rama destino; el origen release/* o hotfix/*
+# se exige mediante las reglas de protección/merge de main.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Gates de release pendientes de habilitación segura:
+# SonarCloud requiere organización/proyecto/token; Playwright y Gatling aún no
+# están cableados al build; Trivy no tiene una configuración o acción pineada.
+# Se activarán aquí, nunca en pr-develop.yml, cuando esos contratos existan.
+
+jobs:
+  full-build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        # SHA pinning: fija una revisión inmutable de la acción y mitiga el retargeting de tags
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up JDK 21
+        # GitHub Actions reusable: configura JDK + cachea dependencias Gradle
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build with Gradle
+        run: ./gradlew clean build
+
+      - name: Run tests
+        run: ./gradlew test -x :android:testDebugUnitTest
+
+      - name: Run architecture tests
+        run: ./gradlew :api:auth:test :api:billing:test :api:physical:test :api:virtual:test --tests "*ArchitectureTest"
+
+      - name: Generate JaCoCo report
+        # JaCoCo: genera reporte de cobertura de código
+        run: ./gradlew jacocoTestReport -x :android:testDebugUnitTest
+
+      - name: Check code coverage
+        # jacocoTestCoverageVerification: valida umbrales de cobertura (100/80 strategy)
+        # billing.domain/application: 100%, virtual/physical: 80%
+        run: ./gradlew jacocoTestCoverageVerification -x :android:testDebugUnitTest
+
+      - name: Run Checkstyle
+        run: ./gradlew :api:auth:checkstyleMain :api:auth:checkstyleTest :api:billing:checkstyleMain :api:billing:checkstyleTest :api:physical:checkstyleMain :api:physical:checkstyleTest :api:virtual:checkstyleMain :api:virtual:checkstyleTest :api:shared:checkstyleMain :api:shared:checkstyleTest :api:app:checkstyleMain :api:app:checkstyleTest :bff:checkstyleMain :bff:checkstyleTest
+
+      - name: Upload test results
+        # if: always() → ejecuta siempre (éxito o fallo) para preservar evidencia
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: test-results
+          path: '**/build/test-results/test/*.xml'
+
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: coverage-reports
+          path: '**/build/reports/jacoco/test/html/**'
+
+  # Job independiente que corre en paralelo con full-build-and-test
+  nginx-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Validate NGINX configuration syntax
+        run: |
+          # Contenedor efímero (--rm): se destruye automáticamente al terminar
+          # --add-host: simula DNS interno para que nginx.conf valide upstreams
+          # -v con :ro: monta archivos read-only (seguridad)
+          # nginx -t: comando de validación sin levantar el server
+          docker run --rm \
+            --add-host menta-api:127.0.0.1 \
+            --add-host menta-bff:127.0.0.1 \
+            -v $(pwd)/infra/docker/nginx/conf/nginx.conf:/etc/nginx/nginx.conf:ro \
+            -v $(pwd)/infra/docker/nginx/conf/conf.d:/etc/nginx/conf.d:ro \
+            nginx:1.27.3-alpine \
+            nginx -t
+
+      - name: Validate production NGINX configuration syntax
+        run: |
+          # Generar certificado SSL temporal auto-firmado para validación
+          # -x509: genera certificado (no CSR)
+          # -nodes: no encriptar la key privada (no password)
+          # -days 1: válido por 1 día (solo para CI)
+          # -subj: Subject Name del certificado (CN = Common Name)
+          mkdir -p /tmp/nginx-certs
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -subj '/CN=mentadance.com' \
+            -keyout /tmp/nginx-certs/mentadance.com.key \
+            -out /tmp/nginx-certs/mentadance.com-fullchain.crt
+          docker run --rm \
+            --add-host menta-api:127.0.0.1 \
+            --add-host menta-bff:127.0.0.1 \
+            -v $(pwd)/infra/docker/nginx/conf/nginx.production.conf.example:/etc/nginx/nginx.conf:ro \
+            -v $(pwd)/infra/docker/nginx/conf/conf.d:/etc/nginx/conf.d:ro \
+            -v /tmp/nginx-certs:/etc/nginx/certs:ro \
+            nginx:1.27.3-alpine \
+            nginx -t
+
+      - name: Validate all locations resolve
+        run: |
+          docker run --rm \
+            --add-host menta-api:127.0.0.1 \
+            --add-host menta-bff:127.0.0.1 \
+            -v $(pwd)/infra/docker/nginx/conf/nginx.conf:/etc/nginx/nginx.conf:ro \
+            -v $(pwd)/infra/docker/nginx/conf/conf.d:/etc/nginx/conf.d:ro \
+            nginx:1.27.3-alpine \
+            sh -c "nginx -T | grep -E 'location|upstream' || exit 1"
+
+      - name: Fail on remaining TODOs in nginx config
+        run: |
+          # Bloquea merge si hay TODOs sin resolver en config crítica
+          if grep -nE 'TODO|FIXME|XXX' infra/docker/nginx/conf/*.conf infra/docker/nginx/conf/conf.d/*.conf; then
+            echo "::error::TODOs sin resolver en config nginx"
+            exit 1
+          fi
+
+  docker-compose-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Validate database compose
+        # working-directory: cambia el directorio para este step
+        working-directory: infra/docker/database
+        run: |
+          # Variables requeridas por docker-compose.yml (sin valores reales)
+          export MYSQL_ROOT_PASSWORD=test
+          export MYSQL_APP_PASSWORD=test
+          # docker compose config: valida sintaxis YAML sin levantar contenedores
+          # > /dev/null: descarta output, solo nos importa el exit code
+          docker compose config > /dev/null
+
+      - name: Validate nginx compose
+        working-directory: infra/docker/nginx
+        run: |
+          export MYSQL_ROOT_PASSWORD=test
+          export MYSQL_APP_PASSWORD=test
+          docker compose config > /dev/null
+
+      - name: Validate production nginx compose overlay
+        working-directory: infra/docker/nginx
+        run: |
+          export MYSQL_ROOT_PASSWORD=test
+          export MYSQL_APP_PASSWORD=test
+          # Compose overlay pattern: -f base + -f override
+          # docker-compose.production.yml sobrescribe/extiende docker-compose.yml
+          # Ej: monta nginx.production.conf en vez de nginx.conf
+          ENVIRONMENT=production docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.production.yml \
+            config > /dev/null
+
+      - name: Validate app compose
+        working-directory: infra/docker/app
+        run: |
+          export MYSQL_ROOT_PASSWORD=test
+          export MYSQL_APP_PASSWORD=test
+          docker compose config > /dev/null
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install ShellCheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Validate shell scripts
+        run: |
+          shellcheck infra/docker/manage.sh
+          shellcheck infra/docker/deploy.sh
+          shellcheck infra/docker/quick-deploy.sh
+
+  # Hadolint: Dockerfile linter (best practices + security)
+  hadolint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Run Hadolint
+        # Hadolint: valida Dockerfile contra reglas DL* (ej: DL3025 = usar exec form CMD)
+        # failure-threshold: warning → falla CI en warnings (strict mode)
+        uses: hadolint/hadolint-action@54c9adbab1582c2ef04b2016b760714a4bfde3cf # v3.1.0
+        with:
+          dockerfile: infra/docker/app/Dockerfile.api
+          failure-threshold: warning
+
+      - name: Run Hadolint for BFF Dockerfile
+        uses: hadolint/hadolint-action@54c9adbab1582c2ef04b2016b760714a4bfde3cf # v3.1.0
+        with:
+          dockerfile: infra/docker/app/Dockerfile.bff
+          failure-threshold: warning
+
+  # Integration test: levanta stack completo y verifica comportamiento real
+  # SOLO para PRs a main (test más costoso)
+  nginx-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Build application images
+        # Construye imágenes con tag :ci (no :latest, para evitar colisiones)
+        run: |
+          docker build -t menta-api:ci -f infra/docker/app/Dockerfile.api .
+          docker build -t menta-bff:ci -f infra/docker/app/Dockerfile.bff .
+
+      - name: Start test stack
+        run: |
+          cp .env.example .env
+          # sed -i: edita archivo in-place (modifica el .env directamente)
+          sed -i 's/^MYSQL_ROOT_PASSWORD=.*/MYSQL_ROOT_PASSWORD=test-root-password/' .env
+          sed -i 's/^MYSQL_APP_PASSWORD=.*/MYSQL_APP_PASSWORD=test-app-password/' .env
+          # set +e: deshabilita "exit on error" temporalmente
+          # Permite capturar exit code sin abortar el script
+          set +e
+          IMAGE_VERSION=ci docker compose --env-file .env \
+            -f infra/docker/nginx/docker-compose.yml up -d
+          compose_status=$?  # Captura exit code del comando anterior
+          set -e  # Re-habilita "exit on error"
+
+          # || true: previene que el comando falle el step (diagnóstico)
+          docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml ps --no-trunc || true
+          if [ "$compose_status" -ne 0 ]; then
+            # Si compose up falló, dumpeamos logs antes de salir
+            echo "=== api logs ==="
+            docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml logs api --no-color || true
+            echo "=== compose logs ==="
+            docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml logs --no-color || true
+            exit "$compose_status"
+          fi
+
+      - name: Verify NGINX routing and security headers
+        run: |
+          # Retry loop: espera hasta 3 minutos (90 intentos × 2s) a que servicios estén listos
+          # Simula healthcheck antes de proceder con las pruebas
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent http://localhost/health > /dev/null; then
+              break
+            fi
+            echo "Waiting for NGINX health endpoint (attempt $attempt/90)..."
+            sleep 2
+          done
+          # Pruebas de routing: verifica que NGINX proxy funciona correctamente
+          curl --fail --silent http://localhost/health > /dev/null
+          curl --fail --silent http://localhost/api/actuator/health > /dev/null
+          # Verificación de security headers: grep -qi = case-insensitive
+          curl --fail --silent --head http://localhost/health | grep -qi '^X-Frame-Options:'
+
+      - name: Dump stack diagnostics on failure
+        # if: failure() → solo ejecuta si algún step previo falló (conditional execution)
+        if: failure()
+        run: |
+          docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml ps --no-trunc || true
+          docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml logs api --no-color || true
+          docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml logs --no-color || true
+
+      - name: Stop test stack
+        # if: always() → ejecuta siempre (éxito o fallo) para cleanup
+        # Importante: evita dejar contenedores corriendo en runner
+        if: always()
+        run: docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml down || true
