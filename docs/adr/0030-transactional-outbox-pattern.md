@@ -133,8 +133,14 @@ externo será transparente: solo cambia el reconciler, no los productores.
 
 - **Latencia de propagación**: Los consumidores ven el evento después del siguiente tick
   del reconciler (configurable, default 5s)
-- **Tabla crece**: Requiere política de retención (cleanup de eventos PROCESSED antiguos)
 - **Idempotencia requerida**: Los consumidores deben tolerar eventos duplicados
+
+### Mitigaciones Implementadas
+
+- **Retención automática**: Un job diario (`cleanupProcessedEvents`) borra eventos
+  COMPLETED más antiguos que el período de retención (default: 7 días). Configurable
+  via `auth.outbox.retention-days` y `auth.outbox.cleanup-cron`. Eventos FAILED se
+  mantienen para inspección manual.
 
 ### Neutrales
 

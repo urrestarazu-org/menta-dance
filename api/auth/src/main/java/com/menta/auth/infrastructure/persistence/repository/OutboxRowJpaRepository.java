@@ -3,6 +3,7 @@ package com.menta.auth.infrastructure.persistence.repository;
 import com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity;
 import com.menta.shared.outbox.OutboxStatus;
 
+import java.time.Instant;
 import java.util.List;
 
 import org.springframework.data.domain.Pageable;
@@ -24,4 +25,14 @@ public interface OutboxRowJpaRepository extends JpaRepository<OutboxRowJpaEntity
     List<OutboxRowJpaEntity> findByStatusOrderByIdAsc(OutboxStatus status, Pageable pageable);
 
     long countByStatus(OutboxStatus status);
+
+    /**
+     * Delete processed outbox events older than the given cutoff.
+     * Used by the retention cleanup job to prevent unbounded table growth.
+     *
+     * @param status   typically COMPLETED (successfully processed events)
+     * @param cutoff   events with processed_at before this instant are deleted
+     * @return number of deleted rows
+     */
+    long deleteByStatusAndProcessedAtBefore(OutboxStatus status, Instant cutoff);
 }

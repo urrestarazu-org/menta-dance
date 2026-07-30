@@ -54,19 +54,22 @@ public class OutboxBlacklistReconciler {
     private final int batchSize;
     private final Duration accessTtl;
     private final Duration backoff;
+    private final int retentionDays;
 
     public OutboxBlacklistReconciler(
         OutboxRowJpaRepository repository,
         TokenBlacklistPort tokenBlacklistPort,
         @Value("${auth.outbox.reconcile-batch-size:100}") int batchSize,
         @Value("${auth.access-token-ttl-seconds:900}") long accessTtlSeconds,
-        @Value("${auth.outbox.reconcile-backoff-seconds:30}") long backoffSeconds
+        @Value("${auth.outbox.reconcile-backoff-seconds:30}") long backoffSeconds,
+        @Value("${auth.outbox.retention-days:7}") int retentionDays
     ) {
         this.repository = repository;
         this.tokenBlacklistPort = tokenBlacklistPort;
         this.batchSize = batchSize;
         this.accessTtl = Duration.ofSeconds(accessTtlSeconds);
         this.backoff = Duration.ofSeconds(backoffSeconds);
+        this.retentionDays = retentionDays;
     }
 
     /**
@@ -125,5 +128,29 @@ public class OutboxBlacklistReconciler {
             return null;
         }
         return message.length() <= max ? message : message.substring(0, max);
+    }
+
+    // ---- Retention cleanup ----
+
+    /**
+     * Daily cleanup job to prevent unbounded table growth (ADR-0030).
+     *
+     * Deletes COMPLETED outbox events older than the configured retention period.
+     * Runs once per day at 3:00 AM server time. The cron expression is configurable
+     * via {@code auth.outbox.cleanup-cron}.
+     *
+     * <p>FAILED events are intentionally kept for manual inspection. A separate
+     * alerting mechanism should notify operators when FAILED count grows.</p>
+     */
+    @Scheduled(cron = "${auth.outbox.cleanup-cron:0 0 3 * * *}")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void cleanupProcessedEvents() {
+        Instant cutoff = Instant.now().minus(Duration.ofDays(retentionDays));
+        long deleted = repository.deleteByStatusAndProcessedAtBefore(
+            OutboxStatus.COMPLETED, cutoff);
+        if (deleted > 0) {
+            log.info("Outbox cleanup: deleted {} COMPLETED events older than {} days",
+                deleted, retentionDays);
+        }
     }
 }

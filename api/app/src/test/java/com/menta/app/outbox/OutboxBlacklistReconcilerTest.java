@@ -49,6 +49,7 @@ class OutboxBlacklistReconcilerTest {
     private static final int BATCH_SIZE = 100;
     private static final long ACCESS_TTL_SECONDS = 900L;
     private static final long BACKOFF_SECONDS = 30L;
+    private static final int RETENTION_DAYS = 7;
     private static final Duration ACCESS_TTL = Duration.ofSeconds(ACCESS_TTL_SECONDS);
 
     @Mock private OutboxRowJpaRepository repository;
@@ -59,7 +60,8 @@ class OutboxBlacklistReconcilerTest {
     @BeforeEach
     void setUp() {
         reconciler = new OutboxBlacklistReconciler(
-            repository, tokenBlacklistPort, BATCH_SIZE, ACCESS_TTL_SECONDS, BACKOFF_SECONDS
+            repository, tokenBlacklistPort, BATCH_SIZE, ACCESS_TTL_SECONDS,
+            BACKOFF_SECONDS, RETENTION_DAYS
         );
     }
 
@@ -173,6 +175,44 @@ class OutboxBlacklistReconcilerTest {
                 ArgumentCaptor.forClass(OutboxRowJpaEntity.class);
             verify(repository).save(captor.capture());
             assertThat(captor.getValue().getStatus()).isEqualTo(OutboxStatus.COMPLETED);
+        }
+    }
+
+    @Nested
+    @DisplayName("Spec: Cleanup borra COMPLETED antiguos")
+    class RetentionCleanup {
+
+        @Test
+        void deletes_completed_events_older_than_retention_period() {
+            when(repository.deleteByStatusAndProcessedAtBefore(
+                eq(OutboxStatus.COMPLETED), any(Instant.class)))
+                .thenReturn(42L);
+
+            reconciler.cleanupProcessedEvents();
+
+            ArgumentCaptor<Instant> cutoffCaptor = ArgumentCaptor.forClass(Instant.class);
+            verify(repository).deleteByStatusAndProcessedAtBefore(
+                eq(OutboxStatus.COMPLETED), cutoffCaptor.capture());
+
+            Instant cutoff = cutoffCaptor.getValue();
+            Instant expectedCutoff = Instant.now().minus(Duration.ofDays(RETENTION_DAYS));
+            // Allow 1 second tolerance for test execution time
+            assertThat(cutoff).isBetween(
+                expectedCutoff.minusSeconds(1),
+                expectedCutoff.plusSeconds(1));
+        }
+
+        @Test
+        void does_not_delete_failed_events() {
+            when(repository.deleteByStatusAndProcessedAtBefore(
+                eq(OutboxStatus.COMPLETED), any(Instant.class)))
+                .thenReturn(0L);
+
+            reconciler.cleanupProcessedEvents();
+
+            // Only COMPLETED status is passed, not FAILED
+            verify(repository).deleteByStatusAndProcessedAtBefore(
+                eq(OutboxStatus.COMPLETED), any(Instant.class));
         }
     }
 
