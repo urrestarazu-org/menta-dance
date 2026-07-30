@@ -21,10 +21,14 @@ import com.menta.auth.infrastructure.security.Sha256TokenHasher;
 import com.menta.auth.infrastructure.security.TokenBlacklistPortImpl;
 
 import java.time.Duration;
+import java.util.Set;
+
+import jakarta.annotation.PostConstruct;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -53,16 +57,57 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 public class AuthConfiguration {
 
     /**
+     * Dev-only default secret. Used to detect insecure configuration in production.
+     */
+    private static final String DEV_DEFAULT_SECRET =
+        "ZGV2LW9ubHktc2VjcmV0LXdpdGgtMzItYnl0ZXMtbWluaW11bS0zMmJ5dGVzLW1pbmltdW0tMzJieXRlcw==";
+
+    /**
+     * Profiles considered production environments where dev secrets are forbidden.
+     */
+    private static final Set<String> PRODUCTION_PROFILES = Set.of("prod", "production", "staging");
+
+    private final Environment environment;
+
+    public AuthConfiguration(Environment environment) {
+        this.environment = environment;
+    }
+
+    /**
      * Base64-encoded HS256 secret. The auth secret MUST be at least 32 bytes
      * (256 bits) raw — JwtService validates this at construction. The dev-only
      * default below is a 32-byte padding-string; production MUST inject a
      * strong value via application.yml / env (.env never committed).
      */
-    @Value("${auth.jwt.base64-secret:ZGV2LW9ubHktc2VjcmV0LXdpdGgtMzItYnl0ZXMtbWluaW11bS0zMmJ5dGVzLW1pbmltdW0tMzJieXRlcw==}")
+    @Value("${auth.jwt.base64-secret:" + DEV_DEFAULT_SECRET + "}")
     private String jwtBase64Secret;
 
     @Value("${auth.access-token-ttl-seconds:900}")
     private long accessTokenTtlSeconds;
+
+    /**
+     * Fail-fast validation: reject dev-only secret in production profiles.
+     * This prevents accidental deployment with insecure defaults.
+     */
+    @PostConstruct
+    void validateSecretNotDefaultInProduction() {
+        if (DEV_DEFAULT_SECRET.equals(jwtBase64Secret) && isProductionProfile()) {
+            throw new IllegalStateException(
+                "SECURITY: auth.jwt.base64-secret is using the dev-only default in a production profile. "
+                    + "Set a strong secret via environment variable or application-prod.yml. "
+                    + "Active profiles: " + String.join(", ", environment.getActiveProfiles())
+            );
+        }
+    }
+
+    private boolean isProductionProfile() {
+        for (String profile : environment.getActiveProfiles()) {
+            if (PRODUCTION_PROFILES.contains(profile.toLowerCase())) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     @Bean
     public PasswordEncoder passwordEncoder() {
