@@ -146,6 +146,110 @@ externo será transparente: solo cambia el reconciler, no los productores.
 
 - La complejidad se concentra en infraestructura, no en dominio/aplicación
 
+## Retención y Limpieza de Eventos
+
+### Problema
+
+Sin una política de retención, `common_outbox_events` crece indefinidamente. Un sistema
+con 1000 eventos/día alcanzaría ~365k filas/año, impactando:
+
+- **Performance de SELECT**: El índice `idx_status_retry` filtra PENDING, pero scans
+  completos (ej: monitoreo, debugging) degradan con millones de filas.
+- **Backups**: La tabla ocupa espacio en snapshots y replicas.
+- **Storage**: MySQL InnoDB mantiene espacio incluso después de DELETE sin OPTIMIZE TABLE.
+
+### Solución Implementada
+
+**Job diario de limpieza** (`OutboxBlacklistReconciler.cleanupProcessedEvents`):
+
+```java
+@Scheduled(cron = "${auth.outbox.cleanup-cron:0 0 3 * * *}")
+@Transactional(propagation = Propagation.REQUIRES_NEW)
+public void cleanupProcessedEvents() {
+    Instant cutoff = Instant.now().minus(Duration.ofDays(retentionDays));
+    long deleted = repository.deleteByStatusAndProcessedAtBefore(
+        OutboxStatus.COMPLETED, cutoff);
+    if (deleted > 0) {
+        log.info("Outbox cleanup: deleted {} COMPLETED events older than {} days",
+            deleted, retentionDays);
+    }
+}
+```
+
+**Query SQL ejecutado** (Spring Data JPA genera):
+
+```sql
+DELETE FROM common_outbox_events
+WHERE status = 'COMPLETED'
+  AND processed_at < ?  -- cutoff = now - retention_days
+```
+
+### Configuración
+
+| Propiedad | Default | Descripción |
+|-----------|---------|-------------|
+| `auth.outbox.retention-days` | `7` | Días de retención para eventos COMPLETED |
+| `auth.outbox.cleanup-cron` | `0 0 3 * * *` | Expresión cron (3:00 AM diario) |
+
+**Ejemplo de override** (`application.yml`):
+
+```yaml
+auth:
+  outbox:
+    retention-days: 30        # 30 días de auditoría
+    cleanup-cron: "0 30 2 * * *"  # 2:30 AM
+```
+
+### Política de Eventos FAILED
+
+Los eventos con `status = 'FAILED'` **NO** se borran automáticamente. Razones:
+
+1. **Post-mortem**: Investigar por qué falló el side-effect (ej: Redis caído por 3 días)
+2. **Re-procesamiento manual**: Después de arreglar el issue, marcar como PENDING para retry
+3. **Alerting**: Un contador de FAILED creciente indica un problema operacional
+
+**Cleanup manual** (cuando sea necesario):
+
+```sql
+-- Revisar primero
+SELECT id, event_type, last_error, attempts, created_at
+FROM common_outbox_events
+WHERE status = 'FAILED'
+ORDER BY created_at DESC
+LIMIT 100;
+
+-- Borrar después de investigar
+DELETE FROM common_outbox_events
+WHERE status = 'FAILED'
+  AND created_at < DATE_SUB(NOW(), INTERVAL 90 DAY);
+```
+
+### Consideraciones Operacionales
+
+**Window de retención**: 7 días balancean:
+- ✅ Auditoría reciente (útil para debugging de producción)
+- ✅ Storage manejable (7k filas/semana con 1k eventos/día)
+- ❌ Eventos antiguos no auditables (logs de aplicación + APM son la fuente de verdad)
+
+**Horario del job**: 3:00 AM minimiza conflictos con el reconciler de eventos, que corre
+cada 5 segundos. El DELETE usa un índice (`status, processed_at`) y es rápido incluso
+con 100k filas COMPLETED.
+
+**Lock contention**: Spring Data JPA usa `DELETE FROM ... WHERE`, que lockea las filas
+a borrar. Con ~7k filas/semana, el lock es breve (<100ms). Si crece, considerar batch
+delete:
+
+```sql
+-- Alternativa batch (manual, si el job tarda >1s)
+DELETE FROM common_outbox_events
+WHERE id IN (
+    SELECT id FROM common_outbox_events
+    WHERE status = 'COMPLETED' AND processed_at < ?
+    LIMIT 1000
+);
+-- Repetir hasta affected_rows = 0
+```
+
 ## Referencias
 
 - [Microservices.io - Transactional Outbox](https://microservices.io/patterns/data/transactional-outbox.html)
