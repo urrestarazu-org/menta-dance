@@ -14,17 +14,42 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 /**
- * JPA binding for common_outbox_events (ADR-0026 durable-local outbox).
+ * JPA entity for the {@code common_outbox_events} table (ADR-0030).
  *
- * Columns mirror the V2 DDL exactly. The PK is BIGINT AUTO_INCREMENT for
- * write performance; event_id (ULID, 26 chars) is the secondary UNIQUE that
- * guarantees producer-side idempotency. status is stored as VARCHAR so the
- * reconciler update path doesn't depend on enum ordinal sequencing.
+ * <h2>Purpose in the Transactional Outbox Pattern</h2>
+ * <p>
+ * This entity represents a single outbox event row. Each row is an <b>intent</b>
+ * to notify consumers about something that happened in the system. The row is
+ * written atomically with the domain mutation, ensuring the event exists if and
+ * only if the business operation committed successfully.
+ * </p>
  *
- * Lifecycle columns (attempts, last_error, next_retry_at, processed_at) are
- * managed by the reconciler (api:app / OutboxBlacklistReconciler). The
- * appender only touches status, event_id, event_type, aggregate_id, payload,
- * created_at.
+ * <h2>Key columns</h2>
+ * <ul>
+ *   <li><b>id</b>: Auto-increment PK for fast writes (no UUID generation overhead)</li>
+ *   <li><b>event_id</b>: ULID (26 chars) for producer-side idempotency and ordering</li>
+ *   <li><b>event_type</b>: Dotted path like "auth.AuthUserLoggedIn" for routing</li>
+ *   <li><b>aggregate_id</b>: Business key (e.g., jti, userId) for correlation</li>
+ *   <li><b>payload</b>: JSON body with event details</li>
+ *   <li><b>status</b>: Lifecycle state (PENDING → PROCESSED or FAILED)</li>
+ * </ul>
+ *
+ * <h2>Lifecycle</h2>
+ * <pre>{@code
+ * PENDING ──(reconciler processes)──→ PROCESSED
+ *    │
+ *    └──(error)──→ retry with backoff ──(max retries)──→ FAILED
+ * }</pre>
+ *
+ * <h2>Ownership</h2>
+ * <p>
+ * The <b>appender</b> ({@code OutboxJpaAppender}) writes new rows with status=PENDING.
+ * The <b>reconciler</b> ({@code OutboxBlacklistReconciler}) reads, processes, and
+ * updates the lifecycle columns (attempts, last_error, next_retry_at, processed_at).
+ * </p>
+ *
+ * @see com.menta.auth.infrastructure.outbox.OutboxJpaAppender
+ * @see com.menta.shared.outbox.OutboxStatus
  */
 @Entity
 @Table(name = "common_outbox_events")
