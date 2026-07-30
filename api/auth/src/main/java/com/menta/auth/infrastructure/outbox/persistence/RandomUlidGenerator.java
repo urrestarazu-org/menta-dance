@@ -3,6 +3,8 @@ package com.menta.auth.infrastructure.outbox.persistence;
 import java.security.SecureRandom;
 import java.time.Instant;
 
+import org.springframework.stereotype.Component;
+
 /**
  * Default UlidGenerator that emits Crockford-base32 ULIDs (26 chars).
  *
@@ -13,6 +15,7 @@ import java.time.Instant;
  * com.github.f4b6a3:ulid-creator if needed; the interface boundary keeps
  * the swap a one-line bean change.
  */
+@Component
 public class RandomUlidGenerator implements UlidGenerator {
 
     private static final int ULID_LENGTH = 26;

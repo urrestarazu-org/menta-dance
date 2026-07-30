@@ -36,7 +36,7 @@ public class RefreshTokenJpaEntity {
     @Column(name = "family_id", columnDefinition = "BINARY(16)", nullable = false)
     private UUID familyId;
 
-    @Column(name = "token_hash", length = 64, nullable = false, updatable = false)
+    @Column(name = "token_hash", columnDefinition = "CHAR(64)", length = 64, nullable = false, updatable = false)
     private String tokenHash;
 
     @Column(name = "user_id", columnDefinition = "BINARY(16)", nullable = false)
