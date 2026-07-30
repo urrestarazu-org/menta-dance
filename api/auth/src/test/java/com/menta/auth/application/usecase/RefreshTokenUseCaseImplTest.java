@@ -133,8 +133,14 @@ class RefreshTokenUseCaseImplTest {
             assertThat(presented.getStatus()).isEqualTo(RefreshTokenStatus.USED);
             assertThat(presented.getRotatedAt()).isNotNull();
 
+            // PR3 fix: persist the USED transition on the rotated parent
+            // refresh token. Without this, the row stays ACTIVE and the
+            // same refresh could be presented again. See LogoutUseCaseImpl
+            // for the matching fix and the integration test that surfaced it.
+            verify(refreshTokenRepository).save(presented);
+
             // New refresh persisted, same family, status=ACTIVE.
-            verify(refreshTokenRepository).save(any(RefreshToken.class));
+            verify(refreshTokenRepository, times(2)).save(any(RefreshToken.class));
             verify(outboxAppender).append(
                 eq(AuthOutboxEventTypes.REFRESH_ROTATED),
                 anyString(),

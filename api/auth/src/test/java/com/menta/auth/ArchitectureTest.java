@@ -127,4 +127,33 @@ class ArchitectureTest {
             .should().resideInAPackage("..application..")
             .check(classes);
     }
+
+    /**
+     * PR3: controllers delegate use cases through ports only. They MUST NOT
+     * reach into infrastructure.persistence.repository.* (or any other
+     * infrastructure adapter) directly.
+     */
+    @Test
+    void controllers_should_not_depend_on_repositories() {
+        noClasses()
+            .that().resideInAPackage("..infrastructure.web.controller..")
+            .should().dependOnClassesThat().resideInAPackage("..infrastructure.persistence.repository..")
+            .check(classes);
+    }
+
+    /**
+     * PR3: the domain layer is the framework-free core. Cross-module contracts
+     * live in :api:shared (e.g. com.menta.shared.domain.vo.Email); the
+     * shared outbox marker (com.menta.shared.outbox.*) is intentionally
+     * outside the domain — domain talks to outbox only via the
+     * application-layer port/in. This rule prevents the domain from
+     * depending on the shared outbox package, even by transitive import.
+     */
+    @Test
+    void domain_should_not_depend_on_shared_outbox() {
+        noClasses()
+            .that().resideInAPackage("..domain..")
+            .should().dependOnClassesThat().resideInAPackage("..shared.outbox..")
+            .check(classes);
+    }
 }

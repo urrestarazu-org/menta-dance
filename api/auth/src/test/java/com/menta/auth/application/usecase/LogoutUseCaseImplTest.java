@@ -101,6 +101,10 @@ class LogoutUseCaseImplTest {
             assertThat(presented.getStatus()).isEqualTo(RefreshTokenStatus.REVOKED);
             assertThat(presented.getRevokedAt()).isNotNull();
 
+            // PR3 fix: persist the status transition. Without this, the
+            // row stays ACTIVE in MySQL and the next presentation re-detects
+            // the refresh as ACTIVE rather than REVOKED.
+            verify(refreshTokenRepository, times(1)).save(presented);
             verify(outboxAppender, times(1)).append(
                 eq(AuthOutboxEventTypes.USER_LOGGED_OUT),
                 eq(presented.getId().toString()),

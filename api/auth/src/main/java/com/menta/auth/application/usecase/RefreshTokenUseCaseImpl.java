@@ -112,6 +112,13 @@ public class RefreshTokenUseCaseImpl implements RefreshTokenUseCase {
 
         // ACTIVE + valid → rotate.
         presented.markUsed();
+        // Persist the USED transition. The bulk-revoke paths go through
+        // refreshTokenRepository#revokeFamily (JPQL bulk update). The
+        // happy-rotation path mutates only the in-memory aggregate; without
+        // a save() here the row stays ACTIVE in MySQL and the same refresh
+        // could be presented again. See LogoutUseCaseImpl for the matching
+        // fix and the test that surfaced it.
+        refreshTokenRepository.save(presented);
 
         UUID nextRefreshId = UUID.randomUUID();
         String nextHash = tokenHasher.hash(nextRefreshId.toString());

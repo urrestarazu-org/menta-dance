@@ -34,6 +34,20 @@ spring:
       port: 6379
       timeout: 2000ms
 
+# Auth module configuration (ADR-0025, ADR-0026)
+auth:
+  # Base64-encoded HMAC-SHA256 secret. MUST be at least 32 bytes raw (256-bit).
+  # Override via .env in production. The default is a dev-only placeholder so
+  # tests can construct JwtService without external config.
+  jwt:
+    base64-secret: ${AUTH_JWT_BASE64_SECRET:ZGV2LW9ubHktc2VjcmV0LXdpdGgtMzItYnl0ZXMtbWluaW11bS0zMmJ5dGVzLW1pbmltdW0tMzJieXRlcw==}
+  access-token-ttl-seconds: ${AUTH_ACCESS_TOKEN_TTL_SECONDS:900}
+  outbox:
+    reconcile-batch-size: ${AUTH_OUTBOX_RECONCILE_BATCH_SIZE:100}
+    reconcile-rate-ms: ${AUTH_OUTBOX_RECONCILE_RATE_MS:5000}
+    reconcile-backoff-seconds: ${AUTH_OUTBOX_RECONCILE_BACKOFF_SECONDS:30}
+    degraded-window-seconds: ${AUTH_OUTBOX_DEGRADED_WINDOW_SECONDS:30}
+
 server:
   port: 8081
   servlet:

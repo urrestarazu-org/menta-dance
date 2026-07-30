@@ -53,15 +53,15 @@ Chain strategy: feature-branch-chain
 
 ## Phase 4: Wiring
 
-- [ ] 4.1 Create `infrastructure/web/controller/AuthController.java` `/auth/{login,refresh,logout}` + `@ExceptionHandler`.
-- [ ] 4.2 Create DTOs `infrastructure/web/dto/{LoginRequest,RefreshRequest,TokenResponse,ErrorResponse,LogoutRequest}.java`.
-- [ ] 4.3 Modify `api/auth/src/main/java/com/menta/auth/infrastructure/security/SecurityConfig.java` registrar filtro JWT + `RoleAuthorizationManager`.
-- [ ] 4.4 Create `infrastructure/config/AuthConfiguration.java` binds ports → impls.
-- [ ] 4.5 Create `integration/AuthFlowIntegrationTest.java` `@SpringBootTest` + Testcontainers login→refresh→logout.
+- [x] 4.1 Create `infrastructure/web/controller/AuthController.java` `/auth/{login,refresh,logout}` + `@ExceptionHandler`.
+- [x] 4.2 Create DTOs `infrastructure/web/dto/{LoginRequest,RefreshRequest,TokenResponse,ErrorResponse,LogoutRequest}.java`.
+- [x] 4.3 Modify `api/auth/src/main/java/com/menta/auth/infrastructure/security/SecurityConfig.java` registrar filtro JWT + `RoleAuthorizationManager`.
+- [x] 4.4 Create `infrastructure/config/AuthConfiguration.java` binds ports → impls.
+- [x] 4.5 Create `integration/AuthFlowIntegrationTest.java` `@SpringBootTest` + Testcontainers login→refresh→logout.
 
 ## Phase 5: Tests / ArchUnit / Bruno
 
-- [ ] 5.1 Modify `api/auth/src/test/java/com/menta/auth/ArchitectureTest.java` agrega `controllers_should_not_depend_on_repositories`, `domain_should_not_depend_on_shared_outbox_infrastructure`.
-- [ ] 5.2 Activar `tasks.jacocoTestCoverageVerification` en `api/auth/build.gradle.kts` 100% LINE `com.menta.auth.domain.*` y `.application.*`.
-- [ ] 5.3 Create `bruno/api/auth/{Login,Refresh,Logout}.bru` happy paths.
-- [ ] 5.4 Verify `./gradlew check` en verde. Sin AI attribution en commits.
+- [x] 5.1 Modify `api/auth/src/test/java/com/menta/auth/ArchitectureTest.java` agrega `controllers_should_not_depend_on_repositories`, `domain_should_not_depend_on_shared_outbox_infrastructure`.
+- [x] 5.2 Activar `tasks.jacocoTestCoverageVerification` en `api/auth/build.gradle.kts` 100% LINE `com.menta.auth.domain.*` y `.application.*`.
+- [x] 5.3 Create `bruno/api/auth/{Login,Refresh,Logout}.bru` happy paths.
+- [x] 5.4 Verify `./gradlew check` en verde. Sin AI attribution en commits.

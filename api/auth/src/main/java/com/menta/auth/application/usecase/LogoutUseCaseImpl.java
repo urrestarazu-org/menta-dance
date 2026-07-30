@@ -89,6 +89,15 @@ public class LogoutUseCaseImpl implements LogoutUseCase {
 
         // ACTIVE happy path: mark REVOKED + atomic UserLoggedOut event.
         presented.markRevoked();
+        // Critical: persist the status change. findByHash() returns a
+        // detached domain POJO (the JPA adapter materializes a fresh entity
+        // via mapper and returns the POJO). Mutating the POJO in memory has
+        // no persistence effect; without this save() call the row stays
+        // ACTIVE in MySQL and the next presentation re-detects the same
+        // refresh as ACTIVE rather than REVOKED. PR2's unit tests did not
+        // catch this because they only verified in-memory state; the bug
+        // surfaced in PR3's AuthFlowIntegrationTest.
+        refreshTokenRepository.save(presented);
         outboxAppender.append(
             AuthOutboxEventTypes.USER_LOGGED_OUT,
             presented.getId().toString(),
