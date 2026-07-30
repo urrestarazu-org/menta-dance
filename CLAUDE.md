@@ -162,3 +162,8 @@ Antes de iniciar una tarea, considerar el modelo apropiado:
 - **Edición de archivo único** → Sonnet 5
 - **Documentación** → Sonnet 5
 - **Verificación rápida** → Haiku 4.5
+
+## Skills del Proyecto
+
+Cuando el usuario pida "crear un PR", "prcreator", o variantes, leer y ejecutar:
+- **prcreator**: @skills/prcreator/SKILL.md

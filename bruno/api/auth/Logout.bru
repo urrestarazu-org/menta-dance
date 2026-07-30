@@ -1,0 +1,43 @@
+meta {
+  name: Auth Logout
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/auth/logout
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "refreshToken": "{{refreshToken}}"
+  }
+}
+
+docs {
+  Revoke the active refresh by presenting it on the logout endpoint.
+  Atomic in the same MySQL transaction:
+    - mark refresh.status = REVOKED;
+    - INSERT common_outbox_events (event_type=UserLoggedOut).
+
+  Spec mapped:
+    "Logout exitoso publica evento atómicamente" → 204 (this happy path).
+    "Refresh ya rotado activa revocación de familia" → 401 if the refresh
+      was previously presented for refresh.
+
+  Variable contract:
+    Auth.Refresh.bru (or Auth.Login.bru if you skipped refresh) must
+    populate {{refreshToken}} first.
+}
+
+assert {
+  res.status: eq 204
+}
+
+tests {
+  test("Body is empty (No Content)", function() {
+    expect(res.getBody()).to.equal('');
+  });
+}

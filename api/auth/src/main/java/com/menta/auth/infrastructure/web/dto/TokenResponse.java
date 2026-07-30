@@ -1,0 +1,29 @@
+package com.menta.auth.infrastructure.web.dto;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+import java.time.Duration;
+
+/**
+ * TokenResponse wire shape for /auth/login and /auth/refresh 200 OK
+ * responses (spec auth-login: 200 → access_token, refresh_token,
+ * token_type, expires_in).
+ *
+ * The Java field names stay semantic (camelCase, Duration). Jackson's
+ * @JsonProperty maps them to the spec-required snake_case JSON so the
+ * application layer never leaks wire-format concerns.
+ */
+public record TokenResponse(
+    @JsonProperty("access_token")
+    String accessToken,
+
+    @JsonProperty("refresh_token")
+    String refreshToken,
+
+    @JsonProperty("token_type")
+    String tokenType,
+
+    @JsonProperty("expires_in")
+    Duration expiresIn
+) {
+}

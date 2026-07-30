@@ -1,0 +1,50 @@
+meta {
+  name: Auth Refresh
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/auth/refresh
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "refreshToken": "{{refreshToken}}"
+  }
+}
+
+docs {
+  Rotate a refresh token — the body carries the opaque refresh token
+  returned by the previous Login. The endpoint atomically:
+    - marks the presented refresh as USED;
+    - mints a new pair in the same family;
+    - publishes common_outbox_events with event_type=RefreshRotated.
+
+  Spec scenarios mapped:
+    "Rotación exitosa"                → 200 with new pair (this happy path).
+    "Refresh USED dispara revocación" → 401 if the very same refresh is
+                                        presented twice (run this request
+                                        twice in a row to trigger).
+    "tokenVersion viejo"               → 401 when a parent's token_version
+                                        was bumped by a revoke-family.
+    "Reconciliador atrasado"           → 503 + Retry-After: 30 (fail-closed,
+                                        mirrors login).
+
+  Variable contract:
+    Auth.Login.bru must run first to populate {{refreshToken}}.
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("Returns new pair", function() {
+    expect(res.getBody().access_token).to.be.a('string');
+    expect(res.getBody().refresh_token).to.be.a('string');
+    expect(res.getBody().refresh_token).to.not.equal(bru.getVar('refreshToken'));
+  });
+}

@@ -124,7 +124,7 @@ start() {
 
     # 1. Iniciar infraestructura (MySQL, Redis, Observability)
     log_info "Iniciando servicios de infraestructura (MySQL, Redis, Observability)..."
-    docker_compose "$DATABASE_DIR" up -d
+    docker_compose "$DATABASE_DIR" up -d --remove-orphans
 
     # 2. Esperar a que MySQL esté healthy
     log_info "Esperando a que MySQL esté listo..."
@@ -147,10 +147,10 @@ start() {
     # 3. Iniciar aplicaciones (API + BFF)
     if [[ "$USE_NGINX" == true ]]; then
         log_info "Iniciando aplicaciones con Nginx..."
-        nginx_compose up -d
+        nginx_compose up -d --remove-orphans
     else
         log_info "Iniciando aplicaciones sin Nginx (desarrollo local)..."
-        docker_compose "$APP_DIR" up -d
+        docker_compose "$APP_DIR" up -d --remove-orphans
     fi
 
     log_success "Todos los servicios iniciados"
@@ -332,6 +332,13 @@ health() {
 clean() {
     log_info "Limpiando recursos del proyecto..."
 
+    # Limpiar contenedores detenidos del proyecto (incluye huérfanos)
+    # docker ps -a: lista todos los contenedores (corriendo y detenidos)
+    # --filter "name=menta-": scope a recursos del proyecto
+    # docker rm -f: fuerza eliminación incluso si están corriendo
+    docker ps -a --filter "name=menta-" --format "{{.Names}}" | \
+        xargs -r docker rm -f 2>/dev/null || true
+
     # Solo limpiar volúmenes del proyecto
     # --filter "name=menta-": scope a recursos del proyecto (evita borrar otros proyectos)
     # --format "{{.Name}}": output solo nombres (formato Go template)
@@ -350,10 +357,30 @@ clean() {
     log_success "Recursos del proyecto limpiados"
 }
 
+# Resetear completamente el entorno (stop + clean + start)
+reset() {
+    log_warning "Esto detendrá y eliminará TODOS los contenedores, volúmenes y redes del proyecto"
+    read -p "¿Continuar? [y/N] " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        log_info "Cancelado"
+        exit 0
+    fi
+
+    log_info "Deteniendo servicios..."
+    stop
+
+    log_info "Limpiando recursos..."
+    clean
+
+    log_info "Reiniciando servicios..."
+    start
+}
+
 # Main
 main() {
     if [[ $# -eq 0 ]]; then
-        echo "Uso: $0 {start|stop|restart|status|logs|health|clean} [--no-nginx]"
+        echo "Uso: $0 {start|stop|restart|status|logs|health|clean|reset} [--no-nginx]"
         echo ""
         echo "Comandos:"
         echo "  start [--no-nginx]   Iniciar servicios"
@@ -362,7 +389,8 @@ main() {
         echo "  status               Mostrar estado de servicios"
         echo "  logs <service>       Ver logs de un servicio (api|bff|nginx|db|redis|grafana|loki|otel)"
         echo "  health               Verificar health checks"
-        echo "  clean                Limpiar contenedores detenidos"
+        echo "  clean                Limpiar contenedores, volúmenes y redes del proyecto"
+        echo "  reset                Detener, limpiar y reiniciar todo (con confirmación)"
         echo ""
         echo "Flags:"
         echo "  --no-nginx           No usar Nginx (desarrollo local, puertos directos)"
@@ -396,6 +424,9 @@ main() {
             ;;
         clean)
             clean
+            ;;
+        reset)
+            reset
             ;;
         *)
             log_error "Comando desconocido: $command"

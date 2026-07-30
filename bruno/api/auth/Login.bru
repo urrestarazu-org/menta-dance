@@ -1,0 +1,54 @@
+meta {
+  name: Auth Login
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/auth/login
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "alice@example.com",
+    "password": "SecurePass123!"
+  }
+}
+
+docs {
+  Authenticate with valid email + password and obtain the JWT pair.
+  The end-to-end happy path mirrors the spec scenario:
+  "Credenciales válidas y reconciliador al día".
+
+  Wire shape (snake_case per spec):
+    200 → { access_token, refresh_token, token_type, expires_in }
+    401 INVALID_CREDENTIALS → wrong or unknown email
+    423 USER_LOCKED          → account locked via /admin
+    503 AUTH_DEGRADED        + Retry-After: 30 → outbox reconciler lagging
+
+  Prerequisite: a STUDENT user must exist (POST /api/v1/users/register
+  then seed password via /auth/register-free helper if you have one).
+}
+
+tests {
+  test("Status is 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("Body carries snake_case token shape", function() {
+    expect(res.getBody().access_token).to.be.a('string');
+    expect(res.getBody().refresh_token).to.be.a('string');
+    expect(res.getBody().token_type).to.equal('Bearer');
+    expect(res.getBody().expires_in).to.be.a('number');
+  });
+
+  test("access_token looks like JWT", function() {
+    expect(res.getBody().access_token.split('.').length).to.equal(3);
+  });
+}
+
+assert {
+  res.status: eq 200
+}

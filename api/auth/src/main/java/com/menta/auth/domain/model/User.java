@@ -17,6 +17,7 @@ public class User {
     private UserStatus status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private long tokenVersion;
 
     public User(
         UserId id,
@@ -27,6 +28,19 @@ public class User {
         LocalDateTime createdAt,
         LocalDateTime updatedAt
     ) {
+        this(id, email, passwordHash, role, status, createdAt, updatedAt, DEFAULT_TOKEN_VERSION);
+    }
+
+    private User(
+        UserId id,
+        Email email,
+        String passwordHash,
+        Role role,
+        UserStatus status,
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt,
+        long tokenVersion
+    ) {
         this.id = id;
         this.email = email;
         this.passwordHash = passwordHash;
@@ -34,7 +48,11 @@ public class User {
         this.status = status;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
+        this.tokenVersion = tokenVersion;
     }
+
+    /** Default token_version for newly-minted auth_users rows (ADR-0025 V2 DDL). */
+    private static final long DEFAULT_TOKEN_VERSION = 1L;
 
     public static User create(Email email, String passwordHash, Role role) {
         LocalDateTime now = LocalDateTime.now();
@@ -45,7 +63,8 @@ public class User {
             role,
             UserStatus.ACTIVE,
             now,
-            now
+            now,
+            DEFAULT_TOKEN_VERSION
         );
     }
 
@@ -56,6 +75,17 @@ public class User {
 
     public void deactivate() {
         this.status = UserStatus.INACTIVE;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    /**
+     * Compromise path: increment tokenVersion by 1. All previously-issued
+     * refresh tokens carrying the OLD token_version will fail their family
+     * check on next presentation (auth-refresh spec: tokenVersion viejo).
+     * Persisted by the caller via UserRepository#save.
+     */
+    public void bumpTokenVersion() {
+        this.tokenVersion += 1;
         this.updatedAt = LocalDateTime.now();
     }
 
@@ -92,6 +122,10 @@ public class User {
         return updatedAt;
     }
 
+    public long getTokenVersion() {
+        return tokenVersion;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) {
@@ -111,6 +145,7 @@ public class User {
 
     @Override
     public String toString() {
-        return "User{id=" + id + ", email=" + email + ", role=" + role + ", status=" + status + "}";
+        return "User{id=" + id + ", email=" + email + ", role=" + role
+            + ", status=" + status + ", tokenVersion=" + tokenVersion + "}";
     }
 }
