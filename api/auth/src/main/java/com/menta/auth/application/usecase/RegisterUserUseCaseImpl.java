@@ -4,6 +4,7 @@ import com.menta.auth.application.dto.RegisterUserCommand;
 import com.menta.auth.application.dto.UserResult;
 import com.menta.auth.application.port.in.RegisterUserUseCase;
 import com.menta.auth.application.port.out.PasswordEncoderPort;
+import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.shared.domain.vo.Email;
@@ -27,6 +28,8 @@ public class RegisterUserUseCaseImpl implements RegisterUserUseCase {
 
     @Override
     public UserResult register(RegisterUserCommand command) {
+        Role role = publicRole(command.role());
+
         // Validate email
         Email email = Email.of(command.email());
 
@@ -39,7 +42,7 @@ public class RegisterUserUseCaseImpl implements RegisterUserUseCase {
         String passwordHash = passwordEncoder.encode(command.password());
 
         // Create domain entity
-        User user = User.create(email, passwordHash, command.role());
+        User user = User.create(email, passwordHash, role);
 
         // Persist
         User savedUser = userRepository.save(user);
@@ -52,5 +55,12 @@ public class RegisterUserUseCaseImpl implements RegisterUserUseCase {
             savedUser.getStatus(),
             savedUser.getCreatedAt()
         );
+    }
+
+    private Role publicRole(Role requestedRole) {
+        if (requestedRole == null || requestedRole == Role.STUDENT) {
+            return Role.STUDENT;
+        }
+        throw new IllegalArgumentException("Public registration only supports the STUDENT role");
     }
 }

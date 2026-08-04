@@ -43,6 +43,9 @@ public class UserJpaEntity {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    @Column(name = "token_version", nullable = false)
+    private long tokenVersion;
+
     // JPA requires default constructor
     protected UserJpaEntity() {
     }
@@ -54,7 +57,8 @@ public class UserJpaEntity {
         Role role,
         UserStatus status,
         LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        LocalDateTime updatedAt,
+        long tokenVersion
     ) {
         this.id = id;
         this.email = email;
@@ -63,6 +67,7 @@ public class UserJpaEntity {
         this.status = status;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
+        this.tokenVersion = tokenVersion;
     }
 
     // Getters and setters
@@ -120,5 +125,13 @@ public class UserJpaEntity {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public long getTokenVersion() {
+        return tokenVersion;
+    }
+
+    public void setTokenVersion(long tokenVersion) {
+        this.tokenVersion = tokenVersion;
     }
 }
