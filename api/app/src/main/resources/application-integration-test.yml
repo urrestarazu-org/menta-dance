@@ -1,0 +1,29 @@
+spring:
+  datasource:
+    url: ${JDBC_URL:jdbc:mysql://localhost:3306/menta_test}
+    username: ${DB_USERNAME:test}
+    password: ${DB_PASSWORD:test}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  flyway:
+    enabled: false
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
+
+  # Redis mock for integration tests
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+auth:
+  jwt:
+    base64-secret: "dGVzdC1zZWNyZXQtZm9yLWludGVncmF0aW9uLXRlc3RzLW11c3QtYmUtNjQtYnl0ZXMtbG9uZy1mb3ItSFMyNTY="
+    access-token-ttl-seconds: 900

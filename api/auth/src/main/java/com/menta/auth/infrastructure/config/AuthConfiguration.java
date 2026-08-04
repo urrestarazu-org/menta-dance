@@ -15,6 +15,9 @@ import com.menta.auth.application.usecase.LoginUseCaseImpl;
 import com.menta.auth.application.usecase.LogoutUseCaseImpl;
 import com.menta.auth.application.usecase.RefreshTokenUseCaseImpl;
 import com.menta.auth.application.usecase.RegisterUserUseCaseImpl;
+import com.menta.auth.infrastructure.transaction.TransactionalLoginUseCase;
+import com.menta.auth.infrastructure.transaction.TransactionalLogoutUseCase;
+import com.menta.auth.infrastructure.transaction.TransactionalRefreshTokenUseCase;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.auth.infrastructure.security.JwtService;
 import com.menta.auth.infrastructure.security.Sha256TokenHasher;
@@ -142,7 +145,7 @@ public class AuthConfiguration {
         OutboxAppender outboxAppender,
         AuthDegradedGuard authDegradedGuard
     ) {
-        return new LoginUseCaseImpl(
+        LoginUseCaseImpl implementation = new LoginUseCaseImpl(
             userRepository,
             passwordEncoder,
             accessTokenIssuer,
@@ -151,6 +154,7 @@ public class AuthConfiguration {
             outboxAppender,
             authDegradedGuard
         );
+        return new TransactionalLoginUseCase(implementation);
     }
 
     @Bean
@@ -162,7 +166,7 @@ public class AuthConfiguration {
         OutboxAppender outboxAppender,
         AuthDegradedGuard authDegradedGuard
     ) {
-        return new RefreshTokenUseCaseImpl(
+        RefreshTokenUseCaseImpl implementation = new RefreshTokenUseCaseImpl(
             userRepository,
             refreshTokenRepository,
             accessTokenIssuer,
@@ -170,6 +174,7 @@ public class AuthConfiguration {
             outboxAppender,
             authDegradedGuard
         );
+        return new TransactionalRefreshTokenUseCase(implementation);
     }
 
     @Bean
@@ -180,13 +185,14 @@ public class AuthConfiguration {
         OutboxAppender outboxAppender,
         AuthDegradedGuard authDegradedGuard
     ) {
-        return new LogoutUseCaseImpl(
+        LogoutUseCaseImpl implementation = new LogoutUseCaseImpl(
             userRepository,
             refreshTokenRepository,
             tokenHasher,
             outboxAppender,
             authDegradedGuard
         );
+        return new TransactionalLogoutUseCase(implementation);
     }
 
     /**
