@@ -8,6 +8,8 @@ import java.util.List;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -35,4 +37,24 @@ public interface OutboxRowJpaRepository extends JpaRepository<OutboxRowJpaEntity
      * @return number of deleted rows
      */
     long deleteByStatusAndProcessedAtBefore(OutboxStatus status, Instant cutoff);
+
+    /**
+     * PR3: Find rows eligible for processing:
+     *   - All PENDING rows (never processed)
+     *   - FAILED rows whose next_retry_at has passed (due for retry)
+     *
+     * Ordered by id ASC for FIFO processing. Pageable controls batch size.
+     *
+     * @param now       current timestamp; FAILED rows with next_retry_at > now are skipped
+     * @param pageable  pagination (page size = batch size)
+     * @return list of rows to process, ordered by id ASC
+     */
+    @Query("""
+        SELECT e FROM OutboxRowJpaEntity e
+        WHERE e.status = 'PENDING'
+           OR (e.status = 'FAILED' AND e.nextRetryAt <= :now)
+        ORDER BY e.id ASC
+        """)
+    List<OutboxRowJpaEntity> findPendingOrDueFailedOrderByIdAsc(
+        @Param("now") Instant now, Pageable pageable);
 }

@@ -74,7 +74,7 @@ class OutboxBlacklistReconcilerTest {
             OutboxRowJpaEntity a = pendingRow(101L, "auth.AuthUserLoggedIn", "jti-a");
             OutboxRowJpaEntity b = pendingRow(102L, "auth.AuthUserLoggedIn", "jti-b");
             OutboxRowJpaEntity c = pendingRow(103L, "auth.UserLoggedOut", "jti-c");
-            when(repository.findByStatusOrderByIdAsc(eq(OutboxStatus.PENDING), any(Pageable.class)))
+            when(repository.findPendingOrDueFailedOrderByIdAsc(any(Instant.class), any(Pageable.class)))
                 .thenReturn(List.of(a, b, c));
             when(repository.save(any(OutboxRowJpaEntity.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
@@ -82,6 +82,7 @@ class OutboxBlacklistReconcilerTest {
             reconciler.tick();
 
             verify(tokenBlacklistPort, times(3)).blacklist(anyString(), any(Duration.class));
+            verify(tokenBlacklistPort).writeHeartbeat();
 
             ArgumentCaptor<OutboxRowJpaEntity> captor =
                 ArgumentCaptor.forClass(OutboxRowJpaEntity.class);
@@ -98,7 +99,7 @@ class OutboxBlacklistReconcilerTest {
         @Test
         void blacklist_projection_uses_aggregate_id_as_jti_with_access_ttl() {
             OutboxRowJpaEntity row = pendingRow(101L, "auth.AuthUserLoggedIn", "jti-xyz");
-            when(repository.findByStatusOrderByIdAsc(eq(OutboxStatus.PENDING), any(Pageable.class)))
+            when(repository.findPendingOrDueFailedOrderByIdAsc(any(Instant.class), any(Pageable.class)))
                 .thenReturn(List.of(row));
             when(repository.save(any(OutboxRowJpaEntity.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
@@ -106,16 +107,18 @@ class OutboxBlacklistReconcilerTest {
             reconciler.tick();
 
             verify(tokenBlacklistPort, times(1)).blacklist(eq("jti-xyz"), eq(ACCESS_TTL));
+            verify(tokenBlacklistPort).writeHeartbeat();
         }
 
         @Test
         void empty_batch_is_a_no_op() {
-            when(repository.findByStatusOrderByIdAsc(eq(OutboxStatus.PENDING), any(Pageable.class)))
+            when(repository.findPendingOrDueFailedOrderByIdAsc(any(Instant.class), any(Pageable.class)))
                 .thenReturn(List.of());
 
             reconciler.tick();
 
             verify(tokenBlacklistPort, times(0)).blacklist(anyString(), any(Duration.class));
+            verify(tokenBlacklistPort).writeHeartbeat();
             verify(repository, times(0)).save(any(OutboxRowJpaEntity.class));
         }
     }
@@ -127,7 +130,7 @@ class OutboxBlacklistReconcilerTest {
         @Test
         void marks_failed_attempts_bumps_last_error_set_and_records_next_retry() {
             OutboxRowJpaEntity row = pendingRow(201L, "auth.AuthUserLoggedIn", "jti-bad");
-            when(repository.findByStatusOrderByIdAsc(eq(OutboxStatus.PENDING), any(Pageable.class)))
+            when(repository.findPendingOrDueFailedOrderByIdAsc(any(Instant.class), any(Pageable.class)))
                 .thenReturn(List.of(row));
             when(repository.save(any(OutboxRowJpaEntity.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
@@ -146,6 +149,8 @@ class OutboxBlacklistReconcilerTest {
             assertThat(saved.getAttempts()).isEqualTo(1);
             assertThat(saved.getLastError()).contains("connection refused");
             assertThat(saved.getNextRetryAt()).isNotNull();
+            // PR3: No heartbeat when Redis failed
+            verify(tokenBlacklistPort, times(0)).writeHeartbeat();
         }
     }
 
@@ -163,7 +168,7 @@ class OutboxBlacklistReconcilerTest {
             // safe.
             OutboxRowJpaEntity orphan = pendingRow(
                 999L, "auth.AuthUserLoggedIn", "jti-orphan");
-            when(repository.findByStatusOrderByIdAsc(eq(OutboxStatus.PENDING), any(Pageable.class)))
+            when(repository.findPendingOrDueFailedOrderByIdAsc(any(Instant.class), any(Pageable.class)))
                 .thenReturn(List.of(orphan));
             when(repository.save(any(OutboxRowJpaEntity.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
@@ -171,10 +176,137 @@ class OutboxBlacklistReconcilerTest {
             reconciler.tick();
 
             verify(tokenBlacklistPort).blacklist(eq("jti-orphan"), any(Duration.class));
+            verify(tokenBlacklistPort).writeHeartbeat();
             ArgumentCaptor<OutboxRowJpaEntity> captor =
                 ArgumentCaptor.forClass(OutboxRowJpaEntity.class);
             verify(repository).save(captor.capture());
             assertThat(captor.getValue().getStatus()).isEqualTo(OutboxStatus.COMPLETED);
+        }
+    }
+
+    @Nested
+    @DisplayName("Spec: PR3 Retry con backoff (3.3 RED)")
+    class RetryBackoff {
+
+        @Test
+        void failed_row_with_future_next_retry_at_is_not_processed() {
+            // PR3: FAILED rows with next_retry_at in the future MUST NOT be
+            // processed (skip early retry). Only PENDING + FAILED rows whose
+            // next_retry_at has passed should be selected.
+            Instant futureRetry = Instant.now().plusSeconds(60);
+            OutboxRowJpaEntity failedNotDue = failedRow(
+                301L, "auth.AuthUserLoggedIn", "jti-not-due", futureRetry, 2);
+
+            // Query should NOT return this row since it's not due yet
+            when(repository.findPendingOrDueFailedOrderByIdAsc(any(Instant.class), any(Pageable.class)))
+                .thenReturn(List.of());
+
+            int processed = reconciler.processBatch();
+
+            assertThat(processed).isZero();
+            verify(tokenBlacklistPort, times(0)).blacklist(anyString(), any(Duration.class));
+        }
+
+        @Test
+        void failed_row_with_past_next_retry_at_is_processed() {
+            // PR3: FAILED rows with next_retry_at <= now MUST be processed.
+            Instant pastRetry = Instant.now().minusSeconds(10);
+            OutboxRowJpaEntity failedDue = failedRow(
+                302L, "auth.AuthUserLoggedIn", "jti-due", pastRetry, 1);
+
+            when(repository.findPendingOrDueFailedOrderByIdAsc(any(Instant.class), any(Pageable.class)))
+                .thenReturn(List.of(failedDue));
+            when(repository.save(any(OutboxRowJpaEntity.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            int processed = reconciler.processBatch();
+
+            assertThat(processed).isEqualTo(1);
+            verify(tokenBlacklistPort).blacklist(eq("jti-due"), eq(ACCESS_TTL));
+
+            ArgumentCaptor<OutboxRowJpaEntity> captor =
+                ArgumentCaptor.forClass(OutboxRowJpaEntity.class);
+            verify(repository).save(captor.capture());
+            OutboxRowJpaEntity saved = captor.getValue();
+            assertThat(saved.getStatus()).isEqualTo(OutboxStatus.COMPLETED);
+            assertThat(saved.getAttempts()).isEqualTo(1); // unchanged from before
+        }
+
+        @Test
+        void query_selects_both_pending_and_due_failed_rows() {
+            // PR3: The query MUST select PENDING + (FAILED where next_retry_at <= now).
+            OutboxRowJpaEntity pending = pendingRow(401L, "auth.AuthUserLoggedIn", "jti-pending");
+            Instant pastRetry = Instant.now().minusSeconds(5);
+            OutboxRowJpaEntity failedDue = failedRow(
+                402L, "auth.UserLoggedOut", "jti-failed-due", pastRetry, 2);
+
+            when(repository.findPendingOrDueFailedOrderByIdAsc(any(Instant.class), any(Pageable.class)))
+                .thenReturn(List.of(pending, failedDue));
+            when(repository.save(any(OutboxRowJpaEntity.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            int processed = reconciler.processBatch();
+
+            assertThat(processed).isEqualTo(2);
+            verify(tokenBlacklistPort, times(2)).blacklist(anyString(), any(Duration.class));
+
+            ArgumentCaptor<OutboxRowJpaEntity> captor =
+                ArgumentCaptor.forClass(OutboxRowJpaEntity.class);
+            verify(repository, times(2)).save(captor.capture());
+            for (OutboxRowJpaEntity saved : captor.getAllValues()) {
+                assertThat(saved.getStatus()).isEqualTo(OutboxStatus.COMPLETED);
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("Spec: PR3 Heartbeat escritura (3.3 RED)")
+    class HeartbeatWrite {
+
+        @Test
+        void writes_heartbeat_after_successful_tick() {
+            // PR3: The reconciler MUST call writeHeartbeat() after every tick,
+            // even if the batch is empty, to inform AuthDegradedGuard that
+            // the reconciler is alive.
+            when(repository.findPendingOrDueFailedOrderByIdAsc(any(Instant.class), any(Pageable.class)))
+                .thenReturn(List.of());
+
+            reconciler.tick();
+
+            verify(tokenBlacklistPort).writeHeartbeat();
+        }
+
+        @Test
+        void writes_heartbeat_even_when_processing_rows() {
+            OutboxRowJpaEntity row = pendingRow(501L, "auth.AuthUserLoggedIn", "jti-heartbeat");
+            when(repository.findPendingOrDueFailedOrderByIdAsc(any(Instant.class), any(Pageable.class)))
+                .thenReturn(List.of(row));
+            when(repository.save(any(OutboxRowJpaEntity.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            reconciler.tick();
+
+            verify(tokenBlacklistPort).blacklist(eq("jti-heartbeat"), any(Duration.class));
+            verify(tokenBlacklistPort).writeHeartbeat();
+        }
+
+        @Test
+        void does_not_write_heartbeat_when_redis_blacklist_fails() {
+            // PR3: If Redis is down for blacklist writes, the reconciler marks
+            // rows as FAILED but MUST NOT write the heartbeat (because Redis is
+            // unreachable, writing heartbeat would fail too or give false signal).
+            OutboxRowJpaEntity row = pendingRow(502L, "auth.AuthUserLoggedIn", "jti-fail");
+            when(repository.findPendingOrDueFailedOrderByIdAsc(any(Instant.class), any(Pageable.class)))
+                .thenReturn(List.of(row));
+            when(repository.save(any(OutboxRowJpaEntity.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+            doThrow(new RuntimeException("connection refused"))
+                .when(tokenBlacklistPort).blacklist(anyString(), any(Duration.class));
+
+            reconciler.tick();
+
+            // Heartbeat should NOT be written when side-effect failed
+            verify(tokenBlacklistPort, times(0)).writeHeartbeat();
         }
     }
 
@@ -225,6 +357,19 @@ class OutboxBlacklistReconcilerTest {
             Instant.parse("2026-07-29T10:00:00Z"), null
         );
         // Force PK so test assertions / captors can track row identity.
+        row.forceId(id);
+        return row;
+    }
+
+    private static OutboxRowJpaEntity failedRow(
+        long id, String eventType, String aggregateId,
+        Instant nextRetryAt, int attempts
+    ) {
+        OutboxRowJpaEntity row = new OutboxRowJpaEntity(
+            "01H9X3F4Z9YJ7K5Q6T2R8V1N4P", eventType, aggregateId,
+            "{}", OutboxStatus.FAILED, attempts, "connection refused", nextRetryAt,
+            Instant.parse("2026-07-29T10:00:00Z"), null
+        );
         row.forceId(id);
         return row;
     }

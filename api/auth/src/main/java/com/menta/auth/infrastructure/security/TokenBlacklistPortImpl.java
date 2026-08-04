@@ -24,10 +24,10 @@ import org.springframework.stereotype.Component;
  *      Auth flows fail-closed when the heartbeat is missing OR older than
  *      the degraded window (ADR-0026).
  *
- * Failure semantics:
- *   - Write path (blacklist): swallow Redis errors. The reconciler is
- *     idempotent and retries from the durable outbox; lost side-effects are
- *     recoverable on the next tick.
+ * Failure semantics (PR3):
+ *   - Write path (blacklist, writeHeartbeat): PROPAGATE Redis errors. The
+ *     reconciler MUST detect write failures to transition outbox rows to
+ *     FAILED with retry backoff instead of marking them COMPLETED incorrectly.
  *   - Read path (isBlacklisted / isDegraded): fail-CLOSED. If we cannot
  *     prove safety, we MUST refuse the request.
  */
@@ -54,14 +54,9 @@ public class TokenBlacklistPortImpl implements TokenBlacklistPort, AuthDegradedG
 
     @Override
     public void blacklist(String jti, Duration ttl) {
-        try {
-            redisTemplate.opsForValue().set(BLACKLIST_KEY_PREFIX + jti, "1", ttl);
-        } catch (RuntimeException e) {
-            // Write path: log + swallow. Reconciler retries from the durable
-            // outbox on the next tick — no need to bubble up an exception.
-            log.warn("blacklist write failed for jti={} ttl={} cause={}",
-                jti, ttl, e.getMessage());
-        }
+        // PR3: Propagate Redis write failures. The reconciler MUST detect them
+        // to transition outbox rows to FAILED with retry backoff.
+        redisTemplate.opsForValue().set(BLACKLIST_KEY_PREFIX + jti, "1", ttl);
     }
 
     @Override
@@ -74,6 +69,14 @@ public class TokenBlacklistPortImpl implements TokenBlacklistPort, AuthDegradedG
             log.warn("blacklist read failed for jti={} cause={}", jti, e.getMessage());
             return true;
         }
+    }
+
+    @Override
+    public void writeHeartbeat() {
+        // PR3: Write reconciler heartbeat without TTL. Propagate failures so
+        // the reconciler can detect Redis outages.
+        long nowMillis = System.currentTimeMillis();
+        redisTemplate.opsForValue().set(LAST_TICK_KEY, String.valueOf(nowMillis));
     }
 
     // ---- AuthDegradedGuard ----

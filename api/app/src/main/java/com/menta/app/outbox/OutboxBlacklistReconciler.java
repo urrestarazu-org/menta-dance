@@ -23,8 +23,10 @@ import org.springframework.transaction.annotation.Transactional;
  * Outbox reconciler that projects PENDING common_outbox_events to Redis
  * side-effects (ADR-0026 + design.md Decision 2).
  *
- * Lifecycle per tick:
- *   1. Bounded SELECT — fetch up to `batchSize` PENDING rows ordered by id.
+ * Lifecycle per tick (PR3):
+ *   1. Bounded SELECT — fetch up to `batchSize` rows ordered by id:
+ *      - All PENDING rows (never processed)
+ *      - FAILED rows whose next_retry_at <= now (due for retry)
  *      A crash between commit and tick leaves PENDING rows intact, so the
  *      next tick naturally re-picks them (Crash retoma spec scenario).
  *   2. For each row, apply the side-effect:
@@ -37,9 +39,9 @@ import org.springframework.transaction.annotation.Transactional;
  *      - Redis OK → status=COMPLETED, processed_at=now, attempts unchanged.
  *      - Redis exception → status=FAILED, attempts+=1, last_error=message,
  *        next_retry_at=now+backoff.
- *   4. Always write the heartbeat key `auth:health:last_tick_at` to Redis
- *      so AuthDegradedGuard stays fresh — even an empty tick informs the
- *      guard that the reconciler is alive.
+ *   4. Write heartbeat key `auth:health:last_tick_at` to Redis ONLY when
+ *      no Redis errors occurred in this tick. This ensures AuthDegradedGuard
+ *      sees degraded state when Redis is actually down.
  *
  * Scheduling is wired with @Scheduled(fixedRate) so the cadence is
  * configurable via `auth.outbox.reconcile-rate-ms`. PR3 can tune.
@@ -86,14 +88,17 @@ public class OutboxBlacklistReconciler {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public int processBatch() {
+        Instant now = Instant.now();
         Pageable page = PageRequest.of(0, batchSize);
-        List<OutboxRowJpaEntity> rows = repository.findByStatusOrderByIdAsc(
-            OutboxStatus.PENDING, page);
+        // PR3: Select PENDING + (FAILED where next_retry_at <= now)
+        List<OutboxRowJpaEntity> rows = repository.findPendingOrDueFailedOrderByIdAsc(now, page);
         if (rows.isEmpty()) {
+            // Empty tick: write heartbeat to signal reconciler is alive
+            tokenBlacklistPort.writeHeartbeat();
             return 0;
         }
         int completedOrFailed = 0;
-        Instant now = Instant.now();
+        boolean hadRedisFailure = false;
         for (OutboxRowJpaEntity row : rows) {
             try {
                 applySideEffect(row);
@@ -109,10 +114,16 @@ public class OutboxBlacklistReconciler {
                 row.setAttempts(row.getAttempts() + 1);
                 row.setLastError(truncate(sideEffectFailure.getMessage(), 1000));
                 row.setNextRetryAt(now.plus(backoff));
+                hadRedisFailure = true;
             } finally {
                 repository.save(row);
                 completedOrFailed++;
             }
+        }
+        // PR3: Write heartbeat ONLY when no Redis failures occurred.
+        // If Redis is down, writing heartbeat would fail or give false signal.
+        if (!hadRedisFailure) {
+            tokenBlacklistPort.writeHeartbeat();
         }
         return completedOrFailed;
     }

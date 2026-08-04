@@ -11,11 +11,13 @@ import com.menta.auth.application.port.in.LoginUseCase;
 import com.menta.auth.application.port.in.LogoutUseCase;
 import com.menta.auth.application.port.in.RefreshTokenUseCase;
 import com.menta.auth.application.port.out.AuthDegradedGuard;
+import com.menta.auth.application.port.out.TokenBlacklistPort;
 import com.menta.auth.domain.exception.RefreshTokenCompromisedException;
 import com.menta.auth.domain.model.RefreshTokenStatus;
 import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.model.UserStatus;
+import com.menta.shared.outbox.OutboxStatus;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity;
 import com.menta.auth.infrastructure.persistence.entity.RefreshTokenJpaEntity;
@@ -27,6 +29,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import jakarta.persistence.EntityManager;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -92,8 +95,14 @@ class TransactionalAuthIntegrationTest {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private EntityManager entityManager;
+
     @MockBean
     private AuthDegradedGuard authDegradedGuard;
+
+    @MockBean
+    private TokenBlacklistPort tokenBlacklistPort;
 
     private static final String EMAIL = "student@example.com";
     private static final String PASSWORD = "SecurePass123!";
@@ -136,7 +145,7 @@ class TransactionalAuthIntegrationTest {
         List<OutboxRowJpaEntity> outboxRows = outboxRowJpaRepository.findAll();
         assertThat(outboxRows).hasSize(1);
         assertThat(outboxRows.get(0).getEventType()).isEqualTo("auth.AuthUserLoggedIn");
-        assertThat(outboxRows.get(0).getStatus()).isEqualTo("PENDING");
+        assertThat(outboxRows.get(0).getStatus()).isEqualTo(OutboxStatus.PENDING);
     }
 
     @Test
@@ -220,6 +229,9 @@ class TransactionalAuthIntegrationTest {
         assertThatThrownBy(() -> refreshTokenUseCase.execute(new RefreshCommand(initial.refreshToken())))
             .isInstanceOf(RefreshTokenCompromisedException.class);
 
+        // Clear JPA cache to force fresh DB read
+        entityManager.clear();
+
         // Verify token version was bumped AND persisted
         User userAfter = userRepository.findByEmail(Email.of(EMAIL)).orElseThrow();
         assertThat(userAfter.getTokenVersion()).isEqualTo(2L);
@@ -241,6 +253,9 @@ class TransactionalAuthIntegrationTest {
         // Present USED token to logout → triggers family revoke + version bump
         assertThatThrownBy(() -> logoutUseCase.execute(new LogoutCommand(initial.refreshToken())))
             .isInstanceOf(RefreshTokenCompromisedException.class);
+
+        // Clear JPA cache to force fresh DB read
+        entityManager.clear();
 
         // Verify token version was bumped to 2
         User userAfter = userRepository.findByEmail(Email.of(EMAIL)).orElseThrow();
