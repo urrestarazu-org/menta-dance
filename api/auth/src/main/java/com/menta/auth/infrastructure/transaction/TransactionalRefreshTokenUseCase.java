@@ -3,6 +3,7 @@ package com.menta.auth.infrastructure.transaction;
 import com.menta.auth.application.dto.RefreshCommand;
 import com.menta.auth.application.dto.TokenPair;
 import com.menta.auth.application.port.in.RefreshTokenUseCase;
+import com.menta.auth.domain.exception.RefreshTokenCompromisedException;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -22,7 +23,7 @@ public class TransactionalRefreshTokenUseCase implements RefreshTokenUseCase {
     }
 
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = RefreshTokenCompromisedException.class)
     public TokenPair execute(RefreshCommand command) {
         return delegate.execute(command);
     }

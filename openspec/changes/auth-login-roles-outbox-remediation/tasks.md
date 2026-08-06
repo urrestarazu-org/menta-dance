@@ -46,4 +46,4 @@ Chain strategy: pending
 
 ## Phase 4: Focused Verification
 
-- [ ] 4.1 Run the three focused work-unit commands with confirmed MySQL/Redis profiles; then run `./gradlew check` only after confirming Android SDK availability.
+- [x] 4.1 Run the three focused work-unit commands with confirmed MySQL/Redis profiles; then run `./gradlew check` only after confirming Android SDK availability.

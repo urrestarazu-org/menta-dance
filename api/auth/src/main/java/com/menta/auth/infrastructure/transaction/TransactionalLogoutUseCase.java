@@ -2,6 +2,7 @@ package com.menta.auth.infrastructure.transaction;
 
 import com.menta.auth.application.dto.LogoutCommand;
 import com.menta.auth.application.port.in.LogoutUseCase;
+import com.menta.auth.domain.exception.RefreshTokenCompromisedException;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -21,7 +22,7 @@ public class TransactionalLogoutUseCase implements LogoutUseCase {
     }
 
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = RefreshTokenCompromisedException.class)
     public void execute(LogoutCommand command) {
         delegate.execute(command);
     }
