@@ -59,10 +59,10 @@ class OutboxBlacklistReconcilerTest {
 
     @BeforeEach
     void setUp() {
+        OutboxReconciliationWorker worker = new OutboxReconciliationWorker(
+            repository, tokenBlacklistPort, ACCESS_TTL_SECONDS, BACKOFF_SECONDS);
         reconciler = new OutboxBlacklistReconciler(
-            repository, tokenBlacklistPort, BATCH_SIZE, ACCESS_TTL_SECONDS,
-            BACKOFF_SECONDS, RETENTION_DAYS
-        );
+            repository, tokenBlacklistPort, worker, BATCH_SIZE, RETENTION_DAYS);
     }
 
     @Nested
@@ -230,6 +230,7 @@ class OutboxBlacklistReconcilerTest {
             OutboxRowJpaEntity saved = captor.getValue();
             assertThat(saved.getStatus()).isEqualTo(OutboxStatus.COMPLETED);
             assertThat(saved.getAttempts()).isEqualTo(1); // unchanged from before
+            assertThat(saved.getNextRetryAt()).isNull();
         }
 
         @Test

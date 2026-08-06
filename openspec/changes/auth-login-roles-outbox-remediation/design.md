@@ -47,7 +47,8 @@ The decorator returns tokens only after commit. Any persistence/outbox failure e
 | `api/auth/.../application/usecase/RegisterUserUseCaseImpl.java` | Modify | Reject caller-supplied non-STUDENT roles before writes. |
 | `api/auth/.../security/TokenBlacklistPortImpl.java` | Modify | Propagate write errors; retain fail-closed reads. |
 | `api/auth/.../application/port/out/TokenBlacklistPort.java` | Modify | Add heartbeat-write contract used by app reconciliation. |
-| `api/app/.../outbox/OutboxBlacklistReconciler.java` | Modify | Add `REQUIRES_NEW` eligible-row processing, FAILED/backoff transitions, and heartbeat scheduling. |
+| `api/app/.../outbox/OutboxBlacklistReconciler.java` | Modify | Select eligible rows and schedule the heartbeat after the batch. |
+| `api/app/.../outbox/OutboxReconciliationWorker.java` | Create | Process each eligible row through a separate Spring proxy with `REQUIRES_NEW`, including FAILED/backoff transitions. |
 | `api/auth/.../persistence/repository/OutboxRowJpaRepository.java` | Modify | Select PENDING and due FAILED rows in order. |
 | `api/auth/src/test/**`, `api/app/src/test/**` | Modify/Create | Regression, persistence, and Redis-focused coverage. |
 

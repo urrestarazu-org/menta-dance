@@ -11,6 +11,7 @@ import com.menta.auth.application.port.in.LoginUseCase;
 import com.menta.auth.application.port.in.LogoutUseCase;
 import com.menta.auth.application.port.in.RefreshTokenUseCase;
 import com.menta.auth.application.port.out.AuthDegradedGuard;
+import com.menta.auth.application.port.out.OutboxAppender;
 import com.menta.auth.application.port.out.TokenBlacklistPort;
 import com.menta.auth.domain.exception.RefreshTokenCompromisedException;
 import com.menta.auth.domain.model.RefreshTokenStatus;
@@ -33,10 +34,12 @@ import jakarta.persistence.EntityManager;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.transaction.annotation.Transactional;
 
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -107,6 +110,9 @@ class TransactionalAuthIntegrationTest {
 
     @MockBean
     private TokenBlacklistPort tokenBlacklistPort;
+
+    @SpyBean
+    private OutboxAppender outboxAppender;
 
     private static final String EMAIL = "student@example.com";
     private static final String PASSWORD = "SecurePass123!";
@@ -213,6 +219,53 @@ class TransactionalAuthIntegrationTest {
         List<OutboxRowJpaEntity> outboxRows = outboxRowJpaRepository.findAll();
         assertThat(outboxRows).hasSize(1);
         assertThat(outboxRows.get(0).getEventType()).isEqualTo("auth.UserLoggedOut");
+    }
+
+    @Test
+    void login_outbox_failure_rolls_back_refresh_mutation() {
+        doThrow(new IllegalStateException("outbox unavailable"))
+            .when(outboxAppender).append(anyString(), anyString(), anyString());
+
+        assertThatThrownBy(() -> loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD)))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("outbox unavailable");
+
+        assertThat(refreshTokenJpaRepository.findAll()).isEmpty();
+        assertThat(outboxRowJpaRepository.findAll()).isEmpty();
+    }
+
+    @Test
+    void refresh_outbox_failure_rolls_back_rotation() {
+        TokenPair initial = loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD));
+        outboxRowJpaRepository.deleteAll();
+        doThrow(new IllegalStateException("outbox unavailable"))
+            .when(outboxAppender).append(anyString(), anyString(), anyString());
+
+        assertThatThrownBy(() -> refreshTokenUseCase.execute(new RefreshCommand(initial.refreshToken())))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("outbox unavailable");
+
+        List<RefreshTokenJpaEntity> tokens = refreshTokenJpaRepository.findAll();
+        assertThat(tokens).hasSize(1);
+        assertThat(tokens.get(0).getStatus()).isEqualTo(RefreshTokenStatus.ACTIVE);
+        assertThat(outboxRowJpaRepository.findAll()).isEmpty();
+    }
+
+    @Test
+    void logout_outbox_failure_rolls_back_revocation() {
+        TokenPair initial = loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD));
+        outboxRowJpaRepository.deleteAll();
+        doThrow(new IllegalStateException("outbox unavailable"))
+            .when(outboxAppender).append(anyString(), anyString(), anyString());
+
+        assertThatThrownBy(() -> logoutUseCase.execute(new LogoutCommand(initial.refreshToken())))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("outbox unavailable");
+
+        List<RefreshTokenJpaEntity> tokens = refreshTokenJpaRepository.findAll();
+        assertThat(tokens).hasSize(1);
+        assertThat(tokens.get(0).getStatus()).isEqualTo(RefreshTokenStatus.ACTIVE);
+        assertThat(outboxRowJpaRepository.findAll()).isEmpty();
     }
 
     @Test

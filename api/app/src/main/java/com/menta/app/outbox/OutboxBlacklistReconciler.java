@@ -53,24 +53,21 @@ public class OutboxBlacklistReconciler {
 
     private final OutboxRowJpaRepository repository;
     private final TokenBlacklistPort tokenBlacklistPort;
+    private final OutboxReconciliationWorker worker;
     private final int batchSize;
-    private final Duration accessTtl;
-    private final Duration backoff;
     private final int retentionDays;
 
     public OutboxBlacklistReconciler(
         OutboxRowJpaRepository repository,
         TokenBlacklistPort tokenBlacklistPort,
+        OutboxReconciliationWorker worker,
         @Value("${auth.outbox.reconcile-batch-size:100}") int batchSize,
-        @Value("${auth.access-token-ttl-seconds:900}") long accessTtlSeconds,
-        @Value("${auth.outbox.reconcile-backoff-seconds:30}") long backoffSeconds,
         @Value("${auth.outbox.retention-days:7}") int retentionDays
     ) {
         this.repository = repository;
         this.tokenBlacklistPort = tokenBlacklistPort;
+        this.worker = worker;
         this.batchSize = batchSize;
-        this.accessTtl = Duration.ofSeconds(accessTtlSeconds);
-        this.backoff = Duration.ofSeconds(backoffSeconds);
         this.retentionDays = retentionDays;
     }
 
@@ -86,7 +83,6 @@ public class OutboxBlacklistReconciler {
     /**
      * Visible for unit tests; production flow goes through tick().
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public int processBatch() {
         Instant now = Instant.now();
         Pageable page = PageRequest.of(0, batchSize);
@@ -99,26 +95,9 @@ public class OutboxBlacklistReconciler {
         }
         int completedOrFailed = 0;
         boolean hadRedisFailure = false;
-        for (OutboxRowJpaEntity row : rows) {
-            try {
-                applySideEffect(row);
-                row.setStatus(OutboxStatus.COMPLETED);
-                row.setProcessedAt(now);
-                row.setLastError(null);
-            } catch (RuntimeException sideEffectFailure) {
-                log.warn(
-                    "Outbox repeat-failed id={} eventType={} attempts={} cause={}",
-                    row.getId(), row.getEventType(), row.getAttempts(),
-                    sideEffectFailure.getMessage());
-                row.setStatus(OutboxStatus.FAILED);
-                row.setAttempts(row.getAttempts() + 1);
-                row.setLastError(truncate(sideEffectFailure.getMessage(), 1000));
-                row.setNextRetryAt(now.plus(backoff));
-                hadRedisFailure = true;
-            } finally {
-                repository.save(row);
-                completedOrFailed++;
-            }
+        for (var row : rows) {
+            hadRedisFailure |= worker.process(row);
+            completedOrFailed++;
         }
         // PR3: Write heartbeat ONLY when no Redis failures occurred.
         // If Redis is down, writing heartbeat would fail or give false signal.
@@ -126,19 +105,6 @@ public class OutboxBlacklistReconciler {
             tokenBlacklistPort.writeHeartbeat();
         }
         return completedOrFailed;
-    }
-
-    private void applySideEffect(OutboxRowJpaEntity row) {
-        // This slice wires ONLY the JTI blacklist side-effect.
-        // Future cross-module consumers dispatch via OutboxListener.
-        tokenBlacklistPort.blacklist(row.getAggregateId(), accessTtl);
-    }
-
-    private static String truncate(String message, int max) {
-        if (message == null) {
-            return null;
-        }
-        return message.length() <= max ? message : message.substring(0, max);
     }
 
     // ---- Retention cleanup ----
