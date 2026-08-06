@@ -1,0 +1,48 @@
+spring:
+  # Datasource configuration provided by @DynamicPropertySource in test
+  datasource:
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+      connection-timeout: 10000
+      validation-timeout: 5000
+      leak-detection-threshold: 60000
+      max-lifetime: 580000
+      # Disable validation on borrow to avoid connection issues during shutdown
+      connection-test-query: SELECT 1
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: false
+        show_sql: false
+        # Prevent schema drop exceptions during test shutdown
+        jakarta:
+          persistence:
+            schema-generation:
+              scripts:
+                action: none
+    # Disable Open Session in View to avoid connection leaks
+    open-in-view: false
+
+  # Disable Flyway for integration tests (using ddl-auto instead)
+  flyway:
+    enabled: false
+
+  # Disable Redis for tests
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+
+# Logging for integration tests
+logging:
+  level:
+    root: WARN
+    com.menta: INFO
+    org.hibernate.SQL: WARN
+    org.springframework.orm.jpa: WARN
+    org.springframework.transaction: WARN
+    com.zaxxer.hikari: WARN

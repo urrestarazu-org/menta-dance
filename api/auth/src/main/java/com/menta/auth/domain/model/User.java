@@ -68,6 +68,19 @@ public class User {
         );
     }
 
+    public static User rehydrate(
+        UserId id,
+        Email email,
+        String passwordHash,
+        Role role,
+        UserStatus status,
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt,
+        long tokenVersion
+    ) {
+        return new User(id, email, passwordHash, role, status, createdAt, updatedAt, tokenVersion);
+    }
+
     public void activate() {
         this.status = UserStatus.ACTIVE;
         this.updatedAt = LocalDateTime.now();

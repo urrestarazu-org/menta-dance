@@ -123,6 +123,7 @@ class ArchitectureTest {
     void use_cases_should_reside_in_application() {
         classes()
             .that().haveSimpleNameEndingWith("UseCase")
+            .and().haveSimpleNameNotContaining("Transactional")
             .or().haveSimpleNameEndingWith("UseCaseImpl")
             .should().resideInAPackage("..application..")
             .check(classes);

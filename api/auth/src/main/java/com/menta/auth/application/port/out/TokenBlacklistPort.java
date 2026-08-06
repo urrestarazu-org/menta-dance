@@ -34,4 +34,12 @@ public interface TokenBlacklistPort {
      *         ADR-0026). False only when the entry is absent AND Redis is up.
      */
     boolean isBlacklisted(String jti);
+
+    /**
+     * Write a heartbeat timestamp to Redis indicating the reconciler's last
+     * successful tick. AuthDegradedGuard uses this to determine if the system
+     * is degraded. MUST propagate Redis failures to the caller so the
+     * reconciler can detect write failures.
+     */
+    void writeHeartbeat();
 }

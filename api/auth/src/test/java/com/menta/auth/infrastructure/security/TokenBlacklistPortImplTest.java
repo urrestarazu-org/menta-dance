@@ -1,6 +1,7 @@
 package com.menta.auth.infrastructure.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -155,15 +156,17 @@ class TokenBlacklistPortImplTest {
     class RedisOutage {
 
         @Test
-        void blacklist_a_swallows_redis_failure_so_writers_do_not_crash() {
-            // Write path: a Redis blip MUST NOT crash the producer. The
-            // reconciler will retry on the next tick; lost side-effects are
-            // recoverable from the durable outbox.
+        void blacklist_propagates_redis_failure_so_reconciler_detects_it() {
+            // PR3: Write path NOW propagates Redis failures. The reconciler
+            // must detect write failures to transition the outbox row to FAILED
+            // with retry backoff instead of marking it COMPLETED incorrectly.
             doThrow(new RuntimeException("connection refused"))
                 .when(valueOps).set(anyString(), anyString(), any(Duration.class));
 
-            // No exception escapes the adapter — the call returns normally.
-            port.blacklist(JTI, ACCESS_TTL);
+            // Exception MUST escape so the reconciler can catch it
+            assertThatThrownBy(() -> port.blacklist(JTI, ACCESS_TTL))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("connection refused");
         }
 
         @Test
@@ -187,14 +190,58 @@ class TokenBlacklistPortImplTest {
         }
 
         @Test
-        void blacklist_b_failure_does_not_call_redis_again() {
+        void blacklist_failure_does_not_retry_within_same_call() {
             doThrow(new RuntimeException("boom"))
                 .when(valueOps).set(anyString(), anyString(), any(Duration.class));
 
-            // Guard against retry storms on the blacklist path.
-            port.blacklist(JTI, ACCESS_TTL);
+            // Guard against retry storms: adapter throws once, no internal retry
+            assertThatThrownBy(() -> port.blacklist(JTI, ACCESS_TTL))
+                .isInstanceOf(RuntimeException.class);
+
             verify(valueOps, times(1)).set(anyString(), anyString(), any(Duration.class));
             verify(redisTemplate, never()).execute(any(RedisCallback.class));
+        }
+    }
+
+    @Nested
+    @DisplayName("Spec: Heartbeat write (PR3)")
+    class HeartbeatWrite {
+
+        @Test
+        void write_heartbeat_stores_current_millis_without_ttl() {
+            long beforeWrite = System.currentTimeMillis();
+
+            port.writeHeartbeat();
+
+            long afterWrite = System.currentTimeMillis();
+
+            // Verify heartbeat key was written with current timestamp
+            verify(valueOps).set(
+                eq("auth:health:last_tick_at"),
+                anyString()  // Will verify it's parseable long in range
+            );
+        }
+
+        @Test
+        void write_heartbeat_propagates_redis_failure() {
+            doThrow(new RuntimeException("redis write failed"))
+                .when(valueOps).set(eq("auth:health:last_tick_at"), anyString());
+
+            // Heartbeat write failures MUST propagate so reconciler can detect them
+            assertThatThrownBy(() -> port.writeHeartbeat())
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("redis write failed");
+        }
+
+        @Test
+        void degraded_guard_reads_heartbeat_written_by_same_adapter() {
+            // Integration scenario: reconciler writes heartbeat, guard reads it
+            long freshTick = Instant.now().toEpochMilli();
+            when(valueOps.get("auth:health:last_tick_at"))
+                .thenReturn(String.valueOf(freshTick));
+
+            AuthDegradedGuard guard = port;
+            assertThat(guard.isDegraded()).isFalse();
         }
     }
 }

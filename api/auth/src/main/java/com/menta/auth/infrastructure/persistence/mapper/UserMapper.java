@@ -27,7 +27,8 @@ public final class UserMapper {
             user.getRole(),
             user.getStatus(),
             user.getCreatedAt(),
-            user.getUpdatedAt()
+            user.getUpdatedAt(),
+            user.getTokenVersion()
         );
     }
 
@@ -36,14 +37,15 @@ public final class UserMapper {
             return null;
         }
 
-        return new User(
+        return User.rehydrate(
             UserId.of(entity.getId()),
             Email.of(entity.getEmail()),
             entity.getPasswordHash(),
             entity.getRole(),
             entity.getStatus(),
             entity.getCreatedAt(),
-            entity.getUpdatedAt()
+            entity.getUpdatedAt(),
+            entity.getTokenVersion()
         );
     }
 }
