@@ -47,8 +47,7 @@ The decorator returns tokens only after commit. Any persistence/outbox failure e
 | `api/auth/.../application/usecase/RegisterUserUseCaseImpl.java` | Modify | Reject caller-supplied non-STUDENT roles before writes. |
 | `api/auth/.../security/TokenBlacklistPortImpl.java` | Modify | Propagate write errors; retain fail-closed reads. |
 | `api/auth/.../application/port/out/TokenBlacklistPort.java` | Modify | Add heartbeat-write contract used by app reconciliation. |
-| `api/app/.../outbox/OutboxBlacklistReconciler.java` | Modify | Schedule heartbeat and delegate batch work to a separate proxied service. |
-| `api/app/.../outbox/OutboxReconciliationService.java` | Create | `REQUIRES_NEW` eligible-row processing and FAILED/backoff transitions. |
+| `api/app/.../outbox/OutboxBlacklistReconciler.java` | Modify | Add `REQUIRES_NEW` eligible-row processing, FAILED/backoff transitions, and heartbeat scheduling. |
 | `api/auth/.../persistence/repository/OutboxRowJpaRepository.java` | Modify | Select PENDING and due FAILED rows in order. |
 | `api/auth/src/test/**`, `api/app/src/test/**` | Modify/Create | Regression, persistence, and Redis-focused coverage. |
 
@@ -57,7 +56,7 @@ The decorator returns tokens only after commit. Any persistence/outbox failure e
 ```java
 public interface TokenBlacklistPort {
     void blacklist(String jti, Duration ttl); // throws on Redis write failure
-    void recordHeartbeat(Instant at);          // throws on Redis write failure
+    void writeHeartbeat();                     // throws on Redis write failure
 }
 
 public static User rehydrate(..., long tokenVersion) { ... }

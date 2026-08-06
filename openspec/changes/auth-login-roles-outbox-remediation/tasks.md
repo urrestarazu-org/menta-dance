@@ -34,15 +34,15 @@ Chain strategy: pending
 
 - [x] 2.1 RED: test `ADMIN`/`INSTRUCTOR` public registration returns the existing validation error with no user/outbox writes; test null/STUDENT success and unchanged internal provisioning. Files: `api/auth/src/test/**/RegisterUserUseCaseImplTest.java`. ArchUnit: application has no Spring/JPA.
 - [x] 2.2 GREEN: reject non-STUDENT caller roles before duplicate lookup, hashing, persistence, or outbox work. File: `api/auth/src/main/**/RegisterUserUseCaseImpl.java`. ArchUnit: application boundary.
-- [ ] 2.3 RED: MySQL integration tests invoke proxied login/refresh/logout ports and prove each append failure rolls back mutation and outbox; cover successful login/rotation/logout and refresh-family revocation version persistence. Files: `api/auth/src/test/**/Transactional*IntegrationTest.java`. ArchUnit: infrastructure owns Spring.
-- [ ] 2.4 GREEN: create proxied `Transactional*UseCase` decorators and wire them as sole input ports. Files: `api/auth/src/main/**/infrastructure/transaction/Transactional*UseCase.java`, `AuthConfiguration.java`. ArchUnit: no Spring in application/domain.
+- [x] 2.3 RED: MySQL integration tests invoke proxied login/refresh/logout ports and prove each append failure rolls back mutation and outbox; cover successful login/rotation/logout and refresh-family revocation version persistence. Files: `api/app/src/test/**/TransactionalAuthIntegrationTest.java`. ArchUnit: infrastructure owns Spring.
+- [x] 2.4 GREEN: create proxied `Transactional*UseCase` decorators and wire them as sole input ports. Files: `api/auth/src/main/**/infrastructure/transaction/Transactional*UseCase.java`, `AuthConfiguration.java`. ArchUnit: no Spring in application/domain.
 
 ## Phase 3: Outbox Redis Recovery and Health
 
-- [ ] 3.1 RED: test blacklist/heartbeat writes propagate Redis failures while reads fail closed. Files: `api/auth/src/test/**/TokenBlacklistPortImplTest.java`; `TokenBlacklistPort.java`. ArchUnit: infrastructure adapter boundary.
-- [ ] 3.2 GREEN: add heartbeat contract and rethrow Redis write failures without changing degraded 503/`Retry-After: 30` behavior. Files: `TokenBlacklistPort.java`, `TokenBlacklistPortImpl.java`. ArchUnit: application port direction.
-- [ ] 3.3 RED: test PENDING Redis failure becomes FAILED with diagnostic/future backoff, skips early retry, survives a later tick, completes when due, and writes heartbeat per tick. Files: `api/app/src/test/**/OutboxReconciliationServiceTest.java`, `OutboxBlacklistReconcilerTest.java`. ArchUnit: app orchestration only.
-- [ ] 3.4 GREEN: query PENDING plus due FAILED rows and process each in `REQUIRES_NEW`; schedule heartbeat. Files: `api/app/src/main/**/OutboxReconciliationService.java`, `OutboxBlacklistReconciler.java`, `api/auth/src/main/**/OutboxRowJpaRepository.java`. ArchUnit: no cross-module repository access.
+- [x] 3.1 RED: test blacklist/heartbeat writes propagate Redis failures while reads fail closed. Files: `api/auth/src/test/**/TokenBlacklistPortImplTest.java`; `TokenBlacklistPort.java`. ArchUnit: infrastructure adapter boundary.
+- [x] 3.2 GREEN: add heartbeat contract and rethrow Redis write failures without changing degraded 503/`Retry-After: 30` behavior. Files: `TokenBlacklistPort.java`, `TokenBlacklistPortImpl.java`. ArchUnit: application port direction.
+- [x] 3.3 RED: test PENDING Redis failure becomes FAILED with diagnostic/future backoff, skips early retry, survives a later tick, completes when due, and writes heartbeat per tick. Files: `api/app/src/test/**/OutboxBlacklistReconcilerTest.java`. ArchUnit: app orchestration only.
+- [x] 3.4 GREEN: query PENDING plus due FAILED rows and process each in `REQUIRES_NEW`; schedule heartbeat. Files: `api/app/src/main/**/OutboxBlacklistReconciler.java`, `api/auth/src/main/**/OutboxRowJpaRepository.java`. ArchUnit: no cross-module repository access.
 
 ## Phase 4: Focused Verification
 
