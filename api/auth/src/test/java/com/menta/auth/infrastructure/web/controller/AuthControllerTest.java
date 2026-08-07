@@ -5,6 +5,7 @@ import static org.hamcrest.Matchers.notNullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -28,12 +29,11 @@ import com.menta.auth.domain.exception.InvalidCredentialsException;
 import com.menta.auth.domain.exception.LockedUserException;
 import com.menta.auth.domain.exception.RefreshTokenCompromisedException;
 import com.menta.auth.infrastructure.web.dto.LoginRequest;
-import com.menta.auth.infrastructure.web.dto.LogoutRequest;
-import com.menta.auth.infrastructure.web.dto.RefreshRequest;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -43,21 +43,16 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
  *
  * Standalone setup keeps the test focused on the controller's contract:
  *   - request body validation & mapping to command DTOs;
- *   - @ExceptionHandler status code & body fan-out;
+ *   - @ExceptionHandler RFC 9457 status code & body fan-out;
  *   - response wire shape (snake_case JSON for the auth-login spec).
  *
  * Security wiring and full-stack integration coverage live in
  * AuthFlowIntegrationTest.
  *
  * RED-first contract for AuthController:
- *   - POST /auth/login 200 with TokenResponse (access_token, refresh_token, token_type, expires_in).
- *   - POST /auth/login 401 on InvalidCredentialsException.
- *   - POST /auth/login 423 on LockedUserException.
- *   - POST /auth/login 503 + Retry-After: 30 on AuthDegradedException.
- *   - POST /auth/refresh 200 with TokenResponse.
- *   - POST /auth/refresh 401 on RefreshTokenCompromisedException.
- *   - POST /auth/logout 204 on success.
- *   - POST /auth/logout 401 on RefreshTokenCompromisedException.
+ *   - POST /api/v1/auth/login 200 with TokenResponse.
+ *   - Refresh and logout accept their sensitive token only via X-Refresh-Token.
+ *   - Validation and domain errors use application/problem+json.
  */
 class AuthControllerTest {
 
@@ -67,18 +62,20 @@ class AuthControllerTest {
     private RefreshTokenUseCase refreshTokenUseCase;
     private LogoutUseCase logoutUseCase;
 
-    private static final String LOGIN_URL = "/auth/login";
-    private static final String REFRESH_URL = "/auth/refresh";
-    private static final String LOGOUT_URL = "/auth/logout";
+    private static final String LOGIN_URL = "/api/v1/auth/login";
+    private static final String REFRESH_URL = "/api/v1/auth/refresh";
+    private static final String LOGOUT_URL = "/api/v1/auth/logout";
+    private static final String REFRESH_TOKEN_HEADER = "X-Refresh-Token";
 
     @BeforeEach
     void setUp() {
         this.loginUseCase = mock(LoginUseCase.class);
         this.refreshTokenUseCase = mock(RefreshTokenUseCase.class);
         this.logoutUseCase = mock(LogoutUseCase.class);
-        this.objectMapper = new ObjectMapper()
-            .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
-            .disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        this.objectMapper = Jackson2ObjectMapperBuilder.json()
+            .modules(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
+            .featuresToDisable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+            .build();
         AuthController controller = new AuthController(
             loginUseCase, refreshTokenUseCase, logoutUseCase
         );
@@ -125,6 +122,11 @@ class AuthControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body))
             .andExpect(status().isUnauthorized())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.type", is("https://menta.dance/problems/invalid_credentials")))
+            .andExpect(jsonPath("$.title", is("Unauthorized")))
+            .andExpect(jsonPath("$.status", is(401)))
+            .andExpect(jsonPath("$.detail", is("Authentication failed.")))
             .andExpect(jsonPath("$.code", is("INVALID_CREDENTIALS")));
     }
 
@@ -141,6 +143,7 @@ class AuthControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body))
             .andExpect(status().isLocked())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
             .andExpect(jsonPath("$.code", is("USER_LOCKED")));
     }
 
@@ -158,6 +161,7 @@ class AuthControllerTest {
                 .content(body))
             .andExpect(status().isServiceUnavailable())
             .andExpect(header().string("Retry-After", is("30")))
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
             .andExpect(jsonPath("$.code", is("AUTH_DEGRADED")));
     }
 
@@ -171,17 +175,15 @@ class AuthControllerTest {
         );
         when(refreshTokenUseCase.execute(any(RefreshCommand.class))).thenReturn(pair);
 
-        String body = objectMapper.writeValueAsString(
-            new RefreshRequest(UUID.randomUUID().toString())
-        );
+        String refreshToken = UUID.randomUUID().toString();
 
         mockMvc.perform(post(REFRESH_URL)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body))
+                .header(REFRESH_TOKEN_HEADER, refreshToken))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.access_token", is("rotated-jwt")))
             .andExpect(jsonPath("$.refresh_token", notNullValue()))
             .andExpect(jsonPath("$.token_type", is("Bearer")));
+        verify(refreshTokenUseCase).execute(new RefreshCommand(refreshToken));
     }
 
     @Test
@@ -189,27 +191,21 @@ class AuthControllerTest {
         when(refreshTokenUseCase.execute(any(RefreshCommand.class)))
             .thenThrow(new RefreshTokenCompromisedException());
 
-        String body = objectMapper.writeValueAsString(
-            new RefreshRequest("compromised-refresh")
-        );
-
         mockMvc.perform(post(REFRESH_URL)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body))
+                .header(REFRESH_TOKEN_HEADER, "compromised-refresh"))
             .andExpect(status().isUnauthorized())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
             .andExpect(jsonPath("$.code", is("REFRESH_TOKEN_COMPROMISED")));
     }
 
     @Test
     void logout_returns_204_on_success() throws Exception {
-        String body = objectMapper.writeValueAsString(
-            new LogoutRequest(UUID.randomUUID().toString())
-        );
+        String refreshToken = UUID.randomUUID().toString();
 
         mockMvc.perform(post(LOGOUT_URL)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body))
+                .header(REFRESH_TOKEN_HEADER, refreshToken))
             .andExpect(status().isNoContent());
+        verify(logoutUseCase).execute(new LogoutCommand(refreshToken));
     }
 
     @Test
@@ -217,14 +213,51 @@ class AuthControllerTest {
         doThrow(new RefreshTokenCompromisedException())
             .when(logoutUseCase).execute(any(LogoutCommand.class));
 
-        String body = objectMapper.writeValueAsString(
-            new LogoutRequest("compromised-refresh")
-        );
+        mockMvc.perform(post(LOGOUT_URL)
+                .header(REFRESH_TOKEN_HEADER, "compromised-refresh"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.code", is("REFRESH_TOKEN_COMPROMISED")));
+    }
 
+    @Test
+    void refresh_rejects_a_missing_header_with_an_rfc_9457_problem() throws Exception {
+        mockMvc.perform(post(REFRESH_URL))
+            .andExpect(status().isBadRequest())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.type", is("https://menta.dance/problems/invalid_auth_request")))
+            .andExpect(jsonPath("$.title", is("Bad Request")))
+            .andExpect(jsonPath("$.status", is(400)))
+            .andExpect(jsonPath("$.detail", is("The authentication request is invalid.")))
+            .andExpect(jsonPath("$.code", is("INVALID_AUTH_REQUEST")));
+    }
+
+    @Test
+    void login_validation_returns_an_rfc_9457_problem() throws Exception {
+        mockMvc.perform(post(LOGIN_URL)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"email\":\"not-an-email\",\"password\":\"\"}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.code", is("INVALID_AUTH_REQUEST")));
+    }
+
+    @Test
+    void refresh_does_not_accept_a_refresh_token_from_json() throws Exception {
+        mockMvc.perform(post(REFRESH_URL)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"refreshToken\":\"must-not-be-read\"}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+    }
+
+    @Test
+    void logout_does_not_accept_a_refresh_token_from_json() throws Exception {
         mockMvc.perform(post(LOGOUT_URL)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body))
-            .andExpect(status().isUnauthorized())
-            .andExpect(jsonPath("$.code", is("REFRESH_TOKEN_COMPROMISED")));
+                .content("{\"refreshToken\":\"must-not-be-read\"}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.code", is("INVALID_AUTH_REQUEST")));
     }
 }

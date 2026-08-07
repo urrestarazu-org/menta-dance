@@ -1,6 +1,7 @@
 package com.menta.auth.infrastructure.security;
 
 import com.menta.auth.domain.model.Role;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -26,8 +27,9 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * exposes default rules so public + authenticated routes have a stable
  * default-deny fail policy.
  *
- * Path policy (PR3 wire-up):
- *   - /auth/login, /auth/refresh, /auth/logout  → permitAll (controllers handle auth itself).
+ * Path policy:
+ *   - /api/v1/auth/login and /api/v1/auth/refresh → permitAll (controllers handle credentials).
+ *   - /api/v1/auth/logout → authenticated Bearer access token required.
  *   - /actuator/health                          → permitAll
  *   - /api/v1/users/register                    → permitAll (public registration; PR2 contract)
  *   - everything else under /api/v1/admin/**    → requires ADMIN authority
@@ -47,14 +49,17 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(
         HttpSecurity http,
         JwtAuthenticationFilter jwtAuthenticationFilter,
-        RoleAuthorizationManager roleAuthorizationManager
+        RoleAuthorizationManager roleAuthorizationManager,
+        ObjectMapper objectMapper
     ) throws Exception {
         http
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // Public auth endpoints — the controllers reject invalid creds.
-                .requestMatchers("/auth/login", "/auth/refresh", "/auth/logout").permitAll()
+                // Login and refresh authenticate their own credentials. Logout requires
+                // a valid access Bearer token, while its refresh is supplied separately.
+                .requestMatchers("/api/v1/auth/login", "/api/v1/auth/refresh").permitAll()
+                .requestMatchers("/api/v1/auth/logout").authenticated()
                 .requestMatchers("/actuator/health").permitAll()
                 .requestMatchers("/api/v1/users/register").permitAll()
                 // Coarse-grained role gates.
@@ -63,6 +68,10 @@ public class SecurityConfig {
                 // Anything else: defer to RoleAuthorizationManager (longest path-prefix wins,
                 // unmapped paths fall through to a grant so controller-layer checks apply).
                 .anyRequest().access(roleAuthorizationManager)
+            )
+            .exceptionHandling(exceptions -> exceptions
+                .authenticationEntryPoint(ProblemJsonSecurityHandlers.authenticationEntryPoint(objectMapper))
+                .accessDeniedHandler(ProblemJsonSecurityHandlers.accessDeniedHandler(objectMapper))
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 

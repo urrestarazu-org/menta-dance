@@ -5,7 +5,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.Duration;
 
 /**
- * TokenResponse wire shape for /auth/login and /auth/refresh 200 OK
+ * TokenResponse wire shape for /api/v1/auth/login and /api/v1/auth/refresh 200 OK
  * responses (spec auth-login: 200 → access_token, refresh_token,
  * token_type, expires_in).
  *
