@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error - Menta Dance</title>
+</head>
+<body>
+<h1>Error</h1>
+
+<p th:if="${status}" th:text="'Status: ' + ${status}">Status</p>
+<p th:if="${error}" th:text="'Error: ' + ${error}">Error</p>
+<p th:if="${message}" th:text="'Message: ' + ${message}">Message</p>
+
+<a href="/">Go to Home</a>
+</body>
+</html>
