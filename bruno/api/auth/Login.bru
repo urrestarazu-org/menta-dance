@@ -5,7 +5,7 @@ meta {
 }
 
 post {
-  url: {{baseUrl}}/auth/login
+  url: {{baseUrl}}/api/v1/auth/login
   body: json
   auth: none
 }
@@ -29,7 +29,7 @@ docs {
     503 AUTH_DEGRADED        + Retry-After: 30 → outbox reconciler lagging
 
   Prerequisite: a STUDENT user must exist (POST /api/v1/users/register
-  then seed password via /auth/register-free helper if you have one).
+  then seed password through the supported registration flow).
 }
 
 tests {

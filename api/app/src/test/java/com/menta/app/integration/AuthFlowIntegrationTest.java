@@ -102,9 +102,9 @@ class AuthFlowIntegrationTest {
         User user = User.create(Email.of(EMAIL), passwordEncoder.encode(RAW_PASSWORD), Role.STUDENT);
         userRepository.save(user);
 
-        // 1. POST /auth/login -> 200 with token_pair
+        // 1. POST /api/v1/auth/login -> 200 with token_pair
         ResponseEntity<Map> loginResponse = http.exchange(
-            "/auth/login",
+            "/api/v1/auth/login",
             HttpMethod.POST,
             jsonEntity(Map.of("email", EMAIL, "password", RAW_PASSWORD)),
             Map.class
@@ -115,12 +115,14 @@ class AuthFlowIntegrationTest {
         assertThat(body).containsKeys("access_token", "refresh_token", "token_type", "expires_in");
         String refreshToken = (String) body.get("refresh_token");
         assertThat(refreshToken).isNotBlank();
+        String accessToken = (String) body.get("access_token");
+        assertThat(accessToken).isNotBlank();
 
-        // 2. POST /auth/refresh -> 200, new pair in same family
+        // 2. POST /api/v1/auth/refresh -> 200, token is only in the header.
         ResponseEntity<Map> refreshResponse = http.exchange(
-            "/auth/refresh",
+            "/api/v1/auth/refresh",
             HttpMethod.POST,
-            jsonEntity(Map.of("refreshToken", refreshToken)),
+            refreshEntity(refreshToken),
             Map.class
         );
         assertThat(refreshResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -129,12 +131,13 @@ class AuthFlowIntegrationTest {
         assertThat((String) rotateBody.get("access_token")).isNotBlank();
         assertThat((String) rotateBody.get("refresh_token")).isNotEqualTo(refreshToken);
 
-        // 3. POST /auth/logout -> 204
+        // 3. POST /api/v1/auth/logout -> 204, requiring both credentials.
         String rotatedRefresh = (String) rotateBody.get("refresh_token");
+        String rotatedAccess = (String) rotateBody.get("access_token");
         ResponseEntity<Void> logoutResponse = http.exchange(
-            "/auth/logout",
+            "/api/v1/auth/logout",
             HttpMethod.POST,
-            jsonEntity(Map.of("refreshToken", rotatedRefresh)),
+            logoutEntity(rotatedAccess, rotatedRefresh),
             Void.class
         );
         assertThat(logoutResponse.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
@@ -168,7 +171,7 @@ class AuthFlowIntegrationTest {
         ));
 
         ResponseEntity<Map> response = http.exchange(
-            "/auth/login",
+            "/api/v1/auth/login",
             HttpMethod.POST,
             jsonEntity(Map.of("email", EMAIL, "password", "WrongPass!")),
             Map.class
@@ -177,6 +180,8 @@ class AuthFlowIntegrationTest {
         assertThat(response.getStatusCode())
             .as("login must reject wrong password with 401 per spec")
             .isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(response.getHeaders().getContentType())
+            .isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
         assertThat((String) response.getBody().get("code"))
             .isEqualTo("INVALID_CREDENTIALS");
     }
@@ -186,7 +191,7 @@ class AuthFlowIntegrationTest {
         when(authDegradedGuard.isDegraded()).thenReturn(false);
 
         ResponseEntity<Map> response = http.exchange(
-            "/auth/login",
+            "/api/v1/auth/login",
             HttpMethod.POST,
             jsonEntity(Map.of("email", "ghost@example.com", "password", "whatever")),
             Map.class
@@ -204,7 +209,7 @@ class AuthFlowIntegrationTest {
         when(authDegradedGuard.isDegraded()).thenReturn(true);
 
         ResponseEntity<Map> response = http.exchange(
-            "/auth/login",
+            "/api/v1/auth/login",
             HttpMethod.POST,
             jsonEntity(Map.of("email", EMAIL, "password", RAW_PASSWORD)),
             Map.class
@@ -216,11 +221,107 @@ class AuthFlowIntegrationTest {
         assertThat(response.getHeaders().getFirst(HttpHeaders.RETRY_AFTER))
             .as("Retry-After must be 30 per ADR-0026")
             .isEqualTo("30");
+        assertThat(response.getHeaders().getContentType())
+            .isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+        assertThat(response.getBody())
+            .containsEntry("type", "https://menta.dance/problems/auth_degraded")
+            .containsEntry("title", "Service Unavailable")
+            .containsEntry("status", 503)
+            .containsEntry("detail", "Authentication is temporarily unavailable.")
+            .containsEntry("code", "AUTH_DEGRADED");
+    }
+
+    @Test
+    void logout_requires_a_bearer_token_and_returns_an_rfc_9457_problem() {
+        ResponseEntity<Map> response = http.exchange(
+            "/api/v1/auth/logout",
+            HttpMethod.POST,
+            refreshEntity(UUID.randomUUID().toString()),
+            Map.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(response.getHeaders().getContentType())
+            .isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+        assertThat(response.getBody()).containsEntry("code", "AUTHENTICATION_REQUIRED");
+    }
+
+    @Test
+    void legacy_auth_routes_are_not_mapped() {
+        for (String route : new String[] {"/auth/login", "/auth/refresh", "/auth/logout"}) {
+            ResponseEntity<Void> response = http.exchange(
+                route,
+                HttpMethod.POST,
+                new HttpEntity<>(new HttpHeaders()),
+                Void.class
+            );
+
+            assertThat(response.getStatusCode())
+                .as("legacy route %s must not remain observable", route)
+                .isEqualTo(HttpStatus.NOT_FOUND);
+        }
+    }
+
+    @Test
+    void authenticated_student_is_denied_from_the_admin_route_with_an_rfc_9457_problem() {
+        when(authDegradedGuard.isDegraded()).thenReturn(false);
+        userRepository.findByEmail(Email.of(EMAIL))
+            .ifPresent(existing -> userRepository.deleteById(existing.getId()));
+        userRepository.save(User.create(
+            Email.of(EMAIL),
+            passwordEncoder.encode(RAW_PASSWORD),
+            Role.STUDENT
+        ));
+
+        ResponseEntity<Map> loginResponse = http.exchange(
+            "/api/v1/auth/login",
+            HttpMethod.POST,
+            jsonEntity(Map.of("email", EMAIL, "password", RAW_PASSWORD)),
+            Map.class
+        );
+        String accessToken = (String) loginResponse.getBody().get("access_token");
+
+        // Security authorizes this configured admin route before MVC handler lookup.
+        ResponseEntity<Map> response = http.exchange(
+            "/api/v1/admin/probe",
+            HttpMethod.GET,
+            bearerEntity(accessToken),
+            Map.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(response.getHeaders().getContentType())
+            .isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+        assertThat(response.getBody())
+            .containsEntry("type", "https://menta.dance/problems/access_denied")
+            .containsEntry("title", "Forbidden")
+            .containsEntry("status", 403)
+            .containsEntry("detail", "You are not authorized to access this resource.")
+            .containsEntry("code", "ACCESS_DENIED");
     }
 
     private static HttpEntity<Map<String, String>> jsonEntity(Map<String, String> body) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         return new HttpEntity<>(body, headers);
+    }
+
+    private static HttpEntity<Void> refreshEntity(String refreshToken) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("X-Refresh-Token", refreshToken);
+        return new HttpEntity<>(headers);
+    }
+
+    private static HttpEntity<Void> logoutEntity(String accessToken, String refreshToken) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(accessToken);
+        headers.set("X-Refresh-Token", refreshToken);
+        return new HttpEntity<>(headers);
+    }
+
+    private static HttpEntity<Void> bearerEntity(String accessToken) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(accessToken);
+        return new HttpEntity<>(headers);
     }
 }

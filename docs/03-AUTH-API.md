@@ -11,7 +11,11 @@
   `iat`, `exp`, `iss` y `aud`. El refresh es UUID opaco, hasheado SHA-256 en
   `auth_refresh_tokens` y dura 7 días.
 
-## Endpoints
+## Endpoints planificados
+
+La superficie Auth v1 implementada se detalla en el contrato HTTP de abajo.
+Los restantes endpoints de esta lista son parte del diseño funcional, no rutas
+expuestas todavía:
 
 ```text
 POST /api/v1/auth/register
@@ -30,9 +34,37 @@ GET  /api/v1/auth/me/roles
 
 Todas las respuestas de error usan `application/problem+json`.
 
+## Contrato HTTP implementado (v1)
+
+Los tres endpoints disponibles hoy son canónicos bajo `/api/v1/auth`; no existe
+compatibilidad para el prefijo legado `/auth`.
+
+| Endpoint | Autenticación de entrada | Respuesta exitosa |
+| --- | --- | --- |
+| `POST /login` | JSON `{ "email", "password" }` | `200` con el par de tokens para el cliente de confianza (BFF o Android) |
+| `POST /refresh` | `X-Refresh-Token` obligatorio; nunca body JSON | `200` con el par rotado |
+| `POST /logout` | `Authorization: Bearer <access>` y `X-Refresh-Token` obligatorios | `204 No Content` |
+
+El BFF lee su cookie de sesión internamente y pasa el refresh a Auth mediante
+`X-Refresh-Token`; puede ver esos valores sólo en su comunicación
+servidor-a-servidor con Auth y no los reenvía al navegador. Los refresh tokens
+no se escriben en logs, errores ni eventos HTTP. Un request inválido, una
+credencial rechazada o un Bearer faltante/inválido se representa como RFC 9457,
+por ejemplo:
+
+```json
+{
+  "type": "https://menta.dance/problems/authentication_required",
+  "title": "Unauthorized",
+  "status": 401,
+  "detail": "Authentication is required.",
+  "code": "AUTHENTICATION_REQUIRED"
+}
+```
+
 ## Renovación y reutilización
 
-`POST /refresh` rota obligatoriamente el refresh: revoca el token presentado y
+`POST /api/v1/auth/refresh` rota obligatoriamente el refresh: revoca el token presentado y
 emite un UUID nuevo. La reutilización de un token rotado, `POST /logout-all` y
 todo reset/cambio de contraseña revocan **todas** las sesiones, incrementan
 `auth_users.token_version` y exigen login nuevo. MySQL es la autoridad absoluta:
@@ -42,12 +74,13 @@ Si Redis no confirma esa reflexión, Auth marca el estado global MySQL como
 `AUTH_DEGRADED`; login, refresh y cualquier ruta autenticada quedan bloqueados
 hasta que el worker repare Redis y restablezca `NORMAL`. Si MySQL no está
 disponible, se niegan esos mismos flujos. `auth_outbox` aporta reintento y
-reparación, no autoridad. La respuesta web queda mediada por el BFF; Android
-recibe el nuevo token sólo en el header seguro definido para la app.
+reparación, no autoridad. La respuesta web queda mediada por el BFF; Android,
+como cliente de confianza, almacena el par rotado de la respuesta en Keystore.
 
 ## Logout y revocación
 
-`POST /logout` requiere `Authorization: Bearer <access>`. En la misma unidad
+`POST /api/v1/auth/logout` requiere `Authorization: Bearer <access>` y
+`X-Refresh-Token`. En la misma unidad
 transaccional se revoca el refresh, se persiste el `jti` revocado y se inserta un
 evento en `auth_outbox` para reflejar `blacklist:jti:{jti}` en Redis hasta `exp`.
 Logout no confirma éxito hasta que Redis lo refleje. Si Redis no puede hacerlo,

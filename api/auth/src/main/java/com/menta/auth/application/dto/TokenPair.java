@@ -5,7 +5,7 @@ import java.time.Duration;
 /**
  * Token-pair result returned by Login / Refresh use cases.
  *
- * Mirrors the spec response shape (POST /auth/login 200 → access_token,
+ * Mirrors the spec response shape (POST /api/v1/auth/login 200 → access_token,
  * refresh_token, token_type, expires_in) without leaking the JWT wire format
  * upward.
  */
