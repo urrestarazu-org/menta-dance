@@ -221,6 +221,14 @@ class AuthFlowIntegrationTest {
         assertThat(response.getHeaders().getFirst(HttpHeaders.RETRY_AFTER))
             .as("Retry-After must be 30 per ADR-0026")
             .isEqualTo("30");
+        assertThat(response.getHeaders().getContentType())
+            .isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+        assertThat(response.getBody())
+            .containsEntry("type", "https://menta.dance/problems/auth_degraded")
+            .containsEntry("title", "Service Unavailable")
+            .containsEntry("status", 503)
+            .containsEntry("detail", "Authentication is temporarily unavailable.")
+            .containsEntry("code", "AUTH_DEGRADED");
     }
 
     @Test
@@ -239,15 +247,57 @@ class AuthFlowIntegrationTest {
     }
 
     @Test
-    void legacy_auth_prefix_is_not_mapped() {
-        ResponseEntity<Void> response = http.exchange(
-            "/auth/login",
+    void legacy_auth_routes_are_not_mapped() {
+        for (String route : new String[] {"/auth/login", "/auth/refresh", "/auth/logout"}) {
+            ResponseEntity<Void> response = http.exchange(
+                route,
+                HttpMethod.POST,
+                new HttpEntity<>(new HttpHeaders()),
+                Void.class
+            );
+
+            assertThat(response.getStatusCode())
+                .as("legacy route %s must not remain observable", route)
+                .isEqualTo(HttpStatus.NOT_FOUND);
+        }
+    }
+
+    @Test
+    void authenticated_student_is_denied_from_the_admin_route_with_an_rfc_9457_problem() {
+        when(authDegradedGuard.isDegraded()).thenReturn(false);
+        userRepository.findByEmail(Email.of(EMAIL))
+            .ifPresent(existing -> userRepository.deleteById(existing.getId()));
+        userRepository.save(User.create(
+            Email.of(EMAIL),
+            passwordEncoder.encode(RAW_PASSWORD),
+            Role.STUDENT
+        ));
+
+        ResponseEntity<Map> loginResponse = http.exchange(
+            "/api/v1/auth/login",
             HttpMethod.POST,
             jsonEntity(Map.of("email", EMAIL, "password", RAW_PASSWORD)),
-            Void.class
+            Map.class
+        );
+        String accessToken = (String) loginResponse.getBody().get("access_token");
+
+        // Security authorizes this configured admin route before MVC handler lookup.
+        ResponseEntity<Map> response = http.exchange(
+            "/api/v1/admin/probe",
+            HttpMethod.GET,
+            bearerEntity(accessToken),
+            Map.class
         );
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(response.getHeaders().getContentType())
+            .isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+        assertThat(response.getBody())
+            .containsEntry("type", "https://menta.dance/problems/access_denied")
+            .containsEntry("title", "Forbidden")
+            .containsEntry("status", 403)
+            .containsEntry("detail", "You are not authorized to access this resource.")
+            .containsEntry("code", "ACCESS_DENIED");
     }
 
     private static HttpEntity<Map<String, String>> jsonEntity(Map<String, String> body) {
@@ -266,6 +316,12 @@ class AuthFlowIntegrationTest {
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(accessToken);
         headers.set("X-Refresh-Token", refreshToken);
+        return new HttpEntity<>(headers);
+    }
+
+    private static HttpEntity<Void> bearerEntity(String accessToken) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(accessToken);
         return new HttpEntity<>(headers);
     }
 }

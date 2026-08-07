@@ -162,6 +162,10 @@ class AuthControllerTest {
             .andExpect(status().isServiceUnavailable())
             .andExpect(header().string("Retry-After", is("30")))
             .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.type", is("https://menta.dance/problems/auth_degraded")))
+            .andExpect(jsonPath("$.title", is("Service Unavailable")))
+            .andExpect(jsonPath("$.status", is(503)))
+            .andExpect(jsonPath("$.detail", is("Authentication is temporarily unavailable.")))
             .andExpect(jsonPath("$.code", is("AUTH_DEGRADED")));
     }
 
@@ -233,12 +237,48 @@ class AuthControllerTest {
     }
 
     @Test
+    void refresh_rejects_an_empty_or_whitespace_refresh_token_header() throws Exception {
+        for (String refreshToken : new String[] {"", "   "}) {
+            mockMvc.perform(post(REFRESH_URL)
+                    .header(REFRESH_TOKEN_HEADER, refreshToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.code", is("INVALID_AUTH_REQUEST")));
+        }
+    }
+
+    @Test
+    void logout_rejects_an_empty_or_whitespace_refresh_token_header() throws Exception {
+        for (String refreshToken : new String[] {"", "   "}) {
+            mockMvc.perform(post(LOGOUT_URL)
+                    .header(REFRESH_TOKEN_HEADER, refreshToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.code", is("INVALID_AUTH_REQUEST")));
+        }
+    }
+
+    @Test
     void login_validation_returns_an_rfc_9457_problem() throws Exception {
         mockMvc.perform(post(LOGIN_URL)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"email\":\"not-an-email\",\"password\":\"\"}"))
             .andExpect(status().isBadRequest())
             .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.code", is("INVALID_AUTH_REQUEST")));
+    }
+
+    @Test
+    void login_rejects_malformed_json_with_an_rfc_9457_problem() throws Exception {
+        mockMvc.perform(post(LOGIN_URL)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"email\":\"user@example.com\",\"password\":"))
+            .andExpect(status().isBadRequest())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.type", is("https://menta.dance/problems/invalid_auth_request")))
+            .andExpect(jsonPath("$.title", is("Bad Request")))
+            .andExpect(jsonPath("$.status", is(400)))
+            .andExpect(jsonPath("$.detail", is("The authentication request is invalid.")))
             .andExpect(jsonPath("$.code", is("INVALID_AUTH_REQUEST")));
     }
 
@@ -259,5 +299,15 @@ class AuthControllerTest {
             .andExpect(status().isBadRequest())
             .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
             .andExpect(jsonPath("$.code", is("INVALID_AUTH_REQUEST")));
+    }
+
+    @Test
+    void legacy_auth_routes_are_not_mapped() throws Exception {
+        mockMvc.perform(post("/auth/login"))
+            .andExpect(status().isNotFound());
+        mockMvc.perform(post("/auth/refresh"))
+            .andExpect(status().isNotFound());
+        mockMvc.perform(post("/auth/logout"))
+            .andExpect(status().isNotFound());
     }
 }
