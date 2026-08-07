@@ -2,6 +2,19 @@ spring:
   application:
     name: menta-dance-bff
 
+  # Session configuration
+  session:
+    store-type: redis
+    redis:
+      namespace: spring:session
+    timeout: 30m
+
+  # Redis configuration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
   # Thymeleaf configuration
   thymeleaf:
     cache: false

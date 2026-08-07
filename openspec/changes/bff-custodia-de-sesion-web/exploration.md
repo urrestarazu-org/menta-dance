@@ -45,4 +45,4 @@ Before proposal, reconcile the API contract: either make Auth implement the docu
 - Current uncommitted state is clean, so the exploration artifact is the only planned working-tree change.
 
 ### Ready for Proposal
-No — first resolve the Auth HTTP contract discrepancy and confirm Redis is approved as the BFF's encrypted server-side session store. Once those two decisions are recorded, the recommended slice is sufficiently bounded for proposal/design.
+Yes — Auth HTTP contract discrepancy resolved (PR #14), Redis approved as session store (ADR-0031). Using Spring Session + Redis for MVP (2-3 hours implementation, zero technical debt).
