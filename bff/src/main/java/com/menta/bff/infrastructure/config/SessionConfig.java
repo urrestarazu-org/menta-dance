@@ -21,6 +21,8 @@ public class SessionConfig {
     @Bean
     @RequestScope
     public SpringSessionTokenRepository springSessionTokenRepository(HttpServletRequest request) {
-        return new SpringSessionTokenRepository(() -> request.getSession(false));
+        // Use getSession(true) to create session if it doesn't exist
+        // This is needed during login when Spring Security hasn't created the session yet
+        return new SpringSessionTokenRepository(() -> request.getSession(true));
     }
 }

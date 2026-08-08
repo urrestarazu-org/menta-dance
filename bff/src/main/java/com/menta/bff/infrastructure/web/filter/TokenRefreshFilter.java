@@ -63,6 +63,13 @@ public class TokenRefreshFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
+        // Skip filter for login/logout endpoints (Spring Security handles these)
+        String requestUri = request.getRequestURI();
+        if (requestUri.equals("/login") || requestUri.equals("/logout")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         // Check if request is authenticated
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 

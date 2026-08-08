@@ -1,5 +1,6 @@
 package com.menta.bff.domain.model;
 
+import java.io.Serializable;
 import java.time.Instant;
 import java.util.Objects;
 
@@ -10,6 +11,9 @@ import java.util.Objects;
  * This class is part of the domain layer and has ZERO framework dependencies
  * (no Spring, no JPA, no Jackson annotations).
  * </p>
+ * <p>
+ * Implements {@link Serializable} for Redis session storage via Spring Session.
+ * </p>
  *
  * @param accessToken  JWT access token for API authentication (short-lived, 15 min)
  * @param refreshToken Opaque refresh token for obtaining new access tokens (long-lived, 7 days)
@@ -19,7 +23,7 @@ public record SessionTokens(
         String accessToken,
         String refreshToken,
         Instant expiresAt
-) {
+) implements Serializable {
     /**
      * Compact constructor with validation.
      * Ensures all fields are non-null per Clean Architecture domain rules.
