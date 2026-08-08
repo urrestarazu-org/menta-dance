@@ -1,5 +1,8 @@
 package com.menta.bff.infrastructure.config;
 
+import com.menta.bff.infrastructure.security.BffAuthenticationProvider;
+import com.menta.bff.infrastructure.security.BffLogoutSuccessHandler;
+import com.menta.bff.infrastructure.web.filter.TokenRefreshFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -8,12 +11,15 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 /**
  * Security configuration for BFF.
  * <p>
  * Configures:
+ * - Custom AuthenticationProvider (validates against Auth API)
  * - Form-based login (custom login page)
+ * - Custom LogoutSuccessHandler (revokes refresh token in Auth API)
  * - CSRF protection (enabled for state-changing operations)
  * - Session management (CREATE_IF_REQUIRED)
  * - Public endpoints (/login, /actuator/health, /error)
@@ -28,9 +34,16 @@ import org.springframework.security.web.SecurityFilterChain;
 @RequiredArgsConstructor
 public class BffSecurityConfig {
 
+    private final BffAuthenticationProvider authenticationProvider;
+    private final BffLogoutSuccessHandler logoutSuccessHandler;
+    private final TokenRefreshFilter tokenRefreshFilter;
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
+                // Custom authentication provider (validates against Auth API)
+                .authenticationProvider(authenticationProvider)
+
                 // Authorization rules
                 .authorizeHttpRequests(authorize -> authorize
                         // Public endpoints - no authentication required
@@ -42,16 +55,15 @@ public class BffSecurityConfig {
                 // Form login configuration
                 .formLogin(form -> form
                         .loginPage("/login")
-                        .loginProcessingUrl("/login")
                         .defaultSuccessUrl("/dashboard", true)
                         .failureUrl("/login?error=true")
                         .permitAll()
                 )
 
-                // Logout configuration
+                // Logout configuration with custom handler
                 .logout(logout -> logout
                         .logoutUrl("/logout")
-                        .logoutSuccessUrl("/login?logout")
+                        .logoutSuccessHandler(logoutSuccessHandler) // Custom handler revokes refresh token
                         .invalidateHttpSession(true)
                         .deleteCookies("SESSION")
                         .permitAll()
@@ -66,7 +78,12 @@ public class BffSecurityConfig {
                         .sessionFixation().changeSessionId() // Mitigate session fixation attacks
                         .maximumSessions(1) // Only one session per user
                         .maxSessionsPreventsLogin(false) // Invalidate old session when new login
-                );
+                )
+
+                // Token refresh filter (transparent access token refresh)
+                // Runs BEFORE UsernamePasswordAuthenticationFilter to ensure tokens are refreshed
+                // before business logic executes
+                .addFilterBefore(tokenRefreshFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

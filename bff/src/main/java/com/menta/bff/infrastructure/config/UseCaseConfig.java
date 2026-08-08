@@ -3,6 +3,7 @@ package com.menta.bff.infrastructure.config;
 import com.menta.bff.application.port.out.AuthApiClient;
 import com.menta.bff.application.port.out.SessionTokenRepository;
 import com.menta.bff.application.usecase.*;
+import com.menta.bff.infrastructure.web.filter.TokenRefreshFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -37,5 +38,10 @@ public class UseCaseConfig {
             SessionTokenRepository sessionTokenRepository
     ) {
         return new GetValidAccessTokenUseCaseImpl(authApiClient, sessionTokenRepository);
+    }
+
+    @Bean
+    public TokenRefreshFilter tokenRefreshFilter(GetValidAccessTokenUseCase getValidAccessTokenUseCase) {
+        return new TokenRefreshFilter(getValidAccessTokenUseCase);
     }
 }

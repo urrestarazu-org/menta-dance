@@ -31,6 +31,8 @@ dependencies {
     testImplementation("org.springframework.security:spring-security-test")
     testImplementation("com.tngtech.archunit:archunit-junit5:1.3.0")
     testImplementation("org.wiremock:wiremock-standalone:3.3.1")
+    testImplementation("org.testcontainers:testcontainers:1.19.3")
+    testImplementation("org.testcontainers:junit-jupiter:1.19.3")
 }
 
 tasks.bootJar {
