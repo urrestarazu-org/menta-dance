@@ -1,6 +1,7 @@
 package com.menta.bff.infrastructure.config;
 
 import com.menta.bff.infrastructure.security.BffAuthenticationProvider;
+import com.menta.bff.infrastructure.security.BffLogoutHandler;
 import com.menta.bff.infrastructure.security.BffLogoutSuccessHandler;
 import com.menta.bff.infrastructure.web.filter.TokenRefreshFilter;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +20,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * Configures:
  * - Custom AuthenticationProvider (validates against Auth API)
  * - Form-based login (custom login page)
- * - Custom LogoutSuccessHandler (revokes refresh token in Auth API)
+ * - Custom LogoutHandler (revokes refresh token BEFORE session invalidation)
+ * - Custom LogoutSuccessHandler (redirects AFTER session invalidation)
  * - CSRF protection (enabled for state-changing operations)
  * - Session management (CREATE_IF_REQUIRED)
  * - Public endpoints (/login, /actuator/health, /error)
@@ -35,6 +37,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class BffSecurityConfig {
 
     private final BffAuthenticationProvider authenticationProvider;
+    private final BffLogoutHandler logoutHandler;
     private final BffLogoutSuccessHandler logoutSuccessHandler;
     private final TokenRefreshFilter tokenRefreshFilter;
 
@@ -60,10 +63,15 @@ public class BffSecurityConfig {
                         .permitAll()
                 )
 
-                // Logout configuration with custom handler
+                // Logout configuration with custom handlers
                 .logout(logout -> logout
                         .logoutUrl("/logout")
-                        .logoutSuccessHandler(logoutSuccessHandler) // Custom handler revokes refresh token
+                        // Order of execution:
+                        // 1. BffLogoutHandler runs FIRST (revokes refresh token while session is still valid)
+                        // 2. Spring Security invalidates session (automatic)
+                        // 3. BffLogoutSuccessHandler runs LAST (redirects to /login?logout)
+                        .addLogoutHandler(logoutHandler) // Execute BEFORE session invalidation
+                        .logoutSuccessHandler(logoutSuccessHandler) // Execute AFTER session invalidation
                         .invalidateHttpSession(true)
                         .deleteCookies("SESSION")
                         .permitAll()

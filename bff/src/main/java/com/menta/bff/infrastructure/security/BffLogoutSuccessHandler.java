@@ -1,11 +1,8 @@
 package com.menta.bff.infrastructure.security;
 
-import com.menta.bff.application.usecase.LogoutUseCase;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.web.authentication.logout.LogoutSuccessHandler;
 import org.springframework.stereotype.Component;
@@ -13,28 +10,29 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 
 /**
- * Custom logout handler that revokes refresh token in Auth API before
- * invalidating local session.
- *
+ * Custom logout success handler that redirects to login page after logout.
+ * <p>
+ * This handler is invoked AFTER:
+ * - BffLogoutHandler revokes refresh token (if present)
+ * - Spring Security invalidates session
+ * </p>
+ * <p>
+ * Its only responsibility is to redirect the user to /login?logout
+ * to display a "logout successful" message.
+ * </p>
+ * <p>
  * Flow:
  * 1. Spring Security triggers logout (POST /logout with CSRF token)
- * 2. Call LogoutUseCase to revoke refresh token in Auth API
- * 3. Spring Security invalidates session (automatic)
- * 4. Redirect to /login?logout
- *
- * Fail-open: If Auth API revocation fails, we still invalidate local session
- * to prevent user lockout. The refresh token will eventually expire in Auth API.
+ * 2. BffLogoutHandler revokes refresh token in Auth API
+ * 3. Spring Security invalidates session
+ * 4. This handler redirects to /login?logout
+ * </p>
+ * <p>
+ * Part of Clean Architecture infrastructure layer.
+ * </p>
  */
 @Component
 public class BffLogoutSuccessHandler implements LogoutSuccessHandler {
-
-    private static final Logger log = LoggerFactory.getLogger(BffLogoutSuccessHandler.class);
-
-    private final LogoutUseCase logoutUseCase;
-
-    public BffLogoutSuccessHandler(LogoutUseCase logoutUseCase) {
-        this.logoutUseCase = logoutUseCase;
-    }
 
     @Override
     public void onLogoutSuccess(
@@ -43,18 +41,8 @@ public class BffLogoutSuccessHandler implements LogoutSuccessHandler {
         Authentication authentication
     ) throws IOException, ServletException {
 
-        // Call LogoutUseCase to revoke refresh token
-        // This is fail-open: if it fails, we still invalidate local session
-        try {
-            logoutUseCase.execute();
-            log.info("User logged out successfully");
-        } catch (Exception e) {
-            // Log error but don't fail the logout
-            // Local session will be invalidated anyway by Spring Security
-            log.warn("Failed to revoke refresh token in Auth API (fail-open): {}", e.getMessage());
-        }
-
         // Redirect to login page with logout message
+        // The refresh token revocation was already handled by BffLogoutHandler
         response.sendRedirect("/login?logout");
     }
 }

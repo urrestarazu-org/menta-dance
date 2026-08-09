@@ -23,12 +23,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("Logout Integration Tests")
 class LogoutIntegrationTest extends BaseIntegrationTest {
 
-    // TODO: Fix logout flow - Spring Security invalidates session BEFORE LogoutSuccessHandler runs
-    // This means sessionTokenRepository.load() returns empty and we can't revoke the refresh token
-    // Solution: Implement custom LogoutHandler that runs BEFORE session invalidation
     @Test
     @DisplayName("POST /logout debe revocar refresh token y limpiar sesión")
-    @org.junit.jupiter.api.Disabled("TODO: Fix logout handler order")
     void logout_shouldRevokeTokenAndClearSession() throws Exception {
         // Given: User is logged in
         String accessToken = "access_token_abc123";
@@ -122,10 +118,8 @@ class LogoutIntegrationTest extends BaseIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
-    // TODO: Same issue as above
     @Test
     @DisplayName("POST /logout cuando Auth API falla debe igual limpiar sesión local (fail-open)")
-    @org.junit.jupiter.api.Disabled("TODO: Fix logout handler order")
     void logout_whenAuthApiFailsToRevoke_shouldStillClearSession() throws Exception {
         // Given: User is logged in
         String accessToken = "access_token";
