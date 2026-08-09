@@ -31,7 +31,7 @@ class LoginIntegrationTest extends BaseIntegrationTest {
         String accessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyQGV4YW1wbGUuY29tIiwicm9sZXMiOlsiUk9MRV9VU0VSIl0sImV4cCI6OTk5OTk5OTk5OX0.signature";
         String refreshToken = "refresh_token_abc123";
 
-        wireMockServer.stubFor(WireMock.post(urlEqualTo("/api/v1/auth/login"))
+        WIRE_MOCK_SERVER.stubFor(WireMock.post(urlEqualTo("/api/v1/auth/login"))
                 .withRequestBody(matchingJsonPath("$.email", equalTo("user@example.com")))
                 .withRequestBody(matchingJsonPath("$.password", equalTo("password123")))
                 .willReturn(aResponse()
@@ -79,7 +79,7 @@ class LoginIntegrationTest extends BaseIntegrationTest {
         assertThat(sessionCookie.getPath()).isEqualTo("/");
 
         // Verify WireMock received the login request
-        wireMockServer.verify(postRequestedFor(urlEqualTo("/api/v1/auth/login"))
+        WIRE_MOCK_SERVER.verify(postRequestedFor(urlEqualTo("/api/v1/auth/login"))
                 .withRequestBody(matchingJsonPath("$.email", equalTo("user@example.com")))
                 .withRequestBody(matchingJsonPath("$.password", equalTo("password123"))));
 
@@ -106,7 +106,7 @@ class LoginIntegrationTest extends BaseIntegrationTest {
     @DisplayName("POST /login con credenciales inválidas debe retornar error y redirigir a /login?error")
     void loginWithInvalidCredentials_shouldReturnError() throws Exception {
         // Given: Mock Auth API /api/v1/auth/login returning 401
-        wireMockServer.stubFor(WireMock.post(urlEqualTo("/api/v1/auth/login"))
+        WIRE_MOCK_SERVER.stubFor(WireMock.post(urlEqualTo("/api/v1/auth/login"))
                 .willReturn(aResponse()
                         .withStatus(401)
                         .withHeader("Content-Type", "application/problem+json")
@@ -149,7 +149,7 @@ class LoginIntegrationTest extends BaseIntegrationTest {
     @DisplayName("POST /login cuando Auth API no está disponible debe retornar error 500")
     void loginWhenAuthApiUnavailable_shouldReturnServerError() throws Exception {
         // Given: Mock Auth API returning 503 Service Unavailable
-        wireMockServer.stubFor(WireMock.post(urlEqualTo("/api/v1/auth/login"))
+        WIRE_MOCK_SERVER.stubFor(WireMock.post(urlEqualTo("/api/v1/auth/login"))
                 .willReturn(aResponse()
                         .withStatus(503)
                         .withHeader("Content-Type", "application/problem+json")

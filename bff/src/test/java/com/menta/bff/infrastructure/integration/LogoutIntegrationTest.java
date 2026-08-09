@@ -31,7 +31,7 @@ class LogoutIntegrationTest extends BaseIntegrationTest {
         String refreshToken = "refresh_token_xyz789";
 
         // Mock Auth API login
-        wireMockServer.stubFor(WireMock.post(urlEqualTo("/api/v1/auth/login"))
+        WIRE_MOCK_SERVER.stubFor(WireMock.post(urlEqualTo("/api/v1/auth/login"))
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
@@ -55,7 +55,7 @@ class LogoutIntegrationTest extends BaseIntegrationTest {
         assertThat(sessionCookie).isNotNull();
 
         // Mock Auth API logout (should receive refresh token)
-        wireMockServer.stubFor(WireMock.post(urlEqualTo("/api/v1/auth/logout"))
+        WIRE_MOCK_SERVER.stubFor(WireMock.post(urlEqualTo("/api/v1/auth/logout"))
                 .withHeader("X-Refresh-Token", equalTo(refreshToken))
                 .willReturn(aResponse()
                         .withStatus(204))); // 204 No Content - successful revocation
@@ -72,7 +72,7 @@ class LogoutIntegrationTest extends BaseIntegrationTest {
                 .andReturn();
 
         // And: Verify Auth API logout was called with correct refresh token
-        wireMockServer.verify(postRequestedFor(urlEqualTo("/api/v1/auth/logout"))
+        WIRE_MOCK_SERVER.verify(postRequestedFor(urlEqualTo("/api/v1/auth/logout"))
                 .withHeader("X-Refresh-Token", equalTo(refreshToken)));
 
         // And: Verify session was invalidated (cookie should be expired/deleted)
@@ -89,7 +89,7 @@ class LogoutIntegrationTest extends BaseIntegrationTest {
         String accessToken = "access_token";
         String refreshToken = "refresh_token";
 
-        wireMockServer.stubFor(WireMock.post(urlEqualTo("/api/v1/auth/login"))
+        WIRE_MOCK_SERVER.stubFor(WireMock.post(urlEqualTo("/api/v1/auth/login"))
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
@@ -125,7 +125,7 @@ class LogoutIntegrationTest extends BaseIntegrationTest {
         String accessToken = "access_token";
         String refreshToken = "refresh_token";
 
-        wireMockServer.stubFor(WireMock.post(urlEqualTo("/api/v1/auth/login"))
+        WIRE_MOCK_SERVER.stubFor(WireMock.post(urlEqualTo("/api/v1/auth/login"))
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
@@ -147,7 +147,7 @@ class LogoutIntegrationTest extends BaseIntegrationTest {
         var sessionCookie = loginResult.getResponse().getCookie("SESSION");
 
         // Mock Auth API logout failing (503 Service Unavailable)
-        wireMockServer.stubFor(WireMock.post(urlEqualTo("/api/v1/auth/logout"))
+        WIRE_MOCK_SERVER.stubFor(WireMock.post(urlEqualTo("/api/v1/auth/logout"))
                 .willReturn(aResponse()
                         .withStatus(503)
                         .withHeader("Content-Type", "application/problem+json")
@@ -177,7 +177,7 @@ class LogoutIntegrationTest extends BaseIntegrationTest {
         assertThat(logoutCookie.getMaxAge()).isEqualTo(0);
 
         // And: Verify we attempted to call Auth API logout
-        wireMockServer.verify(postRequestedFor(urlEqualTo("/api/v1/auth/logout")));
+        WIRE_MOCK_SERVER.verify(postRequestedFor(urlEqualTo("/api/v1/auth/logout")));
     }
 
     @Test

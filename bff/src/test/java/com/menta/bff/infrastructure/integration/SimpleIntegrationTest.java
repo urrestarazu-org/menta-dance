@@ -13,8 +13,8 @@ class SimpleIntegrationTest extends BaseIntegrationTest {
     void contextLoads() {
         assertThat(mockMvc).isNotNull();
         assertThat(redisTemplate).isNotNull();
-        assertThat(wireMockServer).isNotNull();
-        assertThat(wireMockServer.isRunning()).isTrue();
+        assertThat(WIRE_MOCK_SERVER).isNotNull();
+        assertThat(WIRE_MOCK_SERVER.isRunning()).isTrue();
     }
 
     @Test

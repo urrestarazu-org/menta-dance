@@ -32,7 +32,7 @@ class AuthenticatedRequestIntegrationTest extends BaseIntegrationTest {
         String refreshToken = "refresh_token_abc123";
 
         // Mock Auth API login
-        wireMockServer.stubFor(WireMock.post(urlEqualTo("/api/v1/auth/login"))
+        WIRE_MOCK_SERVER.stubFor(WireMock.post(urlEqualTo("/api/v1/auth/login"))
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
