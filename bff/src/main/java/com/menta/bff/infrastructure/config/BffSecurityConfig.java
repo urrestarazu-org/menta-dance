@@ -22,7 +22,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * - Form-based login (custom login page)
  * - Custom LogoutHandler (revokes refresh token BEFORE session invalidation)
  * - Custom LogoutSuccessHandler (redirects AFTER session invalidation)
- * - CSRF protection (enabled for state-changing operations)
+ * - CSRF protection (disabled for local testing - TODO: enable in production)
  * - Session management (CREATE_IF_REQUIRED)
  * - Public endpoints (/login, /actuator/health, /error)
  * - Protected endpoints (all others require authentication)
@@ -77,8 +77,10 @@ public class BffSecurityConfig {
                         .permitAll()
                 )
 
-                // CSRF protection (enabled by default for POST/PUT/DELETE)
-                // GET/HEAD/OPTIONS/TRACE are safe methods (no CSRF needed)
+                // CSRF protection
+                // TODO: Enable CSRF in production with proper token handling
+                // For local testing, CSRF is disabled to allow curl/Bruno requests
+                .csrf(AbstractHttpConfigurer::disable)
 
                 // Session management
                 .sessionManagement(session -> session

@@ -104,7 +104,7 @@ class AuthControllerTest {
             .andExpect(status().isOk())
             .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
             .andExpect(jsonPath("$.access_token", is("compact-jwt")))
-            .andExpect(jsonPath("$.refresh_token", notNullValue()))
+            .andExpect(header().exists("X-Refresh-Token"))
             .andExpect(jsonPath("$.token_type", is("Bearer")))
             .andExpect(jsonPath("$.expires_in", notNullValue()));
     }
@@ -185,7 +185,7 @@ class AuthControllerTest {
                 .header(REFRESH_TOKEN_HEADER, refreshToken))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.access_token", is("rotated-jwt")))
-            .andExpect(jsonPath("$.refresh_token", notNullValue()))
+            .andExpect(header().exists("X-Refresh-Token"))
             .andExpect(jsonPath("$.token_type", is("Bearer")));
         verify(refreshTokenUseCase).execute(new RefreshCommand(refreshToken));
     }

@@ -172,9 +172,9 @@ public class AuthApiAdapter implements AuthApiClient {
                 throw new RuntimeException("Auth API returned empty response body");
             }
 
-            String accessToken = (String) body.get("accessToken");
-            Number expiresInNumber = (Number) body.get("expiresIn");
-            long expiresIn = expiresInNumber != null ? expiresInNumber.longValue() : 900L;
+            String accessToken = (String) body.get("access_token");
+            Object expiresInObj = body.get("expires_in");
+            long expiresIn = parseExpiresIn(expiresInObj);
 
             return new TokenPairResponse(accessToken, refreshToken, expiresIn);
         }
@@ -196,6 +196,33 @@ public class AuthApiAdapter implements AuthApiClient {
         }
 
         throw new RuntimeException("Auth API " + operation + " failed with status " + status + ": " + errorBody);
+    }
+
+    /**
+     * Parses expires_in field from Auth API response.
+     * Auth API returns expires_in as ISO 8601 Duration string (e.g., "PT15M").
+     */
+    private long parseExpiresIn(Object expiresInObj) {
+        if (expiresInObj == null) {
+            return 900L; // Default 15 minutes
+        }
+
+        if (expiresInObj instanceof Number) {
+            return ((Number) expiresInObj).longValue();
+        }
+
+        if (expiresInObj instanceof String) {
+            try {
+                java.time.Duration duration = java.time.Duration.parse((String) expiresInObj);
+                return duration.getSeconds();
+            } catch (Exception e) {
+                log.warn("Failed to parse expires_in '{}', using default 900s", expiresInObj);
+                return 900L;
+            }
+        }
+
+        log.warn("Unexpected expires_in type: {}, using default 900s", expiresInObj.getClass());
+        return 900L;
     }
 
     /**
