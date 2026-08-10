@@ -50,6 +50,9 @@ class TokenRefreshFilterTest {
     void setUp() {
         filter = new TokenRefreshFilter(getValidAccessTokenUseCase);
         SecurityContextHolder.setContext(securityContext);
+
+        // Mock request URI (default to /dashboard, can be overridden in specific tests)
+        when(request.getRequestURI()).thenReturn("/dashboard");
     }
 
     @Test
