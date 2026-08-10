@@ -147,34 +147,51 @@ BUNNY_API_KEY=xxx
 BUNNY_LIBRARY_ID=xxx
 ```
 
-### 3. Iniciar Infraestructura
+### 3. Iniciar Servicios
+
+**Opción A - Script consolidado (Recomendado):**
 
 ```bash
-docker compose up -d
+./scripts/dev.sh start
 ```
 
 Esto levanta:
-- MySQL 8 en puerto `3306`
-- Redis en puerto `6379`
-- Stack de observabilidad (Grafana, Loki, Tempo)
+- **Infraestructura**: MySQL 8, Redis, OpenTelemetry, Loki, Grafana
+- **API**: Spring Boot en puerto `8081`
+- **BFF**: Frontend web en puerto `8080`
 
-### 4. Ejecutar la API
-
+Verificar estado:
 ```bash
-./gradlew :api:app:bootRun
+./scripts/dev.sh status
 ```
 
-La API estará disponible en `http://localhost:8081`
+Ver logs en tiempo real:
+```bash
+./scripts/dev.sh logs api   # Logs de API
+./scripts/dev.sh logs bff   # Logs de BFF
+```
 
-### 5. Ejecutar el BFF (Web)
+Detener todo:
+```bash
+./scripts/dev.sh stop
+```
+
+**Opción B - Ejecución manual:**
 
 ```bash
+# Terminal 1: Infraestructura
+docker compose up -d
+
+# Terminal 2: API
+./gradlew :api:app:bootRun
+
+# Terminal 3: BFF
 ./gradlew :bff:bootRun
 ```
 
-La web estará disponible en `http://localhost:8080`
+### 4. Testing
 
-### 6. Ejecutar Tests
+**Tests unitarios y de integración:**
 
 ```bash
 # Todos los tests
@@ -186,6 +203,20 @@ La web estará disponible en `http://localhost:8080`
 # Cobertura
 ./gradlew jacocoTestReport
 ```
+
+**Tests E2E con Bruno CLI:**
+
+```bash
+# Registrar usuario de prueba
+curl -i -X POST "http://localhost:8081/api/v1/users/register" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"student@example.com","password":"password123","role":"STUDENT"}'
+
+# Ejecutar suite de tests BFF Session
+cd bruno && npx @usebruno/cli run --env local --folder "BFF - Session" .
+```
+
+Resultado esperado: **11/11 tests** (100% pass rate)
 
 ---
 
