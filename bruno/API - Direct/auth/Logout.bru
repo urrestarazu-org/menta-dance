@@ -1,7 +1,7 @@
 meta {
   name: Auth Logout
   type: http
-  seq: 3
+  seq: 4
 }
 
 post {
@@ -17,6 +17,14 @@ auth:bearer {
   token: {{authToken}}
 }
 
+script:post-response {
+  if (res.getStatus() === 204) {
+    bru.deleteVar("authToken");
+    bru.deleteVar("refreshToken");
+    bru.deleteVar("previousRefreshToken");
+  }
+}
+
 docs {
   Revoke the active refresh by presenting both credentials: the access token
   in Authorization: Bearer and the opaque refresh only in X-Refresh-Token.
@@ -29,8 +37,8 @@ docs {
   Errors are RFC 9457 application/problem+json and never return either token.
 
   Variable contract:
-    Auth.Refresh.bru (or Auth.Login.bru if you skipped refresh) must
-    populate {{refreshToken}} and {{authToken}} first.
+    Auth Refresh (or Auth Login if refresh is intentionally skipped) must run
+    first. A successful logout clears all runtime token variables.
 }
 
 assert {
@@ -39,6 +47,6 @@ assert {
 
 tests {
   test("Body is empty (No Content)", function() {
-    expect(res.getBody()).to.equal('');
-  }
+    expect(String(res.getBody() == null ? '' : res.getBody())).to.equal('');
+  });
 }
