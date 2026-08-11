@@ -49,8 +49,9 @@ class AuthApiAdapterTest {
         LoginCommand command = new LoginCommand("user@example.com", "ValidPass123!");
 
         Map<String, Object> responseBody = Map.of(
-                "accessToken", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-                "expiresIn", 900
+                "access_token", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                "token_type", "Bearer",
+                "expires_in", 900
         );
 
         stubFor(post(urlEqualTo("/api/v1/auth/login"))
@@ -115,8 +116,9 @@ class AuthApiAdapterTest {
         String refreshToken = "refresh_token_123";
 
         Map<String, Object> responseBody = Map.of(
-                "accessToken", "new_access_token",
-                "expiresIn", 900
+                "access_token", "new_access_token",
+                "token_type", "Bearer",
+                "expires_in", 900
         );
 
         stubFor(post(urlEqualTo("/api/v1/auth/refresh"))

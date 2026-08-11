@@ -112,8 +112,8 @@ class AuthFlowIntegrationTest {
         assertThat(loginResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
         Map<String, Object> body = loginResponse.getBody();
         assertThat(body).isNotNull();
-        assertThat(body).containsKeys("access_token", "refresh_token", "token_type", "expires_in");
-        String refreshToken = (String) body.get("refresh_token");
+        assertThat(body).containsKeys("access_token", "token_type", "expires_in");
+        String refreshToken = loginResponse.getHeaders().getFirst("X-Refresh-Token");
         assertThat(refreshToken).isNotBlank();
         String accessToken = (String) body.get("access_token");
         assertThat(accessToken).isNotBlank();
@@ -129,10 +129,11 @@ class AuthFlowIntegrationTest {
         Map<String, Object> rotateBody = refreshResponse.getBody();
         assertThat(rotateBody).isNotNull();
         assertThat((String) rotateBody.get("access_token")).isNotBlank();
-        assertThat((String) rotateBody.get("refresh_token")).isNotEqualTo(refreshToken);
+        String rotatedRefresh = refreshResponse.getHeaders().getFirst("X-Refresh-Token");
+        assertThat(rotatedRefresh).isNotBlank();
+        assertThat(rotatedRefresh).isNotEqualTo(refreshToken);
 
         // 3. POST /api/v1/auth/logout -> 204, requiring both credentials.
-        String rotatedRefresh = (String) rotateBody.get("refresh_token");
         String rotatedAccess = (String) rotateBody.get("access_token");
         ResponseEntity<Void> logoutResponse = http.exchange(
             "/api/v1/auth/logout",

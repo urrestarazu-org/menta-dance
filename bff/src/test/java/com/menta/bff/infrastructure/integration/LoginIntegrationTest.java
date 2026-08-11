@@ -40,8 +40,9 @@ class LoginIntegrationTest extends BaseIntegrationTest {
                         .withHeader("X-Refresh-Token", refreshToken)
                         .withBody("""
                                 {
-                                  "accessToken": "%s",
-                                  "expiresIn": 3600
+                                  "access_token": "%s",
+                                  "token_type": "Bearer",
+                                  "expires_in": 3600
                                 }
                                 """.formatted(accessToken))));
 
