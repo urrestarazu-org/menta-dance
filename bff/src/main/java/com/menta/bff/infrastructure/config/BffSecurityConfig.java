@@ -78,9 +78,9 @@ public class BffSecurityConfig {
                 )
 
                 // CSRF protection
-                // TODO: Enable CSRF in production with proper token handling
-                // For local testing, CSRF is disabled to allow curl/Bruno requests
-                .csrf(AbstractHttpConfigurer::disable)
+                // Enabled by default for security
+                // Local testing with curl/Bruno can include CSRF token or use -X OPTIONS first
+                .csrf(csrf -> csrf.ignoringRequestMatchers("/actuator/health"))
 
                 // Session management
                 .sessionManagement(session -> session
