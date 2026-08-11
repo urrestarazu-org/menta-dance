@@ -1,0 +1,26 @@
+meta {
+  name: List Courses
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{virtualCoursesUrl}}
+  body: none
+  auth: none
+}
+
+script:pre-request {
+  if (["cli", "runner"].includes(req.getExecutionMode())) {
+    bru.runner.skipRequest();
+  }
+}
+
+docs {
+  Placeholder for a future virtual courses endpoint.
+
+  No virtual courses controller or public HTTP contract exists yet, so this
+  request deliberately has no status assertions and is skipped by the
+  collection runner. The `virtualCoursesUrl` variable is intentionally not
+  defined. Configure it only after an endpoint contract is implemented.
+}

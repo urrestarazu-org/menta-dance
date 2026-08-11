@@ -113,9 +113,16 @@ Los siguientes skills están disponibles en este proyecto:
 **Descripción:** Orquesta la creación de Pull Requests en GitHub usando el CLI `gh` local. Aplica formato Conventional Commits v1.0.0, detecta automáticamente scope desde los archivos modificados, respeta branch protection, y genera body estructurado según el tipo de PR (feat, fix, hotfix, docs, etc.).
 
 **Características:**
+- **Verificación de PRs duplicados** (STEP 2 CRÍTICO): Detecta PRs existentes del mismo branch ANTES de crear uno nuevo
 - Auto-detección de tipo de PR desde commits y branch name
 - Scope inferido automáticamente desde paths modificados (auth, billing, virtual, physical, etc.)
 - Detección de breaking changes (BREAKING CHANGE: o `!`)
 - Templates específicos por tipo con checklist en español
 - Respeta Git Flow (feature/* → develop, hotfix/* → main)
 - Validación de ambiente (gh auth, branch pushed, etc.)
+
+**⚠️ IMPORTANTE - Lección aprendida:**
+- SIEMPRE verificar PRs existentes ANTES de crear uno nuevo (`gh pr list --head <branch>`)
+- Un mismo branch puede tener múltiples PRs abiertos si apuntan a diferentes bases
+- Si un PR existe con base incorrecta: actualizar base (`gh pr edit --base`) o cerrar y recrear
+- Nunca crear PR duplicado - actualizar el existente o corregir su base

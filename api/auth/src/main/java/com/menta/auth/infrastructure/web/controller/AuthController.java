@@ -46,6 +46,10 @@ import org.springframework.web.bind.MissingRequestHeaderException;
  *   refresh → 200 / 401 / 503
  *   logout → 204 / 401 / 503
  *
+ * Security note:
+ *   - refresh_token is returned in X-Refresh-Token HTTP header (not in body)
+ *   - access_token is returned in response body
+ *
  * SecurityConfig registers JwtAuthenticationFilter + RoleAuthorizationManager
  * bean; the controller does NOT enforce roles itself — paths under
  * /api/v1/auth/login and /api/v1/auth/refresh are public. Logout is protected
@@ -76,7 +80,9 @@ public class AuthController {
     public ResponseEntity<TokenResponse> login(@Valid @RequestBody LoginRequest request) {
         LoginCommand command = new LoginCommand(request.email(), request.password());
         TokenPair pair = loginUseCase.execute(command);
-        return ResponseEntity.ok(toResponse(pair));
+        return ResponseEntity.ok()
+                .header(REFRESH_TOKEN_HEADER, pair.refreshToken())
+                .body(toResponse(pair));
     }
 
     @PostMapping("/refresh")
@@ -85,7 +91,9 @@ public class AuthController {
     ) {
         RefreshCommand command = new RefreshCommand(requireRefreshToken(refreshToken));
         TokenPair pair = refreshTokenUseCase.execute(command);
-        return ResponseEntity.ok(toResponse(pair));
+        return ResponseEntity.ok()
+                .header(REFRESH_TOKEN_HEADER, pair.refreshToken())
+                .body(toResponse(pair));
     }
 
     @PostMapping("/logout")
@@ -141,7 +149,6 @@ public class AuthController {
     private static TokenResponse toResponse(TokenPair pair) {
         return new TokenResponse(
             pair.accessToken(),
-            pair.refreshToken(),
             pair.tokenType(),
             pair.expiresIn()
         );

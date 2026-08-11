@@ -79,7 +79,17 @@ Execute these steps sequentially. Stop and report errors immediately.
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│  STEP 2: Branch Analysis                                        │
+│  STEP 2: Check for Existing PRs (CRITICAL)                      │
+├─────────────────────────────────────────────────────────────────┤
+│  • gh pr list --head $(current-branch)                          │
+│  • If PR exists with CORRECT base → STOP, offer to update desc  │
+│  • If PR exists with WRONG base → offer to fix base or close    │
+│  • If no PR exists → continue to Step 3                         │
+│  → MANDATORY: This prevents duplicate PRs from same branch      │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  STEP 3: Branch Analysis                                        │
 ├─────────────────────────────────────────────────────────────────┤
 │  • Detect current branch name                                   │
 │  • Infer base branch from Git Flow:                             │
@@ -92,7 +102,7 @@ Execute these steps sequentially. Stop and report errors immediately.
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│  STEP 3: Commit Analysis                                        │
+│  STEP 4: Commit Analysis                                        │
 ├─────────────────────────────────────────────────────────────────┤
 │  • git log <base>..<head> --oneline                             │
 │  • Infer PR type from commits/branch prefix                     │
@@ -102,7 +112,7 @@ Execute these steps sequentially. Stop and report errors immediately.
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│  STEP 4: User Confirmation                                      │
+│  STEP 5: User Confirmation                                      │
 ├─────────────────────────────────────────────────────────────────┤
 │  • Show detected values (type, scope, base, title)              │
 │  • Ask for confirmation or adjustments                          │
@@ -111,7 +121,7 @@ Execute these steps sequentially. Stop and report errors immediately.
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│  STEP 5: PR Creation                                            │
+│  STEP 6: PR Creation                                            │
 ├─────────────────────────────────────────────────────────────────┤
 │  • Build title: <type>(<scope>): <description>                  │
 │  • Build body from type-specific template                       │
@@ -120,7 +130,7 @@ Execute these steps sequentially. Stop and report errors immediately.
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│  STEP 6: Post-Creation                                          │
+│  STEP 7: Post-Creation                                          │
 ├─────────────────────────────────────────────────────────────────┤
 │  • Display PR URL prominently                                   │
 │  • Show next steps (review, CI status)                          │
@@ -431,7 +441,57 @@ git remote -v
 
 If authentication fails, abort and instruct the user to run `gh auth login`.
 
-### 2. Determine branch context
+### 2. Check for existing PRs (CRITICAL - prevents duplicates)
+
+**MANDATORY STEP**: Before creating a new PR, ALWAYS verify if a PR already exists for the current branch.
+
+```bash
+# Check for existing PRs from current branch
+gh pr list --head $(git branch --show-current) --json number,title,baseRefName,state
+```
+
+**If a PR already exists:**
+
+1. **If the base branch is CORRECT** (matches Git Flow):
+   - **STOP** - Do not create a new PR
+   - Show the existing PR URL to the user
+   - Ask if they want to update its description instead
+
+2. **If the base branch is INCORRECT** (violates Git Flow):
+   - **Option A (Recommended)**: Update the base branch of existing PR
+     ```bash
+     gh pr edit <number> --base <correct-base>
+     ```
+   - **Option B**: Close the incorrect PR with explanation, then create new one
+     ```bash
+     gh pr close <number> --comment "Closing: incorrect base branch (should be <correct-base> per Git Flow)"
+     gh pr create ...
+     ```
+
+**Why this step is critical:**
+- Prevents multiple PRs from the same branch pointing to different bases
+- Avoids confusion during code review
+- Enforces Git Flow conventions from the start
+- Saves CI resources (no duplicate builds)
+
+**Example output:**
+
+```
+⚠ Existing PR Found
+  ├─ PR #15: feature/bff-session-redis-store → main (INCORRECT)
+  ├─ Created: 2026-08-07
+  └─ Status: OPEN
+
+✗ Cannot create new PR
+  Git Flow violation: feature/* branches must point to develop, not main
+
+→ Choose an action:
+  1. Update PR #15 base to develop (Recommended)
+  2. Close PR #15 and create new PR pointing to develop
+  3. Cancel
+```
+
+### 3. Determine branch context
 
 - **Current branch**: `git branch --show-current`
 - **Base branch**: usually `main` or `develop`. Ask if unsure. Check the repo's
@@ -563,7 +623,8 @@ After the PR is created, capture the PR URL and optionally:
 | `Authentication error` | `gh` session expired | Run `gh auth login` |
 | `could not resolve to a repository` | Missing / wrong remote | Run `gh repo set-default <owner>/<repo>` |
 | `branch protection blocks direct push` | Protected base branch | The PR workflow is correct; ensure CI is green |
-| `pull request already exists` | Duplicate PR | Show the existing PR URL instead |
+| `pull request already exists` | Duplicate PR from same branch | **STOP** - Step 2 should prevent this. If reached, show existing PR URL and offer to update description or fix base branch |
+| PR exists with wrong base | Created PR to wrong branch (violates Git Flow) | Update base with `gh pr edit <number> --base <correct-base>` or close and recreate |
 
 ## Safety rules
 

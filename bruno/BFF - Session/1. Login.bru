@@ -1,0 +1,75 @@
+meta {
+  name: 1. Login
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{bff_url}}/login
+  body: formUrlEncoded
+  auth: none
+}
+
+body:form-urlencoded {
+  username: {{email}}
+  password: {{password}}
+}
+
+script:pre-request {
+  // Keep the original 302 response available to the tests.
+  req.setMaxRedirects(0);
+}
+
+script:post-response {
+  const rawSetCookie = res.getHeader("set-cookie");
+  const cookieLines = (Array.isArray(rawSetCookie) ? rawSetCookie : [rawSetCookie])
+    .filter(Boolean)
+    .flatMap(value => String(value).split(/\r?\n/));
+  const sessionCookie = cookieLines.find(value => /^SESSION=/i.test(value.trim())) || "";
+  const sessionMatch = sessionCookie.match(/^SESSION=([^;\s]+)/i);
+
+  if (sessionMatch) {
+    // Runtime-only value used by requests 2 and 3 for local HTTP testing.
+    bru.setVar("session_id", sessionMatch[1]);
+  }
+}
+
+tests {
+  const location = String(res.getHeader("location") || "");
+  const rawSetCookie = res.getHeader("set-cookie");
+  const cookieLines = (Array.isArray(rawSetCookie) ? rawSetCookie : [rawSetCookie])
+    .filter(Boolean)
+    .flatMap(value => String(value).split(/\r?\n/));
+  const sessionCookie = cookieLines.find(value => /^SESSION=/i.test(value.trim())) || "";
+
+  test("Returns 302 Found", function() {
+    expect(res.getStatus()).to.equal(302);
+  });
+
+  test("Redirects to the dashboard", function() {
+    expect(location).to.match(/^(?:https?:\/\/[^/]+)?\/dashboard$/);
+  });
+
+  test("Creates a non-empty SESSION cookie", function() {
+    expect(sessionCookie).to.match(/^SESSION=[^;\s]+/i);
+  });
+
+  test("SESSION cookie is HttpOnly, Secure, and SameSite=Lax", function() {
+    expect(sessionCookie).to.match(/(?:^|;)\s*HttpOnly(?:;|$)/i);
+    expect(sessionCookie).to.match(/(?:^|;)\s*Secure(?:;|$)/i);
+    expect(sessionCookie).to.match(/(?:^|;)\s*SameSite=Lax(?:;|$)/i);
+  });
+}
+
+docs {
+  # Create the BFF session
+
+  Posts the `Local` environment credentials to the BFF and keeps the original
+  redirect response available for assertions.
+
+  The current backend emits a `Secure` SESSION cookie. A standards-compliant
+  cookie jar must not send that cookie over plain HTTP. To keep this local HTTP
+  flow executable, the post-response script captures only the opaque session ID
+  in the runtime-only `session_id` variable. Requests 2 and 3 send it explicitly.
+  Use an HTTPS BFF endpoint to verify normal automatic cookie-jar behavior.
+}

@@ -70,3 +70,7 @@ tmp/
 *.swp
 *.swo
 *~
+
+# dev.sh outputs
+.dev-pids/
+.dev-logs/

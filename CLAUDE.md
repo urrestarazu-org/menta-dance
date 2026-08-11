@@ -167,3 +167,22 @@ Antes de iniciar una tarea, considerar el modelo apropiado:
 
 Cuando el usuario pida "crear un PR", "prcreator", o variantes, leer y ejecutar:
 - **prcreator**: @skills/prcreator/SKILL.md
+
+### ⚠️ Lección importante sobre PRs
+
+**SIEMPRE verificar PRs existentes antes de crear uno nuevo:**
+
+```bash
+gh pr list --head $(git branch --show-current)
+```
+
+**Por qué es crítico:**
+- Un mismo branch puede tener múltiples PRs si apuntan a diferentes bases
+- Esto causa confusión en code review y duplica recursos de CI
+- Si existe PR con base incorrecta → actualizar base o cerrarlo, NO crear duplicado
+
+**Flujo correcto:**
+1. Verificar PRs existentes del branch actual
+2. Si existe con base correcta → actualizar descripción
+3. Si existe con base incorrecta → `gh pr edit --base <correct>` o cerrar y recrear
+4. Si no existe → crear nuevo PR

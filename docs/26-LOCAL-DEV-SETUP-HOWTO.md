@@ -13,24 +13,35 @@ Si ya tenés todo instalado:
 cp .env.example .env
 # Editar .env y reemplazar los placeholders
 
-# 2. Levantar infraestructura
-./scripts/start-infra.sh
+# 2. Levantar TODO (infraestructura + API + BFF) en un solo comando
+./scripts/dev.sh start
 
-# 3. Levantar API
-./gradlew :api:app:bootRun
+# 3. Verificar que todo esté corriendo
+./scripts/dev.sh status
 
-# 4. Levantar BFF (opcional, en otra terminal)
-./gradlew :bff:bootRun
+# 4. (Opcional) Registrar usuario de prueba para Bruno
+curl -i -X POST "http://localhost:8081/api/v1/users/register" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"student@example.com","password":"password123","role":"STUDENT"}'
 
-# 5. Ver logs en Grafana (opcional)
-# Abrí http://localhost:3000 → Explore → Loki
-# Query: {service_name="menta-dance-api"}
+# 5. (Opcional) Ejecutar tests de Bruno CLI
+cd bruno/BFF-Session-Custody && npx @usebruno/cli run --env Local .
 ```
 
 **URLs:**
 - API: http://localhost:8081
 - BFF: http://localhost:8080
 - Grafana (logs): http://localhost:3000
+
+**Comandos útiles del script dev.sh:**
+```bash
+./scripts/dev.sh start     # Levantar todo
+./scripts/dev.sh stop      # Detener todo
+./scripts/dev.sh restart   # Reiniciar todo
+./scripts/dev.sh status    # Ver estado
+./scripts/dev.sh logs api  # Ver logs de API
+./scripts/dev.sh logs bff  # Ver logs de BFF
+```
 
 ---
 
@@ -123,44 +134,195 @@ Todos los contenedores deben estar en estado `Up` (healthy).
 
 ---
 
-## 4. Ejecutar la API (Backend)
+## 4. Ejecutar la API y BFF (Backend + Frontend)
 
-En una terminal nueva:
+### Opción A: Script consolidado (Recomendado)
 
+El proyecto incluye un script que levanta **infraestructura + API + BFF** en un solo comando:
+
+```bash
+./scripts/dev.sh start
+```
+
+Esto ejecutará:
+1. Levanta infraestructura (MySQL, Redis, OpenTelemetry, Loki, Grafana)
+2. Espera a que MySQL y Redis estén listos
+3. Levanta la API en puerto 8081
+4. Levanta el BFF en puerto 8080
+5. Verifica health checks de API y BFF
+
+El output es visible en la terminal y también se guarda en `.dev-logs/api.log` y `.dev-logs/bff.log`.
+
+**Verificar estado:**
+```bash
+./scripts/dev.sh status
+```
+
+**Ver logs en tiempo real:**
+```bash
+./scripts/dev.sh logs api   # Logs de API
+./scripts/dev.sh logs bff   # Logs de BFF
+```
+
+**Detener todo:**
+```bash
+./scripts/dev.sh stop
+```
+
+**Reiniciar (útil después de cambios de código):**
+```bash
+./scripts/dev.sh restart
+```
+
+### Opción B: Ejecutar manualmente (para debugging)
+
+Si preferís ejecutar cada servicio en terminales separadas:
+
+**Terminal 1 - Infraestructura:**
+```bash
+./scripts/start-infra.sh
+```
+
+**Terminal 2 - API:**
 ```bash
 ./gradlew :api:app:bootRun
 ```
 
-> **Nota**: Gradle lee automáticamente el archivo `.env` de la raíz y pasa las variables a Spring Boot. No necesitás configurar nada más.
-
-La API estará disponible en **http://localhost:8081**
-
-El primer arranque puede tardar un poco porque Flyway ejecuta las migraciones de base de datos.
-
-### Verificar que la API esté funcionando
-
+**Terminal 3 - BFF:**
 ```bash
-curl http://localhost:8081/actuator/health
+./gradlew :bff:bootRun
 ```
 
-Deberías obtener:
+> **Nota**: Gradle lee automáticamente el archivo `.env` de la raíz y pasa las variables a Spring Boot.
+
+### Verificar que los servicios estén funcionando
+
+```bash
+# Health check de API
+curl http://localhost:8081/actuator/health
+
+# Health check de BFF
+curl http://localhost:8080/actuator/health
+```
+
+Ambos deberían retornar:
 ```json
 {"status":"UP"}
 ```
 
 ---
 
-## 5. Ejecutar el BFF (Frontend Web)
+## 5. Testing con Bruno
 
-En **otra terminal nueva**:
+El proyecto incluye colecciones de **Bruno** para testing manual y automatizado de la API y el BFF.
+
+### Requisitos
+
+- **Bruno CLI** instalado globalmente:
+  ```bash
+  npm install -g @usebruno/cli
+  ```
+
+### Preparar usuario de prueba
+
+Antes de ejecutar los tests, registrá un usuario en la API:
 
 ```bash
-./gradlew :bff:bootRun
+curl -i -X POST "http://localhost:8081/api/v1/users/register" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"student@example.com","password":"password123","role":"STUDENT"}'
 ```
 
-El frontend web estará disponible en **http://localhost:8080**
+Deberías obtener `201 Created` con un JSON que contiene el `id` del usuario.
 
-Abrí tu navegador en `http://localhost:8080` para ver la aplicación web.
+### Colección BFF Session Custody
+
+Esta colección prueba el flujo completo de autenticación con sesiones:
+
+```bash
+cd bruno/BFF-Session-Custody
+npx @usebruno/cli run --env Local .
+```
+
+**Tests incluidos:**
+1. **Login** - POST /login con credenciales
+   - Verifica 302 redirect a /dashboard
+   - Verifica cookie SESSION con HttpOnly, Secure, SameSite=Lax
+2. **Dashboard (Authenticated)** - GET /dashboard con sesión
+   - Verifica 200 OK y HTML response
+3. **Logout** - POST /logout con sesión
+   - Verifica 302 redirect a /login?logout
+   - Verifica que la cookie SESSION se expire (Max-Age=0)
+4. **Dashboard (After Logout)** - GET /dashboard sin sesión
+   - Verifica 302 redirect a /login
+
+**Resultado esperado:**
+```
+📊 Execution Summary
+┌───────────────┬──────────────┐
+│ Metric        │    Result    │
+├───────────────┼──────────────┤
+│ Status        │    ✓ PASS    │
+├───────────────┼──────────────┤
+│ Requests      │ 4 (4 Passed) │
+├───────────────┼──────────────┤
+│ Tests         │    11/11     │
+└───────────────┴──────────────┘
+```
+
+### Variables de entorno de Bruno
+
+Las credenciales de prueba están configuradas en `bruno/BFF-Session-Custody/environments/Local.bru`:
+
+```
+vars {
+  bff_url: http://localhost:8080
+  auth_url: http://localhost:8081
+  email: student@example.com
+  password: password123
+}
+```
+
+Si querés usar credenciales diferentes, editá este archivo antes de ejecutar los tests.
+
+### Testing manual con Bruno GUI
+
+1. Abrir Bruno desktop app
+2. Seleccionar **Open Collection**
+3. Navegar a `bruno/BFF-Session-Custody`
+4. Seleccionar entorno **Local** en el dropdown superior
+5. Ejecutar requests en orden (1 → 2 → 3 → 4)
+
+### Testing con curl (alternativa)
+
+Si preferís curl, seguí los pasos en `bruno/BFF-Session-Custody/TESTING-CURL.md`:
+
+```bash
+# 1. Login
+curl -i --max-redirs 0 -X POST "http://localhost:8080/login" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  --data-urlencode "username=student@example.com" \
+  --data-urlencode "password=password123" \
+  -c /tmp/menta-bff-cookies.txt
+
+# 2. Extraer SESSION ID (workaround para HTTP local)
+SESSION_ID=$(awk '$6 == "SESSION" { print $7 }' /tmp/menta-bff-cookies.txt)
+
+# 3. Dashboard autenticado
+curl -i "http://localhost:8080/dashboard" \
+  -H "Cookie: SESSION=${SESSION_ID}"
+
+# 4. Logout
+curl -i --max-redirs 0 -X POST "http://localhost:8080/logout" \
+  -H "Cookie: SESSION=${SESSION_ID}"
+```
+
+### Notas importantes
+
+- **CSRF está deshabilitado** para testing local (configurado en `BffSecurityConfig.java`)
+- El **refresh_token** se retorna en el header `X-Refresh-Token` (no en el body JSON)
+- La cookie SESSION usa el flag `Secure`, por eso el testing local con HTTP requiere enviarla manualmente
+- En producción (HTTPS), las cookies Secure se envían automáticamente
 
 ---
 
@@ -260,66 +422,95 @@ Spring Boot → OpenTelemetry Agent → OTEL Collector → Loki → Grafana
 
 El proyecto incluye scripts para facilitar el manejo de servicios:
 
-### Infraestructura (Docker)
+### Script dev.sh (Recomendado)
+
+Script consolidado que maneja **infraestructura + API + BFF**:
 
 ```bash
-./scripts/start-infra.sh   # Levantar MySQL, Redis, OTEL, Loki, Grafana
-docker compose down    # Detener toda la infraestructura
+./scripts/dev.sh start      # Levantar infraestructura + API + BFF
+./scripts/dev.sh stop       # Detener API, BFF e infraestructura
+./scripts/dev.sh restart    # Reiniciar todo (útil después de cambios de código)
+./scripts/dev.sh status     # Ver estado de procesos y health checks
+./scripts/dev.sh logs api   # Ver logs de API en tiempo real
+./scripts/dev.sh logs bff   # Ver logs de BFF en tiempo real
+./scripts/dev.sh help       # Mostrar ayuda
 ```
 
-### API (Backend)
+**Archivos de logs:**
+- API: `.dev-logs/api.log`
+- BFF: `.dev-logs/bff.log`
 
+### Scripts individuales (para control granular)
+
+**Infraestructura (Docker):**
 ```bash
-./gradlew :api:app:bootRun     # Levantar API en puerto 8081
-pkill -f 'api:app:bootRun'      # Detener API
-pkill -f 'api:app:bootRun' && sleep 2 && ./gradlew :api:app:bootRun   # Reiniciar API (útil después de cambios de código)
+./scripts/start-infra.sh    # Levantar solo infraestructura
+docker compose down         # Detener infraestructura
+docker compose logs -f      # Ver logs de Docker
 ```
 
-### BFF (Frontend Web)
-
+**API (Backend):**
 ```bash
-./gradlew :bff:bootRun     # Levantar BFF en puerto 8080
-pkill -f 'bff:bootRun'      # Detener BFF
+./gradlew :api:app:bootRun      # Levantar API manualmente
+pkill -f 'api:app:bootRun'       # Detener API
 ```
 
-**Ejemplo de flujo de trabajo:**
+**BFF (Frontend Web):**
+```bash
+./gradlew :bff:bootRun           # Levantar BFF manualmente
+pkill -f 'bff:bootRun'            # Detener BFF
+```
+
+**Ejemplo de flujo de trabajo con dev.sh:**
 
 ```bash
 # Levantar todo
-./scripts/start-infra.sh
-./gradlew :api:app:bootRun
+./scripts/dev.sh start
+
+# Ver estado
+./scripts/dev.sh status
 
 # Hacer cambios en el código...
 
-# Reiniciar API para aplicar cambios
-pkill -f 'api:app:bootRun' && sleep 2 && ./gradlew :api:app:bootRun
+# Reiniciar para aplicar cambios
+./scripts/dev.sh restart
+
+# Ver logs en tiempo real
+./scripts/dev.sh logs api
 
 # Detener todo
-pkill -f 'api:app:bootRun'
-docker compose down
+./scripts/dev.sh stop
 ```
 
 ---
 
 ## Detener los Servicios
 
-### Usando scripts (recomendado)
+### Usando dev.sh (Recomendado)
 
 ```bash
-pkill -f 'api:app:bootRun'      # Detener API
-pkill -f 'bff:bootRun'      # Detener BFF
-docker compose down    # Detener infraestructura
+./scripts/dev.sh stop    # Detener API, BFF e infraestructura
 ```
 
-### Forma manual
+Este comando:
+1. Detiene API (SIGTERM, luego SIGKILL si es necesario)
+2. Detiene BFF (SIGTERM, luego SIGKILL si es necesario)
+3. Detiene infraestructura (docker compose down)
+
+### Detener solo infraestructura
+
+```bash
+docker compose down              # Detener contenedores
+docker compose down -v           # Detener Y eliminar volúmenes (base de datos)
+```
+
+### Forma manual (si no usaste dev.sh)
 
 **API y BFF**: Presionar `Ctrl+C` en las terminales donde están corriendo.
 
 **Infraestructura**:
-
 ```bash
-docker-compose down              # Detener contenedores
-docker-compose down -v           # Detener Y eliminar volúmenes (base de datos)
+docker compose down
 ```
 
 ---
@@ -458,13 +649,17 @@ docker-compose down -v
 
 ## Próximos Pasos
 
+- **Ejecutar tests automatizados con Bruno CLI**:
+  ```bash
+  cd bruno/BFF-Session-Custody && npx @usebruno/cli run --env Local .
+  ```
 - **Visualizar logs en Grafana**: http://localhost:3000 (ver sección "Visualizar Logs en Grafana")
-- **Probar API con Bruno**: Abrí la colección en `bruno/` y probá los endpoints
+- **Probar API con Bruno GUI**: Abrí la colección en `bruno/BFF-Session-Custody`
+- **Ejecutar tests unitarios**: `./gradlew test`
+- **Ver cobertura**: `./gradlew jacocoTestReport`
 - Revisar la [Documentación de la API](03-AUTH-API.md)
 - Ver las [Historias de Usuario](user-stories/)
 - Explorar la [Arquitectura del Proyecto](02-ARCHITECTURE.md)
-- Ejecutar tests: `./gradlew test`
-- Ver cobertura: `./gradlew jacocoTestReport`
 
 ---
 

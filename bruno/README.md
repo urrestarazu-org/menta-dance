@@ -1,70 +1,157 @@
-# Bruno API Collection - Menta Dance
+# Menta Dance Bruno Collection
 
-Colección de endpoints para pruebas locales y de desarrollo de la API de Menta Dance.
-
-## Instalación
-
-1. Instalar Bruno: https://www.usebruno.com/downloads
-2. Abrir Bruno y seleccionar "Open Collection"
-3. Navegar a `menta-dance/bruno/`
+Colección unificada para testing de API y BFF. Abrí `bruno/` como la colección raíz y seleccioná un environment antes de ejecutar requests.
 
 ## Estructura
 
 ```
 bruno/
-├── api/
-│   ├── health.bru           # Health check
-│   ├── auth/
-│   │   └── register.bru     # Registro de usuarios
-│   ├── virtual/
-│   │   └── courses.bru      # Cursos online (ejemplo)
-│   └── physical/
-│       └── classes.bru      # Clases presenciales (ejemplo)
-└── environments/
-    ├── local.bru            # localhost:8081
-    └── dev.bru              # Ambiente de desarrollo
+├── environments/           # Configuración compartida
+│   ├── local.bru          # Local development
+│   └── dev.bru            # Development server
+│
+├── API - Direct/          # Tests directos contra la API
+│   ├── auth/              # Autenticación
+│   ├── health.bru         # Health checks
+│   ├── physical/          # Clases presenciales (placeholders)
+│   └── virtual/           # Cursos virtuales (placeholders)
+│
+└── BFF - Session/         # Tests de integración BFF
+    ├── 1. Login.bru
+    ├── 2. Dashboard (Authenticated).bru
+    ├── 3. Logout.bru
+    ├── 4. Dashboard (After Logout).bru
+    ├── README.md          # Guía específica de BFF Session
+    ├── SETUP.md           # Setup local
+    └── TESTING-CURL.md    # Testing con curl
 ```
 
-## Uso
+## Environments
 
-### 1. Seleccionar Environment
+### local
+- **API**: `http://localhost:8081`
+- **BFF**: `http://localhost:8080`
+- **Credenciales de prueba**:
+  ```
+  email: student@example.com
+  password: password123
+  ```
 
-En Bruno, seleccionar el environment:
-- **local**: Para desarrollo local (`localhost:8081`)
-- **dev**: Para ambiente de desarrollo remoto
+### dev
+- **API**: `https://api-dev.mentadance.com`
+- **Credenciales**: Proveer `email` y `password` via runtime variables (NO versionadas)
 
-### 2. Ejecutar Requests
+> **Nota**: Las variables `authToken` y `refreshToken` son runtime variables. NUNCA las guardes en archivos versionados.
 
-Los endpoints están organizados por dominio:
-- `api/health.bru`: Verificar estado de la aplicación
-- `api/auth/register.bru`: Registrar nuevo usuario
+## Cómo usar
 
-### 3. Autenticación
+### Opción 1: Bruno Desktop (GUI)
 
-Para endpoints que requieren autenticación:
+1. Abrir Bruno
+2. **Open Collection** → seleccionar carpeta `bruno/`
+3. Seleccionar environment **local** en el dropdown superior
+4. Navegar a un folder:
+   - **API - Direct** → Para testear la API directamente
+   - **BFF - Session** → Para testear el flujo de sesiones del BFF
 
-1. Ejecutar login (cuando esté implementado)
-2. Copiar el token de la respuesta
-3. Agregar variable `authToken` en el environment
-4. Los requests con `auth: bearer` usarán ese token automáticamente
+### Opción 2: Bruno CLI
 
-### Variables de Environment
-
-**local.bru:**
+**Ejecutar toda la colección:**
+```bash
+cd bruno && npx @usebruno/cli run --env local .
 ```
-baseUrl: http://localhost:8081
-apiVersion: v1
-authToken: <tu-token-aqui>  # Agregar después del login
+
+**Ejecutar solo BFF Session:**
+```bash
+cd bruno && npx @usebruno/cli run --env local --folder "BFF - Session" .
 ```
 
-## Tests
+**Ejecutar solo API Direct:**
+```bash
+cd bruno && npx @usebruno/cli run --env local --folder "API - Direct" .
+```
 
-Cada request incluye tests básicos que se ejecutan automáticamente:
-- Validación de status code
-- Validación de estructura de respuesta
+## Folder: API - Direct
 
-## Notas
+Tests directos contra la API (`http://localhost:8081`).
 
-- Los endpoints de `virtual/` y `physical/` son **plantillas** para cuando se implementen
-- El endpoint `auth/register.bru` ya está funcional y se puede usar
-- Usar `health.bru` para verificar que la API y sus dependencias están levantadas
+### Authentication flow
+
+Ejecutar en este orden:
+
+1. **Register User** - Crea el usuario fixture, retorna `201` con UUID. Solo acepta role `STUDENT` en registro público.
+2. **Auth Login** - Retorna `access_token` en JSON y `refresh_token` en header `X-Refresh-Token`. El script post-response guarda ambos como runtime variables.
+3. **Auth Refresh** - Envía `X-Refresh-Token`, verifica rotación, actualiza runtime variables.
+4. **Auth Logout** - Envía bearer token + `X-Refresh-Token`, retorna `204 No Content`, limpia runtime variables.
+
+> **Importante**: El refresh token NUNCA aparece en el body JSON de request o response, solo en el header `X-Refresh-Token`.
+
+### Health check
+
+`health.bru` verifica `GET /actuator/health` retorna `200` y `status: UP`.
+
+### Physical y Virtual (placeholders)
+
+Los módulos physical classes y virtual courses aún no tienen endpoints implementados. Sus `.bru` son placeholders de documentación:
+- No tienen assertions de success
+- El collection runner los skipea
+- Las variables `physicalClassesUrl` y `virtualCoursesUrl` están intencionalmente sin definir
+
+Definí esas URLs solo cuando los controllers estén implementados.
+
+## Folder: BFF - Session
+
+Tests de integración del flujo completo de autenticación con sesiones (`http://localhost:8080`).
+
+Ver documentación detallada en `BFF - Session/README.md`.
+
+### Quick start
+
+1. Registrar usuario de prueba:
+   ```bash
+   curl -X POST "http://localhost:8081/api/v1/users/register" \
+     -H "Content-Type: application/json" \
+     -d '{"email":"student@example.com","password":"password123","role":"STUDENT"}'
+   ```
+
+2. Ejecutar requests EN ORDEN:
+   - **1. Login** → 302, cookie SESSION
+   - **2. Dashboard (Authenticated)** → 200 OK
+   - **3. Logout** → 302, SESSION expirada
+   - **4. Dashboard (After Logout)** → 302 a /login
+
+3. O ejecutar con CLI:
+   ```bash
+   cd bruno && npx @usebruno/cli run --env local --folder "BFF - Session" .
+   ```
+
+**Resultado esperado**: 11/11 tests ✅
+
+## Troubleshooting
+
+### Variables no se cargan en Bruno GUI
+
+1. Verificá que seleccionaste el environment **local** en el dropdown superior
+2. Si sigue sin funcionar, cerrá y volvé a abrir la colección
+3. Alternativa: Usá Bruno CLI que siempre funciona
+
+### "Connection refused"
+
+Verificá que los servicios estén corriendo:
+```bash
+./scripts/dev.sh status
+```
+
+Si no están corriendo:
+```bash
+./scripts/dev.sh start
+```
+
+### Testing con curl
+
+Si preferís curl, seguí la guía en `BFF - Session/TESTING-CURL.md`.
+
+## Referencias
+
+- [Guía de Setup Local](../docs/26-LOCAL-DEV-SETUP-HOWTO.md)
+- [Documentación de la API Auth](../docs/03-AUTH-API.md)

@@ -1,0 +1,66 @@
+meta {
+  name: Auth Refresh
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/auth/refresh
+  auth: none
+}
+
+headers {
+  X-Refresh-Token: {{refreshToken}}
+}
+
+script:pre-request {
+  bru.setVar("previousRefreshToken", bru.getVar("refreshToken"));
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    const accessToken = res.body.access_token;
+    const refreshToken = res.getHeader("x-refresh-token");
+
+    if (accessToken && refreshToken) {
+      bru.setVar("authToken", accessToken);
+      bru.setVar("refreshToken", refreshToken);
+    }
+  }
+}
+
+docs {
+  Rotate a refresh token. The opaque value is accepted exclusively in the
+  X-Refresh-Token header; it is never accepted from a JSON request body.
+
+  The endpoint atomically:
+    - marks the presented refresh as USED;
+    - mints a new pair in the same family;
+    - publishes common_outbox_events with event_type=RefreshRotated.
+
+  A 4xx/5xx error is RFC 9457 application/problem+json and never includes the
+  presented token.
+
+  Variable contract:
+    Auth Login must run first. This request replaces both runtime token
+    variables with the rotated pair returned by the API.
+}
+
+tests {
+  test("Returns a new access token", function() {
+    expect(res.getBody().access_token).to.be.a('string');
+    expect(res.getBody().token_type).to.equal('Bearer');
+    expect(res.getBody().expires_in).to.be.a('number');
+  });
+
+  test("Rotates the refresh token in the response header", function() {
+    const rotatedRefreshToken = res.getHeader("x-refresh-token");
+    expect(rotatedRefreshToken).to.be.a('string').and.not.empty;
+    expect(rotatedRefreshToken).to.not.equal(bru.getVar('previousRefreshToken'));
+    expect(res.getBody()).to.not.have.property('refresh_token');
+  });
+}
+
+assert {
+  res.status: eq 200
+}

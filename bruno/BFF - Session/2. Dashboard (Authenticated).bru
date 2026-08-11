@@ -1,0 +1,42 @@
+meta {
+  name: 2. Dashboard (Authenticated)
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{bff_url}}/dashboard
+  body: none
+  auth: none
+}
+
+headers {
+  Cookie: SESSION={{session_id}}
+}
+
+script:pre-request {
+  req.setMaxRedirects(0);
+}
+
+tests {
+  const contentType = String(res.getHeader("content-type") || "").toLowerCase();
+
+  test("Returns 200 OK for the authenticated session", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("Returns HTML", function() {
+    expect(contentType).to.match(/^text\/html(?:;|$)/);
+  });
+}
+
+docs {
+  # Authenticated dashboard
+
+  Sends the session captured by request 1 and verifies the implemented dashboard.
+
+  The explicit `Cookie` header is a deliberate local HTTP test bypass. The
+  backend cookie is `Secure`, so Bruno must not automatically resend it to an
+  `http://` URL. Do not use this bypass to claim browser behavior; use HTTPS for
+  an end-to-end cookie transport check.
+}
