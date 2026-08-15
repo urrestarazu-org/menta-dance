@@ -11,7 +11,7 @@ This collection verifies the complete BFF session lifecycle in a fixed order:
 
 - JDK 21, Docker Compose, and the project Gradle wrapper.
 - A configured repository-root `.env` file.
-- A test user registered in the Auth API.
+- An existing active Auth account for the selected Bruno environment.
 
 Start the local stack from the repository root:
 
@@ -26,7 +26,7 @@ manually instead, use `docker compose up -d`, `./gradlew :api:app:bootRun`, and
 
 ## Environment
 
-Open `bruno/BFF-Session-Custody`, select the `Local` environment, and review:
+Open `bruno/`, select the `local` environment, and review:
 
 ```text
 bff_url: http://localhost:8080
@@ -39,18 +39,14 @@ Edit `email` and `password` if your local test user uses different credentials.
 Requests read these environment values directly; request-scoped variables do not
 override them.
 
-If the user does not exist, register it with the existing
-`bruno/api/auth/register.bru` request after adapting its values, or use:
-
-```bash
-curl -i -X POST "http://localhost:8081/api/v1/users/register" \
-  -H "Content-Type: application/json" \
-  -d '{"email":"student@example.com","password":"password123","role":"STUDENT"}'
-```
+The public registration endpoint is temporarily disabled while
+`auth-account-activation` is completed, so it cannot create this fixture. Use
+an existing active local account and update only the selected environment's
+runtime variables when its credentials differ.
 
 ## Run the collection
 
-Run the entire collection sequentially with the `Local` environment. Do not run
+Run the `BFF - Session` folder sequentially with the `local` environment. Do not run
 requests in parallel because requests 2 and 3 depend on the session captured by
 request 1.
 
@@ -126,8 +122,9 @@ Do not use `FLUSHALL`; it destroys unrelated Redis data.
 
 ### Login redirects to `/login?error=true`
 
-The credentials are invalid or the user does not exist. Check the selected
-`Local` environment and register the same email/password pair if necessary.
+The credentials are invalid, the account is not active, or the user does not
+exist. Check the selected `local` environment and use an existing active
+account.
 
 ### Request 2 reports an unresolved `session_id`
 

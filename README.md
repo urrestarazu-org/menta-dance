@@ -204,19 +204,27 @@ docker compose up -d
 ./gradlew jacocoTestReport
 ```
 
-**Tests E2E con Bruno CLI:**
+### Colecciones Bruno
+
+Las colecciones HTTP versionadas están en [`bruno/`](bruno/). Abrí esa carpeta
+como colección raíz en Bruno y seleccioná el entorno `local`.
+
+- **API - Direct**: pruebas directas contra la API local (`http://localhost:8081`),
+  incluyendo Auth y health; Physical y Virtual son placeholders mientras sus
+  endpoints no estén implementados.
+- **BFF - Session**: flujo de sesión contra el BFF local (`http://localhost:8080`):
+  login, dashboard autenticado, logout y verificación posterior al logout.
+
+También pueden ejecutarse con Bruno CLI:
 
 ```bash
-# Registrar usuario de prueba
-curl -i -X POST "http://localhost:8081/api/v1/users/register" \
-  -H "Content-Type: application/json" \
-  -d '{"email":"student@example.com","password":"password123","role":"STUDENT"}'
-
-# Ejecutar suite de tests BFF Session
-cd bruno && npx @usebruno/cli run --env local --folder "BFF - Session" .
+cd bruno
+npx @usebruno/cli run --env local --folder "API - Direct" .
+npx @usebruno/cli run --env local --folder "BFF - Session" .
 ```
 
-Resultado esperado: **11/11 tests** (100% pass rate)
+Consultá [`bruno/README.md`](bruno/README.md) para el flujo, variables de entorno
+y requisitos de cada colección.
 
 ---
 
