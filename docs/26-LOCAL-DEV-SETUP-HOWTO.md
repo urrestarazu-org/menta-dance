@@ -20,6 +20,8 @@ cp .env.example .env
 ./scripts/dev.sh status
 
 # 4. (Opcional) Registrar usuario de prueba para Bruno
+# NOTA: este endpoint devuelve 503 temporalmente mientras se completa
+# auth-account-activation (ver PR3, openspec/changes/auth-account-activation/tasks.md #3.1).
 curl -i -X POST "http://localhost:8081/api/v1/users/register" \
   -H "Content-Type: application/json" \
   -d '{"email":"student@example.com","password":"password123","role":"STUDENT"}'
@@ -234,6 +236,11 @@ curl -i -X POST "http://localhost:8081/api/v1/users/register" \
 ```
 
 Deberías obtener `201 Created` con un JSON que contiene el `id` del usuario.
+
+> **Nota**: este endpoint está temporalmente deshabilitado (devuelve `503
+> Service Unavailable`) mientras se completa `auth-account-activation`; se
+> restaura en PR3 (ver `openspec/changes/auth-account-activation/tasks.md`,
+> tarea 3.1).
 
 ### Colección BFF Session Custody
 
