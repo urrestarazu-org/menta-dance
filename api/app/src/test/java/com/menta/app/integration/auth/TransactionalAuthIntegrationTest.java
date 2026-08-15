@@ -114,17 +114,28 @@ class TransactionalAuthIntegrationTest {
     @MockBean
     private org.springframework.data.redis.core.RedisTemplate<String, String> redisTemplate;
 
+    /**
+     * The real limiter would sit on the mocked RedisTemplate above and degrade
+     * every login. Failure budgets have their own dedicated coverage; here the
+     * budget stays open so these tests remain about transactional atomicity.
+     */
+    @MockBean
+    private com.menta.auth.application.port.out.LoginRateLimitPort loginRateLimitPort;
+
     @SpyBean
     private OutboxAppender outboxAppender;
 
     private static final String EMAIL = "student@example.com";
     private static final String PASSWORD = "SecurePass123!";
+    private static final String CLIENT_FINGERPRINT = "0".repeat(64);
     private User testUser;
 
     @BeforeEach
     void setUp() {
         // Mock AuthDegradedGuard to allow auth operations
         when(authDegradedGuard.isDegraded()).thenReturn(false);
+        when(loginRateLimitPort.check(anyString(), anyString()))
+            .thenReturn(com.menta.auth.application.port.out.RateLimitDecision.allowed());
 
         // Seed test user
         String passwordHash = passwordEncoder.encode(PASSWORD);
@@ -142,7 +153,7 @@ class TransactionalAuthIntegrationTest {
 
     @Test
     void successful_login_commits_refresh_and_outbox_atomically() {
-        LoginCommand command = new LoginCommand(EMAIL, PASSWORD);
+        LoginCommand command = new LoginCommand(EMAIL, PASSWORD, CLIENT_FINGERPRINT);
 
         TokenPair tokens = loginUseCase.execute(command);
 
@@ -164,7 +175,7 @@ class TransactionalAuthIntegrationTest {
     @Test
     void successful_refresh_commits_rotation_and_outbox_atomically() {
         // Setup: login first
-        LoginCommand loginCmd = new LoginCommand(EMAIL, PASSWORD);
+        LoginCommand loginCmd = new LoginCommand(EMAIL, PASSWORD, CLIENT_FINGERPRINT);
         TokenPair initial = loginUseCase.execute(loginCmd);
 
         // Clear outbox to isolate refresh event
@@ -203,7 +214,7 @@ class TransactionalAuthIntegrationTest {
     @Test
     void successful_logout_commits_revocation_and_outbox_atomically() {
         // Setup: login first
-        LoginCommand loginCmd = new LoginCommand(EMAIL, PASSWORD);
+        LoginCommand loginCmd = new LoginCommand(EMAIL, PASSWORD, CLIENT_FINGERPRINT);
         TokenPair tokens = loginUseCase.execute(loginCmd);
 
         // Clear outbox to isolate logout event
@@ -229,7 +240,7 @@ class TransactionalAuthIntegrationTest {
         doThrow(new IllegalStateException("outbox unavailable"))
             .when(outboxAppender).append(anyString(), anyString(), anyString());
 
-        assertThatThrownBy(() -> loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD)))
+        assertThatThrownBy(() -> loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD, CLIENT_FINGERPRINT)))
             .isInstanceOf(IllegalStateException.class)
             .hasMessage("outbox unavailable");
 
@@ -239,7 +250,7 @@ class TransactionalAuthIntegrationTest {
 
     @Test
     void refresh_outbox_failure_rolls_back_rotation() {
-        TokenPair initial = loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD));
+        TokenPair initial = loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD, CLIENT_FINGERPRINT));
         outboxRowJpaRepository.deleteAll();
         doThrow(new IllegalStateException("outbox unavailable"))
             .when(outboxAppender).append(anyString(), anyString(), anyString());
@@ -256,7 +267,7 @@ class TransactionalAuthIntegrationTest {
 
     @Test
     void logout_outbox_failure_rolls_back_revocation() {
-        TokenPair initial = loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD));
+        TokenPair initial = loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD, CLIENT_FINGERPRINT));
         outboxRowJpaRepository.deleteAll();
         doThrow(new IllegalStateException("outbox unavailable"))
             .when(outboxAppender).append(anyString(), anyString(), anyString());
@@ -274,7 +285,7 @@ class TransactionalAuthIntegrationTest {
     @Test
     void refresh_family_revocation_persists_bumped_token_version() {
         // Setup: login and rotate once to create a family
-        LoginCommand loginCmd = new LoginCommand(EMAIL, PASSWORD);
+        LoginCommand loginCmd = new LoginCommand(EMAIL, PASSWORD, CLIENT_FINGERPRINT);
         TokenPair initial = loginUseCase.execute(loginCmd);
 
         RefreshCommand refreshCmd = new RefreshCommand(initial.refreshToken());
@@ -312,7 +323,7 @@ class TransactionalAuthIntegrationTest {
     @Test
     void logout_with_compromised_token_persists_version_bump() {
         // Setup: login and rotate once
-        LoginCommand loginCmd = new LoginCommand(EMAIL, PASSWORD);
+        LoginCommand loginCmd = new LoginCommand(EMAIL, PASSWORD, CLIENT_FINGERPRINT);
         TokenPair initial = loginUseCase.execute(loginCmd);
 
         RefreshCommand refreshCmd = new RefreshCommand(initial.refreshToken());

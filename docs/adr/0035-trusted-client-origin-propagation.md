@@ -1,7 +1,8 @@
 # ADR-0035: Propagación Confiable del Origen del Cliente entre Nginx, BFF y API
 
-**Estado:** Propuesto
+**Estado:** Aceptado
 **Fecha:** 2026-08-15
+**Implementado:** 2026-08-15 (PR #77, #79, #80 y este cambio)
 **Decisores:** Arquitectura y equipo de Auth
 
 ## Contexto y Problema
@@ -40,9 +41,10 @@ entrante, y también construye `X-Forwarded-For` con
 canónico más simple para el salto Nginx -> BFF. Aun así, ese header sólo es
 confiable cuando el peer inmediato pertenece a una red de proxies autorizada.
 
-Esta ADR registra una propuesta. La propagación BFF -> API, la separación de
-presupuestos y el límite específico del login web **todavía no están
-implementados**.
+Esta ADR registró originalmente una propuesta. La propagación BFF -> API, la
+separación de presupuestos y el límite específico del login web **ya están
+implementados**; ver "Plan de Implementación" al final para el estado de cada
+tramo.
 
 ## Factores Clave (Decision Drivers)
 
@@ -126,8 +128,7 @@ responsabilidades:
    de modo que una futura identidad firmada o mTLS no obligue a modificar el
    caso de uso.
 
-La decisión permanece **Propuesta** hasta que los cambios se implementen y se
-validen extremo a extremo.
+La decisión fue implementada en los cuatro PR listados más abajo.
 
 ## Frontera de Confianza
 
@@ -195,22 +196,34 @@ Las siguientes condiciones son obligatorias:
 
 La propuesta se divide para mantener revisiones cohesivas:
 
-1. **PR1 — eliminar la duplicación del login BFF:** hacer que
-   `BffAuthenticationProvider` delegue en `LoginUseCase`, sin cambiar contratos
-   HTTP ni rate limiting.
-2. **PR2 — propagar el origen confiable:** capturar los detalles del request con
-   `AuthenticationDetailsSource`, transportar la dirección canónica por
-   `LoginCommand`/`LoginUseCase`/`AuthApiClient` y enviarla desde
-   `AuthApiAdapter`; generalizar la configuración de proxies confiables.
-3. **PR3 — techo volumétrico en Nginx:** limitar específicamente `POST /login`
-   del BFF por origen, sin consumir presupuesto al servir el formulario u otros
-   métodos.
-4. **PR4 — presupuestos semánticos en API:** separar verificación y registro de
-   fallos; conservar fallos por email y por origen; impedir que éxitos consuman
-   o limpien el presupuesto del origen.
+1. ✅ **PR1 — eliminar la duplicación del login BFF** (#77): `BffAuthenticationProvider`
+   delega en `LoginUseCase`, sin cambiar contratos HTTP ni rate limiting.
+2. ✅ **PR2 — propagar el origen confiable** (#79): `ClientOriginResolver` +
+   `ClientAuthenticationDetailsSource` capturan la dirección canónica desde
+   `X-Real-IP` sólo con peer confiable; viaja por `LoginCommand` y sale como un
+   `X-Forwarded-For` de un solo valor. Configuración generalizada a
+   `auth.trusted-proxy-cidrs` y `menta.trusted-proxy-cidrs`.
+3. ✅ **PR3 — techo volumétrico en Nginx** (#80): zona `login` con clave anulada
+   fuera de `POST`, aplicada en `location = /login`.
+4. ✅ **PR4 — presupuestos semánticos en API**: el puerto pasa a
+   `check` / `recordFailure` / `resetEmail`. `check` es read-only y corre antes
+   de bcrypt; `recordFailure` sólo se invoca tras un fallo contabilizable; los
+   éxitos no consumen presupuesto y limpian únicamente el del email.
 
-El orden evita introducir presupuestos semánticos por origen mientras todo el
-tráfico web todavía comparte identidad.
+El orden evitó introducir presupuestos semánticos por origen mientras todo el
+tráfico web todavía compartía identidad.
+
+### Deuda conocida tras la implementación
+
+* La división `check` / `recordFailure` admite una carrera acotada: varias
+  peticiones concurrentes pueden leer un contador aún por debajo del límite
+  antes de que alguna registre su fallo. El techo volumétrico de Nginx acota el
+  tamaño de esa ráfaga, y por eso PR3 debía preceder a PR4.
+* `auth.activation.trusted-proxy-cidrs` sigue leyéndose como fallback de
+  `auth.trusted-proxy-cidrs`. Conviene retirarla cuando todos los entornos
+  hayan migrado.
+* El valor por defecto `172.16.0.0/12` confía en toda la red bridge de Docker.
+  Es una conveniencia de desarrollo y debe acotarse por ambiente.
 
 ## Plan de Pruebas
 

@@ -1,6 +1,8 @@
 package com.menta.auth.infrastructure.web.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
@@ -27,11 +29,13 @@ import com.menta.auth.application.port.in.RefreshTokenUseCase;
 import com.menta.auth.domain.exception.AuthDegradedException;
 import com.menta.auth.domain.exception.InvalidCredentialsException;
 import com.menta.auth.domain.exception.LockedUserException;
+import com.menta.auth.domain.exception.LoginRateLimitedException;
 import com.menta.auth.domain.exception.RefreshTokenCompromisedException;
 import com.menta.auth.infrastructure.web.dto.LoginRequest;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
@@ -77,7 +81,8 @@ class AuthControllerTest {
             .featuresToDisable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
             .build();
         AuthController controller = new AuthController(
-            loginUseCase, refreshTokenUseCase, logoutUseCase
+            loginUseCase, refreshTokenUseCase, logoutUseCase,
+            new ClientFingerprint("172.16.0.0/12")
         );
         this.mockMvc = MockMvcBuilders.standaloneSetup(controller)
             .setMessageConverters(new MappingJackson2HttpMessageConverter(objectMapper))
@@ -167,6 +172,77 @@ class AuthControllerTest {
             .andExpect(jsonPath("$.status", is(503)))
             .andExpect(jsonPath("$.detail", is("Authentication is temporarily unavailable.")))
             .andExpect(jsonPath("$.code", is("AUTH_DEGRADED")));
+    }
+
+    @Test
+    void login_returns_429_with_retry_after_when_throttled() throws Exception {
+        when(loginUseCase.execute(any(LoginCommand.class)))
+            .thenThrow(new LoginRateLimitedException(Duration.ofSeconds(847)));
+
+        String body = objectMapper.writeValueAsString(
+            new LoginRequest("user@example.com", "WrongPass!")
+        );
+
+        mockMvc.perform(post(LOGIN_URL)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+            .andExpect(status().isTooManyRequests())
+            .andExpect(header().string("Retry-After", is("847")))
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.status", is(429)))
+            .andExpect(jsonPath("$.detail", is("Too many login attempts; retry later.")))
+            .andExpect(jsonPath("$.code", is("LOGIN_RATE_LIMITED")));
+    }
+
+    @Test
+    void login_throttling_never_reports_the_account_as_locked() throws Exception {
+        // 429 and 423 must stay distinguishable: the throttle expires on its
+        // own, a lock does not. Collapsing them would tell an attacker their
+        // spray had a persistent effect on the victim's account.
+        when(loginUseCase.execute(any(LoginCommand.class)))
+            .thenThrow(new LoginRateLimitedException(Duration.ofSeconds(60)));
+
+        String body = objectMapper.writeValueAsString(
+            new LoginRequest("victim@example.com", "WrongPass!")
+        );
+
+        mockMvc.perform(post(LOGIN_URL)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+            .andExpect(status().isTooManyRequests())
+            .andExpect(jsonPath("$.code", is(not("USER_LOCKED"))));
+    }
+
+    @Test
+    void login_passes_an_opaque_client_fingerprint_to_the_use_case() throws Exception {
+        TokenPair pair = new TokenPair(
+            "compact-jwt",
+            UUID.randomUUID().toString(),
+            TokenPair.TOKEN_TYPE_BEARER,
+            Duration.ofMinutes(15)
+        );
+        when(loginUseCase.execute(any(LoginCommand.class))).thenReturn(pair);
+
+        String body = objectMapper.writeValueAsString(
+            new LoginRequest("user@example.com", "SecurePass123!")
+        );
+
+        mockMvc.perform(post(LOGIN_URL)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body)
+                .with(request -> {
+                    request.setRemoteAddr("203.0.113.9");
+                    return request;
+                }))
+            .andExpect(status().isOk());
+
+        ArgumentCaptor<LoginCommand> captor = ArgumentCaptor.forClass(LoginCommand.class);
+        verify(loginUseCase).execute(captor.capture());
+        String fingerprint = captor.getValue().clientFingerprint();
+
+        // A SHA-256 hex digest — never the raw IP.
+        assertThat(fingerprint).matches("[0-9a-f]{64}");
+        assertThat(fingerprint).doesNotContain("203.0.113.9");
     }
 
     @Test

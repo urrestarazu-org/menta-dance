@@ -55,6 +55,7 @@ class AccountActivationIntegrationTest {
     private static final String EMAIL = "activation.student@example.com";
     private static final String PASSWORD = "SecurePass123!";
     private static final String RAW_TOKEN = "integration-activation-token";
+    private static final String CLIENT_FINGERPRINT = "0".repeat(64);
 
     @Container
     private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
@@ -80,6 +81,7 @@ class AccountActivationIntegrationTest {
     @MockBean private ActivationTokenGenerator activationTokenGenerator;
     @MockBean private ActivationTokenHasher activationTokenHasher;
     @MockBean private ActivationRateLimitPort activationRateLimitPort;
+    @MockBean private com.menta.auth.application.port.out.LoginRateLimitPort loginRateLimitPort;
     @MockBean private ActivationNotificationPort activationNotificationPort;
     @MockBean private AuthDegradedGuard authDegradedGuard;
     @MockBean private TokenBlacklistPort tokenBlacklistPort;
@@ -105,10 +107,10 @@ class AccountActivationIntegrationTest {
         new ActivationOutboxEventHandler(activationNotificationPort).handle(outboxRows.get(0));
         verify(activationNotificationPort).sendActivationEmail(any());
 
-        assertThatThrownBy(() -> loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD)))
+        assertThatThrownBy(() -> loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD, CLIENT_FINGERPRINT)))
             .isInstanceOf(InvalidCredentialsException.class);
         activateAccountUseCase.activate(new ActivateAccountCommand(RAW_TOKEN));
-        assertThat(loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD)).accessToken()).isNotBlank();
+        assertThat(loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD, CLIENT_FINGERPRINT)).accessToken()).isNotBlank();
     }
 
     @Test
@@ -152,6 +154,9 @@ class AccountActivationIntegrationTest {
 
     private void allowRegistration() {
         when(activationRateLimitPort.consume(any(), any())).thenReturn(RateLimitDecision.allowed());
+        // Login failure budgets have dedicated coverage; keep this flow about
+        // the register -> activate -> login lifecycle.
+        when(loginRateLimitPort.check(any(), any())).thenReturn(RateLimitDecision.allowed());
         when(activationTokenGenerator.generate()).thenReturn(RAW_TOKEN);
         when(activationTokenHasher.hash(RAW_TOKEN)).thenReturn("0".repeat(64));
         when(authDegradedGuard.isDegraded()).thenReturn(false);
