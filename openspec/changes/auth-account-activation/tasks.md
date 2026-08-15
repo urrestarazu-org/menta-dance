@@ -24,33 +24,33 @@ Antes de `sdd-apply` se deberá confirmar la cadena de branches. La propuesta es
   evento Auth existente y para un tipo desconocido. ArchUnit: N/A. Archivos:
   `api/app/src/test/.../OutboxBlacklistReconcilerTest.java`,
   `OutboxReconciliationWorkerTest.java`.
-- [ ] 0.2 RED: agregar test que demuestra que el registro actual crea `ACTIVE` y
+- [x] 0.2 RED: agregar test que demuestra que el registro actual crea `ACTIVE` y
   convertirlo en expectativa `PENDING_ACTIVATION`. ArchUnit:
   `application_should_not_depend_on_infrastructure`. Archivo:
   `api/auth/src/test/.../RegisterUserUseCaseImplTest.java`.
-- [ ] 0.3 RED: agregar test de login pendiente indistinguible de password
+- [x] 0.3 RED: agregar test de login pendiente indistinguible de password
   incorrecta. ArchUnit: mismo rule id. Archivo:
   `api/auth/src/test/.../LoginUseCaseImplTest.java`.
 
 ## Fase 1 — Dominio y migración (PR1)
 
-- [ ] 1.1 RED/GREEN: extender `UserStatus` con `PENDING_ACTIVATION`, crear
+- [x] 1.1 RED/GREEN: extender `UserStatus` con `PENDING_ACTIVATION`, crear
   `User.register()` y restringir `activate()` a la transición válida. ArchUnit:
   `domain_should_not_depend_on_infrastructure`. Archivos: `User.java`,
   `UserStatus.java`, `UserTest.java`.
-- [ ] 1.2 RED/GREEN: crear aggregate `ActivationToken` con expiración, consumo e
+- [x] 1.2 RED/GREEN: crear aggregate `ActivationToken` con expiración, consumo e
   invalidación. ArchUnit: `domain_should_not_depend_on_infrastructure`.
-- [ ] 1.3 crear V3 aditiva con `auth_activation_tokens`, ciphertext AES-GCM,
+- [x] 1.3 crear V3 aditiva con `auth_activation_tokens`, ciphertext AES-GCM,
   nonce/key version e índices. Archivo:
   `api/app/src/main/resources/db/migration/V3__auth_account_activation.sql`.
-- [ ] 1.4 RED/GREEN: definir `ActivationTokenRepository`, generator, hasher,
+- [x] 1.4 RED/GREEN: definir `ActivationTokenRepository`, generator, hasher,
   delivery cipher, rate limit y outbox contracts en application. ArchUnit:
   `application_should_not_use_spring_web`.
-- [ ] 1.5 RED/GREEN: modificar `RegisterUserUseCaseImpl` para persistir usuario,
+- [x] 1.5 RED/GREEN: modificar `RegisterUserUseCaseImpl` para persistir usuario,
   token y evento atómicamente mediante wrapper transaccional.
-- [ ] 1.6 RED/GREEN: implementar `ActivateAccountUseCase` y
+- [x] 1.6 RED/GREEN: implementar `ActivateAccountUseCase` y
   `ResendActivationUseCase`, incluyendo invalidación y respuesta no enumerativa.
-- [ ] 1.7 REFACTOR: clock y TTL inyectables; eliminar `now()` del dominio para
+- [x] 1.7 REFACTOR: clock y TTL inyectables; eliminar `now()` del dominio para
   tests deterministas.
 
 ## Fase 2 — Infraestructura y entrega durable (PR2)

@@ -7,8 +7,7 @@ Colección unificada para testing de API y BFF. Abrí `bruno/` como la colecció
 ```
 bruno/
 ├── environments/           # Configuración compartida
-│   ├── local.bru          # Local development
-│   └── dev.bru            # Development server
+│   └── local.bru          # Desarrollo local
 │
 ├── API - Direct/          # Tests directos contra la API
 │   ├── auth/              # Autenticación
@@ -36,10 +35,6 @@ bruno/
   email: student@example.com
   password: password123
   ```
-
-### dev
-- **API**: `https://api-dev.mentadance.com`
-- **Credenciales**: Proveer `email` y `password` via runtime variables (NO versionadas)
 
 > **Nota**: Las variables `authToken` y `refreshToken` son runtime variables. NUNCA las guardes en archivos versionados.
 
@@ -79,8 +74,8 @@ Tests directos contra la API (`http://localhost:8081`).
 
 Ejecutar en este orden:
 
-1. **Register User** - Crea el usuario fixture, retorna `201` con UUID. Solo acepta role `STUDENT` en registro público.
-2. **Auth Login** - Retorna `access_token` en JSON y `refresh_token` en header `X-Refresh-Token`. El script post-response guarda ambos como runtime variables.
+1. **Register User** - Durante el desarrollo de `auth-account-activation` el endpoint está deshabilitado y debe retornar `503`. No crea un usuario fixture.
+2. **Auth Login** - Requiere una cuenta local ya existente y activa; retorna `access_token` en JSON y `refresh_token` en header `X-Refresh-Token`. El script post-response guarda ambos como runtime variables.
 3. **Auth Refresh** - Envía `X-Refresh-Token`, verifica rotación, actualiza runtime variables.
 4. **Auth Logout** - Envía bearer token + `X-Refresh-Token`, retorna `204 No Content`, limpia runtime variables.
 
@@ -107,12 +102,9 @@ Ver documentación detallada en `BFF - Session/README.md`.
 
 ### Quick start
 
-1. Registrar usuario de prueba:
-   ```bash
-   curl -X POST "http://localhost:8081/api/v1/users/register" \
-     -H "Content-Type: application/json" \
-     -d '{"email":"student@example.com","password":"password123","role":"STUDENT"}'
-   ```
+1. Configurar `email` y `password` del environment `local` con una cuenta local
+   ya existente y activa. El registro público está temporalmente deshabilitado
+   mientras se completa `auth-account-activation`.
 
 2. Ejecutar requests EN ORDEN:
    - **1. Login** → 302, cookie SESSION
@@ -125,7 +117,8 @@ Ver documentación detallada en `BFF - Session/README.md`.
    cd bruno && npx @usebruno/cli run --env local --folder "BFF - Session" .
    ```
 
-**Resultado esperado**: 11/11 tests ✅
+**Resultado esperado**: las 11 aserciones de BFF Session pasan cuando el
+environment usa una cuenta activa válida.
 
 ## Troubleshooting
 

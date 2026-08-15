@@ -5,7 +5,13 @@ import com.menta.auth.application.port.in.LogoutUseCase;
 import com.menta.auth.application.port.in.RefreshTokenUseCase;
 import com.menta.auth.application.port.in.RegisterUserUseCase;
 import com.menta.auth.application.port.out.AccessTokenIssuer;
+import com.menta.auth.application.port.out.ActivationDeliveryCipher;
+import com.menta.auth.application.port.out.ActivationRateLimitPort;
+import com.menta.auth.application.port.out.ActivationTokenGenerator;
+import com.menta.auth.application.port.out.ActivationTokenHasher;
+import com.menta.auth.application.port.out.ActivationTokenRepository;
 import com.menta.auth.application.port.out.AuthDegradedGuard;
+import com.menta.auth.application.port.out.Clock;
 import com.menta.auth.application.port.out.OutboxAppender;
 import com.menta.auth.application.port.out.PasswordEncoderPort;
 import com.menta.auth.application.port.out.RefreshTokenRepository;
@@ -15,9 +21,15 @@ import com.menta.auth.application.usecase.LoginUseCaseImpl;
 import com.menta.auth.application.usecase.LogoutUseCaseImpl;
 import com.menta.auth.application.usecase.RefreshTokenUseCaseImpl;
 import com.menta.auth.application.usecase.RegisterUserUseCaseImpl;
+import com.menta.auth.infrastructure.activation.NotImplementedActivationDeliveryCipher;
+import com.menta.auth.infrastructure.activation.NotImplementedActivationRateLimitPort;
+import com.menta.auth.infrastructure.activation.NotImplementedActivationTokenGenerator;
+import com.menta.auth.infrastructure.activation.NotImplementedActivationTokenHasher;
+import com.menta.auth.infrastructure.activation.NotImplementedActivationTokenRepository;
 import com.menta.auth.infrastructure.transaction.TransactionalLoginUseCase;
 import com.menta.auth.infrastructure.transaction.TransactionalLogoutUseCase;
 import com.menta.auth.infrastructure.transaction.TransactionalRefreshTokenUseCase;
+import com.menta.auth.infrastructure.transaction.TransactionalRegisterUserUseCase;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.auth.infrastructure.security.JwtService;
 import com.menta.auth.infrastructure.security.Sha256TokenHasher;
@@ -89,6 +101,14 @@ public class AuthConfiguration {
     private long accessTokenTtlSeconds;
 
     /**
+     * TTL for a freshly-issued activation token (design.md decision #3:
+     * 24h default, configurable). ISO-8601 duration string; Spring binds
+     * {@code java.time.Duration} @Value placeholders natively.
+     */
+    @Value("${auth.activation.token-ttl:PT24H}")
+    private Duration activationTokenTtl;
+
+    /**
      * Fail-fast validation: reject dev-only secret in production profiles.
      * This prevents accidental deployment with insecure defaults.
      */
@@ -127,12 +147,62 @@ public class AuthConfiguration {
         return new JwtService(jwtBase64Secret, Duration.ofSeconds(accessTokenTtlSeconds));
     }
 
+    /**
+     * PR2 (tasks 2.1/2.2/2.3/2.4) replaces every placeholder bean below with a
+     * real JPA/Redis/AES-GCM adapter. Exposed individually so the upcoming
+     * {@code ActivateAccountUseCase}/{@code ResendActivationUseCase} beans
+     * (task 1.6) can reuse the same instances.
+     */
+    @Bean
+    public ActivationTokenRepository activationTokenRepository() {
+        return new NotImplementedActivationTokenRepository();
+    }
+
+    @Bean
+    public ActivationTokenGenerator activationTokenGenerator() {
+        return new NotImplementedActivationTokenGenerator();
+    }
+
+    @Bean
+    public ActivationTokenHasher activationTokenHasher() {
+        return new NotImplementedActivationTokenHasher();
+    }
+
+    @Bean
+    public ActivationDeliveryCipher activationDeliveryCipher() {
+        return new NotImplementedActivationDeliveryCipher();
+    }
+
+    @Bean
+    public ActivationRateLimitPort activationRateLimitPort() {
+        return new NotImplementedActivationRateLimitPort();
+    }
+
     @Bean
     public RegisterUserUseCase registerUserUseCase(
         UserRepository userRepository,
-        PasswordEncoderPort passwordEncoder
+        PasswordEncoderPort passwordEncoder,
+        ActivationTokenRepository activationTokenRepository,
+        ActivationTokenGenerator activationTokenGenerator,
+        ActivationTokenHasher activationTokenHasher,
+        ActivationDeliveryCipher activationDeliveryCipher,
+        ActivationRateLimitPort activationRateLimitPort,
+        OutboxAppender outboxAppender,
+        Clock clock
     ) {
-        return new RegisterUserUseCaseImpl(userRepository, passwordEncoder);
+        RegisterUserUseCaseImpl implementation = new RegisterUserUseCaseImpl(
+            userRepository,
+            passwordEncoder,
+            activationTokenRepository,
+            activationTokenGenerator,
+            activationTokenHasher,
+            activationDeliveryCipher,
+            activationRateLimitPort,
+            outboxAppender,
+            clock,
+            activationTokenTtl
+        );
+        return new TransactionalRegisterUserUseCase(implementation);
     }
 
     @Bean
