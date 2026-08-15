@@ -35,6 +35,12 @@
 - CI (GitHub Actions) debe ejecutar: build backend, Checkstyle, tests unitarios + ArchUnit, JaCoCo, SonarCloud, Playwright, Gatling, y Trivy antes del merge. Conectar estos en `./gradlew check`/workflows mientras el código aterriza.
 - Observabilidad (Logback JSON + OpenTelemetry) es parte de la definición de done—asegurar que los nuevos servicios emitan `correlationId` y respeten las reglas de retención de 90 días descritas en docs.
 
+## Contrato y documentación HTTP
+
+- Cada vez que se agregue, modifique o elimine un endpoint de la API —incluyendo ruta, método, parámetros, autenticación, respuestas, errores o rate limits— verificar si corresponde actualizar la colección versionada de Bruno en `bruno/` y el contrato OpenAPI/Swagger.
+- Cuando el endpoint esté cubierto por Bruno, ajustar la request, sus variables y aserciones para que representen el contrato real; no dejar ejemplos o expectativas obsoletos.
+- Cuando exista documentación OpenAPI/Swagger para el área afectada, actualizar paths, schemas, seguridad, códigos de respuesta y ejemplos en el mismo cambio. Si todavía no corresponde documentarlo, dejar explícito el motivo en la entrega.
+
 # Workflow y delivery
 
 ## Git Flow
