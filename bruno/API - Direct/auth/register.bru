@@ -19,28 +19,17 @@ body:json {
 }
 
 docs {
-  Register the STUDENT fixture used by the login request.
-
-  Public registration accepts only the STUDENT role. INSTRUCTOR and ADMIN
-  provisioning must use a privileged administrative flow; changing this
-  request to either role is not a supported public registration scenario.
-
-  The response ID is serialized as a UUID string.
+  Public registration is temporarily unavailable while auth-account-activation
+  is completed. This request verifies the explicit 503 safeguard, preventing
+  the incomplete activation flow from reaching placeholder infrastructure.
 }
 
 tests {
-  test("Status is 201", function() {
-    expect(res.getStatus()).to.equal(201);
-  });
-
-  test("Response has a UUID user ID", function() {
-    expect(res.getBody().id).to.be.a('string');
-    expect(res.getBody().id).to.match(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-    );
+  test("Status is 503 while activation infrastructure is incomplete", function() {
+    expect(res.getStatus()).to.equal(503);
   });
 }
 
 assert {
-  res.status: eq 201
+  res.status: eq 503
 }

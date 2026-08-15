@@ -1,7 +1,5 @@
 package com.menta.auth.infrastructure.web.controller;
 
-import com.menta.auth.application.dto.RegisterUserCommand;
-import com.menta.auth.application.dto.UserResult;
 import com.menta.auth.application.port.in.RegisterUserUseCase;
 import com.menta.auth.infrastructure.web.dto.RegisterUserRequest;
 import com.menta.auth.infrastructure.web.dto.UserResponse;
@@ -29,21 +27,11 @@ public class UserController {
 
     @PostMapping("/register")
     public ResponseEntity<UserResponse> register(@Valid @RequestBody RegisterUserRequest request) {
-        RegisterUserCommand command = new RegisterUserCommand(
-            request.email(),
-            request.password(),
-            request.role()
-        );
-
-        UserResult result = registerUserUseCase.register(command);
-
-        UserResponse response = new UserResponse(
-            result.id(),
-            result.email(),
-            result.role(),
-            result.status()
-        );
-
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        // TODO(task 3.1): rewire this route against the real register flow
+        // once PR2's adapters land. Until then it MUST NOT reach
+        // registerUserUseCase, which is still backed by placeholder
+        // infrastructure adapters (see AuthConfiguration) that throw
+        // UnsupportedOperationException.
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
     }
 }

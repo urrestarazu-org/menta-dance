@@ -1,13 +1,11 @@
 package com.menta.app.outbox;
 
-import com.menta.auth.application.port.out.TokenBlacklistPort;
 import com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity;
 import com.menta.auth.infrastructure.persistence.repository.OutboxRowJpaRepository;
 import com.menta.shared.outbox.OutboxStatus;
-
 import java.time.Duration;
 import java.time.Instant;
-
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,31 +25,31 @@ public class OutboxReconciliationWorker {
     private static final Logger log = LoggerFactory.getLogger(OutboxReconciliationWorker.class);
 
     private final OutboxRowJpaRepository repository;
-    private final TokenBlacklistPort tokenBlacklistPort;
-    private final Duration accessTtl;
+    private final List<OutboxEventHandler> handlers;
     private final Duration backoff;
 
+    /** Creates a worker that dispatches each row through exactly one handler. */
     public OutboxReconciliationWorker(
         OutboxRowJpaRepository repository,
-        TokenBlacklistPort tokenBlacklistPort,
-        @Value("${auth.access-token-ttl-seconds:900}") long accessTtlSeconds,
+        List<OutboxEventHandler> handlers,
         @Value("${auth.outbox.reconcile-backoff-seconds:30}") long backoffSeconds
     ) {
         this.repository = repository;
-        this.tokenBlacklistPort = tokenBlacklistPort;
-        this.accessTtl = Duration.ofSeconds(accessTtlSeconds);
+        this.handlers = List.copyOf(handlers);
         this.backoff = Duration.ofSeconds(backoffSeconds);
     }
 
     /**
-     * @return {@code true} when the Redis side effect failed and no heartbeat
+     * Processes one row and reports whether its side effect failed.
+     *
+     * @return {@code true} when the side effect failed and no heartbeat
      *         should be emitted for the tick.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean process(OutboxRowJpaEntity row) {
         Instant now = Instant.now();
         try {
-            tokenBlacklistPort.blacklist(row.getAggregateId(), accessTtl);
+            resolveHandler(row.getEventType()).handle(row);
         } catch (RuntimeException sideEffectFailure) {
             log.warn(
                 "Outbox repeat-failed id={} eventType={} attempts={} cause={}",
@@ -71,6 +69,21 @@ public class OutboxReconciliationWorker {
         row.setNextRetryAt(null);
         repository.save(row);
         return false;
+    }
+
+    private OutboxEventHandler resolveHandler(String eventType) {
+        List<OutboxEventHandler> matchingHandlers = handlers.stream()
+            .filter(handler -> handler.supports(eventType))
+            .toList();
+        if (matchingHandlers.isEmpty()) {
+            throw new IllegalStateException("No handler registered for event type: " + eventType);
+        }
+        if (matchingHandlers.size() > 1) {
+            throw new IllegalStateException(
+                "Multiple handlers registered for event type: " + eventType
+            );
+        }
+        return matchingHandlers.getFirst();
     }
 
     private static String truncate(String message, int max) {

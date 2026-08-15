@@ -15,6 +15,9 @@
 | [0026](0026-redis-caffeine-strategy.md) | Redis/ Caffeine |
 | [0027](0027-mysql-flyway-strategy.md) | MySQL y Flyway |
 | [0028](0028-physical-capacity-precheck-hold.md) | Precheck de cupo y hold en checkout |
+| [0032](0032-activation-delivery-cipher-nonce-policy.md) | Nonce y rotación de clave del activation delivery cipher |
+| [0033](0033-activation-rate-limiting-strategy.md) | Rate limiting atómico para registro y reenvío de activación |
+| [0034](0034-activation-token-generation-hashing.md) | Generación y hashing del token de activación de cuenta |
 
 Los ADRs no listados fueron eliminados por contener decisiones incompatibles con
 el diseño vigente. Sus números no se reutilizan.

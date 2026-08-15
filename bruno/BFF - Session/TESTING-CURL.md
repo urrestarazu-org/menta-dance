@@ -10,13 +10,11 @@ curl -fsS http://localhost:8081/actuator/health
 curl -fsS http://localhost:8080/actuator/health
 ```
 
-## 2. Register the local user when needed
+## 2. Use an existing active local user
 
-```bash
-curl -i -X POST "http://localhost:8081/api/v1/users/register" \
-  -H "Content-Type: application/json" \
-  -d '{"email":"student@example.com","password":"password123","role":"STUDENT"}'
-```
+Public registration is temporarily disabled while `auth-account-activation` is
+completed. Set the email and password in the commands below to an existing
+active local account.
 
 ## 3. Login without following the redirect
 

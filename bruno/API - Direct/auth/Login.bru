@@ -46,7 +46,9 @@ docs {
     423 USER_LOCKED          → account locked via /admin
     503 AUTH_DEGRADED        + Retry-After: 30 → outbox reconciler lagging
 
-  Prerequisite: run Register User once so the same STUDENT fixture exists.
+  Prerequisite: configure an existing active account in the selected
+  environment. Public registration is temporarily unavailable while
+  auth-account-activation is completed.
 }
 
 tests {
