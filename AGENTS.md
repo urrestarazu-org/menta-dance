@@ -72,6 +72,11 @@ El proyecto sigue Git Flow con las siguientes ramas:
 - **Tags**: Releases se tagean `vMAJOR.MINOR.PATCH` y publican JAR + imágenes GHCR usando digests inmutables.
 - **Actions**: Los workflows de deployment deben pinear cada GitHub Action a un SHA completo (sin `latest`).
 
+### Sincronización con origen
+
+- Antes de crear, actualizar o mergear un Pull Request, ejecutar `git fetch origin` y verificar que la rama esté actualizada respecto de su rama base remota.
+- Si la rama quedó detrás de su base, integrarla mediante rebase o merge según la política del repositorio; al rebasear una feature ya publicada, usar `git push --force-with-lease`, nunca `--force`.
+
 # Guía de selección de modelos
 
 Antes de iniciar una tarea, sugerir el modelo apropiado según la complejidad:
