@@ -1,12 +1,11 @@
 package com.menta.bff.infrastructure.security;
 
 import com.menta.bff.application.dto.LoginCommand;
-import com.menta.bff.application.dto.TokenPairResponse;
 import com.menta.bff.application.port.out.AuthApiClient;
-import com.menta.bff.application.port.out.SessionTokenRepository;
-import com.menta.bff.domain.model.SessionTokens;
+import com.menta.bff.application.usecase.LoginUseCase;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.InternalAuthenticationServiceException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
@@ -14,33 +13,29 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Component;
 
-import java.time.Instant;
 import java.util.List;
 
 /**
- * Custom authentication provider that validates credentials against Auth API
- * and stores tokens in session.
+ * Bridges Spring Security's {@code formLogin()} to the application layer.
  *
- * Flow:
- * 1. Spring Security calls authenticate() with email + password from form
- * 2. Call Auth API /api/v1/auth/login
- * 3. If success: store tokens in session + return authenticated principal
- * 4. If failure: throw BadCredentialsException
+ * <p>This class owns exactly one concern: translating between Spring
+ * Security's {@link Authentication} contract and the login use case. The flow
+ * itself — exchange credentials at the Auth API, then store the token pair in
+ * the server-side session so the browser only ever holds an opaque cookie —
+ * belongs to {@link LoginUseCase} and is not restated here. Two copies of
+ * token custody are two places to forget a change.</p>
  *
- * This integrates with Spring Security's formLogin() mechanism.
+ * <p>Failure mapping is deliberate: invalid credentials and an unreachable
+ * Auth API are different events. Reporting the latter as a bad password sends
+ * users to reset a credential that was never wrong.</p>
  */
 @Component
 public class BffAuthenticationProvider implements AuthenticationProvider {
 
-    private final AuthApiClient authApiClient;
-    private final SessionTokenRepository sessionTokenRepository;
+    private final LoginUseCase loginUseCase;
 
-    public BffAuthenticationProvider(
-        AuthApiClient authApiClient,
-        SessionTokenRepository sessionTokenRepository
-    ) {
-        this.authApiClient = authApiClient;
-        this.sessionTokenRepository = sessionTokenRepository;
+    public BffAuthenticationProvider(LoginUseCase loginUseCase) {
+        this.loginUseCase = loginUseCase;
     }
 
     @Override
@@ -49,40 +44,23 @@ public class BffAuthenticationProvider implements AuthenticationProvider {
         String password = authentication.getCredentials().toString();
 
         try {
-            // Call Auth API
-            LoginCommand command = new LoginCommand(email, password);
-            TokenPairResponse response = authApiClient.login(command);
-
-            // Store tokens in session
-            SessionTokens sessionTokens = new SessionTokens(
-                response.accessToken(),
-                response.refreshToken(),
-                Instant.now().plusSeconds(response.expiresIn())
-            );
-            sessionTokenRepository.store(sessionTokens);
-
-            // Parse userId and role from access token (JWT)
-            // TODO: Extract role from JWT claims instead of hardcoding
-            // For MVP, we'll use ROLE_USER
-            List<GrantedAuthority> authorities = List.of(
-                new SimpleGrantedAuthority("ROLE_USER")
-            );
-
-            // Return authenticated principal
-            // Principal name = email (user-facing identifier)
-            return new UsernamePasswordAuthenticationToken(
-                email,
-                null, // don't expose password
-                authorities
-            );
-
-        } catch (com.menta.bff.application.port.out.AuthApiClient.AuthenticationException e) {
+            loginUseCase.execute(new LoginCommand(email, password));
+        } catch (AuthApiClient.AuthenticationException e) {
             throw new BadCredentialsException("Invalid email or password");
-        } catch (com.menta.bff.application.port.out.AuthApiClient.ServiceUnavailableException e) {
-            throw new org.springframework.security.authentication.InternalAuthenticationServiceException(
-                "Auth service temporarily unavailable"
-            );
+        } catch (AuthApiClient.ServiceUnavailableException e) {
+            throw new InternalAuthenticationServiceException("Auth service temporarily unavailable");
         }
+
+        // TODO: Extract role from JWT claims instead of hardcoding
+        // For MVP, we'll use ROLE_USER
+        List<GrantedAuthority> authorities = List.of(
+            new SimpleGrantedAuthority("ROLE_USER")
+        );
+
+        // Credentials are dropped: this token is stored in the session-backed
+        // security context and would otherwise outlive the request that
+        // carried the password.
+        return new UsernamePasswordAuthenticationToken(email, null, authorities);
     }
 
     @Override
