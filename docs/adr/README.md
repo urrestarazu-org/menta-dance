@@ -18,6 +18,7 @@
 | [0032](0032-activation-delivery-cipher-nonce-policy.md) | Nonce y rotación de clave del activation delivery cipher |
 | [0033](0033-activation-rate-limiting-strategy.md) | Rate limiting atómico para registro y reenvío de activación |
 | [0034](0034-activation-token-generation-hashing.md) | Generación y hashing del token de activación de cuenta |
+| [0035](0035-trusted-client-origin-propagation.md) | Propagación confiable del origen del cliente entre Nginx, BFF y API (Propuesto) |
 
 Los ADRs no listados fueron eliminados por contener decisiones incompatibles con
 el diseño vigente. Sus números no se reutilizan.

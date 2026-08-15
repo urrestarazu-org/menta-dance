@@ -64,6 +64,13 @@ el header en un mecanismo para evadir límites. Por privacidad, la IP elegida se
 hashea inmediatamente y sólo el SHA-256 llega a Redis; la IP en claro no se
 persiste ni se usa como key.
 
+Esta decisión describe el salto directo **Nginx -> API** usado por activación.
+No gobierna el flujo web **Nginx -> BFF -> API**, donde el segundo salto pierde
+el origen si el BFF no lo propaga explícitamente. La propuesta para esa frontera
+multicapa y para los presupuestos de login se registra en
+[ADR-0035](0035-trusted-client-origin-propagation.md); no modifica la decisión
+aceptada en esta ADR.
+
 **Fail-closed ante fallas de Redis.** Cualquier `RuntimeException` al hablar
 con Redis (timeout, conexión caída) se traduce a `AuthDegradedException`
 (HTTP 503, `AUTH_DEGRADED`, "retry after 30s") en vez de dejar pasar el
