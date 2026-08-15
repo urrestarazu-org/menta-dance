@@ -1,0 +1,158 @@
+name: Tarea del tablero
+description: Un resultado verificable (no "hacer código"). Toda decisión relevante debe quedar acá o en un ADR vinculado.
+title: "[Módulo] Resultado esperado en pocas palabras"
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Esta issue representa **un resultado verificable**, no una tarea de "escribir código".
+        Completá todos los campos obligatorios antes de moverla a `Ready`.
+
+  - type: dropdown
+    id: modulo
+    attributes:
+      label: Módulo
+      description: Aplicá también el label `module:<módulo>` correspondiente.
+      options:
+        - auth
+        - billing
+        - virtual
+        - physical
+        - shared
+        - app
+        - bff
+        - android
+        - infra
+        - docs
+    validations:
+      required: true
+
+  - type: dropdown
+    id: tipo
+    attributes:
+      label: Tipo
+      description: Aplicá también el label `type:<tipo>` correspondiente.
+      options:
+        - feature
+        - bug
+        - architecture
+        - security
+        - tech-debt
+        - docs
+        - ci
+    validations:
+      required: true
+
+  - type: dropdown
+    id: prioridad
+    attributes:
+      label: Prioridad
+      options:
+        - Crítica
+        - Alta
+        - Media
+        - Baja
+    validations:
+      required: true
+
+  - type: dropdown
+    id: tamano
+    attributes:
+      label: Tamaño
+      description: Estimación en talles de remera.
+      options:
+        - XS
+        - S
+        - M
+        - L
+        - XL
+    validations:
+      required: true
+
+  - type: input
+    id: release
+    attributes:
+      label: Release
+      description: "Release destino si ya se conoce (ej: v1.4.0). Dejar vacío si aún no está planificada."
+    validations:
+      required: false
+
+  - type: input
+    id: bloqueado-por
+    attributes:
+      label: Bloqueado por
+      description: "Issues que deben cerrarse antes que esta (ej: #12, #34). Dejar vacío si no aplica."
+    validations:
+      required: false
+
+  - type: textarea
+    id: objetivo
+    attributes:
+      label: Objetivo
+      description: Qué resultado observable entrega esta issue y por qué es necesario.
+    validations:
+      required: true
+
+  - type: textarea
+    id: criterios-aceptacion
+    attributes:
+      label: Criterios de aceptación
+      description: Lista verificable. Usá checkboxes `- [ ]`.
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: limites-arquitectonicos
+    attributes:
+      label: Límites arquitectónicos
+      description: Qué capa(s) toca (domain/application/infrastructure), qué NO debe romperse (ej. domain sin dependencias externas, regla de dependencia, contratos entre módulos vía interfaces).
+    validations:
+      required: true
+
+  - type: textarea
+    id: forma-validacion
+    attributes:
+      label: Forma de validación
+      description: Cómo se prueba que el objetivo se cumplió (comandos exactos, tests, pasos manuales).
+      placeholder: |
+        ./gradlew :api:<módulo>:test --tests "..."
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist-tecnico
+    attributes:
+      label: Checklist técnico (marcá "N/A — <motivo>" si no aplica)
+      options:
+        - label: Tests unitarios/integración agregados o actualizados
+        - label: ArchUnit verifica las capas tocadas
+        - label: Contrato OpenAPI/Bruno sincronizado (si expone o cambia un endpoint HTTP)
+        - label: Observabilidad cubierta (logs/métricas/trazas) si aplica
+
+  - type: input
+    id: adr
+    attributes:
+      label: ADR vinculado
+      description: "Para decisiones de arquitectura/seguridad relevantes: link al ADR en docs/adr/. Si la decisión no está documentada todavía, crear el ADR antes de pasar a Ready."
+    validations:
+      required: false
+
+  - type: input
+    id: branch
+    attributes:
+      label: Branch
+      description: "feature/<issue>-descripcion o hotfix/<issue>-descripcion. Completar al iniciar el trabajo."
+    validations:
+      required: false
+
+  - type: input
+    id: pr
+    attributes:
+      label: Pull Request
+      description: Link al PR una vez abierto. Requisito para mover esta issue a "In review".
+    validations:
+      required: false
