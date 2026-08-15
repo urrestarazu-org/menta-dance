@@ -883,6 +883,50 @@ location ~ ^/api/v1/billing/       { limit_req zone=billing burst=10; ... }
 
 **Defensa en profundidad** contra ataques conocidos, no YAGNI.
 
+##### 4.1 Techo volumétrico del login web (ADR-0035)
+
+La zona `auth` de arriba sólo cubre `/api/v1/auth/*`, es decir los clientes directos
+como Android. El formulario web publica `POST /login` contra el BFF, que cae en
+`location /` y **no tenía ningún techo**.
+
+```nginx
+# nginx.conf — la clave se anula fuera de POST
+map $request_method $login_post_key {
+    POST    $binary_remote_addr;
+    default '';
+}
+limit_req_zone $login_post_key zone=login:10m rate=2r/s;
+
+# locations.conf — match exacto, con prioridad sobre "location /"
+location = /login {
+    limit_req zone=login burst=10 nodelay;
+    limit_req_status 429;
+    error_page 429 = @rate_limited;
+    proxy_pass http://bff;
+    include /etc/nginx/conf.d/proxy_params.conf;
+}
+```
+
+**Por qué la clave se anula fuera de POST**: NGINX no contabiliza un request cuyo valor
+de clave es una cadena vacía. Así, servir el formulario (`GET /login`) atraviesa el
+bloque sin consumir presupuesto, y sólo el envío de credenciales lo gasta. Sin esto,
+recargar la página varias veces consumiría el mismo límite que intentar autenticarse.
+
+**Alcance deliberado**: este límite es puramente volumétrico — protege el borde y el
+costo de bcrypt. No sabe si las credenciales eran válidas. La detección de *password
+spraying* vive en Auth, que es la única capa que conoce el resultado de la
+autenticación.
+
+**Verificación de comportamiento** (no sólo `nginx -t`):
+
+| Escenario | Resultado |
+|-----------|-----------|
+| 40× `GET /login` | 40× `200` — no consume presupuesto |
+| 40× `POST /login` | 11× `200`, luego `429` con `Retry-After: 1` |
+| 20× `GET /` y `/dashboard` | 200 — rutas no relacionadas sin afectar |
+| 30× `POST /api/v1/auth/login` | corta en 23 con su propia zona `auth` |
+| `POST /login` tras agotar `auth` | `200` — presupuestos independientes |
+
 #### 5. Endpoints Actuator Restringidos
 
 **Problema**: `/api/actuator/*` exponía `/env`, `/heapdump`, `/loggers` (leaks de configuración y memoria).
