@@ -1,0 +1,122 @@
+name: Project Board Sync
+
+# This runs outside pull-request events and reads GitHub's live PR links. It
+# never checks out or executes code from a PR.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile-status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reconcile linked issue status
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.PROJECT_TOKEN }}
+          script: |
+            const projectId = "PVT_kwDOEOjBNM4BgdHU";
+            const statusFieldId = "PVTSSF_lADOEOjBNM4BgdHUzhd8t1g";
+            const options = {
+              readyOptionId: "41a928d5",
+              inReviewOptionId: "2fa5876f",
+              doneOptionId: "8b548d4d",
+            };
+
+            // Identify issues closed by active PRs and those already closed by
+            // merged PRs. The latter remain under the native Project Done rule.
+            const issuesWithOpenPr = new Set();
+            const issuesWithMergedPr = new Set();
+            let prCursor = null;
+            for (;;) {
+              const result = await github.graphql(
+                `query($owner: String!, $repo: String!, $cursor: String) {
+                  repository(owner: $owner, name: $repo) {
+                    pullRequests(states: [OPEN, MERGED], first: 50, after: $cursor) {
+                      nodes {
+                        isDraft
+                        state
+                        closingIssuesReferences(first: 100) { nodes { number } }
+                      }
+                      pageInfo { hasNextPage endCursor }
+                    }
+                  }
+                }`,
+                { owner: context.repo.owner, repo: context.repo.repo, cursor: prCursor }
+              );
+              const page = result.repository.pullRequests;
+              for (const pr of page.nodes) {
+                for (const issue of pr.closingIssuesReferences.nodes) {
+                  if (pr.state === "MERGED") {
+                    issuesWithMergedPr.add(issue.number);
+                  } else if (!pr.isDraft) {
+                    issuesWithOpenPr.add(issue.number);
+                  }
+                }
+              }
+              if (!page.pageInfo.hasNextPage) break;
+              prCursor = page.pageInfo.endCursor;
+            }
+
+            // Only existing Project items are eligible for a status change.
+            let itemCursor = null;
+            const updates = [];
+            for (;;) {
+              const result = await github.graphql(
+                `query($projectId: ID!, $cursor: String) {
+                  node(id: $projectId) {
+                    ... on ProjectV2 {
+                      items(first: 100, after: $cursor) {
+                        nodes {
+                          id
+                          content { ... on Issue { number } }
+                          fieldValueByName(name: "Status") {
+                            ... on ProjectV2ItemFieldSingleSelectValue { optionId }
+                          }
+                        }
+                        pageInfo { hasNextPage endCursor }
+                      }
+                    }
+                  }
+                }`,
+                { projectId, cursor: itemCursor }
+              );
+              const page = result.node.items;
+              for (const item of page.nodes) {
+                const issueNumber = item.content?.number;
+                if (!issueNumber || issuesWithMergedPr.has(issueNumber)) continue;
+
+                const currentOptionId = item.fieldValueByName?.optionId;
+                if (issuesWithOpenPr.has(issueNumber) && currentOptionId !== options.doneOptionId && currentOptionId !== options.inReviewOptionId) {
+                  updates.push({ itemId: item.id, issueNumber, optionId: options.inReviewOptionId, to: "In review" });
+                } else if (!issuesWithOpenPr.has(issueNumber) && currentOptionId === options.inReviewOptionId) {
+                  updates.push({ itemId: item.id, issueNumber, optionId: options.readyOptionId, to: "Ready" });
+                }
+              }
+              if (!page.pageInfo.hasNextPage) break;
+              itemCursor = page.pageInfo.endCursor;
+            }
+
+            for (const update of updates) {
+              await github.graphql(
+                `mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                  updateProjectV2ItemFieldValue(input: {
+                    projectId: $projectId, itemId: $itemId, fieldId: $fieldId,
+                    value: { singleSelectOptionId: $optionId }
+                  }) { projectV2Item { id } }
+                }`,
+                {
+                  projectId,
+                  itemId: update.itemId,
+                  fieldId: statusFieldId,
+                  optionId: update.optionId,
+                }
+              );
+              core.info(`Issue #${update.issueNumber} -> ${update.to}`);
+            }
+
+            if (updates.length === 0) core.info("No pending status changes.");
