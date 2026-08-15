@@ -50,8 +50,17 @@ auth:
   jwt:
     base64-secret: ${AUTH_JWT_BASE64_SECRET:ZGV2LW9ubHktc2VjcmV0LXdpdGgtMzItYnl0ZXMtbWluaW11bS0zMmJ5dGVzLW1pbmltdW0tMzJieXRlcw==}
   access-token-ttl-seconds: ${AUTH_ACCESS_TOKEN_TTL_SECONDS:900}
+  # Peers allowed to declare the originating client (ADR-0035). Only NGINX and
+  # the BFF forward on a client's behalf; a request from anywhere else has its
+  # forwarded headers ignored in favour of the observed peer address.
+  #
+  # The Docker-wide default below is a development convenience, NOT a safe
+  # production value: it trusts every container on the bridge network. Narrow
+  # it per environment to the actual proxy addresses.
+  trusted-proxy-cidrs: ${AUTH_TRUSTED_PROXY_CIDRS:172.16.0.0/12}
   activation:
-    # NGINX is the only trusted forwarder; direct clients cannot spoof X-Forwarded-For.
+    # Deprecated in favour of auth.trusted-proxy-cidrs (ADR-0035); still read as
+    # a fallback so existing deployments keep working.
     trusted-proxy-cidrs: ${AUTH_ACTIVATION_TRUSTED_PROXY_CIDRS:172.16.0.0/12}
     # ISO-8601 duration for a freshly-issued activation token TTL
     # (design.md decision #3: 24h default, configurable).

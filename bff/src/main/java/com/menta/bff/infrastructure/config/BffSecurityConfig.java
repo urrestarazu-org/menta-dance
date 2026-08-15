@@ -3,6 +3,7 @@ package com.menta.bff.infrastructure.config;
 import com.menta.bff.infrastructure.security.BffAuthenticationProvider;
 import com.menta.bff.infrastructure.security.BffLogoutHandler;
 import com.menta.bff.infrastructure.security.BffLogoutSuccessHandler;
+import com.menta.bff.infrastructure.security.ClientAuthenticationDetailsSource;
 import com.menta.bff.infrastructure.web.filter.TokenRefreshFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -40,6 +41,7 @@ public class BffSecurityConfig {
     private final BffLogoutHandler logoutHandler;
     private final BffLogoutSuccessHandler logoutSuccessHandler;
     private final TokenRefreshFilter tokenRefreshFilter;
+    private final ClientAuthenticationDetailsSource clientAuthenticationDetailsSource;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -58,6 +60,10 @@ public class BffSecurityConfig {
                 // Form login configuration
                 .formLogin(form -> form
                         .loginPage("/login")
+                        // ADR-0035: capture the canonical client origin while
+                        // the request is still in hand, so the provider never
+                        // has to reach for it out of band.
+                        .authenticationDetailsSource(clientAuthenticationDetailsSource)
                         .defaultSuccessUrl("/dashboard", true)
                         .failureUrl("/login?error=true")
                         .permitAll()

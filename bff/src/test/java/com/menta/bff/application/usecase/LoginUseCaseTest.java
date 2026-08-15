@@ -26,6 +26,8 @@ import static org.mockito.Mockito.when;
 @DisplayName("LoginUseCase")
 class LoginUseCaseTest {
 
+    private static final String CLIENT_ADDRESS = "203.0.113.9";
+
     @Mock
     private AuthApiClient authApiClient;
 
@@ -45,7 +47,7 @@ class LoginUseCaseTest {
         // Given
         String email = "user@example.com";
         String password = "ValidPass123!";
-        LoginCommand command = new LoginCommand(email, password);
+        LoginCommand command = new LoginCommand(email, password, CLIENT_ADDRESS);
 
         String accessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...";
         String refreshToken = "refresh_abc123";
@@ -77,7 +79,7 @@ class LoginUseCaseTest {
     @DisplayName("should throw AuthenticationException when credentials are invalid")
     void shouldThrowAuthenticationExceptionWhenCredentialsInvalid() {
         // Given
-        LoginCommand command = new LoginCommand("user@example.com", "WrongPassword");
+        LoginCommand command = new LoginCommand("user@example.com", "WrongPassword", CLIENT_ADDRESS);
 
         when(authApiClient.login(command))
                 .thenThrow(new AuthApiClient.AuthenticationException("Invalid credentials"));
@@ -92,7 +94,7 @@ class LoginUseCaseTest {
     @DisplayName("should throw ServiceUnavailableException when Auth API is unavailable")
     void shouldThrowServiceUnavailableExceptionWhenAuthApiUnavailable() {
         // Given
-        LoginCommand command = new LoginCommand("user@example.com", "ValidPass123!");
+        LoginCommand command = new LoginCommand("user@example.com", "ValidPass123!", CLIENT_ADDRESS);
 
         when(authApiClient.login(command))
                 .thenThrow(new AuthApiClient.ServiceUnavailableException("Auth API unreachable"));
@@ -115,7 +117,7 @@ class LoginUseCaseTest {
     @DisplayName("should calculate expiresAt based on expiresIn from API response")
     void shouldCalculateExpiresAtBasedOnExpiresIn() {
         // Given
-        LoginCommand command = new LoginCommand("user@example.com", "ValidPass123!");
+        LoginCommand command = new LoginCommand("user@example.com", "ValidPass123!", CLIENT_ADDRESS);
         long expiresIn = 900L;
         Instant beforeCall = Instant.now();
 

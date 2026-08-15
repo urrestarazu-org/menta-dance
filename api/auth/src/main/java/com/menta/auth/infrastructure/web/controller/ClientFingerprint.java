@@ -13,7 +13,15 @@ final class ClientFingerprint {
 
     private final String trustedProxyCidrs;
 
-    ClientFingerprint(@Value("${auth.activation.trusted-proxy-cidrs:172.16.0.0/12}") String trustedProxyCidrs) {
+    /**
+     * The trusted-proxy list is no longer activation-specific: since ADR-0035
+     * the login hop relies on it too. The activation key is kept as a fallback
+     * so existing deployments keep working without a coordinated config change.
+     */
+    ClientFingerprint(
+        @Value("${auth.trusted-proxy-cidrs:${auth.activation.trusted-proxy-cidrs:172.16.0.0/12}}")
+        String trustedProxyCidrs
+    ) {
         this.trustedProxyCidrs = trustedProxyCidrs;
     }
 
