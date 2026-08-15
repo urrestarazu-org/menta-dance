@@ -54,6 +54,26 @@ public class User {
     /** Default token_version for newly-minted auth_users rows (ADR-0025 V2 DDL). */
     private static final long DEFAULT_TOKEN_VERSION = 1L;
 
+    /**
+     * Registers a public user that must prove email ownership before login.
+     */
+    public static User register(Email email, String passwordHash, Role role) {
+        LocalDateTime now = LocalDateTime.now();
+        return new User(
+            UserId.generate(),
+            email,
+            passwordHash,
+            role,
+            UserStatus.PENDING_ACTIVATION,
+            now,
+            now,
+            DEFAULT_TOKEN_VERSION
+        );
+    }
+
+    /**
+     * Creates an already-active user for trusted provisioning flows.
+     */
     public static User create(Email email, String passwordHash, Role role) {
         LocalDateTime now = LocalDateTime.now();
         return new User(
@@ -82,6 +102,9 @@ public class User {
     }
 
     public void activate() {
+        if (this.status != UserStatus.PENDING_ACTIVATION) {
+            throw new IllegalStateException("Only a user pending activation can be activated");
+        }
         this.status = UserStatus.ACTIVE;
         this.updatedAt = LocalDateTime.now();
     }

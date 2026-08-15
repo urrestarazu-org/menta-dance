@@ -96,6 +96,12 @@ public class LoginUseCaseImpl implements LoginUseCase {
             throw new LockedUserException(user.getId().getValue());
         }
 
+        // Pending, inactive, and suspended accounts receive the same generic
+        // response as invalid credentials to avoid leaking account state.
+        if (!user.isActive()) {
+            throw new InvalidCredentialsException();
+        }
+
         if (!passwordEncoder.matches(command.password(), user.getPasswordHash())) {
             throw new InvalidCredentialsException();
         }

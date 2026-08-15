@@ -42,6 +42,10 @@ auth:
   jwt:
     base64-secret: ${AUTH_JWT_BASE64_SECRET:ZGV2LW9ubHktc2VjcmV0LXdpdGgtMzItYnl0ZXMtbWluaW11bS0zMmJ5dGVzLW1pbmltdW0tMzJieXRlcw==}
   access-token-ttl-seconds: ${AUTH_ACCESS_TOKEN_TTL_SECONDS:900}
+  activation:
+    # ISO-8601 duration for a freshly-issued activation token TTL
+    # (design.md decision #3: 24h default, configurable).
+    token-ttl: ${AUTH_ACTIVATION_TOKEN_TTL:PT24H}
   outbox:
     reconcile-batch-size: ${AUTH_OUTBOX_RECONCILE_BATCH_SIZE:100}
     reconcile-rate-ms: ${AUTH_OUTBOX_RECONCILE_RATE_MS:5000}

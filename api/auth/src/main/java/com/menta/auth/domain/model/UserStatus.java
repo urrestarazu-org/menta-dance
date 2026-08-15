@@ -7,6 +7,9 @@ package com.menta.auth.domain.model;
  * responds to authentication attempts.
  *
  * <ul>
+ *   <li><b>PENDING_ACTIVATION</b> — The public registration was accepted but the
+ *       email ownership proof has not been completed. Cannot log in.</li>
+ *
  *   <li><b>ACTIVE</b> — The user has a valid, operational account. Can log in,
  *       access courses, attend classes, and perform all actions permitted by their
  *       {@link Role}. This is the default status for newly registered users.</li>
@@ -33,6 +36,11 @@ package com.menta.auth.domain.model;
  * @see com.menta.auth.domain.exception.LockedUserException
  */
 public enum UserStatus {
+
+    /**
+     * Public registration awaiting email ownership proof.
+     */
+    PENDING_ACTIVATION,
 
     /**
      * Active account with full access according to user's role.

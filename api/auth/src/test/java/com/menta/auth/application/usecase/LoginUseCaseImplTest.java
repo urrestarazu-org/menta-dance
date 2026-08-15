@@ -166,6 +166,29 @@ class LoginUseCaseImplTest {
     class InvalidCredentialsScenario {
 
         @Test
+        void pending_activation_uses_generic_invalid_credentials_without_side_effects() {
+            User pending = userWithStatus(
+                USER_ID,
+                Role.STUDENT,
+                HASHED_PASSWORD,
+                1L,
+                UserStatus.PENDING_ACTIVATION
+            );
+
+            when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(pending));
+
+            assertThatThrownBy(() ->
+                useCase.execute(new LoginCommand(EMAIL.getValue(), RAW_PASSWORD))
+            )
+                .isInstanceOf(InvalidCredentialsException.class);
+
+            verify(passwordEncoder, never()).matches(anyString(), anyString());
+            verify(outboxAppender, never()).append(anyString(), anyString(), anyString());
+            verify(accessTokenIssuer, never()).issue(any());
+            verify(refreshTokenRepository, never()).save(any());
+        }
+
+        @Test
         void wrong_password_throws_invalid_credentials_without_outbox() {
             User user = activeUser(USER_ID, Role.STUDENT, HASHED_PASSWORD, 1L);
 

@@ -27,22 +27,15 @@ email: student@example.com
 password: password123
 ```
 
-Register that user once if it does not exist:
-
-```bash
-curl -i -X POST "http://localhost:8081/api/v1/users/register" \
-  -H "Content-Type: application/json" \
-  -d '{"email":"student@example.com","password":"password123","role":"STUDENT"}'
-```
-
-Alternatively, adapt and run the existing `bruno/api/auth/register.bru` request.
-If you use different credentials, update only the BFF collection's `Local`
-environment so every request reads the same values.
+Use an existing active Auth account. Public registration is temporarily
+disabled while `auth-account-activation` is completed, so it cannot create the
+fixture. If you use different credentials, provide them as runtime variables
+for the selected `local` environment so every request reads the same values.
 
 ## 4. Open and run Bruno
 
-1. Open `bruno/BFF-Session-Custody`.
-2. Select the `Local` environment.
+1. Open `bruno/`.
+2. Select the `local` environment.
 3. Run all four requests sequentially.
 4. Confirm every assertion passes.
 
