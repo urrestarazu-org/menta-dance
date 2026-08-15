@@ -34,6 +34,14 @@ spring:
       port: 6379
       timeout: 2000ms
 
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
+    properties:
+      mail.smtp.connectiontimeout: ${SMTP_CONNECTION_TIMEOUT_MS:5000}
+      mail.smtp.timeout: ${SMTP_TIMEOUT_MS:5000}
+      mail.smtp.writetimeout: ${SMTP_WRITE_TIMEOUT_MS:5000}
+
 # Auth module configuration (ADR-0025, ADR-0026)
 auth:
   # Base64-encoded HMAC-SHA256 secret. MUST be at least 32 bytes raw (256-bit).
@@ -46,6 +54,16 @@ auth:
     # ISO-8601 duration for a freshly-issued activation token TTL
     # (design.md decision #3: 24h default, configurable).
     token-ttl: ${AUTH_ACTIVATION_TOKEN_TTL:PT24H}
+    public-base-url: ${AUTH_ACTIVATION_PUBLIC_BASE_URL:http://localhost:8080}
+    from-address: ${AUTH_ACTIVATION_FROM_ADDRESS:no-reply@menta.local}
+    # Dedicated AES-256-GCM key for the short-lived activation delivery envelope.
+    # The fallback is development-only; production profiles reject it at startup.
+    delivery-key: ${AUTH_ACTIVATION_DELIVERY_KEY:YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=}
+    delivery-key-version: ${AUTH_ACTIVATION_DELIVERY_KEY_VERSION:1}
+    rate-limit:
+      email-max-attempts: ${AUTH_ACTIVATION_RATE_LIMIT_EMAIL_MAX_ATTEMPTS:3}
+      client-max-attempts: ${AUTH_ACTIVATION_RATE_LIMIT_CLIENT_MAX_ATTEMPTS:10}
+      window-seconds: ${AUTH_ACTIVATION_RATE_LIMIT_WINDOW_SECONDS:900}
   outbox:
     reconcile-batch-size: ${AUTH_OUTBOX_RECONCILE_BATCH_SIZE:100}
     reconcile-rate-ms: ${AUTH_OUTBOX_RECONCILE_RATE_MS:5000}

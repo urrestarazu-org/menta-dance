@@ -9,6 +9,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.menta.auth.application.contract.AuthOutboxEventTypes;
 import com.menta.auth.application.port.out.TokenBlacklistPort;
 import com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity;
 import com.menta.auth.infrastructure.persistence.repository.OutboxRowJpaRepository;
@@ -59,8 +60,11 @@ class OutboxBlacklistReconcilerTest {
 
     @BeforeEach
     void setUp() {
+        BlacklistOutboxEventHandler blacklistHandler = new BlacklistOutboxEventHandler(
+            tokenBlacklistPort, ACCESS_TTL_SECONDS
+        );
         OutboxReconciliationWorker worker = new OutboxReconciliationWorker(
-            repository, tokenBlacklistPort, ACCESS_TTL_SECONDS, BACKOFF_SECONDS);
+            repository, List.of(blacklistHandler), BACKOFF_SECONDS);
         reconciler = new OutboxBlacklistReconciler(
             repository, tokenBlacklistPort, worker, BATCH_SIZE, RETENTION_DAYS);
     }

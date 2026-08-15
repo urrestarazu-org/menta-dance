@@ -70,7 +70,9 @@ public class ActivateAccountUseCaseImpl implements ActivateAccountUseCase {
             throw new ActivationTokenInvalidException();
         }
 
-        activationTokenRepository.save(token);
+        if (!activationTokenRepository.consumeIfActive(token, now)) {
+            throw new ActivationTokenInvalidException();
+        }
         userRepository.save(user);
     }
 }

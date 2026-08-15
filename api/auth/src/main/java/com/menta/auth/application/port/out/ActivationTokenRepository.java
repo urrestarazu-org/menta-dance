@@ -39,6 +39,15 @@ public interface ActivationTokenRepository {
     Optional<ActivationToken> findByHash(String tokenHash);
 
     /**
+     * Atomically consumes the token only while it remains active. A false
+     * result means a concurrent request consumed, invalidated, or expired it.
+     */
+    boolean consumeIfActive(ActivationToken token, Instant now);
+
+    /** Removes ciphertext, nonce and key version after confirmed delivery. */
+    void clearDeliveryEnvelope(java.util.UUID tokenId);
+
+    /**
      * Invalidates every currently-active token for a user (used before
      * issuing a fresh one on resend). Idempotent — invalidating twice has
      * the same effect as invalidating once.

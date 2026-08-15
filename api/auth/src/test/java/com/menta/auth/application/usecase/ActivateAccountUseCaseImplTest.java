@@ -87,19 +87,39 @@ class ActivateAccountUseCaseImplTest {
         stubClock();
         when(activationTokenRepository.findByHash(TOKEN_HASH)).thenReturn(Optional.of(token));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(activationTokenRepository.save(any(ActivationToken.class)))
-            .thenAnswer(invocation -> invocation.getArgument(0));
+        when(activationTokenRepository.consumeIfActive(any(ActivationToken.class), org.mockito.ArgumentMatchers.eq(NOW)))
+            .thenReturn(true);
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         useCase.activate(new ActivateAccountCommand(RAW_TOKEN));
 
-        ArgumentCaptor<ActivationToken> savedToken = ArgumentCaptor.forClass(ActivationToken.class);
-        verify(activationTokenRepository).save(savedToken.capture());
-        assertThat(savedToken.getValue().getUsedAt()).isNotNull();
+        ArgumentCaptor<ActivationToken> consumedToken = ArgumentCaptor.forClass(ActivationToken.class);
+        verify(activationTokenRepository).consumeIfActive(
+            consumedToken.capture(), org.mockito.ArgumentMatchers.eq(NOW)
+        );
+        assertThat(consumedToken.getValue().getUsedAt()).isNotNull();
 
         ArgumentCaptor<User> savedUser = ArgumentCaptor.forClass(User.class);
         verify(userRepository).save(savedUser.capture());
         assertThat(savedUser.getValue().getStatus()).isEqualTo(UserStatus.ACTIVE);
+    }
+
+    @Test
+    void rejects_a_lost_conditional_consume_without_activating_the_user() {
+        UserId userId = UserId.generate();
+        ActivationToken token = ActivationToken.issue(userId, TOKEN_HASH, NOW.plus(Duration.ofHours(24)), NOW);
+        User user = pendingUser(userId);
+
+        stubClock();
+        when(activationTokenRepository.findByHash(TOKEN_HASH)).thenReturn(Optional.of(token));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(activationTokenRepository.consumeIfActive(any(ActivationToken.class), org.mockito.ArgumentMatchers.eq(NOW)))
+            .thenReturn(false);
+
+        assertThatThrownBy(() -> useCase.activate(new ActivateAccountCommand(RAW_TOKEN)))
+            .isInstanceOf(ActivationTokenInvalidException.class);
+
+        verify(userRepository, never()).save(any());
     }
 
     @Test

@@ -20,7 +20,7 @@ Antes de `sdd-apply` se deberá confirmar la cadena de branches. La propuesta es
 
 ## Fase 0 — Characterization y contratos
 
-- [ ] 0.1 RED: agregar characterization tests del reconciler actual para cada
+- [x] 0.1 RED: agregar characterization tests del reconciler actual para cada
   evento Auth existente y para un tipo desconocido. ArchUnit: N/A. Archivos:
   `api/app/src/test/.../OutboxBlacklistReconcilerTest.java`,
   `OutboxReconciliationWorkerTest.java`.
@@ -55,22 +55,22 @@ Antes de `sdd-apply` se deberá confirmar la cadena de branches. La propuesta es
 
 ## Fase 2 — Infraestructura y entrega durable (PR2)
 
-- [ ] 2.1 RED/GREEN: JPA entity, mapper, repository y adapter de activation
+- [x] 2.1 RED/GREEN: JPA entity, mapper, repository y adapter de activation
   tokens; probar hash único, invalidación masiva y update condicional.
-- [ ] 2.2 RED/GREEN: `SecureRandomActivationTokenGenerator` y SHA-256 hasher;
+- [x] 2.2 RED/GREEN: `SecureRandomActivationTokenGenerator` y SHA-256 hasher;
   verificar 32 bytes, Base64 URL-safe y ausencia de secretos en `toString`.
-- [ ] 2.3 RED/GREEN: AES-GCM delivery cipher con validación de clave productiva,
+- [x] 2.3 RED/GREEN: AES-GCM delivery cipher con validación de clave productiva,
   nonce único y limpieza del ciphertext tras entrega.
-- [ ] 2.4 RED/GREEN: Redis rate limiter atómico (Lua o operación equivalente)
+- [x] 2.4 RED/GREEN: Redis rate limiter atómico (Lua o operación equivalente)
   por email fingerprint e IP fingerprint; probar 429, TTL y Redis caído.
-- [ ] 2.5 RED: fijar comportamiento de dispatch para blacklist, activación,
+- [x] 2.5 RED: fijar comportamiento de dispatch para blacklist, activación,
   handler ausente y handler ambiguo.
-- [ ] 2.6 GREEN/REFACTOR: extraer `OutboxEventHandler` y convertir el worker a
+- [x] 2.6 GREEN/REFACTOR: extraer `OutboxEventHandler` y convertir el worker a
   dispatch exacto sin alterar heartbeat/backoff de blacklist. ArchUnit:
   `app_should_not_contain_domain_logic`.
-- [ ] 2.7 RED/GREEN: implementar `ActivationNotificationPort` con Spring Mail y
+- [x] 2.7 RED/GREEN: implementar `ActivationNotificationPort` con Spring Mail y
   handler durable; usar Mailpit en local y fake SMTP en tests.
-- [ ] 2.8 agregar Mailpit a `docker-compose.yml`, health check y variables SMTP
+- [x] 2.8 agregar Mailpit a `docker-compose.yml`, health check y variables SMTP
   sin credenciales versionadas.
 
 ## Fase 3 — HTTP, seguridad y wiring (PR3)

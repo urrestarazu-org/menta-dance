@@ -124,8 +124,24 @@ class ActivationApplicationPortsContractTest {
             return Optional.ofNullable(byHash.get(tokenHash));
         }
 
+        @Override
+        public boolean consumeIfActive(ActivationToken token, Instant now) {
+            if (token.statusAt(now) != ActivationTokenStatus.ACTIVE) {
+                return false;
+            }
+            token.consume(now);
+            return true;
+        }
+
         Optional<DeliveryEnvelope> findEnvelopeByHash(String tokenHash) {
             return Optional.ofNullable(envelopeByHash.get(tokenHash));
+        }
+
+        @Override
+        public void clearDeliveryEnvelope(java.util.UUID tokenId) {
+            envelopeByHash.entrySet().removeIf(entry ->
+                byHash.get(entry.getKey()).getId().equals(tokenId)
+            );
         }
 
         @Override

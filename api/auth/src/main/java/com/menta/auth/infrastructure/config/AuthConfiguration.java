@@ -21,11 +21,10 @@ import com.menta.auth.application.usecase.LoginUseCaseImpl;
 import com.menta.auth.application.usecase.LogoutUseCaseImpl;
 import com.menta.auth.application.usecase.RefreshTokenUseCaseImpl;
 import com.menta.auth.application.usecase.RegisterUserUseCaseImpl;
-import com.menta.auth.infrastructure.activation.NotImplementedActivationDeliveryCipher;
-import com.menta.auth.infrastructure.activation.NotImplementedActivationRateLimitPort;
-import com.menta.auth.infrastructure.activation.NotImplementedActivationTokenGenerator;
-import com.menta.auth.infrastructure.activation.NotImplementedActivationTokenHasher;
-import com.menta.auth.infrastructure.activation.NotImplementedActivationTokenRepository;
+import com.menta.auth.infrastructure.activation.AesGcmActivationDeliveryCipher;
+import com.menta.auth.infrastructure.activation.RedisActivationRateLimitPort;
+import com.menta.auth.infrastructure.activation.SecureRandomActivationTokenGenerator;
+import com.menta.auth.infrastructure.activation.Sha256ActivationTokenHasher;
 import com.menta.auth.infrastructure.transaction.TransactionalLoginUseCase;
 import com.menta.auth.infrastructure.transaction.TransactionalLogoutUseCase;
 import com.menta.auth.infrastructure.transaction.TransactionalRefreshTokenUseCase;
@@ -76,6 +75,8 @@ public class AuthConfiguration {
      */
     private static final String DEV_DEFAULT_SECRET =
         "ZGV2LW9ubHktc2VjcmV0LXdpdGgtMzItYnl0ZXMtbWluaW11bS0zMmJ5dGVzLW1pbmltdW0tMzJieXRlcw==";
+    private static final String DEV_DEFAULT_ACTIVATION_DELIVERY_KEY =
+        "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=";
 
     /**
      * Profiles considered production environments where dev secrets are forbidden.
@@ -108,17 +109,24 @@ public class AuthConfiguration {
     @Value("${auth.activation.token-ttl:PT24H}")
     private Duration activationTokenTtl;
 
+    @Value("${auth.activation.delivery-key:" + DEV_DEFAULT_ACTIVATION_DELIVERY_KEY + "}")
+    private String activationDeliveryKey;
+
+    @Value("${auth.activation.delivery-key-version:1}")
+    private int activationDeliveryKeyVersion;
+
     /**
      * Fail-fast validation: reject dev-only secret in production profiles.
      * This prevents accidental deployment with insecure defaults.
      */
     @PostConstruct
     void validateSecretNotDefaultInProduction() {
-        if (DEV_DEFAULT_SECRET.equals(jwtBase64Secret) && isProductionProfile()) {
+        if (isProductionProfile() && (DEV_DEFAULT_SECRET.equals(jwtBase64Secret)
+            || DEV_DEFAULT_ACTIVATION_DELIVERY_KEY.equals(activationDeliveryKey))) {
             throw new IllegalStateException(
-                "SECURITY: auth.jwt.base64-secret is using the dev-only default in a production profile. "
-                    + "Set a strong secret via environment variable or application-prod.yml. "
-                    + "Active profiles: " + String.join(", ", environment.getActiveProfiles())
+                "SECURITY: production requires non-default JWT and activation delivery keys. "
+                    + "Set them via environment variables. Active profiles: "
+                    + String.join(", ", environment.getActiveProfiles())
             );
         }
     }
@@ -154,28 +162,32 @@ public class AuthConfiguration {
      * (task 1.6) can reuse the same instances.
      */
     @Bean
-    public ActivationTokenRepository activationTokenRepository() {
-        return new NotImplementedActivationTokenRepository();
-    }
-
-    @Bean
     public ActivationTokenGenerator activationTokenGenerator() {
-        return new NotImplementedActivationTokenGenerator();
+        return new SecureRandomActivationTokenGenerator();
     }
 
     @Bean
     public ActivationTokenHasher activationTokenHasher() {
-        return new NotImplementedActivationTokenHasher();
+        return new Sha256ActivationTokenHasher();
     }
 
     @Bean
     public ActivationDeliveryCipher activationDeliveryCipher() {
-        return new NotImplementedActivationDeliveryCipher();
+        return new AesGcmActivationDeliveryCipher(
+            activationDeliveryKey, activationDeliveryKeyVersion
+        );
     }
 
     @Bean
-    public ActivationRateLimitPort activationRateLimitPort() {
-        return new NotImplementedActivationRateLimitPort();
+    public ActivationRateLimitPort activationRateLimitPort(
+        org.springframework.data.redis.core.RedisTemplate<String, String> redisTemplate,
+        @Value("${auth.activation.rate-limit.email-max-attempts:3}") long emailMaxAttempts,
+        @Value("${auth.activation.rate-limit.client-max-attempts:10}") long clientMaxAttempts,
+        @Value("${auth.activation.rate-limit.window-seconds:900}") long windowSeconds
+    ) {
+        return new RedisActivationRateLimitPort(
+            redisTemplate, emailMaxAttempts, clientMaxAttempts, Duration.ofSeconds(windowSeconds)
+        );
     }
 
     @Bean

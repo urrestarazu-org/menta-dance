@@ -1,5 +1,88 @@
 # Apply progress: auth-account-activation
 
+## PR2 — Infrastructure and durable delivery
+
+### Task 2.4 — atomic Redis rate limit
+
+- Replaced the rate-limit placeholder with `RedisActivationRateLimitPort`.
+  One Lua script increments both fingerprint keys and sets their TTL on first
+  write, then returns a single atomic allow/deny decision and Retry-After.
+  Redis keys follow `rate:auth-activation:email:{sha256}` and
+  `rate:auth-activation:client:{sha256}`; the adapter requires lowercase
+  SHA-256 fingerprints, never raw email or IP.
+- Defaults are configurable: 3 attempts per email, 10 per client, in a
+  15-minute fixed window. Redis errors and malformed script responses fail
+  closed as `AuthDegradedException`, which is the established 503 path.
+- RED: the adapter test did not compile before the class existed. GREEN tests
+  verify atomic script keys/arguments (including 900-second TTL), rate-limit
+  Retry-After and a single fail-closed Redis-outage attempt without retry.
+
+### Task 2.3 — AES-GCM delivery cipher
+
+- Added `AesGcmActivationDeliveryCipher`: AES-256-GCM with a fresh CSPRNG
+  12-byte nonce per encryption and an authenticated 128-bit GCM tag. It
+  accepts only a Base64-encoded 256-bit dedicated delivery key and key version
+  1 or higher; decrypt rejects envelopes for another key version or a failed
+  authentication tag.
+- `AuthConfiguration` now uses the delivery cipher and binds
+  `AUTH_ACTIVATION_DELIVERY_KEY` plus its version. The dev fallback is rejected
+  in production profiles together with the dev JWT key.
+- Added `clearDeliveryEnvelope(UUID)` to the activation persistence port and
+  a JPA bulk update that clears ciphertext, nonce and key version. The future
+  SMTP handler (task 2.7) must invoke it only after SMTP acceptance; its
+  persistence behavior is already tested here.
+- RED: cipher and cleanup tests failed to compile before their implementations
+  existed. GREEN validates round-trip encryption, fresh nonces, key validation,
+  production fail-fast, and durable envelope clearing.
+
+### Task 2.2 — secure token generator and hasher
+
+- Replaced the registered generator and hasher placeholders with
+  `SecureRandomActivationTokenGenerator` and `Sha256ActivationTokenHasher`.
+  The generator produces 32 random bytes encoded as unpadded Base64 URL-safe
+  text; the hasher persists a lowercase SHA-256 hexadecimal digest only.
+- RED: `SecureActivationTokenAdaptersTest` failed to compile until both
+  adapters existed. GREEN tests verify 32 decoded bytes, URL-safe/no-padding
+  representation, independent generated values, the known SHA-256 vector and
+  null rejection. Neither adapter retains or exposes generated token material.
+- Focused regression: `./gradlew :api:auth:test --tests
+  '*SecureActivationTokenAdaptersTest'` passed.
+
+### Task 2.1 — activation token JPA persistence
+
+- Added `ActivationTokenJpaEntity`, mapper, Spring Data repository and JPA
+  adapter for `auth_activation_tokens`. The real adapter is now the scanned
+  `ActivationTokenRepository` bean; the former configuration placeholder is
+  no longer registered.
+- The hash lookup locks its row with `PESSIMISTIC_WRITE`. Bulk invalidation
+  updates only unexpired, unused, non-invalidated tokens. Consumption is an
+  explicit conditional update (`used_at IS NULL`, `invalidated_at IS NULL`,
+  and `expires_at > now`), returning `false` to the use case when a concurrent
+  request has already won.
+- RED: the new `ActivationTokenJpaRepositoryTest` initially failed to compile
+  because the entity and repository did not exist. GREEN: repository,
+  adapter, mapper, application conditional-consumption wiring, and tests were
+  added. The JPA tests cover the unique hash constraint, bulk invalidation and
+  one-time conditional consumption; adapter tests cover envelope persistence
+  and mapping.
+- Regression: `./gradlew :api:auth:test` and `./gradlew :api:app:test --tests
+  '*MentaDanceApplicationTest'` passed; `git diff --check` passed.
+
+### Task 0.1 — outbox dispatch characterization
+
+- Added characterization tests to `OutboxBlacklistReconcilerTest` and the new
+  `OutboxReconciliationWorkerTest`. They record the legacy behavior before the
+  exact-handler refactor: every current Auth event (`AuthUserLoggedIn`,
+  `RefreshRotated`, `RefreshRevoked`, `UserLoggedOut`, and
+  `AccountActivationRequested`) and an unknown event are projected to the JTI
+  blacklist and marked `COMPLETED`.
+- This is intentionally a characterization baseline, not the desired final
+  dispatch policy. Tasks 2.5–2.6 will replace it with exact handler routing and
+  make unknown or ambiguous events fail without applying a blacklist side effect.
+- Focused regression: `./gradlew :api:app:test --tests
+  '*OutboxBlacklistReconcilerTest' --tests '*OutboxReconciliationWorkerTest'`
+  passed.
+
 ## PR1 — Domain foundation
 
 ### Completed
@@ -639,3 +722,59 @@ Both blockers fixed and green. `tasks.md` was not modified by this session
 — task 3.1 correctly stays unchecked (PR3 scope), and no other numbered
 task needed touching. Ledger work-unit `pr1-review-fixes` settled
 `outcome: passed`.
+
+### Task 2.5 — exact outbox dispatch RED contract
+
+- Added `OutboxReconciliationWorkerDispatchTest` to define the task 2.6
+  target before changing production code. It requires an `OutboxEventHandler`
+  contract with `supports(eventType)` and `handle(row)`, plus a worker
+  constructor that receives the handler list and the retry backoff.
+- The RED contract requires exactly one handler per row: login events route to
+  the blacklist handler; `auth.AccountActivationRequested` routes only to its
+  activation handler. Zero or multiple matching handlers must apply no side
+  effect and persist `FAILED`, attempt increment, and retry backoff.
+- Handler-resolution diagnostics are deliberately exact and sanitized: they
+  contain the public event type only, never payload or aggregate identifiers.
+- Expected RED evidence: `:api:app:compileTestJava` fails until task 2.6
+  introduces `OutboxEventHandler` and replaces the legacy worker constructor.
+
+### Task 2.6 — exact outbox dispatch GREEN/REFACTOR
+
+- Introduced the app-local `OutboxEventHandler` boundary and refactored the
+  worker to resolve exactly one matching handler before completing a row.
+  Zero or multiple matches follow the existing FAILED/attempt/backoff path.
+- `BlacklistOutboxEventHandler` owns only the Redis projection and explicitly
+  supports the four pre-existing security event types. The reconciler retains
+  heartbeat ownership, so the successful/failed tick semantics are unchanged.
+- Removed the task 0.1 legacy characterization that intentionally asserted
+  blacklist side effects for activation and unknown event types; task 2.5's
+  dispatch contract supersedes it.
+- Regression fix discovered while running the full app suite: the
+  `integration-test` context did not provide a `RedisTemplate` after task 2.4
+  replaced the rate-limit placeholder with the Redis adapter. Added its mock to
+  `TransactionalAuthIntegrationTest`, restoring the unrelated transactional
+  auth integration suite without a Redis service dependency.
+
+### Task 2.7 — durable activation SMTP delivery
+
+- Added `ActivationNotificationPort` in auth's application boundary and a
+  `SpringMailActivationNotificationAdapter` that reads the encrypted envelope,
+  decrypts it only in memory, sends a single activation link, and clears the
+  envelope only after `JavaMailSender` returns successfully.
+- Added `ActivationOutboxEventHandler` in `:api:app`; it supports only
+  `auth.AccountActivationRequested` and delegates the token UUID to the port,
+  allowing the existing worker to preserve its exact-dispatch FAILED/backoff
+  semantics when SMTP fails.
+- Added the Spring Mail dependency and configurable SMTP/public-link/from
+  properties. A default host/port permits Spring context creation; task 2.8
+  will provide the local Mailpit service.
+
+### Task 2.8 — local Mailpit infrastructure
+
+- Added a pinned Mailpit service to the active infrastructure Compose file,
+  the direct-development app Compose file, and the deprecated root compatibility
+  Compose file. SMTP is exposed on port 1025 and the local inbox on port 8025.
+- All variants use a `/livez` healthcheck. The API development container waits
+  for Mailpit and uses its service hostname as SMTP host.
+- `.env.example` documents only non-secret SMTP/Mailpit variables; Mailpit
+  intentionally requires no credentials in local development.

@@ -38,6 +38,16 @@ public class NotImplementedActivationTokenRepository implements ActivationTokenR
     }
 
     @Override
+    public boolean consumeIfActive(ActivationToken token, Instant now) {
+        throw new UnsupportedOperationException(MESSAGE);
+    }
+
+    @Override
+    public void clearDeliveryEnvelope(java.util.UUID tokenId) {
+        throw new UnsupportedOperationException(MESSAGE);
+    }
+
+    @Override
     public void invalidateActiveByUserId(UserId userId, Instant now) {
         throw new UnsupportedOperationException(MESSAGE);
     }

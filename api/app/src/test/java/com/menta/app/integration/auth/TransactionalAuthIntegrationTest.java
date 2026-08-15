@@ -111,6 +111,9 @@ class TransactionalAuthIntegrationTest {
     @MockBean
     private TokenBlacklistPort tokenBlacklistPort;
 
+    @MockBean
+    private org.springframework.data.redis.core.RedisTemplate<String, String> redisTemplate;
+
     @SpyBean
     private OutboxAppender outboxAppender;
 
