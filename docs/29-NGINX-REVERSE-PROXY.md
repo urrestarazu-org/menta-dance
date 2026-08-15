@@ -285,6 +285,34 @@ location / {
 - ❌ **Subdominios** (api.mentadance.com): Requiere DNS adicional
 - ❌ **Puerto diferente**: Rompe convención web estándar
 
+#### 4.1 Forwarded headers y rate limiting de activación
+
+Nginx debe propagar la identidad de red que observó del cliente hacia la API:
+
+```nginx
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto $scheme;
+```
+
+El flujo de registro y reenvío de activación usa esa IP para producir un
+fingerprint SHA-256 y aplicar un rate limit por cliente sin almacenar la IP en
+Redis en texto plano. No obstante, `X-Forwarded-For` es un header controlable
+por el cliente: la API sólo lo usa cuando la conexión inmediata proviene de un
+proxy incluido en `auth.activation.trusted-proxy-cidrs`. En Docker local el
+valor por defecto es `172.16.0.0/12`; en producción se debe configurar con los
+CIDR reales de los proxies o balanceadores.
+
+Con una configuración correcta, Nginx agrega al final de la cadena la IP del
+cliente que vio directamente y la API toma ese último valor. Una request que
+llega directo a la API, o desde una red no confiable, ignora los headers
+forwarded y usa su `remoteAddr`. La API puede recibir clientes directos, como
+Android, pero `trusted-proxy-cidrs` no debe incluir redes alcanzables por esos
+clientes: eso permitiría evadir el rate limit falsificando la IP.
+
+La decisión completa y sus límites operativos están en
+[ADR-0033](adr/0033-activation-rate-limiting-strategy.md).
+
 #### 5. Health Endpoints
 
 **Decisión**: Health endpoints sin logging.

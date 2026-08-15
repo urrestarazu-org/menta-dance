@@ -75,27 +75,27 @@ Antes de `sdd-apply` se deberá confirmar la cadena de branches. La propuesta es
 
 ## Fase 3 — HTTP, seguridad y wiring (PR3)
 
-- [ ] 3.1 RED/GREEN: exponer `POST /api/v1/auth/register` y mantener alias
+- [x] 3.1 RED/GREEN: exponer `POST /api/v1/auth/register` y mantener alias
   temporal `/api/v1/users/register` sobre el mismo port-in.
-- [ ] 3.2 RED/GREEN: exponer `GET /api/v1/auth/activate/{token}` y
+- [x] 3.2 RED/GREEN: exponer `GET /api/v1/auth/activate/{token}` y
   `POST /api/v1/auth/resend-activation` con RFC 9457.
-- [ ] 3.3 RED/GREEN: respuesta uniforme de registro/reenvío y `Retry-After` para
+- [x] 3.3 RED/GREEN: respuesta uniforme de registro/reenvío y `Retry-After` para
   429/503; probar inexistente, activo y pendiente.
-- [ ] 3.4 GREEN: wiring en `AuthConfiguration` y wrappers transaccionales; ningún
+- [x] 3.4 GREEN: wiring en `AuthConfiguration` y wrappers transaccionales; ningún
   controller puede depender de repository. ArchUnit:
   `controllers_should_not_depend_on_repositories`.
-- [ ] 3.5 RED/GREEN: sanitización de URI y test de logs sin token, hash, email,
+- [x] 3.5 RED/GREEN: sanitización de URI y test de logs sin token, hash, email,
   password ni ciphertext; actualizar NGINX si registra request URI.
-- [ ] 3.6 RED/GREEN integración Testcontainers: registro → outbox → entrega →
+- [x] 3.6 RED/GREEN integración Testcontainers: registro → outbox → entrega →
   activación → login; rollback atómico y doble activación concurrente.
-- [ ] 3.7 agregar Bruno para happy path, token expirado, reutilización, reenvío y
+- [x] 3.7 agregar Bruno para happy path, token expirado, reutilización, reenvío y
   rate limit; nunca versionar tokens o credenciales generadas.
-- [ ] 3.8 actualizar `docs/03-AUTH-API.md`, `docs/22-DATA-MODEL.md`, user stories,
+- [x] 3.8 actualizar `docs/03-AUTH-API.md`, `docs/22-DATA-MODEL.md`, user stories,
   OpenAPI y setup local de Mailpit.
 
 ## Fase 4 — Verificación y entrega
 
-- [ ] 4.1 ejecutar `./gradlew :api:auth:test :api:app:test`.
+- [x] 4.1 ejecutar `./gradlew :api:auth:test :api:app:test`.
 - [ ] 4.2 ejecutar ArchUnit y JaCoCo; mantener 100% agregado domain/application y
   mínimo 50% infrastructure.
 - [ ] 4.3 ejecutar `./gradlew check` y `git diff --check`.

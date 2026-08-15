@@ -58,7 +58,13 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 // Login and refresh authenticate their own credentials. Logout requires
                 // a valid access Bearer token, while its refresh is supplied separately.
-                .requestMatchers("/api/v1/auth/login", "/api/v1/auth/refresh").permitAll()
+                .requestMatchers(
+                    "/api/v1/auth/login",
+                    "/api/v1/auth/refresh",
+                    "/api/v1/auth/register",
+                    "/api/v1/auth/activate/**",
+                    "/api/v1/auth/resend-activation"
+                ).permitAll()
                 .requestMatchers("/api/v1/auth/logout").authenticated()
                 .requestMatchers("/actuator/health").permitAll()
                 .requestMatchers("/api/v1/users/register").permitAll()

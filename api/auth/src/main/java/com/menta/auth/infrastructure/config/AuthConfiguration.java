@@ -4,6 +4,8 @@ import com.menta.auth.application.port.in.LoginUseCase;
 import com.menta.auth.application.port.in.LogoutUseCase;
 import com.menta.auth.application.port.in.RefreshTokenUseCase;
 import com.menta.auth.application.port.in.RegisterUserUseCase;
+import com.menta.auth.application.port.in.ActivateAccountUseCase;
+import com.menta.auth.application.port.in.ResendActivationUseCase;
 import com.menta.auth.application.port.out.AccessTokenIssuer;
 import com.menta.auth.application.port.out.ActivationDeliveryCipher;
 import com.menta.auth.application.port.out.ActivationRateLimitPort;
@@ -21,6 +23,8 @@ import com.menta.auth.application.usecase.LoginUseCaseImpl;
 import com.menta.auth.application.usecase.LogoutUseCaseImpl;
 import com.menta.auth.application.usecase.RefreshTokenUseCaseImpl;
 import com.menta.auth.application.usecase.RegisterUserUseCaseImpl;
+import com.menta.auth.application.usecase.ActivateAccountUseCaseImpl;
+import com.menta.auth.application.usecase.ResendActivationUseCaseImpl;
 import com.menta.auth.infrastructure.activation.AesGcmActivationDeliveryCipher;
 import com.menta.auth.infrastructure.activation.RedisActivationRateLimitPort;
 import com.menta.auth.infrastructure.activation.SecureRandomActivationTokenGenerator;
@@ -29,6 +33,8 @@ import com.menta.auth.infrastructure.transaction.TransactionalLoginUseCase;
 import com.menta.auth.infrastructure.transaction.TransactionalLogoutUseCase;
 import com.menta.auth.infrastructure.transaction.TransactionalRefreshTokenUseCase;
 import com.menta.auth.infrastructure.transaction.TransactionalRegisterUserUseCase;
+import com.menta.auth.infrastructure.transaction.TransactionalActivateAccountUseCase;
+import com.menta.auth.infrastructure.transaction.TransactionalResendActivationUseCase;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.auth.infrastructure.security.JwtService;
 import com.menta.auth.infrastructure.security.Sha256TokenHasher;
@@ -215,6 +221,43 @@ public class AuthConfiguration {
             activationTokenTtl
         );
         return new TransactionalRegisterUserUseCase(implementation);
+    }
+
+    @Bean
+    public ActivateAccountUseCase activateAccountUseCase(
+        ActivationTokenRepository activationTokenRepository,
+        ActivationTokenHasher activationTokenHasher,
+        UserRepository userRepository,
+        Clock clock
+    ) {
+        return new TransactionalActivateAccountUseCase(new ActivateAccountUseCaseImpl(
+            activationTokenRepository, activationTokenHasher, userRepository, clock
+        ));
+    }
+
+    @Bean
+    public ResendActivationUseCase resendActivationUseCase(
+        UserRepository userRepository,
+        ActivationTokenRepository activationTokenRepository,
+        ActivationTokenGenerator activationTokenGenerator,
+        ActivationTokenHasher activationTokenHasher,
+        ActivationDeliveryCipher activationDeliveryCipher,
+        ActivationRateLimitPort activationRateLimitPort,
+        OutboxAppender outboxAppender,
+        Clock clock
+    ) {
+        ResendActivationUseCaseImpl implementation = new ResendActivationUseCaseImpl(
+            userRepository,
+            activationTokenRepository,
+            activationTokenGenerator,
+            activationTokenHasher,
+            activationDeliveryCipher,
+            activationRateLimitPort,
+            outboxAppender,
+            clock,
+            activationTokenTtl
+        );
+        return new TransactionalResendActivationUseCase(implementation);
     }
 
     @Bean

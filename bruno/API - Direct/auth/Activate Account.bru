@@ -1,0 +1,21 @@
+meta {
+  name: Activate Account
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/{{apiVersion}}/auth/activate/{{activationToken}}
+  auth: none
+}
+
+docs {
+  Paste the opaque token from a local Mailpit message into the runtime-only
+  `activationToken` variable. Never save it in an environment file or commit it.
+  A valid token returns 204; expired, reused, or invalid tokens return the same
+  RFC 9457 ACTIVATION_TOKEN_INVALID problem.
+}
+
+assert {
+  res.status: eq 204
+}

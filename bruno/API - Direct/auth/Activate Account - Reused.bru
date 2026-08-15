@@ -1,0 +1,21 @@
+meta {
+  name: Activate Account - Reused Token
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/{{apiVersion}}/auth/activate/{{activationToken}}
+  auth: none
+}
+
+tests {
+  test("Reused token returns a generic RFC 9457 problem", function() {
+    expect(res.getStatus()).to.equal(400);
+    expect(res.getBody().code).to.equal('ACTIVATION_TOKEN_INVALID');
+  });
+}
+
+assert {
+  res.status: eq 400
+}

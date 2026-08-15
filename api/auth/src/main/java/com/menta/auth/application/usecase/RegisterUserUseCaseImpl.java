@@ -14,18 +14,16 @@ import com.menta.auth.application.port.out.DeliveryEnvelope;
 import com.menta.auth.application.port.out.OutboxAppender;
 import com.menta.auth.application.port.out.PasswordEncoderPort;
 import com.menta.auth.application.port.out.RateLimitDecision;
+import com.menta.auth.domain.crypto.Sha256Hex;
 import com.menta.auth.domain.exception.ActivationRateLimitedException;
+import com.menta.auth.domain.exception.DuplicateRegistrationException;
 import com.menta.auth.domain.model.ActivationToken;
 import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.shared.domain.vo.Email;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HexFormat;
 
 /**
  * Implementation of RegisterUserUseCase.
@@ -90,7 +88,7 @@ public class RegisterUserUseCaseImpl implements RegisterUserUseCase {
         }
 
         if (userRepository.existsByEmail(email)) {
-            throw new IllegalArgumentException("User with email " + email + " already exists");
+            throw new DuplicateRegistrationException();
         }
 
         String passwordHash = passwordEncoder.encode(command.password());
@@ -138,12 +136,6 @@ public class RegisterUserUseCaseImpl implements RegisterUserUseCase {
      * (design.md "Puertos principales").
      */
     private String emailFingerprint(Email email) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(email.getValue().getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hash);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 must be available on every supported JVM", e);
-        }
+        return Sha256Hex.hash(email.getValue());
     }
 }

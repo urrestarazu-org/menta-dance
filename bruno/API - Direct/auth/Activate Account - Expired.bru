@@ -1,0 +1,26 @@
+meta {
+  name: Activate Account - Expired Token
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/{{apiVersion}}/auth/activate/{{expiredActivationToken}}
+  auth: none
+}
+
+docs {
+  Use a runtime-only token captured from a deliberately expired local test
+  delivery. It must be indistinguishable from any other invalid activation token.
+}
+
+tests {
+  test("Expired token returns the generic activation problem", function() {
+    expect(res.getStatus()).to.equal(400);
+    expect(res.getBody().code).to.equal('ACTIVATION_TOKEN_INVALID');
+  });
+}
+
+assert {
+  res.status: eq 400
+}
