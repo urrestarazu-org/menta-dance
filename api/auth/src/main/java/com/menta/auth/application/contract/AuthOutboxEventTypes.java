@@ -42,6 +42,14 @@ public final class AuthOutboxEventTypes {
     public static final String REFRESH_REVOKED = "auth.RefreshRevoked";
     public static final String USER_LOGGED_OUT = "auth.UserLoggedOut";
 
+    /**
+     * Durable delivery request for a pending account's activation email
+     * (auth-account-activation spec: "Dispatch seguro del outbox"). The
+     * outbox row carries only {@code activationTokenId} — never the raw
+     * token — per design.md "Dispatch del outbox".
+     */
+    public static final String ACCOUNT_ACTIVATION_REQUESTED = "auth.AccountActivationRequested";
+
     private AuthOutboxEventTypes() {
         // Constant holder.
     }
