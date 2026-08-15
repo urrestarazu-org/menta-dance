@@ -13,6 +13,7 @@ import com.menta.auth.application.port.out.Clock;
 import com.menta.auth.application.port.out.DeliveryEnvelope;
 import com.menta.auth.application.port.out.OutboxAppender;
 import com.menta.auth.application.port.out.RateLimitDecision;
+import com.menta.auth.domain.crypto.Sha256Hex;
 import com.menta.auth.domain.exception.ActivationRateLimitedException;
 import com.menta.auth.domain.model.ActivationToken;
 import com.menta.auth.domain.model.User;
@@ -20,12 +21,8 @@ import com.menta.auth.domain.model.UserStatus;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.shared.domain.vo.Email;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HexFormat;
 import java.util.Optional;
 
 /**
@@ -121,19 +118,8 @@ public class ResendActivationUseCaseImpl implements ResendActivationUseCase {
         );
     }
 
-    /**
-     * Non-reversible SHA-256 fingerprint of the email (mirrors
-     * {@code RegisterUserUseCaseImpl#emailFingerprint}; not extracted to a
-     * shared helper to keep this task's diff scoped to the two new use
-     * cases).
-     */
+    /** Non-reversible SHA-256 fingerprint of the email (mirrors {@code RegisterUserUseCaseImpl}). */
     private String emailFingerprint(Email email) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(email.getValue().getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hash);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 must be available on every supported JVM", e);
-        }
+        return Sha256Hex.hash(email.getValue());
     }
 }

@@ -10,10 +10,17 @@ correo para poder iniciar sesión.
   activa `auth_users` y lo invalida.
 - `POST /api/v1/auth/resend-activation` emite un token nuevo sin revelar si el
   email existe.
+- `POST /api/v1/auth/register` crea el usuario pendiente y responde `202` sin
+  revelar si el email ya estaba registrado; `/api/v1/users/register` es un alias
+  temporal con el mismo contrato.
+- Registro y reenvío devuelven `429 Retry-After` ante límite y `503 Retry-After`
+  si Redis no está disponible; el token no aparece en logs ni en respuestas.
 - El envío de correo usa un puerto/worker interno, sin RabbitMQ ni HTTP interno.
 - Errores siguen `application/problem+json`; tokens y datos personales no se
   incluyen en logs.
 
 ## Hecho cuando
 
-Pruebas cubren token válido, vencido, reutilizado, reenvío y rate limiting.
+Pruebas cubren registro → outbox → entrega → activación → login, rollback
+atómico, activación concurrente, token válido/vencido/reutilizado, reenvío y
+rate limiting. Bruno mantiene ejemplos sin tokens ni credenciales versionados.

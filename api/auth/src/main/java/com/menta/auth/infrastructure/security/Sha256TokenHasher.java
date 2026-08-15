@@ -1,6 +1,7 @@
 package com.menta.auth.infrastructure.security;
 
 import com.menta.auth.application.port.out.TokenHasher;
+import com.menta.auth.domain.crypto.Sha256Hex;
 
 /**
  * SHA-256 hex digest adapter for the TokenHasher port (ADR-0025).

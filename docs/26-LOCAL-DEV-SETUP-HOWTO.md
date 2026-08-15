@@ -20,9 +20,7 @@ cp .env.example .env
 ./scripts/dev.sh status
 
 # 4. (Opcional) Registrar usuario de prueba para Bruno
-# NOTA: este endpoint devuelve 503 temporalmente mientras se completa
-# auth-account-activation (ver PR3, openspec/changes/auth-account-activation/tasks.md #3.1).
-curl -i -X POST "http://localhost:8081/api/v1/users/register" \
+curl -i -X POST "http://localhost:8081/api/v1/auth/register" \
   -H "Content-Type: application/json" \
   -d '{"email":"student@example.com","password":"password123","role":"STUDENT"}'
 
@@ -34,6 +32,7 @@ cd bruno/BFF-Session-Custody && npx @usebruno/cli run --env Local .
 - API: http://localhost:8081
 - BFF: http://localhost:8080
 - Grafana (logs): http://localhost:3000
+- Mailpit (correo local): http://localhost:8025
 
 **Comandos útiles del script dev.sh:**
 ```bash
@@ -230,17 +229,14 @@ El proyecto incluye colecciones de **Bruno** para testing manual y automatizado 
 Antes de ejecutar los tests, registrá un usuario en la API:
 
 ```bash
-curl -i -X POST "http://localhost:8081/api/v1/users/register" \
+curl -i -X POST "http://localhost:8081/api/v1/auth/register" \
   -H "Content-Type: application/json" \
   -d '{"email":"student@example.com","password":"password123","role":"STUDENT"}'
 ```
 
-Deberías obtener `201 Created` con un JSON que contiene el `id` del usuario.
-
-> **Nota**: este endpoint está temporalmente deshabilitado (devuelve `503
-> Service Unavailable`) mientras se completa `auth-account-activation`; se
-> restaura en PR3 (ver `openspec/changes/auth-account-activation/tasks.md`,
-> tarea 3.1).
+La respuesta es `202 Accepted` sin cuerpo. Abrí Mailpit en
+`http://localhost:8025`, copiá el token del enlace sólo a una variable runtime
+de Bruno y ejecutá `Activate Account`; no lo guardes en `.bru` ni `.env`.
 
 ### Colección BFF Session Custody
 

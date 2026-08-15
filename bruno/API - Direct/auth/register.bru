@@ -5,7 +5,7 @@ meta {
 }
 
 post {
-  url: {{baseUrl}}/api/{{apiVersion}}/users/register
+  url: {{baseUrl}}/api/{{apiVersion}}/auth/register
   body: json
   auth: none
 }
@@ -19,17 +19,17 @@ body:json {
 }
 
 docs {
-  Public registration is temporarily unavailable while auth-account-activation
-  is completed. This request verifies the explicit 503 safeguard, preventing
-  the incomplete activation flow from reaching placeholder infrastructure.
+  Creates a PENDING_ACTIVATION account and returns only a generic acknowledgement.
+  Retrieve the activation link from local Mailpit (http://localhost:8025) without
+  persisting its opaque token in this collection or environment file.
 }
 
 tests {
-  test("Status is 503 while activation infrastructure is incomplete", function() {
-    expect(res.getStatus()).to.equal(503);
+  test("Status is 202 Accepted", function() {
+    expect(res.getStatus()).to.equal(202);
   });
 }
 
 assert {
-  res.status: eq 503
+  res.status: eq 202
 }

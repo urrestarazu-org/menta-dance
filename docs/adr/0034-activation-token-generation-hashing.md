@@ -35,15 +35,22 @@ igual actúa como segunda capa.
 hash — no el token — lo que `ActivateAccountUseCaseImpl` busca en
 `ActivationTokenRepository.findByHash(...)`. El cálculo del digest en sí
 (`MessageDigest` fresco por llamada + codificación hex en minúscula) vive en
-`Sha256Hex` (`api/auth/src/main/java/com/menta/auth/infrastructure/security/`),
-una utilidad compartida dentro de `auth.infrastructure` que también usa
-`Sha256TokenHasher` (refresh tokens, [ADR-0025](0025-auth-token-strategy.md)).
-Ambos hashers son adapters de puertos distintos (`ActivationTokenHasher` vs.
-`TokenHasher`) porque protegen credenciales con ciclos de vida diferentes,
-pero la primitiva criptográfica de fondo es la misma y no tiene sentido
-mantenerla duplicada — la reutilización queda dentro de `auth.infrastructure`,
-no se sube a `api:shared`, porque ninguna otra bounded context necesita hoy
-hashear credenciales opacas SHA-256. El token crudo generado por
+`Sha256Hex` (`api/auth/src/main/java/com/menta/auth/domain/crypto/`), una
+primitiva pura sin dependencias externas. Vive en `auth.domain` — no en
+`auth.infrastructure`, donde vivió originalmente — porque además de
+`Sha256ActivationTokenHasher` y `Sha256TokenHasher` (refresh tokens,
+[ADR-0025](0025-auth-token-strategy.md)), también la usan
+`RegisterUserUseCaseImpl` y `ResendActivationUseCaseImpl` para el
+fingerprint no reversible del email que alimenta el rate limiting
+([ADR-0033](0033-activation-rate-limiting-strategy.md)); ambos son
+`application`, que por regla de dependencia de Clean Architecture no puede
+importar `infrastructure`. Los dos hashers son adapters de puertos distintos
+(`ActivationTokenHasher` vs. `TokenHasher`) porque protegen credenciales con
+ciclos de vida diferentes, pero la primitiva criptográfica de fondo es la
+misma y no tiene sentido mantenerla duplicada — la reutilización queda
+dentro de `:api:auth` (domain + application + infrastructure), no se sube a
+`api:shared`, porque ninguna otra bounded context necesita hoy hashear
+credenciales opacas SHA-256. El token crudo generado por
 `RegisterUserUseCaseImpl` / `ResendActivationUseCaseImpl` sólo existe en
 memoria durante el request y se cifra para su entrega vía
 `AesGcmActivationDeliveryCipher` ([ADR-0032](0032-activation-delivery-cipher-nonce-policy.md));
@@ -81,6 +88,12 @@ existe" de "venció" de "ya se usó".
   `AuthConfiguration` lo registraba también vía `@Bean tokenHasher()` —
   dos bean definitions de `TokenHasher` compitiendo. Se eliminó el
   `@Component` redundante, dejando un único bean explícito.
+* Mover `Sha256Hex` a `auth.domain.crypto` (originalmente en
+  `auth.infrastructure.security`) eliminó una tercera duplicación: los
+  fingerprints de email de `RegisterUserUseCaseImpl` y
+  `ResendActivationUseCaseImpl` (Fase 3, activación de cuentas)
+  reimplementaban el mismo `MessageDigest` + hex a mano porque
+  `application` no puede depender de `infrastructure`.
 
 ### Negativas / Deuda Técnica
 
@@ -153,9 +166,10 @@ sequenceDiagram
 
 * `api/auth/src/main/java/com/menta/auth/infrastructure/activation/SecureRandomActivationTokenGenerator.java`
 * `api/auth/src/main/java/com/menta/auth/infrastructure/activation/Sha256ActivationTokenHasher.java`
-* `api/auth/src/main/java/com/menta/auth/infrastructure/security/Sha256Hex.java` —
-  primitiva SHA-256 compartida por `Sha256ActivationTokenHasher` y
-  `Sha256TokenHasher`.
+* `api/auth/src/main/java/com/menta/auth/domain/crypto/Sha256Hex.java` —
+  primitiva SHA-256 compartida por `Sha256ActivationTokenHasher`,
+  `Sha256TokenHasher`, `RegisterUserUseCaseImpl` y
+  `ResendActivationUseCaseImpl`.
 * `api/auth/src/main/java/com/menta/auth/application/usecase/ActivateAccountUseCaseImpl.java`
 * Complementa a: [ADR-0025](0025-auth-token-strategy.md) (hasher de refresh
   tokens, hoy comparte primitiva con `Sha256Hex`),

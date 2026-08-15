@@ -11,6 +11,7 @@ import com.menta.auth.domain.exception.AuthDegradedException;
 import com.menta.auth.domain.exception.InvalidCredentialsException;
 import com.menta.auth.domain.exception.LockedUserException;
 import com.menta.auth.domain.exception.RefreshTokenCompromisedException;
+import com.menta.auth.infrastructure.web.ProblemDetails;
 import com.menta.auth.infrastructure.web.dto.LoginRequest;
 import com.menta.auth.infrastructure.web.dto.TokenResponse;
 
@@ -109,19 +110,19 @@ public class AuthController {
 
     @ExceptionHandler(InvalidCredentialsException.class)
     public ResponseEntity<ProblemDetail> handleInvalidCredentials(InvalidCredentialsException ex) {
-        return problem(HttpStatus.UNAUTHORIZED, "Authentication failed.", ex.getErrorCode());
+        return ProblemDetails.response(HttpStatus.UNAUTHORIZED, "Authentication failed.", ex.getErrorCode());
     }
 
     @ExceptionHandler(RefreshTokenCompromisedException.class)
     public ResponseEntity<ProblemDetail> handleRefreshCompromised(
         RefreshTokenCompromisedException ex
     ) {
-        return problem(HttpStatus.UNAUTHORIZED, "Authentication failed.", ex.getErrorCode());
+        return ProblemDetails.response(HttpStatus.UNAUTHORIZED, "Authentication failed.", ex.getErrorCode());
     }
 
     @ExceptionHandler(LockedUserException.class)
     public ResponseEntity<ProblemDetail> handleLockedUser(LockedUserException ex) {
-        return problem(HttpStatus.LOCKED, "The user account is locked.", ex.getErrorCode());
+        return ProblemDetails.response(HttpStatus.LOCKED, "The user account is locked.", ex.getErrorCode());
     }
 
     @ExceptionHandler(AuthDegradedException.class)
@@ -129,7 +130,7 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
             .header(HttpHeaders.RETRY_AFTER, RECONCILER_RETRY_SECONDS)
             .contentType(MediaType.APPLICATION_PROBLEM_JSON)
-            .body(problemBody(
+            .body(ProblemDetails.body(
                 HttpStatus.SERVICE_UNAVAILABLE,
                 "Authentication is temporarily unavailable.",
                 ex.getErrorCode()
@@ -143,7 +144,9 @@ public class AuthController {
         AuthRequestValidationException.class
     })
     public ResponseEntity<ProblemDetail> handleInvalidRequest(Exception ex) {
-        return problem(HttpStatus.BAD_REQUEST, "The authentication request is invalid.", "INVALID_AUTH_REQUEST");
+        return ProblemDetails.response(
+            HttpStatus.BAD_REQUEST, "The authentication request is invalid.", "INVALID_AUTH_REQUEST"
+        );
     }
 
     private static TokenResponse toResponse(TokenPair pair) {
@@ -159,27 +162,5 @@ public class AuthController {
             throw new AuthRequestValidationException();
         }
         return refreshToken;
-    }
-
-    private static ResponseEntity<ProblemDetail> problem(
-        HttpStatus status,
-        String detail,
-        String code
-    ) {
-        return ResponseEntity.status(status)
-            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
-            .body(problemBody(status, detail, code));
-    }
-
-    private static ProblemDetail problemBody(
-        HttpStatus status,
-        String detail,
-        String code
-    ) {
-        ProblemDetail body = ProblemDetail.forStatusAndDetail(status, detail);
-        body.setType(java.net.URI.create("https://menta.dance/problems/" + code.toLowerCase(java.util.Locale.ROOT)));
-        body.setTitle(status.getReasonPhrase());
-        body.setProperty("code", code);
-        return body;
     }
 }

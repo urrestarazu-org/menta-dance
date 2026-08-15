@@ -45,6 +45,25 @@ la IP en texto plano — sólo su fingerprint SHA-256 (64 hex minúsculas,
 validado en `validateFingerprint`). Esto evita persistir PII en las keys de
 Redis.
 
+**Origen del fingerprint de cliente y frontera de confianza.**
+`ClientFingerprint` deriva el fingerprint de la IP de cliente que llega al
+adaptador HTTP. Una petición directa (por ejemplo, desde Android) usa
+`HttpServletRequest.getRemoteAddr()`. Una petición que llega a través de
+Nginx puede usar el último valor de `X-Forwarded-For`: Nginx agrega ahí la IP
+del cliente que vio directamente mediante `$proxy_add_x_forwarded_for`.
+
+Ese header no se acepta de manera incondicional: cualquier cliente de Internet
+puede enviarlo falsificado. La aplicación sólo lo consulta si el peer inmediato
+(`remoteAddr`) pertenece a `auth.activation.trusted-proxy-cidrs`. En Docker
+local el valor por defecto es `172.16.0.0/12`; cada despliegue debe reemplazarlo
+por los CIDR de sus proxies reales. Si el peer no es confiable, o no hay header,
+se hashea `remoteAddr` y se ignora el header suministrado por el cliente.
+
+Esta frontera permite distinguir clientes reales detrás de Nginx sin convertir
+el header en un mecanismo para evadir límites. Por privacidad, la IP elegida se
+hashea inmediatamente y sólo el SHA-256 llega a Redis; la IP en claro no se
+persiste ni se usa como key.
+
 **Fail-closed ante fallas de Redis.** Cualquier `RuntimeException` al hablar
 con Redis (timeout, conexión caída) se traduce a `AuthDegradedException`
 (HTTP 503, `AUTH_DEGRADED`, "retry after 30s") en vez de dejar pasar el
@@ -59,6 +78,9 @@ la disponibilidad del flujo de activación.
   check-then-increment en dos pasos dejaría abierta bajo concurrencia.
 * El límite dual (email + cliente) cubre los dos patrones de abuso más
   probables sin necesitar dos adaptadores separados.
+* La frontera de proxies confiables evita que un cliente directo fragmente su
+  límite enviando valores falsos de `X-Forwarded-For`, mientras que Nginx
+  conserva límites independientes para clientes legítimos detrás del proxy.
 * Fail-closed evita que una caída de Redis se traduzca en abuso ilimitado
   del flujo de activación.
 
@@ -74,6 +96,10 @@ la disponibilidad del flujo de activación.
   y 3 más a los 15:01) y efectivamente duplicar el throughput permitido en
   el borde. Una ventana deslizante (sliding window log/counter) lo evitaría
   a costa de más complejidad en el script Lua.
+* **Configuración de proxy incorrecta**: si `trusted-proxy-cidrs` no contiene
+  la red del proxy, todos sus clientes comparten el límite del proxy; si incluye
+  una red no confiable, esa red podría falsificar `X-Forwarded-For`. Es una
+  configuración de seguridad del entorno, no un valor cosmético.
 
 ### Riesgos y Reversibilidad
 
@@ -82,6 +108,10 @@ la disponibilidad del flujo de activación.
 * **Plan de Mitigación:** alertar sobre `AUTH_DEGRADED` en el flujo de
   activación como señal de incidente de Redis, no sólo de rate limiting
   legítimo.
+* **Operación de proxies:** al agregar o mover Nginx, actualizar
+  `auth.activation.trusted-proxy-cidrs`, verificar que Nginx envíe
+  `X-Forwarded-For` y probar tanto requests directos como proxied antes de
+  desplegar.
 * **Reversibilidad:** alta — los límites y la ventana son configurables por
   variable de entorno sin cambios de código; cambiar a ventana deslizante
   requeriría reemplazar sólo el script Lua, sin tocar el contrato del

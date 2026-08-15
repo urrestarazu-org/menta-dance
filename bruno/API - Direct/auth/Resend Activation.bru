@@ -1,0 +1,27 @@
+meta {
+  name: Resend Activation
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/{{apiVersion}}/auth/resend-activation
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "{{email}}"
+  }
+}
+
+tests {
+  test("Returns a non-enumerating acknowledgement", function() {
+    expect(res.getStatus()).to.equal(202);
+  });
+}
+
+assert {
+  res.status: eq 202
+}

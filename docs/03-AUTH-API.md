@@ -36,14 +36,32 @@ Todas las respuestas de error usan `application/problem+json`.
 
 ## Contrato HTTP implementado (v1)
 
-Los tres endpoints disponibles hoy son canónicos bajo `/api/v1/auth`; no existe
-compatibilidad para el prefijo legado `/auth`.
+Las rutas canónicas están bajo `/api/v1/auth`; no existe compatibilidad para el
+prefijo legado `/auth`. Durante la migración de registro se conserva solamente
+el alias temporal `POST /api/v1/users/register`, con el mismo comportamiento
+que la ruta canónica.
 
 | Endpoint | Autenticación de entrada | Respuesta exitosa |
 | --- | --- | --- |
 | `POST /login` | JSON `{ "email", "password" }` | `200` con el par de tokens para el cliente de confianza (BFF o Android) |
 | `POST /refresh` | `X-Refresh-Token` obligatorio; nunca body JSON | `200` con el par rotado |
 | `POST /logout` | `Authorization: Bearer <access>` y `X-Refresh-Token` obligatorios | `204 No Content` |
+| `POST /register` | JSON `{ "email", "password", "role": "STUDENT" }` | `202 No Content`, siempre genérico |
+| `GET /activate/{token}` | token opaco en el path | `204 No Content` |
+| `POST /resend-activation` | JSON `{ "email" }` | `202 No Content`, siempre genérico |
+
+Registro público crea una cuenta `PENDING_ACTIVATION`, un token de un uso y un
+evento durable de correo en una sola transacción. Registro duplicado conserva
+el mismo `202` vacío; nunca se devuelve el email, ID o estado de la cuenta.
+`resend-activation` también responde idénticamente para email inexistente,
+activo o pendiente. Registro y reenvío limitados devuelven `429` con
+`Retry-After`; si Redis no está disponible devuelven `503` con `Retry-After`.
+
+Un token expirado, reutilizado o inválido en activación devuelve `400
+application/problem+json` con código `ACTIVATION_TOKEN_INVALID`; el motivo no
+es distinguible. El token no se persiste ni registra en claro: sólo se guarda
+su hash y el material pendiente de entrega se cifra hasta que Mailpit/SMTP lo
+acepta.
 
 El BFF lee su cookie de sesión internamente y pasa el refresh a Auth mediante
 `X-Refresh-Token`; puede ver esos valores sólo en su comunicación
@@ -106,5 +124,7 @@ Un lector QR se autentica como dispositivo técnico y no es un rol.
 ## Seguridad y auditoría
 
 Nunca se registran passwords, JWT, refresh tokens, cookies ni encabezados de
-autorización. Los eventos de login, refresh, revocación, reutilización y denegación
-incluyen `correlationId`, usuario/dispositivo cuando corresponda y resultado.
+autorización. Tampoco se registra el token de activación ni la URI que lo
+contiene: los access logs usan `/api/v1/auth/activate/[REDACTED]`. Los eventos
+de login, refresh, revocación, reutilización y denegación incluyen
+`correlationId`, usuario/dispositivo cuando corresponda y resultado.

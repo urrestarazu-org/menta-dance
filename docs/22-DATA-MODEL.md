@@ -21,6 +21,13 @@ como valor y se validan mediante puertos; no se crean FKs ni `JOIN`s cruzados.
   reparación.
 - `auth_password_reset_tokens`: `token_hash`, `expires_at`, `used_at` y
   `user_id`; nunca almacena el token en claro.
+- `auth_activation_tokens`: `id`, `user_id`, `token_hash CHAR(64) UNIQUE`,
+  `expires_at`, `used_at`, `invalidated_at` y `created_at`; el token de
+  activación nunca se almacena en claro. El sobre de entrega temporal usa
+  `delivery_ciphertext`, `delivery_nonce` y `delivery_key_version`, se cifra
+  con AES-GCM y se limpia después de aceptar el correo. No tiene FK hacia
+  `auth_users`: ambos recursos son propiedad de Auth y se preserva el límite
+  modular mediante el repositorio.
 
 ## Billing
 

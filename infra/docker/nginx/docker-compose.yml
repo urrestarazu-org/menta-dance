@@ -55,6 +55,9 @@ services:
       SPRING_DATA_REDIS_HOST: menta-redis
       SPRING_DATA_REDIS_PORT: 6379
 
+      # Only the Docker bridge containing NGINX may supply X-Forwarded-For.
+      AUTH_ACTIVATION_TRUSTED_PROXY_CIDRS: ${AUTH_ACTIVATION_TRUSTED_PROXY_CIDRS:-172.16.0.0/12}
+
       # Observability
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://menta-otel-collector:4318/v1/traces
       MANAGEMENT_OTLP_LOGS_ENDPOINT: http://menta-otel-collector:4318/v1/logs

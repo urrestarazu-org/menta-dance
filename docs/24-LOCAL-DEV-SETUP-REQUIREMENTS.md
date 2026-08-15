@@ -18,6 +18,9 @@ Instalación: `brew install bruno` (macOS) o descarga desde [usebruno.com](https
 
 - MySQL 8.0 con database `menta`, usuario de aplicación no-root y volumen local;
 - Redis con `maxmemory-policy noeviction`;
+- Mailpit SMTP en `localhost:1025` y UI en `http://localhost:8025` para revisar
+  enlaces de activación locales; los tokens se copian sólo a variables runtime
+  de Bruno y nunca a archivos versionados;
 - los auxiliares de observabilidad definidos para el entorno (OTel/Loki).
 
 Las contraseñas se entregan por `.env` no versionado. El usuario root de MySQL
