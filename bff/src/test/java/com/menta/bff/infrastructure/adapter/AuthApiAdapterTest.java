@@ -23,6 +23,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @DisplayName("AuthApiAdapter")
 class AuthApiAdapterTest {
 
+    private static final String CLIENT_ADDRESS = "203.0.113.9";
+
     private AuthApiAdapter authApiAdapter;
     private ObjectMapper objectMapper;
 
@@ -46,7 +48,7 @@ class AuthApiAdapterTest {
     @DisplayName("should login successfully and return token pair")
     void shouldLoginSuccessfullyAndReturnTokenPair() {
         // Given
-        LoginCommand command = new LoginCommand("user@example.com", "ValidPass123!");
+        LoginCommand command = new LoginCommand("user@example.com", "ValidPass123!", CLIENT_ADDRESS);
 
         Map<String, Object> responseBody = Map.of(
                 "access_token", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
@@ -77,7 +79,7 @@ class AuthApiAdapterTest {
     @DisplayName("should throw AuthenticationException when login returns 401")
     void shouldThrowAuthenticationExceptionWhenLoginReturns401() {
         // Given
-        LoginCommand command = new LoginCommand("user@example.com", "WrongPassword");
+        LoginCommand command = new LoginCommand("user@example.com", "WrongPassword", CLIENT_ADDRESS);
 
         stubFor(post(urlEqualTo("/api/v1/auth/login"))
                 .willReturn(aResponse()
@@ -95,7 +97,7 @@ class AuthApiAdapterTest {
     @DisplayName("should throw ServiceUnavailableException when login returns 503")
     void shouldThrowServiceUnavailableExceptionWhenLoginReturns503() {
         // Given
-        LoginCommand command = new LoginCommand("user@example.com", "ValidPass123!");
+        LoginCommand command = new LoginCommand("user@example.com", "ValidPass123!", CLIENT_ADDRESS);
 
         stubFor(post(urlEqualTo("/api/v1/auth/login"))
                 .willReturn(aResponse()
@@ -227,6 +229,62 @@ class AuthApiAdapterTest {
         // When / Then
         assertThatThrownBy(() -> authApiAdapter.logout(refreshToken))
                 .isInstanceOf(AuthApiClient.ServiceUnavailableException.class);
+    }
+
+    // -- ADR-0035: trusted client origin propagation (BFF → API hop) --------
+
+    @Test
+    @DisplayName("should forward the canonical client origin as a single-value X-Forwarded-For")
+    void shouldForwardCanonicalClientOrigin() {
+        LoginCommand command = new LoginCommand("user@example.com", "ValidPass123!", CLIENT_ADDRESS);
+        stubLoginSuccess();
+
+        authApiAdapter.login(command);
+
+        verify(postRequestedFor(urlEqualTo("/api/v1/auth/login"))
+                .withHeader("X-Forwarded-For", equalTo(CLIENT_ADDRESS)));
+    }
+
+    @Test
+    @DisplayName("should never relay a proxy chain, only the resolved address")
+    void shouldNeverRelayAProxyChain() {
+        // The Auth API reads the LAST element of X-Forwarded-For. Relaying a
+        // chain would let a caller append entries and pick which address gets
+        // fingerprinted; one resolved value removes that choice.
+        LoginCommand command = new LoginCommand("user@example.com", "ValidPass123!", CLIENT_ADDRESS);
+        stubLoginSuccess();
+
+        authApiAdapter.login(command);
+
+        verify(postRequestedFor(urlEqualTo("/api/v1/auth/login"))
+                .withHeader("X-Forwarded-For", notMatching(".*,.*")));
+    }
+
+    @Test
+    @DisplayName("should omit the header when no origin could be established")
+    void shouldOmitTheHeaderWhenOriginIsUnknown() {
+        // Omitted, not blank: the API then falls back to the peer address it
+        // observes, which is the pre-ADR-0035 behaviour and never less safe.
+        LoginCommand command = new LoginCommand("user@example.com", "ValidPass123!", null);
+        stubLoginSuccess();
+
+        authApiAdapter.login(command);
+
+        verify(postRequestedFor(urlEqualTo("/api/v1/auth/login"))
+                .withoutHeader("X-Forwarded-For"));
+    }
+
+    private void stubLoginSuccess() {
+        stubFor(post(urlEqualTo("/api/v1/auth/login"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withHeader("X-Refresh-Token", "refresh_token_123")
+                        .withBody(toJson(Map.of(
+                                "access_token", "compact.jwt.value",
+                                "token_type", "Bearer",
+                                "expires_in", 900
+                        )))));
     }
 
     private String toJson(Object obj) {

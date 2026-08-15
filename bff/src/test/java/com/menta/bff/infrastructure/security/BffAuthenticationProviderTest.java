@@ -97,4 +97,46 @@ class BffAuthenticationProviderTest {
     void supports_the_form_login_authentication_token() {
         assertThat(provider.supports(UsernamePasswordAuthenticationToken.class)).isTrue();
     }
+
+    // -- ADR-0035: trusted client origin propagation -----------------------
+
+    @Test
+    @DisplayName("Carries the captured client origin into the login command")
+    void forwards_the_client_origin_captured_by_the_details_source() {
+        UsernamePasswordAuthenticationToken authentication =
+            new UsernamePasswordAuthenticationToken(EMAIL, PASSWORD);
+        authentication.setDetails(new ClientAuthenticationDetails("203.0.113.9"));
+
+        provider.authenticate(authentication);
+
+        ArgumentCaptor<LoginCommand> captor = ArgumentCaptor.forClass(LoginCommand.class);
+        verify(loginUseCase).execute(captor.capture());
+        assertThat(captor.getValue().clientAddress()).isEqualTo("203.0.113.9");
+    }
+
+    @Test
+    void degrades_to_no_origin_when_details_are_absent() {
+        // A programmatic authentication never passes through the filter that
+        // builds the details. Sending no origin makes the Auth API observe the
+        // BFF as the peer — the pre-ADR-0035 behaviour, and strictly safer
+        // than forwarding a value we cannot vouch for.
+        provider.authenticate(formLogin());
+
+        ArgumentCaptor<LoginCommand> captor = ArgumentCaptor.forClass(LoginCommand.class);
+        verify(loginUseCase).execute(captor.capture());
+        assertThat(captor.getValue().clientAddress()).isNull();
+    }
+
+    @Test
+    void ignores_details_of_an_unexpected_type() {
+        UsernamePasswordAuthenticationToken authentication =
+            new UsernamePasswordAuthenticationToken(EMAIL, PASSWORD);
+        authentication.setDetails("192.168.1.1");
+
+        provider.authenticate(authentication);
+
+        ArgumentCaptor<LoginCommand> captor = ArgumentCaptor.forClass(LoginCommand.class);
+        verify(loginUseCase).execute(captor.capture());
+        assertThat(captor.getValue().clientAddress()).isNull();
+    }
 }

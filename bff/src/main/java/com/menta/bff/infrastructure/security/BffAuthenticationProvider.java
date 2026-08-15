@@ -44,7 +44,7 @@ public class BffAuthenticationProvider implements AuthenticationProvider {
         String password = authentication.getCredentials().toString();
 
         try {
-            loginUseCase.execute(new LoginCommand(email, password));
+            loginUseCase.execute(new LoginCommand(email, password, clientAddressOf(authentication)));
         } catch (AuthApiClient.AuthenticationException e) {
             throw new BadCredentialsException("Invalid email or password");
         } catch (AuthApiClient.ServiceUnavailableException e) {
@@ -61,6 +61,21 @@ public class BffAuthenticationProvider implements AuthenticationProvider {
         // security context and would otherwise outlive the request that
         // carried the password.
         return new UsernamePasswordAuthenticationToken(email, null, authorities);
+    }
+
+    /**
+     * Reads the origin captured by {@link ClientAuthenticationDetailsSource}.
+     *
+     * <p>Returns {@code null} when no details were attached — for instance on
+     * a programmatic authentication that never passed through the filter. That
+     * degrades to the Auth API observing the BFF as the peer, which is the
+     * behaviour that existed before ADR-0035 and is strictly safer than
+     * forwarding an origin we cannot vouch for.</p>
+     */
+    private static String clientAddressOf(Authentication authentication) {
+        return authentication.getDetails() instanceof ClientAuthenticationDetails details
+            ? details.clientAddress()
+            : null;
     }
 
     @Override

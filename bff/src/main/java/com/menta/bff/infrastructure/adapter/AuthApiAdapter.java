@@ -38,8 +38,28 @@ public class AuthApiAdapter implements AuthApiClient {
     private static final String REFRESH_ENDPOINT = "/api/v1/auth/refresh";
     private static final String LOGOUT_ENDPOINT = "/api/v1/auth/logout";
 
+    private static final String FORWARDED_FOR_HEADER = "X-Forwarded-For";
+
     private final WebClient webClient;
     private final AuthProperties authProperties;
+
+    /**
+     * Forwards the canonical client origin to the Auth API as a single-value
+     * {@code X-Forwarded-For} (ADR-0035).
+     *
+     * <p>Single value, deliberately. The Auth API reads the last element of
+     * the chain, so relaying the browser-supplied chain would let a caller
+     * append entries and choose which address the API ends up fingerprinting.
+     * One resolved address removes that choice.</p>
+     *
+     * <p>When no origin was established the header is omitted entirely rather
+     * than sent empty, so the API falls back to the peer address it observes.</p>
+     */
+    private static void applyClientOrigin(HttpHeaders headers, String clientAddress) {
+        if (clientAddress != null && !clientAddress.isBlank()) {
+            headers.set(FORWARDED_FOR_HEADER, clientAddress.trim());
+        }
+    }
 
     @Override
     public TokenPairResponse login(LoginCommand command) {
@@ -56,6 +76,7 @@ public class AuthApiAdapter implements AuthApiClient {
             ClientResponse response = webClient.post()
                     .uri(LOGIN_ENDPOINT)
                     .contentType(MediaType.APPLICATION_JSON)
+                    .headers(headers -> applyClientOrigin(headers, command.clientAddress()))
                     .bodyValue(requestBody)
                     .exchange()
                     .timeout(authProperties.getTimeout())
