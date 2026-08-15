@@ -313,6 +313,34 @@ clientes: eso permitiría evadir el rate limit falsificando la IP.
 La decisión completa y sus límites operativos están en
 [ADR-0033](adr/0033-activation-rate-limiting-strategy.md).
 
+#### 4.2 Descubrimiento: origen del cliente en el login web (propuesto)
+
+> **Estado al 2026-08-15:** propuesta documentada, todavía no implementada.
+
+El flujo de login web agrega un salto que no existe en activación:
+
+```text
+Usuario -> Nginx -> BFF -> API
+```
+
+Nginx ya sobrescribe `X-Real-IP` con `$remote_addr`, pero el BFF no propaga hoy
+ese origen cuando llama a `POST /api/v1/auth/login`. La API recibe como
+`remoteAddr` la dirección del BFF y todos los usuarios web quedan agrupados en
+un mismo fingerprint. En esas condiciones, un presupuesto por cliente en Auth
+puede bloquear globalmente el login web.
+
+[ADR-0035](adr/0035-trusted-client-origin-propagation.md) propone usar
+`X-Real-IP` como origen canónico para el salto Nginx -> BFF, siempre validando
+que el peer inmediato sea un proxy confiable. El BFF propagaría luego un único
+valor canónico hacia la API como un `X-Forwarded-For` de un solo valor, sin
+copiar la cadena recibida.
+
+La misma propuesta separa responsabilidades: Nginx aplicaría un techo
+volumétrico específico a `POST /login` del BFF, mientras Auth conservaría sólo
+los presupuestos semánticos de fallos por email y por origen. La configuración
+actual aún no contiene ese límite específico del login web ni la propagación
+BFF -> API; este texto no debe interpretarse como comportamiento vigente.
+
 #### 5. Health Endpoints
 
 **Decisión**: Health endpoints sin logging.
@@ -657,6 +685,17 @@ curl -I https://localhost/
 curl -H "Accept-Encoding: gzip" -I https://localhost/css/styles.css
 # Debe incluir: Content-Encoding: gzip
 ```
+
+#### Validación pendiente para ADR-0035
+
+Cuando se implemente la propuesta, agregar pruebas integradas que demuestren:
+
+* dos IP distintas a través de Nginx y BFF no comparten fingerprint en Auth;
+* un `X-Real-IP` enviado por un peer no confiable se ignora;
+* el límite de `POST /login` no consume presupuesto para `GET /login`;
+* una IP limitada no bloquea el login de otra IP.
+
+Estas pruebas están pendientes; no forman parte de la configuración actual.
 
 ### Métricas de Performance
 

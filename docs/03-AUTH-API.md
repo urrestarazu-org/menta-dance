@@ -128,3 +128,30 @@ autorización. Tampoco se registra el token de activación ni la URI que lo
 contiene: los access logs usan `/api/v1/auth/activate/[REDACTED]`. Los eventos
 de login, refresh, revocación, reutilización y denegación incluyen
 `correlationId`, usuario/dispositivo cuando corresponda y resultado.
+
+### Descubrimiento: presupuestos de login y origen web
+
+> **Estado al 2026-08-15:** corrección propuesta, todavía no implementada.
+
+El flujo web `Nginx -> BFF -> API` no propaga actualmente el origen del cliente
+en la llamada de login del BFF. Por eso la API identifica al BFF como peer y
+agrupa a todos los usuarios web en el mismo fingerprint de cliente. Además, el
+contador actual de cliente se consume antes de validar credenciales, por lo que
+acumula tanto logins exitosos como fallidos. Un éxito no debe reiniciarlo porque
+un atacante con cuenta propia podría limpiar su presupuesto; el problema es que
+el mismo contador mezcla protección volumétrica con detección de fallos.
+
+[ADR-0035](adr/0035-trusted-client-origin-propagation.md) propone separar esas
+responsabilidades:
+
+* Nginx impondría un techo de requests por origen para `POST /login` del BFF,
+  antes de llegar a bcrypt o Redis;
+* Auth conservaría presupuestos semánticos de **fallos** por email y por origen;
+* un login exitoso podría limpiar el presupuesto del email, pero no consumiría
+  ni limpiaría el presupuesto de fallos por origen;
+* el BFF propagaría un origen canónico sólo desde un proxy confiable y la API
+  mantendría la fuente del fingerprint detrás de un puerto reemplazable.
+
+Hasta completar y validar esa propuesta, el presupuesto por cliente no es apto
+para discriminar usuarios en el flujo web. Los clientes directos, como Android,
+no atraviesan el BFF y no presentan este colapso de identidad.
