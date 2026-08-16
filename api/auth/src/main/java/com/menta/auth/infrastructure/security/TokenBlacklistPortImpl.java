@@ -4,11 +4,14 @@ import com.menta.auth.application.port.out.AuthDegradedGuard;
 import com.menta.auth.application.port.out.TokenBlacklistPort;
 
 import java.time.Duration;
+import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Component;
 
 /**
@@ -37,7 +40,27 @@ public class TokenBlacklistPortImpl implements TokenBlacklistPort, AuthDegradedG
     private static final Logger log = LoggerFactory.getLogger(TokenBlacklistPortImpl.class);
 
     static final String BLACKLIST_KEY_PREFIX = "blacklist:jti:";
+    static final String TOKEN_VERSION_KEY_PREFIX = "auth:tokenversion:user:";
     static final String LAST_TICK_KEY = "auth:health:last_tick_at";
+
+    /**
+     * Monotonic write: outbox rows can reach here out of order (a FAILED
+     * row's backoff retry racing a newer PENDING one, or a crash-resume
+     * replay), and an unconditional SET would let a stale replay lower the
+     * projected version below one already written — silently re-opening a
+     * token that was already revoked (#88 follow-up). A read-then-write from
+     * Java would race across two round-trips, so the compare-and-set must be
+     * one atomic server-side script, mirroring the rate-limit ports'
+     * pattern.
+     */
+    private static final RedisScript<Long> PROJECT_TOKEN_VERSION_SCRIPT = new DefaultRedisScript<>("""
+        local current = tonumber(redis.call('GET', KEYS[1]))
+        if (current == nil) or (tonumber(ARGV[1]) > current) then
+            redis.call('SET', KEYS[1], ARGV[1])
+            return 1
+        end
+        return 0
+        """, Long.class);
 
     private final RedisTemplate<String, String> redisTemplate;
     private final Duration degradedWindow;
@@ -68,6 +91,38 @@ public class TokenBlacklistPortImpl implements TokenBlacklistPort, AuthDegradedG
             // MUST refuse it.
             log.warn("blacklist read failed for jti={} cause={}", jti, e.getMessage());
             return true;
+        }
+    }
+
+    @Override
+    public void projectTokenVersion(String userId, long tokenVersion) {
+        // No TTL: a blacklist entry may expire with its access token, but the
+        // current version must outlive every token that could still present a
+        // stale one. Failures propagate so the reconciler retries.
+        redisTemplate.execute(
+            PROJECT_TOKEN_VERSION_SCRIPT,
+            List.of(TOKEN_VERSION_KEY_PREFIX + userId),
+            Long.toString(tokenVersion)
+        );
+    }
+
+    @Override
+    public java.util.OptionalLong currentTokenVersion(String userId) {
+        // Deliberately NOT caught here: unlike isBlacklisted, this method
+        // cannot express "unsafe" through its return type — an empty result
+        // legitimately means "never revoked". The caller decides, and the
+        // filter refuses the request.
+        String raw = redisTemplate.opsForValue().get(TOKEN_VERSION_KEY_PREFIX + userId);
+        if (raw == null) {
+            return java.util.OptionalLong.empty();
+        }
+        try {
+            return java.util.OptionalLong.of(Long.parseLong(raw));
+        } catch (NumberFormatException malformed) {
+            // A corrupt projection must not read as "no revocation ever
+            // happened" — that would silently re-open every revoked token.
+            log.warn("malformed tokenVersion projection for userId={}", userId);
+            throw new IllegalStateException("Malformed tokenVersion projection", malformed);
         }
     }
 

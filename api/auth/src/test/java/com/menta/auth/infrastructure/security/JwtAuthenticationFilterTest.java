@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.menta.auth.application.port.out.AccessTokenIssuer;
 import com.menta.auth.application.port.out.AccessTokenIssuer.ParsedAccessToken;
+import com.menta.auth.application.port.out.TokenBlacklistPort;
 import com.menta.auth.domain.model.Role;
 
 import jakarta.servlet.FilterChain;
@@ -16,6 +17,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
@@ -45,6 +47,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 class JwtAuthenticationFilterTest {
 
     @Mock private AccessTokenIssuer accessTokenIssuer;
+    @Mock private TokenBlacklistPort tokenBlacklistPort;
     @Mock private FilterChain chain;
 
     private JwtAuthenticationFilter filter;
@@ -52,7 +55,7 @@ class JwtAuthenticationFilterTest {
     @BeforeEach
     void setUp() {
         SecurityContextHolder.clearContext();
-        filter = new JwtAuthenticationFilter(accessTokenIssuer);
+        filter = new JwtAuthenticationFilter(accessTokenIssuer, tokenBlacklistPort);
     }
 
     @AfterEach
@@ -71,6 +74,9 @@ class JwtAuthenticationFilterTest {
                 userId, Role.INSTRUCTOR, 5L, "jti-1"
             );
             when(accessTokenIssuer.parse("good.token.string")).thenReturn(Optional.of(parsed));
+            when(tokenBlacklistPort.isBlacklisted("jti-1")).thenReturn(false);
+            when(tokenBlacklistPort.currentTokenVersion(userId.toString()))
+                .thenReturn(OptionalLong.empty());
 
             MockHttpServletRequest request = new MockHttpServletRequest();
             request.addHeader("Authorization", "Bearer good.token.string");
@@ -123,6 +129,137 @@ class JwtAuthenticationFilterTest {
             filter.doFilter(request, response, chain);
 
             verify(chain, times(1)).doFilter(request, response);
+            assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        }
+    }
+
+    @Nested
+    @DisplayName("Spec: revocation enforcement (#88)")
+    class RevocationEnforcement {
+
+        private static final UUID USER_ID =
+            UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+
+        private void givenParsedToken(long tokenVersion) {
+            ParsedAccessToken parsed =
+                new ParsedAccessToken(USER_ID, Role.STUDENT, tokenVersion, "jti-9");
+            when(accessTokenIssuer.parse("valid.token")).thenReturn(Optional.of(parsed));
+        }
+
+        private MockHttpServletRequest bearerRequest() {
+            MockHttpServletRequest request = new MockHttpServletRequest();
+            request.addHeader("Authorization", "Bearer valid.token");
+            return request;
+        }
+
+        @Test
+        void authenticates_a_valid_token_whose_user_never_revoked_anything() throws Exception {
+            givenParsedToken(5L);
+            when(tokenBlacklistPort.isBlacklisted("jti-9")).thenReturn(false);
+            when(tokenBlacklistPort.currentTokenVersion(USER_ID.toString()))
+                .thenReturn(OptionalLong.empty());
+
+            filter.doFilter(bearerRequest(), new MockHttpServletResponse(), chain);
+
+            assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
+        }
+
+        @Test
+        void authenticates_when_the_token_version_matches_the_projection() throws Exception {
+            givenParsedToken(5L);
+            when(tokenBlacklistPort.isBlacklisted("jti-9")).thenReturn(false);
+            when(tokenBlacklistPort.currentTokenVersion(USER_ID.toString()))
+                .thenReturn(OptionalLong.of(5L));
+
+            filter.doFilter(bearerRequest(), new MockHttpServletResponse(), chain);
+
+            assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
+        }
+
+        @Test
+        void refuses_a_blacklisted_jti() throws Exception {
+            givenParsedToken(5L);
+            when(tokenBlacklistPort.isBlacklisted("jti-9")).thenReturn(true);
+
+            filter.doFilter(bearerRequest(), new MockHttpServletResponse(), chain);
+
+            assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        }
+
+        @Test
+        void refuses_a_token_whose_version_is_older_than_the_projection() throws Exception {
+            // The core of #88: a logout, refresh-reuse detection or password
+            // reset bumped the version, so this still-unexpired token is dead.
+            givenParsedToken(4L);
+            when(tokenBlacklistPort.isBlacklisted("jti-9")).thenReturn(false);
+            when(tokenBlacklistPort.currentTokenVersion(USER_ID.toString()))
+                .thenReturn(OptionalLong.of(5L));
+
+            filter.doFilter(bearerRequest(), new MockHttpServletResponse(), chain);
+
+            assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        }
+
+        @Test
+        void does_not_refuse_a_token_newer_than_the_projection() throws Exception {
+            // Can happen briefly while the reconciler catches up. A newer token
+            // was issued after the revocation, so it is legitimately current.
+            givenParsedToken(6L);
+            when(tokenBlacklistPort.isBlacklisted("jti-9")).thenReturn(false);
+            when(tokenBlacklistPort.currentTokenVersion(USER_ID.toString()))
+                .thenReturn(OptionalLong.of(5L));
+
+            filter.doFilter(bearerRequest(), new MockHttpServletResponse(), chain);
+
+            assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
+        }
+
+        @Test
+        void refuses_when_redis_is_unreachable_on_the_blacklist_read() throws Exception {
+            // Fail-closed: unable to prove the token is live means refuse.
+            givenParsedToken(5L);
+            when(tokenBlacklistPort.isBlacklisted("jti-9"))
+                .thenThrow(new RuntimeException("connection refused"));
+
+            filter.doFilter(bearerRequest(), new MockHttpServletResponse(), chain);
+
+            assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        }
+
+        @Test
+        void refuses_when_redis_is_unreachable_on_the_version_read() throws Exception {
+            givenParsedToken(5L);
+            when(tokenBlacklistPort.isBlacklisted("jti-9")).thenReturn(false);
+            when(tokenBlacklistPort.currentTokenVersion(USER_ID.toString()))
+                .thenThrow(new RuntimeException("connection refused"));
+
+            filter.doFilter(bearerRequest(), new MockHttpServletResponse(), chain);
+
+            assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        }
+
+        @Test
+        void always_continues_the_chain_even_when_refusing() throws Exception {
+            // The filter never short-circuits: the entry point renders 401.
+            givenParsedToken(4L);
+            when(tokenBlacklistPort.isBlacklisted("jti-9")).thenReturn(false);
+            when(tokenBlacklistPort.currentTokenVersion(USER_ID.toString()))
+                .thenReturn(OptionalLong.of(5L));
+            MockHttpServletRequest request = bearerRequest();
+            HttpServletResponse response = new MockHttpServletResponse();
+
+            filter.doFilter(request, response, chain);
+
+            verify(chain, times(1)).doFilter(request, response);
+        }
+
+        @Test
+        void does_not_touch_redis_when_no_credentials_are_present() throws Exception {
+            // An anonymous request must not cost a Redis round-trip.
+            filter.doFilter(new MockHttpServletRequest(), new MockHttpServletResponse(), chain);
+
+            verify(tokenBlacklistPort, never()).isBlacklisted(any());
+            verify(tokenBlacklistPort, never()).currentTokenVersion(any());
             assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
         }
     }

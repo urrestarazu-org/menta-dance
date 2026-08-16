@@ -10,8 +10,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.menta.auth.application.contract.AuthOutboxEventTypes;
 import com.menta.auth.application.dto.ResetPasswordCommand;
 import com.menta.auth.application.port.out.LoginRateLimitPort;
+import com.menta.auth.application.port.out.OutboxAppender;
 import com.menta.auth.application.port.out.PasswordEncoderPort;
 import com.menta.auth.application.port.out.PasswordResetAttemptRateLimitPort;
 import com.menta.auth.application.port.out.PasswordResetTokenHasher;
@@ -76,6 +78,7 @@ class ResetPasswordUseCaseImplTest {
     @Mock private RefreshTokenRepository refreshTokenRepository;
     @Mock private LoginRateLimitPort loginRateLimitPort;
     @Mock private com.menta.auth.application.port.out.Clock clock;
+    @Mock private OutboxAppender outboxAppender;
 
     private ResetPasswordUseCaseImpl useCase;
 
@@ -83,7 +86,8 @@ class ResetPasswordUseCaseImplTest {
     void setUp() {
         useCase = new ResetPasswordUseCaseImpl(
             passwordResetTokenRepository, passwordResetTokenHasher, attemptRateLimitPort,
-            userRepository, passwordEncoder, refreshTokenRepository, loginRateLimitPort, clock
+            userRepository, passwordEncoder, refreshTokenRepository, loginRateLimitPort, clock,
+            outboxAppender
         );
     }
 
@@ -214,6 +218,7 @@ class ResetPasswordUseCaseImplTest {
             verify(passwordResetTokenRepository, never()).consumeIfActive(any(), any());
             verify(userRepository, never()).save(any());
             verify(refreshTokenRepository, never()).revokeAllByUserId(any());
+            verify(outboxAppender, never()).append(anyString(), anyString(), anyString());
         }
 
         @Test
@@ -228,6 +233,7 @@ class ResetPasswordUseCaseImplTest {
 
             verify(passwordResetTokenRepository, never()).consumeIfActive(any(), any());
             verify(userRepository, never()).save(any());
+            verify(outboxAppender, never()).append(anyString(), anyString(), anyString());
         }
     }
 
@@ -286,6 +292,26 @@ class ResetPasswordUseCaseImplTest {
         }
 
         @Test
+        void publishes_the_bumped_token_version_so_redis_can_project_it() {
+            // #88 follow-up: resetPassword() bumps tokenVersion in memory,
+            // but nothing reaches Redis unless an outbox event carries it —
+            // otherwise the leaked-token access token stays valid until it
+            // naturally expires.
+            useCase.reset(command());
+
+            org.mockito.ArgumentCaptor<String> payload =
+                org.mockito.ArgumentCaptor.forClass(String.class);
+            verify(outboxAppender).append(
+                eq(AuthOutboxEventTypes.PASSWORD_RESET_COMPLETED),
+                eq(USER_ID.getValue().toString()),
+                payload.capture()
+            );
+            assertThat(payload.getValue())
+                .contains("\"userId\":\"" + USER_ID.getValue() + "\"")
+                .contains("\"newTokenVersion\":");
+        }
+
+        @Test
         void clears_the_login_failure_budget_for_the_email() {
             // Translated from the issue's "reiniciar failedLoginAttempts y
             // desbloquear la cuenta": that field/state does not exist
@@ -307,6 +333,7 @@ class ResetPasswordUseCaseImplTest {
 
             verify(userRepository, never()).save(any());
             verify(refreshTokenRepository, never()).revokeAllByUserId(any());
+            verify(outboxAppender, never()).append(anyString(), anyString(), anyString());
         }
     }
 

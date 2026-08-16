@@ -1,9 +1,11 @@
 package com.menta.auth.application.usecase;
 
+import com.menta.auth.application.contract.AuthOutboxEventTypes;
 import com.menta.auth.application.dto.ResetPasswordCommand;
 import com.menta.auth.application.port.in.ResetPasswordUseCase;
 import com.menta.auth.application.port.out.Clock;
 import com.menta.auth.application.port.out.LoginRateLimitPort;
+import com.menta.auth.application.port.out.OutboxAppender;
 import com.menta.auth.application.port.out.PasswordEncoderPort;
 import com.menta.auth.application.port.out.PasswordResetAttemptRateLimitPort;
 import com.menta.auth.application.port.out.PasswordResetTokenHasher;
@@ -50,6 +52,7 @@ public class ResetPasswordUseCaseImpl implements ResetPasswordUseCase {
     private final RefreshTokenRepository refreshTokenRepository;
     private final LoginRateLimitPort loginRateLimitPort;
     private final Clock clock;
+    private final OutboxAppender outboxAppender;
 
     public ResetPasswordUseCaseImpl(
         PasswordResetTokenRepository passwordResetTokenRepository,
@@ -59,7 +62,8 @@ public class ResetPasswordUseCaseImpl implements ResetPasswordUseCase {
         PasswordEncoderPort passwordEncoder,
         RefreshTokenRepository refreshTokenRepository,
         LoginRateLimitPort loginRateLimitPort,
-        Clock clock
+        Clock clock,
+        OutboxAppender outboxAppender
     ) {
         this.passwordResetTokenRepository = passwordResetTokenRepository;
         this.passwordResetTokenHasher = passwordResetTokenHasher;
@@ -69,6 +73,7 @@ public class ResetPasswordUseCaseImpl implements ResetPasswordUseCase {
         this.refreshTokenRepository = refreshTokenRepository;
         this.loginRateLimitPort = loginRateLimitPort;
         this.clock = clock;
+        this.outboxAppender = outboxAppender;
     }
 
     @Override
@@ -112,6 +117,17 @@ public class ResetPasswordUseCaseImpl implements ResetPasswordUseCase {
         // calls a caller might forget to pair.
         user.resetPassword(newPasswordHash);
         userRepository.save(user);
+
+        // #88 follow-up: resetPassword() bumps tokenVersion in memory, but
+        // that is invisible to Redis until published — without this event
+        // the access token belonging to the leaked/forgotten credential
+        // would stay valid until it naturally expires.
+        outboxAppender.append(
+            AuthOutboxEventTypes.PASSWORD_RESET_COMPLETED,
+            user.getId().getValue().toString(),
+            "{\"userId\":\"" + user.getId().getValue() + "\",\"newTokenVersion\":"
+                + user.getTokenVersion() + "}"
+        );
 
         // Every refresh across every device — not just the family the leaked
         // token belonged to (escenario 1: "invalidar TODOS los refresh tokens").

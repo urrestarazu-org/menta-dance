@@ -42,4 +42,34 @@ public interface TokenBlacklistPort {
      * reconciler can detect write failures.
      */
     void writeHeartbeat();
+
+    /**
+     * Projects the user's current {@code tokenVersion} so authenticated
+     * requests can be checked without a SQL read per request (#88).
+     *
+     * <p>This is what actually closes access tokens on logout, refresh-reuse
+     * detection and password reset: no access-token identifier is persisted
+     * anywhere, so there is no jti to blacklist for those events — only the
+     * version can invalidate tokens already in the wild.</p>
+     *
+     * <p>Idempotent by construction: writing the same version twice has the
+     * same observable effect. MUST propagate Redis failures so the reconciler
+     * marks the row FAILED and retries.</p>
+     *
+     * <p>Deliberately has no TTL. A blacklist entry may expire with its access
+     * token, but the current version must outlive every token that could still
+     * present a stale one.</p>
+     */
+    void projectTokenVersion(String userId, long tokenVersion);
+
+    /**
+     * @return the projected {@code tokenVersion} for the user, or
+     *     {@link java.util.OptionalLong#empty()} when none has been projected
+     *     yet — which is the normal state for a user who never revoked
+     *     anything.
+     * @throws RuntimeException when Redis is unreachable. Callers MUST treat a
+     *     failure as "cannot prove this token is current" and refuse the
+     *     request, mirroring {@link #isBlacklisted}'s fail-closed contract.
+     */
+    java.util.OptionalLong currentTokenVersion(String userId);
 }

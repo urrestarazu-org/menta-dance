@@ -177,12 +177,20 @@ class RefreshTokenUseCaseImplTest {
             verify(userRepository).save(any(User.class));
             // Family revoked atomically.
             verify(refreshTokenRepository).revokeFamily(FAMILY_ID);
-            // RefreshRevoked outbox event.
+            // RefreshRevoked outbox event. The payload MUST carry userId and
+            // newTokenVersion: the reconciler projects tokenVersion to Redis
+            // from this row alone (#88), and there is no jti available here —
+            // no access-token identifier is persisted anywhere.
+            org.mockito.ArgumentCaptor<String> payload =
+                org.mockito.ArgumentCaptor.forClass(String.class);
             verify(outboxAppender).append(
                 eq(AuthOutboxEventTypes.REFRESH_REVOKED),
-                anyString(),
-                anyString()
+                eq(FAMILY_ID.toString()),
+                payload.capture()
             );
+            assertThat(payload.getValue())
+                .contains("\"userId\":\"" + USER_ID + "\"")
+                .contains("\"newTokenVersion\":" + user.getTokenVersion());
             // Never re-issued tokens.
             verify(accessTokenIssuer, never()).issue(any());
             verify(refreshTokenRepository, never()).save(any(RefreshToken.class));

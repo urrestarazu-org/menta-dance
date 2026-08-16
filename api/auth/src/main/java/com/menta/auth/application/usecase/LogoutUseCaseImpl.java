@@ -98,11 +98,25 @@ public class LogoutUseCaseImpl implements LogoutUseCase {
         // catch this because they only verified in-memory state; the bug
         // surfaced in PR3's AuthFlowIntegrationTest.
         refreshTokenRepository.save(presented);
+
+        // #88 follow-up: revoking the refresh token alone leaves the
+        // still-live access token usable for its full remaining lifetime.
+        // Bumping the user's global tokenVersion is the only lever
+        // available to close it — LogoutCommand never carries the access
+        // token's jti, so there is nothing to blacklist per-token.
+        Optional<User> maybeLoggedOutUser = userRepository.findById(presented.getUserId());
+        User loggedOutUser = maybeLoggedOutUser.orElseThrow(RefreshTokenCompromisedException::new);
+        loggedOutUser.bumpTokenVersion();
+        userRepository.save(loggedOutUser);
+
         outboxAppender.append(
             AuthOutboxEventTypes.USER_LOGGED_OUT,
             presented.getId().toString(),
-            "{\"familyId\":\"" + presented.getFamilyId() + "\",\"tokenVersion\":"
-                + presented.getTokenVersion() + "}"
+            // userId lets the reconciler project tokenVersion without a lookup
+            // (#88). Note the aggregateId is the REFRESH id, never a jti.
+            "{\"userId\":\"" + presented.getUserId().getValue() + "\",\"familyId\":\""
+                + presented.getFamilyId() + "\",\"tokenVersion\":"
+                + loggedOutUser.getTokenVersion() + "}"
         );
     }
 }
