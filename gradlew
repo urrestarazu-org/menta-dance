@@ -1,5 +1,8 @@
 #!/bin/sh
 
+# Fix for AGP conflict between ANDROID_PREFS_ROOT and ANDROID_USER_HOME
+unset ANDROID_PREFS_ROOT
+
 #
 # Copyright © 2015 the original authors.
 #

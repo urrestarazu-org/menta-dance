@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt.android)
@@ -49,6 +50,16 @@ android {
         compose = true
         buildConfig = true
     }
+}
+
+kotlin {
+    // Fija el target de Kotlin en 21, igual que compileOptions arriba, sin
+    // depender del JDK que lance el daemon de Gradle. Sin esto, Android
+    // Studio (que por defecto usa su propio runtime como Gradle JVM, JDK 25
+    // en Quail 3) hace que Kotlin caiga a targetear bytecode 24 mientras Java
+    // sigue targeteando 21 segun compileOptions, y el propio Kotlin Gradle
+    // Plugin bloquea la build por esa inconsistencia.
+    jvmToolchain(21)
 }
 
 dependencies {

@@ -45,6 +45,14 @@ captures/
 *.ap_
 *.dex
 
+# Wrapper duplicado que Android Studio genera si android/ se abre como su
+# propia raiz de proyecto en vez de la raiz del monorepo. El settings.gradle.kts
+# real vive en la raiz; uno segundo aca adentro compite con el build real.
+android/gradlew
+android/gradlew.bat
+android/gradle/
+android/settings.gradle.kts
+
 # IntelliJ IDEA / Android Studio
 .idea/
 *.iml
