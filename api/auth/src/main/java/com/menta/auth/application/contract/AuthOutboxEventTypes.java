@@ -50,6 +50,13 @@ public final class AuthOutboxEventTypes {
      */
     public static final String ACCOUNT_ACTIVATION_REQUESTED = "auth.AccountActivationRequested";
 
+    /**
+     * Durable delivery request for a password-reset email (US-AUTH-005). Same
+     * shape and rationale as {@link #ACCOUNT_ACTIVATION_REQUESTED}: the row
+     * carries only {@code passwordResetTokenId} — never the raw token.
+     */
+    public static final String PASSWORD_RESET_REQUESTED = "auth.PasswordResetRequested";
+
     private AuthOutboxEventTypes() {
         // Constant holder.
     }
