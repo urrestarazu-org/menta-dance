@@ -83,6 +83,17 @@ class AccountActivationIntegrationTest {
     @MockBean private ActivationRateLimitPort activationRateLimitPort;
     @MockBean private com.menta.auth.application.port.out.LoginRateLimitPort loginRateLimitPort;
     @MockBean private ActivationNotificationPort activationNotificationPort;
+    /**
+     * The real password-reset limiters sit on RedisTemplate, which this slice
+     * does not provide. Password reset has its own dedicated coverage; mocking
+     * the ports keeps this test about the activation lifecycle.
+     */
+    @MockBean
+    private com.menta.auth.application.port.out.PasswordResetRequestRateLimitPort
+        passwordResetRequestRateLimitPort;
+    @MockBean
+    private com.menta.auth.application.port.out.PasswordResetAttemptRateLimitPort
+        passwordResetAttemptRateLimitPort;
     @MockBean private AuthDegradedGuard authDegradedGuard;
     @MockBean private TokenBlacklistPort tokenBlacklistPort;
 

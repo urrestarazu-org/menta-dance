@@ -5,7 +5,9 @@ import com.menta.auth.application.port.in.LogoutUseCase;
 import com.menta.auth.application.port.in.RefreshTokenUseCase;
 import com.menta.auth.application.port.in.RegisterUserUseCase;
 import com.menta.auth.application.port.in.ActivateAccountUseCase;
+import com.menta.auth.application.port.in.RequestPasswordResetUseCase;
 import com.menta.auth.application.port.in.ResendActivationUseCase;
+import com.menta.auth.application.port.in.ResetPasswordUseCase;
 import com.menta.auth.application.port.out.AccessTokenIssuer;
 import com.menta.auth.application.port.out.ActivationDeliveryCipher;
 import com.menta.auth.application.port.out.ActivationRateLimitPort;
@@ -17,6 +19,12 @@ import com.menta.auth.application.port.out.Clock;
 import com.menta.auth.application.port.out.LoginAttemptAuditPort;
 import com.menta.auth.application.port.out.LoginRateLimitPort;
 import com.menta.auth.application.port.out.OutboxAppender;
+import com.menta.auth.application.port.out.PasswordResetAttemptRateLimitPort;
+import com.menta.auth.application.port.out.PasswordResetDeliveryCipher;
+import com.menta.auth.application.port.out.PasswordResetRequestRateLimitPort;
+import com.menta.auth.application.port.out.PasswordResetTokenGenerator;
+import com.menta.auth.application.port.out.PasswordResetTokenHasher;
+import com.menta.auth.application.port.out.PasswordResetTokenRepository;
 import com.menta.auth.application.port.out.PasswordEncoderPort;
 import com.menta.auth.application.port.out.RefreshTokenRepository;
 import com.menta.auth.application.port.out.TokenHasher;
@@ -26,17 +34,26 @@ import com.menta.auth.application.usecase.LogoutUseCaseImpl;
 import com.menta.auth.application.usecase.RefreshTokenUseCaseImpl;
 import com.menta.auth.application.usecase.RegisterUserUseCaseImpl;
 import com.menta.auth.application.usecase.ActivateAccountUseCaseImpl;
+import com.menta.auth.application.usecase.RequestPasswordResetUseCaseImpl;
 import com.menta.auth.application.usecase.ResendActivationUseCaseImpl;
+import com.menta.auth.application.usecase.ResetPasswordUseCaseImpl;
 import com.menta.auth.infrastructure.activation.AesGcmActivationDeliveryCipher;
 import com.menta.auth.infrastructure.activation.RedisActivationRateLimitPort;
 import com.menta.auth.infrastructure.activation.SecureRandomActivationTokenGenerator;
 import com.menta.auth.infrastructure.activation.Sha256ActivationTokenHasher;
+import com.menta.auth.infrastructure.passwordreset.AesGcmPasswordResetDeliveryCipher;
+import com.menta.auth.infrastructure.passwordreset.RedisPasswordResetAttemptRateLimitPort;
+import com.menta.auth.infrastructure.passwordreset.RedisPasswordResetRequestRateLimitPort;
+import com.menta.auth.infrastructure.passwordreset.SecureRandomPasswordResetTokenGenerator;
+import com.menta.auth.infrastructure.passwordreset.Sha256PasswordResetTokenHasher;
 import com.menta.auth.infrastructure.transaction.TransactionalLoginUseCase;
 import com.menta.auth.infrastructure.transaction.TransactionalLogoutUseCase;
 import com.menta.auth.infrastructure.transaction.TransactionalRefreshTokenUseCase;
 import com.menta.auth.infrastructure.transaction.TransactionalRegisterUserUseCase;
 import com.menta.auth.infrastructure.transaction.TransactionalActivateAccountUseCase;
+import com.menta.auth.infrastructure.transaction.TransactionalRequestPasswordResetUseCase;
 import com.menta.auth.infrastructure.transaction.TransactionalResendActivationUseCase;
+import com.menta.auth.infrastructure.transaction.TransactionalResetPasswordUseCase;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.auth.infrastructure.security.JwtService;
 import com.menta.auth.infrastructure.security.LoggingLoginAttemptAuditPort;
@@ -87,6 +104,14 @@ public class AuthConfiguration {
         "ZGV2LW9ubHktc2VjcmV0LXdpdGgtMzItYnl0ZXMtbWluaW11bS0zMmJ5dGVzLW1pbmltdW0tMzJieXRlcw==";
     private static final String DEV_DEFAULT_ACTIVATION_DELIVERY_KEY =
         "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=";
+    /**
+     * Distinct from the activation default on purpose: the two flows use
+     * independent keys so rotating or compromising one never affects the
+     * other. A shared default would quietly re-couple them in every
+     * environment that forgets to override.
+     */
+    private static final String DEV_DEFAULT_PASSWORD_RESET_DELIVERY_KEY =
+        "YmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmI=";
 
     /**
      * Profiles considered production environments where dev secrets are forbidden.
@@ -125,6 +150,16 @@ public class AuthConfiguration {
     @Value("${auth.activation.delivery-key-version:1}")
     private int activationDeliveryKeyVersion;
 
+    /** TTL for a freshly-issued password-reset token (US-AUTH-005: 1 hour). */
+    @Value("${auth.password-reset.token-ttl:PT1H}")
+    private Duration passwordResetTokenTtl;
+
+    @Value("${auth.password-reset.delivery-key:" + DEV_DEFAULT_PASSWORD_RESET_DELIVERY_KEY + "}")
+    private String passwordResetDeliveryKey;
+
+    @Value("${auth.password-reset.delivery-key-version:1}")
+    private int passwordResetDeliveryKeyVersion;
+
     /**
      * Fail-fast validation: reject dev-only secret in production profiles.
      * This prevents accidental deployment with insecure defaults.
@@ -132,9 +167,11 @@ public class AuthConfiguration {
     @PostConstruct
     void validateSecretNotDefaultInProduction() {
         if (isProductionProfile() && (DEV_DEFAULT_SECRET.equals(jwtBase64Secret)
-            || DEV_DEFAULT_ACTIVATION_DELIVERY_KEY.equals(activationDeliveryKey))) {
+            || DEV_DEFAULT_ACTIVATION_DELIVERY_KEY.equals(activationDeliveryKey)
+            || DEV_DEFAULT_PASSWORD_RESET_DELIVERY_KEY.equals(passwordResetDeliveryKey))) {
             throw new IllegalStateException(
-                "SECURITY: production requires non-default JWT and activation delivery keys. "
+                "SECURITY: production requires non-default JWT, activation delivery and "
+                    + "password reset delivery keys. "
                     + "Set them via environment variables. Active profiles: "
                     + String.join(", ", environment.getActiveProfiles())
             );
@@ -262,6 +299,104 @@ public class AuthConfiguration {
             activationTokenTtl
         );
         return new TransactionalResendActivationUseCase(implementation);
+    }
+
+    // -- Password reset (US-AUTH-005 / US-AUTH-006) -------------------------
+
+    @Bean
+    public PasswordResetTokenGenerator passwordResetTokenGenerator() {
+        return new SecureRandomPasswordResetTokenGenerator();
+    }
+
+    @Bean
+    public PasswordResetTokenHasher passwordResetTokenHasher() {
+        return new Sha256PasswordResetTokenHasher();
+    }
+
+    /**
+     * Its own AES-GCM key, independent from {@link #activationDeliveryCipher}:
+     * rotating or compromising one delivery key must never take the other
+     * flow down with it.
+     */
+    @Bean
+    public PasswordResetDeliveryCipher passwordResetDeliveryCipher() {
+        return new AesGcmPasswordResetDeliveryCipher(
+            passwordResetDeliveryKey, passwordResetDeliveryKeyVersion
+        );
+    }
+
+    /** US-AUTH-005: 3 solicitudes/hora por email, 10/hora por IP. */
+    @Bean
+    public PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort(
+        org.springframework.data.redis.core.RedisTemplate<String, String> redisTemplate,
+        @Value("${auth.password-reset.request-rate-limit.email-max-attempts:3}") long emailMax,
+        @Value("${auth.password-reset.request-rate-limit.client-max-attempts:10}") long clientMax,
+        @Value("${auth.password-reset.request-rate-limit.window-seconds:3600}") long windowSeconds
+    ) {
+        return new RedisPasswordResetRequestRateLimitPort(
+            redisTemplate, emailMax, clientMax, Duration.ofSeconds(windowSeconds)
+        );
+    }
+
+    /** US-AUTH-006: 10 intentos/hora por IP. */
+    @Bean
+    public PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort(
+        org.springframework.data.redis.core.RedisTemplate<String, String> redisTemplate,
+        @Value("${auth.password-reset.attempt-rate-limit.client-max-attempts:10}") long clientMax,
+        @Value("${auth.password-reset.attempt-rate-limit.window-seconds:3600}") long windowSeconds
+    ) {
+        return new RedisPasswordResetAttemptRateLimitPort(
+            redisTemplate, clientMax, Duration.ofSeconds(windowSeconds)
+        );
+    }
+
+    @Bean
+    public RequestPasswordResetUseCase requestPasswordResetUseCase(
+        UserRepository userRepository,
+        PasswordResetTokenRepository passwordResetTokenRepository,
+        PasswordResetTokenGenerator passwordResetTokenGenerator,
+        PasswordResetTokenHasher passwordResetTokenHasher,
+        PasswordResetDeliveryCipher passwordResetDeliveryCipher,
+        PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort,
+        OutboxAppender outboxAppender,
+        Clock clock
+    ) {
+        RequestPasswordResetUseCaseImpl implementation = new RequestPasswordResetUseCaseImpl(
+            userRepository,
+            passwordResetTokenRepository,
+            passwordResetTokenGenerator,
+            passwordResetTokenHasher,
+            passwordResetDeliveryCipher,
+            passwordResetRequestRateLimitPort,
+            outboxAppender,
+            clock,
+            passwordResetTokenTtl
+        );
+        return new TransactionalRequestPasswordResetUseCase(implementation);
+    }
+
+    @Bean
+    public ResetPasswordUseCase resetPasswordUseCase(
+        PasswordResetTokenRepository passwordResetTokenRepository,
+        PasswordResetTokenHasher passwordResetTokenHasher,
+        PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort,
+        UserRepository userRepository,
+        PasswordEncoderPort passwordEncoder,
+        RefreshTokenRepository refreshTokenRepository,
+        LoginRateLimitPort loginRateLimitPort,
+        Clock clock
+    ) {
+        ResetPasswordUseCaseImpl implementation = new ResetPasswordUseCaseImpl(
+            passwordResetTokenRepository,
+            passwordResetTokenHasher,
+            passwordResetAttemptRateLimitPort,
+            userRepository,
+            passwordEncoder,
+            refreshTokenRepository,
+            loginRateLimitPort,
+            clock
+        );
+        return new TransactionalResetPasswordUseCase(implementation);
     }
 
     /**
