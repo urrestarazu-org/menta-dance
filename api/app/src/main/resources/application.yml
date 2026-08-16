@@ -75,6 +75,26 @@ auth:
       email-max-attempts: ${AUTH_ACTIVATION_RATE_LIMIT_EMAIL_MAX_ATTEMPTS:3}
       client-max-attempts: ${AUTH_ACTIVATION_RATE_LIMIT_CLIENT_MAX_ATTEMPTS:10}
       window-seconds: ${AUTH_ACTIVATION_RATE_LIMIT_WINDOW_SECONDS:900}
+  password-reset:
+    # ISO-8601: el enlace vence a la hora (US-AUTH-005/006).
+    token-ttl: ${AUTH_PASSWORD_RESET_TOKEN_TTL:PT1H}
+    public-base-url: ${AUTH_PASSWORD_RESET_PUBLIC_BASE_URL:http://localhost:8080}
+    from-address: ${AUTH_PASSWORD_RESET_FROM_ADDRESS:no-reply@menta.local}
+    # Clave AES-256-GCM DEDICADA, distinta de la de activación: rotar o
+    # comprometer una no debe afectar al otro flujo. El fallback es sólo para
+    # desarrollo; los perfiles de producción lo rechazan al arrancar.
+    delivery-key: ${AUTH_PASSWORD_RESET_DELIVERY_KEY:YmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmI=}
+    delivery-key-version: ${AUTH_PASSWORD_RESET_DELIVERY_KEY_VERSION:1}
+    request-rate-limit:
+      # US-AUTH-005: 3 solicitudes/hora por email, 10/hora por IP.
+      email-max-attempts: ${AUTH_PASSWORD_RESET_REQUEST_EMAIL_MAX:3}
+      client-max-attempts: ${AUTH_PASSWORD_RESET_REQUEST_CLIENT_MAX:10}
+      window-seconds: ${AUTH_PASSWORD_RESET_REQUEST_WINDOW_SECONDS:3600}
+    attempt-rate-limit:
+      # US-AUTH-006: 10 intentos/hora por IP. Sin dimensión por email: el
+      # endpoint recibe un token, no un email.
+      client-max-attempts: ${AUTH_PASSWORD_RESET_ATTEMPT_CLIENT_MAX:10}
+      window-seconds: ${AUTH_PASSWORD_RESET_ATTEMPT_WINDOW_SECONDS:3600}
   login:
     rate-limit:
       # Presupuestos SEMÁNTICOS: cuentan fallos de autenticación, no requests.
