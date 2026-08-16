@@ -151,6 +151,24 @@ jobs:
           export MYSQL_APP_PASSWORD=test
           docker compose config > /dev/null
 
+  # OpenAPI: el contrato se escribe y versiona a mano (ver api/openapi/README.md),
+  # así que el lint automático es lo que impide que un YAML roto o un $ref
+  # colgado lleguen a develop sin que nadie lo note.
+  openapi-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Validate OpenAPI contracts
+        run: |
+          # redocly lint: valida estructura OpenAPI 3.1, referencias y esquemas.
+          # Sale distinto de cero ante errores; los warnings quedan visibles
+          # pero no bloquean.
+          docker run --rm -v "$(pwd)/api/openapi:/spec:ro" \
+            redocly/cli:latest \
+            lint /spec/auth-v1.yaml
+
   shellcheck:
     runs-on: ubuntu-latest
     steps:

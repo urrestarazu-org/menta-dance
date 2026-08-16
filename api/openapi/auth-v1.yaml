@@ -1,0 +1,581 @@
+openapi: 3.1.0
+
+# Contrato HTTP de la superficie Auth v1.
+#
+# Escrito y versionado a mano: el diff se revisa en el PR igual que la colección
+# Bruno, y no se expone ningún endpoint de documentación en un API cuya
+# configuración de seguridad es fail-closed.
+#
+# AGENTS.md exige actualizar este archivo en el mismo cambio que modifique una
+# ruta, método, parámetro, autenticación, respuesta, error o rate limit.
+#
+# Sólo describe endpoints IMPLEMENTADOS. Los endpoints planificados que figuran
+# en docs/03-AUTH-API.md (logout-all, forgot-password, reset-password,
+# change-password, me, me/roles) no están acá porque todavía no existen.
+
+info:
+  title: Menta Dance — Auth API
+  version: "1.0.0"
+  description: |
+    Autenticación, sesiones y activación de cuentas.
+
+    ## Custodia de tokens
+
+    El access token viaja en el cuerpo de la respuesta; el refresh token **nunca**
+    lo hace: viaja en el header `X-Refresh-Token`, tanto de salida como de
+    entrada. Los endpoints que reciben un refresh lo aceptan únicamente por
+    header y rechazan un refresh enviado en JSON.
+
+    Para la web, el BFF consume este API servidor-a-servidor y custodia ambos
+    tokens en sesión; el navegador sólo recibe una cookie opaca. Android guarda
+    el refresh en Keystore/EncryptedSharedPreferences.
+
+    ## Errores
+
+    Todos los errores usan `application/problem+json` (RFC 9457) con un miembro
+    adicional `code` estable. **Los clientes deben discriminar por `code`, no por
+    `detail`**, que es texto legible y puede cambiar.
+
+    ## No enumeración de cuentas
+
+    Varios endpoints responden de forma deliberadamente indistinguible para no
+    revelar si una cuenta existe:
+
+    - `POST /login` colapsa email desconocido, contraseña incorrecta y cuenta no
+      activa en el mismo `401 INVALID_CREDENTIALS`.
+    - `POST /register` responde `202` vacío tanto para alta nueva como para email
+      ya registrado o rol no permitido.
+    - `POST /resend-activation` responde `202` vacío para email inexistente,
+      pendiente o ya activo.
+    - `GET /activate/{token}` no distingue token inválido, expirado ni reutilizado.
+
+servers:
+  - url: http://localhost:8081
+    description: Desarrollo local
+  - url: https://api.mentadance.com
+    description: Producción
+
+tags:
+  - name: Sesión
+    description: Login, renovación y cierre de sesión.
+  - name: Activación
+    description: Registro público y activación de cuenta.
+
+paths:
+  /api/v1/auth/login:
+    post:
+      tags: [Sesión]
+      summary: Iniciar sesión
+      description: |
+        Valida credenciales y estado de cuenta sin revelar cuál dato falló.
+
+        El refresh token se devuelve en el header `X-Refresh-Token`, nunca en el
+        cuerpo.
+
+        Los intentos fallidos consumen dos presupuestos independientes —por email
+        y por origen— que cuentan **fallos**, no intentos: un login exitoso no
+        consume nada y limpia el presupuesto del email. Agotarlos devuelve `429`
+        temporal; **nunca** cambia el estado de la cuenta a bloqueada (ADR-0035).
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Autenticación correcta.
+          headers:
+            X-Refresh-Token:
+              $ref: '#/components/headers/XRefreshTokenResponse'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          $ref: '#/components/responses/InvalidAuthRequest'
+        '401':
+          description: |
+            Credenciales inválidas. Idéntica para email desconocido, contraseña
+            incorrecta y cuenta no activa.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://menta.dance/problems/invalid_credentials
+                title: Unauthorized
+                status: 401
+                detail: Authentication failed.
+                code: INVALID_CREDENTIALS
+        '423':
+          description: |
+            Cuenta bloqueada administrativamente. Distinto de `429`: este estado
+            es persistente y requiere intervención; el rate limiting nunca lo
+            provoca.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://menta.dance/problems/user_locked
+                title: Locked
+                status: 423
+                detail: The user account is locked.
+                code: USER_LOCKED
+        '429':
+          description: |
+            Presupuesto de fallos agotado. Temporal y auto-recuperable: la ventana
+            expira sola y el estado de la cuenta no se toca.
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://menta.dance/problems/login_rate_limited
+                title: Too Many Requests
+                status: 429
+                detail: Too many login attempts; retry later.
+                code: LOGIN_RATE_LIMITED
+        '503':
+          $ref: '#/components/responses/AuthDegraded'
+
+  /api/v1/auth/refresh:
+    post:
+      tags: [Sesión]
+      summary: Renovar la sesión
+      description: |
+        Rota el refresh obligatoriamente: revoca el presentado y emite uno nuevo.
+
+        El refresh se acepta **sólo** por header. Enviarlo en el cuerpo JSON no
+        es una alternativa soportada y se rechaza con `400`.
+
+        Reutilizar un refresh ya rotado revoca todas las sesiones del usuario.
+      operationId: refresh
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/XRefreshTokenHeader'
+      responses:
+        '200':
+          description: Par de tokens rotado.
+          headers:
+            X-Refresh-Token:
+              $ref: '#/components/headers/XRefreshTokenResponse'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          $ref: '#/components/responses/InvalidAuthRequest'
+        '401':
+          description: Refresh inválido, expirado o reutilizado.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://menta.dance/problems/refresh_token_compromised
+                title: Unauthorized
+                status: 401
+                detail: Authentication failed.
+                code: REFRESH_TOKEN_COMPROMISED
+        '503':
+          $ref: '#/components/responses/AuthDegraded'
+
+  /api/v1/auth/logout:
+    post:
+      tags: [Sesión]
+      summary: Cerrar sesión
+      description: |
+        Revoca el refresh y agrega el `jti` del access a la blacklist en la misma
+        unidad transaccional.
+
+        Requiere el access token en `Authorization` y el refresh en
+        `X-Refresh-Token`. No confirma éxito hasta que la revocación queda
+        reflejada.
+      operationId: logout
+      parameters:
+        - $ref: '#/components/parameters/XRefreshTokenHeader'
+      responses:
+        '204':
+          description: Sesión cerrada.
+        '400':
+          $ref: '#/components/responses/InvalidAuthRequest'
+        '401':
+          description: Access o refresh inválido.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          $ref: '#/components/responses/AuthDegraded'
+
+  /api/v1/auth/register:
+    post:
+      tags: [Activación]
+      summary: Registro público
+      description: |
+        Crea una cuenta `PENDING_ACTIVATION`, un token de un solo uso y un evento
+        durable de correo, todo en una transacción.
+
+        **Responde siempre `202` vacío**, incluso si el email ya está registrado o
+        si se pide un rol distinto de `STUDENT`. Nunca devuelve el email, el ID ni
+        el estado de la cuenta: distinguir esos casos permitiría enumerar cuentas.
+
+        Disponible también en `POST /api/v1/users/register`, alias temporal con el
+        mismo comportamiento.
+      operationId: register
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '202':
+          description: |
+            Solicitud aceptada. Respuesta idéntica para alta nueva, email ya
+            registrado y rol no permitido.
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '429':
+          $ref: '#/components/responses/ActivationRateLimited'
+        '503':
+          $ref: '#/components/responses/AuthDegraded'
+
+  /api/v1/users/register:
+    post:
+      tags: [Activación]
+      summary: Registro público (alias temporal)
+      description: |
+        Alias de `POST /api/v1/auth/register` con comportamiento idéntico. Se
+        conserva durante la migración de la ruta de registro.
+      operationId: registerViaUsersAlias
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '202':
+          description: Solicitud aceptada.
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '429':
+          $ref: '#/components/responses/ActivationRateLimited'
+        '503':
+          $ref: '#/components/responses/AuthDegraded'
+
+  /api/v1/auth/activate/{token}:
+    get:
+      tags: [Activación]
+      summary: Activar cuenta
+      description: |
+        Consume el token de activación y pasa la cuenta a `ACTIVE`.
+
+        El token no se persiste ni se registra en claro: sólo se guarda su hash, y
+        los access logs enmascaran la URI como
+        `/api/v1/auth/activate/[REDACTED]`.
+
+        Un token inválido, expirado o ya usado devuelve el mismo `400`; el motivo
+        no es distinguible.
+      operationId: activateAccount
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          description: Token opaco de un solo uso recibido por email.
+          schema:
+            type: string
+          example: 3f8a9c1e-opaque-single-use-token
+      responses:
+        '204':
+          description: Cuenta activada.
+        '400':
+          description: Token inválido, expirado o reutilizado — indistinguibles entre sí.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://menta.dance/problems/activation_token_invalid
+                title: Bad Request
+                status: 400
+                detail: El token de activación es inválido o expiró.
+                code: ACTIVATION_TOKEN_INVALID
+        '503':
+          $ref: '#/components/responses/AuthDegraded'
+
+  /api/v1/auth/resend-activation:
+    post:
+      tags: [Activación]
+      summary: Reenviar el correo de activación
+      description: |
+        **Responde siempre `202` vacío**: email inexistente, pendiente y ya activo
+        son indistinguibles para el cliente.
+      operationId: resendActivation
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResendActivationRequest'
+      responses:
+        '202':
+          description: Solicitud aceptada, sin revelar el estado de la cuenta.
+        '400':
+          description: Cuerpo inválido.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                validacion:
+                  value:
+                    type: https://menta.dance/problems/invalid_request
+                    title: Bad Request
+                    status: 400
+                    detail: La solicitud contiene datos inválidos.
+                    code: INVALID_REQUEST
+                semantica:
+                  value:
+                    type: https://menta.dance/problems/invalid_activation_request
+                    title: Bad Request
+                    status: 400
+                    detail: La solicitud de activación no es válida.
+                    code: INVALID_ACTIVATION_REQUEST
+        '429':
+          $ref: '#/components/responses/ActivationRateLimited'
+        '503':
+          $ref: '#/components/responses/AuthDegraded'
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Access token JWT de 15 minutos. Claims: `sub`, `roles`, `jti`,
+        `tokenVersion`, `iat`, `exp`, `iss`, `aud`.
+
+  parameters:
+    XRefreshTokenHeader:
+      name: X-Refresh-Token
+      in: header
+      required: true
+      description: |
+        Refresh token opaco. **Sólo por header**: enviarlo en el cuerpo JSON no
+        es una alternativa soportada y se rechaza con `400`.
+      schema:
+        type: string
+        format: uuid
+      example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+
+  headers:
+    RetryAfter:
+      description: Segundos a esperar antes de reintentar.
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+      example: 847
+    XRefreshTokenResponse:
+      description: |
+        Refresh token opaco, válido 7 días. Se entrega sólo por header y nunca en
+        el cuerpo, para que no quede registrado por consumidores que loguean
+        respuestas.
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: alumno@example.com
+        password:
+          type: string
+          format: password
+          example: SecurePass123!
+      additionalProperties: false
+
+    RegisterRequest:
+      type: object
+      required: [email, password, role]
+      properties:
+        email:
+          type: string
+          format: email
+          example: alumno@example.com
+        password:
+          type: string
+          format: password
+          example: SecurePass123!
+        role:
+          $ref: '#/components/schemas/Role'
+      additionalProperties: false
+
+    ResendActivationRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          example: alumno@example.com
+      additionalProperties: false
+
+    TokenResponse:
+      type: object
+      description: |
+        El refresh token **no** aparece acá: viaja en el header
+        `X-Refresh-Token`.
+      required: [access_token, token_type, expires_in]
+      properties:
+        access_token:
+          type: string
+          description: JWT de 15 minutos.
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMWUifQ.signature
+        token_type:
+          type: string
+          const: Bearer
+          example: Bearer
+        expires_in:
+          type: number
+          description: |
+            Vigencia del access token en **segundos**, como número — no como
+            duración ISO-8601.
+          example: 900.0
+
+    Role:
+      type: string
+      description: |
+        El registro público sólo admite `STUDENT`. Pedir otro rol no produce un
+        error distinguible: la respuesta sigue siendo `202` vacío.
+      enum: [STUDENT, INSTRUCTOR, ADMIN]
+      example: STUDENT
+
+    Problem:
+      type: object
+      description: |
+        RFC 9457 Problem Details con el miembro adicional `code`.
+
+        `code` es el identificador estable y **el único campo por el que un
+        cliente debe discriminar**. `detail` es texto legible y puede cambiar sin
+        aviso.
+      required: [type, title, status, code]
+      properties:
+        type:
+          type: string
+          format: uri
+          description: '`https://menta.dance/problems/<code en minúsculas>`.'
+        title:
+          type: string
+          description: Frase de estado HTTP.
+        status:
+          type: integer
+        detail:
+          type: string
+          description: Texto legible. No apto para lógica de cliente.
+        code:
+          $ref: '#/components/schemas/ErrorCode'
+
+    ErrorCode:
+      type: string
+      enum:
+        - INVALID_CREDENTIALS
+        - USER_LOCKED
+        - LOGIN_RATE_LIMITED
+        - REFRESH_TOKEN_COMPROMISED
+        - AUTH_DEGRADED
+        - ACTIVATION_TOKEN_INVALID
+        - ACTIVATION_RATE_LIMITED
+        - INVALID_AUTH_REQUEST
+        - INVALID_REQUEST
+        - INVALID_ACTIVATION_REQUEST
+
+  responses:
+
+    InvalidAuthRequest:
+      description: Cuerpo, validación o header de autenticación inválidos.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: https://menta.dance/problems/invalid_auth_request
+            title: Bad Request
+            status: 400
+            detail: The authentication request is invalid.
+            code: INVALID_AUTH_REQUEST
+
+    InvalidRequest:
+      description: El cuerpo no pasó la validación.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: https://menta.dance/problems/invalid_request
+            title: Bad Request
+            status: 400
+            detail: La solicitud contiene datos inválidos.
+            code: INVALID_REQUEST
+
+    ActivationRateLimited:
+      description: Presupuesto de activación agotado, por email o por origen.
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: https://menta.dance/problems/activation_rate_limited
+            title: Too Many Requests
+            status: 429
+            detail: Demasiados intentos de activación; reintentá más tarde.
+            code: ACTIVATION_RATE_LIMITED
+
+    AuthDegraded:
+      description: |
+        Autenticación temporalmente no disponible.
+
+        Ocurre cuando la reflexión de revocaciones en Redis no está reconciliada o
+        el almacén de rate limiting no responde. **No existe modo fail-open**: la
+        operación se deniega antes que aceptar un token que podría estar revocado.
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: https://menta.dance/problems/auth_degraded
+            title: Service Unavailable
+            status: 503
+            detail: Authentication is temporarily unavailable.
+            code: AUTH_DEGRADED
+
+security:
+  - bearerAuth: []
