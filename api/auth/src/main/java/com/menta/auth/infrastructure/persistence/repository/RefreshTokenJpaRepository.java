@@ -54,4 +54,24 @@ public interface RefreshTokenJpaRepository extends JpaRepository<RefreshTokenJpa
         @Param("revokedAt") Instant revokedAt,
         @Param("familyId") UUID familyId
     );
+
+    /**
+     * Bulk-marks every refresh owned by this user whose status is in
+     * ACTIVE|USED as REVOKED, across every family — not just one (US-AUTH-006:
+     * a password reset must close every session, on every device).
+     */
+    @Modifying
+    @Query("""
+        UPDATE RefreshTokenJpaEntity r
+           SET r.status = :status,
+               r.revokedAt = :revokedAt
+         WHERE r.userId = :userId
+           AND r.status IN (com.menta.auth.domain.model.RefreshTokenStatus.ACTIVE,
+                            com.menta.auth.domain.model.RefreshTokenStatus.USED)
+        """)
+    int bulkRevokeByUser(
+        @Param("status") RefreshTokenStatus status,
+        @Param("revokedAt") Instant revokedAt,
+        @Param("userId") UUID userId
+    );
 }

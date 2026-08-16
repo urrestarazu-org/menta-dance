@@ -62,6 +62,14 @@ public class RefreshTokenRepositoryAdapter implements RefreshTokenRepository {
 
     @Override
     @Transactional(propagation = Propagation.REQUIRED)
+    public void revokeAllByUserId(com.menta.auth.domain.model.UserId userId) {
+        jpaRepository.bulkRevokeByUser(
+            RefreshTokenStatus.REVOKED, Instant.now(), userId.getValue()
+        );
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED)
     public List<RefreshToken> findActiveOrUsedByFamily(UUID familyId) {
         return RefreshTokenJpaMapper.toDomainList(
             jpaRepository.findByFamilyIdAndStatusIn(

@@ -125,6 +125,19 @@ public class User {
         this.updatedAt = LocalDateTime.now();
     }
 
+    /**
+     * Replaces the password hash after a successful reset (US-AUTH-006) and
+     * bumps tokenVersion in the same call, so a caller cannot persist a
+     * changed password without also invalidating existing refresh tokens —
+     * changing the credential and closing prior sessions are one business
+     * event, not two independent calls a caller might forget to pair.
+     */
+    public void resetPassword(String newPasswordHash) {
+        this.passwordHash = Objects.requireNonNull(newPasswordHash, "newPasswordHash cannot be null");
+        this.tokenVersion += 1;
+        this.updatedAt = LocalDateTime.now();
+    }
+
     public boolean isActive() {
         return this.status == UserStatus.ACTIVE;
     }

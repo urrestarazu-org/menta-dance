@@ -1,6 +1,7 @@
 package com.menta.auth.application.port.out;
 
 import com.menta.auth.domain.model.RefreshToken;
+import com.menta.auth.domain.model.UserId;
 
 import java.util.List;
 import java.util.Optional;
@@ -36,4 +37,12 @@ public interface RefreshTokenRepository {
      * detection path to enumerate siblings before bulk-revoke.
      */
     List<RefreshToken> findActiveOrUsedByFamily(UUID familyId);
+
+    /**
+     * Bulk revoke every refresh across every family owned by this user, not
+     * just one family (US-AUTH-006: a password reset must close every
+     * session, on every device — {@link #revokeFamily} only reaches the one
+     * family a compromised token belongs to). Idempotent.
+     */
+    void revokeAllByUserId(UserId userId);
 }

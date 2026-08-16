@@ -143,6 +143,24 @@ class RefreshTokenRepositoryAdapterTest {
     }
 
     @Nested
+    @DisplayName("Spec: revokeAllByUserId")
+    class RevokeAllByUserId {
+
+        @Test
+        void delegates_to_bulk_update_for_user_id_with_revokedAt_now() {
+            when(jpaRepository.bulkRevokeByUser(
+                eq(RefreshTokenStatus.REVOKED), any(Instant.class), eq(USER_ID)
+            )).thenReturn(3);
+
+            adapter.revokeAllByUserId(com.menta.auth.domain.model.UserId.of(USER_ID));
+
+            verify(jpaRepository, times(1)).bulkRevokeByUser(
+                eq(RefreshTokenStatus.REVOKED), any(Instant.class), eq(USER_ID)
+            );
+        }
+    }
+
+    @Nested
     @DisplayName("Spec: findActiveOrUsedByFamily")
     class FindActiveOrUsedByFamily {
 
