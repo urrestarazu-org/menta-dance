@@ -16,6 +16,7 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "AUTH_API_BASE_URL", "\"http://10.0.2.2:8080\"")
     }
 
     buildTypes {
@@ -35,6 +36,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -58,4 +60,10 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.test.core)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    // Provee androidx.test.runner.AndroidJUnitRunner, declarado arriba como
+    // testInstrumentationRunner. Sin esta dependencia la instrumentación no
+    // arranca: ClassNotFoundException antes de ejecutar un solo test.
+    androidTestImplementation(libs.androidx.test.runner)
 }
