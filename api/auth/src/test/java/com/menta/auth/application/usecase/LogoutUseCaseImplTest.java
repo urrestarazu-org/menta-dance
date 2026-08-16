@@ -92,9 +92,12 @@ class LogoutUseCaseImplTest {
                 TOKEN_VERSION,
                 Instant.now().plus(REFRESH_TTL)
             );
+            User user = activeUser(USER_ID, Role.STUDENT, TOKEN_VERSION + 1);
 
             when(tokenHasher.hash(anyString())).thenReturn(presentedHash);
             when(refreshTokenRepository.findByHash(anyString())).thenReturn(Optional.of(presented));
+            when(userRepository.findById(any())).thenReturn(Optional.of(user));
+            when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
             useCase.execute(new LogoutCommand(raw));
 
@@ -105,11 +108,30 @@ class LogoutUseCaseImplTest {
             // row stays ACTIVE in MySQL and the next presentation re-detects
             // the refresh as ACTIVE rather than REVOKED.
             verify(refreshTokenRepository, times(1)).save(presented);
+
+            // #88 follow-up: a normal logout must invalidate the still-live
+            // access token, not merely the refresh token — otherwise the
+            // access token stays usable for its full remaining lifetime.
+            // Bumping the user's global tokenVersion is the only lever
+            // available: LogoutCommand never carries the access token's jti,
+            // so there is nothing to blacklist per-token.
+            assertThat(user.getTokenVersion()).isGreaterThan(TOKEN_VERSION);
+            verify(userRepository).save(user);
+
+            // The aggregateId is the REFRESH token id, not a jti — no access
+            // token identifier is persisted anywhere. The payload must
+            // therefore carry userId and the BUMPED tokenVersion so the
+            // reconciler can project it to Redis without any lookup (#88).
+            org.mockito.ArgumentCaptor<String> payload =
+                org.mockito.ArgumentCaptor.forClass(String.class);
             verify(outboxAppender, times(1)).append(
                 eq(AuthOutboxEventTypes.USER_LOGGED_OUT),
                 eq(presented.getId().toString()),
-                anyString()
+                payload.capture()
             );
+            assertThat(payload.getValue())
+                .contains("\"userId\":\"" + presented.getUserId().getValue() + "\"")
+                .contains("\"tokenVersion\":" + user.getTokenVersion());
         }
 
         @Test

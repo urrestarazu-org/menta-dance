@@ -154,7 +154,11 @@ public class RefreshTokenUseCaseImpl implements RefreshTokenUseCase {
         outboxAppender.append(
             AuthOutboxEventTypes.REFRESH_REVOKED,
             familyId.toString(),
-            "{\"reason\":\"" + reason + "\",\"newTokenVersion\":" + user.getTokenVersion() + "}"
+            // userId is required by the reconciler to project tokenVersion to
+            // Redis (#88). The aggregateId here is a familyId, not a jti — no
+            // access-token identifier exists to key a blacklist entry on.
+            "{\"userId\":\"" + user.getId().getValue() + "\",\"reason\":\"" + reason
+                + "\",\"newTokenVersion\":" + user.getTokenVersion() + "}"
         );
     }
 }

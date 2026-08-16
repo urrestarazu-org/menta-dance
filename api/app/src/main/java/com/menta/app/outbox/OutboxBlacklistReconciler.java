@@ -29,12 +29,16 @@ import org.springframework.transaction.annotation.Transactional;
  *      - FAILED rows whose next_retry_at <= now (due for retry)
  *      A crash between commit and tick leaves PENDING rows intact, so the
  *      next tick naturally re-picks them (Crash retoma spec scenario).
- *   2. For each row, apply the side-effect:
- *      - AuthUserLoggedIn / UserLoggedOut → SET blacklist:jti:{aggregateId}
- *        with the configured access-token TTL.
- *      - The reconciler is intentionally narrow — only JTI blacklist is
- *        wired this slice. Future cross-module consumers register their own
- *        listeners via OutboxListener in :api:shared.
+ *   2. For each row, dispatch to the one {@link OutboxEventHandler} that
+ *      claims its event type (see {@link OutboxReconciliationWorker}):
+ *      - {@code REFRESH_REVOKED} / {@code USER_LOGGED_OUT} /
+ *        {@code PASSWORD_RESET_COMPLETED} → {@link TokenVersionOutboxEventHandler}
+ *        projects the bumped {@code tokenVersion} to Redis (#88). This is
+ *        what actually closes already-issued access tokens — no event
+ *        carries a revocable jti today, so {@link BlacklistOutboxEventHandler}
+ *        claims nothing and stays dormant until one does.
+ *      - Account activation / password-reset-request events go through their
+ *        own dedicated handlers.
  *   3. Update the row:
  *      - Redis OK → status=COMPLETED, processed_at=now, attempts unchanged.
  *      - Redis exception → status=FAILED, attempts+=1, last_error=message,

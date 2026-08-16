@@ -57,6 +57,16 @@ public final class AuthOutboxEventTypes {
      */
     public static final String PASSWORD_RESET_REQUESTED = "auth.PasswordResetRequested";
 
+    /**
+     * A password reset actually completed (US-AUTH-006 / #88 follow-up). The
+     * domain method that changes the password also bumps the user's
+     * tokenVersion in the same call, but that in-memory bump is invisible to
+     * Redis until something publishes it through the outbox — this event is
+     * that publication, carrying {@code userId} and {@code newTokenVersion}
+     * so {@code TokenVersionOutboxEventHandler} can project it.
+     */
+    public static final String PASSWORD_RESET_COMPLETED = "auth.PasswordResetCompleted";
+
     private AuthOutboxEventTypes() {
         // Constant holder.
     }

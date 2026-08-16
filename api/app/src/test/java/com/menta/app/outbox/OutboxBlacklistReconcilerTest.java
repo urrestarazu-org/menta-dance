@@ -2,6 +2,7 @@ package com.menta.app.outbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -53,6 +54,11 @@ class OutboxBlacklistReconcilerTest {
     private static final int RETENTION_DAYS = 7;
     private static final Duration ACCESS_TTL = Duration.ofSeconds(ACCESS_TTL_SECONDS);
 
+    private static final String PROJECTED_USER_ID = "55555555-5555-5555-5555-555555555555";
+    /** Every row in this suite is a revocation carrying userId + version. */
+    private static final String REVOCATION_PAYLOAD =
+        "{\"userId\":\"" + PROJECTED_USER_ID + "\",\"newTokenVersion\":9}";
+
     @Mock private OutboxRowJpaRepository repository;
     @Mock private TokenBlacklistPort tokenBlacklistPort;
 
@@ -60,11 +66,15 @@ class OutboxBlacklistReconcilerTest {
 
     @BeforeEach
     void setUp() {
-        BlacklistOutboxEventHandler blacklistHandler = new BlacklistOutboxEventHandler(
-            tokenBlacklistPort, ACCESS_TTL_SECONDS
-        );
+        // #88: BlacklistOutboxEventHandler no longer claims any event — the
+        // aggregateId of these rows is a familyId or a refresh id, never a
+        // jti. Revocation now travels through the tokenVersion projection.
+        TokenVersionOutboxEventHandler tokenVersionHandler =
+            new TokenVersionOutboxEventHandler(
+                tokenBlacklistPort, new com.fasterxml.jackson.databind.ObjectMapper()
+            );
         OutboxReconciliationWorker worker = new OutboxReconciliationWorker(
-            repository, List.of(blacklistHandler), BACKOFF_SECONDS);
+            repository, List.of(tokenVersionHandler), BACKOFF_SECONDS);
         reconciler = new OutboxBlacklistReconciler(
             repository, tokenBlacklistPort, worker, BATCH_SIZE, RETENTION_DAYS);
     }
@@ -75,8 +85,8 @@ class OutboxBlacklistReconcilerTest {
 
         @Test
         void projects_each_pending_row_to_redis_and_marks_completed() {
-            OutboxRowJpaEntity a = pendingRow(101L, "auth.AuthUserLoggedIn", "jti-a");
-            OutboxRowJpaEntity b = pendingRow(102L, "auth.AuthUserLoggedIn", "jti-b");
+            OutboxRowJpaEntity a = pendingRow(101L, "auth.RefreshRevoked", "jti-a");
+            OutboxRowJpaEntity b = pendingRow(102L, "auth.RefreshRevoked", "jti-b");
             OutboxRowJpaEntity c = pendingRow(103L, "auth.UserLoggedOut", "jti-c");
             when(repository.findPendingOrDueFailedOrderByIdAsc(any(Instant.class), any(Pageable.class)))
                 .thenReturn(List.of(a, b, c));
@@ -85,7 +95,7 @@ class OutboxBlacklistReconcilerTest {
 
             reconciler.tick();
 
-            verify(tokenBlacklistPort, times(3)).blacklist(anyString(), any(Duration.class));
+            verify(tokenBlacklistPort, times(3)).projectTokenVersion(anyString(), anyLong());
             verify(tokenBlacklistPort).writeHeartbeat();
 
             ArgumentCaptor<OutboxRowJpaEntity> captor =
@@ -102,7 +112,7 @@ class OutboxBlacklistReconcilerTest {
 
         @Test
         void blacklist_projection_uses_aggregate_id_as_jti_with_access_ttl() {
-            OutboxRowJpaEntity row = pendingRow(101L, "auth.AuthUserLoggedIn", "jti-xyz");
+            OutboxRowJpaEntity row = pendingRow(101L, "auth.RefreshRevoked", "jti-xyz");
             when(repository.findPendingOrDueFailedOrderByIdAsc(any(Instant.class), any(Pageable.class)))
                 .thenReturn(List.of(row));
             when(repository.save(any(OutboxRowJpaEntity.class)))
@@ -110,7 +120,7 @@ class OutboxBlacklistReconcilerTest {
 
             reconciler.tick();
 
-            verify(tokenBlacklistPort, times(1)).blacklist(eq("jti-xyz"), eq(ACCESS_TTL));
+            verify(tokenBlacklistPort, times(1)).projectTokenVersion(eq(PROJECTED_USER_ID), eq(9L));
             verify(tokenBlacklistPort).writeHeartbeat();
         }
 
@@ -121,7 +131,7 @@ class OutboxBlacklistReconcilerTest {
 
             reconciler.tick();
 
-            verify(tokenBlacklistPort, times(0)).blacklist(anyString(), any(Duration.class));
+            verify(tokenBlacklistPort, times(0)).projectTokenVersion(anyString(), anyLong());
             verify(tokenBlacklistPort).writeHeartbeat();
             verify(repository, times(0)).save(any(OutboxRowJpaEntity.class));
         }
@@ -133,7 +143,7 @@ class OutboxBlacklistReconcilerTest {
 
         @Test
         void marks_failed_attempts_bumps_last_error_set_and_records_next_retry() {
-            OutboxRowJpaEntity row = pendingRow(201L, "auth.AuthUserLoggedIn", "jti-bad");
+            OutboxRowJpaEntity row = pendingRow(201L, "auth.RefreshRevoked", "jti-bad");
             when(repository.findPendingOrDueFailedOrderByIdAsc(any(Instant.class), any(Pageable.class)))
                 .thenReturn(List.of(row));
             when(repository.save(any(OutboxRowJpaEntity.class)))
@@ -141,7 +151,7 @@ class OutboxBlacklistReconcilerTest {
 
             RuntimeException redisBlip = new RuntimeException("connection refused");
             doThrow(redisBlip).when(tokenBlacklistPort)
-                .blacklist(anyString(), any(Duration.class));
+                .projectTokenVersion(anyString(), anyLong());
 
             reconciler.tick();
 
@@ -171,7 +181,7 @@ class OutboxBlacklistReconcilerTest {
             // producer side + Redis SET-with-TTL idempotency make this
             // safe.
             OutboxRowJpaEntity orphan = pendingRow(
-                999L, "auth.AuthUserLoggedIn", "jti-orphan");
+                999L, "auth.RefreshRevoked", "jti-orphan");
             when(repository.findPendingOrDueFailedOrderByIdAsc(any(Instant.class), any(Pageable.class)))
                 .thenReturn(List.of(orphan));
             when(repository.save(any(OutboxRowJpaEntity.class)))
@@ -179,7 +189,7 @@ class OutboxBlacklistReconcilerTest {
 
             reconciler.tick();
 
-            verify(tokenBlacklistPort).blacklist(eq("jti-orphan"), any(Duration.class));
+            verify(tokenBlacklistPort).projectTokenVersion(eq(PROJECTED_USER_ID), anyLong());
             verify(tokenBlacklistPort).writeHeartbeat();
             ArgumentCaptor<OutboxRowJpaEntity> captor =
                 ArgumentCaptor.forClass(OutboxRowJpaEntity.class);
@@ -199,7 +209,7 @@ class OutboxBlacklistReconcilerTest {
             // next_retry_at has passed should be selected.
             Instant futureRetry = Instant.now().plusSeconds(60);
             OutboxRowJpaEntity failedNotDue = failedRow(
-                301L, "auth.AuthUserLoggedIn", "jti-not-due", futureRetry, 2);
+                301L, "auth.RefreshRevoked", "jti-not-due", futureRetry, 2);
 
             // Query should NOT return this row since it's not due yet
             when(repository.findPendingOrDueFailedOrderByIdAsc(any(Instant.class), any(Pageable.class)))
@@ -208,7 +218,7 @@ class OutboxBlacklistReconcilerTest {
             int processed = reconciler.processBatch();
 
             assertThat(processed).isZero();
-            verify(tokenBlacklistPort, times(0)).blacklist(anyString(), any(Duration.class));
+            verify(tokenBlacklistPort, times(0)).projectTokenVersion(anyString(), anyLong());
         }
 
         @Test
@@ -216,7 +226,7 @@ class OutboxBlacklistReconcilerTest {
             // PR3: FAILED rows with next_retry_at <= now MUST be processed.
             Instant pastRetry = Instant.now().minusSeconds(10);
             OutboxRowJpaEntity failedDue = failedRow(
-                302L, "auth.AuthUserLoggedIn", "jti-due", pastRetry, 1);
+                302L, "auth.RefreshRevoked", "jti-due", pastRetry, 1);
 
             when(repository.findPendingOrDueFailedOrderByIdAsc(any(Instant.class), any(Pageable.class)))
                 .thenReturn(List.of(failedDue));
@@ -226,7 +236,7 @@ class OutboxBlacklistReconcilerTest {
             int processed = reconciler.processBatch();
 
             assertThat(processed).isEqualTo(1);
-            verify(tokenBlacklistPort).blacklist(eq("jti-due"), eq(ACCESS_TTL));
+            verify(tokenBlacklistPort).projectTokenVersion(eq(PROJECTED_USER_ID), eq(9L));
 
             ArgumentCaptor<OutboxRowJpaEntity> captor =
                 ArgumentCaptor.forClass(OutboxRowJpaEntity.class);
@@ -240,7 +250,7 @@ class OutboxBlacklistReconcilerTest {
         @Test
         void query_selects_both_pending_and_due_failed_rows() {
             // PR3: The query MUST select PENDING + (FAILED where next_retry_at <= now).
-            OutboxRowJpaEntity pending = pendingRow(401L, "auth.AuthUserLoggedIn", "jti-pending");
+            OutboxRowJpaEntity pending = pendingRow(401L, "auth.RefreshRevoked", "jti-pending");
             Instant pastRetry = Instant.now().minusSeconds(5);
             OutboxRowJpaEntity failedDue = failedRow(
                 402L, "auth.UserLoggedOut", "jti-failed-due", pastRetry, 2);
@@ -253,7 +263,7 @@ class OutboxBlacklistReconcilerTest {
             int processed = reconciler.processBatch();
 
             assertThat(processed).isEqualTo(2);
-            verify(tokenBlacklistPort, times(2)).blacklist(anyString(), any(Duration.class));
+            verify(tokenBlacklistPort, times(2)).projectTokenVersion(anyString(), anyLong());
 
             ArgumentCaptor<OutboxRowJpaEntity> captor =
                 ArgumentCaptor.forClass(OutboxRowJpaEntity.class);
@@ -283,7 +293,7 @@ class OutboxBlacklistReconcilerTest {
 
         @Test
         void writes_heartbeat_even_when_processing_rows() {
-            OutboxRowJpaEntity row = pendingRow(501L, "auth.AuthUserLoggedIn", "jti-heartbeat");
+            OutboxRowJpaEntity row = pendingRow(501L, "auth.RefreshRevoked", "jti-heartbeat");
             when(repository.findPendingOrDueFailedOrderByIdAsc(any(Instant.class), any(Pageable.class)))
                 .thenReturn(List.of(row));
             when(repository.save(any(OutboxRowJpaEntity.class)))
@@ -291,7 +301,7 @@ class OutboxBlacklistReconcilerTest {
 
             reconciler.tick();
 
-            verify(tokenBlacklistPort).blacklist(eq("jti-heartbeat"), any(Duration.class));
+            verify(tokenBlacklistPort).projectTokenVersion(eq(PROJECTED_USER_ID), anyLong());
             verify(tokenBlacklistPort).writeHeartbeat();
         }
 
@@ -300,13 +310,13 @@ class OutboxBlacklistReconcilerTest {
             // PR3: If Redis is down for blacklist writes, the reconciler marks
             // rows as FAILED but MUST NOT write the heartbeat (because Redis is
             // unreachable, writing heartbeat would fail too or give false signal).
-            OutboxRowJpaEntity row = pendingRow(502L, "auth.AuthUserLoggedIn", "jti-fail");
+            OutboxRowJpaEntity row = pendingRow(502L, "auth.RefreshRevoked", "jti-fail");
             when(repository.findPendingOrDueFailedOrderByIdAsc(any(Instant.class), any(Pageable.class)))
                 .thenReturn(List.of(row));
             when(repository.save(any(OutboxRowJpaEntity.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
             doThrow(new RuntimeException("connection refused"))
-                .when(tokenBlacklistPort).blacklist(anyString(), any(Duration.class));
+                .when(tokenBlacklistPort).projectTokenVersion(anyString(), anyLong());
 
             reconciler.tick();
 
@@ -358,7 +368,7 @@ class OutboxBlacklistReconcilerTest {
     private static OutboxRowJpaEntity pendingRow(long id, String eventType, String aggregateId) {
         OutboxRowJpaEntity row = new OutboxRowJpaEntity(
             "01H9X3F4Z9YJ7K5Q6T2R8V1N4P", eventType, aggregateId,
-            "{}", OutboxStatus.PENDING, 0, null, null,
+            REVOCATION_PAYLOAD, OutboxStatus.PENDING, 0, null, null,
             Instant.parse("2026-07-29T10:00:00Z"), null
         );
         // Force PK so test assertions / captors can track row identity.
@@ -372,7 +382,7 @@ class OutboxBlacklistReconcilerTest {
     ) {
         OutboxRowJpaEntity row = new OutboxRowJpaEntity(
             "01H9X3F4Z9YJ7K5Q6T2R8V1N4P", eventType, aggregateId,
-            "{}", OutboxStatus.FAILED, attempts, "connection refused", nextRetryAt,
+            REVOCATION_PAYLOAD, OutboxStatus.FAILED, attempts, "connection refused", nextRetryAt,
             Instant.parse("2026-07-29T10:00:00Z"), null
         );
         row.forceId(id);

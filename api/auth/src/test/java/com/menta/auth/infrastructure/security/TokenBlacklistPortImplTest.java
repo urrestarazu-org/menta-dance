@@ -3,6 +3,7 @@ package com.menta.auth.infrastructure.security;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -17,17 +18,20 @@ import com.menta.auth.application.port.out.TokenBlacklistPort;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.data.redis.core.script.RedisScript;
 
 /**
  * RED-GREEN discipline: this test references TokenBlacklistPortImpl BEFORE
@@ -104,6 +108,94 @@ class TokenBlacklistPortImplTest {
             when(redisTemplate.hasKey("blacklist:jti:" + JTI)).thenReturn(false);
 
             assertThat(port.isBlacklisted(JTI)).isFalse();
+        }
+    }
+
+    @Nested
+    @DisplayName("Spec: tokenVersion projection (#88)")
+    class TokenVersionProjection {
+
+        private static final String USER_ID = "55555555-5555-5555-5555-555555555555";
+        private static final String VERSION_KEY =
+            "auth:tokenversion:user:55555555-5555-5555-5555-555555555555";
+
+        @Test
+        void projects_the_version_under_its_own_key_namespace() {
+            port.projectTokenVersion(USER_ID, 7L);
+
+            verify(redisTemplate).execute(
+                any(RedisScript.class), eq(List.of(VERSION_KEY)), eq("7")
+            );
+        }
+
+        @Test
+        void projects_through_an_atomic_script_not_a_plain_set() {
+            // #88 follow-up: outbox rows can replay or retry out of order
+            // (crash-resume, a FAILED row's backoff retry racing a newer
+            // PENDING one). A plain SET would let a stale replay overwrite a
+            // higher version already projected, silently re-opening a token
+            // that was already revoked — read-then-write from Java would
+            // have the same race across two round-trips. The write must be
+            // one atomic server-side script.
+            port.projectTokenVersion(USER_ID, 7L);
+
+            verify(redisTemplate, never()).opsForValue();
+        }
+
+        @Test
+        void write_script_only_projects_a_strictly_greater_version() {
+            // Guards the mechanism, not just its endpoint: a refactor back to
+            // an unconditional SET would pass every other test here while
+            // reintroducing the out-of-order regression.
+            ArgumentCaptor<RedisScript> scriptCaptor = ArgumentCaptor.forClass(RedisScript.class);
+
+            port.projectTokenVersion(USER_ID, 7L);
+
+            verify(redisTemplate).execute(scriptCaptor.capture(), anyList(), any());
+            String script = scriptCaptor.getValue().getScriptAsString();
+            assertThat(script).contains("SET").containsAnyOf(">", "tonumber");
+        }
+
+        @Test
+        void reads_back_the_projected_version() {
+            when(valueOps.get(VERSION_KEY)).thenReturn("7");
+
+            assertThat(port.currentTokenVersion(USER_ID)).hasValue(7L);
+        }
+
+        @Test
+        void reports_empty_when_nothing_was_ever_projected() {
+            // Normal state for a user who never revoked anything.
+            when(valueOps.get(VERSION_KEY)).thenReturn(null);
+
+            assertThat(port.currentTokenVersion(USER_ID)).isEmpty();
+        }
+
+        @Test
+        void refuses_to_read_a_malformed_projection_as_absent() {
+            // Treating corruption as "never revoked" would silently re-open
+            // every revoked token for that user.
+            when(valueOps.get(VERSION_KEY)).thenReturn("not-a-number");
+
+            assertThatThrownBy(() -> port.currentTokenVersion(USER_ID))
+                .isInstanceOf(IllegalStateException.class);
+        }
+
+        @Test
+        void propagates_redis_failures_on_read() {
+            when(valueOps.get(anyString())).thenThrow(new RuntimeException("connection refused"));
+
+            assertThatThrownBy(() -> port.currentTokenVersion(USER_ID))
+                .isInstanceOf(RuntimeException.class);
+        }
+
+        @Test
+        void propagates_redis_failures_on_write_so_the_reconciler_retries() {
+            when(redisTemplate.execute(any(RedisScript.class), anyList(), any()))
+                .thenThrow(new RuntimeException("connection refused"));
+
+            assertThatThrownBy(() -> port.projectTokenVersion(USER_ID, 7L))
+                .isInstanceOf(RuntimeException.class);
         }
     }
 

@@ -384,7 +384,8 @@ public class AuthConfiguration {
         PasswordEncoderPort passwordEncoder,
         RefreshTokenRepository refreshTokenRepository,
         LoginRateLimitPort loginRateLimitPort,
-        Clock clock
+        Clock clock,
+        OutboxAppender outboxAppender
     ) {
         ResetPasswordUseCaseImpl implementation = new ResetPasswordUseCaseImpl(
             passwordResetTokenRepository,
@@ -394,7 +395,8 @@ public class AuthConfiguration {
             passwordEncoder,
             refreshTokenRepository,
             loginRateLimitPort,
-            clock
+            clock,
+            outboxAppender
         );
         return new TransactionalResetPasswordUseCase(implementation);
     }
