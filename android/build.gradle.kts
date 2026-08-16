@@ -16,11 +16,22 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "AUTH_API_BASE_URL", "\"http://10.0.2.2:8080\"")
     }
 
     buildTypes {
+        // Android es cliente directo del API (ADR-0035): no pasa por el BFF.
+        // Las rutas /api/v1/auth/* las expone el API en 8081; 8080 es el BFF y
+        // sólo sirve el formulario web.
+        debug {
+            // 10.0.2.2 es la dirección con la que el emulador alcanza el host.
+            // El cleartext que esto implica queda habilitado únicamente para
+            // debug, vía src/debug/res/xml/network_security_config.xml.
+            buildConfigField("String", "AUTH_API_BASE_URL", "\"http://10.0.2.2:8081\"")
+        }
+
         release {
+            // HTTPS obligatorio: release no habilita cleartext en ninguna forma.
+            buildConfigField("String", "AUTH_API_BASE_URL", "\"https://api.mentadance.com\"")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

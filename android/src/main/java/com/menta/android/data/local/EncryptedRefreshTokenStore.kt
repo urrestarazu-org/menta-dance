@@ -110,6 +110,10 @@ class EncryptedRefreshTokenStore(context: Context) : RefreshTokenStore {
     }
 
     private companion object {
+        // Cambiar este nombre obliga a actualizar res/xml/backup_rules.xml y
+        // res/xml/data_extraction_rules.xml, que excluyen del backup el archivo
+        // "$PREFERENCES_NAME.xml". Si dejan de coincidir nada falla: la
+        // exclusión simplemente deja de aplicar, en silencio.
         const val PREFERENCES_NAME = "encrypted_refresh_token"
         const val CIPHERTEXT_KEY = "ciphertext"
         const val NONCE_KEY = "nonce"
