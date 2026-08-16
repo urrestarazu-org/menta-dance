@@ -60,7 +60,9 @@ Asegurate de tener instalado:
   docker-compose --version
   ```
 - **Git**
-- **Android Studio** (solo si vas a trabajar en la app móvil)
+- **Android Studio Quail 3 (2026.1.3) o más nuevo** (solo si vas a trabajar en la app
+  móvil) — versiones anteriores a AGP 9.3 (julio 2026) fallan el sync sin causa obvia. Ver
+  [ADR-0036](adr/0036-android-agp9-tooling-migration.md) y sección 6 más abajo.
 
 ---
 
@@ -331,11 +333,82 @@ curl -i --max-redirs 0 -X POST "http://localhost:8080/logout" \
 
 ## 6. Ejecutar la App Android (Opcional)
 
-1. Abrir **Android Studio**
-2. Seleccionar **Open** y elegir la carpeta `android/` del proyecto
-3. Esperar a que Gradle sincronice las dependencias
-4. Configurar un emulador o conectar un dispositivo físico
-5. Hacer clic en el botón **Run** (triángulo verde)
+Contexto de las decisiones de tooling (versión de AGP, flags de compatibilidad, pin del
+JDK del daemon) en [ADR-0036](adr/0036-android-agp9-tooling-migration.md).
+
+### 6.1 Requisitos específicos de Android
+
+- **Android Studio Quail 3** (2026.1.3) **o más nuevo**. Se confirmó que Quail 1 (build de
+  mayo 2026, previo al release de AGP 9.3) falla el sync sin causa obvia; Quail 3 (agosto
+  2026) funciona. `Android Studio → About` para verificar tu versión.
+- **MySQL corriendo.** La app le pega directo al API (`/api/v1/auth/*` en el puerto
+  `8081`), no al BFF. Si `OutboxBlacklistReconciler` u otro scheduled task tira
+  `Communications link failure` / `Connection refused` al puerto `3306`, es que la
+  infraestructura local no está levantada — correr `./scripts/dev.sh start` (o
+  `infra/docker/manage.sh start --no-nginx`) primero.
+
+### 6.2 Abrir el proyecto (IMPORTANTE)
+
+**Abrir el monorepo completo (`menta-dance/`), nunca la carpeta `android/` directamente.**
+Abrir `android/` como raíz genera un wrapper de Gradle duplicado ahí adentro
+(`android/gradlew`, `android/gradle/`, `android/settings.gradle.kts`), que compite con el
+build real del monorepo. Si ves esos archivos aparecer sin que los hayas creado vos, son
+ese síntoma — borralos y volvé a abrir desde la raíz. Están en `.gitignore` para que no se
+commiteen por accidente.
+
+1. `File → Open` y elegir la carpeta raíz `menta-dance/`, **no** `menta-dance/android/`.
+2. Android Studio debería detectar y sincronizar automáticamente el proyecto Gradle
+   multi-módulo completo (API, BFF y Android).
+3. Configurar un emulador (`Device Manager`) o conectar un dispositivo físico.
+4. Seleccionar el módulo `android` en el dropdown de configuración de Run, junto al
+   dispositivo elegido.
+5. Botón **Run** (▶ verde).
+
+### 6.3 Troubleshooting de sync
+
+Si el sync falla, en este orden:
+
+1. **`File → Sync Project with Gradle Files`** (ícono del elefante). Correr una tarea
+   puntual de Gradle desde el panel lateral *no* es lo mismo que un sync completo — el
+   panel puede mostrar `Task list not built...` aunque una tarea individual haya
+   compilado bien.
+2. **`File → Invalidate Caches / Restart`**, marcando también *"Clear VCS Log caches and
+   indexes"* y *"Clear downloaded shared indexes"* — no vienen tildadas por default y la
+   primera pasada puede no limpiar todo.
+3. Si el error es `removeContentEntry: ... still exists after removing` (o similar,
+   apuntando a una carpeta de `build/generated/` que no existe en disco): es una condición
+   de carrera conocida del VFS de IntelliJ Platform entre sincronizaciones consecutivas.
+   Reintentar el sync una vez más suele resolverlo solo.
+4. Si compila por CLI (`./gradlew :android:assembleDebug`) pero el sync del IDE sigue
+   fallando con un error distinto, el problema es del IDE, no del build — no sigas
+   ajustando `build.gradle.kts` a ciegas.
+
+### 6.4 Compilar/testear por línea de comandos
+
+```bash
+# apuntar Gradle al SDK (una sola vez, local.properties está gitignored)
+echo "sdk.dir=$HOME/Library/Android/sdk" > local.properties
+
+./gradlew :android:assembleDebug
+./gradlew :android:testDebugUnitTest       # unit tests
+```
+
+Los tests instrumentados (`connectedDebugAndroidTest`) necesitan un emulador corriendo:
+
+```bash
+emulator -avd <nombre-avd> -no-window -no-audio -no-snapshot-load -gpu swiftshader_indirect &
+# esperar a que termine de bootear
+adb wait-for-device
+until [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ]; do sleep 5; done
+
+./gradlew :android:connectedDebugAndroidTest
+
+adb emu kill   # apagar el emulador al terminar
+```
+
+**Ninguno de estos tests corre en CI hoy** (ver Deuda Técnica en ADR-0036) — correrlos
+localmente antes de un PR que toque `android/` es la única red de seguridad que existe
+por ahora.
 
 ---
 
