@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  El path debe coincidir EXACTAMENTE con PREFERENCES_NAME de
+  EncryptedRefreshTokenStore, más el sufijo .xml que agrega el framework.
+  Un nombre que no coincide no falla en ningún lado: simplemente no excluye
+  nada, y la regla parece estar cuando no lo está.
+-->
+<data-extraction-rules>
+    <cloud-backup disableIfNoEncryptionCapabilities="true">
+        <exclude domain="sharedpref" path="encrypted_refresh_token.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="encrypted_refresh_token.xml" />
+    </device-transfer>
+</data-extraction-rules>
