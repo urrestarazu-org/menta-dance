@@ -75,6 +75,20 @@ auth:
       email-max-attempts: ${AUTH_ACTIVATION_RATE_LIMIT_EMAIL_MAX_ATTEMPTS:3}
       client-max-attempts: ${AUTH_ACTIVATION_RATE_LIMIT_CLIENT_MAX_ATTEMPTS:10}
       window-seconds: ${AUTH_ACTIVATION_RATE_LIMIT_WINDOW_SECONDS:900}
+  login:
+    rate-limit:
+      # Presupuestos SEMÁNTICOS: cuentan fallos de autenticación, no requests.
+      # El techo volumétrico vive en NGINX (ADR-0035, PR3); acá sólo llega lo
+      # que esta capa puede juzgar — si las credenciales realmente fallaron.
+      #
+      # Un login exitoso no consume nada y limpia el contador del email, así
+      # que estos números sólo los alcanza quien está fallando de verdad.
+      email-max-failures: ${AUTH_LOGIN_RATE_LIMIT_EMAIL_MAX_FAILURES:10}
+      # Más alto que el de email: detecta password spraying sin castigar a una
+      # NAT compartida (oficina, escuela, carrier) donde varias personas
+      # legítimas se equivocan dentro de la misma ventana.
+      client-max-failures: ${AUTH_LOGIN_RATE_LIMIT_CLIENT_MAX_FAILURES:50}
+      window-seconds: ${AUTH_LOGIN_RATE_LIMIT_WINDOW_SECONDS:900}
   outbox:
     reconcile-batch-size: ${AUTH_OUTBOX_RECONCILE_BATCH_SIZE:100}
     reconcile-rate-ms: ${AUTH_OUTBOX_RECONCILE_RATE_MS:5000}

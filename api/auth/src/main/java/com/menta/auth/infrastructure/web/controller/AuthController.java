@@ -10,11 +10,13 @@ import com.menta.auth.application.port.in.RefreshTokenUseCase;
 import com.menta.auth.domain.exception.AuthDegradedException;
 import com.menta.auth.domain.exception.InvalidCredentialsException;
 import com.menta.auth.domain.exception.LockedUserException;
+import com.menta.auth.domain.exception.LoginRateLimitedException;
 import com.menta.auth.domain.exception.RefreshTokenCompromisedException;
 import com.menta.auth.infrastructure.web.ProblemDetails;
 import com.menta.auth.infrastructure.web.dto.LoginRequest;
 import com.menta.auth.infrastructure.web.dto.TokenResponse;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 
 import org.springframework.http.HttpHeaders;
@@ -66,20 +68,32 @@ public class AuthController {
     private final LoginUseCase loginUseCase;
     private final RefreshTokenUseCase refreshTokenUseCase;
     private final LogoutUseCase logoutUseCase;
+    private final ClientFingerprint clientFingerprint;
 
     public AuthController(
         LoginUseCase loginUseCase,
         RefreshTokenUseCase refreshTokenUseCase,
-        LogoutUseCase logoutUseCase
+        LogoutUseCase logoutUseCase,
+        ClientFingerprint clientFingerprint
     ) {
         this.loginUseCase = loginUseCase;
         this.refreshTokenUseCase = refreshTokenUseCase;
         this.logoutUseCase = logoutUseCase;
+        this.clientFingerprint = clientFingerprint;
     }
 
     @PostMapping("/login")
-    public ResponseEntity<TokenResponse> login(@Valid @RequestBody LoginRequest request) {
-        LoginCommand command = new LoginCommand(request.email(), request.password());
+    public ResponseEntity<TokenResponse> login(
+        @Valid @RequestBody LoginRequest request,
+        HttpServletRequest httpRequest
+    ) {
+        // The application layer never sees the servlet request: infrastructure
+        // derives an opaque origin fingerprint and passes it as a value. Since
+        // ADR-0035 the BFF forwards the real client address, so this identifies
+        // the user's origin rather than the BFF itself.
+        LoginCommand command = new LoginCommand(
+            request.email(), request.password(), clientFingerprint.from(httpRequest)
+        );
         TokenPair pair = loginUseCase.execute(command);
         return ResponseEntity.ok()
                 .header(REFRESH_TOKEN_HEADER, pair.refreshToken())
@@ -123,6 +137,25 @@ public class AuthController {
     @ExceptionHandler(LockedUserException.class)
     public ResponseEntity<ProblemDetail> handleLockedUser(LockedUserException ex) {
         return ProblemDetails.response(HttpStatus.LOCKED, "The user account is locked.", ex.getErrorCode());
+    }
+
+    /**
+     * 429 — temporary throttle, deliberately distinct from the 423 above. The
+     * account state is untouched and the window expires on its own;
+     * {@code Retry-After} says when. The message is identical whether or not
+     * the email exists, so the throttle cannot be used to enumerate accounts.
+     */
+    @ExceptionHandler(LoginRateLimitedException.class)
+    public ResponseEntity<ProblemDetail> handleLoginRateLimited(LoginRateLimitedException ex) {
+        long seconds = Math.max(1, ex.getRetryAfter().toSeconds());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+            .header(HttpHeaders.RETRY_AFTER, Long.toString(seconds))
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(ProblemDetails.body(
+                HttpStatus.TOO_MANY_REQUESTS,
+                "Too many login attempts; retry later.",
+                ex.getErrorCode()
+            ));
     }
 
     @ExceptionHandler(AuthDegradedException.class)

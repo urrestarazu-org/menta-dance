@@ -2,6 +2,7 @@ package com.menta.app.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 import java.util.Map;
@@ -20,9 +21,12 @@ import com.menta.auth.domain.repository.UserRepository;
 import com.menta.auth.infrastructure.persistence.entity.RefreshTokenJpaEntity;
 import com.menta.auth.infrastructure.persistence.repository.RefreshTokenJpaRepository;
 import com.menta.shared.domain.vo.Email;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import com.menta.auth.application.port.out.LoginRateLimitPort;
+import com.menta.auth.application.port.out.RateLimitDecision;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -88,6 +92,21 @@ class AuthFlowIntegrationTest {
     @MockBean
     @SuppressWarnings("rawtypes")
     private RedisTemplate redisTemplate;
+
+    /**
+     * The real limiter sits on the mocked RedisTemplate above, so leaving it
+     * unstubbed would degrade every login to 503. Failure budgets have their
+     * own dedicated coverage; here the budget stays open so these tests remain
+     * about wiring, persistence, and status mapping.
+     */
+    @MockBean
+    private LoginRateLimitPort loginRateLimitPort;
+
+    @BeforeEach
+    void allowLoginBudget() {
+        when(loginRateLimitPort.check(anyString(), anyString()))
+            .thenReturn(RateLimitDecision.allowed());
+    }
 
     @Test
     void login_refresh_logout_happy_path() {

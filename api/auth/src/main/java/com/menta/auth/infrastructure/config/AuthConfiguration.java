@@ -14,6 +14,8 @@ import com.menta.auth.application.port.out.ActivationTokenHasher;
 import com.menta.auth.application.port.out.ActivationTokenRepository;
 import com.menta.auth.application.port.out.AuthDegradedGuard;
 import com.menta.auth.application.port.out.Clock;
+import com.menta.auth.application.port.out.LoginAttemptAuditPort;
+import com.menta.auth.application.port.out.LoginRateLimitPort;
 import com.menta.auth.application.port.out.OutboxAppender;
 import com.menta.auth.application.port.out.PasswordEncoderPort;
 import com.menta.auth.application.port.out.RefreshTokenRepository;
@@ -37,6 +39,8 @@ import com.menta.auth.infrastructure.transaction.TransactionalActivateAccountUse
 import com.menta.auth.infrastructure.transaction.TransactionalResendActivationUseCase;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.auth.infrastructure.security.JwtService;
+import com.menta.auth.infrastructure.security.LoggingLoginAttemptAuditPort;
+import com.menta.auth.infrastructure.security.RedisLoginRateLimitPort;
 import com.menta.auth.infrastructure.security.Sha256TokenHasher;
 import com.menta.auth.infrastructure.security.TokenBlacklistPortImpl;
 
@@ -260,6 +264,29 @@ public class AuthConfiguration {
         return new TransactionalResendActivationUseCase(implementation);
     }
 
+    /**
+     * Separate key namespace and budget from {@link #activationRateLimitPort}:
+     * burning activation attempts must never cost a user their ability to log
+     * in. These budgets count FAILURES only (ADR-0035); the volumetric ceiling
+     * lives in NGINX.
+     */
+    @Bean
+    public LoginRateLimitPort loginRateLimitPort(
+        org.springframework.data.redis.core.RedisTemplate<String, String> redisTemplate,
+        @Value("${auth.login.rate-limit.email-max-failures:10}") long emailMaxFailures,
+        @Value("${auth.login.rate-limit.client-max-failures:50}") long clientMaxFailures,
+        @Value("${auth.login.rate-limit.window-seconds:900}") long windowSeconds
+    ) {
+        return new RedisLoginRateLimitPort(
+            redisTemplate, emailMaxFailures, clientMaxFailures, Duration.ofSeconds(windowSeconds)
+        );
+    }
+
+    @Bean
+    public LoginAttemptAuditPort loginAttemptAuditPort() {
+        return new LoggingLoginAttemptAuditPort();
+    }
+
     @Bean
     public LoginUseCase loginUseCase(
         UserRepository userRepository,
@@ -268,7 +295,9 @@ public class AuthConfiguration {
         TokenHasher tokenHasher,
         RefreshTokenRepository refreshTokenRepository,
         OutboxAppender outboxAppender,
-        AuthDegradedGuard authDegradedGuard
+        AuthDegradedGuard authDegradedGuard,
+        LoginRateLimitPort loginRateLimitPort,
+        LoginAttemptAuditPort loginAttemptAuditPort
     ) {
         LoginUseCaseImpl implementation = new LoginUseCaseImpl(
             userRepository,
@@ -277,7 +306,9 @@ public class AuthConfiguration {
             tokenHasher,
             refreshTokenRepository,
             outboxAppender,
-            authDegradedGuard
+            authDegradedGuard,
+            loginRateLimitPort,
+            loginAttemptAuditPort
         );
         return new TransactionalLoginUseCase(implementation);
     }
