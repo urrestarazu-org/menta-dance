@@ -10,8 +10,8 @@ openapi: 3.1.0
 # ruta, método, parámetro, autenticación, respuesta, error o rate limit.
 #
 # Sólo describe endpoints IMPLEMENTADOS. Los endpoints planificados que figuran
-# en docs/03-AUTH-API.md (logout-all, forgot-password, reset-password,
-# change-password, me, me/roles) no están acá porque todavía no existen.
+# en docs/03-AUTH-API.md (logout-all, change-password, me, me/roles) no están
+# acá porque todavía no existen.
 
 info:
   title: Menta Dance — Auth API
@@ -48,6 +48,13 @@ info:
     - `POST /resend-activation` responde `202` vacío para email inexistente,
       pendiente o ya activo.
     - `GET /activate/{token}` no distingue token inválido, expirado ni reutilizado.
+    - `POST /forgot-password` responde `202` vacío para email inexistente,
+      inactivo o activo — igual que `resend-activation`.
+
+    `POST /reset-password` es la excepción deliberada: el token de reset es un
+    secreto de alta entropía enviado sólo al correo del dueño de la cuenta, no
+    enumerable como un email, así que distingue `404`/`410`/`400` según la
+    causa exacta sin filtrar nada sobre la cuenta.
 
 servers:
   - url: http://localhost:8081
@@ -60,6 +67,8 @@ tags:
     description: Login, renovación y cierre de sesión.
   - name: Activación
     description: Registro público y activación de cuenta.
+  - name: Recuperación de contraseña
+    description: Solicitud y consumo del enlace de recuperación de contraseña.
 
 paths:
   /api/v1/auth/login:
@@ -359,6 +368,119 @@ paths:
         '503':
           $ref: '#/components/responses/AuthDegraded'
 
+  /api/v1/auth/forgot-password:
+    post:
+      tags: [Recuperación de contraseña]
+      summary: Solicitar el enlace de recuperación de contraseña
+      description: |
+        **Responde siempre `202` vacío**: email inexistente, inactivo y activo
+        son indistinguibles para el cliente. Sólo una cuenta activa genera un
+        token nuevo (invalidando cualquier token de reset anterior) y dispara
+        el email de recuperación.
+      operationId: forgotPassword
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+      responses:
+        '202':
+          description: Solicitud aceptada, sin revelar el estado de la cuenta.
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '429':
+          $ref: '#/components/responses/PasswordResetRateLimited'
+
+  /api/v1/auth/reset-password:
+    post:
+      tags: [Recuperación de contraseña]
+      summary: Consumir el enlace de recuperación y establecer una nueva contraseña
+      description: |
+        El token de reset es un secreto de alta entropía, no enumerable como un
+        email — a diferencia de `resend-activation`/`forgot-password`, acá SÍ se
+        distingue la causa exacta de rechazo (`404`/`410`/`400`) sin filtrar
+        nada sobre la cuenta.
+
+        Éxito invalida TODOS los refresh tokens del usuario e incrementa
+        `token_version`, cerrando también los access tokens ya emitidos
+        (proyección MySQL-first hacia Redis vía outbox).
+      operationId: resetPassword
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+      responses:
+        '200':
+          description: Contraseña actualizada; el token queda consumido.
+        '400':
+          description: Cuerpo inválido, contraseña débil o igual a la actual.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                validacion:
+                  value:
+                    type: https://menta.dance/problems/invalid_request
+                    title: Bad Request
+                    status: 400
+                    detail: La solicitud contiene datos inválidos.
+                    code: INVALID_REQUEST
+                debil:
+                  value:
+                    type: https://menta.dance/problems/weak_password
+                    title: Bad Request
+                    status: 400
+                    detail: 'La contraseña no cumple los requisitos: al menos 8 caracteres.'
+                    code: WEAK_PASSWORD
+                misma:
+                  value:
+                    type: https://menta.dance/problems/same_password
+                    title: Bad Request
+                    status: 400
+                    detail: La nueva contraseña debe ser diferente a la actual.
+                    code: SAME_PASSWORD
+        '404':
+          description: El token no existe.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://menta.dance/problems/password_reset_token_not_found
+                title: Not Found
+                status: 404
+                detail: El enlace de recuperación es inválido.
+                code: PASSWORD_RESET_TOKEN_NOT_FOUND
+        '410':
+          description: El token expiró o ya fue usado.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                expirado:
+                  value:
+                    type: https://menta.dance/problems/password_reset_token_expired
+                    title: Gone
+                    status: 410
+                    detail: El enlace de recuperación expiró. Solicitá uno nuevo.
+                    code: PASSWORD_RESET_TOKEN_EXPIRED
+                usado:
+                  value:
+                    type: https://menta.dance/problems/password_reset_token_already_used
+                    title: Gone
+                    status: 410
+                    detail: Este enlace ya fue utilizado.
+                    code: PASSWORD_RESET_TOKEN_ALREADY_USED
+        '429':
+          $ref: '#/components/responses/PasswordResetRateLimited'
+
 components:
 
   securitySchemes:
@@ -443,6 +565,31 @@ components:
           example: alumno@example.com
       additionalProperties: false
 
+    ForgotPasswordRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          example: alumno@example.com
+      additionalProperties: false
+
+    ResetPasswordRequest:
+      type: object
+      required: [token, newPassword]
+      properties:
+        token:
+          type: string
+          description: Token de reset en claro, tal como llega en el enlace del email.
+          example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+        newPassword:
+          type: string
+          format: password
+          description: Mínimo 8 caracteres, al menos una mayúscula y un dígito.
+          example: NewSecurePass1
+      additionalProperties: false
+
     TokenResponse:
       type: object
       description: |
@@ -511,6 +658,12 @@ components:
         - INVALID_AUTH_REQUEST
         - INVALID_REQUEST
         - INVALID_ACTIVATION_REQUEST
+        - PASSWORD_RESET_RATE_LIMITED
+        - PASSWORD_RESET_TOKEN_NOT_FOUND
+        - PASSWORD_RESET_TOKEN_EXPIRED
+        - PASSWORD_RESET_TOKEN_ALREADY_USED
+        - WEAK_PASSWORD
+        - SAME_PASSWORD
 
   responses:
 
@@ -555,6 +708,22 @@ components:
             status: 429
             detail: Demasiados intentos de activación; reintentá más tarde.
             code: ACTIVATION_RATE_LIMITED
+
+    PasswordResetRateLimited:
+      description: Presupuesto de recuperación de contraseña agotado, por email/token o por origen.
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: https://menta.dance/problems/password_reset_rate_limited
+            title: Too Many Requests
+            status: 429
+            detail: Demasiados intentos; reintentá más tarde.
+            code: PASSWORD_RESET_RATE_LIMITED
 
     AuthDegraded:
       description: |
