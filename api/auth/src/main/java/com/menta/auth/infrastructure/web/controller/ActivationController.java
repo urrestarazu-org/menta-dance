@@ -4,7 +4,9 @@ import com.menta.auth.application.dto.ActivateAccountCommand;
 import com.menta.auth.application.dto.ResendActivationCommand;
 import com.menta.auth.application.port.in.ActivateAccountUseCase;
 import com.menta.auth.application.port.in.ResendActivationUseCase;
+import com.menta.auth.application.port.in.ValidateActivationTokenUseCase;
 import com.menta.auth.infrastructure.web.ProblemDetails;
+import com.menta.auth.infrastructure.web.dto.ActivateAccountRequest;
 import com.menta.auth.infrastructure.web.dto.ResendActivationRequest;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -27,21 +29,30 @@ public class ActivationController {
 
     private final ActivateAccountUseCase activateAccountUseCase;
     private final ResendActivationUseCase resendActivationUseCase;
+    private final ValidateActivationTokenUseCase validateActivationTokenUseCase;
     private final ClientFingerprint clientFingerprint;
 
     public ActivationController(
         ActivateAccountUseCase activateAccountUseCase,
         ResendActivationUseCase resendActivationUseCase,
+        ValidateActivationTokenUseCase validateActivationTokenUseCase,
         ClientFingerprint clientFingerprint
     ) {
         this.activateAccountUseCase = activateAccountUseCase;
         this.resendActivationUseCase = resendActivationUseCase;
+        this.validateActivationTokenUseCase = validateActivationTokenUseCase;
         this.clientFingerprint = clientFingerprint;
     }
 
     @GetMapping("/activate/{token}")
-    public ResponseEntity<Void> activate(@PathVariable String token) {
-        activateAccountUseCase.activate(new ActivateAccountCommand(token));
+    public ResponseEntity<Void> validateActivation(@PathVariable String token) {
+        validateActivationTokenUseCase.validate(new ActivateAccountCommand(token));
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/activate")
+    public ResponseEntity<Void> activate(@Valid @RequestBody ActivateAccountRequest request) {
+        activateAccountUseCase.activate(new ActivateAccountCommand(request.token()));
         return ResponseEntity.noContent().build();
     }
 

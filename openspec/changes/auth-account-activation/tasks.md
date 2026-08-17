@@ -77,7 +77,7 @@ Antes de `sdd-apply` se deberá confirmar la cadena de branches. La propuesta es
 
 - [x] 3.1 RED/GREEN: exponer `POST /api/v1/auth/register` y mantener alias
   temporal `/api/v1/users/register` sobre el mismo port-in.
-- [x] 3.2 RED/GREEN: exponer `GET /api/v1/auth/activate/{token}` y
+- [x] 3.2 RED/GREEN: exponer `GET /api/v1/auth/activate/{token}` de sólo lectura y `POST /api/v1/auth/activate` y
   `POST /api/v1/auth/resend-activation` con RFC 9457.
 - [x] 3.3 RED/GREEN: respuesta uniforme de registro/reenvío y `Retry-After` para
   429/503; probar inexistente, activo y pendiente.

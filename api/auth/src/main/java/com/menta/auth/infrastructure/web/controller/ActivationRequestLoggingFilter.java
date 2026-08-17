@@ -18,8 +18,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class ActivationRequestLoggingFilter extends OncePerRequestFilter {
 
     private static final Logger LOG = LoggerFactory.getLogger(ActivationRequestLoggingFilter.class);
-    private static final String ACTIVATION_PREFIX = "/api/v1/auth/activate/";
-    private static final String REDACTED_ACTIVATION_URI = ACTIVATION_PREFIX + "[REDACTED]";
+    private static final String ACTIVATION_PATH = "/api/v1/auth/activate";
+    private static final String REDACTED_ACTIVATION_URI = ACTIVATION_PATH + "/[REDACTED]";
 
     @Override
     protected void doFilterInternal(
@@ -28,9 +28,11 @@ public class ActivationRequestLoggingFilter extends OncePerRequestFilter {
         FilterChain filterChain
     ) throws ServletException, IOException {
         filterChain.doFilter(request, response);
-        if (request.getRequestURI().startsWith(ACTIVATION_PREFIX)) {
+        String requestUri = request.getRequestURI();
+        if (requestUri.equals(ACTIVATION_PATH) || requestUri.startsWith(ACTIVATION_PATH + "/")) {
+            String safeUri = requestUri.equals(ACTIVATION_PATH) ? ACTIVATION_PATH : REDACTED_ACTIVATION_URI;
             LOG.info("Activation request completed: method={}, uri={}, status={}",
-                request.getMethod(), REDACTED_ACTIVATION_URI, response.getStatus());
+                request.getMethod(), safeUri, response.getStatus());
         }
     }
 }

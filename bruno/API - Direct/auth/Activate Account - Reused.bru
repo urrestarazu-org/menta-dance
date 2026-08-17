@@ -4,9 +4,16 @@ meta {
   seq: 3
 }
 
-get {
-  url: {{baseUrl}}/api/{{apiVersion}}/auth/activate/{{activationToken}}
+post {
+  url: {{baseUrl}}/api/{{apiVersion}}/auth/activate
+  body: json
   auth: none
+}
+
+body:json {
+  {
+    "token": "{{activationToken}}"
+  }
 }
 
 tests {

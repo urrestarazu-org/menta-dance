@@ -6,8 +6,11 @@ correo para poder iniciar sesión.
 
 ## Aceptación
 
-- `GET /api/v1/auth/activate/{token}` valida token de un solo uso y expiración,
-  activa `auth_users` y lo invalida.
+- `GET /api/v1/auth/activate/{token}` sólo valida un token de un solo uso y
+  expiración; no modifica `auth_users` ni consume el token.
+- `POST /api/v1/auth/activate` recibe JSON `{ "token" }`, activa `auth_users`
+  e invalida el token. Una pantalla intermedia en el BFF para retirar el token
+  de la URI queda fuera de alcance.
 - `POST /api/v1/auth/resend-activation` emite un token nuevo sin revelar si el
   email existe.
 - `POST /api/v1/auth/register` crea el usuario pendiente y responde `202` sin

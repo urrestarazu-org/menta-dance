@@ -116,6 +116,8 @@ sequenceDiagram
     participant U as ActivateAccountUseCase
     participant DB as MySQL
     C->>A: GET /api/v1/auth/activate/{token}
+    A-->>C: 204 sin modificar estado
+    C->>A: POST /api/v1/auth/activate { token }
     A->>U: raw token
     U->>U: SHA-256
     U->>DB: SELECT token + user FOR UPDATE
@@ -157,7 +159,7 @@ versión de clave se guardan junto al ciphertext. La clave nunca se versiona.
 - Keys Redis: `rate:auth-activation:email:{sha256}` y
   `rate:auth-activation:client:{sha256}` con TTL; nunca email/IP en claro.
 - Problem Details RFC 9457 con códigos genéricos para token inválido/expirado.
-- Filtro/redacción de access logs para `/activate/{token}`.
+- Filtro/redacción de access logs para `/activate/{token}`; retirar el token de la URI requiere una pantalla intermedia fuera de alcance.
 - Métricas sólo agregadas: emitted, delivered, activated, expired, rate_limited.
 
 ## Testing

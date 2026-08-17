@@ -1,17 +1,26 @@
 meta {
   name: Activate Account
   type: http
-  seq: 2
+  seq: 3
 }
 
-get {
-  url: {{baseUrl}}/api/{{apiVersion}}/auth/activate/{{activationToken}}
+post {
+  url: {{baseUrl}}/api/{{apiVersion}}/auth/activate
+  body: json
   auth: none
+}
+
+body:json {
+  {
+    "token": "{{activationToken}}"
+  }
 }
 
 docs {
   Paste the opaque token from a local Mailpit message into the runtime-only
   `activationToken` variable. Never save it in an environment file or commit it.
+  This POST consumes the token and activates the account; use Validate Activation
+  Token first when testing the read-only GET contract.
   A valid token returns 204; expired, reused, or invalid tokens return the same
   RFC 9457 ACTIVATION_TOKEN_INVALID problem.
 }

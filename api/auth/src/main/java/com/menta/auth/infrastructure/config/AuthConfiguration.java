@@ -5,6 +5,7 @@ import com.menta.auth.application.port.in.LogoutUseCase;
 import com.menta.auth.application.port.in.RefreshTokenUseCase;
 import com.menta.auth.application.port.in.RegisterUserUseCase;
 import com.menta.auth.application.port.in.ActivateAccountUseCase;
+import com.menta.auth.application.port.in.ValidateActivationTokenUseCase;
 import com.menta.auth.application.port.in.RequestPasswordResetUseCase;
 import com.menta.auth.application.port.in.ResendActivationUseCase;
 import com.menta.auth.application.port.in.ResetPasswordUseCase;
@@ -34,6 +35,7 @@ import com.menta.auth.application.usecase.LogoutUseCaseImpl;
 import com.menta.auth.application.usecase.RefreshTokenUseCaseImpl;
 import com.menta.auth.application.usecase.RegisterUserUseCaseImpl;
 import com.menta.auth.application.usecase.ActivateAccountUseCaseImpl;
+import com.menta.auth.application.usecase.ValidateActivationTokenUseCaseImpl;
 import com.menta.auth.application.usecase.RequestPasswordResetUseCaseImpl;
 import com.menta.auth.application.usecase.ResendActivationUseCaseImpl;
 import com.menta.auth.application.usecase.ResetPasswordUseCaseImpl;
@@ -274,6 +276,18 @@ public class AuthConfiguration {
         return new TransactionalActivateAccountUseCase(new ActivateAccountUseCaseImpl(
             activationTokenRepository, activationTokenHasher, userRepository, clock
         ));
+    }
+
+    @Bean
+    public ValidateActivationTokenUseCase validateActivationTokenUseCase(
+        ActivationTokenRepository activationTokenRepository,
+        ActivationTokenHasher activationTokenHasher,
+        UserRepository userRepository,
+        Clock clock
+    ) {
+        return new ValidateActivationTokenUseCaseImpl(
+            activationTokenRepository, activationTokenHasher, userRepository, clock
+        );
     }
 
     @Bean

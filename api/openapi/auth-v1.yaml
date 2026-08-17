@@ -47,7 +47,7 @@ info:
       ya registrado o rol no permitido.
     - `POST /resend-activation` responde `202` vacío para email inexistente,
       pendiente o ya activo.
-    - `GET /activate/{token}` no distingue token inválido, expirado ni reutilizado.
+    - `GET /activate/{token}` valida el token sin consumirlo; `POST /activate` ejecuta la activación y no distingue token inválido, expirado ni reutilizado.
     - `POST /forgot-password` responde `202` vacío para email inexistente,
       inactivo o activo — igual que `resend-activation`.
 
@@ -286,17 +286,13 @@ paths:
   /api/v1/auth/activate/{token}:
     get:
       tags: [Activación]
-      summary: Activar cuenta
+      summary: Validar token de activación
       description: |
-        Consume el token de activación y pasa la cuenta a `ACTIVE`.
-
-        El token no se persiste ni se registra en claro: sólo se guarda su hash, y
-        los access logs enmascaran la URI como
-        `/api/v1/auth/activate/[REDACTED]`.
-
-        Un token inválido, expirado o ya usado devuelve el mismo `400`; el motivo
-        no es distinguible.
-      operationId: activateAccount
+        Comprueba que el token de activación está vigente y puede consumirse, sin
+        modificar la cuenta ni consumir/inutilizar el token. Hasta que exista una
+        pantalla intermedia en el BFF, el token sigue en la URI y los access logs
+        deben redactarlo.
+      operationId: validateActivationToken
       security: []
       parameters:
         - name: token
@@ -306,6 +302,47 @@ paths:
           schema:
             type: string
           example: 3f8a9c1e-opaque-single-use-token
+      responses:
+        '204':
+          description: Token válido y disponible para activación.
+        '400':
+          description: Token inválido, expirado o reutilizado — indistinguibles entre sí.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://menta.dance/problems/activation_token_invalid
+                title: Bad Request
+                status: 400
+                detail: El token de activación es inválido o expiró.
+                code: ACTIVATION_TOKEN_INVALID
+        '503':
+          $ref: '#/components/responses/AuthDegraded'
+
+  /api/v1/auth/activate:
+    post:
+      tags: [Activación]
+      summary: Activar cuenta
+      description: |
+        Consume el token de activación y pasa la cuenta a `ACTIVE`.
+
+        El token se recibe sólo en el cuerpo JSON y nunca se registra en claro.
+        La futura pantalla intermedia del BFF retirará el token del enlace de
+        correo; mientras tanto, el endpoint GET de validación redacciona su URI.
+
+        Un token inválido, expirado o ya usado devuelve el mismo `400`; el motivo
+        no es distinguible.
+      operationId: activateAccount
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivateAccountRequest'
+            example:
+              token: 3f8a9c1e-opaque-single-use-token
       responses:
         '204':
           description: Cuenta activada.
@@ -619,6 +656,15 @@ components:
         error distinguible: la respuesta sigue siendo `202` vacío.
       enum: [STUDENT, INSTRUCTOR, ADMIN]
       example: STUDENT
+
+    ActivateAccountRequest:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          minLength: 1
+          description: Token opaco de un solo uso recibido por email.
 
     Problem:
       type: object
