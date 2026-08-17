@@ -103,15 +103,17 @@ fun Project.registerLayeredCoverageVerification(
 val jacocoDomainApplicationCoverageVerification = registerLayeredCoverageVerification(
     "jacocoDomainApplicationCoverageVerification", "1.00",
     listOf("com/menta/auth/domain/**", "com/menta/auth/application/**"),
-    // Sha256Hex's two catch(NoSuchAlgorithmException) branches are
-    // structurally unreachable: the JCA spec mandates every conformant JDK
-    // support "SHA-256" (java.security.MessageDigest javadoc), so the only
-    // way to trigger them is mutating java.security.Security's provider
-    // list at runtime — exactly the fragile, provider-dependent test the
-    // 100% gate exists to avoid writing. Named and excluded explicitly
-    // rather than lowering the bundle minimum, so a future real regression
-    // anywhere else in domain/application still fails the build.
-    excludePatterns = listOf("com/menta/auth/domain/crypto/Sha256Hex.class")
+    // GuaranteedAlgorithm isolates the one catch(NoSuchAlgorithmException)
+    // branch that's structurally unreachable: the JCA spec mandates every
+    // conformant JDK support "SHA-256" (java.security.MessageDigest
+    // javadoc), so triggering it means mutating java.security.Security's
+    // provider list at runtime — exactly the fragile, provider-dependent
+    // test the 100% gate exists to avoid writing. Excluded by name rather
+    // than lowering the bundle minimum, and kept to that one tiny file
+    // (not the whole Sha256Hex class) so growing Sha256Hex's real hashing
+    // logic stays fully covered by this gate — see the class's own
+    // Javadoc.
+    excludePatterns = listOf("com/menta/auth/domain/crypto/GuaranteedAlgorithm.class")
 )
 val jacocoInfrastructureCoverageVerification = registerLayeredCoverageVerification(
     "jacocoInfrastructureCoverageVerification", "0.50",
