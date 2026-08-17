@@ -25,8 +25,6 @@ POST /api/v1/auth/login
 POST /api/v1/auth/refresh
 POST /api/v1/auth/logout
 POST /api/v1/auth/logout-all
-POST /api/v1/auth/forgot-password
-POST /api/v1/auth/reset-password
 POST /api/v1/auth/change-password
 GET  /api/v1/auth/me
 GET  /api/v1/auth/me/roles
@@ -49,6 +47,8 @@ que la ruta canónica.
 | `POST /register` | JSON `{ "email", "password", "role": "STUDENT" }` | `202 No Content`, siempre genérico |
 | `GET /activate/{token}` | token opaco en el path | `204 No Content` |
 | `POST /resend-activation` | JSON `{ "email" }` | `202 No Content`, siempre genérico |
+| `POST /forgot-password` | JSON `{ "email" }` | `202 No Content`, siempre genérico |
+| `POST /reset-password` | JSON `{ "token", "newPassword" }` | `200 OK`, sin cuerpo |
 
 Registro público crea una cuenta `PENDING_ACTIVATION`, un token de un uso y un
 evento durable de correo en una sola transacción. Registro duplicado conserva
@@ -62,6 +62,25 @@ application/problem+json` con código `ACTIVATION_TOKEN_INVALID`; el motivo no
 es distinguible. El token no se persiste ni registra en claro: sólo se guarda
 su hash y el material pendiente de entrega se cifra hasta que Mailpit/SMTP lo
 acepta.
+
+`forgot-password` responde `202` vacío para email inexistente, inactivo o
+activo — mismo patrón anti-enumeración que `resend-activation`. Sólo una
+cuenta activa invalida sus tokens de reset previos, genera uno nuevo (1 hora
+de vigencia) y dispara el email. El presupuesto agotado devuelve `429` con
+`Retry-After`.
+
+`reset-password` es la excepción deliberada a la no-enumeración: el token es
+un secreto de alta entropía que sólo llega al correo del dueño de la cuenta,
+así que el motivo de rechazo SÍ se distingue sin filtrar nada sobre la cuenta:
+`404 PASSWORD_RESET_TOKEN_NOT_FOUND` si el hash no existe, `410
+PASSWORD_RESET_TOKEN_EXPIRED`/`410 PASSWORD_RESET_TOKEN_ALREADY_USED` si
+expiró o ya se usó, `400 WEAK_PASSWORD` (con el detalle de qué regla no se
+cumple) o `400 SAME_PASSWORD` si la nueva contraseña es igual a la actual. Un
+reset exitoso invalida TODOS los refresh tokens del usuario e incrementa
+`auth_users.token_version` primero en MySQL, reflejándolo en Redis vía outbox
+para cerrar también los access tokens ya emitidos — si Redis no refleja la
+revocación, `AUTH_DEGRADED` bloquea tráfico autenticado hasta la recuperación
+durable (ver ADR-0026).
 
 El BFF lee su cookie de sesión internamente y pasa el refresh a Auth mediante
 `X-Refresh-Token`; puede ver esos valores sólo en su comunicación

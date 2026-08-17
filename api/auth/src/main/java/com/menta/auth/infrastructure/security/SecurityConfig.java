@@ -30,6 +30,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * Path policy:
  *   - /api/v1/auth/login and /api/v1/auth/refresh → permitAll (controllers handle credentials).
  *   - /api/v1/auth/logout → authenticated Bearer access token required.
+ *   - /api/v1/auth/forgot-password and /api/v1/auth/reset-password → permitAll
+ *     (US-AUTH-005/006; the reset token itself is the temporary authorization).
  *   - /actuator/health                          → permitAll
  *   - /api/v1/users/register                    → permitAll (public registration; PR2 contract)
  *   - everything else under /api/v1/admin/**    → requires ADMIN authority
@@ -63,7 +65,9 @@ public class SecurityConfig {
                     "/api/v1/auth/refresh",
                     "/api/v1/auth/register",
                     "/api/v1/auth/activate/**",
-                    "/api/v1/auth/resend-activation"
+                    "/api/v1/auth/resend-activation",
+                    "/api/v1/auth/forgot-password",
+                    "/api/v1/auth/reset-password"
                 ).permitAll()
                 .requestMatchers("/api/v1/auth/logout").authenticated()
                 .requestMatchers("/actuator/health").permitAll()
