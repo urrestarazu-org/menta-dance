@@ -135,6 +135,14 @@ class AuthRevocationIntegrationTest {
     @MockBean
     private PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
 
+    /**
+     * Same reason as the auth ports above: api:app now also assembles
+     * api:billing, whose plans rate limiter needs a RedisTemplate this
+     * profile does not provide.
+     */
+    @MockBean
+    private com.menta.billing.application.port.out.BillingPlansRateLimitPort billingPlansRateLimitPort;
+
     private final Map<String, Long> projectedVersions = new ConcurrentHashMap<>();
     private final Set<String> blacklistedJtis = ConcurrentHashMap.newKeySet();
 

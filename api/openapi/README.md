@@ -5,6 +5,7 @@ Contratos HTTP versionados de la API, escritos a mano.
 | Archivo | Alcance |
 |---------|---------|
 | `auth-v1.yaml` | Auth v1: sesión (login, refresh, logout) y activación de cuentas |
+| `billing-v1.yaml` | Billing v1: catálogo público de planes de suscripción (US-BILLING-001) |
 
 ## Por qué a mano y no generado
 
@@ -29,7 +30,7 @@ El costo aceptado es el mantenimiento manual. La mitigación es doble:
 
 ```bash
 docker run --rm -v "$(pwd)/api/openapi:/spec:ro" \
-  redocly/cli:latest lint /spec/auth-v1.yaml
+  redocly/cli:latest lint /spec/auth-v1.yaml /spec/billing-v1.yaml
 ```
 
 Dos warnings son esperados y aceptados:

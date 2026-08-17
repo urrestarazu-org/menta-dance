@@ -96,6 +96,12 @@ class AccountActivationIntegrationTest {
         passwordResetAttemptRateLimitPort;
     @MockBean private AuthDegradedGuard authDegradedGuard;
     @MockBean private TokenBlacklistPort tokenBlacklistPort;
+    /**
+     * api:app now also assembles api:billing, whose plans rate limiter needs
+     * a RedisTemplate this slice does not provide.
+     */
+    @MockBean
+    private com.menta.billing.application.port.out.BillingPlansRateLimitPort billingPlansRateLimitPort;
 
     @AfterEach
     void cleanUp() {

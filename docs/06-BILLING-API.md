@@ -32,6 +32,28 @@ POST /api/v1/billing/payments/{paymentId}/proof
 Las rutas `/me` y `/payments` son autoservicio del alumno; las de conciliación
 son exclusivas de `ADMIN`. Los errores usan `application/problem+json`.
 
+## Contrato HTTP implementado (v1)
+
+| Endpoint | Autenticación de entrada | Respuesta exitosa |
+| --- | --- | --- |
+| `GET /plans` | Ninguna (público) | `200` con `{ plans: [...] }`, `[]` si no hay planes activos |
+| `GET /plans/{planId}` | Ninguna (público) | `200` con el detalle completo del plan |
+
+`GET /plans` sólo devuelve planes con `status = ACTIVE`, ordenados por precio
+ascendente; el destacado se indica con el campo `featured`, no con el orden.
+`GET /plans/{planId}` responde `404 PLAN_NOT_FOUND` tanto para un id
+inexistente como para uno inactivo — el motivo real nunca es distinguible
+desde afuera. Ambos endpoints comparten un presupuesto de 60 solicitudes por
+minuto por IP (`429 PLAN_RATE_LIMITED` al agotarse); si el limitador no puede
+alcanzar Redis, responden `503 BILLING_DEGRADED` en vez de dejar pasar
+tráfico sin límite.
+
+`billing_plan_courses` referencia cursos de Virtual/Physical por `course_id`
+sin FK ni JOIN (`docs/25-ARCHITECTURE-RULES.md`); el nombre de cada curso se
+resuelve vía `CourseCatalogPort`, cuyo adapter real todavía no existe
+(pendiente de #40/#46) — hasta entonces `courses[].name` puede venir `null`
+sin que la respuesta falle.
+
 ## Estados e idempotencia
 
 `Payment` usa un estado principal y, cuando está pendiente, un subestado.
