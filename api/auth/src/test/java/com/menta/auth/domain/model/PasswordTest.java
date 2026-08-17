@@ -114,5 +114,19 @@ class PasswordTest {
         void differing_passwords_are_not_equal() {
             assertThat(Password.of("SecurePass1")).isNotEqualTo(Password.of("SecurePass2"));
         }
+
+        @Test
+        void is_equal_to_itself_and_not_equal_to_null_or_a_different_type() {
+            Password password = Password.of("SecurePass1");
+
+            assertThat(password).isEqualTo(password);
+            assertThat(password).isNotEqualTo(null);
+            assertThat(password).isNotEqualTo("SecurePass1");
+        }
+
+        @Test
+        void equal_passwords_share_a_hash_code() {
+            assertThat(Password.of("SecurePass1")).hasSameHashCodeAs(Password.of("SecurePass1"));
+        }
     }
 }

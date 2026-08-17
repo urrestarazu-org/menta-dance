@@ -39,4 +39,27 @@ class DeliveryEnvelopeTest {
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("ciphertext");
     }
+
+    @Test
+    void equal_when_every_field_matches() {
+        DeliveryEnvelope a = DeliveryEnvelope.of(CIPHERTEXT, VALID_NONCE, 1);
+        DeliveryEnvelope b = DeliveryEnvelope.of(CIPHERTEXT.clone(), VALID_NONCE.clone(), 1);
+
+        assertThat(a).isEqualTo(b);
+        assertThat(a).hasSameHashCodeAs(b);
+    }
+
+    @Test
+    void not_equal_to_null_a_different_type_or_a_different_field() {
+        DeliveryEnvelope envelope = DeliveryEnvelope.of(CIPHERTEXT, VALID_NONCE, 1);
+
+        assertThat(envelope).isEqualTo(envelope);
+        assertThat(envelope).isNotEqualTo(null);
+        assertThat(envelope).isNotEqualTo("not-an-envelope");
+        assertThat(envelope).isNotEqualTo(DeliveryEnvelope.of(new byte[] {9, 9, 9}, VALID_NONCE, 1));
+        assertThat(envelope).isNotEqualTo(DeliveryEnvelope.of(CIPHERTEXT, VALID_NONCE, 2));
+        byte[] otherNonce = new byte[12];
+        otherNonce[0] = 9;
+        assertThat(envelope).isNotEqualTo(DeliveryEnvelope.of(CIPHERTEXT, otherNonce, 1));
+    }
 }

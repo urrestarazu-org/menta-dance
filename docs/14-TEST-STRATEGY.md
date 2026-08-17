@@ -31,3 +31,32 @@
   y fallo cerrado ante MySQL/Redis. Cada release candidata a rollback automático
   prueba que la aplicación anterior funciona con el schema migrado y datos escritos
   por la versión nueva.
+
+## Nota técnica: gate de cobertura JaCoCo (issue #96)
+
+Una `JacocoViolationRule` con `element = "BUNDLE"` **deja de reportar
+cualquier violación en cuanto se le setea `includes`/`excludes`** —
+confirmado empíricamente contra este build (Gradle 9.7.0, JaCoCo 0.8.12):
+la misma regla, mismos datos, pasa en silencio incluso con un mínimo
+matemáticamente imposible (`1.01`, fuera del rango 0.0–1.0 y que ni
+siquiera llega a validarse), y falla correctamente apenas se saca el
+filtro. `element = "CLASS"` con `includes` sí funciona. Es un
+comportamiento confirmado en este proyecto/versión específica, no una
+afirmación de bug upstream — no se hizo una reproducción mínima aislada
+fuera del repo.
+
+**Consecuencia real**: el gate de 100% de `domain`/`application` en
+`api:auth` estuvo efectivamente apagado desde las primeras PRs sin que
+nadie lo notara — `./gradlew check` pasaba en verde con clases enteras
+sin ningún test.
+
+**Regla a seguir en cualquier módulo nuevo**: nunca usar `includes`/
+`excludes` sobre una regla con `element = "BUNDLE"`. Filtrar por capa
+scopeando el **input** de la task (`classDirectories`, vía
+`FileTree.matching { include(...) }`) en una task
+`JacocoCoverageVerification` dedicada por capa, cada una con una regla
+`BUNDLE` simple sin `includes` — es la única forma comprobada que
+efectivamente falla. Ver el patrón completo, con el comentario explicando
+el porqué, en `api/auth/build.gradle.kts`
+(`registerLayeredCoverageVerification`). `api:billing` (#29) debe aplicar
+el mismo patrón cuando se retome ese trabajo.

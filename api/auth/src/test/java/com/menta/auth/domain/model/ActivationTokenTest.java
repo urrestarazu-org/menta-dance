@@ -65,6 +65,55 @@ class ActivationTokenTest {
     }
 
     @Test
+    void reconstitute_rejects_a_null_id() {
+        assertThatThrownBy(() -> ActivationToken.reconstitute(
+            null, USER_ID, TOKEN_HASH, NOW.plusSeconds(1), NOW, null, null
+        )).isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void reconstitute_rejects_a_null_user_id() {
+        assertThatThrownBy(() -> ActivationToken.reconstitute(
+            UUID.randomUUID(), null, TOKEN_HASH, NOW.plusSeconds(1), NOW, null, null
+        )).isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void expires_at_must_be_after_created_at() {
+        assertThatThrownBy(() -> ActivationToken.issue(USER_ID, TOKEN_HASH, NOW, NOW))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("expiresAt");
+    }
+
+    @Test
+    void a_token_cannot_be_both_used_and_invalidated() {
+        assertThatThrownBy(() -> ActivationToken.reconstitute(
+            UUID.randomUUID(), USER_ID, TOKEN_HASH, NOW.plusSeconds(1), NOW, NOW, NOW
+        )).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void equal_when_ids_match() {
+        ActivationToken token = tokenExpiringIn(Duration.ofHours(1));
+        ActivationToken same = ActivationToken.reconstitute(
+            token.getId(), USER_ID, TOKEN_HASH, token.getExpiresAt(), NOW, null, null
+        );
+
+        assertThat(token).isEqualTo(same);
+        assertThat(token).hasSameHashCodeAs(same);
+    }
+
+    @Test
+    void not_equal_to_null_a_different_type_or_a_different_id() {
+        ActivationToken token = tokenExpiringIn(Duration.ofHours(1));
+
+        assertThat(token).isEqualTo(token);
+        assertThat(token).isNotEqualTo(null);
+        assertThat(token).isNotEqualTo("not-a-token");
+        assertThat(token).isNotEqualTo(tokenExpiringIn(Duration.ofHours(1)));
+    }
+
+    @Test
     void token_hash_must_be_lowercase_sha256_hex() {
         assertThatThrownBy(() -> ActivationToken.issue(
             USER_ID,
