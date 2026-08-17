@@ -121,10 +121,14 @@ subprojects {
         tasks.jacocoTestCoverageVerification {
             dependsOn(tasks.jacocoTestReport)
             violationRules {
+                // Floor for modules that declare no coverage profile of their
+                // own (still-empty scaffolds like shared/physical/virtual/bff).
+                // Modules with a real coverage requirement (auth, billing —
+                // see CLAUDE.md "Estrategia de Tests 100/80/0") add their own
+                // stricter BUNDLE rules in their own build.gradle.kts; those
+                // are additive on top of this one, not a replacement for it.
                 rule {
                     limit {
-                        // TODO: Increase to 0.50 when implementing tests in Phase 1
-                        // Phase 0 scaffolding has no implementation yet
                         minimum = "0.00".toBigDecimal()
                     }
                 }

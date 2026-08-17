@@ -132,4 +132,68 @@ class PasswordResetTokenTest {
             assertThat(activeToken().toString()).doesNotContain(TOKEN_HASH);
         }
     }
+
+    @Nested
+    @DisplayName("Reconstitución y getters")
+    class Reconstitution {
+
+        @Test
+        void reconstitutes_an_active_token_from_persisted_state() {
+            UUID id = UUID.randomUUID();
+
+            PasswordResetToken token = PasswordResetToken.reconstitute(
+                id, USER_ID, TOKEN_HASH, EXPIRES_AT, NOW, null, null
+            );
+
+            assertThat(token.getId()).isEqualTo(id);
+            assertThat(token.getUserId()).isEqualTo(USER_ID);
+            assertThat(token.getTokenHash()).isEqualTo(TOKEN_HASH);
+            assertThat(token.getExpiresAt()).isEqualTo(EXPIRES_AT);
+            assertThat(token.getCreatedAt()).isEqualTo(NOW);
+            assertThat(token.getUsedAt()).isNull();
+            assertThat(token.getInvalidatedAt()).isNull();
+        }
+
+        @Test
+        void getters_report_used_and_invalidated_timestamps() {
+            PasswordResetToken usedToken = PasswordResetToken.reconstitute(
+                UUID.randomUUID(), USER_ID, TOKEN_HASH, EXPIRES_AT, NOW, NOW, null
+            );
+            PasswordResetToken invalidatedToken = PasswordResetToken.reconstitute(
+                UUID.randomUUID(), USER_ID, TOKEN_HASH, EXPIRES_AT, NOW, null, NOW
+            );
+
+            assertThat(usedToken.getUsedAt()).isEqualTo(NOW);
+            assertThat(invalidatedToken.getInvalidatedAt()).isEqualTo(NOW);
+        }
+    }
+
+    @Nested
+    @DisplayName("Igualdad")
+    class Equality {
+
+        @Test
+        void equal_when_ids_match() {
+            UUID id = UUID.randomUUID();
+            PasswordResetToken a = PasswordResetToken.reconstitute(
+                id, USER_ID, TOKEN_HASH, EXPIRES_AT, NOW, null, null
+            );
+            PasswordResetToken b = PasswordResetToken.reconstitute(
+                id, USER_ID, TOKEN_HASH, EXPIRES_AT, NOW, null, null
+            );
+
+            assertThat(a).isEqualTo(b);
+            assertThat(a).hasSameHashCodeAs(b);
+        }
+
+        @Test
+        void not_equal_to_null_a_different_type_or_a_different_id() {
+            PasswordResetToken token = activeToken();
+
+            assertThat(token).isEqualTo(token);
+            assertThat(token).isNotEqualTo(null);
+            assertThat(token).isNotEqualTo("not-a-token");
+            assertThat(token).isNotEqualTo(activeToken());
+        }
+    }
 }
