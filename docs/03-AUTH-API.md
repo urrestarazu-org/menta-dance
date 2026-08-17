@@ -20,6 +20,7 @@ expuestas todavía:
 ```text
 POST /api/v1/auth/register
 GET  /api/v1/auth/activate/{token}
+POST /api/v1/auth/activate
 POST /api/v1/auth/resend-activation
 POST /api/v1/auth/login
 POST /api/v1/auth/refresh
@@ -44,14 +45,18 @@ que la ruta canónica.
 | `POST /login` | JSON `{ "email", "password" }` | `200` con el par de tokens para el cliente de confianza (BFF o Android) |
 | `POST /refresh` | `X-Refresh-Token` obligatorio; nunca body JSON | `200` con el par rotado |
 | `POST /logout` | `Authorization: Bearer <access>` y `X-Refresh-Token` obligatorios | `204 No Content` |
-| `POST /register` | JSON `{ "email", "password", "role": "STUDENT" }` | `202 No Content`, siempre genérico |
-| `GET /activate/{token}` | token opaco en el path | `204 No Content` |
-| `POST /resend-activation` | JSON `{ "email" }` | `202 No Content`, siempre genérico |
-| `POST /forgot-password` | JSON `{ "email" }` | `202 No Content`, siempre genérico |
+| `POST /register` | JSON `{ "email", "password", "role": "STUDENT" }` | `202 Accepted`, sin cuerpo y siempre genérico |
+| `GET /activate/{token}` | token opaco en el path; sólo valida sin consumir | `204 No Content` |
+| `POST /activate` | JSON `{ "token" }` | `204 No Content`; consume el token y activa la cuenta |
+| `POST /resend-activation` | JSON `{ "email" }` | `202 Accepted`, sin cuerpo y siempre genérico |
+| `POST /forgot-password` | JSON `{ "email" }` | `202 Accepted`, sin cuerpo y siempre genérico |
 | `POST /reset-password` | JSON `{ "token", "newPassword" }` | `200 OK`, sin cuerpo |
 
 Registro público crea una cuenta `PENDING_ACTIVATION`, un token de un uso y un
-evento durable de correo en una sola transacción. Registro duplicado conserva
+evento durable de correo en una sola transacción. Hasta que exista una pantalla
+intermedia en el BFF, el enlace de correo usa `GET /activate/{token}` sólo para
+validar el token; la activación efectiva requiere `POST /activate` con el token
+en el cuerpo. Registro duplicado conserva
 el mismo `202` vacío; nunca se devuelve el email, ID o estado de la cuenta.
 `resend-activation` también responde idénticamente para email inexistente,
 activo o pendiente. Registro y reenvío limitados devuelven `429` con
@@ -143,8 +148,10 @@ Un lector QR se autentica como dispositivo técnico y no es un rol.
 ## Seguridad y auditoría
 
 Nunca se registran passwords, JWT, refresh tokens, cookies ni encabezados de
-autorización. Tampoco se registra el token de activación ni la URI que lo
-contiene: los access logs usan `/api/v1/auth/activate/[REDACTED]`. Los eventos
+autorización. Tampoco se registra el token de activación. Mientras el enlace de correo contenga
+el token en su URI, los access logs lo redaccionan como
+`/api/v1/auth/activate/[REDACTED]`; eliminarlo de la URI requiere una pantalla
+intermedia en el BFF y queda fuera del alcance de este cambio. Los eventos
 de login, refresh, revocación, reutilización y denegación incluyen
 `correlationId`, usuario/dispositivo cuando corresponda y resultado.
 

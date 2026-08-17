@@ -37,8 +37,10 @@ SHA-256 **DEBE** ser único.
 
 ### Requirement: Activación de un solo uso
 
-`GET /api/v1/auth/activate/{token}` **MUST (DEBE)** activar exclusivamente una cuenta
-pendiente asociada a un token válido, vigente y no consumido.
+`GET /api/v1/auth/activate/{token}` **MUST (DEBE)** validar sin efectos una cuenta
+pendiente asociada a un token válido, vigente y no consumido. `POST /api/v1/auth/activate`
+con un cuerpo JSON que contiene `token` **MUST (DEBE)** ejecutar la activación y consumir el
+token. Retirar el token de la URI requiere una pantalla intermedia y queda fuera de alcance.
 
 #### Scenario: Token válido
 

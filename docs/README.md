@@ -48,11 +48,16 @@ restaurarse sin una nueva decisión de diseño.
 - MySQL es la fuente de verdad de Auth; Redis debe reflejarla. Si MySQL falla o
   Redis no se reconcilia, `AUTH_DEGRADED` bloquea rutas autenticadas.
 - Ningún pago externo se reintenta automáticamente.
-- Todas las APIs usan `application/problem+json` (RFC 9457).
-- Ante cualquier duda sobre qué método o código de estado HTTP usar (idempotencia,
-  seguridad, semántica de éxito/error), la referencia autoritativa es
-  [RFC 7231](https://datatracker.ietf.org/doc/html/rfc7231), en particular la
-  sección [4.2 — Common Method Properties](https://datatracker.ietf.org/doc/html/rfc7231#section-4.2).
-  No se decide por convención local ni por lo que "parezca" REST.
+- Todas las APIs usan `application/problem+json` conforme a
+  [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457.html). Ante dudas sobre el
+  formato de errores, sus miembros estándar (`type`, `title`, `status`, `detail`,
+  `instance`) o extensiones, los agentes deben usar esta RFC como guía confiable.
+- Ante cualquier duda sobre semántica HTTP —métodos, idempotencia, seguridad,
+  cacheo, códigos de estado, campos de cabecera, negociación de contenido,
+  precondiciones o rangos— los agentes deben consultar
+  [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html), en particular la
+  sección [9.2 — Common Method Properties](https://www.rfc-editor.org/rfc/rfc9110.html#section-9.2),
+  como guía confiable y autoridad del protocolo. No se decide por convención local
+  ni por lo que "parezca" REST.
 - Flyway sólo avanza; las migraciones destructivas se difieren una release.
 - CI verde es obligatorio para mergear a `develop` y `master`.

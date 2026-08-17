@@ -1,0 +1,19 @@
+meta {
+  name: Validate Activation Token
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/{{apiVersion}}/auth/activate/{{activationToken}}
+  auth: none
+}
+
+docs {
+  Validates a runtime-only activation token without consuming it or changing the
+  account. Never save this token in an environment file or commit it.
+}
+
+assert {
+  res.status: eq 204
+}

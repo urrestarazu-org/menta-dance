@@ -13,7 +13,7 @@ solo uso y respuestas resistentes a enumeración.
 - Estado `PENDING_ACTIVATION` para registros públicos.
 - Token opaco de activación: generación criptográfica, hash persistido, TTL de
   24 horas configurable, invalidación y consumo único.
-- `GET /api/v1/auth/activate/{token}`.
+- `GET /api/v1/auth/activate/{token}` para validar sin efectos y `POST /api/v1/auth/activate` con el token en el cuerpo JSON para ejecutar la activación.
 - `POST /api/v1/auth/resend-activation` con respuesta uniforme.
 - Registro transaccional de usuario + token + evento de entrega.
 - SMTP detrás de `ActivationNotificationPort`, procesado desde outbox durable.
@@ -25,7 +25,7 @@ solo uso y respuestas resistentes a enumeración.
 ### Excluido
 
 - Recuperación/reset/cambio de contraseña (`US-AUTH-005/006`).
-- BFF/Android UI para activación.
+- BFF/Android UI para activación; retirar el token de la URI requiere una pantalla intermedia y queda fuera de alcance.
 - MFA, OAuth social y administración de usuarios.
 - Cambio de correo de una cuenta existente.
 

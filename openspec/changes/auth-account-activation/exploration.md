@@ -10,7 +10,7 @@ no existe token, endpoint ni entrega de correo para activación.
 Esto contradice `US-AUTH-001` y `US-AUTH-003`: una cuenta recién registrada debe
 permanecer pendiente, recibir un token de un solo uso y no poder iniciar sesión
 hasta activarse. También faltan el reenvío no enumerativo, rate limiting y las
-rutas planificadas `GET /api/v1/auth/activate/{token}` y
+rutas planificadas `GET /api/v1/auth/activate/{token}` y `POST /api/v1/auth/activate` y
 `POST /api/v1/auth/resend-activation`.
 
 ## Áreas afectadas
