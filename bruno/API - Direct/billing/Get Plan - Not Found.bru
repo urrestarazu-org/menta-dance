@@ -1,0 +1,31 @@
+meta {
+  name: Get Plan - Not Found
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/billing/plans/00000000-0000-0000-0000-000000000000
+  body: none
+  auth: none
+}
+
+docs {
+  A well-formed but nonexistent planId must return the exact same 404
+  PLAN_NOT_FOUND as an inactive one — the endpoint never reveals which case
+  it is.
+}
+
+tests {
+  test("Status is 404", function() {
+    expect(res.getStatus()).to.equal(404);
+  });
+
+  test("Problem code is PLAN_NOT_FOUND", function() {
+    expect(res.getBody().code).to.equal('PLAN_NOT_FOUND');
+  });
+}
+
+assert {
+  res.status: eq 404
+}
