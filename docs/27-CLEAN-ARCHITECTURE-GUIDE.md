@@ -225,8 +225,10 @@ public class UserController {
 
 ## Inyección de Dependencias
 
-**Constructor injection, siempre — nunca `@Autowired` en un campo de una
-clase `@Component`/`@Service`/`@RestController`.** Un campo `@Autowired`
+**En clases de producción (`@Component`/`@Service`/`@RestController`):
+constructor injection, nunca `@Autowired` en un campo.** Esta regla es
+específica de esas clases — no es una prohibición general de `@Autowired`
+en el repo, ver más abajo el caso de los tests. Un campo `@Autowired`
 impide declarar la dependencia `final`, esconde cuántas dependencias tiene
 realmente la clase (un constructor con demasiados parámetros grita "esta
 clase hace demasiado"; un campo no grita nada), y hace que la clase sólo
@@ -235,8 +237,10 @@ Spring 4.3, si la clase tiene un único constructor ni siquiera hace falta
 anotarlo con `@Autowired` — se detecta solo. Verificado en el repo: no hay
 un solo `@Autowired` en ningún archivo de `src/main` de ningún módulo.
 
-**Excepción deliberada — clases de test con `@SpringBootTest`.** Ahí
-`@Autowired`/`@MockBean` por campo es el patrón estándar e idiomático:
+**En clases de test con `@SpringBootTest`**, en cambio, `@Autowired`/
+`@MockBean` por campo es el patrón estándar e idiomático — no es una
+excepción a la regla de arriba, es una regla distinta para un tipo de
+clase distinto (nunca instanciada a mano, nunca expuesta como API):
 
 - No hay "otro código" que instancie mal la clase de test — sólo el motor
   de JUnit la crea una vez para correr los `@Test`.
