@@ -167,7 +167,7 @@ jobs:
           # pero no bloquean.
           docker run --rm -v "$(pwd)/api/openapi:/spec:ro" \
             redocly/cli:latest \
-            lint /spec/auth-v1.yaml
+            lint /spec/auth-v1.yaml /spec/billing-v1.yaml
 
   shellcheck:
     runs-on: ubuntu-latest

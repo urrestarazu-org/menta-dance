@@ -1,0 +1,39 @@
+meta {
+  name: List Plans
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/billing/plans
+  body: none
+  auth: none
+}
+
+docs {
+  Public, unauthenticated catalog of active subscription plans
+  (US-BILLING-001). Sorted by price ascending; empty array (not 404) when
+  no plan is active.
+
+  Success contract:
+    body → { "plans": [ { id, name, description, price, currency,
+              durationDays, featured, courses: [{ id, name }] } ] }
+
+  Error contract:
+    429 PLAN_RATE_LIMITED   + Retry-After → 60 req/min per-IP budget spent
+    503 BILLING_DEGRADED    + Retry-After → rate limiter Redis unreachable
+}
+
+tests {
+  test("Status is 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("Body carries a plans array", function() {
+    expect(res.getBody().plans).to.be.an('array');
+  });
+}
+
+assert {
+  res.status: eq 200
+}

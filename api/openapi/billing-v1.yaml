@@ -1,0 +1,240 @@
+openapi: 3.1.0
+
+# Contrato HTTP de la superficie Billing v1.
+#
+# Escrito y versionado a mano, mismo criterio que auth-v1.yaml: el diff se
+# revisa en el PR igual que la colección Bruno.
+#
+# Sólo describe endpoints IMPLEMENTADOS. El resto del contrato de
+# docs/06-BILLING-API.md (suscripciones, pagos, webhooks, pricing presencial,
+# conciliación) no está acá porque todavía no existe.
+
+info:
+  title: Menta Dance — Billing API
+  version: "1.0.0"
+  description: |
+    Catálogo público de planes de suscripción (US-BILLING-001).
+
+    ## Errores
+
+    Todos los errores usan `application/problem+json` (RFC 9457) con un
+    miembro adicional `code` estable. Los clientes deben discriminar por
+    `code`, no por `detail`.
+
+    ## No enumeración
+
+    `GET /plans/{planId}` no distingue un plan inexistente de uno inactivo —
+    ambos responden el mismo `404 PLAN_NOT_FOUND`.
+
+servers:
+  - url: http://localhost:8081
+    description: Desarrollo local
+  - url: https://api.mentadance.com
+    description: Producción
+
+tags:
+  - name: Planes
+    description: Catálogo público de planes de suscripción.
+
+paths:
+  /api/v1/billing/plans:
+    get:
+      tags: [Planes]
+      summary: Listar planes activos
+      description: |
+        Devuelve únicamente planes con `status = ACTIVE`, ordenados por
+        precio ascendente. Sin planes activos, responde `200` con una lista
+        vacía — nunca `404`.
+      operationId: listPlans
+      security: []
+      responses:
+        '200':
+          description: Lista de planes activos (posiblemente vacía).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanListResponse'
+        '429':
+          $ref: '#/components/responses/PlanRateLimited'
+        '503':
+          $ref: '#/components/responses/BillingDegraded'
+
+  /api/v1/billing/plans/{planId}:
+    get:
+      tags: [Planes]
+      summary: Detalle de un plan
+      description: |
+        Devuelve el detalle completo de un plan sólo si existe y está
+        `ACTIVE`. Un `planId` inexistente y uno inactivo responden
+        idénticamente `404` — el motivo real no es distinguible.
+      operationId: getPlan
+      security: []
+      parameters:
+        - name: planId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Detalle completo del plan.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanDetailResponse'
+        '404':
+          description: Plan inexistente o inactivo.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                no_encontrado:
+                  value:
+                    type: https://menta.dance/problems/plan_not_found
+                    title: Not Found
+                    status: 404
+                    detail: Plan no encontrado o no disponible.
+                    code: PLAN_NOT_FOUND
+        '429':
+          $ref: '#/components/responses/PlanRateLimited'
+        '503':
+          $ref: '#/components/responses/BillingDegraded'
+
+components:
+  responses:
+    PlanRateLimited:
+      description: Presupuesto de 60 req/min por IP agotado.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Segundos hasta poder reintentar.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            rate_limited:
+              value:
+                type: https://menta.dance/problems/plan_rate_limited
+                title: Too Many Requests
+                status: 429
+                detail: Demasiadas solicitudes; reintentá más tarde.
+                code: PLAN_RATE_LIMITED
+
+    BillingDegraded:
+      description: El limitador de Redis no está disponible; fail-closed.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            degraded:
+              value:
+                type: https://menta.dance/problems/billing_degraded
+                title: Service Unavailable
+                status: 503
+                detail: El servicio de facturación no está disponible temporalmente.
+                code: BILLING_DEGRADED
+
+  schemas:
+    Problem:
+      type: object
+      description: |
+        RFC 9457 Problem Details con el miembro adicional `code`.
+      required: [type, title, status, code]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        code:
+          type: string
+
+    PlanCourseResponse:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          description: UUID global del curso (propiedad de Virtual o Physical).
+        name:
+          type: [string, "null"]
+          description: |
+            Nombre del curso. `null` si el catálogo de Virtual/Physical no
+            pudo resolverlo todavía (ver #40/#46).
+
+    PlanSummaryResponse:
+      type: object
+      required: [id, name, description, price, currency, durationDays, featured, courses]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+          format: decimal
+        currency:
+          type: string
+          example: ARS
+        durationDays:
+          type: integer
+        featured:
+          type: boolean
+        courses:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanCourseResponse'
+
+    PlanListResponse:
+      type: object
+      required: [plans]
+      properties:
+        plans:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanSummaryResponse'
+
+    PlanDetailResponse:
+      type: object
+      required: [id, name, description, price, currency, durationDays, featured, termsAndConditions, cancellationPolicy, courses]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+          format: decimal
+        currency:
+          type: string
+        durationDays:
+          type: integer
+        featured:
+          type: boolean
+        termsAndConditions:
+          type: string
+        cancellationPolicy:
+          type: string
+        courses:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanCourseResponse'

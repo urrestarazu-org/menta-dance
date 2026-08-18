@@ -1,0 +1,43 @@
+meta {
+  name: Get Plan
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/billing/plans/{{planId}}
+  body: none
+  auth: none
+}
+
+docs {
+  Full detail of a single plan (US-BILLING-001) — only returns it if the
+  plan exists AND is ACTIVE.
+
+  Prerequisite: set the runtime-only `planId` variable to an id returned by
+  "List Plans".
+
+  Success contract:
+    body → { id, name, description, price, currency, durationDays, featured,
+              termsAndConditions, cancellationPolicy, courses: [{ id, name }] }
+
+  Error contract:
+    404 PLAN_NOT_FOUND      → unknown or inactive planId (indistinguishable)
+    429 PLAN_RATE_LIMITED   + Retry-After
+    503 BILLING_DEGRADED    + Retry-After
+}
+
+tests {
+  test("Status is 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("Body carries the full detail shape", function() {
+    expect(res.getBody().termsAndConditions).to.be.a('string');
+    expect(res.getBody().cancellationPolicy).to.be.a('string');
+  });
+}
+
+assert {
+  res.status: eq 200
+}
