@@ -32,6 +32,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *   - /api/v1/auth/logout → authenticated Bearer access token required.
  *   - /api/v1/auth/forgot-password and /api/v1/auth/reset-password → permitAll
  *     (US-AUTH-005/006; the reset token itself is the temporary authorization).
+ *   - /api/v1/billing/plans and /api/v1/billing/plans/** → permitAll
+ *     (US-BILLING-001; public plan catalog, no account required to browse).
  *   - /actuator/health                          → permitAll
  *   - /api/v1/users/register                    → permitAll (public registration; PR2 contract)
  *   - everything else under /api/v1/admin/**    → requires ADMIN authority
@@ -67,7 +69,9 @@ public class SecurityConfig {
                     "/api/v1/auth/activate/**",
                     "/api/v1/auth/resend-activation",
                     "/api/v1/auth/forgot-password",
-                    "/api/v1/auth/reset-password"
+                    "/api/v1/auth/reset-password",
+                    "/api/v1/billing/plans",
+                    "/api/v1/billing/plans/**"
                 ).permitAll()
                 .requestMatchers("/api/v1/auth/logout").authenticated()
                 .requestMatchers("/actuator/health").permitAll()
