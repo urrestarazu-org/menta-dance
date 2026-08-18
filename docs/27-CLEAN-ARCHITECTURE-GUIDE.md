@@ -223,6 +223,46 @@ public class UserController {
 
 ---
 
+## Inyección de Dependencias
+
+**En clases de producción (`@Component`/`@Service`/`@RestController`):
+constructor injection, nunca `@Autowired` en un campo.** Esta regla es
+específica de esas clases — no es una prohibición general de `@Autowired`
+en el repo, ver más abajo el caso de los tests. Un campo `@Autowired`
+impide declarar la dependencia `final`, esconde cuántas dependencias tiene
+realmente la clase (un constructor con demasiados parámetros grita "esta
+clase hace demasiado"; un campo no grita nada), y hace que la clase sólo
+pueda instanciarse levantando un `ApplicationContext` de Spring. Desde
+Spring 4.3, si la clase tiene un único constructor ni siquiera hace falta
+anotarlo con `@Autowired` — se detecta solo. Verificado en el repo: no hay
+un solo `@Autowired` en ningún archivo de `src/main` de ningún módulo.
+
+**En clases de test con `@SpringBootTest`**, en cambio, `@Autowired`/
+`@MockBean` por campo es el patrón estándar e idiomático — no es una
+excepción a la regla de arriba, es una regla distinta para un tipo de
+clase distinto (nunca instanciada a mano, nunca expuesta como API):
+
+- No hay "otro código" que instancie mal la clase de test — sólo el motor
+  de JUnit la crea una vez para correr los `@Test`.
+- El propósito de un test de integración es justamente levantar el
+  `ApplicationContext` real; no es un defecto a evitar.
+- `@MockBean` reemplaza un bean *dentro* de un contexto ya armado por
+  Spring — no es algo que se pueda pasar por constructor.
+
+```java
+// Test unitario puro (sin Spring) → constructor injection, como en producción.
+mockMvc = MockMvcBuilders.standaloneSetup(
+    new PlanController(listPlansUseCase, getPlanUseCase, clientFingerprint)
+).build();
+
+// Test de integración (@SpringBootTest) → campo, es el uso idiomático.
+@Autowired
+private UserRepository userRepository;
+
+@MockBean
+private AuthDegradedGuard authDegradedGuard;
+```
+
 ## Regla de Dependencias
 
 ```
