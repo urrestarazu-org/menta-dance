@@ -1,0 +1,40 @@
+meta {
+  name: Get Course
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/catalog/courses/{{courseId}}
+  body: none
+  auth: none
+}
+
+docs {
+  Full detail of a single course (#95), resolved against Physical and
+  Virtual in parallel (ADR-0037) — the client never indicates the modality.
+
+  Prerequisite: set the runtime-only `courseId` variable to an id returned
+  by "List Courses".
+
+  Success contract:
+    body → { courseId, modality, title, level, physical | virtual }
+
+  Error contract:
+    404 COURSE_NOT_FOUND   → unknown id, or exists but not published/active
+    503 CATALOG_DEGRADED   + Retry-After → an owning module failed
+}
+
+tests {
+  test("Status is 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("Body carries a modality", function() {
+    expect(['PHYSICAL', 'VIRTUAL']).to.include(res.getBody().modality);
+  });
+}
+
+assert {
+  res.status: eq 200
+}

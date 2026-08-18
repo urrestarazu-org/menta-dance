@@ -16,6 +16,7 @@ import com.menta.virtual.domain.model.CourseLevel;
 import com.menta.virtual.domain.model.CourseStatus;
 import com.menta.virtual.domain.model.VirtualCourse;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class VirtualCourseCatalogPortImplTest {
@@ -68,5 +69,26 @@ class VirtualCourseCatalogPortImplTest {
         when(repository.findPublished(isNull(), eq(10))).thenReturn(List.of());
 
         assertThat(port.listPublished(null, 10)).isEmpty();
+    }
+
+    @Test
+    void find_published_by_id_maps_the_repository_result() {
+        CourseId id = CourseId.generate();
+        when(repository.findPublishedById(eq(id))).thenReturn(Optional.of(course(id)));
+
+        Optional<VirtualCourseSummary> result = port.findPublishedById(id.toString());
+
+        assertThat(result).contains(new VirtualCourseSummary(
+            id.toString(), "Tango Básico", "Aprendé los pasos fundamentales",
+            "https://cdn/tango.jpg", "tango", "BEGINNER", true, 5, 20, 150
+        ));
+    }
+
+    @Test
+    void find_published_by_id_returns_empty_when_the_repository_finds_nothing() {
+        CourseId id = CourseId.generate();
+        when(repository.findPublishedById(eq(id))).thenReturn(Optional.empty());
+
+        assertThat(port.findPublishedById(id.toString())).isEmpty();
     }
 }

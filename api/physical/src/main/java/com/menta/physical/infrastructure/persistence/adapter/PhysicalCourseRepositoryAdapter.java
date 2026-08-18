@@ -7,6 +7,7 @@ import com.menta.physical.domain.model.PhysicalCourse;
 import com.menta.physical.infrastructure.persistence.mapper.PhysicalCourseJpaMapper;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJpaRepository;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
@@ -32,5 +33,13 @@ public class PhysicalCourseRepositoryAdapter implements PhysicalCourseRepository
             .stream()
             .map(PhysicalCourseJpaMapper::toDomain)
             .toList();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public Optional<PhysicalCourse> findActiveById(CourseId courseId) {
+        return courseRepository.findById(courseId.getValue())
+            .filter(entity -> entity.getStatus() == CourseStatus.ACTIVE)
+            .map(PhysicalCourseJpaMapper::toDomain);
     }
 }

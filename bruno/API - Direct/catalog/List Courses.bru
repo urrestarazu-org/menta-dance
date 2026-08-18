@@ -1,0 +1,37 @@
+meta {
+  name: List Courses
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/catalog/courses
+  body: none
+  auth: none
+}
+
+docs {
+  Public, unauthenticated composed catalog of Physical and Virtual courses
+  (#95). Empty array (not 404) when neither module has any course.
+
+  Success contract:
+    body → { "courses": [ { courseId, modality, title, level,
+              physical | virtual } ] }
+
+  Error contract:
+    503 CATALOG_DEGRADED + Retry-After → an owning module failed
+}
+
+tests {
+  test("Status is 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("Body carries a courses array", function() {
+    expect(res.getBody().courses).to.be.an('array');
+  });
+}
+
+assert {
+  res.status: eq 200
+}

@@ -6,6 +6,7 @@ import com.menta.virtual.application.port.out.VirtualCourseRepository;
 import com.menta.virtual.domain.model.CourseId;
 import com.menta.virtual.domain.model.VirtualCourse;
 import java.util.List;
+import java.util.Optional;
 
 public class VirtualCourseCatalogPortImpl implements VirtualCourseCatalogPort {
 
@@ -20,6 +21,12 @@ public class VirtualCourseCatalogPortImpl implements VirtualCourseCatalogPort {
         CourseId cursor = afterCursor == null ? null : CourseId.of(afterCursor);
         List<VirtualCourse> courses = virtualCourseRepository.findPublished(cursor, pageSize);
         return courses.stream().map(VirtualCourseCatalogPortImpl::toSummary).toList();
+    }
+
+    @Override
+    public Optional<VirtualCourseSummary> findPublishedById(String courseId) {
+        return virtualCourseRepository.findPublishedById(CourseId.of(courseId))
+            .map(VirtualCourseCatalogPortImpl::toSummary);
     }
 
     private static VirtualCourseSummary toSummary(VirtualCourse course) {

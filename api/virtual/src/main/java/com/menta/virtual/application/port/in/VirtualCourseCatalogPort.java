@@ -2,6 +2,7 @@ package com.menta.virtual.application.port.in;
 
 import com.menta.virtual.application.dto.VirtualCourseSummary;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Entry point Virtual exposes for other modules to read its published
@@ -25,4 +26,19 @@ public interface VirtualCourseCatalogPort {
      *     {@code ARCHIVED} — or an empty list if none are published.
      */
     List<VirtualCourseSummary> listPublished(String afterCursor, int pageSize);
+
+    /**
+     * Single-course lookup for {@code api:app}'s catalog detail endpoint
+     * (#95) — {@code GET /api/v1/catalog/courses/{courseId}} does not know
+     * the modality in advance, so it resolves against this and Physical's
+     * equivalent port and keeps whichever responds.
+     *
+     * @param courseId the opaque course id to look up.
+     * @return the course if it exists and is {@code PUBLISHED}; {@code
+     *     Optional.empty()} both when it does not exist and when it exists
+     *     but is not published — the same non-enumeration discipline
+     *     {@code listPublished} already applies, so a caller can never tell
+     *     the two cases apart.
+     */
+    Optional<VirtualCourseSummary> findPublishedById(String courseId);
 }

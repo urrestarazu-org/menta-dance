@@ -20,6 +20,7 @@ import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -70,6 +71,30 @@ class PhysicalCourseAvailabilityPortImplTest {
         when(courseRepository.findActive(null, 10)).thenReturn(List.of());
 
         assertThat(port.listCourses(null, 10)).isEmpty();
+    }
+
+    @Test
+    void find_active_by_id_maps_the_repository_result() {
+        CourseId id = CourseId.generate();
+        PhysicalCourse course = new PhysicalCourse(
+            id, "Salsa inicial", "María García", DayOfWeek.TUESDAY,
+            LocalTime.of(19, 0), PhysicalCourseLevel.BEGINNER, 20, CourseStatus.ACTIVE
+        );
+        when(courseRepository.findActiveById(id)).thenReturn(Optional.of(course));
+
+        Optional<PhysicalCourseSummary> result = port.findActiveById(id.toString());
+
+        assertThat(result).contains(new PhysicalCourseSummary(
+            id.toString(), "Salsa inicial", "María García", "TUESDAY", "19:00", "BEGINNER", 20
+        ));
+    }
+
+    @Test
+    void find_active_by_id_returns_empty_when_the_repository_finds_nothing() {
+        CourseId id = CourseId.generate();
+        when(courseRepository.findActiveById(id)).thenReturn(Optional.empty());
+
+        assertThat(port.findActiveById(id.toString())).isEmpty();
     }
 
     @Test
