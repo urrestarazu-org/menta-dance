@@ -20,6 +20,7 @@
 | [0034](0034-activation-token-generation-hashing.md) | Generación y hashing del token de activación de cuenta |
 | [0035](0035-trusted-client-origin-propagation.md) | Propagación confiable del origen del cliente entre Nginx, BFF y API |
 | [0036](0036-android-agp9-tooling-migration.md) | Migración de tooling Android a AGP 9.x |
+| [0037](0037-catalog-course-id-routing.md) | Ruteo de courseId a su módulo dueño en el catálogo |
 
 Los ADRs no listados fueron eliminados por contener decisiones incompatibles con
 el diseño vigente. Sus números no se reutilizan.
