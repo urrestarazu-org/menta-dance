@@ -21,6 +21,7 @@ import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -44,8 +45,8 @@ class PhysicalCourseAvailabilityPortImplTest {
     void lists_courses_mapped_to_the_cross_module_summary_shape() {
         CourseId id = CourseId.generate();
         PhysicalCourse course = new PhysicalCourse(
-            id, "Salsa inicial", "María García", DayOfWeek.TUESDAY,
-            LocalTime.of(19, 0), PhysicalCourseLevel.BEGINNER, 20, CourseStatus.ACTIVE
+            id, "Salsa inicial", "desc", UUID.randomUUID(), "María García", DayOfWeek.TUESDAY,
+            LocalTime.of(19, 0), 60, PhysicalCourseLevel.BEGINNER, 20, CourseStatus.ACTIVE
         );
         when(courseRepository.findActive(null, 10)).thenReturn(List.of(course));
 
@@ -77,8 +78,8 @@ class PhysicalCourseAvailabilityPortImplTest {
     void find_active_by_id_maps_the_repository_result() {
         CourseId id = CourseId.generate();
         PhysicalCourse course = new PhysicalCourse(
-            id, "Salsa inicial", "María García", DayOfWeek.TUESDAY,
-            LocalTime.of(19, 0), PhysicalCourseLevel.BEGINNER, 20, CourseStatus.ACTIVE
+            id, "Salsa inicial", "desc", UUID.randomUUID(), "María García", DayOfWeek.TUESDAY,
+            LocalTime.of(19, 0), 60, PhysicalCourseLevel.BEGINNER, 20, CourseStatus.ACTIVE
         );
         when(courseRepository.findActiveById(id)).thenReturn(Optional.of(course));
 

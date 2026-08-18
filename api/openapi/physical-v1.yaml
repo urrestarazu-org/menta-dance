@@ -1,0 +1,297 @@
+openapi: 3.1.0
+
+# Contrato HTTP de la superficie Physical v1.
+#
+# Escrito y versionado a mano, mismo criterio que auth-v1.yaml/billing-v1.yaml:
+# el diff se revisa en el PR igual que la colección Bruno.
+#
+# Sólo describe endpoints IMPLEMENTADOS. Physical no tiene ningún endpoint
+# público propio todavía — su catálogo de sólo lectura vive compuesto en
+# api:app (docs/07-CATALOG-API.md, #95). Este contrato es el primer HTTP que
+# Physical expone directamente, y es exclusivamente de gestión (US-PHYSICAL-005).
+
+info:
+  title: Menta Dance — Physical API
+  version: "1.0.0"
+  description: |
+    Gestión de cursos presenciales recurrentes (US-PHYSICAL-005) para
+    ADMIN/PROFESOR.
+
+    ## Errores
+
+    Todos los errores usan `application/problem+json` (RFC 9457) con un
+    miembro adicional `code` estable. Los clientes deben discriminar por
+    `code`, no por `detail`.
+
+    ## Autorización
+
+    `/api/v1/admin/physical/courses/**` acepta tanto `ADMIN` como
+    `INSTRUCTOR` (rol interno de `PROFESOR`) — la coincidencia de rol se
+    verifica en el filtro de seguridad; la propiedad de un curso concreto se
+    verifica en el caso de uso (`403 COURSE_NOT_OWNED`).
+
+servers:
+  - url: http://localhost:8081
+    description: Desarrollo local
+  - url: https://api.mentadance.com
+    description: Producción
+
+tags:
+  - name: Gestión de cursos
+    description: Administración de cursos presenciales recurrentes (ADMIN/PROFESOR).
+
+paths:
+  /api/v1/admin/physical/courses:
+    post:
+      tags: [Gestión de cursos]
+      summary: Crear un curso presencial
+      description: |
+        `professorId` es opcional: un PROFESOR que lo omite queda asignado
+        a sí mismo; si lo envía debe coincidir con su propio id, o responde
+        `400 PROFESSOR_MISMATCH`. Sólo un ADMIN puede asignar el curso a un
+        `professorId` arbitrario. `professorName` no forma parte del diseño
+        original de la historia — se agregó porque no existe (todavía)
+        ningún puerto que resuelva el nombre de un profesor a partir de su
+        id desde Physical.
+      operationId: createPhysicalCourse
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePhysicalCourseRequest'
+      responses:
+        '201':
+          description: Curso creado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalCourseManagementResponse'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '403':
+          description: Rol sin acceso a este prefijo (ni ADMIN ni INSTRUCTOR).
+
+    get:
+      tags: [Gestión de cursos]
+      summary: Listar cursos de gestión
+      description: |
+        A diferencia del catálogo público (`GET /api/v1/catalog/courses`),
+        devuelve cursos de cualquier estado. ADMIN ve todos los cursos;
+        PROFESOR ve únicamente los propios.
+      operationId: listManagedPhysicalCourses
+      responses:
+        '200':
+          description: Cursos visibles para el actor autenticado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalCourseManagementListResponse'
+        '403':
+          description: Rol sin acceso a este prefijo (ni ADMIN ni INSTRUCTOR).
+
+  /api/v1/admin/physical/courses/{courseId}:
+    patch:
+      tags: [Gestión de cursos]
+      summary: Actualizar un curso presencial (parcial)
+      description: |
+        Sólo los campos presentes en el body cambian. Desactivar
+        (`status: INACTIVE`) un curso con sesiones futuras que ya tienen
+        cupos asignados responde `409 COURSE_HAS_ACTIVE_ASSIGNMENTS`.
+      operationId: updatePhysicalCourse
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePhysicalCourseRequest'
+      responses:
+        '200':
+          description: Curso actualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalCourseManagementResponse'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '403':
+          description: |
+            Rol sin acceso a este prefijo, o un PROFESOR autenticado que no
+            es dueño de este curso (`COURSE_NOT_OWNED`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                no_es_dueno:
+                  value:
+                    type: https://menta.dance/problems/course_not_owned
+                    title: Forbidden
+                    status: 403
+                    detail: You do not own this course.
+                    code: COURSE_NOT_OWNED
+        '404':
+          description: Curso inexistente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                no_encontrado:
+                  value:
+                    type: https://menta.dance/problems/course_not_found
+                    title: Not Found
+                    status: 404
+                    detail: Course not found.
+                    code: COURSE_NOT_FOUND
+        '409':
+          description: Desactivación rechazada por sesiones futuras con cupos asignados.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                sesiones_activas:
+                  value:
+                    type: https://menta.dance/problems/course_has_active_assignments
+                    title: Conflict
+                    status: 409
+                    detail: Course has future sessions with confirmed assignments and cannot be deactivated.
+                    code: COURSE_HAS_ACTIVE_ASSIGNMENTS
+
+components:
+  responses:
+    InvalidRequest:
+      description: Body inválido (bean validation) o `professorId` no coincide con el actor.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            professor_mismatch:
+              value:
+                type: https://menta.dance/problems/professor_mismatch
+                title: Bad Request
+                status: 400
+                detail: professorId must match the authenticated instructor.
+                code: PROFESSOR_MISMATCH
+
+  schemas:
+    Problem:
+      type: object
+      description: |
+        RFC 9457 Problem Details con el miembro adicional `code`.
+      required: [type, title, status, code]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        code:
+          type: string
+
+    CreatePhysicalCourseRequest:
+      type: object
+      required: [title, description, professorName, dayOfWeek, startTime, durationMinutes, level, capacity]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        professorId:
+          type: [string, "null"]
+          format: uuid
+          description: Omitido por un PROFESOR (se asigna a sí mismo); requerido para que un ADMIN asigne a otro profesor.
+        professorName:
+          type: string
+        dayOfWeek:
+          type: string
+          enum: [MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY]
+        startTime:
+          type: string
+          example: "20:00:00"
+        durationMinutes:
+          type: integer
+          minimum: 1
+        level:
+          type: string
+          enum: [BEGINNER, INTERMEDIATE, ADVANCED]
+        capacity:
+          type: integer
+          minimum: 1
+
+    UpdatePhysicalCourseRequest:
+      type: object
+      description: Todos los campos son opcionales — sólo los presentes se aplican.
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        dayOfWeek:
+          type: string
+          enum: [MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY]
+        startTime:
+          type: string
+        durationMinutes:
+          type: integer
+          minimum: 1
+        level:
+          type: string
+          enum: [BEGINNER, INTERMEDIATE, ADVANCED]
+        capacity:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+
+    PhysicalCourseManagementResponse:
+      type: object
+      required: [courseId, title, description, professorId, professorName, dayOfWeek, startTime, durationMinutes, level, capacity, status]
+      properties:
+        courseId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        professorId:
+          type: string
+          format: uuid
+        professorName:
+          type: string
+        dayOfWeek:
+          type: string
+        startTime:
+          type: string
+        durationMinutes:
+          type: integer
+        level:
+          type: string
+        capacity:
+          type: integer
+        status:
+          type: string
+
+    PhysicalCourseManagementListResponse:
+      type: object
+      required: [courses]
+      properties:
+        courses:
+          type: array
+          items:
+            $ref: '#/components/schemas/PhysicalCourseManagementResponse'

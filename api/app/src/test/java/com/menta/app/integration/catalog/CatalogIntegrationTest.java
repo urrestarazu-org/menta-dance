@@ -90,8 +90,8 @@ class CatalogIntegrationTest {
         UUID id = UUID.randomUUID();
         Instant now = Instant.now();
         physicalCourseRepository.save(new PhysicalCourseJpaEntity(
-            id, title, "María García", "TUESDAY", LocalTime.of(19, 0),
-            "BEGINNER", 20, status, now, now
+            id, title, "desc " + title, UUID.randomUUID(), "María García", "TUESDAY", LocalTime.of(19, 0),
+            60, "BEGINNER", 20, status, now, now
         ));
         return id;
     }

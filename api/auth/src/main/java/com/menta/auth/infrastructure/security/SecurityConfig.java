@@ -42,6 +42,14 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *     own HMAC signature verification is the authorization mechanism).
  *   - /actuator/health                          → permitAll
  *   - /api/v1/users/register                    → permitAll (public registration; PR2 contract)
+ *   - /api/v1/admin/physical/courses/**         → ADMIN or INSTRUCTOR
+ *     (#42; a PROFESOR manages their own courses under the admin prefix —
+ *     evaluated before the generic /api/v1/admin/** rule below, since
+ *     Spring evaluates authorizeHttpRequests matchers in declaration order
+ *     and the first match wins. Resource-level ownership — an INSTRUCTOR
+ *     touching a course they don't own — is checked in the use case, not
+ *     here; this rule only proves the caller is one of the two roles that
+ *     may reach the controller at all).
  *   - everything else under /api/v1/admin/**    → requires ADMIN authority
  *   - everything else under /api/v1/instructor/** → requires INSTRUCTOR authority
  *   - other authenticated paths                 → fall-through via RoleAuthorizationManager.
@@ -85,6 +93,10 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/auth/logout").authenticated()
                 .requestMatchers("/actuator/health").permitAll()
                 .requestMatchers("/api/v1/users/register").permitAll()
+                // #42: ADMIN and INSTRUCTOR share this prefix; ownership of a specific
+                // course is enforced in the use case, not here. Must be declared before
+                // the generic /api/v1/admin/** rule below — first match wins.
+                .requestMatchers("/api/v1/admin/physical/courses/**").hasAnyRole("ADMIN", "INSTRUCTOR")
                 // Coarse-grained role gates.
                 .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/v1/instructor/**").hasRole("INSTRUCTOR")

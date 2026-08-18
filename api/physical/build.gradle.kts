@@ -12,6 +12,11 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-validation")
+    // First Physical endpoint that reads the authenticated caller (#42):
+    // Authentication is a Spring Security type, resolved as a controller
+    // method argument. Already on the runtime classpath via :api:app /
+    // :api:auth; needed here too so this module compiles on its own.
+    implementation("org.springframework.boot:spring-boot-starter-security")
 
     // Database
     runtimeOnly("com.mysql:mysql-connector-j")
