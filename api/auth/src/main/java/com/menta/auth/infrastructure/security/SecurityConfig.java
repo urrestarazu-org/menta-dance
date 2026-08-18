@@ -37,6 +37,9 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *   - /api/v1/catalog/courses and /api/v1/catalog/courses/** → permitAll
  *     (#95; public course catalog composed from Physical/Virtual, no
  *     account required to browse).
+ *   - /api/v1/billing/payments/mercadopago/webhook → permitAll
+ *     (US-BILLING-002; Mercado Pago has no Bearer token — the controller's
+ *     own HMAC signature verification is the authorization mechanism).
  *   - /actuator/health                          → permitAll
  *   - /api/v1/users/register                    → permitAll (public registration; PR2 contract)
  *   - everything else under /api/v1/admin/**    → requires ADMIN authority
@@ -75,6 +78,7 @@ public class SecurityConfig {
                     "/api/v1/auth/reset-password",
                     "/api/v1/billing/plans",
                     "/api/v1/billing/plans/**",
+                    "/api/v1/billing/payments/mercadopago/webhook",
                     "/api/v1/catalog/courses",
                     "/api/v1/catalog/courses/**"
                 ).permitAll()

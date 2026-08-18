@@ -6,14 +6,15 @@ openapi: 3.1.0
 # revisa en el PR igual que la colección Bruno.
 #
 # Sólo describe endpoints IMPLEMENTADOS. El resto del contrato de
-# docs/06-BILLING-API.md (suscripciones, pagos, webhooks, pricing presencial,
+# docs/06-BILLING-API.md (suscripciones, pagos, pricing presencial,
 # conciliación) no está acá porque todavía no existe.
 
 info:
   title: Menta Dance — Billing API
   version: "1.0.0"
   description: |
-    Catálogo público de planes de suscripción (US-BILLING-001).
+    Catálogo público de planes de suscripción (US-BILLING-001) y confirmación
+    de pago por webhook de Mercado Pago (US-BILLING-002).
 
     ## Errores
 
@@ -35,6 +36,8 @@ servers:
 tags:
   - name: Planes
     description: Catálogo público de planes de suscripción.
+  - name: Webhooks
+    description: Notificaciones asíncronas de proveedores de pago.
 
 paths:
   /api/v1/billing/plans:
@@ -101,6 +104,63 @@ paths:
           $ref: '#/components/responses/PlanRateLimited'
         '503':
           $ref: '#/components/responses/BillingDegraded'
+
+  /api/v1/billing/payments/mercadopago/webhook:
+    post:
+      tags: [Webhooks]
+      summary: Recibir notificación de pago de Mercado Pago
+      description: |
+        Verifica `HMAC-SHA256` de `x-signature` (comparación timing-safe) y
+        rechaza timestamps con más de 5 minutos de antigüedad. Persiste y
+        deduplica la notificación como `RECEIVED` en el inbox durable —
+        responde `200` incluso ante un duplicado, sólo después de comprobar
+        esa persistencia. Nunca consulta al proveedor ni aplica ningún efecto
+        de pago en este hilo: eso corre en un worker asíncrono
+        (docs/06-BILLING-API.md, ADR-0038).
+      operationId: receiveMercadoPagoWebhook
+      security: []
+      parameters:
+        - name: data.id
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Id del pago en Mercado Pago.
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: x-signature
+          in: header
+          required: true
+          schema:
+            type: string
+          description: Formato `ts=<epoch-seconds>,v1=<hmac-sha256-hex>`.
+      responses:
+        '200':
+          description: Notificación verificada y persistida (o ya vista antes — idempotente).
+        '401':
+          description: Firma inválida o timestamp vencido.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                firma_invalida:
+                  value:
+                    type: https://menta.dance/problems/webhook_signature_invalid
+                    title: Unauthorized
+                    status: 401
+                    detail: Webhook signature verification failed.
+                    code: WEBHOOK_SIGNATURE_INVALID
+                timestamp_vencido:
+                  value:
+                    type: https://menta.dance/problems/webhook_timestamp_expired
+                    title: Unauthorized
+                    status: 401
+                    detail: Webhook timestamp is too old.
+                    code: WEBHOOK_TIMESTAMP_EXPIRED
 
 components:
   responses:

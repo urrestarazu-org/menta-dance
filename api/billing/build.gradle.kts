@@ -16,6 +16,11 @@ dependencies {
     // Redis (plans rate limiter)
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
 
+    // Resilience4j (ADR-0023): timeout + circuit breaker for the Mercado Pago
+    // payment-provider read. No retry module — the inbox's own backoff cycle
+    // is the retry mechanism (ADR-0038), never stacked with Resilience4j's.
+    implementation("io.github.resilience4j:resilience4j-circuitbreaker:2.2.0")
+
     // Database
     runtimeOnly("com.mysql:mysql-connector-j")
 
