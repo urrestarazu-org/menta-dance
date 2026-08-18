@@ -3,6 +3,7 @@ package com.menta.virtual.application.port.out;
 import com.menta.virtual.domain.model.CourseId;
 import com.menta.virtual.domain.model.VirtualCourse;
 import java.util.List;
+import java.util.Optional;
 
 /** Persistence port for {@link VirtualCourse}. */
 public interface VirtualCourseRepository {
@@ -17,4 +18,11 @@ public interface VirtualCourseRepository {
      * @param pageSize maximum number of courses to return.
      */
     List<VirtualCourse> findPublished(CourseId afterCursor, int pageSize);
+
+    /**
+     * @param courseId the course to look up.
+     * @return the course if it exists and is {@code PUBLISHED}; {@code
+     *     Optional.empty()} otherwise (not found or not published).
+     */
+    Optional<VirtualCourse> findPublishedById(CourseId courseId);
 }

@@ -1,0 +1,178 @@
+openapi: 3.1.0
+
+# Contrato HTTP de la superficie Catalog v1.
+#
+# Escrito y versionado a mano, mismo criterio que auth-v1.yaml y
+# billing-v1.yaml: el diff se revisa en el PR igual que la colección Bruno.
+#
+# Primer endpoint público propio de api:app fuera de auth (#95). Compone,
+# sin tabla compartida ni HTTP interno, los puertos de Physical (#40) y
+# Virtual (#46) — ver docs/07-CATALOG-API.md y docs/adr/0037-catalog-course-id-routing.md.
+
+info:
+  title: Menta Dance — Catalog API
+  version: "1.0.0"
+  description: |
+    Única lectura pública de cursos para alumnos/visitantes (docs/07-CATALOG-API.md).
+    Cada curso tiene exactamente una modalidad (`PHYSICAL` o `VIRTUAL`); la
+    respuesta lleva campos comunes más un bloque específico de modalidad.
+
+    ## Errores
+
+    Todos los errores usan `application/problem+json` (RFC 9457) con un
+    miembro adicional `code` estable. Los clientes deben discriminar por
+    `code`, no por `detail`.
+
+    ## No enumeración
+
+    `GET /courses/{courseId}` no distingue un curso inexistente de uno no
+    publicado/inactivo — ambos responden el mismo `404 COURSE_NOT_FOUND`.
+
+servers:
+  - url: http://localhost:8081
+    description: Desarrollo local
+  - url: https://api.mentadance.com
+    description: Producción
+
+tags:
+  - name: Catálogo
+    description: Catálogo público compuesto de cursos (Physical + Virtual).
+
+paths:
+  /api/v1/catalog/courses:
+    get:
+      tags: [Catálogo]
+      summary: Listar cursos del catálogo público
+      description: |
+        Devuelve cursos de ambas modalidades combinados. Sin filtro, búsqueda
+        ni paginación pública (fuera de alcance de #95). Sin cursos, responde
+        `200` con una lista vacía — nunca `404`.
+      operationId: listCatalogCourses
+      security: []
+      responses:
+        '200':
+          description: Lista combinada de cursos (posiblemente vacía).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogListResponse'
+        '503':
+          $ref: '#/components/responses/CatalogDegraded'
+  /api/v1/catalog/courses/{courseId}:
+    get:
+      tags: [Catálogo]
+      summary: Obtener el detalle de un curso por id, sin indicar la modalidad
+      description: |
+        `api:app` determina la modalidad consultando ambos puertos dueños y
+        se queda con el que responde (ADR-0037).
+      operationId: getCatalogCourse
+      security: []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Curso encontrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogCourseResponse'
+        '404':
+          $ref: '#/components/responses/CourseNotFound'
+        '503':
+          $ref: '#/components/responses/CatalogDegraded'
+
+components:
+  schemas:
+    CatalogListResponse:
+      type: object
+      properties:
+        courses:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogCourseResponse'
+      required: [courses]
+    CatalogCourseResponse:
+      type: object
+      properties:
+        courseId:
+          type: string
+          format: uuid
+        modality:
+          type: string
+          enum: [PHYSICAL, VIRTUAL]
+        title:
+          type: string
+        level:
+          type: string
+        physical:
+          $ref: '#/components/schemas/PhysicalCatalogBlock'
+          nullable: true
+        virtual:
+          $ref: '#/components/schemas/VirtualCatalogBlock'
+          nullable: true
+      required: [courseId, modality, title, level]
+    PhysicalCatalogBlock:
+      type: object
+      properties:
+        professorName:
+          type: string
+        dayOfWeek:
+          type: string
+        startTime:
+          type: string
+        capacity:
+          type: integer
+    VirtualCatalogBlock:
+      type: object
+      properties:
+        shortDescription:
+          type: string
+        imageUrl:
+          type: string
+        category:
+          type: string
+        premium:
+          type: boolean
+        moduleCount:
+          type: integer
+        lessonCount:
+          type: integer
+        totalDurationMinutes:
+          type: integer
+    ProblemDetail:
+      type: object
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        code:
+          type: string
+      required: [status, code]
+  responses:
+    CourseNotFound:
+      description: Ningún módulo dueño tiene ese courseId (o existe pero no está publicado/activo).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    CatalogDegraded:
+      description: El módulo dueño (Physical o Virtual) falló al resolver la consulta.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'

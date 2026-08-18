@@ -17,6 +17,7 @@ import com.menta.virtual.infrastructure.persistence.repository.VirtualLessonJpaR
 import com.menta.virtual.infrastructure.persistence.repository.VirtualModuleJpaRepository;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -30,10 +31,14 @@ class VirtualCourseRepositoryAdapterTest {
         new VirtualCourseRepositoryAdapter(courseRepository, moduleRepository, lessonRepository);
 
     private static VirtualCourseJpaEntity aCourseEntity(UUID id) {
+        return aCourseEntity(id, CourseStatus.PUBLISHED);
+    }
+
+    private static VirtualCourseJpaEntity aCourseEntity(UUID id, CourseStatus status) {
         Instant now = Instant.now();
         return new VirtualCourseJpaEntity(
             id, "Tango Básico", "desc", "https://cdn/img.jpg", "tango", "BEGINNER",
-            false, CourseStatus.PUBLISHED, now, now
+            false, status, now, now
         );
     }
 
@@ -77,5 +82,45 @@ class VirtualCourseRepositoryAdapterTest {
         assertThat(courseWithoutAggregates.getModuleCount()).isZero();
         assertThat(courseWithoutAggregates.getLessonCount()).isZero();
         assertThat(courseWithoutAggregates.getTotalDurationMinutes()).isZero();
+    }
+
+    @Test
+    void find_published_by_id_returns_the_course_with_its_aggregates() {
+        UUID id = UUID.randomUUID();
+        when(courseRepository.findById(id)).thenReturn(Optional.of(aCourseEntity(id)));
+
+        ModuleCountProjection moduleCount = mock(ModuleCountProjection.class);
+        when(moduleCount.getCourseId()).thenReturn(id);
+        when(moduleCount.getModuleCount()).thenReturn(3L);
+        when(moduleRepository.countByCourseIdIn(List.of(id))).thenReturn(List.of(moduleCount));
+
+        LessonAggregateProjection lessonAggregate = mock(LessonAggregateProjection.class);
+        when(lessonAggregate.getCourseId()).thenReturn(id);
+        when(lessonAggregate.getLessonCount()).thenReturn(9L);
+        when(lessonAggregate.getTotalDurationMinutes()).thenReturn(120L);
+        when(lessonRepository.aggregateByCourseIdIn(List.of(id))).thenReturn(List.of(lessonAggregate));
+
+        Optional<VirtualCourse> result = adapter.findPublishedById(CourseId.of(id));
+
+        assertThat(result).isPresent();
+        assertThat(result.get().getModuleCount()).isEqualTo(3);
+        assertThat(result.get().getLessonCount()).isEqualTo(9);
+        assertThat(result.get().getTotalDurationMinutes()).isEqualTo(120);
+    }
+
+    @Test
+    void find_published_by_id_returns_empty_when_the_course_does_not_exist() {
+        UUID id = UUID.randomUUID();
+        when(courseRepository.findById(id)).thenReturn(Optional.empty());
+
+        assertThat(adapter.findPublishedById(CourseId.of(id))).isEmpty();
+    }
+
+    @Test
+    void find_published_by_id_returns_empty_when_the_course_is_not_published() {
+        UUID id = UUID.randomUUID();
+        when(courseRepository.findById(id)).thenReturn(Optional.of(aCourseEntity(id, CourseStatus.DRAFT)));
+
+        assertThat(adapter.findPublishedById(CourseId.of(id))).isEmpty();
     }
 }

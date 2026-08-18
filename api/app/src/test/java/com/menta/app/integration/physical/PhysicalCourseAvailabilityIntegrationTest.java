@@ -177,6 +177,28 @@ class PhysicalCourseAvailabilityIntegrationTest {
     }
 
     @Test
+    void find_active_by_id_returns_the_course_when_active() {
+        UUID id = seedCourse("Salsa inicial", CourseStatus.ACTIVE);
+
+        assertThat(physicalCourseAvailabilityPort.findActiveById(id.toString()))
+            .isPresent()
+            .get()
+            .satisfies(course -> assertThat(course.title()).isEqualTo("Salsa inicial"));
+    }
+
+    @Test
+    void find_active_by_id_returns_empty_when_the_course_is_inactive() {
+        UUID id = seedCourse("Bachata pausada", CourseStatus.INACTIVE);
+
+        assertThat(physicalCourseAvailabilityPort.findActiveById(id.toString())).isEmpty();
+    }
+
+    @Test
+    void find_active_by_id_returns_empty_when_the_course_does_not_exist() {
+        assertThat(physicalCourseAvailabilityPort.findActiveById(UUID.randomUUID().toString())).isEmpty();
+    }
+
+    @Test
     void a_session_without_assignments_or_holds_reports_full_availability() {
         UUID courseId = seedCourse("Salsa inicial", CourseStatus.ACTIVE);
         Instant scheduledAt = Instant.parse("2026-08-25T22:00:00Z");

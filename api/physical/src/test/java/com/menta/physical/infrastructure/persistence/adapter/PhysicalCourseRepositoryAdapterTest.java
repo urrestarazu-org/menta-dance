@@ -13,6 +13,7 @@ import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJp
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -42,5 +43,42 @@ class PhysicalCourseRepositoryAdapterTest {
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getId().getValue()).isEqualTo(id);
+    }
+
+    @Test
+    void find_active_by_id_returns_the_course_when_active() {
+        UUID id = UUID.randomUUID();
+        Instant now = Instant.now();
+        PhysicalCourseJpaEntity entity = new PhysicalCourseJpaEntity(
+            id, "Salsa inicial", "María García", "TUESDAY", LocalTime.of(19, 0),
+            "BEGINNER", 20, CourseStatus.ACTIVE, now, now
+        );
+        when(courseRepository.findById(id)).thenReturn(Optional.of(entity));
+
+        Optional<PhysicalCourse> result = adapter.findActiveById(CourseId.of(id));
+
+        assertThat(result).isPresent();
+        assertThat(result.get().getId().getValue()).isEqualTo(id);
+    }
+
+    @Test
+    void find_active_by_id_returns_empty_when_the_course_does_not_exist() {
+        UUID id = UUID.randomUUID();
+        when(courseRepository.findById(id)).thenReturn(Optional.empty());
+
+        assertThat(adapter.findActiveById(CourseId.of(id))).isEmpty();
+    }
+
+    @Test
+    void find_active_by_id_returns_empty_when_the_course_is_inactive() {
+        UUID id = UUID.randomUUID();
+        Instant now = Instant.now();
+        PhysicalCourseJpaEntity entity = new PhysicalCourseJpaEntity(
+            id, "Salsa inicial", "María García", "TUESDAY", LocalTime.of(19, 0),
+            "BEGINNER", 20, CourseStatus.INACTIVE, now, now
+        );
+        when(courseRepository.findById(id)).thenReturn(Optional.of(entity));
+
+        assertThat(adapter.findActiveById(CourseId.of(id))).isEmpty();
     }
 }

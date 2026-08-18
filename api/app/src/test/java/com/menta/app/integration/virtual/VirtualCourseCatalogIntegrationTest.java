@@ -149,6 +149,33 @@ class VirtualCourseCatalogIntegrationTest {
     }
 
     @Test
+    void find_published_by_id_returns_the_course_when_published() {
+        UUID id = seedCourse("Tango Básico", CourseStatus.PUBLISHED);
+        seedModuleWithLessons(id, 2, 10);
+
+        assertThat(virtualCourseCatalogPort.findPublishedById(id.toString()))
+            .isPresent()
+            .get()
+            .satisfies(course -> {
+                assertThat(course.title()).isEqualTo("Tango Básico");
+                assertThat(course.moduleCount()).isEqualTo(1);
+                assertThat(course.lessonCount()).isEqualTo(2);
+            });
+    }
+
+    @Test
+    void find_published_by_id_returns_empty_when_the_course_is_a_draft() {
+        UUID id = seedCourse("Salsa Draft", CourseStatus.DRAFT);
+
+        assertThat(virtualCourseCatalogPort.findPublishedById(id.toString())).isEmpty();
+    }
+
+    @Test
+    void find_published_by_id_returns_empty_when_the_course_does_not_exist() {
+        assertThat(virtualCourseCatalogPort.findPublishedById(UUID.randomUUID().toString())).isEmpty();
+    }
+
+    @Test
     void cursor_pagination_never_repeats_or_skips_a_course() {
         UUID first = seedCourse("A", CourseStatus.PUBLISHED);
         seedCourse("B", CourseStatus.PUBLISHED);

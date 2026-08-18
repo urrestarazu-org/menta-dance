@@ -10,6 +10,7 @@ import com.menta.physical.domain.model.PhysicalCourse;
 import com.menta.physical.domain.model.PhysicalSession;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 public class PhysicalCourseAvailabilityPortImpl implements PhysicalCourseAvailabilityPort {
 
@@ -28,6 +29,12 @@ public class PhysicalCourseAvailabilityPortImpl implements PhysicalCourseAvailab
         CourseId cursor = afterCursor == null ? null : CourseId.of(afterCursor);
         List<PhysicalCourse> courses = courseRepository.findActive(cursor, pageSize);
         return courses.stream().map(PhysicalCourseAvailabilityPortImpl::toSummary).toList();
+    }
+
+    @Override
+    public Optional<PhysicalCourseSummary> findActiveById(String courseId) {
+        return courseRepository.findActiveById(CourseId.of(courseId))
+            .map(PhysicalCourseAvailabilityPortImpl::toSummary);
     }
 
     @Override

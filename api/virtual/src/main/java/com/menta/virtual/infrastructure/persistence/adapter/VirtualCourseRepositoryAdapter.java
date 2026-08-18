@@ -13,6 +13,7 @@ import com.menta.virtual.infrastructure.persistence.repository.VirtualLessonJpaR
 import com.menta.virtual.infrastructure.persistence.repository.VirtualModuleJpaRepository;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
@@ -75,6 +76,32 @@ public class VirtualCourseRepositoryAdapter implements VirtualCourseRepository {
                 )
             ))
             .toList();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public Optional<VirtualCourse> findPublishedById(CourseId courseId) {
+        Optional<VirtualCourseJpaEntity> entity = courseRepository.findById(courseId.getValue());
+        if (entity.isEmpty() || entity.get().getStatus() != CourseStatus.PUBLISHED) {
+            return Optional.empty();
+        }
+        VirtualCourseJpaEntity course = entity.get();
+        List<UUID> singleId = List.of(course.getId());
+
+        Map<UUID, Long> moduleCounts = moduleRepository.countByCourseIdIn(singleId).stream()
+            .collect(java.util.stream.Collectors.toMap(
+                ModuleCountProjection::getCourseId, ModuleCountProjection::getModuleCount
+            ));
+        Map<UUID, LessonAggregateProjection> lessonAggregates = lessonRepository
+            .aggregateByCourseIdIn(singleId).stream()
+            .collect(java.util.stream.Collectors.toMap(LessonAggregateProjection::getCourseId, a -> a));
+
+        return Optional.of(VirtualCourseJpaMapper.toDomain(
+            course,
+            moduleCounts.getOrDefault(course.getId(), 0L).intValue(),
+            lessonAggregateOf(lessonAggregates, course.getId(), LessonAggregateProjection::getLessonCount),
+            lessonAggregateOf(lessonAggregates, course.getId(), LessonAggregateProjection::getTotalDurationMinutes)
+        ));
     }
 
     private static int lessonAggregateOf(
