@@ -1,0 +1,31 @@
+meta {
+  name: List Managed Physical Sessions
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admin/physical/courses/{{physicalCourseId}}/sessions
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  US-PHYSICAL-006 escenario 3. Requires an ADMIN or INSTRUCTOR bearer token.
+
+  Unlike the public catalog read, this returns sessions of every status,
+  including CANCELLED. `from`/`to` query params are optional (ISO-8601
+  instants); omitted defaults to a wide ±10 year window.
+
+  Success contract: 200 with PhysicalSessionManagementListResponse.
+  Error contract:
+    403 COURSE_NOT_OWNED → INSTRUCTOR is not the course's professor
+}
+
+assert {
+  res.status: eq 200
+}

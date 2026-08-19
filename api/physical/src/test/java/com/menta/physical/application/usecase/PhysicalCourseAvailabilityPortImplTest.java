@@ -105,7 +105,9 @@ class PhysicalCourseAvailabilityPortImplTest {
         Instant scheduledAt = Instant.parse("2026-08-25T22:00:00Z");
         Instant from = Instant.parse("2026-08-01T00:00:00Z");
         Instant to = Instant.parse("2026-09-01T00:00:00Z");
-        PhysicalSession session = new PhysicalSession(sessionId, courseId, scheduledAt, 20, 5, 3);
+        PhysicalSession session = new PhysicalSession(
+            sessionId, courseId, scheduledAt, 20, 5, 3, com.menta.physical.domain.model.SessionStatus.SCHEDULED, null
+        );
         when(sessionRepository.findScheduled(courseId, from, to)).thenReturn(List.of(session));
 
         List<PhysicalSessionAvailability> result = port.listSessions(courseId.toString(), from, to);

@@ -14,11 +14,15 @@ class PhysicalSessionJpaEntityTest {
         UUID courseId = UUID.randomUUID();
         Instant scheduledAt = Instant.parse("2026-08-25T22:00:00Z");
 
-        PhysicalSessionJpaEntity entity = new PhysicalSessionJpaEntity(id, courseId, scheduledAt, 20);
+        PhysicalSessionJpaEntity entity = new PhysicalSessionJpaEntity(
+            id, courseId, scheduledAt, 20, "SCHEDULED", "Clase especial"
+        );
 
         assertThat(entity.getId()).isEqualTo(id);
         assertThat(entity.getCourseId()).isEqualTo(courseId);
         assertThat(entity.getScheduledAt()).isEqualTo(scheduledAt);
         assertThat(entity.getCapacity()).isEqualTo(20);
+        assertThat(entity.getStatus()).isEqualTo("SCHEDULED");
+        assertThat(entity.getNotes()).isEqualTo("Clase especial");
     }
 }

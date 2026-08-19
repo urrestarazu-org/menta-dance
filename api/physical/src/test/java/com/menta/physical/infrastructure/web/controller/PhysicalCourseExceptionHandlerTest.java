@@ -3,10 +3,13 @@ package com.menta.physical.infrastructure.web.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import com.menta.physical.domain.exception.CapacityBelowAssignedException;
 import com.menta.physical.domain.exception.CourseHasActiveAssignmentsException;
 import com.menta.physical.domain.exception.CourseNotFoundException;
 import com.menta.physical.domain.exception.CourseNotOwnedException;
 import com.menta.physical.domain.exception.ProfessorMismatchException;
+import com.menta.physical.domain.exception.SessionAlreadyOccurredException;
+import com.menta.physical.domain.exception.SessionNotFoundException;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -48,6 +51,32 @@ class PhysicalCourseExceptionHandlerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody().getProperties().get("code")).isEqualTo("PROFESSOR_MISMATCH");
+    }
+
+    @Test
+    void maps_session_not_found_to_404() {
+        ResponseEntity<ProblemDetail> response = handler.sessionNotFound(new SessionNotFoundException());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getBody().getProperties().get("code")).isEqualTo("SESSION_NOT_FOUND");
+    }
+
+    @Test
+    void maps_capacity_below_assigned_to_409() {
+        ResponseEntity<ProblemDetail> response =
+            handler.capacityBelowAssigned(new CapacityBelowAssignedException());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody().getProperties().get("code")).isEqualTo("CAPACITY_BELOW_ASSIGNED");
+    }
+
+    @Test
+    void maps_session_already_occurred_to_409() {
+        ResponseEntity<ProblemDetail> response =
+            handler.sessionAlreadyOccurred(new SessionAlreadyOccurredException());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody().getProperties().get("code")).isEqualTo("SESSION_ALREADY_OCCURRED");
     }
 
     @Test
