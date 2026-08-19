@@ -8,9 +8,9 @@ import java.util.UUID;
 
 /**
  * JPA persistence model for the virtual_lessons table. {@code courseId} is
- * denormalized here (in addition to {@code moduleId}) so counting lessons
- * and summing duration per course is a flat {@code WHERE course_id IN (...)}
- * — never a JOIN through modules. Content is out of scope (US-VIRTUAL-002).
+ * denormalized here (in addition to {@code moduleId}) so counting lessons,
+ * summing duration and resolving ownership per course is a flat {@code
+ * WHERE course_id IN (...)} — never a JOIN through modules.
  */
 @Entity
 @Table(name = "virtual_lessons")
@@ -29,19 +29,38 @@ public class VirtualLessonJpaEntity {
     @Column(name = "title", nullable = false)
     private String title;
 
+    @Column(name = "description", nullable = false, columnDefinition = "TEXT")
+    private String description;
+
+    @Column(name = "video_id", nullable = false)
+    private String videoId;
+
     @Column(name = "duration_minutes", nullable = false)
     private int durationMinutes;
+
+    @Column(name = "is_free", nullable = false)
+    private boolean free;
+
+    @Column(name = "display_order", nullable = false)
+    private int displayOrder;
 
     protected VirtualLessonJpaEntity() {
         // JPA requires a no-arg constructor.
     }
 
-    public VirtualLessonJpaEntity(UUID id, UUID moduleId, UUID courseId, String title, int durationMinutes) {
+    public VirtualLessonJpaEntity(
+        UUID id, UUID moduleId, UUID courseId, String title, String description, String videoId,
+        int durationMinutes, boolean free, int displayOrder
+    ) {
         this.id = id;
         this.moduleId = moduleId;
         this.courseId = courseId;
         this.title = title;
+        this.description = description;
+        this.videoId = videoId;
         this.durationMinutes = durationMinutes;
+        this.free = free;
+        this.displayOrder = displayOrder;
     }
 
     public UUID getId() {
@@ -60,7 +79,23 @@ public class VirtualLessonJpaEntity {
         return title;
     }
 
+    public String getDescription() {
+        return description;
+    }
+
+    public String getVideoId() {
+        return videoId;
+    }
+
     public int getDurationMinutes() {
         return durationMinutes;
+    }
+
+    public boolean isFree() {
+        return free;
+    }
+
+    public int getDisplayOrder() {
+        return displayOrder;
     }
 }

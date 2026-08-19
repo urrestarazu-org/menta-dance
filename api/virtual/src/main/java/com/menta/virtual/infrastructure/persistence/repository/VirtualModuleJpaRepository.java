@@ -14,4 +14,9 @@ public interface VirtualModuleJpaRepository extends JpaRepository<VirtualModuleJ
             + "WHERE m.courseId IN :courseIds GROUP BY m.courseId"
     )
     List<ModuleCountProjection> countByCourseIdIn(@Param("courseIds") List<UUID> courseIds);
+
+    /** Management view (US-VIRTUAL-006) — every module of a course, ordered for display/reorder. */
+    List<VirtualModuleJpaEntity> findByCourseIdOrderByDisplayOrderAsc(UUID courseId);
+
+    long countByCourseId(UUID courseId);
 }

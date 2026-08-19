@@ -1,0 +1,47 @@
+meta {
+  name: Create Virtual Lesson
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/v1/admin/virtual/modules/{{virtualModuleId}}/lessons
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "title": "Sacadas y barridas",
+    "description": "Técnicas avanzadas de conexión y desplazamiento.",
+    "videoId": "bunny-video-id-123",
+    "durationMinutes": 18,
+    "free": false
+  }
+}
+
+script:post-response {
+  if (res.getStatus() === 201) {
+    bru.setVar("virtualLessonId", res.getBody().lessonId);
+  }
+}
+
+docs {
+  US-VIRTUAL-006 escenario 3. `durationMinutes` is an integer (not the
+  "mm:ss" string in the original draft) — virtual_lessons.duration_minutes
+  has been an INT since #46. `videoId` is an opaque Bunny.net reference the
+  client already knows; Virtual only stores it by value.
+
+  Success contract: 201 with VirtualLessonManagementResponse.
+  Error contract:
+    403 COURSE_NOT_OWNED → INSTRUCTOR is not the parent course's professor
+    404 MODULE_NOT_FOUND → moduleId does not exist
+}
+
+assert {
+  res.status: eq 201
+}

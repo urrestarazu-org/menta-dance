@@ -25,6 +25,12 @@ public class VirtualCourseJpaEntity {
     @Column(name = "short_description", nullable = false)
     private String shortDescription;
 
+    @Column(name = "description", nullable = false, columnDefinition = "TEXT")
+    private String description;
+
+    @Column(name = "professor_id", columnDefinition = "BINARY(16)", nullable = false)
+    private UUID professorId;
+
     @Column(name = "image_url", nullable = false)
     private String imageUrl;
 
@@ -52,12 +58,14 @@ public class VirtualCourseJpaEntity {
     }
 
     public VirtualCourseJpaEntity(
-        UUID id, String title, String shortDescription, String imageUrl, String category,
-        String level, boolean premium, CourseStatus status, Instant createdAt, Instant updatedAt
+        UUID id, String title, String shortDescription, String description, UUID professorId, String imageUrl,
+        String category, String level, boolean premium, CourseStatus status, Instant createdAt, Instant updatedAt
     ) {
         this.id = id;
         this.title = title;
         this.shortDescription = shortDescription;
+        this.description = description;
+        this.professorId = professorId;
         this.imageUrl = imageUrl;
         this.category = category;
         this.level = level;
@@ -77,6 +85,14 @@ public class VirtualCourseJpaEntity {
 
     public String getShortDescription() {
         return shortDescription;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public UUID getProfessorId() {
+        return professorId;
     }
 
     public String getImageUrl() {

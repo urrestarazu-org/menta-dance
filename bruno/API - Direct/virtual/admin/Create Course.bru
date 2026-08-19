@@ -1,0 +1,45 @@
+meta {
+  name: Create Virtual Course
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/admin/virtual/courses
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "title": "Tango Básico",
+    "shortDescription": "Domina el tango argentino",
+    "description": "Curso completo de técnicas fundamentales de tango argentino.",
+    "imageUrl": "https://cdn.bunny.net/images/tango-basico.jpg",
+    "category": "tango",
+    "level": "BEGINNER"
+  }
+}
+
+script:post-response {
+  if (res.getStatus() === 201) {
+    bru.setVar("virtualCourseId", res.getBody().courseId);
+  }
+}
+
+docs {
+  US-VIRTUAL-006 escenario 1. Requires an ADMIN or INSTRUCTOR bearer token.
+
+  `professorId` is omitted here — an INSTRUCTOR creating a course is always
+  its own professor. Course is created in DRAFT.
+
+  Success contract: 201 with VirtualCourseManagementResponse.
+}
+
+assert {
+  res.status: eq 201
+}

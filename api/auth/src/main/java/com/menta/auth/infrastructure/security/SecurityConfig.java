@@ -54,6 +54,14 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *     (#43; updating a session lives under a DIFFERENT top-level prefix
  *     than /admin/physical/courses/** above — that matcher does not cover
  *     it — so it needs its own rule, same reasoning and ordering).
+ *   - /api/v1/admin/virtual/courses/**          → ADMIN or INSTRUCTOR
+ *   - /api/v1/admin/virtual/modules/**          → ADMIN or INSTRUCTOR
+ *   - /api/v1/admin/virtual/lessons/**          → ADMIN or INSTRUCTOR
+ *     (#54; course/module/lesson management each live under their own
+ *     top-level prefix — same three-way split as Physical's courses vs.
+ *     sessions, same first-match-wins ordering rationale. Ownership of the
+ *     specific course a module/lesson belongs to is checked in the use
+ *     case, never here.)
  *   - everything else under /api/v1/admin/**    → requires ADMIN authority
  *   - everything else under /api/v1/instructor/** → requires INSTRUCTOR authority
  *   - other authenticated paths                 → fall-through via RoleAuthorizationManager.
@@ -104,6 +112,10 @@ public class SecurityConfig {
                 // #43: different top-level prefix than /courses/** above — needs its own
                 // matcher, same first-match-wins ordering rationale.
                 .requestMatchers("/api/v1/admin/physical/sessions/**").hasAnyRole("ADMIN", "INSTRUCTOR")
+                // #54: course/module/lesson management, each its own top-level prefix.
+                .requestMatchers("/api/v1/admin/virtual/courses/**").hasAnyRole("ADMIN", "INSTRUCTOR")
+                .requestMatchers("/api/v1/admin/virtual/modules/**").hasAnyRole("ADMIN", "INSTRUCTOR")
+                .requestMatchers("/api/v1/admin/virtual/lessons/**").hasAnyRole("ADMIN", "INSTRUCTOR")
                 // Coarse-grained role gates.
                 .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/v1/instructor/**").hasRole("INSTRUCTOR")

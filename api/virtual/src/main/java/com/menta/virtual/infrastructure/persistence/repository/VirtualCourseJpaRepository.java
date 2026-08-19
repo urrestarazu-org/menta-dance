@@ -24,4 +24,7 @@ public interface VirtualCourseJpaRepository extends JpaRepository<VirtualCourseJ
     List<VirtualCourseJpaEntity> findByStatusAfterCursor(
         @Param("status") CourseStatus status, @Param("cursor") UUID cursor, Pageable pageable
     );
+
+    /** Management view for an INSTRUCTOR (US-VIRTUAL-006) — every status, not just PUBLISHED. */
+    List<VirtualCourseJpaEntity> findByProfessorId(UUID professorId);
 }

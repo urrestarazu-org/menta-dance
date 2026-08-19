@@ -1,0 +1,36 @@
+meta {
+  name: Update Virtual Lesson
+  type: http
+  seq: 9
+}
+
+put {
+  url: {{baseUrl}}/api/v1/admin/virtual/lessons/{{virtualLessonId}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "free": true
+  }
+}
+
+docs {
+  US-VIRTUAL-006. Lives under a DIFFERENT top-level prefix
+  (/admin/virtual/lessons/**) — ownership resolves through the lesson's
+  course_id, denormalized since #46 (never through the module first).
+
+  Success contract: 200 with VirtualLessonManagementResponse.
+  Error contract:
+    403 COURSE_NOT_OWNED → INSTRUCTOR is not the parent course's professor
+    404 LESSON_NOT_FOUND → lessonId does not exist
+}
+
+assert {
+  res.status: eq 200
+}

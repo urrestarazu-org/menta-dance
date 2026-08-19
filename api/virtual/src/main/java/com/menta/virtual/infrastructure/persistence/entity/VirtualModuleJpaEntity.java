@@ -6,11 +6,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.util.UUID;
 
-/**
- * JPA persistence model for the virtual_modules table. Minimal on purpose:
- * this issue only needs to count modules per course, not their content
- * (US-VIRTUAL-002).
- */
+/** JPA persistence model for the virtual_modules table. */
 @Entity
 @Table(name = "virtual_modules")
 public class VirtualModuleJpaEntity {
@@ -25,14 +21,18 @@ public class VirtualModuleJpaEntity {
     @Column(name = "title", nullable = false)
     private String title;
 
+    @Column(name = "display_order", nullable = false)
+    private int displayOrder;
+
     protected VirtualModuleJpaEntity() {
         // JPA requires a no-arg constructor.
     }
 
-    public VirtualModuleJpaEntity(UUID id, UUID courseId, String title) {
+    public VirtualModuleJpaEntity(UUID id, UUID courseId, String title, int displayOrder) {
         this.id = id;
         this.courseId = courseId;
         this.title = title;
+        this.displayOrder = displayOrder;
     }
 
     public UUID getId() {
@@ -45,5 +45,9 @@ public class VirtualModuleJpaEntity {
 
     public String getTitle() {
         return title;
+    }
+
+    public int getDisplayOrder() {
+        return displayOrder;
     }
 }

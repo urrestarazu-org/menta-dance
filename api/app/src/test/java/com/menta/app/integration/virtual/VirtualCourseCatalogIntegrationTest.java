@@ -88,18 +88,18 @@ class VirtualCourseCatalogIntegrationTest {
         UUID id = UUID.randomUUID();
         Instant now = Instant.now();
         courseRepository.save(new VirtualCourseJpaEntity(
-            id, title, "desc " + title, "https://cdn/img.jpg", "tango", "BEGINNER",
-            false, status, now, now
+            id, title, "desc " + title, "descripción larga", UUID.randomUUID(), "https://cdn/img.jpg", "tango",
+            "BEGINNER", false, status, now, now
         ));
         return id;
     }
 
     private void seedModuleWithLessons(UUID courseId, int lessonCount, int minutesEach) {
         UUID moduleId = UUID.randomUUID();
-        moduleRepository.save(new VirtualModuleJpaEntity(moduleId, courseId, "Módulo"));
+        moduleRepository.save(new VirtualModuleJpaEntity(moduleId, courseId, "Módulo", 0));
         for (int i = 0; i < lessonCount; i++) {
             lessonRepository.save(new VirtualLessonJpaEntity(
-                UUID.randomUUID(), moduleId, courseId, "Lección " + i, minutesEach
+                UUID.randomUUID(), moduleId, courseId, "Lección " + i, "desc", "video-" + i, minutesEach, false, i
             ));
         }
     }
