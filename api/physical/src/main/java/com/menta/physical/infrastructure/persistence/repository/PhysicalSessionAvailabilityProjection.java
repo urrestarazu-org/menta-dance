@@ -4,8 +4,9 @@ import java.time.Instant;
 
 /**
  * Session row joined with a live count of occupied spots — computed by the
- * SQL in {@link PhysicalSessionJpaRepository#findScheduledWithAvailability}
- * at query time, never a cached counter.
+ * SQL in {@link PhysicalSessionJpaRepository#findScheduledWithAvailability}/
+ * {@link PhysicalSessionJpaRepository#findManagedWithAvailability} at query
+ * time, never a cached counter.
  *
  * <p>{@code id}/{@code courseId} are exposed as raw {@code byte[]}: unlike a
  * JPQL entity query, a native-SQL projection gets no Hibernate UUID↔BINARY(16)
@@ -25,4 +26,8 @@ public interface PhysicalSessionAvailabilityProjection {
     Integer getAssignedSpots();
 
     Integer getActiveCapacityHolds();
+
+    String getStatus();
+
+    String getNotes();
 }

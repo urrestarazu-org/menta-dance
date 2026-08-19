@@ -8,14 +8,15 @@ openapi: 3.1.0
 # Sólo describe endpoints IMPLEMENTADOS. Physical no tiene ningún endpoint
 # público propio todavía — su catálogo de sólo lectura vive compuesto en
 # api:app (docs/07-CATALOG-API.md, #95). Este contrato es el primer HTTP que
-# Physical expone directamente, y es exclusivamente de gestión (US-PHYSICAL-005).
+# Physical expone directamente, y es exclusivamente de gestión
+# (US-PHYSICAL-005, US-PHYSICAL-006).
 
 info:
   title: Menta Dance — Physical API
   version: "1.0.0"
   description: |
-    Gestión de cursos presenciales recurrentes (US-PHYSICAL-005) para
-    ADMIN/PROFESOR.
+    Gestión de cursos y sesiones presenciales (US-PHYSICAL-005,
+    US-PHYSICAL-006) para ADMIN/PROFESOR.
 
     ## Errores
 
@@ -25,10 +26,12 @@ info:
 
     ## Autorización
 
-    `/api/v1/admin/physical/courses/**` acepta tanto `ADMIN` como
-    `INSTRUCTOR` (rol interno de `PROFESOR`) — la coincidencia de rol se
-    verifica en el filtro de seguridad; la propiedad de un curso concreto se
-    verifica en el caso de uso (`403 COURSE_NOT_OWNED`).
+    `/api/v1/admin/physical/courses/**` y `/api/v1/admin/physical/sessions/**`
+    aceptan tanto `ADMIN` como `INSTRUCTOR` (rol interno de `PROFESOR`) — la
+    coincidencia de rol se verifica en el filtro de seguridad; la propiedad
+    del curso dueño de la sesión se verifica en el caso de uso (`403
+    COURSE_NOT_OWNED`). Una sesión no tiene `professorId` propio: la
+    autorización siempre se resuelve a través de su curso padre.
 
 servers:
   - url: http://localhost:8081
@@ -39,6 +42,8 @@ servers:
 tags:
   - name: Gestión de cursos
     description: Administración de cursos presenciales recurrentes (ADMIN/PROFESOR).
+  - name: Gestión de sesiones
+    description: Administración de sesiones concretas de un curso presencial (ADMIN/PROFESOR).
 
 paths:
   /api/v1/admin/physical/courses:
@@ -165,6 +170,168 @@ paths:
                     status: 409
                     detail: Course has future sessions with confirmed assignments and cannot be deactivated.
                     code: COURSE_HAS_ACTIVE_ASSIGNMENTS
+
+  /api/v1/admin/physical/courses/{courseId}/sessions:
+    post:
+      tags: [Gestión de sesiones]
+      summary: Crear una sesión
+      description: |
+        `capacity` es opcional — si se omite, hereda la capacidad del curso.
+      operationId: createPhysicalSession
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePhysicalSessionRequest'
+      responses:
+        '201':
+          description: Sesión creada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalSessionManagementResponse'
+        '403':
+          description: Rol sin acceso, o PROFESOR que no es dueño del curso (`COURSE_NOT_OWNED`).
+        '404':
+          description: Curso inexistente.
+
+    get:
+      tags: [Gestión de sesiones]
+      summary: Listar sesiones de gestión
+      description: |
+        A diferencia de la lectura pública (`listSessions` compuesta en
+        `GET /api/v1/catalog/courses/{courseId}`), devuelve sesiones de
+        cualquier estado, incluidas las canceladas. `from`/`to` son
+        opcionales (instantes ISO-8601); si se omiten, cubre una ventana
+        amplia de ±10 años.
+      operationId: listManagedPhysicalSessions
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Sesiones del curso visibles para el actor autenticado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalSessionManagementListResponse'
+        '403':
+          description: Rol sin acceso, o PROFESOR que no es dueño del curso (`COURSE_NOT_OWNED`).
+
+  /api/v1/admin/physical/courses/{courseId}/sessions/batch:
+    post:
+      tags: [Gestión de sesiones]
+      summary: Crear sesiones en lote
+      description: |
+        Genera una sesión por cada fecha en `[fromDate, toDate]` que caiga
+        en el día de recurrencia del curso, con su horario y capacidad. Sin
+        exclusión de feriados: el proyecto no tiene ese concepto todavía.
+      operationId: batchCreatePhysicalSessions
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchCreatePhysicalSessionsRequest'
+      responses:
+        '201':
+          description: Sesiones generadas.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalSessionManagementListResponse'
+        '403':
+          description: Rol sin acceso, o PROFESOR que no es dueño del curso (`COURSE_NOT_OWNED`).
+        '404':
+          description: Curso inexistente.
+
+  /api/v1/admin/physical/sessions/{sessionId}:
+    patch:
+      tags: [Gestión de sesiones]
+      summary: Actualizar una sesión (parcial)
+      description: |
+        Sólo los campos presentes en el body cambian. `status: CANCELLED`
+        cancela la sesión. Reducir `capacity` por debajo de los cupos ya
+        asignados responde `409 CAPACITY_BELOW_ASSIGNED`. Cualquier
+        modificación sobre una sesión cuya fecha ya pasó responde
+        `409 SESSION_ALREADY_OCCURRED`.
+      operationId: updatePhysicalSession
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePhysicalSessionRequest'
+      responses:
+        '200':
+          description: Sesión actualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalSessionManagementResponse'
+        '403':
+          description: Rol sin acceso, o PROFESOR que no es dueño del curso de la sesión (`COURSE_NOT_OWNED`).
+        '404':
+          description: Sesión inexistente.
+        '409':
+          description: Capacidad por debajo de lo asignado, o la sesión ya ocurrió.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                capacidad_insuficiente:
+                  value:
+                    type: https://menta.dance/problems/capacity_below_assigned
+                    title: Conflict
+                    status: 409
+                    detail: New capacity is below the number of already assigned spots.
+                    code: CAPACITY_BELOW_ASSIGNED
+                sesion_ya_ocurrida:
+                  value:
+                    type: https://menta.dance/problems/session_already_occurred
+                    title: Conflict
+                    status: 409
+                    detail: Session has already occurred and cannot be modified.
+                    code: SESSION_ALREADY_OCCURRED
 
 components:
   responses:
@@ -295,3 +462,85 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PhysicalCourseManagementResponse'
+
+    CreatePhysicalSessionRequest:
+      type: object
+      required: [date, startTime]
+      properties:
+        date:
+          type: string
+          format: date
+        startTime:
+          type: string
+          example: "19:00:00"
+        capacity:
+          type: [integer, "null"]
+          minimum: 1
+          description: Omitido para heredar la capacidad del curso.
+        notes:
+          type: [string, "null"]
+
+    BatchCreatePhysicalSessionsRequest:
+      type: object
+      required: [fromDate, toDate]
+      properties:
+        fromDate:
+          type: string
+          format: date
+        toDate:
+          type: string
+          format: date
+
+    UpdatePhysicalSessionRequest:
+      type: object
+      description: Todos los campos son opcionales — sólo los presentes se aplican.
+      properties:
+        date:
+          type: string
+          format: date
+        startTime:
+          type: string
+        capacity:
+          type: integer
+          minimum: 1
+        notes:
+          type: string
+        status:
+          type: string
+          enum: [SCHEDULED, CANCELLED]
+
+    PhysicalSessionManagementResponse:
+      type: object
+      required:
+        [sessionId, courseId, scheduledAt, capacity, assignedSpots, activeCapacityHolds, availableSpots, status]
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        courseId:
+          type: string
+          format: uuid
+        scheduledAt:
+          type: string
+          format: date-time
+        capacity:
+          type: integer
+        assignedSpots:
+          type: integer
+        activeCapacityHolds:
+          type: integer
+        availableSpots:
+          type: integer
+        status:
+          type: string
+        notes:
+          type: [string, "null"]
+
+    PhysicalSessionManagementListResponse:
+      type: object
+      required: [sessions]
+      properties:
+        sessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PhysicalSessionManagementResponse'

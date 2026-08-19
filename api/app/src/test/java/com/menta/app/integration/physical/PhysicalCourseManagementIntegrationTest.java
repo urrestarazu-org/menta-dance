@@ -219,7 +219,7 @@ class PhysicalCourseManagementIntegrationTest {
         UUID courseId = seedCourse(ownerId, CourseStatus.ACTIVE);
         UUID sessionId = UUID.randomUUID();
         sessionRepository.save(new PhysicalSessionJpaEntity(
-            sessionId, courseId, Instant.now().plusSeconds(86400), 20
+            sessionId, courseId, Instant.now().plusSeconds(86400), 20, "SCHEDULED", null
         ));
         assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
             UUID.randomUUID(), sessionId, UUID.randomUUID(), Instant.now()

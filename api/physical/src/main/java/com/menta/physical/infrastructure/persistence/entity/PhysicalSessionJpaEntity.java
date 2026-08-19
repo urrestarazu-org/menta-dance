@@ -2,8 +2,8 @@ package com.menta.physical.infrastructure.persistence.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Id;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -25,15 +25,25 @@ public class PhysicalSessionJpaEntity {
     @Column(name = "capacity", nullable = false)
     private int capacity;
 
+    @Column(name = "status", nullable = false, columnDefinition = "VARCHAR(20)")
+    private String status;
+
+    @Column(name = "notes")
+    private String notes;
+
     protected PhysicalSessionJpaEntity() {
         // JPA requires a no-arg constructor.
     }
 
-    public PhysicalSessionJpaEntity(UUID id, UUID courseId, Instant scheduledAt, int capacity) {
+    public PhysicalSessionJpaEntity(
+        UUID id, UUID courseId, Instant scheduledAt, int capacity, String status, String notes
+    ) {
         this.id = id;
         this.courseId = courseId;
         this.scheduledAt = scheduledAt;
         this.capacity = capacity;
+        this.status = status;
+        this.notes = notes;
     }
 
     public UUID getId() {
@@ -50,5 +60,13 @@ public class PhysicalSessionJpaEntity {
 
     public int getCapacity() {
         return capacity;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public String getNotes() {
+        return notes;
     }
 }

@@ -3,6 +3,7 @@ package com.menta.physical.domain.model;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.menta.physical.domain.exception.CapacityBelowAssignedException;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
 
@@ -12,7 +13,8 @@ class PhysicalSessionTest {
 
     private static PhysicalSession session(int capacity, int assignedSpots, int activeCapacityHolds) {
         return new PhysicalSession(
-            SessionId.generate(), CourseId.generate(), SCHEDULED_AT, capacity, assignedSpots, activeCapacityHolds
+            SessionId.generate(), CourseId.generate(), SCHEDULED_AT, capacity, assignedSpots,
+            activeCapacityHolds, SessionStatus.SCHEDULED, null
         );
     }
 
@@ -23,9 +25,6 @@ class PhysicalSessionTest {
 
     @Test
     void available_spots_never_goes_negative_even_if_oversold() {
-        // This issue never creates assignments/holds -- it only reads whatever
-        // another (future) write path already committed. A defensive floor
-        // means a bug elsewhere never surfaces here as a negative number.
         assertThat(session(10, 8, 5).getAvailableSpots()).isZero();
     }
 
@@ -36,11 +35,6 @@ class PhysicalSessionTest {
 
     @Test
     void concurrent_assignment_and_hold_rows_are_both_counted_toward_availability() {
-        // Simulates two concurrent writers: one confirmed assignment, one
-        // active hold landing on the same session between two reads --
-        // availableSpots reflects both, proving the calculation is a live
-        // read of whatever is committed, not a cached counter that could
-        // miss one of the two concurrent writes.
         PhysicalSession beforeConcurrentWrites = session(10, 0, 0);
         PhysicalSession afterConcurrentWrites = session(10, 1, 1);
 
@@ -68,12 +62,18 @@ class PhysicalSessionTest {
 
     @Test
     void rejects_null_required_fields() {
-        assertThatThrownBy(() -> new PhysicalSession(null, CourseId.generate(), SCHEDULED_AT, 1, 0, 0))
-            .isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> new PhysicalSession(SessionId.generate(), null, SCHEDULED_AT, 1, 0, 0))
-            .isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> new PhysicalSession(SessionId.generate(), CourseId.generate(), null, 1, 0, 0))
-            .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new PhysicalSession(
+            null, CourseId.generate(), SCHEDULED_AT, 1, 0, 0, SessionStatus.SCHEDULED, null
+        )).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new PhysicalSession(
+            SessionId.generate(), null, SCHEDULED_AT, 1, 0, 0, SessionStatus.SCHEDULED, null
+        )).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new PhysicalSession(
+            SessionId.generate(), CourseId.generate(), null, 1, 0, 0, SessionStatus.SCHEDULED, null
+        )).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new PhysicalSession(
+            SessionId.generate(), CourseId.generate(), SCHEDULED_AT, 1, 0, 0, null, null
+        )).isInstanceOf(NullPointerException.class);
     }
 
     @Test
@@ -84,5 +84,75 @@ class PhysicalSessionTest {
         assertThat(session.getCapacity()).isEqualTo(20);
         assertThat(session.getAssignedSpots()).isEqualTo(5);
         assertThat(session.getActiveCapacityHolds()).isEqualTo(3);
+        assertThat(session.getStatus()).isEqualTo(SessionStatus.SCHEDULED);
+    }
+
+    @Test
+    void create_starts_scheduled_with_zero_assignments_and_holds() {
+        CourseId courseId = CourseId.generate();
+
+        PhysicalSession session = PhysicalSession.create(courseId, SCHEDULED_AT, 20, "Nota");
+
+        assertThat(session.getCourseId()).isEqualTo(courseId);
+        assertThat(session.getScheduledAt()).isEqualTo(SCHEDULED_AT);
+        assertThat(session.getCapacity()).isEqualTo(20);
+        assertThat(session.getAssignedSpots()).isZero();
+        assertThat(session.getActiveCapacityHolds()).isZero();
+        assertThat(session.getStatus()).isEqualTo(SessionStatus.SCHEDULED);
+        assertThat(session.getNotes()).isEqualTo("Nota");
+        assertThat(session.getAvailableSpots()).isEqualTo(20);
+    }
+
+    @Test
+    void with_schedule_changes_only_scheduled_at() {
+        PhysicalSession session = session(20, 5, 3);
+        Instant newScheduledAt = SCHEDULED_AT.plusSeconds(3600);
+
+        PhysicalSession rescheduled = session.withSchedule(newScheduledAt);
+
+        assertThat(rescheduled.getScheduledAt()).isEqualTo(newScheduledAt);
+        assertThat(rescheduled.getId()).isEqualTo(session.getId());
+        assertThat(rescheduled.getCapacity()).isEqualTo(20);
+    }
+
+    @Test
+    void with_notes_changes_only_notes() {
+        PhysicalSession session = session(20, 0, 0);
+
+        assertThat(session.withNotes("Actualizado").getNotes()).isEqualTo("Actualizado");
+    }
+
+    @Test
+    void with_capacity_accepts_a_value_at_or_above_assigned_spots() {
+        PhysicalSession session = session(20, 5, 3);
+
+        assertThat(session.withCapacity(5).getCapacity()).isEqualTo(5);
+        assertThat(session.withCapacity(10).getCapacity()).isEqualTo(10);
+    }
+
+    @Test
+    void with_capacity_rejects_a_value_below_assigned_spots() {
+        PhysicalSession session = session(20, 5, 0);
+
+        assertThatThrownBy(() -> session.withCapacity(4)).isInstanceOf(CapacityBelowAssignedException.class);
+    }
+
+    @Test
+    void cancel_marks_the_session_cancelled_without_touching_other_fields() {
+        PhysicalSession session = session(20, 5, 3);
+
+        PhysicalSession cancelled = session.cancel();
+
+        assertThat(cancelled.getStatus()).isEqualTo(SessionStatus.CANCELLED);
+        assertThat(cancelled.getCapacity()).isEqualTo(20);
+        assertThat(cancelled.getAssignedSpots()).isEqualTo(5);
+    }
+
+    @Test
+    void has_occurred_compares_scheduled_at_against_the_given_instant() {
+        PhysicalSession session = session(20, 0, 0);
+
+        assertThat(session.hasOccurred(SCHEDULED_AT.plusSeconds(1))).isTrue();
+        assertThat(session.hasOccurred(SCHEDULED_AT.minusSeconds(1))).isFalse();
     }
 }

@@ -3,16 +3,24 @@ package com.menta.physical.infrastructure.config;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import com.menta.physical.application.port.in.BatchCreatePhysicalSessionsUseCase;
 import com.menta.physical.application.port.in.CreatePhysicalCourseUseCase;
+import com.menta.physical.application.port.in.CreatePhysicalSessionUseCase;
 import com.menta.physical.application.port.in.ListManagedPhysicalCoursesUseCase;
+import com.menta.physical.application.port.in.ListManagedPhysicalSessionsUseCase;
 import com.menta.physical.application.port.in.PhysicalCourseAvailabilityPort;
 import com.menta.physical.application.port.in.UpdatePhysicalCourseUseCase;
+import com.menta.physical.application.port.in.UpdatePhysicalSessionUseCase;
 import com.menta.physical.application.port.out.PhysicalCourseRepository;
 import com.menta.physical.application.port.out.PhysicalSessionRepository;
+import com.menta.physical.application.usecase.BatchCreatePhysicalSessionsUseCaseImpl;
 import com.menta.physical.application.usecase.CreatePhysicalCourseUseCaseImpl;
+import com.menta.physical.application.usecase.CreatePhysicalSessionUseCaseImpl;
 import com.menta.physical.application.usecase.ListManagedPhysicalCoursesUseCaseImpl;
+import com.menta.physical.application.usecase.ListManagedPhysicalSessionsUseCaseImpl;
 import com.menta.physical.application.usecase.PhysicalCourseAvailabilityPortImpl;
 import com.menta.physical.application.usecase.UpdatePhysicalCourseUseCaseImpl;
+import com.menta.physical.application.usecase.UpdatePhysicalSessionUseCaseImpl;
 import org.junit.jupiter.api.Test;
 
 class PhysicalConfigurationTest {
@@ -53,5 +61,41 @@ class PhysicalConfigurationTest {
         );
 
         assertThat(useCase).isInstanceOf(UpdatePhysicalCourseUseCaseImpl.class);
+    }
+
+    @Test
+    void wires_the_create_session_use_case_bean() {
+        CreatePhysicalSessionUseCase useCase = configuration.createPhysicalSessionUseCase(
+            mock(PhysicalCourseRepository.class), mock(PhysicalSessionRepository.class)
+        );
+
+        assertThat(useCase).isInstanceOf(CreatePhysicalSessionUseCaseImpl.class);
+    }
+
+    @Test
+    void wires_the_batch_create_sessions_use_case_bean() {
+        BatchCreatePhysicalSessionsUseCase useCase = configuration.batchCreatePhysicalSessionsUseCase(
+            mock(PhysicalCourseRepository.class), mock(PhysicalSessionRepository.class)
+        );
+
+        assertThat(useCase).isInstanceOf(BatchCreatePhysicalSessionsUseCaseImpl.class);
+    }
+
+    @Test
+    void wires_the_list_managed_sessions_use_case_bean() {
+        ListManagedPhysicalSessionsUseCase useCase = configuration.listManagedPhysicalSessionsUseCase(
+            mock(PhysicalCourseRepository.class), mock(PhysicalSessionRepository.class)
+        );
+
+        assertThat(useCase).isInstanceOf(ListManagedPhysicalSessionsUseCaseImpl.class);
+    }
+
+    @Test
+    void wires_the_update_session_use_case_bean() {
+        UpdatePhysicalSessionUseCase useCase = configuration.updatePhysicalSessionUseCase(
+            mock(PhysicalCourseRepository.class), mock(PhysicalSessionRepository.class)
+        );
+
+        assertThat(useCase).isInstanceOf(UpdatePhysicalSessionUseCaseImpl.class);
     }
 }

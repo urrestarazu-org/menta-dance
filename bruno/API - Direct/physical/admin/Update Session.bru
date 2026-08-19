@@ -1,0 +1,40 @@
+meta {
+  name: Update Physical Session
+  type: http
+  seq: 7
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/admin/physical/sessions/{{physicalSessionId}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "capacity": 15
+  }
+}
+
+docs {
+  US-PHYSICAL-006 escenarios 4-7. Requires an ADMIN or INSTRUCTOR bearer
+  token and an existing `physicalSessionId`.
+
+  Partial update — only the fields present in the body change. Send
+  `{"status": "CANCELLED"}` to cancel a future session instead.
+
+  Success contract: 200 with the updated PhysicalSessionManagementResponse.
+  Error contract:
+    403 COURSE_NOT_OWNED         → INSTRUCTOR is not the course's professor
+    404 SESSION_NOT_FOUND        → sessionId does not exist
+    409 CAPACITY_BELOW_ASSIGNED  → new capacity is below already-assigned spots
+    409 SESSION_ALREADY_OCCURRED → the session's scheduledAt has already passed
+}
+
+assert {
+  res.status: eq 200
+}

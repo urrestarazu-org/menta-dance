@@ -1,9 +1,12 @@
 package com.menta.physical.infrastructure.web.controller;
 
+import com.menta.physical.domain.exception.CapacityBelowAssignedException;
 import com.menta.physical.domain.exception.CourseHasActiveAssignmentsException;
 import com.menta.physical.domain.exception.CourseNotFoundException;
 import com.menta.physical.domain.exception.CourseNotOwnedException;
 import com.menta.physical.domain.exception.ProfessorMismatchException;
+import com.menta.physical.domain.exception.SessionAlreadyOccurredException;
+import com.menta.physical.domain.exception.SessionNotFoundException;
 import com.menta.physical.infrastructure.web.ProblemDetails;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -12,7 +15,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-/** RFC 9457 Problem Details mapping for Physical's management endpoints (US-PHYSICAL-005). */
+/** RFC 9457 Problem Details mapping for Physical's management endpoints (US-PHYSICAL-005, US-PHYSICAL-006). */
 @RestControllerAdvice(annotations = PhysicalManagementEndpoint.class)
 public class PhysicalCourseExceptionHandler {
 
@@ -49,9 +52,34 @@ public class PhysicalCourseExceptionHandler {
         );
     }
 
+    @ExceptionHandler(SessionNotFoundException.class)
+    ResponseEntity<ProblemDetail> sessionNotFound(SessionNotFoundException exception) {
+        return ProblemDetails.response(
+            HttpStatus.NOT_FOUND, "Session not found.", exception.getErrorCode()
+        );
+    }
+
+    @ExceptionHandler(CapacityBelowAssignedException.class)
+    ResponseEntity<ProblemDetail> capacityBelowAssigned(CapacityBelowAssignedException exception) {
+        return ProblemDetails.response(
+            HttpStatus.CONFLICT,
+            "New capacity is below the number of already assigned spots.",
+            exception.getErrorCode()
+        );
+    }
+
+    @ExceptionHandler(SessionAlreadyOccurredException.class)
+    ResponseEntity<ProblemDetail> sessionAlreadyOccurred(SessionAlreadyOccurredException exception) {
+        return ProblemDetails.response(
+            HttpStatus.CONFLICT,
+            "Session has already occurred and cannot be modified.",
+            exception.getErrorCode()
+        );
+    }
+
     /**
-     * A malformed {@code courseId} path variable or {@code professorId}
-     * body field — never a 500.
+     * A malformed {@code courseId}/{@code sessionId} path variable or
+     * {@code professorId} body field — never a 500.
      */
     @ExceptionHandler(IllegalArgumentException.class)
     ResponseEntity<ProblemDetail> malformedId(IllegalArgumentException exception) {

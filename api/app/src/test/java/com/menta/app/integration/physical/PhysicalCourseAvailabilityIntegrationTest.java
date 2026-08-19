@@ -105,7 +105,13 @@ class PhysicalCourseAvailabilityIntegrationTest {
 
     private UUID seedSession(UUID courseId, Instant scheduledAt, int capacity) {
         UUID id = UUID.randomUUID();
-        sessionRepository.save(new PhysicalSessionJpaEntity(id, courseId, scheduledAt, capacity));
+        sessionRepository.save(new PhysicalSessionJpaEntity(id, courseId, scheduledAt, capacity, "SCHEDULED", null));
+        return id;
+    }
+
+    private UUID seedCancelledSession(UUID courseId, Instant scheduledAt, int capacity) {
+        UUID id = UUID.randomUUID();
+        sessionRepository.save(new PhysicalSessionJpaEntity(id, courseId, scheduledAt, capacity, "CANCELLED", null));
         return id;
     }
 
@@ -220,6 +226,22 @@ class PhysicalCourseAvailabilityIntegrationTest {
 
         List<PhysicalSessionAvailability> result = physicalCourseAvailabilityPort.listSessions(
             courseId.toString(), Instant.parse("2026-09-01T00:00:00Z"), Instant.parse("2026-09-30T00:00:00Z")
+        );
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void a_cancelled_session_never_appears_in_the_public_availability_read() {
+        // US-PHYSICAL-006 (#43): a cancelled class must never be offered as
+        // available to an external visitor -- only the management view
+        // (findManaged) shows every status.
+        UUID courseId = seedCourse("Salsa inicial", CourseStatus.ACTIVE);
+        Instant scheduledAt = Instant.parse("2026-08-25T22:00:00Z");
+        seedCancelledSession(courseId, scheduledAt, 20);
+
+        List<PhysicalSessionAvailability> result = physicalCourseAvailabilityPort.listSessions(
+            courseId.toString(), scheduledAt.minusSeconds(60), scheduledAt.plusSeconds(60)
         );
 
         assertThat(result).isEmpty();

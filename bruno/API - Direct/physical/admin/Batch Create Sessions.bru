@@ -1,0 +1,40 @@
+meta {
+  name: Batch Create Physical Sessions
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/admin/physical/courses/{{physicalCourseId}}/sessions/batch
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "fromDate": "2026-09-01",
+    "toDate": "2026-09-30"
+  }
+}
+
+docs {
+  US-PHYSICAL-006 escenario 2. Requires an ADMIN or INSTRUCTOR bearer token
+  and an existing `physicalCourseId`.
+
+  Generates one session per date in [fromDate, toDate] that falls on the
+  course's recurring day of week, at its startTime and capacity. No holiday
+  exclusion — the project has no holidays concept yet.
+
+  Success contract: 201 with PhysicalSessionManagementListResponse.
+  Error contract:
+    403 COURSE_NOT_OWNED → INSTRUCTOR is not the course's professor
+    404 COURSE_NOT_FOUND → courseId does not exist
+}
+
+assert {
+  res.status: eq 201
+}
