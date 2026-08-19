@@ -30,4 +30,10 @@ public class PhysicalSessionRepositoryAdapter implements PhysicalSessionReposito
             .map(PhysicalSessionJpaMapper::toDomain)
             .toList();
     }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public boolean hasFutureAssignedSessions(CourseId courseId) {
+        return sessionRepository.existsFutureAssignedSession(courseId.getValue(), Instant.now());
+    }
 }

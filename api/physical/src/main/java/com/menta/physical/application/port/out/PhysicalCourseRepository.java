@@ -4,6 +4,7 @@ import com.menta.physical.domain.model.CourseId;
 import com.menta.physical.domain.model.PhysicalCourse;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /** Persistence port for {@link PhysicalCourse}. */
 public interface PhysicalCourseRepository {
@@ -25,4 +26,20 @@ public interface PhysicalCourseRepository {
      *     Optional.empty()} otherwise (not found or inactive).
      */
     Optional<PhysicalCourse> findActiveById(CourseId courseId);
+
+    /**
+     * Unfiltered by status — management endpoints (US-PHYSICAL-005) must be
+     * able to load and edit an {@code INACTIVE} course too, unlike the
+     * public catalog read path above.
+     */
+    Optional<PhysicalCourse> findById(CourseId courseId);
+
+    /** Every course regardless of status or owner — the ADMIN management view. */
+    List<PhysicalCourse> findAll();
+
+    /** Every course owned by {@code professorId}, regardless of status — the INSTRUCTOR management view. */
+    List<PhysicalCourse> findByProfessorId(UUID professorId);
+
+    /** Creates a new course or updates an existing one (matched by {@link PhysicalCourse#getId()}). */
+    PhysicalCourse save(PhysicalCourse course);
 }

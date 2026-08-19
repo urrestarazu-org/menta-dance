@@ -24,4 +24,7 @@ public interface PhysicalCourseJpaRepository extends JpaRepository<PhysicalCours
     List<PhysicalCourseJpaEntity> findByStatusAfterCursor(
         @Param("status") CourseStatus status, @Param("cursor") UUID cursor, Pageable pageable
     );
+
+    /** Management view for an INSTRUCTOR (US-PHYSICAL-005) — every status, not just ACTIVE. */
+    List<PhysicalCourseJpaEntity> findByProfessorId(UUID professorId);
 }

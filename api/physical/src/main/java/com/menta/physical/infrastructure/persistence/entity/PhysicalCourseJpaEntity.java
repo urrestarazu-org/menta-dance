@@ -23,6 +23,12 @@ public class PhysicalCourseJpaEntity {
     @Column(name = "title", nullable = false)
     private String title;
 
+    @Column(name = "description", nullable = false, columnDefinition = "TEXT")
+    private String description;
+
+    @Column(name = "professor_id", columnDefinition = "BINARY(16)", nullable = false)
+    private UUID professorId;
+
     @Column(name = "professor_name", nullable = false)
     private String professorName;
 
@@ -31,6 +37,9 @@ public class PhysicalCourseJpaEntity {
 
     @Column(name = "start_time", nullable = false)
     private LocalTime startTime;
+
+    @Column(name = "duration_minutes", nullable = false)
+    private int durationMinutes;
 
     @Column(name = "level", nullable = false, columnDefinition = "VARCHAR(20)")
     private String level;
@@ -53,14 +62,18 @@ public class PhysicalCourseJpaEntity {
     }
 
     public PhysicalCourseJpaEntity(
-        UUID id, String title, String professorName, String dayOfWeek, LocalTime startTime,
-        String level, int capacity, CourseStatus status, Instant createdAt, Instant updatedAt
+        UUID id, String title, String description, UUID professorId, String professorName, String dayOfWeek,
+        LocalTime startTime, int durationMinutes, String level, int capacity, CourseStatus status,
+        Instant createdAt, Instant updatedAt
     ) {
         this.id = id;
         this.title = title;
+        this.description = description;
+        this.professorId = professorId;
         this.professorName = professorName;
         this.dayOfWeek = dayOfWeek;
         this.startTime = startTime;
+        this.durationMinutes = durationMinutes;
         this.level = level;
         this.capacity = capacity;
         this.status = status;
@@ -76,6 +89,14 @@ public class PhysicalCourseJpaEntity {
         return title;
     }
 
+    public String getDescription() {
+        return description;
+    }
+
+    public UUID getProfessorId() {
+        return professorId;
+    }
+
     public String getProfessorName() {
         return professorName;
     }
@@ -86,6 +107,10 @@ public class PhysicalCourseJpaEntity {
 
     public LocalTime getStartTime() {
         return startTime;
+    }
+
+    public int getDurationMinutes() {
+        return durationMinutes;
     }
 
     public String getLevel() {

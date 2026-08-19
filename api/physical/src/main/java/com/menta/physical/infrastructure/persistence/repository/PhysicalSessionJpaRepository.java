@@ -34,4 +34,15 @@ public interface PhysicalSessionJpaRepository extends JpaRepository<PhysicalSess
         @Param("to") Instant to,
         @Param("now") Instant now
     );
+
+    /** US-PHYSICAL-005 escenario 4: guards course deactivation. */
+    @Query(
+        value = "SELECT EXISTS("
+            + "SELECT 1 FROM physical_sessions s "
+            + "JOIN physical_capacity_assignments a ON a.session_id = s.id "
+            + "WHERE s.course_id = :courseId AND s.scheduled_at > :now"
+            + ")",
+        nativeQuery = true
+    )
+    boolean existsFutureAssignedSession(@Param("courseId") UUID courseId, @Param("now") Instant now);
 }

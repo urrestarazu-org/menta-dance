@@ -14,4 +14,11 @@ import java.util.List;
 public interface PhysicalSessionRepository {
 
     List<PhysicalSession> findScheduled(CourseId courseId, Instant from, Instant to);
+
+    /**
+     * US-PHYSICAL-005 escenario 4: a course may not be deactivated while it
+     * still has a future session with at least one confirmed assignment —
+     * deactivating would silently strand those students.
+     */
+    boolean hasFutureAssignedSessions(CourseId courseId);
 }
