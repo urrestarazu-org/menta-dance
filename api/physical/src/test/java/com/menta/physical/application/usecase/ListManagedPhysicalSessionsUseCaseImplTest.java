@@ -2,7 +2,10 @@ package com.menta.physical.application.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.notNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.menta.physical.application.dto.PhysicalSessionManagementResult;
@@ -16,12 +19,14 @@ import com.menta.physical.domain.model.PhysicalCourseLevel;
 import com.menta.physical.domain.model.PhysicalSession;
 import com.menta.physical.domain.model.SessionStatus;
 import java.time.DayOfWeek;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class ListManagedPhysicalSessionsUseCaseImplTest {
 
@@ -66,5 +71,21 @@ class ListManagedPhysicalSessionsUseCaseImplTest {
 
         assertThat(results).hasSize(1);
         assertThat(results.get(0).status()).isEqualTo("CANCELLED");
+    }
+
+    @Test
+    void resolves_a_wide_default_window_when_from_and_to_are_omitted() {
+        CourseId id = CourseId.generate();
+        UUID ownerId = UUID.randomUUID();
+        when(courseRepository.findById(id)).thenReturn(Optional.of(course(id, ownerId)));
+        when(sessionRepository.findManaged(eq(id), notNull(), notNull())).thenReturn(List.of());
+
+        useCase.list(id.toString(), null, null, ownerId, false);
+
+        ArgumentCaptor<Instant> fromCaptor = ArgumentCaptor.forClass(Instant.class);
+        ArgumentCaptor<Instant> toCaptor = ArgumentCaptor.forClass(Instant.class);
+        verify(sessionRepository).findManaged(eq(id), fromCaptor.capture(), toCaptor.capture());
+        Duration window = Duration.between(fromCaptor.getValue(), toCaptor.getValue());
+        assertThat(window).isCloseTo(Duration.ofDays(7300), Duration.ofSeconds(5));
     }
 }

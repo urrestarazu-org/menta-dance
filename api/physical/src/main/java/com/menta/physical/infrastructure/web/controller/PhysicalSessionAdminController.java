@@ -14,7 +14,6 @@ import com.menta.physical.infrastructure.web.dto.PhysicalSessionManagementListRe
 import com.menta.physical.infrastructure.web.dto.PhysicalSessionManagementResponse;
 import com.menta.physical.infrastructure.web.dto.UpdatePhysicalSessionRequest;
 import jakarta.validation.Valid;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -44,9 +43,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @PhysicalManagementEndpoint
 public class PhysicalSessionAdminController {
-
-    /** ~10 years ahead: comfortably inside MySQL's DATETIME range, generous for an unbounded "to". */
-    private static final Duration DEFAULT_RANGE = Duration.ofDays(3650);
 
     private final CreatePhysicalSessionUseCase createPhysicalSessionUseCase;
     private final BatchCreatePhysicalSessionsUseCase batchCreatePhysicalSessionsUseCase;
@@ -101,11 +97,8 @@ public class PhysicalSessionAdminController {
         @RequestParam(required = false) Instant to,
         Authentication authentication
     ) {
-        Instant now = Instant.now();
-        Instant effectiveFrom = from != null ? from : now.minus(DEFAULT_RANGE);
-        Instant effectiveTo = to != null ? to : now.plus(DEFAULT_RANGE);
         List<PhysicalSessionManagementResult> results = listManagedPhysicalSessionsUseCase.list(
-            courseId, effectiveFrom, effectiveTo, actingUserId(authentication), isAdmin(authentication)
+            courseId, from, to, actingUserId(authentication), isAdmin(authentication)
         );
         return ResponseEntity.ok(new PhysicalSessionManagementListResponse(
             results.stream().map(PhysicalSessionManagementResponse::from).toList()

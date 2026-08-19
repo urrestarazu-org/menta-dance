@@ -3,7 +3,9 @@ package com.menta.physical.infrastructure.web.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.menta.physical.application.dto.PhysicalSessionManagementResult;
@@ -89,16 +91,21 @@ class PhysicalSessionAdminControllerTest {
     }
 
     @Test
-    void list_defaults_from_and_to_when_not_provided() {
+    void list_passes_null_from_and_to_through_unchanged_when_not_provided() {
         UUID adminId = UUID.randomUUID();
         String courseId = UUID.randomUUID().toString();
-        when(listUseCase.list(eq(courseId), any(), any(), eq(adminId), eq(true))).thenReturn(List.of(result()));
+        when(listUseCase.list(eq(courseId), isNull(), isNull(), eq(adminId), eq(true)))
+            .thenReturn(List.of(result()));
 
         ResponseEntity<PhysicalSessionManagementListResponse> response =
             controller.list(courseId, null, null, authOf(adminId, "ADMIN"));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().sessions()).hasSize(1);
+        // Resolving what "unbounded" means is the use case's job (see
+        // ListManagedPhysicalSessionsUseCaseImplTest) — the controller must
+        // never invent a default range itself.
+        verify(listUseCase).list(eq(courseId), isNull(), isNull(), eq(adminId), eq(true));
     }
 
     @Test
