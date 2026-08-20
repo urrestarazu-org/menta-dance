@@ -102,6 +102,16 @@ alumno nunca puede darse un trial a sí mismo.
 * **Modelo:** requiere distinguir el tipo de suscripción (`TRIAL` / `PAID`) en
   `Subscription`. Hoy ese concepto no existe en el modelo.
 
+* **Un trial se asigna contra un plan normal.** No existen "planes de prueba"
+  como entidad aparte: el administrador elige cualquier plan `ACTIVE` y el
+  trial habilita los cursos de ese plan por los días indicados. Es una
+  simplificación deliberada frente a modelos que exigen planes dedicados con
+  precio cero — evita mantener planes fantasma en el catálogo público y hace
+  que el trial ofrezca exactamente el mismo contenido que la compra que busca
+  incentivar. Como consecuencia, el `paymentMethod` del plan
+  ([US-BILLING-001](US-BILLING-001.md)) es irrelevante para un trial: nunca hay
+  transacción.
+
 * **Lo que NO cambia:** la cascada de acceso de US-VIRTUAL-007 permanece igual.
   El tipo de suscripción es dato de negocio y auditoría — **nunca** entra en la
   decisión de autorización, que sigue dependiendo sólo del estado y del

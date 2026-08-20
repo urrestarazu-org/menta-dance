@@ -24,9 +24,15 @@
 * **Dado que (Given):** Un usuario accede a la página de planes.
 * **Cuando (When):** Envía una petición `GET /api/v1/billing/plans`.
 * **Entonces (Then):** El sistema debe devolver todos los planes con `status = ACTIVE`.
-* **Y (And):** Cada plan debe incluir: nombre, descripción, precio, duración, y lista de cursos incluidos.
+* **Y (And):** Cada plan debe incluir: nombre, descripción, precio, duración, lista de cursos incluidos, y **los métodos de pago que acepta**.
 * **Y (And):** Los planes deben estar ordenados por precio ascendente.
 * **Y (And):** Debe devolver un código HTTP `200 OK`.
+
+> **Refinamiento.** `paymentMethods` ya figuraba en el JSON de ejemplo de la
+> sección 4, pero no estaba en los criterios de aceptación ni existía como
+> campo del modelo. Se formaliza acá: es el dato que le permite al cliente
+> saber qué vías de compra ofrecer para cada plan, y el que
+> [US-BILLING-010](US-BILLING-010.md) valida al iniciar una suscripción.
 
 **Escenario 2: Plan destacado/recomendado**
 
@@ -100,9 +106,19 @@
   }
   ```
 
+* **Métodos de pago aceptados por plan:**
+  * Un plan declara qué vías de compra admite: `MERCADO_PAGO` (pago online,
+    [US-BILLING-010](US-BILLING-010.md)) y/o `BANK_TRANSFER` (transferencia con
+    comprobante, [US-BILLING-003](US-BILLING-003.md)).
+  * Es un conjunto, no un valor único: un mismo plan puede aceptar ambas.
+  * El modelo de dominio `Plan` **no tiene hoy este campo** — requiere migración.
+  * No existe la noción de un enlace de pago externo preconfigurado por plan;
+    ver la sección "Fuera de alcance" de US-BILLING-010 para el porqué.
+
 * **Tablas de BD (Schemas):**
   * `billing_plans` - Planes de suscripción
   * `billing_plan_courses` - Relación plan-cursos
+  * Métodos de pago aceptados por plan - requiere columna o tabla nueva
 
 ---
 
