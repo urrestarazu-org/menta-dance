@@ -12,6 +12,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.io.IOException;
+import java.net.ServerSocket;
 import java.time.Duration;
 import java.util.Map;
 
@@ -228,6 +230,217 @@ class AuthApiAdapterTest {
 
         // When / Then
         assertThatThrownBy(() -> authApiAdapter.logout(refreshToken))
+                .isInstanceOf(AuthApiClient.ServiceUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("should throw ServiceUnavailableException when refresh returns 503")
+    void shouldThrowServiceUnavailableExceptionWhenRefreshReturns503() {
+        // Given
+        String refreshToken = "refresh_token_123";
+
+        stubFor(post(urlEqualTo("/api/v1/auth/refresh"))
+                .withHeader("X-Refresh-Token", equalTo(refreshToken))
+                .willReturn(aResponse()
+                        .withStatus(503)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"message\":\"Service temporarily unavailable\"}")));
+
+        // When / Then
+        assertThatThrownBy(() -> authApiAdapter.refresh(refreshToken))
+                .isInstanceOf(AuthApiClient.ServiceUnavailableException.class)
+                .hasMessageContaining("Auth API unavailable");
+    }
+
+    @Test
+    @DisplayName("should throw RuntimeException when login returns an unmapped status")
+    void shouldThrowRuntimeExceptionWhenLoginReturnsAnUnmappedStatus() {
+        // Given
+        LoginCommand command = new LoginCommand("user@example.com", "ValidPass123!", CLIENT_ADDRESS);
+
+        stubFor(post(urlEqualTo("/api/v1/auth/login"))
+                .willReturn(aResponse()
+                        .withStatus(400)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"message\":\"Bad request\"}")));
+
+        // When / Then
+        assertThatThrownBy(() -> authApiAdapter.login(command))
+                .isInstanceOf(RuntimeException.class)
+                .isNotInstanceOf(AuthApiClient.AuthenticationException.class)
+                .hasMessageContaining("failed with status");
+    }
+
+    @Test
+    @DisplayName("should throw RuntimeException when login succeeds without a refresh token header")
+    void shouldThrowRuntimeExceptionWhenLoginSucceedsWithoutRefreshTokenHeader() {
+        // Given
+        LoginCommand command = new LoginCommand("user@example.com", "ValidPass123!", CLIENT_ADDRESS);
+
+        stubFor(post(urlEqualTo("/api/v1/auth/login"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(toJson(Map.of(
+                                "access_token", "compact.jwt.value",
+                                "token_type", "Bearer",
+                                "expires_in", 900
+                        )))));
+
+        // When / Then
+        assertThatThrownBy(() -> authApiAdapter.login(command))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("did not return");
+    }
+
+    @Test
+    @DisplayName("should throw RuntimeException when login succeeds with an empty response body")
+    void shouldThrowRuntimeExceptionWhenLoginSucceedsWithAnEmptyResponseBody() {
+        // Given
+        LoginCommand command = new LoginCommand("user@example.com", "ValidPass123!", CLIENT_ADDRESS);
+
+        stubFor(post(urlEqualTo("/api/v1/auth/login"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("X-Refresh-Token", "refresh_abc123")));
+
+        // When / Then
+        assertThatThrownBy(() -> authApiAdapter.login(command))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("empty response body");
+    }
+
+    @Test
+    @DisplayName("should default expires_in to 900 seconds when the field is missing")
+    void shouldDefaultExpiresInWhenFieldIsMissing() {
+        // Given
+        LoginCommand command = new LoginCommand("user@example.com", "ValidPass123!", CLIENT_ADDRESS);
+
+        stubFor(post(urlEqualTo("/api/v1/auth/login"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withHeader("X-Refresh-Token", "refresh_abc123")
+                        .withBody(toJson(Map.of(
+                                "access_token", "compact.jwt.value",
+                                "token_type", "Bearer"
+                        )))));
+
+        // When
+        TokenPairResponse result = authApiAdapter.login(command);
+
+        // Then
+        assertThat(result.expiresIn()).isEqualTo(900L);
+    }
+
+    @Test
+    @DisplayName("should parse expires_in when returned as an ISO-8601 duration string")
+    void shouldParseExpiresInWhenReturnedAsIsoDurationString() {
+        // Given
+        LoginCommand command = new LoginCommand("user@example.com", "ValidPass123!", CLIENT_ADDRESS);
+
+        stubFor(post(urlEqualTo("/api/v1/auth/login"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withHeader("X-Refresh-Token", "refresh_abc123")
+                        .withBody(toJson(Map.of(
+                                "access_token", "compact.jwt.value",
+                                "token_type", "Bearer",
+                                "expires_in", "PT15M"
+                        )))));
+
+        // When
+        TokenPairResponse result = authApiAdapter.login(command);
+
+        // Then
+        assertThat(result.expiresIn()).isEqualTo(900L);
+    }
+
+    @Test
+    @DisplayName("should default expires_in to 900 seconds when the duration string is invalid")
+    void shouldDefaultExpiresInWhenDurationStringIsInvalid() {
+        // Given
+        LoginCommand command = new LoginCommand("user@example.com", "ValidPass123!", CLIENT_ADDRESS);
+
+        stubFor(post(urlEqualTo("/api/v1/auth/login"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withHeader("X-Refresh-Token", "refresh_abc123")
+                        .withBody(toJson(Map.of(
+                                "access_token", "compact.jwt.value",
+                                "token_type", "Bearer",
+                                "expires_in", "not-a-duration"
+                        )))));
+
+        // When
+        TokenPairResponse result = authApiAdapter.login(command);
+
+        // Then
+        assertThat(result.expiresIn()).isEqualTo(900L);
+    }
+
+    @Test
+    @DisplayName("should default expires_in to 900 seconds when the field has an unexpected type")
+    void shouldDefaultExpiresInWhenFieldHasAnUnexpectedType() {
+        // Given
+        LoginCommand command = new LoginCommand("user@example.com", "ValidPass123!", CLIENT_ADDRESS);
+
+        stubFor(post(urlEqualTo("/api/v1/auth/login"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withHeader("X-Refresh-Token", "refresh_abc123")
+                        .withBody(toJson(Map.of(
+                                "access_token", "compact.jwt.value",
+                                "token_type", "Bearer",
+                                "expires_in", true
+                        )))));
+
+        // When
+        TokenPairResponse result = authApiAdapter.login(command);
+
+        // Then
+        assertThat(result.expiresIn()).isEqualTo(900L);
+    }
+
+    @Test
+    @DisplayName("should log and ignore logout errors for unmapped statuses (fail-open)")
+    void shouldLogAndIgnoreLogoutErrorsForUnmappedStatuses() {
+        // Given
+        String refreshToken = "refresh_token_123";
+
+        stubFor(post(urlEqualTo("/api/v1/auth/logout"))
+                .withHeader("X-Refresh-Token", equalTo(refreshToken))
+                .willReturn(aResponse()
+                        .withStatus(400)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"message\":\"Bad request\"}")));
+
+        // When / Then - Should not throw (fail-open)
+        authApiAdapter.logout(refreshToken);
+    }
+
+    @Test
+    @DisplayName("should throw ServiceUnavailableException when logout cannot reach the Auth API")
+    void shouldThrowServiceUnavailableExceptionWhenLogoutCannotReachAuthApi() throws IOException {
+        // Given - an address with nobody listening, to force a connection failure
+        int unusedPort;
+        try (ServerSocket serverSocket = new ServerSocket(0)) {
+            unusedPort = serverSocket.getLocalPort();
+        }
+        String unreachableUrl = "http://localhost:" + unusedPort;
+
+        AuthProperties unreachableProperties = new AuthProperties();
+        unreachableProperties.setBaseUrl(unreachableUrl);
+        unreachableProperties.setTimeout(Duration.ofSeconds(2));
+
+        WebClient unreachableWebClient = WebClient.builder().baseUrl(unreachableUrl).build();
+        AuthApiAdapter unreachableAdapter = new AuthApiAdapter(unreachableWebClient, unreachableProperties);
+
+        // When / Then
+        assertThatThrownBy(() -> unreachableAdapter.logout("refresh_token_123"))
                 .isInstanceOf(AuthApiClient.ServiceUnavailableException.class);
     }
 

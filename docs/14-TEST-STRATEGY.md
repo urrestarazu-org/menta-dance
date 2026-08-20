@@ -32,7 +32,66 @@
   prueba que la aplicación anterior funciona con el schema migrado y datos escritos
   por la versión nueva.
 
-## Nota técnica: gate de cobertura JaCoCo (issue #96)
+## Cobertura: gates por capa, no por módulo plano
+
+Cada módulo JVM (`auth`, `billing`, `virtual`, `physical`) gatea **por capa
+de Clean Architecture**, no con un único número parejo sobre todo el
+módulo:
+
+| Módulo | domain + application (BUNDLE) | infrastructure (BUNDLE) |
+|---|---|---|
+| `auth` | 1.00 (real 99.7%) | 0.85 (real 91.6%) |
+| `billing` | 1.00 (real 100%) | 0.85 (real 95.5%) |
+| `virtual` | 0.95 (real 98.7%) | 0.90 (real 97.0%) |
+| `physical` | 0.95 (real 97.8%) | 0.90 (real 97.3%) |
+
+`shared`, `app` y `bff` no tienen capas propias que gatear por separado;
+llevan un piso plano de LINE sobre todo el módulo, declarado en
+`moduleCoverageFloor` en el `build.gradle.kts` raíz (`shared` 0.85 —
+real 97.1%, `app` 0.90 — real 97.4%, `bff` 0.85 — real 94.9%).
+
+Ningún umbral queda por debajo de 85% — fue un pedido explícito, y
+cerrarlo en `auth.infrastructure` (66.0%→91.6% real) y
+`billing.infrastructure` (72.5%→95.5% real) fue trabajo de tests nuevo,
+no sólo de recalibrar el número.
+
+**Por qué BUNDLE y no CLASS**: un contador por CLASS pesa un record de dos
+líneas igual que un caso de uso con ramas — exactamente lo contrario de lo
+que Clean Architecture pide (tipos chicos, decoradores finos, value
+objects). BUNDLE pregunta lo que realmente importa: "¿está cubierto el
+comportamiento de esta capa, dejando viajar el ruido inevitable de
+records/DTOs?". `virtual`/`physical` usaron `element = "CLASS"` con un
+80% parejo hasta que eso mismo rompió CI en #112: diez decoradores
+`Transactional*UseCase` de una línea, cada uno por debajo de 80% en
+soledad, contra una capa ya al 97%. Se migraron al mismo mecanismo de
+`auth`/`billing`.
+
+**Estos números son un trinquete, no una meta.** Cada mínimo se fija justo
+debajo de la cobertura real del momento — nunca muy por debajo, porque
+eso deja de proteger nada (permite borrar código de test en silencio sin
+que el gate se entere), y se sube cuando la capa mejora de verdad. Nunca
+se baja para poner un build en verde.
+
+**Mecanismo compartido**: `registerLayeredCoverageVerification` vive en
+`buildSrc/src/main/kotlin/com/menta/buildlogic/LayeredCoverage.kt` (paquete
+`buildlogic` y no `build` — ese nombre choca con `**/build/` en
+`.gitignore`, que ignora cualquier directorio llamado `build` en
+cualquier profundidad, incluido uno de paquete Java/Kotlin) — una sola
+implementación, consumida por los cuatro módulos vía `import
+com.menta.buildlogic.registerLayeredCoverageVerification`. Antes existían dos
+copias idénticas (`auth`/`billing`); extraerla evita que crezcan más.
+
+**Reporte agregado del monorepo**: `./gradlew jacocoAggregatedReport`
+combina el `execution data` de los 7 módulos JVM en un solo reporte
+(`build/reports/jacoco/jacocoAggregatedReport/`). Es sólo reporte, sin
+umbral propio — los gates siguen viviendo por módulo, donde un fallo
+señala la capa concreta que retrocedió. Existe porque cada gate por
+módulo sólo ve la ejecución de sus propios tests: la suite de integración
+de `:api:app` ejercita `virtual`, `auth` y `billing` de punta a punta (con
+MySQL real vía Testcontainers) y ese trabajo era invisible para todos los
+gates que en realidad cubre.
+
+### Nota técnica: el bug de JaCoCo detrás de todo esto (issue #96)
 
 Una `JacocoViolationRule` con `element = "BUNDLE"` **deja de reportar
 cualquier violación en cuanto se le setea `includes`/`excludes`** —
@@ -56,7 +115,5 @@ scopeando el **input** de la task (`classDirectories`, vía
 `FileTree.matching { include(...) }`) en una task
 `JacocoCoverageVerification` dedicada por capa, cada una con una regla
 `BUNDLE` simple sin `includes` — es la única forma comprobada que
-efectivamente falla. Ver el patrón completo, con el comentario explicando
-el porqué, en `api/auth/build.gradle.kts`
-(`registerLayeredCoverageVerification`). `api:billing` (#29) debe aplicar
-el mismo patrón cuando se retome ese trabajo.
+efectivamente falla. Usar `registerLayeredCoverageVerification` de
+`buildSrc` en vez de reimplementar el patrón.

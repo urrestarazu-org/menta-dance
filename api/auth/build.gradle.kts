@@ -1,3 +1,5 @@
+import com.menta.buildlogic.registerLayeredCoverageVerification
+
 plugins {
     id("java-library")
 }
@@ -50,56 +52,14 @@ tasks.jar {
 
 // PR3 coverage gates (ADR-0021 strict, openspec/config.yaml profile_100).
 //
-// Aggregation strategy — JaCoCo's per-CLASS counter counts interface
-// records, type-only DTOs, and getters/setters exactly the same as
-// behavior-bearing code. For a strict gate that respects Clean
-// Architecture intent, BUNDLE-level aggregation is the only honest unit:
-// "all behavior in this layer covered, with the inevitable record-class
-// noise allowed to ride along". This matches the project's coverage
-// profile_100 meaning: "no meaningful untested behavior leak".
+// The mechanism — BUNDLE aggregation, scoping via classDirectories, and the
+// #96 finding behind it — lives in buildSrc's registerLayeredCoverageVerification.
+// What stays here is the policy: which layers this module gates, at what
+// minimum, and why.
 //
-//   - Domain + Application: must reach 1.00 LINE together (BUNDLE).
-//   - Infrastructure: best-effort 0.50 LINE (BUNDLE) — controllers,
-//     mappers, JPA entities, JWT security wiring are exercised end-to-end
-//     but spec quibbles (per-class 1.00) don't add value.
-//
-// #96: a JacocoViolationRule with element=BUNDLE never reports a violation
-// when `includes`/`excludes` is set — confirmed empirically against this
-// project's Gradle 9.7.0 / JaCoCo 0.8.12: the exact same rule, same data,
-// passes silently (even with a deliberately out-of-range 1.01 minimum) the
-// moment `includes` is non-empty, and fails correctly the moment it's
-// removed. Scoping therefore happens on the task's `classDirectories` INPUT
-// (a FileTree filtered by package path) instead of on the rule itself, and
-// each layer gets its own task with one unscoped, unfiltered BUNDLE rule —
-// the one form proven to actually fail.
-fun Project.registerLayeredCoverageVerification(
-    taskName: String,
-    minimumLineRatio: String,
-    packagePatterns: List<String>,
-    excludePatterns: List<String> = emptyList()
-) = tasks.register<JacocoCoverageVerification>(taskName) {
-    dependsOn(tasks.test)
-    val mainSourceSet = sourceSets.getByName("main")
-    val mainOutput = mainSourceSet.output
-    executionData.setFrom(tasks.test.map { it.extensions.getByType<JacocoTaskExtension>().destinationFile!! })
-    sourceDirectories.setFrom(mainSourceSet.allJava.srcDirs)
-    classDirectories.setFrom(
-        mainOutput.classesDirs.asFileTree.matching {
-            packagePatterns.forEach { include(it) }
-            excludePatterns.forEach { exclude(it) }
-        }
-    )
-    violationRules {
-        rule {
-            limit {
-                counter = "LINE"
-                value = "COVEREDRATIO"
-                minimum = minimumLineRatio.toBigDecimal()
-            }
-        }
-    }
-}
-
+//   - Domain + Application: 1.00 LINE (BUNDLE). Real: 99.7%, and the 0.3%
+//     gap is the excluded class below.
+//   - Infrastructure: 0.85 LINE (BUNDLE). Real: 91.6%.
 val jacocoDomainApplicationCoverageVerification = registerLayeredCoverageVerification(
     "jacocoDomainApplicationCoverageVerification", "1.00",
     listOf("com/menta/auth/domain/**", "com/menta/auth/application/**"),
@@ -116,7 +76,7 @@ val jacocoDomainApplicationCoverageVerification = registerLayeredCoverageVerific
     excludePatterns = listOf("com/menta/auth/domain/crypto/GuaranteedAlgorithm.class")
 )
 val jacocoInfrastructureCoverageVerification = registerLayeredCoverageVerification(
-    "jacocoInfrastructureCoverageVerification", "0.50",
+    "jacocoInfrastructureCoverageVerification", "0.85",
     listOf("com/menta/auth/infrastructure/**")
 )
 
