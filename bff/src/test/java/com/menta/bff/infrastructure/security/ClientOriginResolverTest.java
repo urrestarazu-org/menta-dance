@@ -129,5 +129,32 @@ class ClientOriginResolverTest {
             assertThat(malformed.resolve(trusted)).isEqualTo(USER_ADDRESS);
             assertThat(malformed.resolve(untrusted)).isEqualTo(USER_ADDRESS);
         }
+
+        @Test
+        void a_null_configuration_trusts_nobody() {
+            ClientOriginResolver nullConfig = new ClientOriginResolver(null);
+            MockHttpServletRequest request = requestFrom(NGINX_ADDRESS);
+            request.addHeader("X-Real-IP", USER_ADDRESS);
+
+            assertThat(nullConfig.resolve(request)).isEqualTo(NGINX_ADDRESS);
+        }
+
+        @Test
+        void a_prefix_length_wider_than_the_address_never_widens_trust() {
+            ClientOriginResolver invalidPrefix = new ClientOriginResolver("10.0.0.0/33");
+            MockHttpServletRequest request = requestFrom("10.0.0.5");
+            request.addHeader("X-Real-IP", USER_ADDRESS);
+
+            assertThat(invalidPrefix.resolve(request)).isEqualTo("10.0.0.5");
+        }
+
+        @Test
+        void a_non_numeric_prefix_never_widens_trust() {
+            ClientOriginResolver invalidPrefix = new ClientOriginResolver("10.0.0.0/not-a-number");
+            MockHttpServletRequest request = requestFrom("10.0.0.5");
+            request.addHeader("X-Real-IP", USER_ADDRESS);
+
+            assertThat(invalidPrefix.resolve(request)).isEqualTo("10.0.0.5");
+        }
     }
 }

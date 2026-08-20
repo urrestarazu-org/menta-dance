@@ -108,13 +108,14 @@ encima, ni un piso muy por debajo que deje de proteger nada.
 
 | Módulo | domain + application | infrastructure |
 |---|---|---|
-| `auth` | 100% | 65% |
-| `billing` | 100% | 70% |
+| `auth` | 100% | 85% |
+| `billing` | 100% | 85% |
 | `virtual` | 95% | 90% |
 | `physical` | 95% | 90% |
 
 `shared`, `app` y `bff` no tienen capas propias; llevan un piso plano
-declarado en `moduleCoverageFloor` (root `build.gradle.kts`).
+declarado en `moduleCoverageFloor` (root `build.gradle.kts`), todos en
+85% o más. Ningún umbral del proyecto está por debajo de 85%.
 
 El mecanismo (`registerLayeredCoverageVerification`) vive en
 `buildSrc/` y se documenta en detalle, junto al bug de JaCoCo #96 que

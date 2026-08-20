@@ -59,11 +59,7 @@ tasks.jar {
 //
 //   - Domain + Application: 1.00 LINE (BUNDLE). Real: 99.7%, and the 0.3%
 //     gap is the excluded class below.
-//   - Infrastructure: 0.65 LINE (BUNDLE). Real: 66.0% — controllers,
-//     mappers, JPA entities and JWT security wiring are exercised
-//     end-to-end, so a per-class 1.00 would add ceremony, not safety. The
-//     minimum sits just under the real number so the gate acts as a
-//     ratchet: it cannot slide back, and it rises when the layer does.
+//   - Infrastructure: 0.85 LINE (BUNDLE). Real: 91.6%.
 val jacocoDomainApplicationCoverageVerification = registerLayeredCoverageVerification(
     "jacocoDomainApplicationCoverageVerification", "1.00",
     listOf("com/menta/auth/domain/**", "com/menta/auth/application/**"),
@@ -80,7 +76,7 @@ val jacocoDomainApplicationCoverageVerification = registerLayeredCoverageVerific
     excludePatterns = listOf("com/menta/auth/domain/crypto/GuaranteedAlgorithm.class")
 )
 val jacocoInfrastructureCoverageVerification = registerLayeredCoverageVerification(
-    "jacocoInfrastructureCoverageVerification", "0.65",
+    "jacocoInfrastructureCoverageVerification", "0.85",
     listOf("com/menta/auth/infrastructure/**")
 )
 

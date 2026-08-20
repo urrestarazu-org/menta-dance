@@ -47,16 +47,13 @@ tasks.jar {
 // registerLayeredCoverageVerification; what stays here is the policy.
 //
 //   - Domain + Application: 1.00 LINE (BUNDLE). Real: 100%.
-//   - Infrastructure: 0.70 LINE (BUNDLE). Real: 72.5% — controllers, JPA
-//     entities, mappers and config wiring are exercised end-to-end, so a
-//     per-class 1.00 adds no safety. The minimum sits just under the real
-//     number so the gate ratchets instead of decorating.
+//   - Infrastructure: 0.85 LINE (BUNDLE). Real: 95.5%.
 val jacocoDomainApplicationCoverageVerification = registerLayeredCoverageVerification(
     "jacocoDomainApplicationCoverageVerification", "1.00",
     listOf("com/menta/billing/domain/**", "com/menta/billing/application/**")
 )
 val jacocoInfrastructureCoverageVerification = registerLayeredCoverageVerification(
-    "jacocoInfrastructureCoverageVerification", "0.70",
+    "jacocoInfrastructureCoverageVerification", "0.85",
     listOf("com/menta/billing/infrastructure/**")
 )
 

@@ -3,6 +3,7 @@ package com.menta.shared.domain.vo;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -75,5 +76,27 @@ class EmailTest {
 
         assertEquals(email1, email2);
         assertEquals(email1.hashCode(), email2.hashCode());
+    }
+
+    @Test
+    void shouldBeEqualToItself() {
+        Email email = Email.of("user@example.com");
+
+        assertEquals(email, email);
+    }
+
+    @Test
+    void shouldNotBeEqualToNullOrAnotherType() {
+        Email email = Email.of("user@example.com");
+
+        assertNotEquals(null, email);
+        assertNotEquals("user@example.com", email);
+    }
+
+    @Test
+    void shouldExposeValueThroughToString() {
+        Email email = Email.of("user@example.com");
+
+        assertEquals("user@example.com", email.toString());
     }
 }

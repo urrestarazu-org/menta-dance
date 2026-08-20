@@ -40,15 +40,20 @@ módulo:
 
 | Módulo | domain + application (BUNDLE) | infrastructure (BUNDLE) |
 |---|---|---|
-| `auth` | 1.00 | 0.65 |
-| `billing` | 1.00 | 0.70 |
-| `virtual` | 0.95 | 0.90 |
-| `physical` | 0.95 | 0.90 |
+| `auth` | 1.00 (real 99.7%) | 0.85 (real 91.6%) |
+| `billing` | 1.00 (real 100%) | 0.85 (real 95.5%) |
+| `virtual` | 0.95 (real 98.7%) | 0.90 (real 97.0%) |
+| `physical` | 0.95 (real 97.8%) | 0.90 (real 97.3%) |
 
 `shared`, `app` y `bff` no tienen capas propias que gatear por separado;
 llevan un piso plano de LINE sobre todo el módulo, declarado en
-`moduleCoverageFloor` en el `build.gradle.kts` raíz (`shared` 0.55, `app`
-0.90, `bff` 0.80).
+`moduleCoverageFloor` en el `build.gradle.kts` raíz (`shared` 0.85 —
+real 97.1%, `app` 0.90 — real 97.4%, `bff` 0.85 — real 94.9%).
+
+Ningún umbral queda por debajo de 85% — fue un pedido explícito, y
+cerrarlo en `auth.infrastructure` (66.0%→91.6% real) y
+`billing.infrastructure` (72.5%→95.5% real) fue trabajo de tests nuevo,
+no sólo de recalibrar el número.
 
 **Por qué BUNDLE y no CLASS**: un contador por CLASS pesa un record de dos
 líneas igual que un caso de uso con ramas — exactamente lo contrario de lo

@@ -32,9 +32,9 @@ val jacocoVersion = libs.versions.jacoco.get()
 // Raise these when the module genuinely improves; never lower them to make
 // a red build green.
 val moduleCoverageFloor = mapOf(
-    ":api:shared" to "0.55", // real 60.0%
+    ":api:shared" to "0.85", // real 97.1%
     ":api:app" to "0.90",    // real 97.4%
-    ":bff" to "0.80"         // real 83.8%
+    ":bff" to "0.85"         // real 94.9%
 )
 
 // Modules whose coverage feeds the aggregated report below.
