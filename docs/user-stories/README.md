@@ -33,20 +33,22 @@ complementarios son `Should Have`.
 | [US-AUTH-006](US-AUTH-006.md) | Reset de contraseña | Auth | Must Have |
 | [US-AUTH-007](US-AUTH-007.md) | Logout y revocación | Auth | Must Have |
 
-### Billing (10 historias)
+### Billing (12 historias)
 
 | ID | Título | Módulo | Prioridad |
 |---|---|---|---|
 | [US-BILLING-001](US-BILLING-001.md) | Ver planes disponibles | Billing | Must Have |
 | [US-BILLING-002](US-BILLING-002.md) | Confirmación de pago por webhook | Billing | Must Have |
 | [US-BILLING-003](US-BILLING-003.md) | Suscripción con transferencia bancaria | Billing | Should Have |
-| [US-BILLING-010](US-BILLING-010.md) | Suscripción a un plan con pago online | Billing y api:app | Must Have |
 | [US-BILLING-004](US-BILLING-004.md) | Consulta de estado de suscripción | Billing | Must Have |
 | [US-BILLING-005](US-BILLING-005.md) | Verificación de pagos manuales (Admin) | Billing | Must Have |
 | [US-BILLING-006](US-BILLING-006.md) | Cotización de curso presencial | Billing | Must Have |
 | [US-BILLING-007](US-BILLING-007.md) | Compra presencial y pago individual | Billing, Physical y api:app | Must Have |
 | [US-BILLING-008](US-BILLING-008.md) | Transferencia presencial y excepción de capacidad | Billing, Physical y api:app | Should Have |
 | [US-BILLING-009](US-BILLING-009.md) | Administración y auditoría de pricing presencial | Billing | Must Have |
+| [US-BILLING-010](US-BILLING-010.md) | Suscripción a un plan con pago online | Billing y api:app | Must Have |
+| [US-BILLING-011](US-BILLING-011.md) | Cancelación de suscripción | Billing | Should Have |
+| [US-BILLING-012](US-BILLING-012.md) | Suscripción de prueba asignada por un administrador | Billing | Should Have |
 
 ### Virtual (8 historias)
 
@@ -79,7 +81,7 @@ complementarios son `Should Have`.
 | Módulo | Total | Must Have | Should Have |
 |---|---:|---:|---:|
 | Auth | 7 | 6 | 1 |
-| Billing | 10 | 8 | 2 |
+| Billing | 12 | 8 | 4 |
 | Virtual | 8 | 6 | 2 |
 | Physical | 8 | 7 | 1 |
-| **Total** | **33** | **27** | **6** |
+| **Total** | **35** | **27** | **8** |

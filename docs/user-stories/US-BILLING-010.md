@@ -42,7 +42,19 @@ bancaria.
 - **Entonces** el `Payment` pasa a `COMPLETED` como liquidación y la
   `Subscription` a `ACTIVE`, con `startDate` en el timestamp confirmado y
   `endDate` calculado con `durationDays` del plan.
-- **Y** el alumno obtiene acceso a **todos los cursos incluidos en el plan**.
+- **Y** la suscripción **persiste un snapshot del conjunto de cursos** que el
+  plan habilitaba en ese instante.
+- **Y** el alumno obtiene acceso a **todos los cursos incluidos en ese
+  snapshot**.
+
+**Escenario 2b: el plan cambia después de activarse la suscripción**
+
+- **Dado** una `Subscription` `ACTIVE` con su snapshot de cursos.
+- **Cuando** un admin desactiva el plan o le quita uno de esos cursos.
+- **Entonces** la suscripción **conserva su acceso íntegro hasta vencer**: el
+  cambio administrativo no altera lo ya comprado.
+- **Y** el cambio sí afecta a las suscripciones que se activen a partir de ese
+  momento.
 
 **Escenario 3: ya tiene una suscripción vigente**
 
@@ -59,6 +71,19 @@ bancaria.
 - **Entonces** responde `422 PLAN_NOT_AVAILABLE` sin crear `Payment` ni
   `Subscription`, aplicando la misma disciplina de no enumeración que el
   catálogo público: no distingue "no existe" de "no está disponible".
+
+**Escenario 4b: método de pago no habilitado para el plan**
+
+- **Dado** un plan `ACTIVE` que no acepta el `paymentMethod` solicitado.
+- **Cuando** el alumno intenta suscribirse con ese método.
+- **Entonces** responde `422 PAYMENT_METHOD_NOT_ACCEPTED` sin crear `Payment`
+  ni `Subscription`, ni iniciar cobro en el proveedor.
+- **Y** la respuesta informa qué métodos sí acepta el plan.
+
+> El catálogo público ya publica esos métodos por plan
+> ([US-BILLING-001](US-BILLING-001.md)), así que un cliente correcto nunca
+> debería llegar acá; la validación existe porque el servidor no puede confiar
+> en que el cliente respetó el contrato.
 
 **Escenario 5: idempotencia**
 
@@ -122,11 +147,57 @@ bancaria.
   3. **La suscripción apunta a un curso, no a un plan.** Hoy
      `PaymentTarget.Virtual` lleva un `courseId` suelto y
      `Subscription.virtualCourseId` también. El negocio es por plan: debe
-     referenciar `planId`, y el acceso se deriva de `Plan.courses`.
+     referenciar `planId`, y el acceso se deriva del snapshot de
+     `Plan.courses` tomado al activar.
+
+  5. **No hay snapshot de los cursos del plan.** La suscripción debe persistir
+     qué cursos habilitaba el plan al activarse, para que un cambio
+     administrativo posterior no le quite acceso a quien ya pagó (Escenario
+     2b). Sin snapshot, el acceso se evaluaría contra el plan vivo y una
+     desactivación cortaría el acceso en caliente — un defecto observado en
+     otro sistema con este mismo modelo, donde la intención declarada del
+     soft-delete y el comportamiento real no coincidían.
   4. **`Subscription` no tiene vigencia.** Hoy sólo modela
      `PENDING_FULFILLMENT` / `ASSIGNED` / `EXCEPTION`, sin `startDate`,
      `endDate` ni estado `ACTIVE`/`EXPIRED`. US-BILLING-004 ya especifica esos
      campos en su contrato de respuesta.
+
+* **Fuera de alcance: enlaces de pago externos preconfigurados**
+
+  No se soporta que un plan tenga un enlace de pago estático —configurado a mano
+  en el panel del proveedor— al que se redirija al alumno sin registrar nada
+  localmente. **No es una omisión: es una exclusión deliberada**, porque ese
+  esquema es incompatible con el modelo de verificación que este proyecto ya
+  construyó.
+
+  1. **Contradice una regla explícita de [US-BILLING-002](US-BILLING-002.md):**
+     *"Si no existe pago local para un inbox agotado, se crea una tarea
+     administrativa que referencia el evento del proveedor, sin inventar un
+     Payment."* Un enlace estático obliga a crear la suscripción recién cuando
+     el proveedor devuelve al usuario, sin registro previo.
+
+  2. **Deja la verificación sin nada contra qué comparar.** `Payment` exige
+     `expectedAmount`, `expectedExternalReference` y
+     `expectedMerchantAccountId` desde su construcción, y toda la validación es
+     `matchesExpected(outcome)`. Un enlace estático no puede llevar una
+     referencia por transacción, así que no hay "esperado" que contrastar y la
+     propiedad de seguridad central desaparece.
+
+  3. **El retorno del proveedor por navegador no es prueba de pago.** Llega como
+     una petición sin firmar, reproducible y falsificable por cualquiera. El
+     circuito de US-BILLING-002 —HMAC con comparación timing-safe, ventana
+     temporal e inbox con deduplicación— existe precisamente para no confiar en
+     nada de eso.
+
+  Un enlace estático también obliga a acoplar a mano la configuración del
+  proveedor con la base de datos (hacer coincidir la referencia externa con el
+  identificador del plan), sin validación cruzada posible: un error de tipeo se
+  descubre en producción, con el alumno ya habiendo pagado.
+
+  Si en el futuro hace falta cobro recurrente, debe resolverse **generando la
+  suscripción del proveedor desde el backend**, creando el registro local antes
+  de redirigir — la misma forma que el Escenario 1. Sería una historia nueva:
+  hoy `autoRenew` es siempre `false` (ver [US-BILLING-004](US-BILLING-004.md)).
 
 * **Consistencia con el circuito existente:**
   * La confirmación llega por el webhook ya construido en US-BILLING-002 — esta
@@ -138,6 +209,9 @@ bancaria.
 * **Tablas de BD:**
   * `billing_payments` — requiere columna de usuario.
   * `billing_subscriptions` — requiere usuario, plan, vigencia y estado.
+  * Snapshot de cursos habilitados por suscripción — tabla nueva; no puede
+    derivarse de `billing_plan_courses`, que refleja el estado **actual** del
+    plan y no el del momento de la compra.
   * `billing_plans` / `billing_plan_courses` — lectura, ya existen.
 
 ---
@@ -149,6 +223,7 @@ bancaria.
       prueba de que un cliente no puede suscribir a otro usuario.
 - [ ] Prueba de rechazo con suscripción vigente, sin efectos colaterales
       (ni pago local ni cobro en el proveedor).
+- [ ] Prueba de rechazo cuando el plan no acepta el método de pago solicitado.
 - [ ] Prueba de idempotencia sin doble cobro.
 - [ ] Prueba end-to-end: alta → webhook → `ACTIVE` con vigencia correcta.
 - [ ] El acceso resultante habilita exactamente los cursos del plan.
