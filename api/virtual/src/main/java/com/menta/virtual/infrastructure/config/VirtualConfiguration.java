@@ -28,6 +28,16 @@ import com.menta.virtual.application.usecase.UpdateVirtualCourseUseCaseImpl;
 import com.menta.virtual.application.usecase.UpdateVirtualLessonUseCaseImpl;
 import com.menta.virtual.application.usecase.UpdateVirtualModuleUseCaseImpl;
 import com.menta.virtual.application.usecase.VirtualCourseCatalogPortImpl;
+import com.menta.virtual.infrastructure.transaction.TransactionalCreateVirtualCourseUseCase;
+import com.menta.virtual.infrastructure.transaction.TransactionalCreateVirtualLessonUseCase;
+import com.menta.virtual.infrastructure.transaction.TransactionalCreateVirtualModuleUseCase;
+import com.menta.virtual.infrastructure.transaction.TransactionalDeleteVirtualCourseUseCase;
+import com.menta.virtual.infrastructure.transaction.TransactionalPublishVirtualCourseUseCase;
+import com.menta.virtual.infrastructure.transaction.TransactionalReorderVirtualModulesUseCase;
+import com.menta.virtual.infrastructure.transaction.TransactionalUnpublishVirtualCourseUseCase;
+import com.menta.virtual.infrastructure.transaction.TransactionalUpdateVirtualCourseUseCase;
+import com.menta.virtual.infrastructure.transaction.TransactionalUpdateVirtualLessonUseCase;
+import com.menta.virtual.infrastructure.transaction.TransactionalUpdateVirtualModuleUseCase;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -36,6 +46,11 @@ import org.springframework.context.annotation.Configuration;
  * use cases are plain Java classes composed here, mirroring {@code
  * AuthConfiguration}/{@code BillingConfiguration}'s rationale: no implicit
  * {@code @Autowired} on use-case classes.
+ *
+ * <p>Every mutating use case is wrapped in its {@code Transactional*}
+ * decorator (#54 review follow-up) — each performs its domain mutation and
+ * its {@code virtual_course_audit} write as separate repository calls, which
+ * without a wrapping transaction would commit independently.</p>
  */
 @Configuration
 public class VirtualConfiguration {
@@ -49,7 +64,9 @@ public class VirtualConfiguration {
     public CreateVirtualCourseUseCase createVirtualCourseUseCase(
         VirtualCourseRepository courseRepository, VirtualCourseAuditRepository auditRepository
     ) {
-        return new CreateVirtualCourseUseCaseImpl(courseRepository, auditRepository);
+        return new TransactionalCreateVirtualCourseUseCase(
+            new CreateVirtualCourseUseCaseImpl(courseRepository, auditRepository)
+        );
     }
 
     @Bean
@@ -61,14 +78,19 @@ public class VirtualConfiguration {
     public UpdateVirtualCourseUseCase updateVirtualCourseUseCase(
         VirtualCourseRepository courseRepository, VirtualCourseAuditRepository auditRepository
     ) {
-        return new UpdateVirtualCourseUseCaseImpl(courseRepository, auditRepository);
+        return new TransactionalUpdateVirtualCourseUseCase(
+            new UpdateVirtualCourseUseCaseImpl(courseRepository, auditRepository)
+        );
     }
 
     @Bean
     public DeleteVirtualCourseUseCase deleteVirtualCourseUseCase(
-        VirtualCourseRepository courseRepository, VirtualCourseAuditRepository auditRepository
+        VirtualCourseRepository courseRepository, VirtualModuleRepository moduleRepository,
+        VirtualLessonRepository lessonRepository, VirtualCourseAuditRepository auditRepository
     ) {
-        return new DeleteVirtualCourseUseCaseImpl(courseRepository, auditRepository);
+        return new TransactionalDeleteVirtualCourseUseCase(
+            new DeleteVirtualCourseUseCaseImpl(courseRepository, moduleRepository, lessonRepository, auditRepository)
+        );
     }
 
     @Bean
@@ -76,14 +98,18 @@ public class VirtualConfiguration {
         VirtualCourseRepository courseRepository, VirtualModuleRepository moduleRepository,
         VirtualLessonRepository lessonRepository, VirtualCourseAuditRepository auditRepository
     ) {
-        return new PublishVirtualCourseUseCaseImpl(courseRepository, moduleRepository, lessonRepository, auditRepository);
+        return new TransactionalPublishVirtualCourseUseCase(new PublishVirtualCourseUseCaseImpl(
+            courseRepository, moduleRepository, lessonRepository, auditRepository
+        ));
     }
 
     @Bean
     public UnpublishVirtualCourseUseCase unpublishVirtualCourseUseCase(
         VirtualCourseRepository courseRepository, VirtualCourseAuditRepository auditRepository
     ) {
-        return new UnpublishVirtualCourseUseCaseImpl(courseRepository, auditRepository);
+        return new TransactionalUnpublishVirtualCourseUseCase(
+            new UnpublishVirtualCourseUseCaseImpl(courseRepository, auditRepository)
+        );
     }
 
     @Bean
@@ -91,7 +117,9 @@ public class VirtualConfiguration {
         VirtualCourseRepository courseRepository, VirtualModuleRepository moduleRepository,
         VirtualCourseAuditRepository auditRepository
     ) {
-        return new CreateVirtualModuleUseCaseImpl(courseRepository, moduleRepository, auditRepository);
+        return new TransactionalCreateVirtualModuleUseCase(
+            new CreateVirtualModuleUseCaseImpl(courseRepository, moduleRepository, auditRepository)
+        );
     }
 
     @Bean
@@ -99,7 +127,9 @@ public class VirtualConfiguration {
         VirtualModuleRepository moduleRepository, VirtualCourseRepository courseRepository,
         VirtualCourseAuditRepository auditRepository
     ) {
-        return new UpdateVirtualModuleUseCaseImpl(moduleRepository, courseRepository, auditRepository);
+        return new TransactionalUpdateVirtualModuleUseCase(
+            new UpdateVirtualModuleUseCaseImpl(moduleRepository, courseRepository, auditRepository)
+        );
     }
 
     @Bean
@@ -107,7 +137,9 @@ public class VirtualConfiguration {
         VirtualModuleRepository moduleRepository, VirtualCourseRepository courseRepository,
         VirtualLessonRepository lessonRepository, VirtualCourseAuditRepository auditRepository
     ) {
-        return new CreateVirtualLessonUseCaseImpl(moduleRepository, courseRepository, lessonRepository, auditRepository);
+        return new TransactionalCreateVirtualLessonUseCase(new CreateVirtualLessonUseCaseImpl(
+            moduleRepository, courseRepository, lessonRepository, auditRepository
+        ));
     }
 
     @Bean
@@ -115,7 +147,9 @@ public class VirtualConfiguration {
         VirtualLessonRepository lessonRepository, VirtualCourseRepository courseRepository,
         VirtualCourseAuditRepository auditRepository
     ) {
-        return new UpdateVirtualLessonUseCaseImpl(lessonRepository, courseRepository, auditRepository);
+        return new TransactionalUpdateVirtualLessonUseCase(
+            new UpdateVirtualLessonUseCaseImpl(lessonRepository, courseRepository, auditRepository)
+        );
     }
 
     @Bean
@@ -123,6 +157,8 @@ public class VirtualConfiguration {
         VirtualCourseRepository courseRepository, VirtualModuleRepository moduleRepository,
         VirtualCourseAuditRepository auditRepository
     ) {
-        return new ReorderVirtualModulesUseCaseImpl(courseRepository, moduleRepository, auditRepository);
+        return new TransactionalReorderVirtualModulesUseCase(
+            new ReorderVirtualModulesUseCaseImpl(courseRepository, moduleRepository, auditRepository)
+        );
     }
 }

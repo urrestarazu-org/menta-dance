@@ -23,4 +23,6 @@ public interface VirtualLessonJpaRepository extends JpaRepository<VirtualLessonJ
     List<VirtualLessonJpaEntity> findByCourseId(UUID courseId);
 
     long countByModuleId(UUID moduleId);
+
+    void deleteByCourseId(UUID courseId);
 }

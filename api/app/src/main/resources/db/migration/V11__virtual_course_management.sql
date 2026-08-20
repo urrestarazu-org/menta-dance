@@ -13,7 +13,7 @@ ALTER TABLE virtual_modules
 
 ALTER TABLE virtual_lessons
     ADD COLUMN description TEXT NOT NULL AFTER title,
-    ADD COLUMN video_id VARCHAR(128) NOT NULL AFTER description,
+    ADD COLUMN video_id VARCHAR(128) NULL AFTER description,
     ADD COLUMN is_free BOOLEAN NOT NULL DEFAULT FALSE,
     ADD COLUMN display_order INT NOT NULL;
 

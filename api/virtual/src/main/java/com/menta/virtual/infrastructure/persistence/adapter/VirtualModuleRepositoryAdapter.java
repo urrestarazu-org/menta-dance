@@ -53,4 +53,10 @@ public class VirtualModuleRepositoryAdapter implements VirtualModuleRepository {
     public void saveAll(List<VirtualModule> modules) {
         moduleRepository.saveAll(modules.stream().map(VirtualModuleJpaMapper::toEntity).toList());
     }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED)
+    public void deleteByCourseId(CourseId courseId) {
+        moduleRepository.deleteByCourseId(courseId.getValue());
+    }
 }
