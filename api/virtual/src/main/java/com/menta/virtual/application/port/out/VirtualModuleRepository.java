@@ -19,4 +19,12 @@ public interface VirtualModuleRepository {
     VirtualModule save(VirtualModule module);
 
     void saveAll(List<VirtualModule> modules);
+
+    /**
+     * Deletes every module of a course. Used when deleting a {@code DRAFT}
+     * course — {@code virtual_modules.course_id} has a {@code NOT NULL} FK
+     * with no {@code ON DELETE CASCADE}, so a course with modules must have
+     * them removed first or the delete fails with a constraint violation.
+     */
+    void deleteByCourseId(CourseId courseId);
 }

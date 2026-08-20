@@ -20,4 +20,11 @@ public interface VirtualLessonRepository {
     int countByModuleId(ModuleId moduleId);
 
     VirtualLesson save(VirtualLesson lesson);
+
+    /**
+     * Deletes every lesson of a course (across all its modules). Used when
+     * deleting a {@code DRAFT} course, before its modules — lessons must go
+     * first since they also FK-reference {@code virtual_modules}.
+     */
+    void deleteByCourseId(CourseId courseId);
 }

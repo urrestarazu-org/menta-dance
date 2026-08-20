@@ -56,4 +56,10 @@ public class VirtualLessonRepositoryAdapter implements VirtualLessonRepository {
     public VirtualLesson save(VirtualLesson lesson) {
         return VirtualLessonJpaMapper.toDomain(lessonRepository.save(VirtualLessonJpaMapper.toEntity(lesson)));
     }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED)
+    public void deleteByCourseId(CourseId courseId) {
+        lessonRepository.deleteByCourseId(courseId.getValue());
+    }
 }
