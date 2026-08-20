@@ -1,0 +1,36 @@
+meta {
+  name: Reorder Virtual Modules
+  type: http
+  seq: 7
+}
+
+put {
+  url: {{baseUrl}}/api/v1/admin/virtual/courses/{{virtualCourseId}}/modules/reorder
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "moduleIds": ["{{virtualModuleId}}"]
+  }
+}
+
+docs {
+  US-VIRTUAL-006 escenario 7. `moduleIds` must contain exactly the course's
+  current module set, in the new desired order.
+
+  Success contract: 200 with VirtualModuleManagementListResponse.
+  Error contract:
+    400 MODULE_REORDER_MISMATCH → list doesn't match the course's current modules
+    403 COURSE_NOT_OWNED → INSTRUCTOR is not the course's professor
+    404 COURSE_NOT_FOUND → courseId does not exist
+}
+
+assert {
+  res.status: eq 200
+}

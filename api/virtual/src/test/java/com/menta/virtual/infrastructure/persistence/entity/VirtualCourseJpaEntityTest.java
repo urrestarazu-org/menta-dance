@@ -15,14 +15,17 @@ class VirtualCourseJpaEntityTest {
         Instant createdAt = Instant.now();
         Instant updatedAt = createdAt.plusSeconds(60);
 
+        UUID professorId = UUID.randomUUID();
         VirtualCourseJpaEntity entity = new VirtualCourseJpaEntity(
-            id, "Tango Básico", "desc", "https://cdn/img.jpg", "tango", "BEGINNER",
-            true, CourseStatus.PUBLISHED, createdAt, updatedAt
+            id, "Tango Básico", "desc", "descripción larga", professorId, "https://cdn/img.jpg", "tango",
+            "BEGINNER", true, CourseStatus.PUBLISHED, createdAt, updatedAt
         );
 
         assertThat(entity.getId()).isEqualTo(id);
         assertThat(entity.getTitle()).isEqualTo("Tango Básico");
         assertThat(entity.getShortDescription()).isEqualTo("desc");
+        assertThat(entity.getDescription()).isEqualTo("descripción larga");
+        assertThat(entity.getProfessorId()).isEqualTo(professorId);
         assertThat(entity.getImageUrl()).isEqualTo("https://cdn/img.jpg");
         assertThat(entity.getCategory()).isEqualTo("tango");
         assertThat(entity.getLevel()).isEqualTo("BEGINNER");

@@ -15,4 +15,12 @@ public interface VirtualLessonJpaRepository extends JpaRepository<VirtualLessonJ
             + "FROM VirtualLessonJpaEntity l WHERE l.courseId IN :courseIds GROUP BY l.courseId"
     )
     List<LessonAggregateProjection> aggregateByCourseIdIn(@Param("courseIds") List<UUID> courseIds);
+
+    /** Management view (US-VIRTUAL-006) — every lesson of a module, ordered for display. */
+    List<VirtualLessonJpaEntity> findByModuleIdOrderByDisplayOrderAsc(UUID moduleId);
+
+    /** Every lesson across a course's modules — used for publish-completeness validation. */
+    List<VirtualLessonJpaEntity> findByCourseId(UUID courseId);
+
+    long countByModuleId(UUID moduleId);
 }

@@ -11,6 +11,7 @@ import com.menta.virtual.infrastructure.persistence.repository.ModuleCountProjec
 import com.menta.virtual.infrastructure.persistence.repository.VirtualCourseJpaRepository;
 import com.menta.virtual.infrastructure.persistence.repository.VirtualLessonJpaRepository;
 import com.menta.virtual.infrastructure.persistence.repository.VirtualModuleJpaRepository;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -102,6 +103,44 @@ public class VirtualCourseRepositoryAdapter implements VirtualCourseRepository {
             lessonAggregateOf(lessonAggregates, course.getId(), LessonAggregateProjection::getLessonCount),
             lessonAggregateOf(lessonAggregates, course.getId(), LessonAggregateProjection::getTotalDurationMinutes)
         ));
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public Optional<VirtualCourse> findById(CourseId courseId) {
+        return courseRepository.findById(courseId.getValue()).map(VirtualCourseJpaMapper::toDomain);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public List<VirtualCourse> findAll() {
+        return courseRepository.findAll().stream().map(VirtualCourseJpaMapper::toDomain).toList();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public List<VirtualCourse> findByProfessorId(UUID professorId) {
+        return courseRepository.findByProfessorId(professorId).stream()
+            .map(VirtualCourseJpaMapper::toDomain)
+            .toList();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED)
+    public VirtualCourse save(VirtualCourse course) {
+        Instant now = Instant.now();
+        Instant createdAt = courseRepository.findById(course.getId().getValue())
+            .map(VirtualCourseJpaEntity::getCreatedAt)
+            .orElse(now);
+        VirtualCourseJpaEntity saved =
+            courseRepository.save(VirtualCourseJpaMapper.toEntity(course, createdAt, now));
+        return VirtualCourseJpaMapper.toDomain(saved);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED)
+    public void delete(CourseId courseId) {
+        courseRepository.deleteById(courseId.getValue());
     }
 
     private static int lessonAggregateOf(

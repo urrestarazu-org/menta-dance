@@ -37,8 +37,8 @@ class VirtualCourseRepositoryAdapterTest {
     private static VirtualCourseJpaEntity aCourseEntity(UUID id, CourseStatus status) {
         Instant now = Instant.now();
         return new VirtualCourseJpaEntity(
-            id, "Tango Básico", "desc", "https://cdn/img.jpg", "tango", "BEGINNER",
-            false, status, now, now
+            id, "Tango Básico", "desc", "descripción larga", UUID.randomUUID(), "https://cdn/img.jpg", "tango",
+            "BEGINNER", false, status, now, now
         );
     }
 
@@ -122,5 +122,81 @@ class VirtualCourseRepositoryAdapterTest {
         when(courseRepository.findById(id)).thenReturn(Optional.of(aCourseEntity(id, CourseStatus.DRAFT)));
 
         assertThat(adapter.findPublishedById(CourseId.of(id))).isEmpty();
+    }
+
+    @Test
+    void find_by_id_is_unfiltered_by_status() {
+        UUID id = UUID.randomUUID();
+        when(courseRepository.findById(id)).thenReturn(Optional.of(aCourseEntity(id, CourseStatus.DRAFT)));
+
+        Optional<VirtualCourse> result = adapter.findById(CourseId.of(id));
+
+        assertThat(result).isPresent();
+        assertThat(result.get().getStatus()).isEqualTo(CourseStatus.DRAFT);
+    }
+
+    @Test
+    void find_all_maps_every_course_regardless_of_status() {
+        when(courseRepository.findAll()).thenReturn(
+            List.of(aCourseEntity(UUID.randomUUID(), CourseStatus.DRAFT), aCourseEntity(UUID.randomUUID()))
+        );
+
+        assertThat(adapter.findAll()).hasSize(2);
+    }
+
+    @Test
+    void find_by_professor_id_maps_every_owned_course() {
+        UUID professorId = UUID.randomUUID();
+        when(courseRepository.findByProfessorId(professorId))
+            .thenReturn(List.of(aCourseEntity(UUID.randomUUID(), CourseStatus.DRAFT)));
+
+        assertThat(adapter.findByProfessorId(professorId)).hasSize(1);
+    }
+
+    @Test
+    void save_preserves_created_at_of_an_existing_row_on_update() {
+        UUID professorId = UUID.randomUUID();
+        VirtualCourse course = VirtualCourse.create(
+            "t", "s", "d", professorId, "i", com.menta.virtual.domain.model.CourseCategory.of("tango"),
+            com.menta.virtual.domain.model.CourseLevel.BEGINNER
+        );
+        Instant originalCreatedAt = Instant.now().minusSeconds(3600);
+        when(courseRepository.findById(course.getId().getValue()))
+            .thenReturn(Optional.of(new VirtualCourseJpaEntity(
+                course.getId().getValue(), "old", "s", "d", professorId, "i", "tango", "BEGINNER", false,
+                CourseStatus.DRAFT, originalCreatedAt, originalCreatedAt
+            )));
+        when(courseRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        adapter.save(course);
+
+        org.mockito.ArgumentCaptor<VirtualCourseJpaEntity> captor =
+            org.mockito.ArgumentCaptor.forClass(VirtualCourseJpaEntity.class);
+        org.mockito.Mockito.verify(courseRepository).save(captor.capture());
+        assertThat(captor.getValue().getCreatedAt()).isEqualTo(originalCreatedAt);
+    }
+
+    @Test
+    void save_uses_now_as_created_at_for_a_brand_new_course() {
+        UUID professorId = UUID.randomUUID();
+        VirtualCourse course = VirtualCourse.create(
+            "t", "s", "d", professorId, "i", com.menta.virtual.domain.model.CourseCategory.of("tango"),
+            com.menta.virtual.domain.model.CourseLevel.BEGINNER
+        );
+        when(courseRepository.findById(course.getId().getValue())).thenReturn(Optional.empty());
+        when(courseRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        VirtualCourse saved = adapter.save(course);
+
+        assertThat(saved.getId()).isEqualTo(course.getId());
+    }
+
+    @Test
+    void delete_delegates_to_the_jpa_repository() {
+        UUID id = UUID.randomUUID();
+
+        adapter.delete(CourseId.of(id));
+
+        org.mockito.Mockito.verify(courseRepository).deleteById(id);
     }
 }

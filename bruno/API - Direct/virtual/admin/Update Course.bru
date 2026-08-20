@@ -1,0 +1,34 @@
+meta {
+  name: Update Virtual Course
+  type: http
+  seq: 3
+}
+
+put {
+  url: {{baseUrl}}/api/v1/admin/virtual/courses/{{virtualCourseId}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "title": "Tango Básico (revisado)"
+  }
+}
+
+docs {
+  US-VIRTUAL-006. Partial update — only fields present in the body change.
+
+  Success contract: 200 with VirtualCourseManagementResponse.
+  Error contract:
+    403 COURSE_NOT_OWNED → INSTRUCTOR is not the course's professor
+    404 COURSE_NOT_FOUND → courseId does not exist
+}
+
+assert {
+  res.status: eq 200
+}

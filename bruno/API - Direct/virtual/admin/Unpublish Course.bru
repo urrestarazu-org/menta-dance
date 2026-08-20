@@ -1,0 +1,29 @@
+meta {
+  name: Unpublish Virtual Course
+  type: http
+  seq: 11
+}
+
+put {
+  url: {{baseUrl}}/api/v1/admin/virtual/courses/{{virtualCourseId}}/unpublish
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  US-VIRTUAL-006 escenario 5. Flips status back to DRAFT. Temporary access
+  for already-subscribed students is entitlement logic (#56), not handled
+  here.
+
+  Success contract: 200 with VirtualCourseManagementResponse, status=DRAFT.
+  Error contract:
+    403 COURSE_NOT_OWNED → INSTRUCTOR is not the course's professor
+    404 COURSE_NOT_FOUND → courseId does not exist
+}
+
+assert {
+  res.status: eq 200
+}

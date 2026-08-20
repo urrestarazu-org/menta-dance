@@ -100,8 +100,8 @@ class CatalogIntegrationTest {
         UUID id = UUID.randomUUID();
         Instant now = Instant.now();
         virtualCourseRepository.save(new VirtualCourseJpaEntity(
-            id, title, "desc " + title, "https://cdn/img.jpg", "tango", "BEGINNER",
-            false, status, now, now
+            id, title, "desc " + title, "descripción larga", UUID.randomUUID(), "https://cdn/img.jpg", "tango",
+            "BEGINNER", false, status, now, now
         ));
         return id;
     }

@@ -17,6 +17,7 @@ import com.menta.virtual.domain.model.CourseStatus;
 import com.menta.virtual.domain.model.VirtualCourse;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class VirtualCourseCatalogPortImplTest {
@@ -26,9 +27,9 @@ class VirtualCourseCatalogPortImplTest {
 
     private static VirtualCourse course(CourseId id) {
         return new VirtualCourse(
-            id, "Tango Básico", "Aprendé los pasos fundamentales", "https://cdn/tango.jpg",
-            CourseCategory.of("tango"), CourseLevel.BEGINNER, true, CourseStatus.PUBLISHED,
-            5, 20, 150
+            id, "Tango Básico", "Aprendé los pasos fundamentales", "Descripción larga", UUID.randomUUID(),
+            "https://cdn/tango.jpg", CourseCategory.of("tango"), CourseLevel.BEGINNER, true,
+            CourseStatus.PUBLISHED, 5, 20, 150
         );
     }
 
