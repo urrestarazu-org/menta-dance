@@ -244,6 +244,24 @@ class VirtualCourseManagementIntegrationTest {
     }
 
     @Test
+    void deleting_a_draft_course_with_modules_and_lessons_succeeds() {
+        UUID adminId = issueUser(Role.ADMIN);
+        UUID courseId = seedCourse(adminId, CourseStatus.DRAFT);
+        UUID moduleId = seedModule(courseId, 0);
+        seedCompleteLesson(moduleId, courseId);
+
+        ResponseEntity<Void> response = http.exchange(
+            "/api/v1/admin/virtual/courses/" + courseId, HttpMethod.DELETE,
+            new HttpEntity<>(headersFor(adminId, Role.ADMIN)), Void.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(lessonRepository.findAll()).isEmpty();
+        assertThat(moduleRepository.findAll()).isEmpty();
+        assertThat(courseRepository.findById(courseId)).isEmpty();
+    }
+
+    @Test
     void publishing_a_course_with_no_modules_is_rejected() {
         UUID adminId = issueUser(Role.ADMIN);
         UUID courseId = seedCourse(adminId, CourseStatus.DRAFT);

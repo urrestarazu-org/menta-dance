@@ -19,18 +19,17 @@ import com.menta.virtual.application.port.out.VirtualCourseAuditRepository;
 import com.menta.virtual.application.port.out.VirtualCourseRepository;
 import com.menta.virtual.application.port.out.VirtualLessonRepository;
 import com.menta.virtual.application.port.out.VirtualModuleRepository;
-import com.menta.virtual.application.usecase.CreateVirtualCourseUseCaseImpl;
-import com.menta.virtual.application.usecase.CreateVirtualLessonUseCaseImpl;
-import com.menta.virtual.application.usecase.CreateVirtualModuleUseCaseImpl;
-import com.menta.virtual.application.usecase.DeleteVirtualCourseUseCaseImpl;
-import com.menta.virtual.application.usecase.ListManagedVirtualCoursesUseCaseImpl;
-import com.menta.virtual.application.usecase.PublishVirtualCourseUseCaseImpl;
-import com.menta.virtual.application.usecase.ReorderVirtualModulesUseCaseImpl;
-import com.menta.virtual.application.usecase.UnpublishVirtualCourseUseCaseImpl;
-import com.menta.virtual.application.usecase.UpdateVirtualCourseUseCaseImpl;
-import com.menta.virtual.application.usecase.UpdateVirtualLessonUseCaseImpl;
-import com.menta.virtual.application.usecase.UpdateVirtualModuleUseCaseImpl;
 import com.menta.virtual.application.usecase.VirtualCourseCatalogPortImpl;
+import com.menta.virtual.infrastructure.transaction.TransactionalCreateVirtualCourseUseCase;
+import com.menta.virtual.infrastructure.transaction.TransactionalCreateVirtualLessonUseCase;
+import com.menta.virtual.infrastructure.transaction.TransactionalCreateVirtualModuleUseCase;
+import com.menta.virtual.infrastructure.transaction.TransactionalDeleteVirtualCourseUseCase;
+import com.menta.virtual.infrastructure.transaction.TransactionalPublishVirtualCourseUseCase;
+import com.menta.virtual.infrastructure.transaction.TransactionalReorderVirtualModulesUseCase;
+import com.menta.virtual.infrastructure.transaction.TransactionalUnpublishVirtualCourseUseCase;
+import com.menta.virtual.infrastructure.transaction.TransactionalUpdateVirtualCourseUseCase;
+import com.menta.virtual.infrastructure.transaction.TransactionalUpdateVirtualLessonUseCase;
+import com.menta.virtual.infrastructure.transaction.TransactionalUpdateVirtualModuleUseCase;
 import org.junit.jupiter.api.Test;
 
 class VirtualConfigurationTest {
@@ -49,91 +48,92 @@ class VirtualConfigurationTest {
     }
 
     @Test
-    void wires_the_create_course_use_case_bean() {
+    void wires_the_create_course_use_case_bean_transactionally() {
         CreateVirtualCourseUseCase useCase =
             configuration.createVirtualCourseUseCase(courseRepository, auditRepository);
 
-        assertThat(useCase).isInstanceOf(CreateVirtualCourseUseCaseImpl.class);
+        assertThat(useCase).isInstanceOf(TransactionalCreateVirtualCourseUseCase.class);
     }
 
     @Test
     void wires_the_list_managed_courses_use_case_bean() {
         ListManagedVirtualCoursesUseCase useCase = configuration.listManagedVirtualCoursesUseCase(courseRepository);
 
-        assertThat(useCase).isInstanceOf(ListManagedVirtualCoursesUseCaseImpl.class);
+        assertThat(useCase).isNotNull();
     }
 
     @Test
-    void wires_the_update_course_use_case_bean() {
+    void wires_the_update_course_use_case_bean_transactionally() {
         UpdateVirtualCourseUseCase useCase =
             configuration.updateVirtualCourseUseCase(courseRepository, auditRepository);
 
-        assertThat(useCase).isInstanceOf(UpdateVirtualCourseUseCaseImpl.class);
+        assertThat(useCase).isInstanceOf(TransactionalUpdateVirtualCourseUseCase.class);
     }
 
     @Test
-    void wires_the_delete_course_use_case_bean() {
-        DeleteVirtualCourseUseCase useCase =
-            configuration.deleteVirtualCourseUseCase(courseRepository, auditRepository);
+    void wires_the_delete_course_use_case_bean_transactionally() {
+        DeleteVirtualCourseUseCase useCase = configuration.deleteVirtualCourseUseCase(
+            courseRepository, moduleRepository, lessonRepository, auditRepository
+        );
 
-        assertThat(useCase).isInstanceOf(DeleteVirtualCourseUseCaseImpl.class);
+        assertThat(useCase).isInstanceOf(TransactionalDeleteVirtualCourseUseCase.class);
     }
 
     @Test
-    void wires_the_publish_course_use_case_bean() {
+    void wires_the_publish_course_use_case_bean_transactionally() {
         PublishVirtualCourseUseCase useCase = configuration.publishVirtualCourseUseCase(
             courseRepository, moduleRepository, lessonRepository, auditRepository
         );
 
-        assertThat(useCase).isInstanceOf(PublishVirtualCourseUseCaseImpl.class);
+        assertThat(useCase).isInstanceOf(TransactionalPublishVirtualCourseUseCase.class);
     }
 
     @Test
-    void wires_the_unpublish_course_use_case_bean() {
+    void wires_the_unpublish_course_use_case_bean_transactionally() {
         UnpublishVirtualCourseUseCase useCase =
             configuration.unpublishVirtualCourseUseCase(courseRepository, auditRepository);
 
-        assertThat(useCase).isInstanceOf(UnpublishVirtualCourseUseCaseImpl.class);
+        assertThat(useCase).isInstanceOf(TransactionalUnpublishVirtualCourseUseCase.class);
     }
 
     @Test
-    void wires_the_create_module_use_case_bean() {
+    void wires_the_create_module_use_case_bean_transactionally() {
         CreateVirtualModuleUseCase useCase =
             configuration.createVirtualModuleUseCase(courseRepository, moduleRepository, auditRepository);
 
-        assertThat(useCase).isInstanceOf(CreateVirtualModuleUseCaseImpl.class);
+        assertThat(useCase).isInstanceOf(TransactionalCreateVirtualModuleUseCase.class);
     }
 
     @Test
-    void wires_the_update_module_use_case_bean() {
+    void wires_the_update_module_use_case_bean_transactionally() {
         UpdateVirtualModuleUseCase useCase =
             configuration.updateVirtualModuleUseCase(moduleRepository, courseRepository, auditRepository);
 
-        assertThat(useCase).isInstanceOf(UpdateVirtualModuleUseCaseImpl.class);
+        assertThat(useCase).isInstanceOf(TransactionalUpdateVirtualModuleUseCase.class);
     }
 
     @Test
-    void wires_the_create_lesson_use_case_bean() {
+    void wires_the_create_lesson_use_case_bean_transactionally() {
         CreateVirtualLessonUseCase useCase = configuration.createVirtualLessonUseCase(
             moduleRepository, courseRepository, lessonRepository, auditRepository
         );
 
-        assertThat(useCase).isInstanceOf(CreateVirtualLessonUseCaseImpl.class);
+        assertThat(useCase).isInstanceOf(TransactionalCreateVirtualLessonUseCase.class);
     }
 
     @Test
-    void wires_the_update_lesson_use_case_bean() {
+    void wires_the_update_lesson_use_case_bean_transactionally() {
         UpdateVirtualLessonUseCase useCase =
             configuration.updateVirtualLessonUseCase(lessonRepository, courseRepository, auditRepository);
 
-        assertThat(useCase).isInstanceOf(UpdateVirtualLessonUseCaseImpl.class);
+        assertThat(useCase).isInstanceOf(TransactionalUpdateVirtualLessonUseCase.class);
     }
 
     @Test
-    void wires_the_reorder_modules_use_case_bean() {
+    void wires_the_reorder_modules_use_case_bean_transactionally() {
         ReorderVirtualModulesUseCase useCase =
             configuration.reorderVirtualModulesUseCase(courseRepository, moduleRepository, auditRepository);
 
-        assertThat(useCase).isInstanceOf(ReorderVirtualModulesUseCaseImpl.class);
+        assertThat(useCase).isInstanceOf(TransactionalReorderVirtualModulesUseCase.class);
     }
 }

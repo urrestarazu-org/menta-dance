@@ -19,4 +19,6 @@ public interface VirtualModuleJpaRepository extends JpaRepository<VirtualModuleJ
     List<VirtualModuleJpaEntity> findByCourseIdOrderByDisplayOrderAsc(UUID courseId);
 
     long countByCourseId(UUID courseId);
+
+    void deleteByCourseId(UUID courseId);
 }

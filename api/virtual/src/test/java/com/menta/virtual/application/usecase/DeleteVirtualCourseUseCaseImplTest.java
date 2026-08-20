@@ -8,6 +8,8 @@ import static org.mockito.Mockito.when;
 
 import com.menta.virtual.application.port.out.VirtualCourseAuditRepository;
 import com.menta.virtual.application.port.out.VirtualCourseRepository;
+import com.menta.virtual.application.port.out.VirtualLessonRepository;
+import com.menta.virtual.application.port.out.VirtualModuleRepository;
 import com.menta.virtual.domain.exception.CourseNotDraftException;
 import com.menta.virtual.domain.model.CourseCategory;
 import com.menta.virtual.domain.model.CourseId;
@@ -17,13 +19,17 @@ import com.menta.virtual.domain.model.VirtualCourse;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
+import org.mockito.Mockito;
 
 class DeleteVirtualCourseUseCaseImplTest {
 
     private final VirtualCourseRepository courseRepository = mock(VirtualCourseRepository.class);
+    private final VirtualModuleRepository moduleRepository = mock(VirtualModuleRepository.class);
+    private final VirtualLessonRepository lessonRepository = mock(VirtualLessonRepository.class);
     private final VirtualCourseAuditRepository auditRepository = mock(VirtualCourseAuditRepository.class);
     private final DeleteVirtualCourseUseCaseImpl useCase =
-        new DeleteVirtualCourseUseCaseImpl(courseRepository, auditRepository);
+        new DeleteVirtualCourseUseCaseImpl(courseRepository, moduleRepository, lessonRepository, auditRepository);
 
     private static VirtualCourse course(CourseId id, UUID professorId, CourseStatus status) {
         return new VirtualCourse(
@@ -46,6 +52,20 @@ class DeleteVirtualCourseUseCaseImplTest {
             org.mockito.ArgumentMatchers.eq("DELETE_COURSE"), org.mockito.ArgumentMatchers.any(),
             org.mockito.ArgumentMatchers.isNull()
         );
+    }
+
+    @Test
+    void deletes_lessons_then_modules_then_the_course_in_that_order() {
+        CourseId id = CourseId.generate();
+        UUID ownerId = UUID.randomUUID();
+        when(courseRepository.findById(id)).thenReturn(Optional.of(course(id, ownerId, CourseStatus.DRAFT)));
+
+        useCase.delete(id.toString(), ownerId, false);
+
+        InOrder inOrder = Mockito.inOrder(lessonRepository, moduleRepository, courseRepository);
+        inOrder.verify(lessonRepository).deleteByCourseId(id);
+        inOrder.verify(moduleRepository).deleteByCourseId(id);
+        inOrder.verify(courseRepository).delete(id);
     }
 
     @Test
