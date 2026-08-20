@@ -33,13 +33,14 @@ complementarios son `Should Have`.
 | [US-AUTH-006](US-AUTH-006.md) | Reset de contraseña | Auth | Must Have |
 | [US-AUTH-007](US-AUTH-007.md) | Logout y revocación | Auth | Must Have |
 
-### Billing (9 historias)
+### Billing (10 historias)
 
 | ID | Título | Módulo | Prioridad |
 |---|---|---|---|
 | [US-BILLING-001](US-BILLING-001.md) | Ver planes disponibles | Billing | Must Have |
 | [US-BILLING-002](US-BILLING-002.md) | Confirmación de pago por webhook | Billing | Must Have |
 | [US-BILLING-003](US-BILLING-003.md) | Suscripción con transferencia bancaria | Billing | Should Have |
+| [US-BILLING-010](US-BILLING-010.md) | Suscripción a un plan con pago online | Billing y api:app | Must Have |
 | [US-BILLING-004](US-BILLING-004.md) | Consulta de estado de suscripción | Billing | Must Have |
 | [US-BILLING-005](US-BILLING-005.md) | Verificación de pagos manuales (Admin) | Billing | Must Have |
 | [US-BILLING-006](US-BILLING-006.md) | Cotización de curso presencial | Billing | Must Have |
@@ -78,7 +79,7 @@ complementarios son `Should Have`.
 | Módulo | Total | Must Have | Should Have |
 |---|---:|---:|---:|
 | Auth | 7 | 6 | 1 |
-| Billing | 9 | 7 | 2 |
+| Billing | 10 | 8 | 2 |
 | Virtual | 8 | 6 | 2 |
 | Physical | 8 | 7 | 1 |
-| **Total** | **32** | **26** | **6** |
+| **Total** | **33** | **27** | **6** |
