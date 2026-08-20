@@ -12,8 +12,17 @@
 ## 1. Historia de Usuario
 
 > **Como** visitante sin suscripción
-> **Quiero** ver la primera lección de cada curso de forma gratuita
+> **Quiero** ver las lecciones marcadas como gratuitas
 > **Para** evaluar la calidad del contenido antes de suscribirme.
+
+> **Nota de refinamiento.** Esta historia decía "la primera lección de cada
+> curso", el Escenario 3 decía "la primera lección de cada módulo" y el
+> Escenario 1 se apoyaba en el flag `isFree` — tres reglas distintas en un
+> mismo documento. Se resolvió a favor del **flag explícito por lección**,
+> que es lo único que existe en el modelo (`VirtualLesson.isFree`,
+> `virtual_lessons.is_free`). No hay ninguna regla derivada de la posición
+> de la lección ni del módulo. Ver la cascada completa de acceso en
+> [US-VIRTUAL-007](US-VIRTUAL-007.md).
 
 ---
 
@@ -42,12 +51,18 @@
 * **Entonces (Then):** El sistema debe permitir el acceso completo.
 * **Y (And):** Debe mostrar invitación a suscribirse para más contenido.
 
-**Escenario 3: Primera lección siempre gratuita**
+**Escenario 3: Módulo marcado como preview libera sus lecciones**
 
-* **Dado que (Given):** Un curso tiene la primera lección de cada módulo gratuita.
-* **Cuando (When):** Un visitante accede a la primera lección del primer módulo.
+* **Dado que (Given):** Un módulo tiene `isPreview = true`.
+* **Cuando (When):** Un visitante accede a cualquier lección de ese módulo,
+  aunque esa lección tenga `isFree = false`.
 * **Entonces (Then):** El sistema debe permitir acceso completo al video.
 * **Y (And):** Debe indicar "Lección de preview gratuita".
+
+> La cascada es **jerárquica**: marcar un módulo como preview libera todas sus
+> lecciones sin necesidad de marcarlas una por una. Es deliberado — un modelo
+> donde ambos flags son independientes hace que marcar el módulo no libere
+> nada, que es exactamente lo que un admin no espera.
 
 **Escenario 4: Intento de acceso a lección premium (sin suscripción)**
 

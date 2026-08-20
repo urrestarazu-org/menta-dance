@@ -42,7 +42,19 @@ bancaria.
 - **Entonces** el `Payment` pasa a `COMPLETED` como liquidación y la
   `Subscription` a `ACTIVE`, con `startDate` en el timestamp confirmado y
   `endDate` calculado con `durationDays` del plan.
-- **Y** el alumno obtiene acceso a **todos los cursos incluidos en el plan**.
+- **Y** la suscripción **persiste un snapshot del conjunto de cursos** que el
+  plan habilitaba en ese instante.
+- **Y** el alumno obtiene acceso a **todos los cursos incluidos en ese
+  snapshot**.
+
+**Escenario 2b: el plan cambia después de activarse la suscripción**
+
+- **Dado** una `Subscription` `ACTIVE` con su snapshot de cursos.
+- **Cuando** un admin desactiva el plan o le quita uno de esos cursos.
+- **Entonces** la suscripción **conserva su acceso íntegro hasta vencer**: el
+  cambio administrativo no altera lo ya comprado.
+- **Y** el cambio sí afecta a las suscripciones que se activen a partir de ese
+  momento.
 
 **Escenario 3: ya tiene una suscripción vigente**
 
@@ -122,7 +134,16 @@ bancaria.
   3. **La suscripción apunta a un curso, no a un plan.** Hoy
      `PaymentTarget.Virtual` lleva un `courseId` suelto y
      `Subscription.virtualCourseId` también. El negocio es por plan: debe
-     referenciar `planId`, y el acceso se deriva de `Plan.courses`.
+     referenciar `planId`, y el acceso se deriva del snapshot de
+     `Plan.courses` tomado al activar.
+
+  5. **No hay snapshot de los cursos del plan.** La suscripción debe persistir
+     qué cursos habilitaba el plan al activarse, para que un cambio
+     administrativo posterior no le quite acceso a quien ya pagó (Escenario
+     2b). Sin snapshot, el acceso se evaluaría contra el plan vivo y una
+     desactivación cortaría el acceso en caliente — un defecto observado en
+     otro sistema con este mismo modelo, donde la intención declarada del
+     soft-delete y el comportamiento real no coincidían.
   4. **`Subscription` no tiene vigencia.** Hoy sólo modela
      `PENDING_FULFILLMENT` / `ASSIGNED` / `EXCEPTION`, sin `startDate`,
      `endDate` ni estado `ACTIVE`/`EXPIRED`. US-BILLING-004 ya especifica esos
@@ -138,6 +159,9 @@ bancaria.
 * **Tablas de BD:**
   * `billing_payments` — requiere columna de usuario.
   * `billing_subscriptions` — requiere usuario, plan, vigencia y estado.
+  * Snapshot de cursos habilitados por suscripción — tabla nueva; no puede
+    derivarse de `billing_plan_courses`, que refleja el estado **actual** del
+    plan y no el del momento de la compra.
   * `billing_plans` / `billing_plan_courses` — lectura, ya existen.
 
 ---
