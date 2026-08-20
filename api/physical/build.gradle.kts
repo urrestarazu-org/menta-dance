@@ -1,3 +1,5 @@
+import com.menta.buildlogic.registerLayeredCoverageVerification
+
 plugins {
     id("java-library")
 }
@@ -38,17 +40,22 @@ tasks.jar {
     enabled = true
 }
 
-// 80% coverage for physical module
-tasks.jacocoTestCoverageVerification {
-    violationRules {
-        rule {
-            element = "CLASS"
-            limit {
-                counter = "LINE"
-                value = "COVEREDRATIO"
-                minimum = "0.80".toBigDecimal()
-            }
-            includes = listOf("com.menta.physical.*")
-        }
-    }
+// Coverage gates. The mechanism lives in buildSrc's
+// registerLayeredCoverageVerification; what stays here is the policy.
+// Migrated off a flat element = CLASS 0.80 for the same reason as
+// :api:virtual — see that module's note.
+//
+//   - Domain + Application: 0.95 LINE (BUNDLE). Real: 97.8%.
+//   - Infrastructure: 0.90 LINE (BUNDLE). Real: 97.3%.
+val jacocoDomainApplicationCoverageVerification = registerLayeredCoverageVerification(
+    "jacocoDomainApplicationCoverageVerification", "0.95",
+    listOf("com/menta/physical/domain/**", "com/menta/physical/application/**")
+)
+val jacocoInfrastructureCoverageVerification = registerLayeredCoverageVerification(
+    "jacocoInfrastructureCoverageVerification", "0.90",
+    listOf("com/menta/physical/infrastructure/**")
+)
+
+tasks.check {
+    dependsOn(jacocoDomainApplicationCoverageVerification, jacocoInfrastructureCoverageVerification)
 }

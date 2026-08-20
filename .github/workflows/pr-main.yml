@@ -51,8 +51,9 @@ jobs:
         run: ./gradlew jacocoTestReport -x :android:testDebugUnitTest
 
       - name: Check code coverage
-        # jacocoTestCoverageVerification: valida umbrales de cobertura (100/80 strategy)
-        # billing.domain/application: 100%, virtual/physical: 80%
+        # jacocoTestCoverageVerification: valida umbrales de cobertura por capa
+        # (BUNDLE, ver docs/14-TEST-STRATEGY.md) — auth/billing 100% domain+app,
+        # virtual/physical 95% domain+app; el resto tiene su propio piso.
         run: ./gradlew jacocoTestCoverageVerification -x :android:testDebugUnitTest
 
       - name: Run Checkstyle

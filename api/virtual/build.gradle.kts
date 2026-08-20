@@ -1,3 +1,5 @@
+import com.menta.buildlogic.registerLayeredCoverageVerification
+
 plugins {
     id("java-library")
 }
@@ -38,17 +40,28 @@ tasks.jar {
     enabled = true
 }
 
-// 80% coverage for virtual module
-tasks.jacocoTestCoverageVerification {
-    violationRules {
-        rule {
-            element = "CLASS"
-            limit {
-                counter = "LINE"
-                value = "COVEREDRATIO"
-                minimum = "0.80".toBigDecimal()
-            }
-            includes = listOf("com.menta.virtual.*")
-        }
-    }
+// Coverage gates. The mechanism lives in buildSrc's
+// registerLayeredCoverageVerification; what stays here is the policy.
+//
+// This module used to gate with element = CLASS at a flat 0.80 across
+// com.menta.virtual.*, which was wrong in both directions: the aggregate sat
+// at 97.9% — so a third of the suite could be deleted in silence — while any
+// individual thin class dragged the build down. That is exactly what
+// happened to the Transactional*UseCase decorators in #112: ten one-line
+// delegators, each below 0.80 on its own, against a layer already at 97%.
+// BUNDLE per layer asks the question that actually matters.
+//
+//   - Domain + Application: 0.95 LINE (BUNDLE). Real: 98.7%.
+//   - Infrastructure: 0.90 LINE (BUNDLE). Real: 97.0%.
+val jacocoDomainApplicationCoverageVerification = registerLayeredCoverageVerification(
+    "jacocoDomainApplicationCoverageVerification", "0.95",
+    listOf("com/menta/virtual/domain/**", "com/menta/virtual/application/**")
+)
+val jacocoInfrastructureCoverageVerification = registerLayeredCoverageVerification(
+    "jacocoInfrastructureCoverageVerification", "0.90",
+    listOf("com/menta/virtual/infrastructure/**")
+)
+
+tasks.check {
+    dependsOn(jacocoDomainApplicationCoverageVerification, jacocoInfrastructureCoverageVerification)
 }

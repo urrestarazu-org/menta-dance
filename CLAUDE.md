@@ -99,11 +99,28 @@ module/
 ./gradlew jacocoTestCoverageVerification
 ```
 
-## Estrategia de Tests (100/80/0)
+## Estrategia de Tests
 
-- **100% cobertura**: `billing.domain`, `billing.application`, `auth.domain`, `auth.application`
-- **80% cobertura**: `virtual.*`, `physical.*`
-- **0% tests unitarios**: DTOs, configs, interfaces de repositorio JPA
+Cada módulo gatea cobertura **por capa** (JaCoCo, agregación BUNDLE), no
+con un número plano por módulo. El umbral es un trinquete calibrado justo
+debajo de la cobertura real vigente — nunca una meta aspiracional muy por
+encima, ni un piso muy por debajo que deje de proteger nada.
+
+| Módulo | domain + application | infrastructure |
+|---|---|---|
+| `auth` | 100% | 65% |
+| `billing` | 100% | 70% |
+| `virtual` | 95% | 90% |
+| `physical` | 95% | 90% |
+
+`shared`, `app` y `bff` no tienen capas propias; llevan un piso plano
+declarado en `moduleCoverageFloor` (root `build.gradle.kts`).
+
+El mecanismo (`registerLayeredCoverageVerification`) vive en
+`buildSrc/` y se documenta en detalle, junto al bug de JaCoCo #96 que
+motivó el diseño, en `docs/14-TEST-STRATEGY.md`. `./gradlew
+jacocoAggregatedReport` genera el reporte combinado del monorepo
+(sin umbral propio — sólo reporting).
 
 ## Comunicación entre Módulos
 
