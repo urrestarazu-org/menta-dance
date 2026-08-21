@@ -1,26 +1,34 @@
 package com.menta.billing.infrastructure.config;
 
+import com.menta.billing.application.port.in.GetPhysicalCoursePricingUseCase;
 import com.menta.billing.application.port.in.GetPlanUseCase;
 import com.menta.billing.application.port.in.ListPlansUseCase;
 import com.menta.billing.application.port.in.ReceiveWebhookUseCase;
+import com.menta.billing.application.port.in.UpdatePhysicalCoursePricingUseCase;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.port.out.Clock;
 import com.menta.billing.application.port.out.CourseCatalogPort;
 import com.menta.billing.application.port.out.PaymentProviderPort;
 import com.menta.billing.application.port.out.PaymentRepository;
 import com.menta.billing.application.port.out.PhysicalCapacityAssignmentPort;
+import com.menta.billing.application.port.out.PhysicalCourseOwnershipPort;
+import com.menta.billing.application.port.out.PhysicalCoursePricingRepository;
+import com.menta.billing.application.port.out.PhysicalCoursePricingRevisionRepository;
 import com.menta.billing.application.port.out.PlanRepository;
 import com.menta.billing.application.port.out.PurchaseRepository;
 import com.menta.billing.application.port.out.SubscriptionRepository;
 import com.menta.billing.application.port.out.VirtualAccessGrantPort;
 import com.menta.billing.application.port.out.WebhookInboxAppender;
 import com.menta.billing.application.port.out.WebhookSignatureVerifier;
+import com.menta.billing.application.usecase.GetPhysicalCoursePricingUseCaseImpl;
 import com.menta.billing.application.usecase.GetPlanUseCaseImpl;
 import com.menta.billing.application.usecase.ListPlansUseCaseImpl;
 import com.menta.billing.application.usecase.PaymentVerificationService;
 import com.menta.billing.application.usecase.ReceiveWebhookUseCaseImpl;
+import com.menta.billing.application.usecase.UpdatePhysicalCoursePricingUseCaseImpl;
 import com.menta.billing.infrastructure.security.RedisBillingPlansRateLimitPort;
 import com.menta.billing.infrastructure.transaction.TransactionalReceiveWebhookUseCase;
+import com.menta.billing.infrastructure.transaction.TransactionalUpdatePhysicalCoursePricingUseCase;
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.util.Set;
@@ -123,5 +131,22 @@ public class BillingConfiguration {
         BillingPlansRateLimitPort billingPlansRateLimitPort
     ) {
         return new GetPlanUseCaseImpl(planRepository, courseCatalogPort, billingPlansRateLimitPort);
+    }
+
+    @Bean
+    public GetPhysicalCoursePricingUseCase getPhysicalCoursePricingUseCase(
+        PhysicalCoursePricingRepository pricingRepository
+    ) {
+        return new GetPhysicalCoursePricingUseCaseImpl(pricingRepository);
+    }
+
+    @Bean
+    public UpdatePhysicalCoursePricingUseCase updatePhysicalCoursePricingUseCase(
+        PhysicalCourseOwnershipPort physicalCourseOwnershipPort, PhysicalCoursePricingRepository pricingRepository,
+        PhysicalCoursePricingRevisionRepository revisionRepository, Clock clock
+    ) {
+        return new TransactionalUpdatePhysicalCoursePricingUseCase(new UpdatePhysicalCoursePricingUseCaseImpl(
+            physicalCourseOwnershipPort, pricingRepository, revisionRepository, clock
+        ));
     }
 }

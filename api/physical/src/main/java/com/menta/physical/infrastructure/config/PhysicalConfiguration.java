@@ -6,6 +6,7 @@ import com.menta.physical.application.port.in.CreatePhysicalSessionUseCase;
 import com.menta.physical.application.port.in.ListManagedPhysicalCoursesUseCase;
 import com.menta.physical.application.port.in.ListManagedPhysicalSessionsUseCase;
 import com.menta.physical.application.port.in.PhysicalCourseAvailabilityPort;
+import com.menta.physical.application.port.in.PhysicalCourseOwnershipPort;
 import com.menta.physical.application.port.in.UpdatePhysicalCourseUseCase;
 import com.menta.physical.application.port.in.UpdatePhysicalSessionUseCase;
 import com.menta.physical.application.port.out.PhysicalCourseRepository;
@@ -16,6 +17,7 @@ import com.menta.physical.application.usecase.CreatePhysicalSessionUseCaseImpl;
 import com.menta.physical.application.usecase.ListManagedPhysicalCoursesUseCaseImpl;
 import com.menta.physical.application.usecase.ListManagedPhysicalSessionsUseCaseImpl;
 import com.menta.physical.application.usecase.PhysicalCourseAvailabilityPortImpl;
+import com.menta.physical.application.usecase.PhysicalCourseOwnershipPortImpl;
 import com.menta.physical.application.usecase.UpdatePhysicalCourseUseCaseImpl;
 import com.menta.physical.application.usecase.UpdatePhysicalSessionUseCaseImpl;
 import org.springframework.context.annotation.Bean;
@@ -35,6 +37,11 @@ public class PhysicalConfiguration {
         PhysicalCourseRepository courseRepository, PhysicalSessionRepository sessionRepository
     ) {
         return new PhysicalCourseAvailabilityPortImpl(courseRepository, sessionRepository);
+    }
+
+    @Bean
+    public PhysicalCourseOwnershipPort physicalCourseOwnershipPort(PhysicalCourseRepository courseRepository) {
+        return new PhysicalCourseOwnershipPortImpl(courseRepository);
     }
 
     @Bean
