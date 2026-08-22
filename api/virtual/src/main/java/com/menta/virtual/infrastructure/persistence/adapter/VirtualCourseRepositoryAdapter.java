@@ -113,6 +113,32 @@ public class VirtualCourseRepositoryAdapter implements VirtualCourseRepository {
 
     @Override
     @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public Optional<VirtualCourse> findByIdAnyStatus(CourseId courseId) {
+        Optional<VirtualCourseJpaEntity> entity = courseRepository.findById(courseId.getValue());
+        if (entity.isEmpty()) {
+            return Optional.empty();
+        }
+        VirtualCourseJpaEntity course = entity.get();
+        List<UUID> singleId = List.of(course.getId());
+
+        Map<UUID, Long> moduleCounts = moduleRepository.countByCourseIdIn(singleId).stream()
+            .collect(java.util.stream.Collectors.toMap(
+                ModuleCountProjection::getCourseId, ModuleCountProjection::getModuleCount
+            ));
+        Map<UUID, LessonAggregateProjection> lessonAggregates = lessonRepository
+            .aggregateByCourseIdIn(singleId).stream()
+            .collect(java.util.stream.Collectors.toMap(LessonAggregateProjection::getCourseId, a -> a));
+
+        return Optional.of(VirtualCourseJpaMapper.toDomain(
+            course,
+            moduleCounts.getOrDefault(course.getId(), 0L).intValue(),
+            lessonAggregateOf(lessonAggregates, course.getId(), LessonAggregateProjection::getLessonCount),
+            lessonAggregateOf(lessonAggregates, course.getId(), LessonAggregateProjection::getTotalDurationMinutes)
+        ));
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
     public List<VirtualCourse> findAll() {
         return courseRepository.findAll().stream().map(VirtualCourseJpaMapper::toDomain).toList();
     }
