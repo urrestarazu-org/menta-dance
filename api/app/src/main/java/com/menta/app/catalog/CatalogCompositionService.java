@@ -2,6 +2,7 @@ package com.menta.app.catalog;
 
 import com.menta.physical.application.dto.PhysicalCourseSummary;
 import com.menta.physical.application.port.in.PhysicalCourseAvailabilityPort;
+import com.menta.virtual.application.dto.VirtualCourseDetailView;
 import com.menta.virtual.application.dto.VirtualCourseSummary;
 import com.menta.virtual.application.port.in.VirtualCourseCatalogPort;
 import java.util.ArrayList;
@@ -13,7 +14,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
- * Composes the public catalog (docs/07-CATALOG-API.md, #95) from Physical's
+ * Composes the public catalog (docs/07-CATALOG-API.md, #95, #47) from Physical's
  * and Virtual's already-merged read ports (#40/#46) — no shared table, FK,
  * JOIN or internal HTTP between modules, per ADR-0037.
  */
@@ -74,6 +75,36 @@ public class CatalogCompositionService {
             return CatalogCourseResponse.fromVirtual(virtual.get());
         }
         throw new CourseNotFoundException();
+    }
+
+    /**
+     * Public detail composition (#47, US-VIRTUAL-002 escenarios 1, 3, 4).
+     *
+     * <p>Scope explicit: this method resolves against Virtual's detail port
+     * only. Physical detail is left as a follow-up (#47 explicitly chose
+     * virtual-first granularity so the endpoint can ship behind a single
+     * non-enumerating discipline); a physical-only {@code courseId} therefore
+     * answers the same {@code 404 COURSE_NOT_FOUND} US-VIRTUAL-002 escenario
+     * 3 demands. The same goes for a well-formed UUID that resolves neither
+     * modality (#47 scenario 3) and for an ID that exists only as
+     * non-published state (#47 scenario 4 — the underlying port collapses
+     * both to {@code Optional.empty()} by design, see
+     * {@code VirtualCourseCatalogPort.findPublishedDetailById}).</p>
+     *
+     * <p>Callers must not assume any instructor block is present — the
+     * virtual detail projection deliberately omits it (#47 scope decision:
+     * only {@code professorId} is persisted on {@code VirtualCourse}).</p>
+     *
+     * <p>Malformed {@code courseId} (not a UUID) is swallowed by
+     * {@link #lookup} into {@link Optional#empty()} and reported as
+     * {@code CourseNotFoundException} — the same anti-enumeration discipline
+     * {@link #getCourse} applies on scenario 3.</p>
+     */
+    public CatalogCourseDetailResponse getCourseDetail(String courseId) {
+        VirtualCourseDetailView virtual =
+            lookup("virtual", () -> virtualPort.findPublishedDetailById(courseId))
+                .orElseThrow(CourseNotFoundException::new);
+        return CatalogCourseDetailResponse.fromVirtual(virtual);
     }
 
     private static <T> List<T> callPort(String moduleName, Supplier<List<T>> query) {

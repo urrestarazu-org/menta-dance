@@ -56,8 +56,17 @@ import org.springframework.context.annotation.Configuration;
 public class VirtualConfiguration {
 
     @Bean
-    public VirtualCourseCatalogPort virtualCourseCatalogPort(VirtualCourseRepository virtualCourseRepository) {
-        return new VirtualCourseCatalogPortImpl(virtualCourseRepository);
+    public VirtualCourseCatalogPort virtualCourseCatalogPort(
+        VirtualCourseRepository virtualCourseRepository,
+        VirtualModuleRepository moduleRepository,
+        VirtualLessonRepository lessonRepository
+    ) {
+        // #47: detail read needs module + lesson repositories on top of the
+        // course repository. The list/summary methods are unaffected because
+        // they never reach into these extra collaborators.
+        return new VirtualCourseCatalogPortImpl(
+            virtualCourseRepository, moduleRepository, lessonRepository
+        );
     }
 
     @Bean

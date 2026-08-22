@@ -41,8 +41,12 @@ class VirtualConfigurationTest {
     private final VirtualCourseAuditRepository auditRepository = mock(VirtualCourseAuditRepository.class);
 
     @Test
-    void wires_the_catalog_port_bean_with_the_given_repository() {
-        VirtualCourseCatalogPort port = configuration.virtualCourseCatalogPort(courseRepository);
+    void wires_the_catalog_port_bean_with_the_given_repositories() {
+        // #47: the detail read needs module + lesson repositories alongside
+        // the course repository; the bean must wire all three.
+        VirtualCourseCatalogPort port = configuration.virtualCourseCatalogPort(
+            courseRepository, moduleRepository, lessonRepository
+        );
 
         assertThat(port).isInstanceOf(VirtualCourseCatalogPortImpl.class);
     }
