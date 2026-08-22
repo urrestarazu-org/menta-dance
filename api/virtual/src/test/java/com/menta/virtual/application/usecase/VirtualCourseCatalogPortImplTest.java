@@ -10,6 +10,8 @@ import static org.mockito.Mockito.when;
 
 import com.menta.virtual.application.dto.VirtualCourseSummary;
 import com.menta.virtual.application.port.out.VirtualCourseRepository;
+import com.menta.virtual.application.port.out.VirtualLessonRepository;
+import com.menta.virtual.application.port.out.VirtualModuleRepository;
 import com.menta.virtual.domain.model.CourseCategory;
 import com.menta.virtual.domain.model.CourseId;
 import com.menta.virtual.domain.model.CourseLevel;
@@ -23,7 +25,10 @@ import org.junit.jupiter.api.Test;
 class VirtualCourseCatalogPortImplTest {
 
     private final VirtualCourseRepository repository = mock(VirtualCourseRepository.class);
-    private final VirtualCourseCatalogPortImpl port = new VirtualCourseCatalogPortImpl(repository);
+    private final VirtualModuleRepository moduleRepository = mock(VirtualModuleRepository.class);
+    private final VirtualLessonRepository lessonRepository = mock(VirtualLessonRepository.class);
+    private final VirtualCourseCatalogPortImpl port =
+        new VirtualCourseCatalogPortImpl(repository, moduleRepository, lessonRepository);
 
     private static VirtualCourse course(CourseId id) {
         return new VirtualCourse(
