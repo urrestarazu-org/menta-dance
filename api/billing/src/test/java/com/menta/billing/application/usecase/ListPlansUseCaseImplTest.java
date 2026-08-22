@@ -50,7 +50,8 @@ class ListPlansUseCaseImplTest {
     private static Plan plan(String name, boolean featured, List<PlanCourse> courses) {
         return new Plan(
             PlanId.generate(), name, "desc", Money.of(BigDecimal.TEN, "ARS"), 30,
-            featured, PlanStatus.ACTIVE, "terms", "cancellation", courses
+            featured, PlanStatus.ACTIVE, "terms", "cancellation", courses,
+            java.util.Set.of(com.menta.billing.domain.model.PaymentMethod.MERCADO_PAGO)
         );
     }
 

@@ -6,9 +6,11 @@ import com.menta.billing.domain.model.PlanId;
 import com.menta.billing.domain.model.PlanStatus;
 import com.menta.billing.infrastructure.persistence.entity.PlanCourseJpaEntity;
 import com.menta.billing.infrastructure.persistence.entity.PlanJpaEntity;
+import com.menta.billing.infrastructure.persistence.entity.PlanPaymentMethodJpaEntity;
 import com.menta.billing.infrastructure.persistence.mapper.PlanJpaMapper;
 import com.menta.billing.infrastructure.persistence.repository.PlanCourseJpaRepository;
 import com.menta.billing.infrastructure.persistence.repository.PlanJpaRepository;
+import com.menta.billing.infrastructure.persistence.repository.PlanPaymentMethodJpaRepository;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -21,9 +23,9 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * JPA adapter for {@link PlanRepository}.
  *
- * <p>Two flat queries (plans, then their courses), joined in memory —
- * deliberately no {@code @OneToMany} JPA relationship: it would tempt lazy
- * loading and N+1 queries for what is, at this scale, one bounded batch
+ * <p>Flat queries (plans, then their courses and payment methods), joined in
+ * memory — deliberately no {@code @OneToMany} JPA relationship: it would tempt
+ * lazy loading and N+1 queries for what is, at this scale, one bounded batch
  * fetch per request.</p>
  */
 @Component
@@ -31,12 +33,15 @@ public class PlanRepositoryAdapter implements PlanRepository {
 
     private final PlanJpaRepository planJpaRepository;
     private final PlanCourseJpaRepository planCourseJpaRepository;
+    private final PlanPaymentMethodJpaRepository planPaymentMethodJpaRepository;
 
     public PlanRepositoryAdapter(
-        PlanJpaRepository planJpaRepository, PlanCourseJpaRepository planCourseJpaRepository
+        PlanJpaRepository planJpaRepository, PlanCourseJpaRepository planCourseJpaRepository,
+        PlanPaymentMethodJpaRepository planPaymentMethodJpaRepository
     ) {
         this.planJpaRepository = planJpaRepository;
         this.planCourseJpaRepository = planCourseJpaRepository;
+        this.planPaymentMethodJpaRepository = planPaymentMethodJpaRepository;
     }
 
     @Override
@@ -46,21 +51,41 @@ public class PlanRepositoryAdapter implements PlanRepository {
         if (plans.isEmpty()) {
             return List.of();
         }
+        List<UUID> planIds = plans.stream().map(PlanJpaEntity::getId).toList();
         Map<UUID, List<PlanCourseJpaEntity>> coursesByPlanId = planCourseJpaRepository
-            .findByPlanIdIn(plans.stream().map(PlanJpaEntity::getId).toList())
+            .findByPlanIdIn(planIds)
             .stream()
             .collect(Collectors.groupingBy(PlanCourseJpaEntity::getPlanId));
+        Map<UUID, List<PlanPaymentMethodJpaEntity>> methodsByPlanId = planPaymentMethodJpaRepository
+            .findByPlanIdIn(planIds)
+            .stream()
+            .collect(Collectors.groupingBy(PlanPaymentMethodJpaEntity::getPlanId));
         return plans.stream()
-            .map(plan -> PlanJpaMapper.toDomain(plan, coursesByPlanId.getOrDefault(plan.getId(), List.of())))
+            .map(plan -> PlanJpaMapper.toDomain(
+                plan,
+                coursesByPlanId.getOrDefault(plan.getId(), List.of()),
+                methodsByPlanId.getOrDefault(plan.getId(), List.of())
+            ))
             .toList();
     }
 
     @Override
     @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
     public Optional<Plan> findActiveById(PlanId id) {
-        return planJpaRepository.findByIdAndStatus(id.getValue(), PlanStatus.ACTIVE)
-            .map(entity -> PlanJpaMapper.toDomain(
-                entity, planCourseJpaRepository.findByPlanId(entity.getId())
-            ));
+        return planJpaRepository.findByIdAndStatus(id.getValue(), PlanStatus.ACTIVE).map(this::toDomain);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public Optional<Plan> findById(PlanId id) {
+        return planJpaRepository.findById(id.getValue()).map(this::toDomain);
+    }
+
+    private Plan toDomain(PlanJpaEntity entity) {
+        return PlanJpaMapper.toDomain(
+            entity,
+            planCourseJpaRepository.findByPlanId(entity.getId()),
+            planPaymentMethodJpaRepository.findByPlanId(entity.getId())
+        );
     }
 }

@@ -55,8 +55,8 @@ class WebhookVerificationWorkerTest {
 
     private static Payment payment(PaymentStatus status) {
         return new Payment(
-            PaymentId.generate(), "mp-1", Money.of(BigDecimal.TEN, "ARS"), "ext-1", "merchant-1",
-            new PaymentTarget.Physical("session-1"), status, NOW
+            PaymentId.generate(), java.util.UUID.randomUUID(), "mp-1", Money.of(BigDecimal.TEN, "ARS"),
+            "ext-1", "merchant-1", new PaymentTarget.Physical("session-1"), status, NOW
         );
     }
 

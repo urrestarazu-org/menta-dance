@@ -38,6 +38,7 @@ son exclusivas de `ADMIN`. Los errores usan `application/problem+json`.
 | --- | --- | --- |
 | `GET /plans` | Ninguna (público) | `200` con `{ plans: [...] }`, `[]` si no hay planes activos |
 | `GET /plans/{planId}` | Ninguna (público) | `200` con el detalle completo del plan |
+| `POST /subscriptions` | Access token válido | `201` con la suscripción pendiente y la URL de Checkout Pro |
 
 `GET /plans` sólo devuelve planes con `status = ACTIVE`, ordenados por precio
 ascendente; el destacado se indica con el campo `featured`, no con el orden.
@@ -53,6 +54,39 @@ sin FK ni JOIN (`docs/25-ARCHITECTURE-RULES.md`); el nombre de cada curso se
 resuelve vía `CourseCatalogPort`, cuyo adapter real todavía no existe
 (pendiente de #40/#46) — hasta entonces `courses[].name` puede venir `null`
 sin que la respuesta falle.
+
+## Checkout de suscripción virtual (US-BILLING-010)
+
+`POST /api/v1/billing/subscriptions` inicia un checkout para el usuario del
+access token. El body es `{ "planId": UUID, "paymentMethod": "MERCADO_PAGO",
+"idempotencyKey": string }`; no acepta `userId`. La clave tiene un máximo de
+128 caracteres y una repetición con el mismo usuario devuelve el checkout ya
+creado, sin abrir otro cobro.
+
+Este endpoint implementa exclusivamente Checkout Pro: `BANK_TRANSFER` es
+inválido aquí (`400 INVALID_REQUEST`) hasta que US-BILLING-003 incorpore su
+flujo propio de datos bancarios y comprobantes. Nunca se transforma una
+transferencia en una preferencia de Mercado Pago.
+
+La respuesta `201` es `{ subscriptionId, paymentId, planId, status,
+providerPreferenceId, externalReference, checkoutUrl }`. `status` comienza en
+`PENDING`; `providerPreferenceId` identifica la preferencia de Checkout Pro y
+`checkoutUrl` es la URL a la que el cliente debe redirigir al alumno.
+`paymentId`, `providerPreferenceId` y `externalReference` son identificadores
+distintos. El `providerPaymentId` todavía no existe y nunca se expone aquí.
+
+Errores: `400 INVALID_REQUEST` para un body inválido, `401` sin autenticación,
+`409 SUBSCRIPTION_ALREADY_ACTIVE` si el usuario ya tiene un checkout pendiente
+o una suscripción activa, `422 PLAN_NOT_AVAILABLE` para un plan inexistente o
+inactivo y `422 PAYMENT_METHOD_NOT_ACCEPTED` (incluye
+`acceptedPaymentMethods`). Si Mercado Pago no puede crear la preferencia,
+responde `503 PAYMENT_PREFERENCE_UNAVAILABLE`; la transacción local se revierte
+y no se reintenta automáticamente.
+
+La URL de retorno de Mercado Pago sólo devuelve navegación al cliente. La fuente
+de verdad es el webhook firmado: Billing consulta el pago, lo correlaciona con
+`externalReference`, valida cuenta, importe y moneda, y recién entonces activa
+la suscripción y congela su snapshot de cursos.
 
 ## Estados e idempotencia
 

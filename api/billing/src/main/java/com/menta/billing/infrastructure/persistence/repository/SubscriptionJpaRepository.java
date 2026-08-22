@@ -8,4 +8,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface SubscriptionJpaRepository extends JpaRepository<SubscriptionJpaEntity, UUID> {
 
     Optional<SubscriptionJpaEntity> findByPaymentId(UUID paymentId);
+
+    Optional<SubscriptionJpaEntity> findByUserIdAndIdempotencyKey(UUID userId, String idempotencyKey);
+
+    /** Resolves the user's slot through the column the unique index sits on — never a status scan. */
+    Optional<SubscriptionJpaEntity> findByActiveUserId(UUID activeUserId);
 }

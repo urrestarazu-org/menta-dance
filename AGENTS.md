@@ -11,6 +11,11 @@
 - La colaboración entre módulos siempre va a través de interfaces Java (típicamente definidas en `api:shared`). Prohibido: compartir entidades JPA, repositorios, SQL joins, llamadas HTTP, messaging, o cualquier infraestructura de otro módulo.
 - Android replica la misma dirección (`presentation -> domain <- data`), con el wiring de Hilt aislado en `di`.
 
+## Documentación de código
+
+- Las interfaces públicas de `domain` y los puertos de `application` deben incluir Javadoc descriptivo: responsabilidad, semántica relevante, invariantes y efectos no obvios.
+- No repetir la firma; documentar el porqué y los límites arquitectónicos cuando aporten contexto.
+
 # Datos y migraciones
 
 - Schema único de MySQL `menta`; las tablas tienen prefijo por módulo (`auth_`, `billing_`, etc.). Las foreign keys y queries nunca deben cruzar prefijos de módulo.

@@ -1,20 +1,32 @@
 package com.menta.billing.domain.model;
 
+import com.menta.billing.domain.exception.ProviderPaymentIdConflictException;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
- * A payment expected against a provider transaction (US-BILLING-002).
+ * A payment expected against a provider transaction (US-BILLING-002,
+ * US-BILLING-010).
  *
- * <p>Created by a checkout flow not yet built (out of this issue's scope) in
- * {@link PaymentStatus.AwaitingProvider}, with {@code providerPaymentId}
- * already known — the webhook flow only verifies and confirms, it never
- * creates a payment from scratch.</p>
+ * <p>Created by the checkout flow in {@link PaymentStatus.AwaitingProvider}
+ * with {@code providerPaymentId} <strong>absent</strong>. That absence is the
+ * whole point: Mercado Pago's Checkout Pro returns a <em>preference</em> and a
+ * redirect URL, and the real {@code payment.id} does not exist until the buyer
+ * actually pays. The only identifier both sides share at checkout time is
+ * {@code expectedExternalReference}, which we generate — so that, not the
+ * provider's id, is the correlation key.</p>
+ *
+ * <p>{@code providerPaymentId} is bound later, by the webhook flow, via
+ * {@link #bindProviderPaymentId(String)} — and only after the provider's own
+ * authenticated response has been matched against every expected field. The
+ * webhook itself contributes nothing but a {@code data.id}.</p>
  */
 public final class Payment {
 
     private final PaymentId id;
+    private final UUID userId;
     private final String providerPaymentId;
     private final Money expectedAmount;
     private final String expectedExternalReference;
@@ -24,11 +36,16 @@ public final class Payment {
     private final Instant createdAt;
 
     public Payment(
-        PaymentId id, String providerPaymentId, Money expectedAmount, String expectedExternalReference,
-        String expectedMerchantAccountId, PaymentTarget target, PaymentStatus status, Instant createdAt
+        PaymentId id, UUID userId, String providerPaymentId, Money expectedAmount,
+        String expectedExternalReference, String expectedMerchantAccountId, PaymentTarget target,
+        PaymentStatus status, Instant createdAt
     ) {
         this.id = Objects.requireNonNull(id, "id cannot be null");
-        this.providerPaymentId = Objects.requireNonNull(providerPaymentId, "providerPaymentId cannot be null");
+        this.userId = Objects.requireNonNull(userId, "userId cannot be null");
+        if (providerPaymentId != null && providerPaymentId.isBlank()) {
+            throw new IllegalArgumentException("providerPaymentId cannot be blank when present");
+        }
+        this.providerPaymentId = providerPaymentId;
         this.expectedAmount = Objects.requireNonNull(expectedAmount, "expectedAmount cannot be null");
         this.expectedExternalReference =
             Objects.requireNonNull(expectedExternalReference, "expectedExternalReference cannot be null");
@@ -37,6 +54,21 @@ public final class Payment {
         this.target = Objects.requireNonNull(target, "target cannot be null");
         this.status = Objects.requireNonNull(status, "status cannot be null");
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt cannot be null");
+    }
+
+    /**
+     * The checkout's entry point (US-BILLING-010 escenario 1): local payment
+     * first, provider charge afterwards — never the other way round, so a
+     * confirmation can always be matched against something we already wrote.
+     */
+    public static Payment awaitingProvider(
+        PaymentId id, UUID userId, Money expectedAmount, String expectedExternalReference,
+        String expectedMerchantAccountId, PaymentTarget target, Instant createdAt
+    ) {
+        return new Payment(
+            id, userId, null, expectedAmount, expectedExternalReference, expectedMerchantAccountId,
+            target, new PaymentStatus.AwaitingProvider(), createdAt
+        );
     }
 
     /**
@@ -49,6 +81,40 @@ public final class Payment {
         return expectedAmount.equals(outcome.amount())
             && expectedExternalReference.equals(outcome.externalReference())
             && expectedMerchantAccountId.equals(outcome.merchantAccountId());
+    }
+
+    /**
+     * Associates the provider's own payment id with this payment, once and
+     * only once.
+     *
+     * <ul>
+     *   <li>Not bound yet → returns a bound copy.</li>
+     *   <li>Already bound to the <em>same</em> id → returns {@code this}. A
+     *       replayed or duplicated webhook is an expected condition, not an
+     *       error (same monotonicity rule as {@link PaymentStatus}).</li>
+     *   <li>Already bound to a <em>different</em> id → throws. Two provider
+     *       transactions claiming one local payment is never something to
+     *       resolve automatically: it goes to manual reconciliation, and the
+     *       existing binding is never overwritten.</li>
+     * </ul>
+     *
+     * @throws ProviderPaymentIdConflictException if a different id is already bound
+     */
+    public Payment bindProviderPaymentId(String newProviderPaymentId) {
+        if (newProviderPaymentId == null || newProviderPaymentId.isBlank()) {
+            throw new IllegalArgumentException("providerPaymentId cannot be null or blank");
+        }
+        if (providerPaymentId == null) {
+            return copyWith(newProviderPaymentId, status);
+        }
+        if (providerPaymentId.equals(newProviderPaymentId)) {
+            return this;
+        }
+        throw new ProviderPaymentIdConflictException(providerPaymentId, newProviderPaymentId);
+    }
+
+    public boolean isBound() {
+        return providerPaymentId != null;
     }
 
     /**
@@ -95,8 +161,12 @@ public final class Payment {
     }
 
     private Payment withStatus(PaymentStatus newStatus) {
+        return copyWith(providerPaymentId, newStatus);
+    }
+
+    private Payment copyWith(String newProviderPaymentId, PaymentStatus newStatus) {
         return new Payment(
-            id, providerPaymentId, expectedAmount, expectedExternalReference,
+            id, userId, newProviderPaymentId, expectedAmount, expectedExternalReference,
             expectedMerchantAccountId, target, newStatus, createdAt
         );
     }
@@ -105,8 +175,14 @@ public final class Payment {
         return id;
     }
 
-    public String getProviderPaymentId() {
-        return providerPaymentId;
+    /** Whose payment this is (US-BILLING-010) — always the authenticated user, never a client-supplied value. */
+    public UUID getUserId() {
+        return userId;
+    }
+
+    /** Empty until the webhook flow binds it — see this class's Javadoc for why it cannot be known at checkout. */
+    public Optional<String> getProviderPaymentId() {
+        return Optional.ofNullable(providerPaymentId);
     }
 
     public Money getExpectedAmount() {
