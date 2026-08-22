@@ -7,6 +7,7 @@ import com.menta.virtual.application.port.in.CreateVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.CreateVirtualLessonUseCase;
 import com.menta.virtual.application.port.in.CreateVirtualModuleUseCase;
 import com.menta.virtual.application.port.in.DeleteVirtualCourseUseCase;
+import com.menta.virtual.application.port.in.GetPublicLessonUseCase;
 import com.menta.virtual.application.port.in.ListManagedVirtualCoursesUseCase;
 import com.menta.virtual.application.port.in.PublishVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.ReorderVirtualModulesUseCase;
@@ -18,7 +19,9 @@ import com.menta.virtual.application.port.in.VirtualCourseCatalogPort;
 import com.menta.virtual.application.port.out.VirtualCourseAuditRepository;
 import com.menta.virtual.application.port.out.VirtualCourseRepository;
 import com.menta.virtual.application.port.out.VirtualLessonRepository;
+import com.menta.shared.billing.VirtualCourseEntitlementPort;
 import com.menta.virtual.application.port.out.VirtualModuleRepository;
+import com.menta.virtual.application.usecase.GetPublicLessonUseCaseImpl;
 import com.menta.virtual.application.usecase.VirtualCourseCatalogPortImpl;
 import com.menta.virtual.infrastructure.transaction.TransactionalCreateVirtualCourseUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalCreateVirtualLessonUseCase;
@@ -39,6 +42,7 @@ class VirtualConfigurationTest {
     private final VirtualModuleRepository moduleRepository = mock(VirtualModuleRepository.class);
     private final VirtualLessonRepository lessonRepository = mock(VirtualLessonRepository.class);
     private final VirtualCourseAuditRepository auditRepository = mock(VirtualCourseAuditRepository.class);
+    private final VirtualCourseEntitlementPort entitlementPort = mock(VirtualCourseEntitlementPort.class);
 
     @Test
     void wires_the_catalog_port_bean_with_the_given_repositories() {
@@ -139,5 +143,20 @@ class VirtualConfigurationTest {
             configuration.reorderVirtualModulesUseCase(courseRepository, moduleRepository, auditRepository);
 
         assertThat(useCase).isInstanceOf(TransactionalReorderVirtualModulesUseCase.class);
+    }
+
+    /**
+     * US-VIRTUAL-003 (#48): the public-lesson read bean keeps its three
+     * repository collaborators AND the cross-module entitlement port —
+     * if a refactor drops an argument, this test catches it before
+     * Spring tries to wire a missing bean at startup.
+     */
+    @Test
+    void wires_the_get_public_lesson_use_case_bean_with_all_four_collaborators() {
+        GetPublicLessonUseCase useCase = configuration.getPublicLessonUseCase(
+            lessonRepository, moduleRepository, courseRepository, entitlementPort
+        );
+
+        assertThat(useCase).isInstanceOf(GetPublicLessonUseCaseImpl.class);
     }
 }
