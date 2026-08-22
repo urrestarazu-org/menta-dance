@@ -1,9 +1,11 @@
 package com.menta.virtual.infrastructure.config;
 
+import com.menta.shared.billing.VirtualCourseEntitlementPort;
 import com.menta.virtual.application.port.in.CreateVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.CreateVirtualLessonUseCase;
 import com.menta.virtual.application.port.in.CreateVirtualModuleUseCase;
 import com.menta.virtual.application.port.in.DeleteVirtualCourseUseCase;
+import com.menta.virtual.application.port.in.GetPublicLessonUseCase;
 import com.menta.virtual.application.port.in.ListManagedVirtualCoursesUseCase;
 import com.menta.virtual.application.port.in.PublishVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.ReorderVirtualModulesUseCase;
@@ -20,6 +22,7 @@ import com.menta.virtual.application.usecase.CreateVirtualCourseUseCaseImpl;
 import com.menta.virtual.application.usecase.CreateVirtualLessonUseCaseImpl;
 import com.menta.virtual.application.usecase.CreateVirtualModuleUseCaseImpl;
 import com.menta.virtual.application.usecase.DeleteVirtualCourseUseCaseImpl;
+import com.menta.virtual.application.usecase.GetPublicLessonUseCaseImpl;
 import com.menta.virtual.application.usecase.ListManagedVirtualCoursesUseCaseImpl;
 import com.menta.virtual.application.usecase.PublishVirtualCourseUseCaseImpl;
 import com.menta.virtual.application.usecase.ReorderVirtualModulesUseCaseImpl;
@@ -42,18 +45,38 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Wires Virtual's use cases. Adapters are {@code @Component}-scanned; the
- * use cases are plain Java classes composed here, mirroring {@code
- * AuthConfiguration}/{@code BillingConfiguration}'s rationale: no implicit
- * {@code @Autowired} on use-case classes.
- *
- * <p>Every mutating use case is wrapped in its {@code Transactional*}
- * decorator (#54 review follow-up) — each performs its domain mutation and
- * its {@code virtual_course_audit} write as separate repository calls, which
- * without a wrapping transaction would commit independently.</p>
- */
-@Configuration
-public class VirtualConfiguration {
+     * Wires Virtual's use cases. Adapters are {@code @Component}-scanned; the
+     * use cases are plain Java classes composed here, mirroring {@code
+     * AuthConfiguration}/{@code BillingConfiguration}'s rationale: no implicit
+     * {@code @Autowired} on use-case classes.
+     *
+     * <p>Every mutating use case is wrapped in its {@code Transactional*}
+     * decorator (#54 review follow-up) — each performs its domain mutation and
+     * its {@code virtual_course_audit} write as separate repository calls, which
+     * without a wrapping transaction would commit independently.</p>
+     */
+    @Configuration
+    public class VirtualConfiguration {
+
+    /**
+     * US-VIRTUAL-003 (#48). Read-only on triple repositories + the
+     * cross-module {@link VirtualCourseEntitlementPort}. ADR-0039 lets Virtual
+     * consume the billing port — the alternative of HTTP / RabbitMQ would
+     * reintroduce the cross-module smell #62 worked to remove. The bean
+     * itself is registered by {@code BillingConfiguration} since Billing
+     * owns the subscription lifecycle; we only inject.
+     */
+    @Bean
+    public GetPublicLessonUseCase getPublicLessonUseCase(
+        VirtualLessonRepository lessonRepository,
+        VirtualModuleRepository moduleRepository,
+        VirtualCourseRepository courseRepository,
+        VirtualCourseEntitlementPort virtualCourseEntitlementPort
+    ) {
+        return new GetPublicLessonUseCaseImpl(
+            lessonRepository, moduleRepository, courseRepository, virtualCourseEntitlementPort
+        );
+    }
 
     @Bean
     public VirtualCourseCatalogPort virtualCourseCatalogPort(
