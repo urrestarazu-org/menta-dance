@@ -25,8 +25,6 @@ import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.port.out.CourseCatalogPort;
 import com.menta.billing.application.port.out.PaymentPreferencePort;
 import com.menta.billing.application.port.out.PaymentProviderPort;
-import com.menta.billing.application.port.out.PhysicalCapacityAssignmentPort;
-import com.menta.billing.application.port.out.VirtualAccessGrantPort;
 import com.menta.billing.domain.model.Money;
 import com.menta.billing.domain.model.PlanStatus;
 import com.menta.billing.infrastructure.persistence.entity.PlanCourseJpaEntity;
@@ -130,8 +128,6 @@ class SubscriptionCheckoutIntegrationTest {
 
     @MockBean private PaymentPreferencePort paymentPreferencePort;
     @MockBean private PaymentProviderPort paymentProviderPort;
-    @MockBean private PhysicalCapacityAssignmentPort physicalCapacityAssignmentPort;
-    @MockBean private VirtualAccessGrantPort virtualAccessGrantPort;
     @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
     @MockBean private CourseCatalogPort courseCatalogPort;
     @MockBean private AuthDegradedGuard authDegradedGuard;
@@ -307,8 +303,6 @@ class SubscriptionCheckoutIntegrationTest {
         assertThat(subscriptionCourseRepository.findBySubscriptionId(subscription.getId()))
             .extracting(entity -> entity.getCourseId())
             .containsExactlyInAnyOrder("course-1", "course-2");
-        verify(virtualAccessGrantPort).grant(org.mockito.ArgumentMatchers.eq("course-1"), anyString());
-        verify(virtualAccessGrantPort).grant(org.mockito.ArgumentMatchers.eq("course-2"), anyString());
     }
 
     /** Escenario 2b: the snapshot is frozen, so a later plan edit cannot reach a subscription already paid. */
@@ -352,8 +346,6 @@ class SubscriptionCheckoutIntegrationTest {
         assertThat(subscriptionRepository.findAll()).hasSize(1);
         assertThat(subscriptionRepository.findAll().get(0).getStartDate()).isEqualTo(firstStartDate);
         assertThat(subscriptionCourseRepository.findAll()).hasSize(1);
-        verify(virtualAccessGrantPort, times(1))
-            .grant(org.mockito.ArgumentMatchers.eq("course-1"), anyString());
     }
 
     // --- Escenario 3 --------------------------------------------------------
@@ -487,7 +479,6 @@ class SubscriptionCheckoutIntegrationTest {
         assertThat(subscription.getStatus()).isEqualTo("CANCELLED");
         assertThat(subscription.getActiveUserId()).isNull();
         assertThat(subscriptionCourseRepository.findAll()).isEmpty();
-        verify(virtualAccessGrantPort, org.mockito.Mockito.never()).grant(anyString(), anyString());
 
         ResponseEntity<Map> retry = checkout(userId, planId, "MERCADO_PAGO", "idem-2");
 

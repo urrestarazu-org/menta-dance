@@ -22,6 +22,7 @@
 | [0036](0036-android-agp9-tooling-migration.md) | Migración de tooling Android a AGP 9.x |
 | [0037](0037-catalog-course-id-routing.md) | Ruteo de courseId a su módulo dueño en el catálogo |
 | [0038](0038-payment-webhook-state-machine-and-worker.md) | Máquina de estados de Payment, worker de webhook y puerto a Mercado Pago |
+| [0039](0039-post-payment-fulfillment-boundaries.md) | Límites del fulfillment post-pago |
 
 Los ADRs no listados fueron eliminados por contener decisiones incompatibles con
 el diseño vigente. Sus números no se reutilizan.

@@ -13,7 +13,6 @@ import com.menta.billing.application.port.out.CourseCatalogPort;
 import com.menta.billing.application.port.out.PaymentPreferencePort;
 import com.menta.billing.application.port.out.PaymentProviderPort;
 import com.menta.billing.application.port.out.PaymentRepository;
-import com.menta.billing.application.port.out.PhysicalCapacityAssignmentPort;
 import com.menta.billing.application.port.out.PhysicalCourseAvailabilityPort;
 import com.menta.billing.application.port.out.PhysicalCourseOwnershipPort;
 import com.menta.billing.application.port.out.PhysicalCoursePricingRepository;
@@ -22,7 +21,6 @@ import com.menta.billing.application.port.out.PhysicalCourseQuoteRepository;
 import com.menta.billing.application.port.out.PlanRepository;
 import com.menta.billing.application.port.out.PurchaseRepository;
 import com.menta.billing.application.port.out.SubscriptionRepository;
-import com.menta.billing.application.port.out.VirtualAccessGrantPort;
 import com.menta.billing.application.port.out.WebhookInboxAppender;
 import com.menta.billing.application.port.out.WebhookSignatureVerifier;
 import com.menta.billing.application.usecase.CreatePhysicalCourseQuoteUseCaseImpl;
@@ -33,6 +31,8 @@ import com.menta.billing.application.usecase.ListPlansUseCaseImpl;
 import com.menta.billing.application.usecase.PaymentVerificationService;
 import com.menta.billing.application.usecase.ReceiveWebhookUseCaseImpl;
 import com.menta.billing.application.usecase.UpdatePhysicalCoursePricingUseCaseImpl;
+import com.menta.billing.application.usecase.VirtualCourseEntitlementService;
+import com.menta.shared.billing.VirtualCourseEntitlementPort;
 import com.menta.billing.infrastructure.security.RedisBillingPlansRateLimitPort;
 import com.menta.billing.infrastructure.transaction.TransactionalCreateSubscriptionCheckoutUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalReceiveWebhookUseCase;
@@ -106,14 +106,19 @@ public class BillingConfiguration {
     @Bean
     public PaymentVerificationService paymentVerificationService(
         PaymentRepository paymentRepository, PaymentProviderPort paymentProviderPort,
-        PurchaseRepository purchaseRepository, SubscriptionRepository subscriptionRepository,
-        PlanRepository planRepository, PhysicalCapacityAssignmentPort physicalCapacityAssignmentPort,
-        VirtualAccessGrantPort virtualAccessGrantPort, Clock clock
+        SubscriptionRepository subscriptionRepository, PlanRepository planRepository, Clock clock
     ) {
         return new PaymentVerificationService(
-            paymentRepository, paymentProviderPort, purchaseRepository, subscriptionRepository,
-            planRepository, physicalCapacityAssignmentPort, virtualAccessGrantPort, clock
+            paymentRepository, paymentProviderPort, subscriptionRepository, planRepository, clock
         );
+    }
+
+    /** ADR-0039: Virtual reads Billing's current subscription entitlement. */
+    @Bean
+    public VirtualCourseEntitlementPort virtualCourseEntitlementPort(
+        SubscriptionRepository subscriptionRepository, Clock clock
+    ) {
+        return new VirtualCourseEntitlementService(subscriptionRepository, clock);
     }
 
     /**

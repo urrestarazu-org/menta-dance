@@ -4,11 +4,8 @@ import com.menta.billing.application.dto.ProviderPaymentResult;
 import com.menta.billing.application.port.out.Clock;
 import com.menta.billing.application.port.out.PaymentProviderPort;
 import com.menta.billing.application.port.out.PaymentRepository;
-import com.menta.billing.application.port.out.PhysicalCapacityAssignmentPort;
 import com.menta.billing.application.port.out.PlanRepository;
-import com.menta.billing.application.port.out.PurchaseRepository;
 import com.menta.billing.application.port.out.SubscriptionRepository;
-import com.menta.billing.application.port.out.VirtualAccessGrantPort;
 import com.menta.billing.domain.exception.ProviderPaymentIdConflictException;
 import com.menta.billing.domain.model.Payment;
 import com.menta.billing.domain.model.PaymentStatus;
@@ -16,9 +13,7 @@ import com.menta.billing.domain.model.PaymentTarget;
 import com.menta.billing.domain.model.Plan;
 import com.menta.billing.domain.model.PlanId;
 import com.menta.billing.domain.model.ProviderOutcome;
-import com.menta.billing.domain.model.Purchase;
 import com.menta.billing.domain.model.Subscription;
-import java.util.List;
 import java.util.Optional;
 
 /**
@@ -46,35 +41,27 @@ import java.util.Optional;
  *
  * <p>{@link PaymentProviderPort#fetchPayment} failures are NOT caught here —
  * they propagate to the worker, which retains the inbox row for retry with
- * backoff (ADR-0038). Only the fulfillment ports ({@link
- * PhysicalCapacityAssignmentPort}/{@link VirtualAccessGrantPort}) are caught,
- * because their failure degrades to {@code EXCEPTION} fulfillment, never to
- * an unconfirmed payment.</p>
+ * backoff (ADR-0038). Virtual fulfillment is local: the verified payment
+ * activates Billing's subscription snapshot; Virtual queries that entitlement
+ * later (ADR-0039). Physical fulfillment is orchestrated by {@code api:app}
+ * under ADR-0028, not by this Billing worker.</p>
  */
 public final class PaymentVerificationService {
 
     private final PaymentRepository paymentRepository;
     private final PaymentProviderPort paymentProviderPort;
-    private final PurchaseRepository purchaseRepository;
     private final SubscriptionRepository subscriptionRepository;
     private final PlanRepository planRepository;
-    private final PhysicalCapacityAssignmentPort physicalCapacityAssignmentPort;
-    private final VirtualAccessGrantPort virtualAccessGrantPort;
     private final Clock clock;
 
     public PaymentVerificationService(
         PaymentRepository paymentRepository, PaymentProviderPort paymentProviderPort,
-        PurchaseRepository purchaseRepository, SubscriptionRepository subscriptionRepository,
-        PlanRepository planRepository, PhysicalCapacityAssignmentPort physicalCapacityAssignmentPort,
-        VirtualAccessGrantPort virtualAccessGrantPort, Clock clock
+        SubscriptionRepository subscriptionRepository, PlanRepository planRepository, Clock clock
     ) {
         this.paymentRepository = paymentRepository;
         this.paymentProviderPort = paymentProviderPort;
-        this.purchaseRepository = purchaseRepository;
         this.subscriptionRepository = subscriptionRepository;
         this.planRepository = planRepository;
-        this.physicalCapacityAssignmentPort = physicalCapacityAssignmentPort;
-        this.virtualAccessGrantPort = virtualAccessGrantPort;
         this.clock = clock;
     }
 
@@ -140,9 +127,9 @@ public final class PaymentVerificationService {
      *
      * <p>A completed payment still calls {@link #ensureFulfillment(Payment)}:
      * a duplicate or late webhook may arrive after the financial state was
-     * persisted but before its purchase or subscription was fulfilled. That
-     * operation is idempotent, so retrying it repairs this partial failure
-     * without creating duplicate fulfillment.
+     * persisted but before the virtual subscription snapshot was activated.
+     * That operation is idempotent, so retrying it repairs this partial
+     * failure without duplicating the entitlement.
      *
      * <p>Other terminal states ({@code Rejected}, {@code Cancelled}, and
      * {@code Expired}) have no fulfillment to recover and return immediately.
@@ -183,7 +170,9 @@ public final class PaymentVerificationService {
 
     private void ensureFulfillment(Payment payment) {
         switch (payment.getTarget()) {
-            case PaymentTarget.Physical physical -> ensurePurchase(payment, physical);
+            case PaymentTarget.Physical ignored -> {
+                // ADR-0028: api:app owns hold conversion and capacity assignment.
+            }
             case PaymentTarget.Virtual virtual -> ensureSubscription(payment, virtual);
         }
     }
@@ -194,20 +183,6 @@ public final class PaymentVerificationService {
                 .filter(Subscription::occupiesUserSlot)
                 .ifPresent(subscription -> subscriptionRepository.save(subscription.cancelled()));
         }
-    }
-
-    private void ensurePurchase(Payment payment, PaymentTarget.Physical physical) {
-        if (purchaseRepository.findByPaymentId(payment.getId()).isPresent()) {
-            return;
-        }
-        Purchase purchase = Purchase.pendingFulfillment(payment.getId(), physical.sessionId());
-        try {
-            physicalCapacityAssignmentPort.assign(physical.sessionId(), purchase.getId().toString());
-            purchase = purchase.assigned();
-        } catch (RuntimeException assignmentFailed) {
-            purchase = purchase.exception();
-        }
-        purchaseRepository.save(purchase);
     }
 
     /**
@@ -222,11 +197,16 @@ public final class PaymentVerificationService {
      */
     private void ensureSubscription(Payment payment, PaymentTarget.Virtual virtual) {
         Optional<Subscription> existing = subscriptionRepository.findByPaymentId(payment.getId());
-        if (existing.isEmpty() || existing.get().isActivated()) {
-            // Already activated: a replayed webhook must not move startDate,
-            // re-snapshot the plan, or re-grant access. Absent: only the
-            // checkout creates virtual payments and it writes both rows in one
-            // transaction, so there is nothing to activate and nothing to invent.
+        if (existing.isEmpty()) {
+            // Only the checkout creates virtual payments and writes both rows
+            // in one transaction, so there is nothing to activate or invent.
+            return;
+        }
+
+        if (existing.get().isActivated()) {
+            if (!existing.get().grantsAccess()) {
+                subscriptionRepository.save(existing.get().assigned());
+            }
             return;
         }
 
@@ -239,22 +219,6 @@ public final class PaymentVerificationService {
         Subscription activated = existing.get().activate(
             payment.confirmedAt().orElseGet(clock::now), plan.get().getDurationDays(), plan.get().courseIds()
         );
-        subscriptionRepository.save(grantAccess(activated, activated.getCourseIds()));
-    }
-
-    /**
-     * Grants access to every course in the snapshot. A single failure degrades
-     * the whole subscription to {@code EXCEPTION} — the payment stays settled
-     * either way (US-BILLING-010: settlement never waits on fulfillment).
-     */
-    private Subscription grantAccess(Subscription subscription, List<String> courseIds) {
-        try {
-            for (String courseId : courseIds) {
-                virtualAccessGrantPort.grant(courseId, subscription.getId().toString());
-            }
-            return subscription.assigned();
-        } catch (RuntimeException grantFailed) {
-            return subscription.exception();
-        }
+        subscriptionRepository.save(activated.assigned());
     }
 }

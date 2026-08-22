@@ -14,12 +14,11 @@ import java.util.UUID;
  * <ul>
  *   <li>{@link SubscriptionStatus} — the commercial lifecycle
  *       ({@code PENDING → ACTIVE → EXPIRED/CANCELLED}).</li>
- *   <li>{@link FulfillmentStatus} — whether Virtual actually granted access,
- *       the same axis {@link Purchase} uses. US-BILLING-010's integrity NFR
- *       requires an {@code ACTIVE} subscription whose grant failed to be
- *       representable ("un Payment puede quedar COMPLETED aunque el
- *       otorgamiento de acceso falle"), so collapsing the two would erase a
- *       state the business explicitly asks for.</li>
+ *   <li>{@link FulfillmentStatus} — whether Billing completed the local
+ *       entitlement snapshot. Virtual reads that snapshot through the shared
+ *       entitlement contract; it is not mutated from this aggregate
+ *       (ADR-0039). Keeping this axis separate preserves recoverable states
+ *       where a payment is completed but its snapshot is still exceptional.</li>
  * </ul>
  *
  * <p>{@code courseIds} is a <strong>snapshot</strong> taken at activation, not
@@ -119,14 +118,14 @@ public final class Subscription {
         );
     }
 
-    /** Virtual granted access to every course in the snapshot. */
+    /** Marks the locally stored entitlement snapshot as available to Virtual. */
     public Subscription assigned() {
         return copy(
             status, FulfillmentStatus.ASSIGNED, startDate, endDate, courseIds, providerPreferenceId, checkoutUrl
         );
     }
 
-    /** The access grant failed — the payment stays settled, this is a fulfillment exception. */
+    /** Snapshot activation failed; the settled payment remains recoverable on a later retry. */
     public Subscription exception() {
         return copy(
             status, FulfillmentStatus.EXCEPTION, startDate, endDate, courseIds, providerPreferenceId, checkoutUrl

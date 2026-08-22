@@ -15,16 +15,16 @@ import com.menta.billing.application.port.out.CourseCatalogPort;
 import com.menta.billing.application.port.out.PaymentPreferencePort;
 import com.menta.billing.application.port.out.PaymentProviderPort;
 import com.menta.billing.application.port.out.PaymentRepository;
-import com.menta.billing.application.port.out.PhysicalCapacityAssignmentPort;
 import com.menta.billing.application.port.out.PlanRepository;
 import com.menta.billing.application.port.out.PurchaseRepository;
 import com.menta.billing.application.port.out.SubscriptionRepository;
-import com.menta.billing.application.port.out.VirtualAccessGrantPort;
 import com.menta.billing.application.port.out.WebhookInboxAppender;
 import com.menta.billing.application.port.out.WebhookSignatureVerifier;
 import com.menta.billing.application.usecase.GetPlanUseCaseImpl;
 import com.menta.billing.application.usecase.ListPlansUseCaseImpl;
 import com.menta.billing.application.usecase.PaymentVerificationService;
+import com.menta.billing.application.usecase.VirtualCourseEntitlementService;
+import com.menta.shared.billing.VirtualCourseEntitlementPort;
 import com.menta.billing.infrastructure.security.RedisBillingPlansRateLimitPort;
 import com.menta.billing.infrastructure.transaction.TransactionalCreateSubscriptionCheckoutUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalReceiveWebhookUseCase;
@@ -50,12 +50,20 @@ class BillingConfigurationTest {
     @Test
     void wires_the_payment_verification_service_bean() {
         PaymentVerificationService service = configuration.paymentVerificationService(
-            mock(PaymentRepository.class), mock(PaymentProviderPort.class), mock(PurchaseRepository.class),
-            mock(SubscriptionRepository.class), mock(PlanRepository.class),
-            mock(PhysicalCapacityAssignmentPort.class), mock(VirtualAccessGrantPort.class), mock(Clock.class)
+            mock(PaymentRepository.class), mock(PaymentProviderPort.class), mock(SubscriptionRepository.class),
+            mock(PlanRepository.class), mock(Clock.class)
         );
 
         assertThat(service).isInstanceOf(PaymentVerificationService.class);
+    }
+
+    @Test
+    void wires_the_virtual_course_entitlement_port_bean() {
+        VirtualCourseEntitlementPort port = configuration.virtualCourseEntitlementPort(
+            mock(SubscriptionRepository.class), mock(Clock.class)
+        );
+
+        assertThat(port).isInstanceOf(VirtualCourseEntitlementService.class);
     }
 
     @Test
