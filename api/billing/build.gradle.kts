@@ -14,6 +14,10 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-validation")
+    // Authentication/GrantedAuthority for the physical pricing management endpoint
+    // (US-BILLING-009, #37) -- same dependency virtual/physical already declare
+    // for their own admin controllers.
+    implementation("org.springframework.boot:spring-boot-starter-security")
 
     // Redis (plans rate limiter)
     implementation("org.springframework.boot:spring-boot-starter-data-redis")

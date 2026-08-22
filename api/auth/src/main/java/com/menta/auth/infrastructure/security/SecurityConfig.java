@@ -9,6 +9,7 @@ import java.util.Set;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -34,6 +35,11 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *     (US-AUTH-005/006; the reset token itself is the temporary authorization).
  *   - /api/v1/billing/plans and /api/v1/billing/plans/** → permitAll
  *     (US-BILLING-001; public plan catalog, no account required to browse).
+ *   - GET /api/v1/billing/physical/courses/{courseId}/pricing → permitAll
+ *     (US-BILLING-009; reading a course's current price requires no
+ *     account). PUT on the same path is a separate rule below, restricted to
+ *     ADMIN/INSTRUCTOR — ownership of the specific course is checked in the
+ *     use case, not here.
  *   - /api/v1/catalog/courses and /api/v1/catalog/courses/** → permitAll
  *     (#95; public course catalog composed from Physical/Virtual, no
  *     account required to browse).
@@ -62,6 +68,11 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *     sessions, same first-match-wins ordering rationale. Ownership of the
  *     specific course a module/lesson belongs to is checked in the use
  *     case, never here.)
+ *   - PUT /api/v1/billing/physical/courses/{courseId}/pricing → ADMIN or
+ *     INSTRUCTOR (US-BILLING-009, #37; the GET permitAll rule above covers
+ *     the same path for reads — Spring Security matches per-HTTP-method, so
+ *     both rules apply to the same prefix without conflict. Ownership of
+ *     the specific course is checked in the use case, never here.)
  *   - everything else under /api/v1/admin/**    → requires ADMIN authority
  *   - everything else under /api/v1/instructor/** → requires INSTRUCTOR authority
  *   - other authenticated paths                 → fall-through via RoleAuthorizationManager.
@@ -102,6 +113,11 @@ public class SecurityConfig {
                     "/api/v1/catalog/courses",
                     "/api/v1/catalog/courses/**"
                 ).permitAll()
+                // US-BILLING-009, #37: reading a course's current price requires no account.
+                // The PUT rule below covers the same path for writes.
+                .requestMatchers(
+                    HttpMethod.GET, "/api/v1/billing/physical/courses/*/pricing"
+                ).permitAll()
                 .requestMatchers("/api/v1/auth/logout").authenticated()
                 .requestMatchers("/actuator/health").permitAll()
                 .requestMatchers("/api/v1/users/register").permitAll()
@@ -116,6 +132,11 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/admin/virtual/courses/**").hasAnyRole("ADMIN", "INSTRUCTOR")
                 .requestMatchers("/api/v1/admin/virtual/modules/**").hasAnyRole("ADMIN", "INSTRUCTOR")
                 .requestMatchers("/api/v1/admin/virtual/lessons/**").hasAnyRole("ADMIN", "INSTRUCTOR")
+                // US-BILLING-009, #37: PUT restricted to ADMIN/INSTRUCTOR; the GET rule
+                // above already covers this same path for reads (per-HTTP-method matching).
+                .requestMatchers(
+                    HttpMethod.PUT, "/api/v1/billing/physical/courses/*/pricing"
+                ).hasAnyRole("ADMIN", "INSTRUCTOR")
                 // Coarse-grained role gates.
                 .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/v1/instructor/**").hasRole("INSTRUCTOR")
