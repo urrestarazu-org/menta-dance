@@ -38,4 +38,10 @@ public class PaymentRepositoryAdapter implements PaymentRepository {
     public Optional<Payment> findByProviderPaymentId(String providerPaymentId) {
         return jpaRepository.findByProviderPaymentId(providerPaymentId).map(PaymentJpaMapper::toDomain);
     }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public Optional<Payment> findByExternalReference(String externalReference) {
+        return jpaRepository.findByExpectedExternalReference(externalReference).map(PaymentJpaMapper::toDomain);
+    }
 }

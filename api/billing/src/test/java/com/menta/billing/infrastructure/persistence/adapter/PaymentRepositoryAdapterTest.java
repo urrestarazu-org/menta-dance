@@ -15,6 +15,7 @@ import com.menta.billing.infrastructure.persistence.repository.PaymentJpaReposit
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -31,8 +32,9 @@ class PaymentRepositoryAdapterTest {
 
     private static Payment payment() {
         return new Payment(
-            PaymentId.generate(), "mp-1", Money.of(BigDecimal.TEN, "ARS"), "ext-1", "merchant-1",
-            new PaymentTarget.Physical("session-1"), new PaymentStatus.AwaitingProvider(), Instant.now()
+            PaymentId.generate(), UUID.randomUUID(), "mp-1", Money.of(BigDecimal.TEN, "ARS"), "ext-1",
+            "merchant-1", new PaymentTarget.Physical("session-1"), new PaymentStatus.AwaitingProvider(),
+            Instant.now()
         );
     }
 
@@ -77,5 +79,21 @@ class PaymentRepositoryAdapterTest {
         when(jpaRepository.findByProviderPaymentId("missing")).thenReturn(Optional.empty());
 
         assertThat(adapter.findByProviderPaymentId("missing")).isEmpty();
+    }
+
+    @Test
+    void findByExternalReference_maps_when_present() {
+        Payment payment = payment();
+        when(jpaRepository.findByExpectedExternalReference("ext-1"))
+            .thenReturn(Optional.of(PaymentJpaMapper.toEntity(payment)));
+
+        assertThat(adapter.findByExternalReference("ext-1")).isPresent();
+    }
+
+    @Test
+    void findByExternalReference_empty_when_absent() {
+        when(jpaRepository.findByExpectedExternalReference("missing")).thenReturn(Optional.empty());
+
+        assertThat(adapter.findByExternalReference("missing")).isEmpty();
     }
 }

@@ -1,7 +1,10 @@
 package com.menta.billing.domain.model;
 
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * A subscription plan (US-BILLING-001).
@@ -22,11 +25,12 @@ public final class Plan {
     private final String termsAndConditions;
     private final String cancellationPolicy;
     private final List<PlanCourse> courses;
+    private final Set<PaymentMethod> paymentMethods;
 
     public Plan(
         PlanId id, String name, String description, Money price, int durationDays,
         boolean featured, PlanStatus status, String termsAndConditions,
-        String cancellationPolicy, List<PlanCourse> courses
+        String cancellationPolicy, List<PlanCourse> courses, Set<PaymentMethod> paymentMethods
     ) {
         this.id = Objects.requireNonNull(id, "id cannot be null");
         this.name = Objects.requireNonNull(name, "name cannot be null");
@@ -41,10 +45,25 @@ public final class Plan {
         this.termsAndConditions = Objects.requireNonNull(termsAndConditions, "termsAndConditions cannot be null");
         this.cancellationPolicy = Objects.requireNonNull(cancellationPolicy, "cancellationPolicy cannot be null");
         this.courses = List.copyOf(Objects.requireNonNull(courses, "courses cannot be null"));
+        Objects.requireNonNull(paymentMethods, "paymentMethods cannot be null");
+        if (paymentMethods.isEmpty()) {
+            throw new IllegalArgumentException("paymentMethods cannot be empty");
+        }
+        this.paymentMethods = Collections.unmodifiableSet(EnumSet.copyOf(paymentMethods));
     }
 
     public boolean isActive() {
         return status == PlanStatus.ACTIVE;
+    }
+
+    /**
+     * US-BILLING-010 escenario 4b. The public catalog already publishes this
+     * set, so a correct client never asks for an unaccepted method — the
+     * check exists because the server cannot assume the client honoured the
+     * contract.
+     */
+    public boolean accepts(PaymentMethod paymentMethod) {
+        return paymentMethods.contains(paymentMethod);
     }
 
     public PlanId getId() {
@@ -85,5 +104,14 @@ public final class Plan {
 
     public List<PlanCourse> getCourses() {
         return courses;
+    }
+
+    public Set<PaymentMethod> getPaymentMethods() {
+        return paymentMethods;
+    }
+
+    /** The plan's courses as opaque cross-module ids — the shape a subscription snapshot freezes. */
+    public List<String> courseIds() {
+        return courses.stream().map(PlanCourse::getCourseId).toList();
     }
 }

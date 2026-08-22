@@ -16,6 +16,7 @@ public final class PaymentJpaMapper {
     public static Payment toDomain(PaymentJpaEntity entity) {
         return new Payment(
             PaymentId.of(entity.getId()),
+            entity.getUserId(),
             entity.getProviderPaymentId(),
             Money.of(entity.getExpectedAmount(), entity.getExpectedCurrency()),
             entity.getExpectedExternalReference(),
@@ -31,7 +32,8 @@ public final class PaymentJpaMapper {
         TargetColumns targetColumns = toTargetColumns(payment.getTarget());
         return new PaymentJpaEntity(
             payment.getId().getValue(),
-            payment.getProviderPaymentId(),
+            payment.getUserId(),
+            payment.getProviderPaymentId().orElse(null),
             payment.getExpectedAmount().getAmount(),
             payment.getExpectedAmount().getCurrency(),
             payment.getExpectedExternalReference(),
@@ -54,7 +56,7 @@ public final class PaymentJpaMapper {
     private static TargetColumns toTargetColumns(PaymentTarget target) {
         return switch (target) {
             case PaymentTarget.Physical physical -> new TargetColumns("PHYSICAL", physical.sessionId());
-            case PaymentTarget.Virtual virtual -> new TargetColumns("VIRTUAL", virtual.courseId());
+            case PaymentTarget.Virtual virtual -> new TargetColumns("VIRTUAL", virtual.planId());
         };
     }
 

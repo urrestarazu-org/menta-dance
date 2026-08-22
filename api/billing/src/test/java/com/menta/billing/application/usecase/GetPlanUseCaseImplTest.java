@@ -49,7 +49,8 @@ class GetPlanUseCaseImplTest {
     private static Plan plan(PlanId id) {
         return new Plan(
             id, "Plan Mensual", "desc", Money.of(BigDecimal.TEN, "ARS"), 30,
-            true, PlanStatus.ACTIVE, "terms", "cancellation", List.of()
+            true, PlanStatus.ACTIVE, "terms", "cancellation", List.of(),
+            java.util.Set.of(com.menta.billing.domain.model.PaymentMethod.MERCADO_PAGO)
         );
     }
 

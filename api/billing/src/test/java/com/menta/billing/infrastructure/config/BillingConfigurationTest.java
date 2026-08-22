@@ -5,12 +5,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.menta.billing.application.port.in.CreateSubscriptionCheckoutUseCase;
 import com.menta.billing.application.port.in.GetPlanUseCase;
 import com.menta.billing.application.port.in.ListPlansUseCase;
 import com.menta.billing.application.port.in.ReceiveWebhookUseCase;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.port.out.Clock;
 import com.menta.billing.application.port.out.CourseCatalogPort;
+import com.menta.billing.application.port.out.PaymentPreferencePort;
 import com.menta.billing.application.port.out.PaymentProviderPort;
 import com.menta.billing.application.port.out.PaymentRepository;
 import com.menta.billing.application.port.out.PhysicalCapacityAssignmentPort;
@@ -24,6 +26,7 @@ import com.menta.billing.application.usecase.GetPlanUseCaseImpl;
 import com.menta.billing.application.usecase.ListPlansUseCaseImpl;
 import com.menta.billing.application.usecase.PaymentVerificationService;
 import com.menta.billing.infrastructure.security.RedisBillingPlansRateLimitPort;
+import com.menta.billing.infrastructure.transaction.TransactionalCreateSubscriptionCheckoutUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalReceiveWebhookUseCase;
 import java.lang.reflect.Field;
 import org.junit.jupiter.api.Test;
@@ -48,11 +51,21 @@ class BillingConfigurationTest {
     void wires_the_payment_verification_service_bean() {
         PaymentVerificationService service = configuration.paymentVerificationService(
             mock(PaymentRepository.class), mock(PaymentProviderPort.class), mock(PurchaseRepository.class),
-            mock(SubscriptionRepository.class), mock(PhysicalCapacityAssignmentPort.class),
-            mock(VirtualAccessGrantPort.class), mock(Clock.class)
+            mock(SubscriptionRepository.class), mock(PlanRepository.class),
+            mock(PhysicalCapacityAssignmentPort.class), mock(VirtualAccessGrantPort.class), mock(Clock.class)
         );
 
         assertThat(service).isInstanceOf(PaymentVerificationService.class);
+    }
+
+    @Test
+    void wires_the_subscription_checkout_use_case_bean_transactionally() {
+        CreateSubscriptionCheckoutUseCase useCase = configuration.createSubscriptionCheckoutUseCase(
+            mock(PlanRepository.class), mock(PaymentRepository.class), mock(SubscriptionRepository.class),
+            mock(PaymentPreferencePort.class), mock(Clock.class), "merchant-1"
+        );
+
+        assertThat(useCase).isInstanceOf(TransactionalCreateSubscriptionCheckoutUseCase.class);
     }
 
     @Test

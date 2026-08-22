@@ -6,15 +6,16 @@ openapi: 3.1.0
 # revisa en el PR igual que la colección Bruno.
 #
 # Sólo describe endpoints IMPLEMENTADOS. El resto del contrato de
-# docs/06-BILLING-API.md (suscripciones, pagos, pricing presencial,
-# conciliación) no está acá porque todavía no existe.
+# docs/06-BILLING-API.md (pagos, pricing presencial y conciliación) no está
+# acá porque todavía no existe.
 
 info:
   title: Menta Dance — Billing API
   version: "1.0.0"
   description: |
-    Catálogo público de planes de suscripción (US-BILLING-001) y confirmación
-    de pago por webhook de Mercado Pago (US-BILLING-002).
+    Catálogo público de planes de suscripción (US-BILLING-001), inicio de
+    Checkout Pro (US-BILLING-010) y confirmación de pago por webhook de
+    Mercado Pago (US-BILLING-002).
 
     ## Errores
 
@@ -36,6 +37,8 @@ servers:
 tags:
   - name: Planes
     description: Catálogo público de planes de suscripción.
+  - name: Suscripciones
+    description: Inicio autenticado de checkouts de suscripción virtual.
   - name: Webhooks
     description: Notificaciones asíncronas de proveedores de pago.
 
@@ -105,6 +108,92 @@ paths:
         '503':
           $ref: '#/components/responses/BillingDegraded'
 
+  /api/v1/billing/subscriptions:
+    post:
+      tags: [Suscripciones]
+      summary: Iniciar Checkout Pro para una suscripción
+      description: |
+        Crea localmente un pago y una suscripción `PENDING` antes de pedir la
+        preferencia a Mercado Pago. El usuario siempre se obtiene del access
+        token, nunca del body. Repetir la misma `idempotencyKey` para ese
+        usuario devuelve el checkout original y no crea un segundo cobro.
+
+        `checkoutUrl` sólo sirve para navegar al Checkout Pro. La confirmación
+        financiera llega exclusivamente por el webhook firmado.
+      operationId: createSubscriptionCheckout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSubscriptionCheckoutRequest'
+      responses:
+        '201':
+          description: Suscripción pendiente y preferencia de Checkout Pro creadas.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionCheckoutResponse'
+        '400':
+          description: Body inválido o `planId` mal formado.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Falta un access token válido.
+        '409':
+          description: El usuario ya tiene un checkout pendiente o una suscripción activa.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                subscription_already_active:
+                  value:
+                    type: https://menta.dance/problems/subscription_already_active
+                    title: Conflict
+                    status: 409
+                    detail: Ya tenés una suscripción vigente.
+                    code: SUBSCRIPTION_ALREADY_ACTIVE
+                    currentEndDate: '2026-09-17T12:00:00Z'
+        '422':
+          description: El plan no está disponible o no acepta el medio de pago.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                plan_not_available:
+                  value:
+                    type: https://menta.dance/problems/plan_not_available
+                    title: Unprocessable Entity
+                    status: 422
+                    detail: El plan no está disponible para suscribirse.
+                    code: PLAN_NOT_AVAILABLE
+                payment_method_not_accepted:
+                  value:
+                    type: https://menta.dance/problems/payment_method_not_accepted
+                    title: Unprocessable Entity
+                    status: 422
+                    detail: El plan no acepta el método de pago solicitado.
+                    code: PAYMENT_METHOD_NOT_ACCEPTED
+                    acceptedPaymentMethods: [MERCADO_PAGO]
+        '503':
+          description: No fue posible crear la preferencia; no se creó un cobro.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                payment_preference_unavailable:
+                  value:
+                    type: https://menta.dance/problems/payment_preference_unavailable
+                    title: Service Unavailable
+                    status: 503
+                    detail: No pudimos iniciar el pago en este momento. Intentá de nuevo en unos minutos.
+                    code: PAYMENT_PREFERENCE_UNAVAILABLE
+
   /api/v1/billing/payments/mercadopago/webhook:
     post:
       tags: [Webhooks]
@@ -163,6 +252,13 @@ paths:
                     code: WEBHOOK_TIMESTAMP_EXPIRED
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token JWT emitido por Auth.
+
   responses:
     PlanRateLimited:
       description: Presupuesto de 60 req/min por IP agotado.
@@ -221,6 +317,59 @@ components:
           type: string
         code:
           type: string
+        currentEndDate:
+          type: string
+          format: date-time
+          description: Fecha de vencimiento de la suscripción que bloquea el checkout, si ya fue activada.
+        acceptedPaymentMethods:
+          type: array
+          description: Medios de pago que acepta el plan cuando se rechaza el solicitado.
+          items:
+            type: string
+
+    CreateSubscriptionCheckoutRequest:
+      type: object
+      required: [planId, paymentMethod, idempotencyKey]
+      properties:
+        planId:
+          type: string
+          format: uuid
+        paymentMethod:
+          type: string
+          enum: [MERCADO_PAGO]
+          description: Este endpoint implementa exclusivamente Checkout Pro. La transferencia bancaria se incorporará con su propio flujo en US-BILLING-003.
+        idempotencyKey:
+          type: string
+          minLength: 1
+          maxLength: 128
+
+    SubscriptionCheckoutResponse:
+      type: object
+      required:
+        [subscriptionId, paymentId, planId, status, providerPreferenceId, externalReference, checkoutUrl]
+      properties:
+        subscriptionId:
+          type: string
+          format: uuid
+        paymentId:
+          type: string
+          format: uuid
+        planId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PENDING]
+        providerPreferenceId:
+          type: string
+          description: Identificador de la preferencia de Checkout Pro, no del pago.
+        externalReference:
+          type: string
+          description: Referencia local usada para correlacionar el webhook verificado.
+        checkoutUrl:
+          type: string
+          format: uri
+          description: URL de redirección al Checkout Pro.
 
     PlanCourseResponse:
       type: object
@@ -298,3 +447,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PlanCourseResponse'
+
+security:
+  - bearerAuth: []

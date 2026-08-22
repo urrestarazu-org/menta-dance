@@ -14,6 +14,12 @@ import java.util.UUID;
  * status_reason} ({@code ReconciliationRequired}'s message) and {@code
  * status_changed_at} (the terminal states' instant — one column for all
  * four, since only one is ever set at a time). See {@code PaymentJpaMapper}.
+ *
+ * <p>{@code provider_payment_id} is nullable and {@code
+ * expected_external_reference} is the unique correlation key
+ * (US-BILLING-010): a Checkout Pro payment has no provider id until the buyer
+ * actually pays. MySQL's UNIQUE indexes admit any number of NULLs, so the
+ * uniqueness of the non-null ids survives the change.</p>
  */
 @Entity
 @Table(name = "billing_payments")
@@ -23,7 +29,10 @@ public class PaymentJpaEntity {
     @Column(name = "id", columnDefinition = "BINARY(16)", updatable = false, nullable = false)
     private UUID id;
 
-    @Column(name = "provider_payment_id", nullable = false, unique = true)
+    @Column(name = "user_id", columnDefinition = "BINARY(16)", nullable = false, updatable = false)
+    private UUID userId;
+
+    @Column(name = "provider_payment_id", unique = true)
     private String providerPaymentId;
 
     @Column(name = "expected_amount", nullable = false, columnDefinition = "DECIMAL(10,2)")
@@ -32,7 +41,7 @@ public class PaymentJpaEntity {
     @Column(name = "expected_currency", nullable = false, columnDefinition = "CHAR(3)")
     private String expectedCurrency;
 
-    @Column(name = "expected_external_reference", nullable = false)
+    @Column(name = "expected_external_reference", nullable = false, unique = true)
     private String expectedExternalReference;
 
     @Column(name = "expected_merchant_account_id", nullable = false)
@@ -61,12 +70,13 @@ public class PaymentJpaEntity {
     }
 
     public PaymentJpaEntity(
-        UUID id, String providerPaymentId, BigDecimal expectedAmount, String expectedCurrency,
+        UUID id, UUID userId, String providerPaymentId, BigDecimal expectedAmount, String expectedCurrency,
         String expectedExternalReference, String expectedMerchantAccountId, String targetModality,
         String targetReference, String statusType, String statusReason, Instant statusChangedAt,
         Instant createdAt
     ) {
         this.id = id;
+        this.userId = userId;
         this.providerPaymentId = providerPaymentId;
         this.expectedAmount = expectedAmount;
         this.expectedCurrency = expectedCurrency;
@@ -82,6 +92,10 @@ public class PaymentJpaEntity {
 
     public UUID getId() {
         return id;
+    }
+
+    public UUID getUserId() {
+        return userId;
     }
 
     public String getProviderPaymentId() {

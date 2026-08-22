@@ -1,0 +1,59 @@
+meta {
+  name: Create Subscription Checkout
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/billing/subscriptions
+  body: json
+  auth: bearer
+}
+
+headers {
+  content-type: application/json
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "planId": "{{planId}}",
+    "paymentMethod": "MERCADO_PAGO",
+    "idempotencyKey": "{{subscriptionIdempotencyKey}}"
+  }
+}
+
+docs {
+  Starts Mercado Pago Checkout Pro for the authenticated user. Run Auth Login
+  first, then set runtime variables:
+    - planId: an ACTIVE plan that accepts MERCADO_PAGO;
+    - subscriptionIdempotencyKey: a unique value for a new checkout.
+
+  Reuse the same idempotency key only to retrieve the original checkout. A new
+  key while the user has a PENDING or ACTIVE subscription returns
+  409 SUBSCRIPTION_ALREADY_ACTIVE.
+
+  Success contract (201):
+    { subscriptionId, paymentId, planId, status: "PENDING",
+      providerPreferenceId, externalReference, checkoutUrl }
+
+  checkoutUrl is a browser-navigation URL, not payment confirmation. The
+  signed Mercado Pago webhook remains the source of truth for settlement.
+}
+
+tests {
+  test("Creates a pending checkout", function() {
+    expect(res.getStatus()).to.equal(201);
+    expect(res.getBody().status).to.equal("PENDING");
+    expect(res.getBody().checkoutUrl).to.be.a("string").and.not.empty;
+    expect(res.getBody().providerPreferenceId).to.be.a("string").and.not.empty;
+    expect(res.getBody().externalReference).to.be.a("string").and.not.empty;
+  });
+}
+
+assert {
+  res.status: eq 201
+}

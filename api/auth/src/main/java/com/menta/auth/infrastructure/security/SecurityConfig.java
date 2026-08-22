@@ -46,6 +46,10 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *     matcher only proves the caller holds a valid Bearer token, since an
  *     unmapped path otherwise falls through to a grant via {@code
  *     RoleAuthorizationManager}).
+ *   - POST /api/v1/billing/subscriptions → authenticated (any role)
+ *     (US-BILLING-010, #116; the subscription and its payment are bound to
+ *     the token's user — the client never says whose they are. Same
+ *     explicit-matcher reasoning as the quotes rule above.)
  *   - /api/v1/catalog/courses and /api/v1/catalog/courses/** → permitAll
  *     (#95; public course catalog composed from Physical/Virtual, no
  *     account required to browse).
@@ -129,6 +133,11 @@ public class SecurityConfig {
                 // restriction, and this path is otherwise unmapped so it would fall
                 // through to a grant without this explicit rule.
                 .requestMatchers(HttpMethod.POST, "/api/v1/billing/physical/quotes").authenticated()
+                // US-BILLING-010, #116: any authenticated user may open a subscription
+                // checkout. Declared before the generic /api/v1/admin/** gate below and
+                // before anyRequest(), same first-match-wins ordering as #37 and #34.
+                // The owning user comes from the token, never from the body.
+                .requestMatchers(HttpMethod.POST, "/api/v1/billing/subscriptions").authenticated()
                 .requestMatchers("/actuator/health").permitAll()
                 .requestMatchers("/api/v1/users/register").permitAll()
                 // #42: ADMIN and INSTRUCTOR share this prefix; ownership of a specific

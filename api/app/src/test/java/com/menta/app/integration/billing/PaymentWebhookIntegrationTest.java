@@ -131,8 +131,9 @@ class PaymentWebhookIntegrationTest {
     private UUID seedPendingPhysicalPayment(String providerPaymentId) {
         UUID id = UUID.randomUUID();
         paymentRepository.save(new PaymentJpaEntity(
-            id, providerPaymentId, new BigDecimal("100.00"), "ARS", "ext-1", "merchant-1",
-            "PHYSICAL", "session-1", "AWAITING_PROVIDER", null, null, Instant.now()
+            id, UUID.randomUUID(), providerPaymentId, new BigDecimal("100.00"), "ARS",
+            "ext-1", "merchant-1", "PHYSICAL", "session-1", "AWAITING_PROVIDER",
+            null, null, Instant.now()
         ));
         return id;
     }

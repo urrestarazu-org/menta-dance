@@ -1,6 +1,7 @@
 package com.menta.billing.infrastructure.config;
 
 import com.menta.billing.application.port.in.CreatePhysicalCourseQuoteUseCase;
+import com.menta.billing.application.port.in.CreateSubscriptionCheckoutUseCase;
 import com.menta.billing.application.port.in.GetPhysicalCoursePricingUseCase;
 import com.menta.billing.application.port.in.GetPlanUseCase;
 import com.menta.billing.application.port.in.ListPlansUseCase;
@@ -9,6 +10,7 @@ import com.menta.billing.application.port.in.UpdatePhysicalCoursePricingUseCase;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.port.out.Clock;
 import com.menta.billing.application.port.out.CourseCatalogPort;
+import com.menta.billing.application.port.out.PaymentPreferencePort;
 import com.menta.billing.application.port.out.PaymentProviderPort;
 import com.menta.billing.application.port.out.PaymentRepository;
 import com.menta.billing.application.port.out.PhysicalCapacityAssignmentPort;
@@ -24,6 +26,7 @@ import com.menta.billing.application.port.out.VirtualAccessGrantPort;
 import com.menta.billing.application.port.out.WebhookInboxAppender;
 import com.menta.billing.application.port.out.WebhookSignatureVerifier;
 import com.menta.billing.application.usecase.CreatePhysicalCourseQuoteUseCaseImpl;
+import com.menta.billing.application.usecase.CreateSubscriptionCheckoutUseCaseImpl;
 import com.menta.billing.application.usecase.GetPhysicalCoursePricingUseCaseImpl;
 import com.menta.billing.application.usecase.GetPlanUseCaseImpl;
 import com.menta.billing.application.usecase.ListPlansUseCaseImpl;
@@ -31,6 +34,7 @@ import com.menta.billing.application.usecase.PaymentVerificationService;
 import com.menta.billing.application.usecase.ReceiveWebhookUseCaseImpl;
 import com.menta.billing.application.usecase.UpdatePhysicalCoursePricingUseCaseImpl;
 import com.menta.billing.infrastructure.security.RedisBillingPlansRateLimitPort;
+import com.menta.billing.infrastructure.transaction.TransactionalCreateSubscriptionCheckoutUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalReceiveWebhookUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalUpdatePhysicalCoursePricingUseCase;
 import jakarta.annotation.PostConstruct;
@@ -103,13 +107,35 @@ public class BillingConfiguration {
     public PaymentVerificationService paymentVerificationService(
         PaymentRepository paymentRepository, PaymentProviderPort paymentProviderPort,
         PurchaseRepository purchaseRepository, SubscriptionRepository subscriptionRepository,
-        PhysicalCapacityAssignmentPort physicalCapacityAssignmentPort,
+        PlanRepository planRepository, PhysicalCapacityAssignmentPort physicalCapacityAssignmentPort,
         VirtualAccessGrantPort virtualAccessGrantPort, Clock clock
     ) {
         return new PaymentVerificationService(
             paymentRepository, paymentProviderPort, purchaseRepository, subscriptionRepository,
-            physicalCapacityAssignmentPort, virtualAccessGrantPort, clock
+            planRepository, physicalCapacityAssignmentPort, virtualAccessGrantPort, clock
         );
+    }
+
+    /**
+     * US-BILLING-010. Wrapped in a transactional decorator, unlike {@code
+     * createPhysicalCourseQuoteUseCase}: a checkout writes a Payment, a
+     * Subscription and its preference, and a rejected one must leave none of
+     * them behind.
+     *
+     * <p>{@code merchantAccountId} is configuration, never client input — it
+     * is the value {@code Payment.matchesExpected} will later demand from the
+     * provider's response.</p>
+     */
+    @Bean
+    public CreateSubscriptionCheckoutUseCase createSubscriptionCheckoutUseCase(
+        PlanRepository planRepository, PaymentRepository paymentRepository,
+        SubscriptionRepository subscriptionRepository, PaymentPreferencePort paymentPreferencePort, Clock clock,
+        @Value("${billing.mercadopago.merchant-account-id:}") String merchantAccountId
+    ) {
+        return new TransactionalCreateSubscriptionCheckoutUseCase(new CreateSubscriptionCheckoutUseCaseImpl(
+            planRepository, paymentRepository, subscriptionRepository, paymentPreferencePort, clock,
+            merchantAccountId
+        ));
     }
 
     @Bean
