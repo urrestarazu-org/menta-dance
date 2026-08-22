@@ -125,6 +125,36 @@ propietario o `ADMIN` cambiar `monthlyPrice` e `individualSurchargePercent` con
 motivo. Billing valida ownership mediante puerto, versiona el pricing y registra
 una revisión append-only; los quotes existentes no cambian.
 
+## Cotización de curso presencial (US-BILLING-006)
+
+`POST /billing/physical/quotes` requiere cualquier usuario autenticado (sin
+restricción de rol) y crea un quote inmutable, válido durante **una hora**.
+Body: `{ "courseId": string, "purchaseType": "MONTHLY" | "INDIVIDUAL",
+"selectedSessionId": string | null }`. `selectedSessionId` es obligatorio para
+`INDIVIDUAL` y no debe enviarse para `MONTHLY` (`422
+SELECTED_SESSION_REQUIRED` / `422 SELECTED_SESSION_NOT_ALLOWED`).
+
+El período cotizado es siempre un mes calendario según el reloj del servidor
+(`ZoneOffset.UTC`, sin campo de fecha en el request): para `MONTHLY` es el mes
+calendario "actual"; para `INDIVIDUAL` es el mes calendario que contiene el
+`scheduledAt` de la sesión elegida (no necesariamente el mes "actual" cerca de
+un cambio de mes).
+
+Respuesta (`201`): `{ id, courseId, purchaseType, scheduledSessionCount,
+selectedSessionId, amount, currency, availability, pricingVersion, createdAt,
+expiresAt }`. `MONTHLY` no fija `selectedSessionId` ni cobertura — sólo el
+importe mensual snapshot y una proyección informativa de `availability`.
+`INDIVIDUAL` divide el precio mensual entre `scheduledSessionCount` con alta
+precisión, aplica el recargo y redondea `HALF_UP` a dos decimales; si el
+resultado no supera por al menos un centavo el precio por sesión sin recargo,
+responde `422 INDIVIDUAL_SURCHARGE_TOO_SMALL` y no persiste nada.
+
+Errores: `404 PHYSICAL_COURSE_PRICING_NOT_FOUND` (sin pricing publicado),
+`404 PHYSICAL_SESSION_NOT_FOUND` (`selectedSessionId` fuera del período),
+`422 NO_SCHEDULED_SESSIONS` (sin sesiones `SCHEDULED` en el período). La
+disponibilidad (`AVAILABLE`/`UNAVAILABLE`) es sólo informativa para la UI — el
+checkout (fuera de esta historia) es quien reserva o rechaza cupo de verdad.
+
 ## Transferencias bancarias
 
 Una transferencia crea `PENDING/AWAITING_MANUAL_VERIFICATION` y recibe un comprobante privado.
