@@ -53,6 +53,12 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *   - /api/v1/catalog/courses and /api/v1/catalog/courses/** → permitAll
  *     (#95; public course catalog composed from Physical/Virtual, no
  *     account required to browse).
+ *   - GET /api/v1/virtual/lessons and /api/v1/virtual/lessons/** → permitAll
+ *     (#48, US-VIRTUAL-003; public lesson-detail read. Free lessons
+ *     resolve without an account; callers with no entitlement on a
+ *     premium lesson hit the public advice chain — anonymous → 403
+ *     ProblemDetail, identified-but-not-subscribed → 200 with
+ *     {@code access.allowed=false}).
  *   - /api/v1/billing/payments/mercadopago/webhook → permitAll
  *     (US-BILLING-002; Mercado Pago has no Bearer token — the controller's
  *     own HMAC signature verification is the authorization mechanism).
@@ -121,7 +127,9 @@ public class SecurityConfig {
                     "/api/v1/billing/plans/**",
                     "/api/v1/billing/payments/mercadopago/webhook",
                     "/api/v1/catalog/courses",
-                    "/api/v1/catalog/courses/**"
+                    "/api/v1/catalog/courses/**",
+                    "/api/v1/virtual/lessons",
+                    "/api/v1/virtual/lessons/**"
                 ).permitAll()
                 // US-BILLING-009, #37: reading a course's current price requires no account.
                 // The PUT rule below covers the same path for writes.
