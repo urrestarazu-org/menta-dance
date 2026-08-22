@@ -1,5 +1,6 @@
 package com.menta.billing.infrastructure.config;
 
+import com.menta.billing.application.port.in.CreatePhysicalCourseQuoteUseCase;
 import com.menta.billing.application.port.in.GetPhysicalCoursePricingUseCase;
 import com.menta.billing.application.port.in.GetPlanUseCase;
 import com.menta.billing.application.port.in.ListPlansUseCase;
@@ -11,15 +12,18 @@ import com.menta.billing.application.port.out.CourseCatalogPort;
 import com.menta.billing.application.port.out.PaymentProviderPort;
 import com.menta.billing.application.port.out.PaymentRepository;
 import com.menta.billing.application.port.out.PhysicalCapacityAssignmentPort;
+import com.menta.billing.application.port.out.PhysicalCourseAvailabilityPort;
 import com.menta.billing.application.port.out.PhysicalCourseOwnershipPort;
 import com.menta.billing.application.port.out.PhysicalCoursePricingRepository;
 import com.menta.billing.application.port.out.PhysicalCoursePricingRevisionRepository;
+import com.menta.billing.application.port.out.PhysicalCourseQuoteRepository;
 import com.menta.billing.application.port.out.PlanRepository;
 import com.menta.billing.application.port.out.PurchaseRepository;
 import com.menta.billing.application.port.out.SubscriptionRepository;
 import com.menta.billing.application.port.out.VirtualAccessGrantPort;
 import com.menta.billing.application.port.out.WebhookInboxAppender;
 import com.menta.billing.application.port.out.WebhookSignatureVerifier;
+import com.menta.billing.application.usecase.CreatePhysicalCourseQuoteUseCaseImpl;
 import com.menta.billing.application.usecase.GetPhysicalCoursePricingUseCaseImpl;
 import com.menta.billing.application.usecase.GetPlanUseCaseImpl;
 import com.menta.billing.application.usecase.ListPlansUseCaseImpl;
@@ -148,5 +152,19 @@ public class BillingConfiguration {
         return new TransactionalUpdatePhysicalCoursePricingUseCase(new UpdatePhysicalCoursePricingUseCaseImpl(
             physicalCourseOwnershipPort, pricingRepository, revisionRepository, clock
         ));
+    }
+
+    /**
+     * No {@code Transactional*UseCase} decorator here, unlike {@code
+     * updatePhysicalCoursePricingUseCase} above — a quote is a single
+     * immutable insert, not two writes that must commit atomically
+     * (US-BILLING-006).
+     */
+    @Bean
+    public CreatePhysicalCourseQuoteUseCase createPhysicalCourseQuoteUseCase(
+        PhysicalCoursePricingRepository pricingRepository, PhysicalCourseAvailabilityPort availabilityPort,
+        PhysicalCourseQuoteRepository quoteRepository, Clock clock
+    ) {
+        return new CreatePhysicalCourseQuoteUseCaseImpl(pricingRepository, availabilityPort, quoteRepository, clock);
     }
 }

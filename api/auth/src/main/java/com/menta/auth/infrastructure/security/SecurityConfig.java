@@ -40,6 +40,12 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *     account). PUT on the same path is a separate rule below, restricted to
  *     ADMIN/INSTRUCTOR — ownership of the specific course is checked in the
  *     use case, not here.
+ *   - POST /api/v1/billing/physical/quotes → authenticated (any role)
+ *     (US-BILLING-006; a quote is not persisted for an anonymous caller. No
+ *     specific role is required and no coarse role gate applies here — this
+ *     matcher only proves the caller holds a valid Bearer token, since an
+ *     unmapped path otherwise falls through to a grant via {@code
+ *     RoleAuthorizationManager}).
  *   - /api/v1/catalog/courses and /api/v1/catalog/courses/** → permitAll
  *     (#95; public course catalog composed from Physical/Virtual, no
  *     account required to browse).
@@ -119,6 +125,10 @@ public class SecurityConfig {
                     HttpMethod.GET, "/api/v1/billing/physical/courses/*/pricing"
                 ).permitAll()
                 .requestMatchers("/api/v1/auth/logout").authenticated()
+                // US-BILLING-006: any authenticated user may request a quote — no role
+                // restriction, and this path is otherwise unmapped so it would fall
+                // through to a grant without this explicit rule.
+                .requestMatchers(HttpMethod.POST, "/api/v1/billing/physical/quotes").authenticated()
                 .requestMatchers("/actuator/health").permitAll()
                 .requestMatchers("/api/v1/users/register").permitAll()
                 // #42: ADMIN and INSTRUCTOR share this prefix; ownership of a specific
