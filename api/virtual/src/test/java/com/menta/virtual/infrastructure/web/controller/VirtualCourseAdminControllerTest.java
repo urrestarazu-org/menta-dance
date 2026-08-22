@@ -1,12 +1,17 @@
 package com.menta.virtual.infrastructure.web.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.menta.virtual.application.dto.VirtualCourseAdminDetailView;
 import com.menta.virtual.application.dto.VirtualCourseManagementResult;
+import com.menta.virtual.application.dto.VirtualCourseStats;
+import com.menta.virtual.application.dto.VirtualLessonAdminSummary;
+import com.menta.virtual.application.dto.VirtualModuleAdminDetail;
 import com.menta.virtual.application.dto.VirtualModuleManagementResult;
 import com.menta.virtual.application.port.in.CreateVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.CreateVirtualModuleUseCase;
@@ -16,15 +21,20 @@ import com.menta.virtual.application.port.in.PublishVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.ReorderVirtualModulesUseCase;
 import com.menta.virtual.application.port.in.UnpublishVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.UpdateVirtualCourseUseCase;
+import com.menta.virtual.application.port.in.VirtualCourseCatalogPort;
+import com.menta.virtual.domain.exception.CourseNotFoundException;
+import com.menta.virtual.domain.model.CourseStatus;
 import com.menta.virtual.infrastructure.web.dto.CreateVirtualCourseRequest;
 import com.menta.virtual.infrastructure.web.dto.CreateVirtualModuleRequest;
 import com.menta.virtual.infrastructure.web.dto.ReorderVirtualModulesRequest;
 import com.menta.virtual.infrastructure.web.dto.UpdateVirtualCourseRequest;
+import com.menta.virtual.infrastructure.web.dto.VirtualCourseAdminDetailResponse;
 import com.menta.virtual.infrastructure.web.dto.VirtualCourseManagementListResponse;
 import com.menta.virtual.infrastructure.web.dto.VirtualCourseManagementResponse;
 import com.menta.virtual.infrastructure.web.dto.VirtualModuleManagementListResponse;
 import com.menta.virtual.infrastructure.web.dto.VirtualModuleManagementResponse;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,6 +54,7 @@ class VirtualCourseAdminControllerTest {
     private UnpublishVirtualCourseUseCase unpublishUseCase;
     private CreateVirtualModuleUseCase createModuleUseCase;
     private ReorderVirtualModulesUseCase reorderUseCase;
+    private VirtualCourseCatalogPort catalogPort;
     private VirtualCourseAdminController controller;
 
     @BeforeEach
@@ -56,9 +67,10 @@ class VirtualCourseAdminControllerTest {
         unpublishUseCase = mock(UnpublishVirtualCourseUseCase.class);
         createModuleUseCase = mock(CreateVirtualModuleUseCase.class);
         reorderUseCase = mock(ReorderVirtualModulesUseCase.class);
+        catalogPort = mock(VirtualCourseCatalogPort.class);
         controller = new VirtualCourseAdminController(
             createUseCase, listUseCase, updateUseCase, deleteUseCase, publishUseCase, unpublishUseCase,
-            createModuleUseCase, reorderUseCase
+            createModuleUseCase, reorderUseCase, catalogPort
         );
     }
 
@@ -178,5 +190,85 @@ class VirtualCourseAdminControllerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().modules()).hasSize(1);
+    }
+
+    private static VirtualCourseAdminDetailView adminView(CourseStatus status, String videoId) {
+        return new VirtualCourseAdminDetailView(
+            UUID.randomUUID().toString(),
+            "Tango Básico",
+            "Descripción larga",
+            "https://cdn/tango.jpg",
+            "tango",
+            "BEGINNER",
+            true,
+            status,
+            List.of(new VirtualModuleAdminDetail(
+                UUID.randomUUID().toString(),
+                "Introducción",
+                1,
+                List.of(new VirtualLessonAdminSummary(
+                    UUID.randomUUID().toString(),
+                    "Historia",
+                    30,
+                    true,
+                    1,
+                    videoId
+                ))
+            )),
+            new VirtualCourseStats(1, 1, 30)
+        );
+    }
+
+    @Test
+    void get_returns_200_with_detail_for_a_DRAFT_course() {
+        String courseId = UUID.randomUUID().toString();
+        when(catalogPort.findByIdForAdmin(courseId))
+            .thenReturn(Optional.of(adminView(CourseStatus.DRAFT, "vid-draft")));
+
+        ResponseEntity<VirtualCourseAdminDetailResponse> response = controller.get(courseId);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().status()).isEqualTo("DRAFT");
+        assertThat(response.getBody().modules().get(0).lessons().get(0).videoId()).isEqualTo("vid-draft");
+    }
+
+    @Test
+    void get_returns_200_with_detail_for_a_PUBLISHED_course() {
+        String courseId = UUID.randomUUID().toString();
+        when(catalogPort.findByIdForAdmin(courseId))
+            .thenReturn(Optional.of(adminView(CourseStatus.PUBLISHED, "vid-published")));
+
+        ResponseEntity<VirtualCourseAdminDetailResponse> response = controller.get(courseId);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().status()).isEqualTo("PUBLISHED");
+        assertThat(response.getBody().modules().get(0).lessons().get(0).videoId()).isEqualTo("vid-published");
+    }
+
+    @Test
+    void get_returns_200_with_detail_for_an_ARCHIVED_course() {
+        String courseId = UUID.randomUUID().toString();
+        when(catalogPort.findByIdForAdmin(courseId))
+            .thenReturn(Optional.of(adminView(CourseStatus.ARCHIVED, "vid-archived")));
+
+        ResponseEntity<VirtualCourseAdminDetailResponse> response = controller.get(courseId);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().status()).isEqualTo("ARCHIVED");
+        assertThat(response.getBody().modules().get(0).lessons().get(0).videoId()).isEqualTo("vid-archived");
+    }
+
+    @Test
+    void get_throws_CourseNotFoundException_when_courseId_does_not_exist() {
+        // The @RestControllerAdvice maps CourseNotFoundException to a 404
+        // ProblemDetail (see VirtualCourseExceptionHandler) — the unit
+        // assertion here is the side: the controller raises the right
+        // domain exception, NOT a generic ResponseStatusException or a
+        // silently-empty 200.
+        String courseId = UUID.randomUUID().toString();
+        when(catalogPort.findByIdForAdmin(courseId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> controller.get(courseId))
+            .isInstanceOf(CourseNotFoundException.class);
     }
 }

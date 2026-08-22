@@ -4,6 +4,7 @@ import com.menta.virtual.application.dto.CreateVirtualCourseCommand;
 import com.menta.virtual.application.dto.CreateVirtualModuleCommand;
 import com.menta.virtual.application.dto.ReorderVirtualModulesCommand;
 import com.menta.virtual.application.dto.UpdateVirtualCourseCommand;
+import com.menta.virtual.application.dto.VirtualCourseAdminDetailView;
 import com.menta.virtual.application.dto.VirtualCourseManagementResult;
 import com.menta.virtual.application.dto.VirtualModuleManagementResult;
 import com.menta.virtual.application.port.in.CreateVirtualCourseUseCase;
@@ -14,10 +15,13 @@ import com.menta.virtual.application.port.in.PublishVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.ReorderVirtualModulesUseCase;
 import com.menta.virtual.application.port.in.UnpublishVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.UpdateVirtualCourseUseCase;
+import com.menta.virtual.application.port.in.VirtualCourseCatalogPort;
+import com.menta.virtual.domain.exception.CourseNotFoundException;
 import com.menta.virtual.infrastructure.web.dto.CreateVirtualCourseRequest;
 import com.menta.virtual.infrastructure.web.dto.CreateVirtualModuleRequest;
 import com.menta.virtual.infrastructure.web.dto.ReorderVirtualModulesRequest;
 import com.menta.virtual.infrastructure.web.dto.UpdateVirtualCourseRequest;
+import com.menta.virtual.infrastructure.web.dto.VirtualCourseAdminDetailResponse;
 import com.menta.virtual.infrastructure.web.dto.VirtualCourseManagementListResponse;
 import com.menta.virtual.infrastructure.web.dto.VirtualCourseManagementResponse;
 import com.menta.virtual.infrastructure.web.dto.VirtualModuleManagementListResponse;
@@ -58,6 +62,7 @@ public class VirtualCourseAdminController {
     private final UnpublishVirtualCourseUseCase unpublishVirtualCourseUseCase;
     private final CreateVirtualModuleUseCase createVirtualModuleUseCase;
     private final ReorderVirtualModulesUseCase reorderVirtualModulesUseCase;
+    private final VirtualCourseCatalogPort virtualCourseCatalogPort;
 
     public VirtualCourseAdminController(
         CreateVirtualCourseUseCase createVirtualCourseUseCase,
@@ -67,7 +72,8 @@ public class VirtualCourseAdminController {
         PublishVirtualCourseUseCase publishVirtualCourseUseCase,
         UnpublishVirtualCourseUseCase unpublishVirtualCourseUseCase,
         CreateVirtualModuleUseCase createVirtualModuleUseCase,
-        ReorderVirtualModulesUseCase reorderVirtualModulesUseCase
+        ReorderVirtualModulesUseCase reorderVirtualModulesUseCase,
+        VirtualCourseCatalogPort virtualCourseCatalogPort
     ) {
         this.createVirtualCourseUseCase = createVirtualCourseUseCase;
         this.listManagedVirtualCoursesUseCase = listManagedVirtualCoursesUseCase;
@@ -77,6 +83,7 @@ public class VirtualCourseAdminController {
         this.unpublishVirtualCourseUseCase = unpublishVirtualCourseUseCase;
         this.createVirtualModuleUseCase = createVirtualModuleUseCase;
         this.reorderVirtualModulesUseCase = reorderVirtualModulesUseCase;
+        this.virtualCourseCatalogPort = virtualCourseCatalogPort;
     }
 
     @PostMapping
@@ -101,6 +108,25 @@ public class VirtualCourseAdminController {
         return ResponseEntity.ok(new VirtualCourseManagementListResponse(
             results.stream().map(VirtualCourseManagementResponse::from).toList()
         ));
+    }
+
+    /**
+     * Admin course-detail read (US-VIRTUAL-002 escenario 5, #125). Returns
+     * the full course — including modules/lessons with {@code videoId} and
+     * the lifecycle {@code status} — for any of {@code DRAFT}/
+     * {@code PUBLISHED}/{@code ARCHIVED}; the {@code findByIdForAdmin} port
+     * method intentionally inverts the public non-enumeration discipline so
+     * a {@code DRAFT} or {@code ARCHIVED} course shows up here. A missing
+     * id (or a malformed one — see the port contract) is
+     * {@link com.menta.virtual.domain.exception.CourseNotFoundException} →
+     * {@code 404 ProblemDetail} via
+     * {@link VirtualCourseExceptionHandler}.
+     */
+    @GetMapping("/{courseId}")
+    public ResponseEntity<VirtualCourseAdminDetailResponse> get(@PathVariable String courseId) {
+        VirtualCourseAdminDetailView view = virtualCourseCatalogPort.findByIdForAdmin(courseId)
+            .orElseThrow(CourseNotFoundException::new);
+        return ResponseEntity.ok(VirtualCourseAdminDetailResponse.fromVirtualAdmin(view));
     }
 
     @PutMapping("/{courseId}")
