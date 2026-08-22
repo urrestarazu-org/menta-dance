@@ -2,7 +2,6 @@ package com.menta.app.integration.billing;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 
 import com.menta.auth.application.port.out.ActivationRateLimitPort;
@@ -15,8 +14,6 @@ import com.menta.billing.application.dto.ProviderPaymentResult;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.port.out.CourseCatalogPort;
 import com.menta.billing.application.port.out.PaymentProviderPort;
-import com.menta.billing.application.port.out.PhysicalCapacityAssignmentPort;
-import com.menta.billing.application.port.out.VirtualAccessGrantPort;
 import com.menta.billing.domain.model.Money;
 import com.menta.billing.infrastructure.persistence.entity.PaymentJpaEntity;
 import com.menta.billing.infrastructure.persistence.entity.WebhookInboxJpaEntity;
@@ -89,8 +86,6 @@ class PaymentWebhookIntegrationTest {
     @Autowired private WebhookVerificationWorker worker;
 
     @MockBean private PaymentProviderPort paymentProviderPort;
-    @MockBean private PhysicalCapacityAssignmentPort physicalCapacityAssignmentPort;
-    @MockBean private VirtualAccessGrantPort virtualAccessGrantPort;
     @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
     @MockBean private CourseCatalogPort courseCatalogPort;
     @MockBean private AuthDegradedGuard authDegradedGuard;
@@ -178,7 +173,7 @@ class PaymentWebhookIntegrationTest {
     }
 
     @Test
-    void the_worker_confirms_a_matching_payment_and_never_double_assigns_capacity_on_retry() {
+    void the_worker_confirms_a_matching_physical_payment_without_creating_billing_fulfillment() {
         UUID paymentId = seedPendingPhysicalPayment("mp-idempotent");
         when(paymentProviderPort.fetchPayment("mp-idempotent")).thenReturn(
             new ProviderPaymentResult("approved", Money.of(new BigDecimal("100.00"), "ARS"), "ext-1", "merchant-1")
@@ -193,19 +188,15 @@ class PaymentWebhookIntegrationTest {
         worker.process(row);
 
         assertThat(paymentRepository.findById(paymentId).orElseThrow().getStatusType()).isEqualTo("COMPLETED");
-        assertThat(purchaseRepository.findAll()).hasSize(1);
-        org.mockito.Mockito.verify(physicalCapacityAssignmentPort, org.mockito.Mockito.times(1))
-            .assign(org.mockito.ArgumentMatchers.eq("session-1"), any());
+        assertThat(purchaseRepository.findAll()).isEmpty();
     }
 
     @Test
-    void a_failed_capacity_assignment_still_completes_the_payment_but_marks_the_purchase_exception() {
+    void a_physical_payment_completion_leaves_capacity_orchestration_to_app() {
         seedPendingPhysicalPayment("mp-fulfillment-fails");
         when(paymentProviderPort.fetchPayment("mp-fulfillment-fails")).thenReturn(
             new ProviderPaymentResult("approved", Money.of(new BigDecimal("100.00"), "ARS"), "ext-1", "merchant-1")
         );
-        doThrow(new RuntimeException("capacity full"))
-            .when(physicalCapacityAssignmentPort).assign(any(), any());
         WebhookInboxJpaEntity row = new WebhookInboxJpaEntity(
             "mp-fulfillment-fails:req-1", "mp-fulfillment-fails", "req-1",
             com.menta.billing.infrastructure.webhook.WebhookInboxStatus.RECEIVED, 0, null, null, Instant.now(), null
@@ -214,12 +205,14 @@ class PaymentWebhookIntegrationTest {
 
         worker.process(row);
 
-        assertThat(purchaseRepository.findAll()).hasSize(1);
-        assertThat(purchaseRepository.findAll().get(0).getStatus()).isEqualTo("EXCEPTION");
+        assertThat(paymentRepository.findAll()).allSatisfy(
+            payment -> assertThat(payment.getStatusType()).isEqualTo("COMPLETED")
+        );
+        assertThat(purchaseRepository.findAll()).isEmpty();
     }
 
     @Test
-    void an_expired_provider_status_never_creates_a_purchase() {
+    void an_expired_provider_status_never_creates_billing_fulfillment() {
         seedPendingPhysicalPayment("mp-expired");
         when(paymentProviderPort.fetchPayment("mp-expired")).thenReturn(
             new ProviderPaymentResult("expired", Money.of(new BigDecimal("100.00"), "ARS"), "ext-1", "merchant-1")

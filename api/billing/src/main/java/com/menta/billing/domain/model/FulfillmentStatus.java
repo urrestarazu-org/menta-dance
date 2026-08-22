@@ -1,16 +1,15 @@
 package com.menta.billing.domain.model;
 
 /**
- * Post-payment fulfillment state, shared by {@link Purchase} (physical
- * capacity) and {@link Subscription} (virtual access).
+ * Post-payment local fulfillment state retained for {@link Purchase} and
+ * {@link Subscription}.
  *
  * <p>docs/06-BILLING-API.md only specifies this state machine for {@code
  * Purchase} ("PENDING_FULFILLMENT... ASSIGNED o EXCEPTION"). {@code
- * Subscription} is mentioned alongside it with no state machine of its own
- * — reusing the same three states here is this issue's interpretation, not
- * something the doc states literally: both depend on the identical
- * shape (a placeholder port that may throw), so one enum covers both rather
- * than inventing a second, narrower one.</p>
+ * Subscription} is mentioned alongside it with no state machine of its own.
+ * For subscriptions, {@code ASSIGNED} means Billing's immutable entitlement
+ * snapshot is available for Virtual to read; it does not represent a
+ * write-side call into Virtual (ADR-0039).</p>
  */
 public enum FulfillmentStatus {
     PENDING_FULFILLMENT,
