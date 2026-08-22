@@ -3,15 +3,20 @@ package com.menta.virtual.infrastructure.web.controller;
 import com.menta.virtual.application.dto.PublicLessonFreeView;
 import com.menta.virtual.application.dto.PublicLessonPremiumAccessibleView;
 import com.menta.virtual.application.dto.PublicLessonRequiresSubscriptionView;
+import com.menta.virtual.application.dto.PublicLessonStreamResult;
 import com.menta.virtual.application.dto.PublicLessonView;
+import com.menta.virtual.application.port.in.GetPublicLessonStreamUseCase;
 import com.menta.virtual.application.port.in.GetPublicLessonUseCase;
 import com.menta.virtual.domain.exception.LessonNotFoundException;
+import com.menta.virtual.infrastructure.web.dto.PublicLessonAccessDto;
 import com.menta.virtual.infrastructure.web.dto.PublicLessonFreeResponse;
 import com.menta.virtual.infrastructure.web.dto.PublicLessonPremiumAccessibleResponse;
 import com.menta.virtual.infrastructure.web.dto.PublicLessonRequiresSubscriptionResponse;
 import com.menta.virtual.infrastructure.web.dto.PublicLessonResponse;
+import com.menta.virtual.infrastructure.web.dto.PublicLessonStreamResponse;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,34 +25,41 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Public read of a single virtual lesson (US-VIRTUAL-003). The route is
- * {@code GET /api/v1/virtual/lessons/{lessonId}} and lives outside the
- * {@code /api/v1/admin/virtual/lessons/**} prefix covered by
- * {@code SecurityConfig}'s ADMIN/INSTRUCTOR rule — the public matcher,
- * added in this PR, sits at the top of the permitAll list right next to
- * the catalog one.
+ * Public read of a single virtual lesson (US-VIRTUAL-003) and its
+ * signed streaming URL (US-VIRTUAL-004). Routes live under
+ * {@code /api/v1/virtual/lessons/**}, which {@code SecurityConfig}
+ * permits for anonymous and authenticated callers alike.
  *
- * <p>An empty view is mapped to {@link LessonNotFoundException} → 404
+ * <p>The detail route {@code GET /api/v1/virtual/lessons/{lessonId}}
+ * maps to {@link LessonNotFoundException} → 404
  * {@code application/problem+json} via
- * {@link VirtualPublicLessonExceptionHandler}. A premium lesson requested
- * by an anonymous caller is mapped to
- * {@link com.menta.virtual.domain.exception.ForbiddenLessonAccessException}
- * → 403 {@code application/problem+json} by the same handler chain.</p>
- *
- * <p>The three positive branches are dispatched as follows:</p>
+ * {@link VirtualPublicLessonExceptionHandler}, with three positive
+ * 200 branches per #48:</p>
  * <ul>
- *   <li>{@link PublicLessonFreeResponse} → 200 OK; the visitor sees the
- *       lesson body without a {@code videoId};</li>
- *   <li>{@link PublicLessonPremiumAccessibleResponse} → 200 OK; the
- *       visitor sees the lesson body WITH {@code videoId};</li>
- *   <li>{@link PublicLessonRequiresSubscriptionResponse} → 200 OK;
- *       the visitor (now identified) sees the preview body, with
- *       {@code access.allowed=false} and a {@code plansUrl}.</li>
+ *   <li>{@link PublicLessonFreeResponse} → free preview, no {@code videoId};</li>
+ *   <li>{@link PublicLessonPremiumAccessibleResponse} → premium body
+ *       WITH {@code videoId};</li>
+ *   <li>{@link PublicLessonRequiresSubscriptionResponse} → preview with
+ *       {@code access.allowed=false}.</li>
  * </ul>
  *
- * <p>The orchestrator's decision (#48): anonymous premium → 403
- * ProblemDetail, identified-but-no-entitlement → 200 with the explicit
- * {@code access.allowed=false} flag. Implemented below.</p>
+ * <p>The streaming route {@code GET /api/v1/virtual/lessons/{lessonId}/stream}
+ * (US-VIRTUAL-004) is a different shape:</p>
+ * <ul>
+ *   <li>{@link PublicLessonStreamResult.Authorized} → 200 OK with
+ *       {@link PublicLessonStreamResponse} ({@code {stream, lesson}});</li>
+ *   <li>{@link PublicLessonStreamResult.AccessDenied} → 403 Forbidden
+ *       with the same {@link PublicLessonAccessDto} body the public
+ *       lesson detail already exposes for its access-decision 200.</li>
+ * </ul>
+ *
+ * <p>The 403 wire shape intentionally mirrors the
+ * {@code PublicLessonRequiresSubscriptionResponse.access} block: the
+ * orchestrator's document (#50 / #48) budgets a richer
+ * {@code SUBSCRIPTION_EXPIRED} discriminator to a follow-up that
+ * extends the cross-module entitlement port. Until then,
+ * anonymous and expired callers receive the same
+ * {@code SUBSCRIPTION_REQUIRED} message.</p>
  */
 @RestController
 @RequestMapping("/api/v1/virtual/lessons")
@@ -55,9 +67,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class VirtualPublicLessonController {
 
     private final GetPublicLessonUseCase getPublicLessonUseCase;
+    private final GetPublicLessonStreamUseCase getPublicLessonStreamUseCase;
 
-    public VirtualPublicLessonController(GetPublicLessonUseCase getPublicLessonUseCase) {
+    public VirtualPublicLessonController(
+        GetPublicLessonUseCase getPublicLessonUseCase,
+        GetPublicLessonStreamUseCase getPublicLessonStreamUseCase
+    ) {
         this.getPublicLessonUseCase = getPublicLessonUseCase;
+        this.getPublicLessonStreamUseCase = getPublicLessonStreamUseCase;
     }
 
     @GetMapping("/{lessonId}")
@@ -74,6 +91,40 @@ public class VirtualPublicLessonController {
 
         PublicLessonResponse body = translate(resolved);
         return ResponseEntity.ok(body);
+    }
+
+    /**
+     * US-VIRTUAL-004: signed streaming URL for the requested lesson.
+     *
+     * <p>The use case throws {@link LessonNotFoundException} for any
+     * unresolvable id (malformed, missing row, parent course
+     * unpublished) — handled by the public advice chain as a 404
+     * ProblemDetail, mirroring the detail route. The 403 branch is
+     * returned inline (sealed result → {@code 403} with the
+     * {@link PublicLessonAccessDto} body) rather than via a thrown
+     * {@link com.menta.virtual.domain.exception.ForbiddenLessonAccessException},
+     * because the wire shape required by the spec
+     * ({@code {access: {...}}}) is not a Spring RFC 9457 ProblemDetail.
+     * Adding yet another exception type to keep the handler chain would
+     * not buy anything the sealed result already gives us.</p>
+     */
+    @GetMapping("/{lessonId}/stream")
+    public ResponseEntity<Object> getStream(
+        @PathVariable String lessonId,
+        Authentication authentication
+    ) {
+        UUID actingUserId = actingUserIdOrNull(authentication);
+        PublicLessonStreamResult result = getPublicLessonStreamUseCase.get(lessonId, actingUserId);
+
+        if (result instanceof PublicLessonStreamResult.Authorized authorized) {
+            return ResponseEntity.ok(PublicLessonStreamResponse.from(authorized.view()));
+        }
+        if (result instanceof PublicLessonStreamResult.AccessDenied denied) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(PublicLessonAccessDto.from(denied.access()));
+        }
+        // Sealed at compile time — the instanceof chain covers every permitted subtype.
+        throw new IllegalStateException("unhandled stream result type: " + result.getClass());
     }
 
     /**

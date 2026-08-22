@@ -18,6 +18,7 @@ import com.menta.virtual.application.dto.PublicLessonPreviewView;
 import com.menta.virtual.application.dto.PublicLessonRequiresSubscriptionView;
 import com.menta.virtual.application.dto.PublicLessonSubscriptionPrompt;
 import com.menta.virtual.application.dto.PublicModuleRef;
+import com.menta.virtual.application.port.in.GetPublicLessonStreamUseCase;
 import com.menta.virtual.application.port.in.GetPublicLessonUseCase;
 import com.menta.virtual.domain.exception.ForbiddenLessonAccessException;
 import com.menta.virtual.domain.exception.LessonNotFoundException;
@@ -48,7 +49,10 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 class VirtualPublicLessonControllerTest {
 
     private final GetPublicLessonUseCase useCase = mock(GetPublicLessonUseCase.class);
-    private final VirtualPublicLessonController controller = new VirtualPublicLessonController(useCase);
+    private final GetPublicLessonStreamUseCase streamUseCase = mock(GetPublicLessonStreamUseCase.class);
+    private final VirtualPublicLessonController controller = new VirtualPublicLessonController(
+        useCase, streamUseCase
+    );
 
     private static Authentication anonymous() {
         // Render the SecurityContext the way JwtAuthenticationFilter leaves it for an

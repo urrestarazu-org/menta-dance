@@ -7,6 +7,7 @@ import com.menta.virtual.application.port.in.CreateVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.CreateVirtualLessonUseCase;
 import com.menta.virtual.application.port.in.CreateVirtualModuleUseCase;
 import com.menta.virtual.application.port.in.DeleteVirtualCourseUseCase;
+import com.menta.virtual.application.port.in.GetPublicLessonStreamUseCase;
 import com.menta.virtual.application.port.in.GetPublicLessonUseCase;
 import com.menta.virtual.application.port.in.ListManagedVirtualCoursesUseCase;
 import com.menta.virtual.application.port.in.PublishVirtualCourseUseCase;
@@ -16,13 +17,18 @@ import com.menta.virtual.application.port.in.UpdateVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.UpdateVirtualLessonUseCase;
 import com.menta.virtual.application.port.in.UpdateVirtualModuleUseCase;
 import com.menta.virtual.application.port.in.VirtualCourseCatalogPort;
+import com.menta.virtual.application.port.out.BunnyNetSignatureService;
+import com.menta.virtual.application.port.out.Clock;
 import com.menta.virtual.application.port.out.VirtualCourseAuditRepository;
 import com.menta.virtual.application.port.out.VirtualCourseRepository;
 import com.menta.virtual.application.port.out.VirtualLessonRepository;
 import com.menta.shared.billing.VirtualCourseEntitlementPort;
 import com.menta.virtual.application.port.out.VirtualModuleRepository;
+import com.menta.virtual.application.usecase.GetPublicLessonStreamUseCaseImpl;
 import com.menta.virtual.application.usecase.GetPublicLessonUseCaseImpl;
 import com.menta.virtual.application.usecase.VirtualCourseCatalogPortImpl;
+import com.menta.virtual.infrastructure.cdn.BunnyNetProperties;
+import com.menta.virtual.infrastructure.cdn.StringFormatBunnyNetSignatureService;
 import com.menta.virtual.infrastructure.transaction.TransactionalCreateVirtualCourseUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalCreateVirtualLessonUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalCreateVirtualModuleUseCase;
@@ -158,5 +164,39 @@ class VirtualConfigurationTest {
         );
 
         assertThat(useCase).isInstanceOf(GetPublicLessonUseCaseImpl.class);
+    }
+
+    /**
+     * US-VIRTUAL-004: the stream bean takes four collaborators — the
+     * lesson repository, the cross-module entitlement port, the CDN
+     * signature service, and the application's {@link Clock}. The
+     * signature service is a separate @Bean produced right above, so
+     * this test wires a real one with deterministic properties to make
+     * sure the cable chain goes all the way through the lambda.
+     */
+    @Test
+    void wires_the_get_public_lesson_stream_use_case_bean_with_all_four_collaborators() {
+        BunnyNetProperties properties = new BunnyNetProperties();
+        properties.setPullZoneHostname("vz-test.b-cdn.net");
+        properties.setVideoLibraryId("9999");
+        BunnyNetSignatureService signatureService = configuration.bunnyNetSignatureService(properties);
+        Clock clock = configuration.clock();
+
+        GetPublicLessonStreamUseCase useCase = configuration.getPublicLessonStreamUseCase(
+            lessonRepository, entitlementPort, signatureService, clock
+        );
+
+        assertThat(useCase).isInstanceOf(GetPublicLessonStreamUseCaseImpl.class);
+        // Beam smoke test: prove the service actually reads BunnyNetProperties.
+        assertThat(signatureService).isInstanceOf(StringFormatBunnyNetSignatureService.class);
+        assertThat(signatureService.generateSignedUrl("vid", 0L))
+            .isEqualTo("vz-test.b-cdn.net/9999/vid");
+    }
+
+    @Test
+    void clock_bean_point_in_time_produces_a_non_null_instant() {
+        Clock clock = configuration.clock();
+
+        assertThat(clock.now()).isNotNull();
     }
 }
