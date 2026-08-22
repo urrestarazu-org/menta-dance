@@ -30,9 +30,36 @@ public interface VirtualCourseRepository {
     /**
      * Unfiltered by status — management endpoints (US-VIRTUAL-006) must be
      * able to load and edit a {@code DRAFT} or {@code ARCHIVED} course too,
-     * unlike the public catalog read path above.
+     * unlike the public catalog read path above. Returns the aggregate
+     * WITHOUT its pre-aggregated counts — callers only need the management
+     * fields, never {@code moduleCount}/{@code lessonCount}/etc.
      */
     Optional<VirtualCourse> findById(CourseId courseId);
+
+    /**
+     * Unfiltered by status AND populated with the same pre-aggregated counts
+     * used by the published read paths
+     * ({@code moduleCount}/{@code lessonCount}/{@code totalDurationMinutes}).
+     *
+     * <p>Deliberately separate from {@link #findById(CourseId)}: the admin
+     * detail read path (#125, US-VIRTUAL-002 escenario 5) needs both the
+     * management fields AND the counts to render a complete view, while
+     * existing management write paths (#54, #47 etc.) only depend on the
+     * management fields — merging them would either force every caller to
+     * pay for the extra COUNT/SUM round-trips or create a non-uniform
+     * contract.</p>
+     *
+     * <p>Same anti-enumeration discipline does NOT apply here: an
+     * authenticated operator viewing the admin detail wants to see
+     * {@code DRAFT} and {@code ARCHIVED} courses too, so the {@code
+     * Optional.empty()} return only means "the id does not resolve at
+     * all".</p>
+     *
+     * @param courseId the course id to look up.
+     * @return the course with its aggregates, regardless of status, or
+     *     {@code Optional.empty()} when no row matches.
+     */
+    Optional<VirtualCourse> findByIdAnyStatus(CourseId courseId);
 
     /** Every course regardless of status or owner — the ADMIN management view. */
     List<VirtualCourse> findAll();

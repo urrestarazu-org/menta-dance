@@ -136,6 +136,92 @@ class VirtualCourseRepositoryAdapterTest {
     }
 
     @Test
+    void find_by_id_any_status_returns_empty_when_the_course_does_not_exist() {
+        UUID id = UUID.randomUUID();
+        when(courseRepository.findById(id)).thenReturn(Optional.empty());
+
+        assertThat(adapter.findByIdAnyStatus(CourseId.of(id))).isEmpty();
+    }
+
+    @Test
+    void find_by_id_any_status_returns_a_draft_course_with_zero_aggregates() {
+        // find_by_id is unfiltered too — but does NOT populate aggregates.
+        // findByIdAnyStatus must, so the admin detail view (#125) has counts
+        // to render. The counts are zero here because no module/lesson rows
+        // exist for the course id; the port must NOT silently promote to
+        // null/not-applicable.
+        UUID id = UUID.randomUUID();
+        when(courseRepository.findById(id)).thenReturn(Optional.of(aCourseEntity(id, CourseStatus.DRAFT)));
+        when(moduleRepository.countByCourseIdIn(List.of(id))).thenReturn(List.of());
+        when(lessonRepository.aggregateByCourseIdIn(List.of(id))).thenReturn(List.of());
+
+        Optional<VirtualCourse> result = adapter.findByIdAnyStatus(CourseId.of(id));
+
+        assertThat(result).isPresent();
+        assertThat(result.get().getStatus()).isEqualTo(CourseStatus.DRAFT);
+        assertThat(result.get().getModuleCount()).isZero();
+        assertThat(result.get().getLessonCount()).isZero();
+        assertThat(result.get().getTotalDurationMinutes()).isZero();
+    }
+
+    @Test
+    void find_by_id_any_status_returns_an_archived_course_with_populated_aggregates() {
+        // ARCHIVED is a distinct value the public findPublishedById path
+        // would silently treat as not-found; the admin path must surface
+        // it intact so operators can inspect (and un-archive) it.
+        UUID id = UUID.randomUUID();
+        when(courseRepository.findById(id))
+            .thenReturn(Optional.of(aCourseEntity(id, CourseStatus.ARCHIVED)));
+
+        ModuleCountProjection moduleCount = mock(ModuleCountProjection.class);
+        when(moduleCount.getCourseId()).thenReturn(id);
+        when(moduleCount.getModuleCount()).thenReturn(4L);
+        when(moduleRepository.countByCourseIdIn(List.of(id))).thenReturn(List.of(moduleCount));
+
+        LessonAggregateProjection lessonAggregate = mock(LessonAggregateProjection.class);
+        when(lessonAggregate.getCourseId()).thenReturn(id);
+        when(lessonAggregate.getLessonCount()).thenReturn(12L);
+        when(lessonAggregate.getTotalDurationMinutes()).thenReturn(180L);
+        when(lessonRepository.aggregateByCourseIdIn(List.of(id))).thenReturn(List.of(lessonAggregate));
+
+        Optional<VirtualCourse> result = adapter.findByIdAnyStatus(CourseId.of(id));
+
+        assertThat(result).isPresent();
+        assertThat(result.get().getStatus()).isEqualTo(CourseStatus.ARCHIVED);
+        assertThat(result.get().getModuleCount()).isEqualTo(4);
+        assertThat(result.get().getLessonCount()).isEqualTo(12);
+        assertThat(result.get().getTotalDurationMinutes()).isEqualTo(180);
+    }
+
+    @Test
+    void find_by_id_any_status_returns_a_published_course_with_populated_aggregates() {
+        // DRAFT/ARCHIVED keep the public-only filters at bay; PUBLISHED is
+        // also in scope here so operators browsing their full inventory
+        // (including the already-published half) get the same counts.
+        UUID id = UUID.randomUUID();
+        when(courseRepository.findById(id)).thenReturn(Optional.of(aCourseEntity(id)));
+
+        ModuleCountProjection moduleCount = mock(ModuleCountProjection.class);
+        when(moduleCount.getCourseId()).thenReturn(id);
+        when(moduleCount.getModuleCount()).thenReturn(2L);
+        when(moduleRepository.countByCourseIdIn(List.of(id))).thenReturn(List.of(moduleCount));
+
+        LessonAggregateProjection lessonAggregate = mock(LessonAggregateProjection.class);
+        when(lessonAggregate.getCourseId()).thenReturn(id);
+        when(lessonAggregate.getLessonCount()).thenReturn(6L);
+        when(lessonAggregate.getTotalDurationMinutes()).thenReturn(90L);
+        when(lessonRepository.aggregateByCourseIdIn(List.of(id))).thenReturn(List.of(lessonAggregate));
+
+        Optional<VirtualCourse> result = adapter.findByIdAnyStatus(CourseId.of(id));
+
+        assertThat(result).isPresent();
+        assertThat(result.get().getStatus()).isEqualTo(CourseStatus.PUBLISHED);
+        assertThat(result.get().getModuleCount()).isEqualTo(2);
+        assertThat(result.get().getLessonCount()).isEqualTo(6);
+        assertThat(result.get().getTotalDurationMinutes()).isEqualTo(90);
+    }
+
+    @Test
     void find_all_maps_every_course_regardless_of_status() {
         when(courseRepository.findAll()).thenReturn(
             List.of(aCourseEntity(UUID.randomUUID(), CourseStatus.DRAFT), aCourseEntity(UUID.randomUUID()))
