@@ -11,18 +11,42 @@ get {
 }
 
 docs {
-  Full detail of a single course (#95), resolved against Physical and
-  Virtual in parallel (ADR-0037) — the client never indicates the modality.
+  Rich detail of a single VIRTUAL course (#47, US-VIRTUAL-002 escenarios 1, 3, 4).
+  The endpoint no longer fans out to both modalities: it resolves against
+  Virtual's detail port alone. Physical detail is a follow-up, so a
+  physical-only courseId answers the same 404 as a missing id — a visitor
+  cannot probe modality.
 
   Prerequisite: set the runtime-only `courseId` variable to an id returned
-  by "List Courses".
+  by "List Courses" (VIRTUAL modality).
 
-  Success contract:
-    body → { courseId, modality, title, level, physical | virtual }
+  Success contract (VIRTUAL only — physical returns 404):
+    body → {
+      courseId,
+      title,
+      description,
+      thumbnailUrl,
+      category,
+      level,
+      isPremium,
+      modules: [{ moduleId, title, order, lessons: [{
+        lessonId, title, duration, isFree, order
+      }] }],
+      stats: { moduleCount, lessonCount, totalDuration }
+    }
+
+  Lesson `duration` is `mm:ss` under 60 minutes (`10:00` for a 10-minute
+  lesson — minutes are integer in the domain), `h:mm` once over (`1:05`).
+  Stats `totalDuration` is `Xm` under 60 minutes and `Xh Ym` once
+  over (`2h 30m` for 150).
+
+  Lesson payloads must NEVER carry a `videoId` / `videoUrl`: even lessons
+  persisted with one are projected without it for the public read.
 
   Error contract:
-    404 COURSE_NOT_FOUND   → unknown id, or exists but not published/active
-    503 CATALOG_DEGRADED   + Retry-After → an owning module failed
+    404 COURSE_NOT_FOUND   → unknown id, exists but not published, OR id
+                              belongs to physical modality (#47 scope)
+    503 CATALOG_DEGRADED   + Retry-After → the virtual port failed
 }
 
 tests {
@@ -30,8 +54,21 @@ tests {
     expect(res.getStatus()).to.equal(200);
   });
 
-  test("Body carries a modality", function() {
-    expect(['PHYSICAL', 'VIRTUAL']).to.include(res.getBody().modality);
+  test("Body carries a courseId field", function() {
+    expect(res.getBody()).to.have.property('courseId');
+  });
+
+  test("Body carries modules and stats", function() {
+    expect(res.getBody()).to.have.property('modules');
+    expect(res.getBody()).to.have.property('stats');
+  });
+
+  test("No lesson carries videoId or videoUrl", function() {
+    const lessons = (res.getBody().modules || []).flatMap(m => m.lessons || []);
+    lessons.forEach(l => {
+      expect(l).to.not.have.property('videoId');
+      expect(l).to.not.have.property('videoUrl');
+    });
   });
 }
 

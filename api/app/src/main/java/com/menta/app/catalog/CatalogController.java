@@ -29,7 +29,10 @@ public class CatalogController {
     }
 
     @GetMapping("/{courseId}")
-    public ResponseEntity<CatalogCourseResponse> get(@PathVariable String courseId) {
-        return ResponseEntity.ok(compositionService.getCourse(courseId));
+    public ResponseEntity<CatalogCourseDetailResponse> get(@PathVariable String courseId) {
+        // #47: rich-detail shape for the public course page (US-VIRTUAL-002).
+        // The composition method delegates to Virtual only — physical detail
+        // is a follow-up and falls through to the standard 404 problem.
+        return ResponseEntity.ok(compositionService.getCourseDetail(courseId));
     }
 }
