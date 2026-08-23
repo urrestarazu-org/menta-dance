@@ -76,6 +76,14 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *     (#43; updating a session lives under a DIFFERENT top-level prefix
  *     than /admin/physical/courses/** above — that matcher does not cover
  *     it — so it needs its own rule, same reasoning and ordering).
+ *   - POST /api/v1/physical/sessions/{sessionId}/access-qr → authenticated
+ *     (any role) (US-PHYSICAL-001 escenario 1; a confirmed student requests
+ *     their own ephemeral check-in QR — same explicit-matcher reasoning as
+ *     #37's quotes rule, no specific role required).
+ *   - POST /api/v1/physical/sessions/{sessionId}/check-ins → permitAll
+ *     (US-PHYSICAL-001 escenario 2; the door reader has no user session — it
+ *     authenticates with a shared device token the use case itself verifies,
+ *     never the filter chain).
  *   - /api/v1/admin/virtual/courses/**          → ADMIN or INSTRUCTOR
  *   - /api/v1/admin/virtual/modules/**          → ADMIN or INSTRUCTOR
  *   - /api/v1/admin/virtual/lessons/**          → ADMIN or INSTRUCTOR
@@ -146,6 +154,12 @@ public class SecurityConfig {
                 // before anyRequest(), same first-match-wins ordering as #37 and #34.
                 // The owning user comes from the token, never from the body.
                 .requestMatchers(HttpMethod.POST, "/api/v1/billing/subscriptions").authenticated()
+                // US-PHYSICAL-001 escenario 2: the door reader has no user session — it
+                // authenticates with a shared device token the use case itself verifies.
+                .requestMatchers(HttpMethod.POST, "/api/v1/physical/sessions/*/check-ins").permitAll()
+                // US-PHYSICAL-001 escenario 1: any authenticated student may request their
+                // own ephemeral check-in QR — no specific role required.
+                .requestMatchers(HttpMethod.POST, "/api/v1/physical/sessions/*/access-qr").authenticated()
                 .requestMatchers("/actuator/health").permitAll()
                 .requestMatchers("/api/v1/users/register").permitAll()
                 // #42: ADMIN and INSTRUCTOR share this prefix; ownership of a specific

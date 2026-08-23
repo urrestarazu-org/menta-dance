@@ -10,6 +10,7 @@ import com.menta.auth.application.port.out.PasswordResetRequestRateLimitPort;
 import com.menta.auth.application.port.out.TokenBlacklistPort;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.port.out.CourseCatalogPort;
+import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
 import com.menta.virtual.application.dto.VirtualCourseSummary;
 import com.menta.virtual.application.port.in.VirtualCourseCatalogPort;
 import com.menta.virtual.domain.model.CourseStatus;
@@ -76,6 +77,9 @@ class VirtualCourseCatalogIntegrationTest {
     @MockBean private PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
     @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
     @MockBean private CourseCatalogPort courseCatalogPort;
+    // US-PHYSICAL-001: ProcessPhysicalCheckInUseCaseImpl needs a RedisTemplate
+    // its bean factory would otherwise fail to resolve in this Redis-less context.
+    @MockBean private ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
 
     @AfterEach
     void cleanUp() {

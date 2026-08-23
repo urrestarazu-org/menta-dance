@@ -41,6 +41,7 @@ import com.menta.billing.infrastructure.persistence.repository.SubscriptionJpaRe
 import com.menta.billing.infrastructure.persistence.repository.WebhookInboxJpaRepository;
 import com.menta.billing.infrastructure.webhook.WebhookInboxStatus;
 import com.menta.billing.infrastructure.webhook.WebhookVerificationWorker;
+import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
 import com.menta.shared.domain.vo.Email;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -136,6 +137,9 @@ class SubscriptionCheckoutIntegrationTest {
     @MockBean private ActivationRateLimitPort activationRateLimitPort;
     @MockBean private PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort;
     @MockBean private PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
+    // US-PHYSICAL-001: ProcessPhysicalCheckInUseCaseImpl needs a RedisTemplate
+    // its bean factory would otherwise fail to resolve in this Redis-less context.
+    @MockBean private ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
 
     private final AtomicInteger preferenceSequence = new AtomicInteger();
 
