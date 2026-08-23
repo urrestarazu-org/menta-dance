@@ -47,6 +47,7 @@ import com.menta.virtual.infrastructure.transaction.TransactionalUnpublishVirtua
 import com.menta.virtual.infrastructure.transaction.TransactionalUpdateVirtualCourseUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalUpdateVirtualLessonUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalUpdateVirtualModuleUseCase;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -61,9 +62,16 @@ import org.springframework.context.annotation.Configuration;
      * decorator (#54 review follow-up) — each performs its domain mutation and
      * its {@code virtual_course_audit} write as separate repository calls, which
      * without a wrapping transaction would commit independently.</p>
+     *
+     * <p>{@link BunnyNetProperties} is picked up by the package-scoped
+     * {@code @ConfigurationPropertiesScan} below: {@code MentaDanceApplication}'s
+     * {@code scanBasePackages = "com.menta"} would otherwise auto-discover it
+     * via component scan from {@code @Component}, but we keep the
+     * properties classes annotation-free to avoid the dual-registration
+     * gotcha and to be explicit about package ownership inside Virtual.</p>
      */
     @Configuration
-    @EnableConfigurationProperties(BunnyNetProperties.class)
+    @ConfigurationPropertiesScan(basePackages = "com.menta.virtual.infrastructure.cdn")
     public class VirtualConfiguration {
 
     /**

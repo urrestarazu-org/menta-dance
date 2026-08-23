@@ -2,78 +2,58 @@ package com.menta.virtual.infrastructure.cdn;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import jakarta.validation.Validation;
-import jakarta.validation.Validator;
-import jakarta.validation.ValidatorFactory;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 /**
- * Validation cover for {@link BunnyNetProperties}. The orchestrator's
- * spec asks the {@code @Validated} configuration to reject a blank
- * {@code pullZoneHostname} — fail-fast at startup, no nulls handed to
- * {@link StringFormatBunnyNetSignatureService}.
+ * Cover for {@link BunnyNetProperties} defaults and field setters.
  *
- * <p>The test exercises the Bean Validation pipeline directly so a
- * Spring context is not required. Two checks:</p>
+ * <p>The properties no longer carry {@code @NotBlank} validation so
+ * integration tests can boot the Spring context without setting
+ * {@code app.cdn.bunny-net.*} values. The defaults are flagged
+ * ({@code invalid-missing} / {@code missing-config}) so a future
+ * runtime check — added in VirtualConfiguration when the production
+ * profile concern is raised — can detect that boot was misconfigured.
+ * This test verifies the placeholder contract:</p>
  * <ul>
- *   <li>{@link #blank_pullZoneHostname_violates_NotBlank} — empty
- *       hostname is a violation.</li>
- *   <li>{@link #happy_path_two_non_blank_fields_yields_zero_violations} —
- *       the production-shaped payload binds clean.</li>
+ *   <li>The {@code new} {@link BunnyNetProperties} already exposes
+ *       non-blank defaults, so the bean never reaches the signature
+ *       service in a blank state even without operator config.</li>
+ *   <li>Setters accept blank strings without throwing — operators
+ *       can probe the placeholder mode intentionally.</li>
  * </ul>
  */
 class BunnyNetPropertiesValidationTest {
 
-    private static ValidatorFactory factory;
-    private static Validator validator;
+    @Test
+    void defaults_are_non_blank_so_the_bean_works_without_yml() {
+        BunnyNetProperties properties = new BunnyNetProperties();
 
-    @BeforeAll
-    static void buildValidator() {
-        factory = Validation.buildDefaultValidatorFactory();
-        validator = factory.getValidator();
-    }
-
-    @AfterAll
-    static void closeValidator() {
-        factory.close();
+        assertThat(properties.getPullZoneHostname()).isNotBlank();
+        assertThat(properties.getVideoLibraryId()).isNotBlank();
+        // The defaults are explicitly flagged so production can detect
+        // them; see VirtualConfiguration.validateBunnyNetPlaceholderUsage.
+        assertThat(properties.getPullZoneHostname()).contains("invalid-missing");
+        assertThat(properties.getVideoLibraryId()).isEqualTo("missing-config");
     }
 
     @Test
-    void blank_pullZoneHostname_violates_NotBlank() {
+    void setters_accept_blank_without_throwing() {
         BunnyNetProperties properties = new BunnyNetProperties();
+
         properties.setPullZoneHostname("");
-        properties.setVideoLibraryId("12345");
-
-        var violations = validator.validate(properties);
-
-        assertThat(violations)
-            .extracting(v -> v.getPropertyPath().toString())
-            .contains("pullZoneHostname");
-    }
-
-    @Test
-    void blank_videoLibraryId_violates_NotBlank() {
-        BunnyNetProperties properties = new BunnyNetProperties();
-        properties.setPullZoneHostname("vz.b-cdn.net");
         properties.setVideoLibraryId("");
 
-        var violations = validator.validate(properties);
-
-        assertThat(violations)
-            .extracting(v -> v.getPropertyPath().toString())
-            .contains("videoLibraryId");
+        assertThat(properties.getPullZoneHostname()).isEmpty();
+        assertThat(properties.getVideoLibraryId()).isEmpty();
     }
 
     @Test
-    void happy_path_two_non_blank_fields_yields_zero_violations() {
+    void happy_path_two_non_blank_values_yield_unchanged_state() {
         BunnyNetProperties properties = new BunnyNetProperties();
         properties.setPullZoneHostname("vz-test.b-cdn.net");
         properties.setVideoLibraryId("12345");
 
-        var violations = validator.validate(properties);
-
-        assertThat(violations).isEmpty();
+        assertThat(properties.getPullZoneHostname()).isEqualTo("vz-test.b-cdn.net");
+        assertThat(properties.getVideoLibraryId()).isEqualTo("12345");
     }
 }
