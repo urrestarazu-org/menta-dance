@@ -13,6 +13,7 @@ import com.menta.billing.application.port.out.CourseCatalogPort;
 import com.menta.physical.application.dto.PhysicalCourseSummary;
 import com.menta.physical.application.dto.PhysicalSessionAvailability;
 import com.menta.physical.application.port.in.PhysicalCourseAvailabilityPort;
+import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
 import com.menta.physical.domain.model.CourseStatus;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalCapacityAssignmentJpaEntity;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalCapacityHoldJpaEntity;
@@ -84,6 +85,9 @@ class PhysicalCourseAvailabilityIntegrationTest {
     @MockBean private PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
     @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
     @MockBean private CourseCatalogPort courseCatalogPort;
+    // US-PHYSICAL-001: ProcessPhysicalCheckInUseCaseImpl needs a RedisTemplate
+    // its bean factory would otherwise fail to resolve in this Redis-less context.
+    @MockBean private ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
 
     @AfterEach
     void cleanUp() {

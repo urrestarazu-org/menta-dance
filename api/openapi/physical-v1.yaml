@@ -5,18 +5,19 @@ openapi: 3.1.0
 # Escrito y versionado a mano, mismo criterio que auth-v1.yaml/billing-v1.yaml:
 # el diff se revisa en el PR igual que la colección Bruno.
 #
-# Sólo describe endpoints IMPLEMENTADOS. Physical no tiene ningún endpoint
-# público propio todavía — su catálogo de sólo lectura vive compuesto en
-# api:app (docs/07-CATALOG-API.md, #95). Este contrato es el primer HTTP que
-# Physical expone directamente, y es exclusivamente de gestión
-# (US-PHYSICAL-005, US-PHYSICAL-006).
+# Sólo describe endpoints IMPLEMENTADOS. El catálogo de sólo lectura de
+# Physical vive compuesto en api:app (docs/07-CATALOG-API.md, #95). Este
+# contrato cubre la gestión ADMIN/PROFESOR (US-PHYSICAL-005, US-PHYSICAL-006)
+# y, desde US-PHYSICAL-001, el primer endpoint público de Physical: el flujo
+# de check-in con QR para el alumno y el lector de puerta.
 
 info:
   title: Menta Dance — Physical API
   version: "1.0.0"
   description: |
     Gestión de cursos y sesiones presenciales (US-PHYSICAL-005,
-    US-PHYSICAL-006) para ADMIN/PROFESOR.
+    US-PHYSICAL-006) para ADMIN/PROFESOR, más el check-in con QR
+    (US-PHYSICAL-001) para el alumno confirmado y el lector de puerta.
 
     ## Errores
 
@@ -33,6 +34,14 @@ info:
     COURSE_NOT_OWNED`). Una sesión no tiene `professorId` propio: la
     autorización siempre se resuelve a través de su curso padre.
 
+    `POST /api/v1/physical/sessions/{sessionId}/access-qr` requiere sólo un
+    Bearer token válido (sin rol específico) — el alumno autenticado es su
+    propia autorización. `POST
+    /api/v1/physical/sessions/{sessionId}/check-ins` es público a nivel de
+    filtro (`permitAll`): el lector de puerta se autentica con un
+    `deviceToken` compartido que el caso de uso verifica internamente, nunca
+    con un Bearer token de usuario.
+
 servers:
   - url: http://localhost:8081
     description: Desarrollo local
@@ -44,6 +53,12 @@ tags:
     description: Administración de cursos presenciales recurrentes (ADMIN/PROFESOR).
   - name: Gestión de sesiones
     description: Administración de sesiones concretas de un curso presencial (ADMIN/PROFESOR).
+  - name: Check-in
+    description: |
+      Emisión de QR efímero y redención en la puerta (US-PHYSICAL-001). MVP:
+      cubre los escenarios 1, 2, 3, 4 y 5 del issue #38; la compensación
+      Redis compare-and-delete del escenario 6 queda fuera de alcance — el
+      lock simplemente expira por TTL.
 
 paths:
   /api/v1/admin/physical/courses:
@@ -333,6 +348,158 @@ paths:
                     detail: Session has already occurred and cannot be modified.
                     code: SESSION_ALREADY_OCCURRED
 
+  /api/v1/physical/sessions/{sessionId}/access-qr:
+    post:
+      tags: [Check-in]
+      summary: Emitir un QR de acceso efímero
+      description: |
+        Requiere un alumno autenticado con una asignación de cupo confirmada
+        para la sesión (US-PHYSICAL-001 escenario 1). El `studentId` sale
+        siempre del Bearer token, nunca del body. `qrCredentials` es un
+        placeholder de concatenación simple en este MVP — sin HMAC real
+        todavía. No es un recurso persistido: responde `200 OK`, no `201`.
+      operationId: issuePhysicalAccessQr
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: QR emitido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessQrResponse'
+        '400':
+          description: '`sessionId` malformado (`INVALID_REQUEST`).'
+        '403':
+          description: |
+            Sesión cancelada (`SESSION_CANCELLED`), fuera de la ventana de
+            check-in (`OUTSIDE_CHECK_IN_WINDOW`), o sin asignación de cupo
+            confirmada (`CAPACITY_ASSIGNMENT_REQUIRED`).
+        '404':
+          description: Sesión inexistente (`SESSION_NOT_FOUND`).
+
+  /api/v1/physical/sessions/{sessionId}/check-ins:
+    post:
+      tags: [Check-in]
+      summary: Redimir un QR escaneado en la puerta
+      description: |
+        Público a nivel de filtro (`permitAll`) — el lector se autentica con
+        `deviceToken`, un secreto compartido verificado dentro del caso de
+        uso (US-PHYSICAL-001 escenario 2). Responde `201 Created` en el
+        primer escaneo válido y `200 OK` en cualquier replay idempotente del
+        mismo QR (escenario 5, `count()` nunca crece en el replay). El orden
+        de validación es deliberado: `deviceToken`, forma del QR,
+        coincidencia de `sessionId`, firma, expiración, existencia/ventana de
+        la sesión y asignación de cupo se resuelven TODOS antes de tocar
+        Redis (escenario 4) — sólo un request que pasó todas esas puertas
+        llega a los locks que producen `409 ALREADY_PROCESSING` o
+        `503 CHECK_IN_DEGRADED`.
+      operationId: processPhysicalCheckIn
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckInRequest'
+      responses:
+        '201':
+          description: Asistencia registrada por primera vez.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckInResponse'
+        '200':
+          description: Replay idempotente de un check-in ya registrado (escenario 5).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckInResponse'
+        '400':
+          description: |
+            Body inválido (`INVALID_REQUEST`, incluye `type` distinto de
+            `QR`), o `qrCredentials` malformado o de otra sesión
+            (`INVALID_QR_CREDENTIAL`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                credencial_invalida:
+                  value:
+                    type: https://menta.dance/problems/invalid_qr_credential
+                    title: Bad Request
+                    status: 400
+                    detail: The QR credential is malformed or does not match the target session.
+                    code: INVALID_QR_CREDENTIAL
+        '401':
+          description: '`deviceToken` inválido (`INVALID_DEVICE_TOKEN`).'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                token_invalido:
+                  value:
+                    type: https://menta.dance/problems/invalid_device_token
+                    title: Unauthorized
+                    status: 401
+                    detail: The device token is invalid.
+                    code: INVALID_DEVICE_TOKEN
+        '403':
+          description: |
+            Sesión cancelada (`SESSION_CANCELLED`), fuera de la ventana de
+            check-in (`OUTSIDE_CHECK_IN_WINDOW`), o sin asignación de cupo
+            confirmada (`CAPACITY_ASSIGNMENT_REQUIRED`).
+        '404':
+          description: Sesión inexistente (`SESSION_NOT_FOUND`).
+        '409':
+          description: Otro lector procesando el mismo check-in (`ALREADY_PROCESSING`).
+        '410':
+          description: QR bien formado pero expirado (`EXPIRED_QR_CREDENTIAL`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                qr_expirado:
+                  value:
+                    type: https://menta.dance/problems/expired_qr_credential
+                    title: Gone
+                    status: 410
+                    detail: The QR credential has expired.
+                    code: EXPIRED_QR_CREDENTIAL
+        '503':
+          description: Redis no disponible; fail-closed (`CHECK_IN_DEGRADED`). Incluye `Retry-After`.
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Segundos sugeridos antes de reintentar.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                redis_caido:
+                  value:
+                    type: https://menta.dance/problems/check_in_degraded
+                    title: Service Unavailable
+                    status: 503
+                    detail: "Check-in is temporarily unavailable; retry after 30s."
+                    code: CHECK_IN_DEGRADED
+
 components:
   responses:
     InvalidRequest:
@@ -544,3 +711,50 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PhysicalSessionManagementResponse'
+
+    AccessQrResponse:
+      type: object
+      required: [qrCredentials, expiresAt, refreshAfterSeconds]
+      properties:
+        qrCredentials:
+          type: string
+          description: |
+            Token de acceso efímero. Placeholder de concatenación simple en
+            este MVP (`qr:<studentId>:<sessionId>:<jti>:<exp>`) — sin HMAC
+            real todavía.
+        expiresAt:
+          type: string
+          format: date-time
+        refreshAfterSeconds:
+          type: integer
+          description: Hint para que la app del alumno reemita el QR cada N segundos.
+
+    CheckInRequest:
+      type: object
+      required: [type, qrCredentials, deviceId, deviceToken]
+      properties:
+        type:
+          type: string
+          enum: [QR]
+          description: Único valor válido en este MVP; cualquier otro responde 400.
+        qrCredentials:
+          type: string
+        deviceId:
+          type: string
+        deviceToken:
+          type: string
+          description: Secreto compartido del lector, verificado dentro del caso de uso.
+
+    CheckInResponse:
+      type: object
+      required: [attendanceId, recordedAt, kind]
+      properties:
+        attendanceId:
+          type: string
+          format: uuid
+        recordedAt:
+          type: string
+          format: date-time
+        kind:
+          type: string
+          enum: [QR, MANUAL]

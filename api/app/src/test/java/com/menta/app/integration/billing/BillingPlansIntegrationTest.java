@@ -18,6 +18,7 @@ import com.menta.billing.infrastructure.persistence.entity.PlanCourseJpaEntity;
 import com.menta.billing.infrastructure.persistence.entity.PlanJpaEntity;
 import com.menta.billing.infrastructure.persistence.repository.PlanCourseJpaRepository;
 import com.menta.billing.infrastructure.persistence.repository.PlanJpaRepository;
+import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
@@ -72,6 +73,9 @@ class BillingPlansIntegrationTest {
 
     @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
     @MockBean private CourseCatalogPort courseCatalogPort;
+    // US-PHYSICAL-001: ProcessPhysicalCheckInUseCaseImpl needs a RedisTemplate
+    // its bean factory would otherwise fail to resolve in this Redis-less context.
+    @MockBean private ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
 
     // Every Redis-backed auth port needs a mock: integration-test excludes
     // RedisAutoConfiguration and this is one shared Spring context. Mirrors

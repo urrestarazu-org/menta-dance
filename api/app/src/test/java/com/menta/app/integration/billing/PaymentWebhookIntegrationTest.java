@@ -22,6 +22,7 @@ import com.menta.billing.infrastructure.persistence.repository.PurchaseJpaReposi
 import com.menta.billing.infrastructure.persistence.repository.ReconciliationTaskJpaRepository;
 import com.menta.billing.infrastructure.persistence.repository.WebhookInboxJpaRepository;
 import com.menta.billing.infrastructure.webhook.WebhookVerificationWorker;
+import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -88,6 +89,9 @@ class PaymentWebhookIntegrationTest {
     @MockBean private PaymentProviderPort paymentProviderPort;
     @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
     @MockBean private CourseCatalogPort courseCatalogPort;
+    // US-PHYSICAL-001: ProcessPhysicalCheckInUseCaseImpl needs a RedisTemplate
+    // its bean factory would otherwise fail to resolve in this Redis-less context.
+    @MockBean private ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
     @MockBean private AuthDegradedGuard authDegradedGuard;
     @MockBean private TokenBlacklistPort tokenBlacklistPort;
     @MockBean private LoginRateLimitPort loginRateLimitPort;

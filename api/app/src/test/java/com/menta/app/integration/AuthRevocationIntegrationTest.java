@@ -143,6 +143,14 @@ class AuthRevocationIntegrationTest {
     @MockBean
     private com.menta.billing.application.port.out.BillingPlansRateLimitPort billingPlansRateLimitPort;
 
+    /**
+     * US-PHYSICAL-001: ProcessPhysicalCheckInUseCaseImpl needs a RedisTemplate
+     * its bean factory would otherwise fail to resolve in this Redis-less profile.
+     */
+    @MockBean
+    private com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase
+        processPhysicalCheckInUseCase;
+
     private final Map<String, Long> projectedVersions = new ConcurrentHashMap<>();
     private final Set<String> blacklistedJtis = ConcurrentHashMap.newKeySet();
 

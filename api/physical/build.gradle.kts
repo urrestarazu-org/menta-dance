@@ -20,6 +20,9 @@ dependencies {
     // :api:auth; needed here too so this module compiles on its own.
     implementation("org.springframework.boot:spring-boot-starter-security")
 
+    // Redis — check-in door lock (US-PHYSICAL-001 escenario 6).
+    implementation("org.springframework.boot:spring-boot-starter-data-redis")
+
     // Database
     runtimeOnly("com.mysql:mysql-connector-j")
 
