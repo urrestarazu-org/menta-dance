@@ -83,11 +83,11 @@ The proposed chain (mirrors design §10):
 
 ---
 
-## 3. PublishPhysicalPaymentCompletedUseCase + PaymentVerificationService edit + after-commit rollback integration test
+## 3. PublishPhysicalPaymentCompletedUseCase + PaymentVerificationService edit + transactional rollback integration test
 
 ## 3. PublishPhysicalPaymentCompletedUseCase + wire into PaymentVerificationService.ensureFulfillment
 - **ID**: TASK-003
-- **Status**: pending
+- **Status**: completed (corrected 2026-08-24: append joins the payment transaction; no deferred after-commit write)
 - **Dependencies**: TASK-001, TASK-002
 - **Estimated LOC**: 80 prod (use case + 8-line edit) + 110 test = ~190
 - **Estimated test LOC**: 110
@@ -97,8 +97,8 @@ The proposed chain (mirrors design §10):
 - **Files (new — tests)**: `api/billing/src/test/java/com/menta/billing/application/usecase/PublishPhysicalPaymentCompletedUseCaseTest.java`, `api/billing/src/test/java/com/menta/billing/integration/outbox/BillingOutboxAppenderAfterCommitIntegrationTest.java`
 - **New build dependencies**: none
 - **Test classes**:
-  - `PublishPhysicalPaymentCompletedUseCaseTest` — Mockito-only. Verifies (a) `handle(physical payment)` calls `TransactionSynchronizationManager.registerSynchronization(...)` registering an `afterCommit` that calls `BillingOutboxAppenderPort.append` with constant + payload; (b) when payment target is `Virtual`, NO synchronisation is registered; (c) the synchronisation fires only on commit, not when the calling transaction is marked `rollbackOnly`.
-  - `BillingOutboxAppenderAfterCommitIntegrationTest` — `@SpringBootTest` + `@ActiveProfiles("integration-test")` + Testcontainers MySQL. Test name `payment_rollback_leaves_zero_outbox_and_zero_purchase_rows`. Drives a forced rollback inside `TransactionTemplate.execute(status -> { status.setRollbackOnly(); })` and asserts `common_outbox_events` empty + `billing_purchases` empty. Negative case: commit succeeds, asserts exactly one outbox row.
+  - `PublishPhysicalPaymentCompletedUseCaseTest` — Mockito-only. Verifies `handle(physical payment)` invokes `BillingOutboxAppenderPort.append` synchronously with the event constant and payload; virtual/non-completed payments are no-ops.
+  - `BillingOutboxAppenderAfterCommitIntegrationTest` — `@SpringBootTest` + `@ActiveProfiles("integration-test")` + Testcontainers MySQL. A `TransactionTemplate` drives `PaymentVerificationService` directly: commit asserts exactly one outbox row and rollback asserts no outbox or purchase rows.
 - **Acceptance criteria** (each MUST be independently verifiable):
   - AC1: After successful test commit, exactly one `common_outbox_events` row exists with `event_type = "billing.PhysicalPaymentCompleted"` and `aggregate_id = paymentId`. Maps to spec scenario "Completed physical payment appends one outbox row".
   - AC2: After forced test rollback, zero `common_outbox_events` rows exist with that event_type. Maps to spec scenario "Rolled-back payment leaves empty outbox and empty purchases".
