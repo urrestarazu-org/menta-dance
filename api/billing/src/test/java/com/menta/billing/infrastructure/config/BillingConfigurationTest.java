@@ -51,7 +51,8 @@ class BillingConfigurationTest {
     void wires_the_payment_verification_service_bean() {
         PaymentVerificationService service = configuration.paymentVerificationService(
             mock(PaymentRepository.class), mock(PaymentProviderPort.class), mock(SubscriptionRepository.class),
-            mock(PlanRepository.class), mock(Clock.class)
+            mock(PlanRepository.class), mock(Clock.class),
+            mock(com.menta.billing.application.usecase.PublishPhysicalPaymentCompletedUseCase.class)
         );
 
         assertThat(service).isInstanceOf(PaymentVerificationService.class);

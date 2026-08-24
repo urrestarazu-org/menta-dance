@@ -53,16 +53,19 @@ public final class PaymentVerificationService {
     private final SubscriptionRepository subscriptionRepository;
     private final PlanRepository planRepository;
     private final Clock clock;
+    private final PublishPhysicalPaymentCompletedUseCase publishPhysicalPaymentCompletedUseCase;
 
     public PaymentVerificationService(
         PaymentRepository paymentRepository, PaymentProviderPort paymentProviderPort,
-        SubscriptionRepository subscriptionRepository, PlanRepository planRepository, Clock clock
+        SubscriptionRepository subscriptionRepository, PlanRepository planRepository, Clock clock,
+        PublishPhysicalPaymentCompletedUseCase publishPhysicalPaymentCompletedUseCase
     ) {
         this.paymentRepository = paymentRepository;
         this.paymentProviderPort = paymentProviderPort;
         this.subscriptionRepository = subscriptionRepository;
         this.planRepository = planRepository;
         this.clock = clock;
+        this.publishPhysicalPaymentCompletedUseCase = publishPhysicalPaymentCompletedUseCase;
     }
 
     public VerificationOutcome verify(String providerPaymentId) {
@@ -170,9 +173,7 @@ public final class PaymentVerificationService {
 
     private void ensureFulfillment(Payment payment) {
         switch (payment.getTarget()) {
-            case PaymentTarget.Physical ignored -> {
-                // ADR-0028: api:app owns hold conversion and capacity assignment.
-            }
+            case PaymentTarget.Physical ignored -> publishPhysicalPaymentCompletedUseCase.handle(payment);
             case PaymentTarget.Virtual virtual -> ensureSubscription(payment, virtual);
         }
     }

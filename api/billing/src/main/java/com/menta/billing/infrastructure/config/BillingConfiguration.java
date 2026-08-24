@@ -29,6 +29,7 @@ import com.menta.billing.application.usecase.GetPhysicalCoursePricingUseCaseImpl
 import com.menta.billing.application.usecase.GetPlanUseCaseImpl;
 import com.menta.billing.application.usecase.ListPlansUseCaseImpl;
 import com.menta.billing.application.usecase.PaymentVerificationService;
+import com.menta.billing.application.usecase.PublishPhysicalPaymentCompletedUseCase;
 import com.menta.billing.application.usecase.ReceiveWebhookUseCaseImpl;
 import com.menta.billing.application.usecase.UpdatePhysicalCoursePricingUseCaseImpl;
 import com.menta.billing.application.usecase.VirtualCourseEntitlementService;
@@ -106,11 +107,22 @@ public class BillingConfiguration {
     @Bean
     public PaymentVerificationService paymentVerificationService(
         PaymentRepository paymentRepository, PaymentProviderPort paymentProviderPort,
-        SubscriptionRepository subscriptionRepository, PlanRepository planRepository, Clock clock
+        SubscriptionRepository subscriptionRepository, PlanRepository planRepository, Clock clock,
+        PublishPhysicalPaymentCompletedUseCase publishPhysicalPaymentCompletedUseCase
     ) {
         return new PaymentVerificationService(
-            paymentRepository, paymentProviderPort, subscriptionRepository, planRepository, clock
+            paymentRepository, paymentProviderPort, subscriptionRepository, planRepository, clock,
+            publishPhysicalPaymentCompletedUseCase
         );
+    }
+
+    /** Task TASK-003: produces the {@code billing.PhysicalPaymentCompleted}
+     *  outbox event from a completed physical payment. */
+    @Bean
+    public PublishPhysicalPaymentCompletedUseCase publishPhysicalPaymentCompletedUseCase(
+        com.menta.billing.application.port.out.BillingOutboxAppenderPort billingOutboxAppenderPort
+    ) {
+        return new PublishPhysicalPaymentCompletedUseCase(billingOutboxAppenderPort);
     }
 
     /** ADR-0039: Virtual reads Billing's current subscription entitlement. */
