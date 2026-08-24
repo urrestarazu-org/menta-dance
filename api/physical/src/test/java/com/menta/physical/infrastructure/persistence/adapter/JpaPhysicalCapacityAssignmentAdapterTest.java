@@ -6,12 +6,14 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.menta.physical.domain.model.CourseId;
 import com.menta.physical.domain.model.SessionId;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalCapacityAssignmentJpaEntity;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityAssignmentJpaRepository;
-import java.time.Clock;
+import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionAvailabilityProjection;
+import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
 import java.time.Instant;
-import java.time.ZoneId;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -21,9 +23,7 @@ import org.mockito.ArgumentCaptor;
 
 /**
  * RED-GREEN: validates the JPA adapter that owns the
- * {@code physical_capacity_assignments} write path (TASK-005). Asserts
- * the read-method delegation AND the persistence shape of
- * {@link com.menta.physical.application.port.out.PhysicalCapacityAssignmentWriter#assertAssignment}.
+ * {@code physical_capacity_assignments} write path (TASK-005).
  */
 class JpaPhysicalCapacityAssignmentAdapterTest {
 
@@ -32,32 +32,38 @@ class JpaPhysicalCapacityAssignmentAdapterTest {
     private static final SessionId SESSION_ID = SessionId.of(SESSION_UUID);
     private static final Instant NOW = Instant.parse("2026-08-24T13:00:00Z");
 
-    private PhysicalCapacityAssignmentJpaRepository jpaRepository;
+    private PhysicalCapacityAssignmentJpaRepository assignmentRepository;
+    private PhysicalSessionJpaRepository sessionRepository;
     private JpaPhysicalCapacityAssignmentAdapter adapter;
 
     @BeforeEach
     void setUp() {
-        jpaRepository = mock(PhysicalCapacityAssignmentJpaRepository.class);
-        when(jpaRepository.save(any(PhysicalCapacityAssignmentJpaEntity.class)))
+        assignmentRepository = mock(PhysicalCapacityAssignmentJpaRepository.class);
+        sessionRepository = mock(PhysicalSessionJpaRepository.class);
+        when(assignmentRepository.save(any(PhysicalCapacityAssignmentJpaEntity.class)))
             .thenAnswer(inv -> inv.getArgument(0));
+        com.menta.physical.application.port.out.Clock clock = () -> NOW;
         adapter = new JpaPhysicalCapacityAssignmentAdapter(
-            jpaRepository, Clock.fixed(NOW, ZoneId.of("UTC"))
+            assignmentRepository, sessionRepository, clock
         );
     }
 
-    @Nested
-    @DisplayName("Read method preserved on the existing port")
-    class ReadDelegation {
+    private void stubSessionWithCapacity(int capacity, int assignedSpots) {
+        when(sessionRepository.findByIdWithAvailabilityForUpdate(SESSION_UUID, NOW))
+            .thenReturn(Optional.of(projection(capacity, assignedSpots)));
+    }
 
-        @Test
-        void existsConfirmedAssignment_delegates_to_repository_with_sessionId_and_studentId() {
-            when(jpaRepository.existsBySessionIdAndStudentId(SESSION_UUID, STUDENT_UUID)).thenReturn(true);
-
-            boolean result = adapter.existsConfirmedAssignment(SESSION_ID, STUDENT_UUID);
-
-            assertThat(result).isTrue();
-            verify(jpaRepository).existsBySessionIdAndStudentId(SESSION_UUID, STUDENT_UUID);
-        }
+    private static PhysicalSessionAvailabilityProjection projection(int capacity, int assigned) {
+        return new PhysicalSessionAvailabilityProjection() {
+            @Override public byte[] getId() { return null; }
+            @Override public byte[] getCourseId() { return null; }
+            @Override public Instant getScheduledAt() { return null; }
+            @Override public Integer getCapacity() { return capacity; }
+            @Override public Integer getAssignedSpots() { return assigned; }
+            @Override public Integer getActiveCapacityHolds() { return 0; }
+            @Override public String getStatus() { return "SCHEDULED"; }
+            @Override public String getNotes() { return null; }
+        };
     }
 
     @Nested
@@ -65,7 +71,9 @@ class JpaPhysicalCapacityAssignmentAdapterTest {
     class WriteShape {
 
         @Test
-        void assertAssignment_saves_one_row_with_fresh_row_id_sessionId_studentId_now() {
+        void assertAssignment_saves_one_row_when_assignedSpots_plus_one_does_not_exceed_capacity() {
+            stubSessionWithCapacity(2, 0);
+
             Instant returned = adapter.assertAssignment(SESSION_UUID, STUDENT_UUID);
 
             assertThat(returned).isEqualTo(NOW);
@@ -73,13 +81,24 @@ class JpaPhysicalCapacityAssignmentAdapterTest {
             ArgumentCaptor<PhysicalCapacityAssignmentJpaEntity> captor = ArgumentCaptor.forClass(
                 PhysicalCapacityAssignmentJpaEntity.class
             );
-            verify(jpaRepository).save(captor.capture());
+            verify(assignmentRepository).save(captor.capture());
 
             PhysicalCapacityAssignmentJpaEntity row = captor.getValue();
             assertThat(row.getId()).isNotNull();
             assertThat(row.getSessionId()).isEqualTo(SESSION_UUID);
             assertThat(row.getStudentId()).isEqualTo(STUDENT_UUID);
             assertThat(row.getCreatedAt()).isEqualTo(NOW);
+        }
+
+        @Test
+        void assertAssignment_deletes_and_throws_when_assignedSpots_plus_one_exceeds_capacity() {
+            stubSessionWithCapacity(1, 1);
+
+            org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                adapter.assertAssignment(SESSION_UUID, STUDENT_UUID)
+            ).isInstanceOf(com.menta.physical.domain.exception.CapacityBelowAssignedException.class);
+
+            verify(assignmentRepository).deleteById(any(UUID.class));
         }
     }
 }
