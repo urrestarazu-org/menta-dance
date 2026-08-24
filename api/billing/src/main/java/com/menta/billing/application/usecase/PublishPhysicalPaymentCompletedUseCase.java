@@ -13,23 +13,18 @@ import com.menta.billing.domain.model.PaymentStatus;
 import com.menta.billing.domain.model.PaymentTarget;
 import com.menta.shared.billing.PaymentCompletedOutboxPayload;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * Producer for the {@code billing.PhysicalPaymentCompleted} outbox event
- * (proposal §5 Approach — "Event production"; design §5.1 — after-commit
- * semantics; tasks TASK-003).
+ * (proposal §5 Approach — "Event production"; design §5.1 — transactional
+ * outbox semantics; tasks TASK-003).
  *
  * <h2>Lifecycle</h2>
  * <p>Called from {@link PaymentVerificationService#ensureFulfillment}
- * inside the payment-status commit. The use case does NOT persist the
- * outbox row synchronously: it registers a
- * {@link TransactionSynchronization#afterCommit()} hook on the caller's
- * transaction, so the row only exists if and when the payment transaction
- * itself commits. On rollback, Spring drops the registered synchronization
- * and the appender is never called — the spec scenario "Rolled-back payment
- * leaves empty outbox and empty purchases" is preserved mechanically.</p>
+ * inside the payment-status commit. The use case persists the outbox row
+ * synchronously through an appender that joins that transaction. Consequently,
+ * a rollback removes both the payment update and its outbox row, while a
+ * commit makes them visible atomically to the reconciler.</p>
  *
  * <h2>Scope</h2>
  * <p>Only fires for {@code PaymentTarget.Physical} that has reached
@@ -55,42 +50,37 @@ public final class PublishPhysicalPaymentCompletedUseCase {
     private final ObjectWriter writer;
 
     public PublishPhysicalPaymentCompletedUseCase(BillingOutboxAppenderPort outboxAppender) {
-        this.outboxAppender = outboxAppender;
-        this.writer = new ObjectMapper()
+        this(outboxAppender, new ObjectMapper()
             .registerModule(new JavaTimeModule())
             .registerModule(new ParameterNamesModule())
             .configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false)
-            .writerFor(PaymentCompletedOutboxPayload.class);
+            .writerFor(PaymentCompletedOutboxPayload.class));
+    }
+
+    PublishPhysicalPaymentCompletedUseCase(BillingOutboxAppenderPort outboxAppender, ObjectWriter writer) {
+        this.outboxAppender = outboxAppender;
+        this.writer = writer;
     }
 
     /**
-     * Register the after-commit appender for a Completed physical payment;
-     * no-op for any other status or non-Physical target so the caller
+     * Append the event in the caller's active payment transaction for a
+     * Completed physical payment; no-op for any other status or non-Physical target so the caller
      * (which already gates by status) can safely call this from any branch.
      *
      * @param payment the payment currently being committed.
      */
     public void handle(Payment payment) {
-        if (!(payment.getTarget() instanceof PaymentTarget)) {
-            return;
-        }
         if (!(payment.getTarget() instanceof PaymentTarget.Physical)) {
             return;
         }
         if (!(payment.getStatus() instanceof PaymentStatus.Completed)) {
             return;
         }
-        PaymentCompletedOutboxPayload payload = toPayload(payment);
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                outboxAppender.append(
-                    BillingOutboxEventTypes.PHYSICAL_PAYMENT_COMPLETED,
-                    payment.getId().getValue().toString(),
-                    writeJson(payload)
-                );
-            }
-        });
+        outboxAppender.append(
+            BillingOutboxEventTypes.PHYSICAL_PAYMENT_COMPLETED,
+            payment.getId().getValue().toString(),
+            writeJson(toPayload(payment))
+        );
     }
 
     private static PaymentCompletedOutboxPayload toPayload(Payment payment) {
@@ -105,9 +95,7 @@ public final class PublishPhysicalPaymentCompletedUseCase {
             ((PaymentTarget.Physical) payment.getTarget()).sessionId(),
             payment.getExpectedAmount().getAmount(),
             payment.getExpectedAmount().getCurrency(),
-            payment.confirmedAt().orElseThrow(() -> new IllegalStateException(
-                "Completed payment without confirmedAt cannot be published; paymentId=" + payment.getId()
-            ))
+            ((PaymentStatus.Completed) payment.getStatus()).confirmedAt()
         );
     }
 

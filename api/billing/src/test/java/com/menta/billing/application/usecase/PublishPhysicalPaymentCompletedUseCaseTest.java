@@ -1,13 +1,17 @@
 package com.menta.billing.application.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectWriter;
 import com.menta.billing.application.contract.BillingOutboxEventTypes;
 import com.menta.billing.application.port.out.BillingOutboxAppenderPort;
 import com.menta.billing.domain.model.Money;
@@ -17,16 +21,12 @@ import com.menta.billing.domain.model.PaymentStatus;
 import com.menta.billing.domain.model.PaymentTarget;
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * RED-GREEN: every assertion references
@@ -36,14 +36,12 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * <p>Spec scenarios exercised:
  * <ul>
  *   <li>"Completed physical payment appends one outbox row" — happy path
- *       via {@link TransactionSynchronization#afterCommit()}.</li>
+ *       in the calling payment transaction.</li>
  *   <li>"Completed virtual payment publishes no physical event" — the
- *       synchronization MUST NOT be registered for a non-physical target.</li>
+ *       appender MUST NOT be called for a non-physical target.</li>
  *   <li>"Rolled-back payment leaves empty outbox and empty purchases" —
- *       proves registration alone is not enough: only {@code afterCommit}
- *       fires the appender. Spring drops the synchronization on rollback,
- *       and unit-level proof of the same contract: never invoking
- *       {@code afterCommit()} means the appender is never called.</li>
+ *       the appender joins the caller's transaction, so a rollback removes
+ *       its event with the payment update.</li>
  * </ul>
  */
 class PublishPhysicalPaymentCompletedUseCaseTest {
@@ -61,14 +59,6 @@ class PublishPhysicalPaymentCompletedUseCaseTest {
     void setUp() {
         outboxAppender = mock(BillingOutboxAppenderPort.class);
         useCase = new PublishPhysicalPaymentCompletedUseCase(outboxAppender);
-        TransactionSynchronizationManager.initSynchronization();
-    }
-
-    @AfterEach
-    void tearDown() {
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.clearSynchronization();
-        }
     }
 
     private static Payment physicalPayment(PaymentStatus status) {
@@ -80,18 +70,11 @@ class PublishPhysicalPaymentCompletedUseCaseTest {
 
     @Nested
     @DisplayName("Spec scenario: Completed physical payment appends one outbox row")
-    class AfterCommitHappy {
+    class TransactionalHappy {
 
         @Test
-        void registers_after_commit_synchronization_that_invokes_the_outbox_appender() {
+        void appends_the_outbox_event_in_the_calling_payment_transaction() {
             useCase.handle(physicalPayment(new PaymentStatus.Completed(NOW)));
-
-            List<TransactionSynchronization> syncs =
-                TransactionSynchronizationManager.getSynchronizations();
-            assertThat(syncs).hasSize(1);
-
-            TransactionSynchronization sync = syncs.get(0);
-            sync.afterCommit();
 
             ArgumentCaptor<String> eventType = ArgumentCaptor.forClass(String.class);
             ArgumentCaptor<String> aggregateId = ArgumentCaptor.forClass(String.class);
@@ -117,7 +100,7 @@ class PublishPhysicalPaymentCompletedUseCaseTest {
     class VirtualPaymentIgnored {
 
         @Test
-        void does_not_register_synchronization_when_target_is_virtual() {
+        void does_not_append_when_target_is_virtual() {
             Payment virtual = new Payment(
                 PaymentId.generate(), USER_ID, "mp-virtual", AMOUNT, "ext-v", "merchant-1",
                 new PaymentTarget.Virtual("plan-1"),
@@ -126,12 +109,11 @@ class PublishPhysicalPaymentCompletedUseCaseTest {
 
             useCase.handle(virtual);
 
-            assertThat(TransactionSynchronizationManager.getSynchronizations()).isEmpty();
             verify(outboxAppender, never()).append(any(), any(), any());
         }
 
         @Test
-        void does_not_register_synchronization_when_target_is_virtual_pending() {
+        void does_not_append_when_target_is_virtual_pending() {
             Payment virtualPending = new Payment(
                 PaymentId.generate(), USER_ID, null, AMOUNT, "ext-v", "merchant-1",
                 new PaymentTarget.Virtual("plan-1"),
@@ -140,7 +122,6 @@ class PublishPhysicalPaymentCompletedUseCaseTest {
 
             useCase.handle(virtualPending);
 
-            assertThat(TransactionSynchronizationManager.getSynchronizations()).isEmpty();
         }
     }
 
@@ -149,25 +130,38 @@ class PublishPhysicalPaymentCompletedUseCaseTest {
     class RolledBackPaymentNoEvent {
 
         @Test
-        void after_commit_must_be_called_explicitly_or_no_outbox_row_appears() {
-            useCase.handle(physicalPayment(new PaymentStatus.Completed(NOW)));
-
-            List<TransactionSynchronization> syncs =
-                TransactionSynchronizationManager.getSynchronizations();
-            assertThat(syncs).hasSize(1);
-
-            // Drop the synchronization without firing afterCommit — this mimics
-            // Spring's own rollback behavior: the registered sync never fires.
-            TransactionSynchronizationManager.clearSynchronization();
+        void publishes_nothing_for_a_non_completed_physical_payment() {
+            useCase.handle(physicalPayment(new PaymentStatus.AwaitingProvider()));
 
             verify(outboxAppender, never()).append(any(), any(), any());
         }
 
         @Test
-        void publishes_nothing_for_a_non_completed_physical_payment() {
-            useCase.handle(physicalPayment(new PaymentStatus.AwaitingProvider()));
+        void rejects_a_completed_payment_that_has_no_provider_payment_id() {
+            Payment invalidCompletedPayment = new Payment(
+                PAYMENT_ID, USER_ID, null, AMOUNT, "ext-1", "merchant-1",
+                new PaymentTarget.Physical(SESSION_ID.toString()),
+                new PaymentStatus.Completed(NOW), NOW
+            );
 
-            assertThat(TransactionSynchronizationManager.getSynchronizations()).isEmpty();
+            assertThatThrownBy(() -> useCase.handle(invalidCompletedPayment))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Completed payment without providerPaymentId");
+
+            verify(outboxAppender, never()).append(any(), any(), any());
+        }
+
+        @Test
+        void fails_without_appending_when_payload_serialization_fails() throws Exception {
+            ObjectWriter failingWriter = mock(ObjectWriter.class);
+            when(failingWriter.writeValueAsString(any()))
+                .thenThrow(new JsonProcessingException("serialization failed") { });
+            useCase = new PublishPhysicalPaymentCompletedUseCase(outboxAppender, failingWriter);
+
+            assertThatThrownBy(() -> useCase.handle(physicalPayment(new PaymentStatus.Completed(NOW))))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("PaymentCompletedOutboxPayload JSON serialization failed");
+
             verify(outboxAppender, never()).append(any(), any(), any());
         }
     }
@@ -192,16 +186,10 @@ class PublishPhysicalPaymentCompletedUseCaseTest {
     class IdempotentSurface {
 
         @Test
-        void registers_a_fresh_after_commit_again_on_a_second_handle_call() {
+        void delegates_each_re_delivery_to_the_appender_so_the_database_unique_constraint_decides() {
             Payment payment = physicalPayment(new PaymentStatus.Completed(NOW));
             useCase.handle(payment);
             useCase.handle(payment);
-
-            List<TransactionSynchronization> syncs =
-                TransactionSynchronizationManager.getSynchronizations();
-            assertThat(syncs).hasSize(2);
-
-            syncs.forEach(TransactionSynchronization::afterCommit);
 
             verify(outboxAppender, times(2))
                 .append(eq(BillingOutboxEventTypes.PHYSICAL_PAYMENT_COMPLETED),
