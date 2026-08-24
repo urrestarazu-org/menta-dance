@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
+import com.menta.app.outbox.OutboxReconciliationWorker;
 import com.menta.auth.application.port.out.AccessTokenIssuer;
 import com.menta.auth.application.port.out.ActivationRateLimitPort;
 import com.menta.auth.application.port.out.AuthDegradedGuard;
@@ -17,8 +18,19 @@ import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.model.UserId;
 import com.menta.auth.domain.model.UserStatus;
 import com.menta.auth.domain.repository.UserRepository;
+import com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity;
+import com.menta.auth.infrastructure.persistence.repository.OutboxRowJpaRepository;
+import com.menta.billing.application.dto.ProviderPaymentResult;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.port.out.CourseCatalogPort;
+import com.menta.billing.application.port.out.PaymentProviderPort;
+import com.menta.billing.domain.model.Money;
+import com.menta.billing.infrastructure.persistence.entity.PaymentJpaEntity;
+import com.menta.billing.infrastructure.persistence.entity.WebhookInboxJpaEntity;
+import com.menta.billing.infrastructure.persistence.repository.PaymentJpaRepository;
+import com.menta.billing.infrastructure.persistence.repository.PurchaseJpaRepository;
+import com.menta.billing.infrastructure.persistence.repository.WebhookInboxJpaRepository;
+import com.menta.billing.infrastructure.webhook.WebhookVerificationWorker;
 import com.menta.physical.domain.model.CourseStatus;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalCapacityAssignmentJpaEntity;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalCourseJpaEntity;
@@ -27,11 +39,13 @@ import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacity
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
 import com.menta.shared.domain.vo.Email;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Executors;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -92,6 +106,12 @@ class PhysicalSessionManagementIntegrationTest {
     @Autowired private PhysicalCourseJpaRepository courseRepository;
     @Autowired private PhysicalSessionJpaRepository sessionRepository;
     @Autowired private PhysicalCapacityAssignmentJpaRepository assignmentRepository;
+    @Autowired private PaymentJpaRepository paymentRepository;
+    @Autowired private PurchaseJpaRepository purchaseRepository;
+    @Autowired private WebhookInboxJpaRepository inboxRepository;
+    @Autowired private OutboxRowJpaRepository outboxRepository;
+    @Autowired private WebhookVerificationWorker webhookWorker;
+    @Autowired private OutboxReconciliationWorker outboxWorker;
 
     @MockBean private AuthDegradedGuard authDegradedGuard;
     @MockBean private TokenBlacklistPort tokenBlacklistPort;
@@ -101,6 +121,7 @@ class PhysicalSessionManagementIntegrationTest {
     @MockBean private PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
     @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
     @MockBean private CourseCatalogPort courseCatalogPort;
+    @MockBean private PaymentProviderPort paymentProviderPort;
 
     @SuppressWarnings("rawtypes")
     @MockBean
@@ -109,6 +130,10 @@ class PhysicalSessionManagementIntegrationTest {
     @AfterEach
     void cleanUp() {
         assignmentRepository.deleteAll();
+        purchaseRepository.deleteAll();
+        outboxRepository.deleteAll();
+        inboxRepository.deleteAll();
+        paymentRepository.deleteAll();
         sessionRepository.deleteAll();
         courseRepository.deleteAll();
     }
@@ -151,6 +176,36 @@ class PhysicalSessionManagementIntegrationTest {
         UUID id = UUID.randomUUID();
         sessionRepository.save(new PhysicalSessionJpaEntity(id, courseId, scheduledAt, capacity, status, null));
         return id;
+    }
+
+    private UUID seedPendingPhysicalPayment(String providerPaymentId, UUID studentId, UUID sessionId) {
+        UUID paymentId = UUID.randomUUID();
+        paymentRepository.save(new PaymentJpaEntity(
+            paymentId, studentId, providerPaymentId, new BigDecimal("100.00"), "ARS",
+            "ext-" + providerPaymentId, "merchant-1", "PHYSICAL", sessionId.toString(),
+            "AWAITING_PROVIDER", null, null, Instant.now()
+        ));
+        return paymentId;
+    }
+
+    private void verifyAndDispatch(String providerPaymentId) {
+        WebhookInboxJpaEntity inbox = inboxRepository.save(new WebhookInboxJpaEntity(
+            providerPaymentId + ":req-1", providerPaymentId, "req-1",
+            com.menta.billing.infrastructure.webhook.WebhookInboxStatus.RECEIVED,
+            0, null, null, Instant.now(), null
+        ));
+        webhookWorker.process(inbox);
+        OutboxRowJpaEntity outbox = outboxRepository.findAll().getLast();
+        assertThat(outboxWorker.process(outbox)).isFalse();
+    }
+
+    private ResponseEntity<Map> issueAccessQr(UUID sessionId, UUID studentId) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(tokenFor(studentId, Role.STUDENT));
+        return http.exchange(
+            "/api/v1/physical/sessions/" + sessionId + "/access-qr", HttpMethod.POST,
+            new HttpEntity<>(headers), Map.class
+        );
     }
 
     @Test
@@ -298,4 +353,83 @@ class PhysicalSessionManagementIntegrationTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().get("status")).isEqualTo("CANCELLED");
     }
+
+    @Test
+    void payment_verification_driven_assign_honors_capacity_invariant_for_one_payment() {
+        UUID studentId = issueUser(Role.STUDENT);
+        UUID courseId = seedCourse(UUID.randomUUID());
+        UUID sessionId = seedSession(courseId, Instant.now(), 1, "SCHEDULED");
+        UUID paymentId = seedPendingPhysicalPayment("mp-capacity-happy", studentId, sessionId);
+        when(paymentProviderPort.fetchPayment("mp-capacity-happy")).thenReturn(
+            new ProviderPaymentResult(
+                "approved", Money.of(new BigDecimal("100.00"), "ARS"),
+                "ext-mp-capacity-happy", "merchant-1"
+            )
+        );
+
+        verifyAndDispatch("mp-capacity-happy");
+
+        assertThat(assignmentRepository.countBySessionId(sessionId)).isEqualTo(1);
+        assertThat(purchaseRepository.findByPaymentId(paymentId).orElseThrow().getStatus())
+            .isEqualTo("PENDING_FULFILLMENT");
+        ResponseEntity<Map> qrResponse = issueAccessQr(sessionId, studentId);
+        assertThat(qrResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(qrResponse.getBody().get("qrCredentials")).isNotNull();
+    }
+
+    @Test
+    void concurrent_payments_for_same_session_capacity_one_resolves_one_is_exception() throws Exception {
+        UUID courseId = seedCourse(UUID.randomUUID());
+        UUID sessionId = seedSession(courseId, Instant.now(), 1, "SCHEDULED");
+        UUID firstPaymentId = seedPendingPhysicalPayment(
+            "mp-concurrent-1", UUID.randomUUID(), sessionId
+        );
+        UUID secondPaymentId = seedPendingPhysicalPayment(
+            "mp-concurrent-2", UUID.randomUUID(), sessionId
+        );
+        when(paymentProviderPort.fetchPayment("mp-concurrent-1")).thenReturn(
+            new ProviderPaymentResult(
+                "approved", Money.of(new BigDecimal("100.00"), "ARS"),
+                "ext-mp-concurrent-1", "merchant-1"
+            )
+        );
+        when(paymentProviderPort.fetchPayment("mp-concurrent-2")).thenReturn(
+            new ProviderPaymentResult(
+                "approved", Money.of(new BigDecimal("100.00"), "ARS"),
+                "ext-mp-concurrent-2", "merchant-1"
+            )
+        );
+        WebhookInboxJpaEntity firstInbox = inboxRepository.save(new WebhookInboxJpaEntity(
+            "mp-concurrent-1:req-1", "mp-concurrent-1", "req-1",
+            com.menta.billing.infrastructure.webhook.WebhookInboxStatus.RECEIVED,
+            0, null, null, Instant.now(), null
+        ));
+        WebhookInboxJpaEntity secondInbox = inboxRepository.save(new WebhookInboxJpaEntity(
+            "mp-concurrent-2:req-1", "mp-concurrent-2", "req-1",
+            com.menta.billing.infrastructure.webhook.WebhookInboxStatus.RECEIVED,
+            0, null, null, Instant.now(), null
+        ));
+        webhookWorker.process(firstInbox);
+        webhookWorker.process(secondInbox);
+        List<OutboxRowJpaEntity> events = outboxRepository.findAll();
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var first = executor.submit(
+                () -> assertThat(outboxWorker.process(events.get(0))).isFalse()
+            );
+            var second = executor.submit(
+                () -> assertThat(outboxWorker.process(events.get(1))).isFalse()
+            );
+            first.get();
+            second.get();
+        }
+
+        assertThat(assignmentRepository.countBySessionId(sessionId)).isEqualTo(1);
+        assertThat(purchaseRepository.findByPaymentId(firstPaymentId).orElseThrow().getStatus())
+            .isIn("PENDING_FULFILLMENT", "EXCEPTION");
+        assertThat(purchaseRepository.findByPaymentId(secondPaymentId).orElseThrow().getStatus())
+            .isIn("PENDING_FULFILLMENT", "EXCEPTION");
+        assertThat(purchaseRepository.findAll()).extracting(purchase -> purchase.getStatus())
+            .containsExactlyInAnyOrder("PENDING_FULFILLMENT", "EXCEPTION");
+    }
+
 }

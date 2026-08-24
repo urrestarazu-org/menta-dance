@@ -40,7 +40,7 @@ The proposed chain (mirrors design §10):
 
 ## 1. PaymentCompletedOutboxPayload + CapacityAssignmentCommand
 - **ID**: TASK-001
-- **Status**: pending
+- **Status**: completed
 - **Dependencies**: none
 - **Estimated LOC**: 80 prod + 60 test = ~140
 - **Estimated test LOC**: 60
@@ -63,7 +63,7 @@ The proposed chain (mirrors design §10):
 
 ## 2. BillingOutboxEventTypes + BillingOutboxAppenderPort + BillingOutboxAppender (infra)
 - **ID**: TASK-002
-- **Status**: pending
+- **Status**: completed
 - **Dependencies**: TASK-001
 - **Estimated LOC**: 140 prod + 60 test = ~200
 - **Estimated test LOC**: 60
@@ -113,7 +113,7 @@ The proposed chain (mirrors design §10):
 
 ## 4. PurchaseCreationFromEventPort + MarkPurchaseExceptionPort + use cases + state machine
 - **ID**: TASK-004
-- **Status**: pending
+- **Status**: completed
 - **Dependencies**: TASK-001, TASK-002
 - **Estimated LOC**: 220 prod + 100 test = ~320
 - **Estimated test LOC**: 100
@@ -140,7 +140,7 @@ The proposed chain (mirrors design §10):
 
 ## 5. PhysicalCapacityAssignmentPort + AssignCapacityUseCase + JpaPhysicalCapacityAssignmentAdapter + repo extension
 - **ID**: TASK-005
-- **Status**: pending
+- **Status**: completed
 - **Dependencies**: TASK-001
 - **Estimated LOC**: 130 prod + 90 test = ~220
 - **Estimated test LOC**: 90
@@ -167,7 +167,7 @@ The proposed chain (mirrors design §10):
 
 ## 6. AssignCapacityAdapterIntegrationTest (capacity-respecting end-to-end)
 - **ID**: TASK-006
-- **Status**: pending
+- **Status**: completed
 - **Dependencies**: TASK-005
 - **Estimated LOC**: 0 prod + 120 test = ~120
 - **Estimated test LOC**: 120
@@ -250,7 +250,7 @@ The proposed chain (mirrors design §10):
 
 ## 9. PaymentWebhookIntegrationTest.java:195, 215 rewrite + 2 new sibling tests
 - **ID**: TASK-009
-- **Status**: pending
+- **Status**: completed
 - **Dependencies**: TASK-007
 - **Estimated LOC**: 0 prod-as-new + 220 test (rewrite + new tests) = ~220
 - **Estimated test LOC**: 220
@@ -280,7 +280,7 @@ The proposed chain (mirrors design §10):
 
 ## 10. Capacity invariant concurrency extension + dedicated EXCEPTION integration + verification sweep
 - **ID**: TASK-010
-- **Status**: pending
+- **Status**: completed
 - **Dependencies**: TASK-006, TASK-007, TASK-008
 - **Estimated LOC**: 0 prod-as-new + 200 test (extends + new) + 40 wrap-up = ~240
 - **Estimated test LOC**: 200
