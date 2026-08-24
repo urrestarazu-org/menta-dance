@@ -22,10 +22,21 @@ import com.menta.billing.infrastructure.persistence.repository.PurchaseJpaReposi
 import com.menta.billing.infrastructure.persistence.repository.ReconciliationTaskJpaRepository;
 import com.menta.billing.infrastructure.persistence.repository.WebhookInboxJpaRepository;
 import com.menta.billing.infrastructure.webhook.WebhookVerificationWorker;
+import com.menta.app.outbox.OutboxReconciliationWorker;
+import com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity;
+import com.menta.auth.infrastructure.persistence.repository.OutboxRowJpaRepository;
 import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
+import com.menta.physical.domain.model.CourseStatus;
+import com.menta.physical.infrastructure.persistence.entity.PhysicalCapacityAssignmentJpaEntity;
+import com.menta.physical.infrastructure.persistence.entity.PhysicalCourseJpaEntity;
+import com.menta.physical.infrastructure.persistence.entity.PhysicalSessionJpaEntity;
+import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityAssignmentJpaRepository;
+import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJpaRepository;
+import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.LocalTime;
 import java.util.HexFormat;
 import java.util.UUID;
 import javax.crypto.Mac;
@@ -85,6 +96,11 @@ class PaymentWebhookIntegrationTest {
     @Autowired private PurchaseJpaRepository purchaseRepository;
     @Autowired private ReconciliationTaskJpaRepository reconciliationTaskRepository;
     @Autowired private WebhookVerificationWorker worker;
+    @Autowired private OutboxRowJpaRepository outboxRepository;
+    @Autowired private OutboxReconciliationWorker outboxWorker;
+    @Autowired private PhysicalCapacityAssignmentJpaRepository physicalCapacityAssignmentRepository;
+    @Autowired private PhysicalCourseJpaRepository physicalCourseRepository;
+    @Autowired private PhysicalSessionJpaRepository physicalSessionRepository;
 
     @MockBean private PaymentProviderPort paymentProviderPort;
     @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
@@ -105,6 +121,10 @@ class PaymentWebhookIntegrationTest {
         purchaseRepository.deleteAll();
         paymentRepository.deleteAll();
         inboxRepository.deleteAll();
+        outboxRepository.deleteAll();
+        physicalCapacityAssignmentRepository.deleteAll();
+        physicalSessionRepository.deleteAll();
+        physicalCourseRepository.deleteAll();
     }
 
     private static String hmac(String manifest, String secret) {
@@ -127,14 +147,41 @@ class PaymentWebhookIntegrationTest {
         );
     }
 
-    private UUID seedPendingPhysicalPayment(String providerPaymentId) {
+    private UUID seedPendingPhysicalPayment(String providerPaymentId, UUID studentId, UUID sessionId) {
         UUID id = UUID.randomUUID();
         paymentRepository.save(new PaymentJpaEntity(
-            id, UUID.randomUUID(), providerPaymentId, new BigDecimal("100.00"), "ARS",
-            "ext-1", "merchant-1", "PHYSICAL", "session-1", "AWAITING_PROVIDER",
+            id, studentId, providerPaymentId, new BigDecimal("100.00"), "ARS",
+            "ext-1", "merchant-1", "PHYSICAL", sessionId.toString(), "AWAITING_PROVIDER",
             null, null, Instant.now()
         ));
         return id;
+    }
+
+    private UUID seedSession(int capacity) {
+        UUID courseId = UUID.randomUUID();
+        Instant now = Instant.now();
+        physicalCourseRepository.save(new PhysicalCourseJpaEntity(
+            courseId, "Integration course", "Test course", UUID.randomUUID(), "Test professor",
+            "MONDAY", LocalTime.NOON, 60, "BEGINNER", capacity, CourseStatus.ACTIVE, now, now
+        ));
+        UUID sessionId = UUID.randomUUID();
+        physicalSessionRepository.save(new PhysicalSessionJpaEntity(
+            sessionId, courseId, now.plusSeconds(86_400), capacity, "SCHEDULED", null
+        ));
+        return sessionId;
+    }
+
+    private WebhookInboxJpaEntity receivedWebhookRow(String providerPaymentId, String requestId) {
+        return inboxRepository.save(new WebhookInboxJpaEntity(
+            providerPaymentId + ":" + requestId, providerPaymentId, requestId,
+            com.menta.billing.infrastructure.webhook.WebhookInboxStatus.RECEIVED,
+            0, null, null, Instant.now(), null
+        ));
+    }
+
+    private void dispatchPendingOutboxEvent() {
+        OutboxRowJpaEntity event = outboxRepository.findAll().getFirst();
+        assertThat(outboxWorker.process(event)).isFalse();
     }
 
     @Test
@@ -178,46 +225,89 @@ class PaymentWebhookIntegrationTest {
 
     @Test
     void the_worker_confirms_a_matching_physical_payment_without_creating_billing_fulfillment() {
-        UUID paymentId = seedPendingPhysicalPayment("mp-idempotent");
+        UUID sessionId = seedSession(2);
+        UUID paymentId = seedPendingPhysicalPayment("mp-idempotent", UUID.randomUUID(), sessionId);
         when(paymentProviderPort.fetchPayment("mp-idempotent")).thenReturn(
             new ProviderPaymentResult("approved", Money.of(new BigDecimal("100.00"), "ARS"), "ext-1", "merchant-1")
         );
-        WebhookInboxJpaEntity row = new WebhookInboxJpaEntity(
-            "mp-idempotent:req-1", "mp-idempotent", "req-1",
-            com.menta.billing.infrastructure.webhook.WebhookInboxStatus.RECEIVED, 0, null, null, Instant.now(), null
-        );
-        inboxRepository.save(row);
+        WebhookInboxJpaEntity row = receivedWebhookRow("mp-idempotent", "req-1");
 
         worker.process(row);
-        worker.process(row);
+        dispatchPendingOutboxEvent();
 
         assertThat(paymentRepository.findById(paymentId).orElseThrow().getStatusType()).isEqualTo("COMPLETED");
-        assertThat(purchaseRepository.findAll()).isEmpty();
+        assertThat(purchaseRepository.findAll()).hasSize(1);
+        assertThat(purchaseRepository.findByPaymentId(paymentId).orElseThrow().getStatus())
+            .isEqualTo("PENDING_FULFILLMENT");
     }
 
     @Test
     void a_physical_payment_completion_leaves_capacity_orchestration_to_app() {
-        seedPendingPhysicalPayment("mp-fulfillment-fails");
+        UUID sessionId = seedSession(2);
+        UUID studentId = UUID.randomUUID();
+        seedPendingPhysicalPayment("mp-fulfillment-fails", studentId, sessionId);
         when(paymentProviderPort.fetchPayment("mp-fulfillment-fails")).thenReturn(
             new ProviderPaymentResult("approved", Money.of(new BigDecimal("100.00"), "ARS"), "ext-1", "merchant-1")
         );
-        WebhookInboxJpaEntity row = new WebhookInboxJpaEntity(
-            "mp-fulfillment-fails:req-1", "mp-fulfillment-fails", "req-1",
-            com.menta.billing.infrastructure.webhook.WebhookInboxStatus.RECEIVED, 0, null, null, Instant.now(), null
-        );
-        inboxRepository.save(row);
+        WebhookInboxJpaEntity row = receivedWebhookRow("mp-fulfillment-fails", "req-1");
 
         worker.process(row);
+        dispatchPendingOutboxEvent();
 
         assertThat(paymentRepository.findAll()).allSatisfy(
             payment -> assertThat(payment.getStatusType()).isEqualTo("COMPLETED")
         );
-        assertThat(purchaseRepository.findAll()).isEmpty();
+        assertThat(purchaseRepository.findAll()).hasSize(1);
+        assertThat(physicalCapacityAssignmentRepository.existsBySessionIdAndStudentId(sessionId, studentId)).isTrue();
+    }
+
+    @Test
+    void webhook_redelivery_is_idempotent_and_does_not_create_a_second_purchase_row() {
+        UUID sessionId = seedSession(2);
+        UUID studentId = UUID.randomUUID();
+        UUID paymentId = seedPendingPhysicalPayment("mp-idempotent", studentId, sessionId);
+        when(paymentProviderPort.fetchPayment("mp-idempotent")).thenReturn(
+            new ProviderPaymentResult("approved", Money.of(new BigDecimal("100.00"), "ARS"), "ext-1", "merchant-1")
+        );
+        WebhookInboxJpaEntity row = receivedWebhookRow("mp-idempotent", "req-1");
+
+        worker.process(row);
+        worker.process(row);
+        dispatchPendingOutboxEvent();
+
+        assertThat(purchaseRepository.findAll()).hasSize(1);
+        assertThat(purchaseRepository.findByPaymentId(paymentId).orElseThrow().getStatus())
+            .isEqualTo("PENDING_FULFILLMENT");
+        assertThat(physicalCapacityAssignmentRepository.findAll()).hasSize(1);
+        assertThat(inboxRepository.findAll()).allSatisfy(
+            inbox -> assertThat(inbox.getStatus())
+                .isEqualTo(com.menta.billing.infrastructure.webhook.WebhookInboxStatus.PROCESSED)
+        );
+    }
+
+    @Test
+    void webhook_handler_trips_capacity_invariant_flipping_purchase_to_exception() {
+        UUID sessionId = seedSession(1);
+        physicalCapacityAssignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
+            UUID.randomUUID(), sessionId, UUID.randomUUID(), Instant.now()
+        ));
+        UUID paymentId = seedPendingPhysicalPayment("mp-capacity-full", UUID.randomUUID(), sessionId);
+        when(paymentProviderPort.fetchPayment("mp-capacity-full")).thenReturn(
+            new ProviderPaymentResult("approved", Money.of(new BigDecimal("100.00"), "ARS"), "ext-1", "merchant-1")
+        );
+        WebhookInboxJpaEntity row = receivedWebhookRow("mp-capacity-full", "req-1");
+
+        worker.process(row);
+        dispatchPendingOutboxEvent();
+
+        assertThat(purchaseRepository.findByPaymentId(paymentId).orElseThrow().getStatus()).isEqualTo("EXCEPTION");
+        assertThat(physicalCapacityAssignmentRepository.findAll()).hasSize(1);
+        assertThat(paymentRepository.findById(paymentId).orElseThrow().getStatusType()).isEqualTo("COMPLETED");
     }
 
     @Test
     void an_expired_provider_status_never_creates_billing_fulfillment() {
-        seedPendingPhysicalPayment("mp-expired");
+        seedPendingPhysicalPayment("mp-expired", UUID.randomUUID(), seedSession(2));
         when(paymentProviderPort.fetchPayment("mp-expired")).thenReturn(
             new ProviderPaymentResult("expired", Money.of(new BigDecimal("100.00"), "ARS"), "ext-1", "merchant-1")
         );
@@ -235,7 +325,7 @@ class PaymentWebhookIntegrationTest {
 
     @Test
     void an_approved_status_with_mismatched_amount_goes_to_reconciliation_required_never_completed() {
-        seedPendingPhysicalPayment("mp-mismatch");
+        seedPendingPhysicalPayment("mp-mismatch", UUID.randomUUID(), seedSession(2));
         when(paymentProviderPort.fetchPayment("mp-mismatch")).thenReturn(
             new ProviderPaymentResult(
                 "approved", Money.of(new BigDecimal("999.00"), "ARS"), "ext-1", "merchant-1"
@@ -256,7 +346,7 @@ class PaymentWebhookIntegrationTest {
 
     @Test
     void exhausting_provider_lookup_retries_creates_a_reconciliation_task() {
-        UUID paymentId = seedPendingPhysicalPayment("mp-exhausted");
+        UUID paymentId = seedPendingPhysicalPayment("mp-exhausted", UUID.randomUUID(), seedSession(2));
         when(paymentProviderPort.fetchPayment("mp-exhausted")).thenThrow(new RuntimeException("timeout"));
         WebhookInboxJpaEntity row = new WebhookInboxJpaEntity(
             "mp-exhausted:req-1", "mp-exhausted", "req-1",
