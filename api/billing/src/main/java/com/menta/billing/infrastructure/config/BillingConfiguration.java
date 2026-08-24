@@ -21,6 +21,8 @@ import com.menta.billing.application.port.out.PhysicalCourseQuoteRepository;
 import com.menta.billing.application.port.out.PlanRepository;
 import com.menta.billing.application.port.out.PurchaseRepository;
 import com.menta.billing.application.port.out.SubscriptionRepository;
+import com.menta.billing.application.usecase.CreatePurchaseFromPaymentEventUseCase;
+import com.menta.billing.application.usecase.MarkPurchaseExceptionUseCase;
 import com.menta.billing.application.port.out.WebhookInboxAppender;
 import com.menta.billing.application.port.out.WebhookSignatureVerifier;
 import com.menta.billing.application.usecase.CreatePhysicalCourseQuoteUseCaseImpl;
@@ -209,5 +211,23 @@ public class BillingConfiguration {
         PhysicalCourseQuoteRepository quoteRepository, Clock clock
     ) {
         return new CreatePhysicalCourseQuoteUseCaseImpl(pricingRepository, availabilityPort, quoteRepository, clock);
+    }
+
+    /** Task TASK-004: idempotently upserts a {@code Purchase(PENDING_FULFILLMENT)}
+     *  keyed on paymentId when an outbox event arrives. */
+    @Bean
+    public CreatePurchaseFromPaymentEventUseCase createPurchaseFromPaymentEventUseCase(
+        PurchaseRepository purchaseRepository
+    ) {
+        return new CreatePurchaseFromPaymentEventUseCase(purchaseRepository);
+    }
+
+    /** Task TASK-004: state-machine guard for the {@code EXCEPTION} terminal
+     *  residual (refuses {@code ASSIGNED → EXCEPTION}). */
+    @Bean
+    public MarkPurchaseExceptionUseCase markPurchaseExceptionUseCase(
+        PurchaseRepository purchaseRepository
+    ) {
+        return new MarkPurchaseExceptionUseCase(purchaseRepository);
     }
 }
