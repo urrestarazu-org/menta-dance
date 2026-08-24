@@ -51,6 +51,14 @@ class ArchitectureTest {
     }
 
     @Test
+    void physical_application_port_in_is_the_only_bridge() {
+        com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes()
+            .that().haveSimpleName("PhysicalCapacityAssignmentPort")
+            .should().resideInAPackage("com.menta.physical.application.port.in")
+            .check(classes);
+    }
+
+    @Test
     void domain_should_not_use_spring_annotations() {
         noClasses()
             .that().resideInAPackage("..domain..")

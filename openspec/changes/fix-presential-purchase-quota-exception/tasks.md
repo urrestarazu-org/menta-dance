@@ -225,7 +225,7 @@ The proposed chain (mirrors design §10):
 
 ## 8. api:app ArchitectureTest + extend api:physical ArchitectureTest
 - **ID**: TASK-008
-- **Status**: pending
+- **Status**: completed
 - **Dependencies**: TASK-007
 - **Estimated LOC**: 0 prod + 80 test = ~80
 - **Estimated test LOC**: 80
