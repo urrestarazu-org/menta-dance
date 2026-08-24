@@ -30,8 +30,10 @@ import org.springframework.transaction.annotation.Transactional;
  *       to {@code EXCEPTION} via the same catch it already has.</li>
  * </ul>
  *
- * <p>Single transaction (REQUIRED) per design §5.3 — joins the
- * {@code api:app} outbox handler's REQUIRES_NEW transaction.</p>
+ * <p>Independent transaction (REQUIRES_NEW) per design §5.3. A capacity
+ * invariant failure rolls back only the assignment attempt, so the
+ * {@code api:app} outbox handler can persist Billing's {@code EXCEPTION}
+ * residual in its still-usable transaction.</p>
  */
 @Component
 public class AssignCapacityUseCase implements PhysicalCapacityAssignmentPort {
@@ -48,7 +50,7 @@ public class AssignCapacityUseCase implements PhysicalCapacityAssignmentPort {
     }
 
     @Override
-    @Transactional(propagation = Propagation.REQUIRED)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public AssignmentOutcome assign(CapacityAssignmentCommand command) {
         SessionId sessionId = SessionId.of(command.sessionId());
         UUID studentId = command.studentId();
