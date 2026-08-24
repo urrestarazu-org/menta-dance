@@ -28,4 +28,13 @@ public interface PhysicalCapacityAssignmentJpaRepository
      * coercion step, so it is the safe shape here.</p>
      */
     boolean existsBySessionIdAndStudentId(UUID sessionId, UUID studentId);
+
+    /**
+     * TASK-005: re-reads the live count after a peer's INSERT commits, so
+     * the adapter can fail-closed when the racing-INSERT pushed
+     * {@code assignedSpots} above {@code capacity}. Spring Data derives
+     * this from the method name without needing a hand-rolled
+     * {@code @Query}.
+     */
+    long countBySessionId(UUID sessionId);
 }
