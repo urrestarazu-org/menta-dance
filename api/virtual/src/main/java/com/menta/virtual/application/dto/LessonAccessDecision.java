@@ -10,10 +10,14 @@ package com.menta.virtual.application.dto;
  * not a domain invariant.
  */
 public enum LessonAccessDecision {
-    /** The lesson is free; render the full free view. No entitlement ever consulted. */
-    FREE,
-    /** The lesson is premium and the caller has an active entitlement; render the full premium view including {@code videoId}. */
-    PREMIUM_ACCESSIBLE,
-    /** The lesson is premium and the caller has no active entitlement; render the preview-with-prompt view (HTTP 200, NOT 403). */
-    REQUIRES_SUBSCRIPTION
+    /** A lesson explicitly marked free is public, regardless of commercial state. */
+    PUBLIC_FREE,
+    /** A premium lesson is public because its containing module is a preview. */
+    PUBLIC_MODULE_PREVIEW,
+    /** A premium lesson is public because its course is not sold by any Billing plan. */
+    PUBLIC_UNPLANNED_COURSE,
+    /** A protected course has a current frozen-snapshot entitlement for this caller. */
+    SUBSCRIPTION_GRANTED,
+    /** A planned, protected lesson has no current entitlement and must not expose media. */
+    SUBSCRIPTION_REQUIRED
 }

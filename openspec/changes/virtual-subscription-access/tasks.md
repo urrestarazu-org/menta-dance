@@ -96,7 +96,7 @@ size exception.  PR 2 must target PR 1 and merge after it.
 
 ## TASK-004 — Create the Virtual-owned ordered lesson-access policy
 
-- **Status**: pending
+- **Status**: completed
 - **Dependencies**: TASK-001, TASK-002, TASK-003
 - **Estimated LOC**: ~200 (85 production, 115 tests)
 - **Modules**: `api:virtual`
