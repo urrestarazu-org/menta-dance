@@ -143,6 +143,18 @@ class SubscriptionRepositoryAdapterTest {
     }
 
     @Test
+    void findAllByUserId_maps_every_subscription_with_its_course_snapshot() {
+        Subscription subscription = pending().activate(NOW, 30, List.of("course-1"));
+        when(jpaRepository.findAllByUserId(USER_ID)).thenReturn(List.of(SubscriptionJpaMapper.toEntity(subscription)));
+        when(courseJpaRepository.findBySubscriptionId(subscription.getId())).thenReturn(List.of(
+            new SubscriptionCourseJpaEntity(subscription.getId(), "course-1")
+        ));
+
+        assertThat(adapter.findAllByUserId(USER_ID)).singleElement()
+            .satisfies(found -> assertThat(found.getCourseIds()).containsExactly("course-1"));
+    }
+
+    @Test
     void findCurrentByUserId_empty_when_the_slot_is_free() {
         when(jpaRepository.findByActiveUserId(USER_ID)).thenReturn(Optional.empty());
 

@@ -3,6 +3,9 @@ package com.menta.billing.application.usecase;
 import com.menta.billing.application.port.out.Clock;
 import com.menta.billing.application.port.out.PlanRepository;
 import com.menta.billing.application.port.out.SubscriptionRepository;
+import com.menta.billing.domain.model.FulfillmentStatus;
+import com.menta.billing.domain.model.Subscription;
+import com.menta.billing.domain.model.SubscriptionStatus;
 import com.menta.shared.billing.CourseAccessSnapshot;
 import com.menta.shared.billing.VirtualCourseEntitlementPort;
 import java.time.Instant;
@@ -34,11 +37,16 @@ public final class VirtualCourseEntitlementService implements VirtualCourseEntit
             return new CourseAccessSnapshot(courseInAnyPlan, false);
         }
         Instant now = clock.now();
-        boolean currentEntitlement = subscriptionRepository.findCurrentByUserId(userIdOrNull)
-            .filter(subscription -> subscription.grantsAccess())
-            .filter(subscription -> subscription.getEndDate().filter(end -> end.isAfter(now)).isPresent())
-            .filter(subscription -> subscription.getCourseIds().contains(courseId))
-            .isPresent();
+        boolean currentEntitlement = subscriptionRepository.findAllByUserId(userIdOrNull).stream()
+            .anyMatch(subscription -> grantsCurrentAccess(subscription, courseId, now));
         return new CourseAccessSnapshot(courseInAnyPlan, currentEntitlement);
+    }
+
+    private static boolean grantsCurrentAccess(Subscription subscription, String courseId, Instant now) {
+        return subscription.getFulfillmentStatus() == FulfillmentStatus.ASSIGNED
+            && (subscription.getStatus() == SubscriptionStatus.ACTIVE
+                || subscription.getStatus() == SubscriptionStatus.CANCELLED)
+            && subscription.getEndDate().filter(end -> end.isAfter(now)).isPresent()
+            && subscription.getCourseIds().contains(courseId);
     }
 }

@@ -27,4 +27,13 @@ public interface VirtualCourseEntitlementPort {
      * @return only commercial facts; this contract never grants content access itself
      */
     CourseAccessSnapshot resolveCourseAccess(UUID userIdOrNull, String courseId);
+
+    /**
+     * Compatibility projection for existing callers while they move to the
+     * richer snapshot contract. New callers must use {@link #resolveCourseAccess(UUID, String)}.
+     */
+    @Deprecated(forRemoval = true)
+    default boolean hasActiveEntitlement(UUID userId, String courseId) {
+        return resolveCourseAccess(userId, courseId).currentEntitlement();
+    }
 }

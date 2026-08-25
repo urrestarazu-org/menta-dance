@@ -84,6 +84,12 @@ public class SubscriptionRepositoryAdapter implements SubscriptionRepository {
         return jpaRepository.findByActiveUserId(userId).map(this::toDomainWithCourses);
     }
 
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public List<Subscription> findAllByUserId(UUID userId) {
+        return jpaRepository.findAllByUserId(userId).stream().map(this::toDomainWithCourses).toList();
+    }
+
     private Subscription toDomainWithCourses(SubscriptionJpaEntity entity) {
         return SubscriptionJpaMapper.toDomain(entity, courseIdsOf(entity.getId()));
     }
