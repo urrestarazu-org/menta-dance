@@ -1,0 +1,2 @@
+ALTER TABLE virtual_modules
+    ADD COLUMN is_preview BOOLEAN NOT NULL DEFAULT FALSE AFTER title;

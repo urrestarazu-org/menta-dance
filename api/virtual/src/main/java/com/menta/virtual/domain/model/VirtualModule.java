@@ -12,28 +12,42 @@ public final class VirtualModule {
     private final ModuleId id;
     private final CourseId courseId;
     private final String title;
+    private final boolean preview;
     private final int order;
 
-    public VirtualModule(ModuleId id, CourseId courseId, String title, int order) {
+    public VirtualModule(ModuleId id, CourseId courseId, String title, boolean preview, int order) {
         this.id = Objects.requireNonNull(id, "id cannot be null");
         this.courseId = Objects.requireNonNull(courseId, "courseId cannot be null");
         this.title = Objects.requireNonNull(title, "title cannot be null");
         if (order < 0) {
             throw new IllegalArgumentException("order cannot be negative");
         }
+        this.preview = preview;
         this.order = order;
     }
 
+    public VirtualModule(ModuleId id, CourseId courseId, String title, int order) {
+        this(id, courseId, title, false, order);
+    }
+
+    public static VirtualModule create(CourseId courseId, String title, boolean preview, int order) {
+        return new VirtualModule(ModuleId.generate(), courseId, title, preview, order);
+    }
+
     public static VirtualModule create(CourseId courseId, String title, int order) {
-        return new VirtualModule(ModuleId.generate(), courseId, title, order);
+        return create(courseId, title, false, order);
     }
 
     public VirtualModule withTitle(String newTitle) {
-        return new VirtualModule(id, courseId, newTitle, order);
+        return new VirtualModule(id, courseId, newTitle, preview, order);
+    }
+
+    public VirtualModule withPreview(boolean newPreview) {
+        return new VirtualModule(id, courseId, title, newPreview, order);
     }
 
     public VirtualModule withOrder(int newOrder) {
-        return new VirtualModule(id, courseId, title, newOrder);
+        return new VirtualModule(id, courseId, title, preview, newOrder);
     }
 
     public ModuleId getId() {
@@ -46,6 +60,10 @@ public final class VirtualModule {
 
     public String getTitle() {
         return title;
+    }
+
+    public boolean isPreview() {
+        return preview;
     }
 
     public int getOrder() {

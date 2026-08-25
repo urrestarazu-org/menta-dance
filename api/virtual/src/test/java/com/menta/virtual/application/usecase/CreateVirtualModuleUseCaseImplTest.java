@@ -48,6 +48,20 @@ class CreateVirtualModuleUseCaseImplTest {
     }
 
     @Test
+    void persists_the_requested_preview_flag() {
+        CourseId id = CourseId.generate();
+        UUID ownerId = UUID.randomUUID();
+        when(courseRepository.findById(id)).thenReturn(Optional.of(course(id, ownerId)));
+        when(moduleRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        VirtualModuleManagementResult result = useCase.create(
+            id.toString(), new CreateVirtualModuleCommand("Preview", Optional.empty(), true), ownerId, false
+        );
+
+        assertThat(result.preview()).isTrue();
+    }
+
+    @Test
     void uses_the_requested_order_when_present() {
         CourseId id = CourseId.generate();
         UUID ownerId = UUID.randomUUID();

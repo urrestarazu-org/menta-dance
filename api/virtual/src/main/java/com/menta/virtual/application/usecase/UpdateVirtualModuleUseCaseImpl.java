@@ -32,7 +32,7 @@ public class UpdateVirtualModuleUseCaseImpl implements UpdateVirtualModuleUseCas
         VirtualModule module = ModuleOwnershipGuard.resolveOwnedModule(
             moduleRepository, courseRepository, ModuleId.of(moduleId), actingUserId, actingAsAdmin
         );
-        String before = "title=" + module.getTitle() + ", order=" + module.getOrder();
+        String before = "title=" + module.getTitle() + ", preview=" + module.isPreview() + ", order=" + module.getOrder();
 
         VirtualModule updated = module;
         if (command.title().isPresent()) {
@@ -41,10 +41,13 @@ public class UpdateVirtualModuleUseCaseImpl implements UpdateVirtualModuleUseCas
         if (command.order().isPresent()) {
             updated = updated.withOrder(command.order().get());
         }
+        if (command.preview().isPresent()) {
+            updated = updated.withPreview(command.preview().get());
+        }
         VirtualModule saved = moduleRepository.save(updated);
         auditRepository.append(
             saved.getCourseId(), actingUserId, "UPDATE_MODULE", before,
-            "title=" + saved.getTitle() + ", order=" + saved.getOrder()
+            "title=" + saved.getTitle() + ", preview=" + saved.isPreview() + ", order=" + saved.getOrder()
         );
         return VirtualModuleResultMapper.toResult(saved);
     }

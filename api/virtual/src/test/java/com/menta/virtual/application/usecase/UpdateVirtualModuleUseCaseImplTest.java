@@ -65,6 +65,24 @@ class UpdateVirtualModuleUseCaseImplTest {
     }
 
     @Test
+    void applies_a_present_preview_update() {
+        CourseId courseId = CourseId.generate();
+        UUID ownerId = UUID.randomUUID();
+        VirtualModule module = VirtualModule.create(courseId, "Módulo 1", 0);
+        when(moduleRepository.findById(module.getId())).thenReturn(Optional.of(module));
+        when(courseRepository.findById(courseId)).thenReturn(Optional.of(course(courseId, ownerId)));
+        when(moduleRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        VirtualModuleManagementResult result = useCase.update(
+            module.getId().toString(), new UpdateVirtualModuleCommand(
+                Optional.empty(), Optional.empty(), Optional.of(true)
+            ), ownerId, false
+        );
+
+        assertThat(result.preview()).isTrue();
+    }
+
+    @Test
     void applies_only_the_fields_present_in_the_command() {
         CourseId courseId = CourseId.generate();
         UUID ownerId = UUID.randomUUID();

@@ -27,10 +27,19 @@ class VirtualModuleTest {
     }
 
     @Test
-    void with_title_and_with_order_return_new_instances() {
+    void defaults_preview_to_false_and_preserves_it_when_other_fields_change() {
         VirtualModule module = VirtualModule.create(CourseId.generate(), "Módulo 1", 0);
 
-        assertThat(module.withTitle("Nuevo").getTitle()).isEqualTo("Nuevo");
-        assertThat(module.withOrder(3).getOrder()).isEqualTo(3);
+        assertThat(module.isPreview()).isFalse();
+        assertThat(module.withTitle("Nuevo").isPreview()).isFalse();
+        assertThat(module.withOrder(3).isPreview()).isFalse();
+    }
+
+    @Test
+    void creates_and_updates_a_preview_module() {
+        VirtualModule module = VirtualModule.create(CourseId.generate(), "Módulo 1", true, 0);
+
+        assertThat(module.isPreview()).isTrue();
+        assertThat(module.withPreview(false).isPreview()).isFalse();
     }
 }

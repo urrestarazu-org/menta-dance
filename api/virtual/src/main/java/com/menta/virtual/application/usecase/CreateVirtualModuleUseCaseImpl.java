@@ -35,11 +35,11 @@ public class CreateVirtualModuleUseCaseImpl implements CreateVirtualModuleUseCas
             CourseOwnershipGuard.resolveOwnedCourse(courseRepository, parsedCourseId, actingUserId, actingAsAdmin);
 
         int order = command.order().orElseGet(() -> moduleRepository.countByCourseId(parsedCourseId));
-        VirtualModule module = VirtualModule.create(course.getId(), command.title(), order);
+        VirtualModule module = VirtualModule.create(course.getId(), command.title(), command.preview(), order);
         VirtualModule saved = moduleRepository.save(module);
         auditRepository.append(
             parsedCourseId, actingUserId, "CREATE_MODULE", null,
-            "moduleId=" + saved.getId() + ", title=" + saved.getTitle() + ", order=" + saved.getOrder()
+            "moduleId=" + saved.getId() + ", title=" + saved.getTitle() + ", preview=" + saved.isPreview() + ", order=" + saved.getOrder()
         );
         return VirtualModuleResultMapper.toResult(saved);
     }
