@@ -12,6 +12,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.menta.shared.billing.CourseAccessSnapshot;
 import com.menta.shared.billing.VirtualCourseEntitlementPort;
 import com.menta.virtual.application.dto.LessonAccessDecisionDto;
 import com.menta.virtual.application.dto.PublicStreamQuality;
@@ -20,6 +21,7 @@ import com.menta.virtual.application.dto.PublicLessonStreamView;
 import com.menta.virtual.application.port.out.BunnyNetSignatureService;
 import com.menta.virtual.application.port.out.Clock;
 import com.menta.virtual.application.port.out.VirtualLessonRepository;
+import com.menta.virtual.application.port.out.VirtualModuleRepository;
 import com.menta.virtual.domain.exception.LessonNotFoundException;
 import com.menta.virtual.domain.model.CourseId;
 import com.menta.virtual.domain.model.LessonId;
@@ -30,6 +32,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -51,14 +54,24 @@ class GetPublicLessonStreamUseCaseImplTest {
     private static final String VIDEO_LIBRARY_ID = "12345";
 
     private final VirtualLessonRepository lessonRepository = mock(VirtualLessonRepository.class);
+    private final VirtualModuleRepository moduleRepository = mock(VirtualModuleRepository.class);
     private final VirtualCourseEntitlementPort entitlementPort = mock(VirtualCourseEntitlementPort.class);
     private final BunnyNetSignatureService signatureService = mock(BunnyNetSignatureService.class);
     private final Clock fixedClock = new Clock() {
         @Override public Instant now() { return java.time.Clock.fixed(FIXED_NOW, ZoneOffset.UTC).instant(); }
     };
     private final GetPublicLessonStreamUseCaseImpl useCase = new GetPublicLessonStreamUseCaseImpl(
-        lessonRepository, entitlementPort, signatureService, fixedClock
+        lessonRepository, moduleRepository, new LessonAccessPolicy(entitlementPort), signatureService, fixedClock
     );
+
+    @org.junit.jupiter.api.BeforeEach
+    void resolveAnyLessonModule() {
+        when(moduleRepository.findById(any())).thenAnswer(invocation -> Optional.of(
+            new com.menta.virtual.domain.model.VirtualModule(
+                invocation.getArgument(0), CourseId.generate(), "Module", false, 1
+            )
+        ));
+    }
 
     private static BunnyNetSignatureService configuredService() {
         BunnyNetProperties props = new BunnyNetProperties();
@@ -85,8 +98,8 @@ class GetPublicLessonStreamUseCaseImplTest {
         when(lessonRepository.findById(lessonId)).thenReturn(
             java.util.Optional.of(lesson(lessonId, courseId, "vid-target", false, 15))
         );
-        when(entitlementPort.hasActiveEntitlement(eq(userId), eq(courseId.getValue().toString())))
-            .thenReturn(true);
+        when(entitlementPort.resolveCourseAccess(eq(userId), eq(courseId.getValue().toString())))
+            .thenReturn(new CourseAccessSnapshot(true, true));
         when(signatureService.generateSignedUrl(eq("vid-target"), anyLong()))
             .thenReturn(PULL_ZONE_HOSTNAME + "/" + VIDEO_LIBRARY_ID + "/" + "vid-target");
 
@@ -128,7 +141,7 @@ class GetPublicLessonStreamUseCaseImplTest {
 
         assertThat(result).isInstanceOf(PublicLessonStreamResult.Authorized.class);
         // Critical invariant: a free lesson never consults the billing port — same discipline as #48.
-        verify(entitlementPort, never()).hasActiveEntitlement(any(), anyString());
+        verify(entitlementPort, never()).resolveCourseAccess(any(), anyString());
     }
 
     @Test
@@ -148,7 +161,7 @@ class GetPublicLessonStreamUseCaseImplTest {
         assertThat(access.reason()).isEqualTo("SUBSCRIPTION_REQUIRED");
         assertThat(access.plansUrl()).isEqualTo("/api/v1/billing/plans");
         // Anonymous → no entitlement candidate → port must never be called.
-        verify(entitlementPort, never()).hasActiveEntitlement(any(), anyString());
+        verify(entitlementPort, never()).resolveCourseAccess(any(), anyString());
         // And no signature either: the use case rejected before signing.
         verify(signatureService, never()).generateSignedUrl(any(), anyLong());
     }
@@ -162,8 +175,8 @@ class GetPublicLessonStreamUseCaseImplTest {
         when(lessonRepository.findById(lessonId)).thenReturn(
             java.util.Optional.of(lesson(lessonId, courseId, "vid-target", false, 15))
         );
-        when(entitlementPort.hasActiveEntitlement(eq(userId), eq(courseId.getValue().toString())))
-            .thenReturn(false);
+        when(entitlementPort.resolveCourseAccess(eq(userId), eq(courseId.getValue().toString())))
+            .thenReturn(new CourseAccessSnapshot(true, false));
 
         PublicLessonStreamResult result = useCase.get(lessonId.toString(), userId);
 
@@ -183,7 +196,7 @@ class GetPublicLessonStreamUseCaseImplTest {
 
         // Critical invariant: the use case must NOT touch any dependency on a bad id.
         verify(lessonRepository, never()).findById(any());
-        verify(entitlementPort, never()).hasActiveEntitlement(any(), anyString());
+        verify(entitlementPort, never()).resolveCourseAccess(any(), anyString());
         verify(signatureService, never()).generateSignedUrl(any(), anyLong());
     }
 
@@ -194,7 +207,7 @@ class GetPublicLessonStreamUseCaseImplTest {
 
         assertThatThrownBy(() -> useCase.get(missing.toString(), UUID.randomUUID()))
             .isInstanceOf(LessonNotFoundException.class);
-        verify(entitlementPort, never()).hasActiveEntitlement(any(), anyString());
+        verify(entitlementPort, never()).resolveCourseAccess(any(), anyString());
         verify(signatureService, never()).generateSignedUrl(any(), anyLong());
     }
 

@@ -1,6 +1,6 @@
 package com.menta.virtual.application.usecase;
 
-import com.menta.shared.billing.VirtualCourseEntitlementPort;
+import com.menta.virtual.application.dto.LessonAccessDecision;
 import com.menta.virtual.application.dto.LessonAccessDecisionDto;
 import com.menta.virtual.application.dto.PublicLessonStreamResult;
 import com.menta.virtual.application.dto.PublicLessonStreamView;
@@ -9,9 +9,11 @@ import com.menta.virtual.application.port.in.GetPublicLessonStreamUseCase;
 import com.menta.virtual.application.port.out.BunnyNetSignatureService;
 import com.menta.virtual.application.port.out.Clock;
 import com.menta.virtual.application.port.out.VirtualLessonRepository;
+import com.menta.virtual.application.port.out.VirtualModuleRepository;
 import com.menta.virtual.domain.exception.LessonNotFoundException;
 import com.menta.virtual.domain.model.LessonId;
 import com.menta.virtual.domain.model.VirtualLesson;
+import com.menta.virtual.domain.model.VirtualModule;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -92,18 +94,21 @@ public class GetPublicLessonStreamUseCaseImpl implements GetPublicLessonStreamUs
     static final String BILLING_PLANS_URL = "/api/v1/billing/plans";
 
     private final VirtualLessonRepository lessonRepository;
-    private final VirtualCourseEntitlementPort entitlementPort;
+    private final VirtualModuleRepository moduleRepository;
+    private final LessonAccessPolicy accessPolicy;
     private final BunnyNetSignatureService signatureService;
     private final Clock clock;
 
     public GetPublicLessonStreamUseCaseImpl(
         VirtualLessonRepository lessonRepository,
-        VirtualCourseEntitlementPort entitlementPort,
+        VirtualModuleRepository moduleRepository,
+        LessonAccessPolicy accessPolicy,
         BunnyNetSignatureService signatureService,
         Clock clock
     ) {
         this.lessonRepository = lessonRepository;
-        this.entitlementPort = entitlementPort;
+        this.moduleRepository = moduleRepository;
+        this.accessPolicy = accessPolicy;
         this.signatureService = signatureService;
         this.clock = clock;
     }
@@ -116,8 +121,10 @@ public class GetPublicLessonStreamUseCaseImpl implements GetPublicLessonStreamUs
         }
         VirtualLesson lesson = lessonRepository.findById(parsed)
             .orElseThrow(LessonNotFoundException::new);
+        VirtualModule module = moduleRepository.findById(lesson.getModuleId())
+            .orElseThrow(LessonNotFoundException::new);
 
-        if (!canPlay(actingUserId, lesson)) {
+        if (accessPolicy.decide(lesson, module, actingUserId) == LessonAccessDecision.SUBSCRIPTION_REQUIRED) {
             LOG.debug(
                 "stream denied: lessonId={} courseId={} actingUserId={} isFree={}",
                 parsed, lesson.getCourseId(), actingUserId, lesson.isFree()
@@ -160,27 +167,6 @@ public class GetPublicLessonStreamUseCaseImpl implements GetPublicLessonStreamUs
         } catch (IllegalArgumentException malformed) {
             return null;
         }
-    }
-
-    /**
-     * True if the caller can play the lesson stream now. Free lessons
-     * play for any caller — anonymous visitors get a stream URL too.
-     * Premium lessons require an authenticated user with an active
-     * entitlement through {@link VirtualCourseEntitlementPort}; the
-     * boolean port cannot say whether the missing entitlement is
-     * "never subscribed" or "expired" — that distinction is a follow-up
-     * issue against billing.
-     */
-    private boolean canPlay(UUID actingUserId, VirtualLesson lesson) {
-        if (lesson.isFree()) {
-            return true;
-        }
-        if (actingUserId == null) {
-            return false;
-        }
-        return entitlementPort.hasActiveEntitlement(
-            actingUserId, lesson.getCourseId().getValue().toString()
-        );
     }
 
     /**

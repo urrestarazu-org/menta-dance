@@ -26,6 +26,7 @@ import com.menta.shared.billing.VirtualCourseEntitlementPort;
 import com.menta.virtual.application.port.out.VirtualModuleRepository;
 import com.menta.virtual.application.usecase.GetPublicLessonStreamUseCaseImpl;
 import com.menta.virtual.application.usecase.GetPublicLessonUseCaseImpl;
+import com.menta.virtual.application.usecase.LessonAccessPolicy;
 import com.menta.virtual.application.usecase.VirtualCourseCatalogPortImpl;
 import com.menta.virtual.infrastructure.cdn.BunnyNetProperties;
 import com.menta.virtual.infrastructure.cdn.StringFormatBunnyNetSignatureService;
@@ -160,7 +161,7 @@ class VirtualConfigurationTest {
     @Test
     void wires_the_get_public_lesson_use_case_bean_with_all_four_collaborators() {
         GetPublicLessonUseCase useCase = configuration.getPublicLessonUseCase(
-            lessonRepository, moduleRepository, courseRepository, entitlementPort
+            lessonRepository, moduleRepository, courseRepository, new LessonAccessPolicy(entitlementPort)
         );
 
         assertThat(useCase).isInstanceOf(GetPublicLessonUseCaseImpl.class);
@@ -183,7 +184,7 @@ class VirtualConfigurationTest {
         Clock clock = configuration.clock();
 
         GetPublicLessonStreamUseCase useCase = configuration.getPublicLessonStreamUseCase(
-            lessonRepository, entitlementPort, signatureService, clock
+            lessonRepository, moduleRepository, new LessonAccessPolicy(entitlementPort), signatureService, clock
         );
 
         assertThat(useCase).isInstanceOf(GetPublicLessonStreamUseCaseImpl.class);

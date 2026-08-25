@@ -10,11 +10,11 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.menta.shared.billing.CourseAccessSnapshot;
 import com.menta.shared.billing.VirtualCourseEntitlementPort;
 import com.menta.virtual.application.dto.LessonAccessDecisionDto;
 import com.menta.virtual.application.dto.PublicLessonFreeView;
 import com.menta.virtual.application.dto.PublicLessonPremiumAccessibleView;
-import com.menta.virtual.application.dto.PublicLessonRequiresSubscriptionView;
 import com.menta.virtual.application.dto.PublicLessonView;
 import com.menta.virtual.application.port.out.VirtualCourseRepository;
 import com.menta.virtual.application.port.out.VirtualLessonRepository;
@@ -47,9 +47,8 @@ import org.junit.jupiter.api.Test;
  *       indistinguishable from a not-found row;</li>
  *   <li>throws {@link ForbiddenLessonAccessException} for anonymous
  *       premium callers, NOT silently downgrading to a preview;</li>
- *   <li>does NOT throw for identified-but-not-subscribed callers —
- *       that branch returns a {@link PublicLessonRequiresSubscriptionView}
- *       with {@code access.allowed=false}.</li>
+ *   <li>rejects every planned premium caller without a current entitlement
+ *       through the stable 403 exception boundary.</li>
  * </ol>
  */
 class GetPublicLessonUseCaseImplTest {
@@ -59,7 +58,7 @@ class GetPublicLessonUseCaseImplTest {
     private final VirtualCourseRepository courseRepository = mock(VirtualCourseRepository.class);
     private final VirtualCourseEntitlementPort entitlementPort = mock(VirtualCourseEntitlementPort.class);
     private final GetPublicLessonUseCaseImpl useCase = new GetPublicLessonUseCaseImpl(
-        lessonRepository, moduleRepository, courseRepository, entitlementPort
+        lessonRepository, moduleRepository, courseRepository, new LessonAccessPolicy(entitlementPort)
     );
 
     private static VirtualCourse publishedCourse(CourseId id) {
@@ -136,7 +135,7 @@ class GetPublicLessonUseCaseImplTest {
         assertThat(free.subscription().plansUrl()).isEqualTo("/api/v1/billing/plans");
         assertThat(free.subscription().message()).contains("Suscríbete");
         // Critical invariant: a free lesson never reaches the billing port.
-        verify(entitlementPort, never()).hasActiveEntitlement(any(), anyString());
+        verify(entitlementPort, never()).resolveCourseAccess(any(), anyString());
     }
 
     @Test
@@ -160,7 +159,7 @@ class GetPublicLessonUseCaseImplTest {
 
         assertThat(view).isPresent();
         assertThat(view.get()).isInstanceOf(PublicLessonFreeView.class);
-        verify(entitlementPort, never()).hasActiveEntitlement(any(), anyString());
+        verify(entitlementPort, never()).resolveCourseAccess(any(), anyString());
     }
 
     @Test
@@ -181,8 +180,8 @@ class GetPublicLessonUseCaseImplTest {
             lesson(LessonId.generate(), moduleId, courseId, "Intro", "vid-p", 5, true, 1),
             lesson(lessonId, moduleId, courseId, "Avanzado", "vid-a", 15, false, 2)
         ));
-        when(entitlementPort.hasActiveEntitlement(eq(userId), eq(courseId.getValue().toString())))
-            .thenReturn(true);
+        when(entitlementPort.resolveCourseAccess(eq(userId), eq(courseId.getValue().toString())))
+            .thenReturn(new CourseAccessSnapshot(true, true));
 
         Optional<PublicLessonView> view = useCase.get(lessonId.toString(), userId);
 
@@ -200,7 +199,7 @@ class GetPublicLessonUseCaseImplTest {
     }
 
     @Test
-    void premium_lesson_with_no_entitlement_returns_requires_subscription_view_with_access_disallowed() {
+    void premium_lesson_with_no_entitlement_throws_without_exposing_the_video_id() {
         CourseId courseId = CourseId.generate();
         ModuleId moduleId = ModuleId.generate();
         LessonId lessonId = LessonId.generate();
@@ -218,24 +217,11 @@ class GetPublicLessonUseCaseImplTest {
         when(lessonRepository.findByModuleId(moduleId)).thenReturn(List.of(
             lesson(lessonId, moduleId, courseId, "Avanzado", "vid-a", 15, false, 2)
         ));
-        when(entitlementPort.hasActiveEntitlement(eq(userId), eq(courseId.getValue().toString())))
-            .thenReturn(false);
+        when(entitlementPort.resolveCourseAccess(eq(userId), eq(courseId.getValue().toString())))
+            .thenReturn(new CourseAccessSnapshot(true, false));
 
-        Optional<PublicLessonView> view = useCase.get(lessonId.toString(), userId);
-
-        assertThat(view).isPresent();
-        assertThat(view.get()).isInstanceOf(PublicLessonRequiresSubscriptionView.class);
-        PublicLessonRequiresSubscriptionView gated = (PublicLessonRequiresSubscriptionView) view.get();
-        // No videoId on this branch, by the type. Static structural guard below
-        // (record components = exactly 6 named fields) is the real check;
-        // runtime assertion is a no-op here so we keep the test simple and
-        // the type-restriction readable.
-        assertThat(gated.lesson().title()).isEqualTo("Avanzado");
-        assertThat(gated.lesson().isFree()).isFalse();
-        assertThat(gated.access().allowed()).isFalse();
-        assertThat(gated.access().reason()).isEqualTo("SUBSCRIPTION_REQUIRED");
-        assertThat(gated.access().message()).contains("suscripción");
-        assertThat(gated.access().plansUrl()).isEqualTo("/api/v1/billing/plans");
+        assertThatThrownBy(() -> useCase.get(lessonId.toString(), userId))
+            .isInstanceOf(ForbiddenLessonAccessException.class);
     }
 
     @Test
@@ -255,7 +241,7 @@ class GetPublicLessonUseCaseImplTest {
         // Anonymous caller → no userId at all → throw before even consulting billing.
         assertThatThrownBy(() -> useCase.get(lessonId.toString(), null))
             .isInstanceOf(ForbiddenLessonAccessException.class);
-        verify(entitlementPort, never()).hasActiveEntitlement(any(), anyString());
+        verify(entitlementPort, never()).resolveCourseAccess(any(), anyString());
     }
 
     @Test
@@ -267,7 +253,7 @@ class GetPublicLessonUseCaseImplTest {
         assertThat(garbage).isEmpty();
         verify(lessonRepository, never()).findById(any());
         verify(courseRepository, never()).findPublishedById(any());
-        verify(entitlementPort, never()).hasActiveEntitlement(any(), anyString());
+        verify(entitlementPort, never()).resolveCourseAccess(any(), anyString());
     }
 
     @Test
