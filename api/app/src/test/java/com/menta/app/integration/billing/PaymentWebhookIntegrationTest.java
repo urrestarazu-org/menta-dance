@@ -10,16 +10,30 @@ import com.menta.auth.application.port.out.LoginRateLimitPort;
 import com.menta.auth.application.port.out.PasswordResetAttemptRateLimitPort;
 import com.menta.auth.application.port.out.PasswordResetRequestRateLimitPort;
 import com.menta.auth.application.port.out.TokenBlacklistPort;
+import com.menta.billing.application.dto.CreateSubscriptionCheckoutCommand;
+import com.menta.billing.application.dto.PaymentPreferenceResult;
 import com.menta.billing.application.dto.ProviderPaymentResult;
+import com.menta.billing.application.port.in.CreateSubscriptionCheckoutUseCase;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.port.out.CourseCatalogPort;
+import com.menta.billing.application.port.out.PaymentPreferencePort;
 import com.menta.billing.application.port.out.PaymentProviderPort;
 import com.menta.billing.domain.model.Money;
+import com.menta.billing.domain.model.PaymentMethod;
+import com.menta.billing.domain.model.PlanStatus;
 import com.menta.billing.infrastructure.persistence.entity.PaymentJpaEntity;
+import com.menta.billing.infrastructure.persistence.entity.PlanCourseJpaEntity;
+import com.menta.billing.infrastructure.persistence.entity.PlanJpaEntity;
+import com.menta.billing.infrastructure.persistence.entity.PlanPaymentMethodJpaEntity;
 import com.menta.billing.infrastructure.persistence.entity.WebhookInboxJpaEntity;
 import com.menta.billing.infrastructure.persistence.repository.PaymentJpaRepository;
+import com.menta.billing.infrastructure.persistence.repository.PlanCourseJpaRepository;
+import com.menta.billing.infrastructure.persistence.repository.PlanJpaRepository;
+import com.menta.billing.infrastructure.persistence.repository.PlanPaymentMethodJpaRepository;
 import com.menta.billing.infrastructure.persistence.repository.PurchaseJpaRepository;
 import com.menta.billing.infrastructure.persistence.repository.ReconciliationTaskJpaRepository;
+import com.menta.billing.infrastructure.persistence.repository.SubscriptionCourseJpaRepository;
+import com.menta.billing.infrastructure.persistence.repository.SubscriptionJpaRepository;
 import com.menta.billing.infrastructure.persistence.repository.WebhookInboxJpaRepository;
 import com.menta.billing.infrastructure.webhook.WebhookVerificationWorker;
 import com.menta.app.outbox.OutboxReconciliationWorker;
@@ -93,9 +107,15 @@ class PaymentWebhookIntegrationTest {
     @Autowired private TestRestTemplate http;
     @Autowired private WebhookInboxJpaRepository inboxRepository;
     @Autowired private PaymentJpaRepository paymentRepository;
+    @Autowired private PlanJpaRepository planRepository;
+    @Autowired private PlanCourseJpaRepository planCourseRepository;
+    @Autowired private PlanPaymentMethodJpaRepository planPaymentMethodRepository;
     @Autowired private PurchaseJpaRepository purchaseRepository;
     @Autowired private ReconciliationTaskJpaRepository reconciliationTaskRepository;
+    @Autowired private SubscriptionJpaRepository subscriptionRepository;
+    @Autowired private SubscriptionCourseJpaRepository subscriptionCourseRepository;
     @Autowired private WebhookVerificationWorker worker;
+    @Autowired private CreateSubscriptionCheckoutUseCase createSubscriptionCheckoutUseCase;
     @Autowired private OutboxRowJpaRepository outboxRepository;
     @Autowired private OutboxReconciliationWorker outboxWorker;
     @Autowired private PhysicalCapacityAssignmentJpaRepository physicalCapacityAssignmentRepository;
@@ -103,6 +123,7 @@ class PaymentWebhookIntegrationTest {
     @Autowired private PhysicalSessionJpaRepository physicalSessionRepository;
 
     @MockBean private PaymentProviderPort paymentProviderPort;
+    @MockBean private PaymentPreferencePort paymentPreferencePort;
     @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
     @MockBean private CourseCatalogPort courseCatalogPort;
     // US-PHYSICAL-001: ProcessPhysicalCheckInUseCaseImpl needs a RedisTemplate
@@ -119,7 +140,12 @@ class PaymentWebhookIntegrationTest {
     void cleanUp() {
         reconciliationTaskRepository.deleteAll();
         purchaseRepository.deleteAll();
+        subscriptionCourseRepository.deleteAll();
+        subscriptionRepository.deleteAll();
         paymentRepository.deleteAll();
+        planCourseRepository.deleteAll();
+        planPaymentMethodRepository.deleteAll();
+        planRepository.deleteAll();
         inboxRepository.deleteAll();
         outboxRepository.deleteAll();
         physicalCapacityAssignmentRepository.deleteAll();
@@ -155,6 +181,20 @@ class PaymentWebhookIntegrationTest {
             null, null, Instant.now()
         ));
         return id;
+    }
+
+    private UUID seedActivePlanWithCourses(String... courseIds) {
+        UUID planId = UUID.randomUUID();
+        Instant now = Instant.now();
+        planRepository.save(new PlanJpaEntity(
+            planId, "Virtual integration plan", "Test plan", new BigDecimal("100.00"), "ARS", 30,
+            false, PlanStatus.ACTIVE, "Terms", "Policy", now, now
+        ));
+        planPaymentMethodRepository.save(new PlanPaymentMethodJpaEntity(planId, "MERCADO_PAGO"));
+        for (String courseId : courseIds) {
+            planCourseRepository.save(new PlanCourseJpaEntity(planId, courseId));
+        }
+        return planId;
     }
 
     private UUID seedSession(int capacity) {
@@ -239,6 +279,36 @@ class PaymentWebhookIntegrationTest {
         assertThat(purchaseRepository.findAll()).hasSize(1);
         assertThat(purchaseRepository.findByPaymentId(paymentId).orElseThrow().getStatus())
             .isEqualTo("PENDING_FULFILLMENT");
+    }
+
+    @Test
+    void a_matching_approved_virtual_payment_activates_and_assigns_the_local_subscription() {
+        UUID planId = seedActivePlanWithCourses("course-1", "course-2");
+        UUID studentId = UUID.randomUUID();
+        when(paymentPreferencePort.createPreference(any())).thenReturn(
+            new PaymentPreferenceResult("pref-virtual", "https://mp.example/checkout/pref-virtual")
+        );
+        var checkout = createSubscriptionCheckoutUseCase.create(
+            new CreateSubscriptionCheckoutCommand(studentId, planId.toString(), PaymentMethod.MERCADO_PAGO, "idem-virtual")
+        );
+        when(paymentProviderPort.fetchPayment("mp-virtual-approved")).thenReturn(
+            new ProviderPaymentResult(
+                "approved", Money.of(new BigDecimal("100.00"), "ARS"), checkout.externalReference(), ""
+            )
+        );
+
+        worker.process(receivedWebhookRow("mp-virtual-approved", "req-virtual"));
+
+        PaymentJpaEntity payment = paymentRepository.findAll().getFirst();
+        var subscription = subscriptionRepository.findByPaymentId(payment.getId()).orElseThrow();
+        assertThat(payment.getStatusType()).isEqualTo("COMPLETED");
+        assertThat(subscription.getStatus()).isEqualTo("ACTIVE");
+        assertThat(subscription.getFulfillmentStatus()).isEqualTo("ASSIGNED");
+        assertThat(subscriptionCourseRepository.findBySubscriptionId(subscription.getId()))
+            .extracting(course -> course.getCourseId())
+            .containsExactlyInAnyOrder("course-1", "course-2");
+        assertThat(purchaseRepository.findAll()).isEmpty();
+        assertThat(outboxRepository.findAll()).isEmpty();
     }
 
     @Test
