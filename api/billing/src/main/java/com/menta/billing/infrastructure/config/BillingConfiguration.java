@@ -130,9 +130,9 @@ public class BillingConfiguration {
     /** ADR-0039: Virtual reads Billing's current subscription entitlement. */
     @Bean
     public VirtualCourseEntitlementPort virtualCourseEntitlementPort(
-        SubscriptionRepository subscriptionRepository, Clock clock
+        PlanRepository planRepository, SubscriptionRepository subscriptionRepository, Clock clock
     ) {
-        return new VirtualCourseEntitlementService(subscriptionRepository, clock);
+        return new VirtualCourseEntitlementService(planRepository, subscriptionRepository, clock);
     }
 
     /**

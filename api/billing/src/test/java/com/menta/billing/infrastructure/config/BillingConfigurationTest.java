@@ -61,7 +61,7 @@ class BillingConfigurationTest {
     @Test
     void wires_the_virtual_course_entitlement_port_bean() {
         VirtualCourseEntitlementPort port = configuration.virtualCourseEntitlementPort(
-            mock(SubscriptionRepository.class), mock(Clock.class)
+            mock(PlanRepository.class), mock(SubscriptionRepository.class), mock(Clock.class)
         );
 
         assertThat(port).isInstanceOf(VirtualCourseEntitlementService.class);

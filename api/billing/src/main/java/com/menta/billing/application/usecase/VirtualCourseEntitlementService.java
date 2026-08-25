@@ -1,32 +1,44 @@
 package com.menta.billing.application.usecase;
 
 import com.menta.billing.application.port.out.Clock;
+import com.menta.billing.application.port.out.PlanRepository;
 import com.menta.billing.application.port.out.SubscriptionRepository;
+import com.menta.shared.billing.CourseAccessSnapshot;
 import com.menta.shared.billing.VirtualCourseEntitlementPort;
 import java.time.Instant;
 import java.util.UUID;
 
-/** Billing implementation of Virtual's read-only entitlement contract (ADR-0039). */
+/** Billing implementation of Virtual's read-only course-access contract (ADR-0039). */
 public final class VirtualCourseEntitlementService implements VirtualCourseEntitlementPort {
 
+    private final PlanRepository planRepository;
     private final SubscriptionRepository subscriptionRepository;
     private final Clock clock;
 
-    public VirtualCourseEntitlementService(SubscriptionRepository subscriptionRepository, Clock clock) {
+    public VirtualCourseEntitlementService(
+        PlanRepository planRepository, SubscriptionRepository subscriptionRepository, Clock clock
+    ) {
+        this.planRepository = planRepository;
         this.subscriptionRepository = subscriptionRepository;
         this.clock = clock;
     }
 
     @Override
-    public boolean hasActiveEntitlement(UUID userId, String courseId) {
-        if (userId == null || courseId == null || courseId.isBlank()) {
-            return false;
+    public CourseAccessSnapshot resolveCourseAccess(UUID userIdOrNull, String courseId) {
+        if (courseId == null || courseId.isBlank()) {
+            return new CourseAccessSnapshot(false, false);
+        }
+        boolean courseInAnyPlan = planRepository.findAllActiveOrderByPriceAsc().stream()
+            .anyMatch(plan -> plan.courseIds().contains(courseId));
+        if (userIdOrNull == null) {
+            return new CourseAccessSnapshot(courseInAnyPlan, false);
         }
         Instant now = clock.now();
-        return subscriptionRepository.findCurrentByUserId(userId)
+        boolean currentEntitlement = subscriptionRepository.findCurrentByUserId(userIdOrNull)
             .filter(subscription -> subscription.grantsAccess())
             .filter(subscription -> subscription.getEndDate().filter(end -> end.isAfter(now)).isPresent())
             .filter(subscription -> subscription.getCourseIds().contains(courseId))
             .isPresent();
+        return new CourseAccessSnapshot(courseInAnyPlan, currentEntitlement);
     }
 }
