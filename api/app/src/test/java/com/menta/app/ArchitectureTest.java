@@ -54,6 +54,15 @@ class ArchitectureTest {
         );
     }
 
+    @Test
+    void app_should_not_own_virtual_lesson_access_policy() {
+        noClasses()
+            .that().resideInAPackage("com.menta.app..")
+            .should().dependOnClassesThat()
+            .haveFullyQualifiedName("com.menta.virtual.application.usecase.LessonAccessPolicy")
+            .check(classes);
+    }
+
     private void assertDirectDependency(String sourceClassName, String targetClassName) {
         org.assertj.core.api.Assertions.assertThat(
             classes.get(sourceClassName).getDirectDependenciesFromSelf()

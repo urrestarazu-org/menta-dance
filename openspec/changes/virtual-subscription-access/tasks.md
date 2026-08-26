@@ -123,7 +123,7 @@ size exception.  PR 2 must target PR 1 and merge after it.
 
 ## TASK-005 — Enforce one decision in lesson detail and stream issuance
 
-- **Status**: pending
+- **Status**: completed
 - **Dependencies**: TASK-004
 - **Estimated LOC**: ~260 (105 production, 155 tests)
 - **Modules**: `api:virtual`, `api:app` wiring if required

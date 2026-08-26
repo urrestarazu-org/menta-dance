@@ -51,6 +51,15 @@ class ArchitectureTest {
     }
 
     @Test
+    void domain_and_application_should_not_depend_on_billing_infrastructure() {
+        noClasses()
+            .that().resideInAnyPackage("..domain..", "..application..")
+            .should().dependOnClassesThat().resideInAPackage("com.menta.billing.infrastructure..")
+            .allowEmptyShould(true)
+            .check(classes);
+    }
+
+    @Test
     void domain_should_not_use_spring_annotations() {
         noClasses()
             .that().resideInAPackage("..domain..")
