@@ -145,13 +145,15 @@ class GetPublicLessonStreamUseCaseImplTest {
     }
 
     @Test
-    void premium_lesson_for_anonymous_caller_returns_access_denied_without_entitlement_consult() {
+    void premium_lesson_for_anonymous_caller_resolves_plan_membership_before_access_is_denied() {
         CourseId courseId = CourseId.generate();
         LessonId lessonId = LessonId.generate();
 
         when(lessonRepository.findById(lessonId)).thenReturn(
             java.util.Optional.of(lesson(lessonId, courseId, "vid-target", false, 15))
         );
+        when(entitlementPort.resolveCourseAccess(eq(null), eq(courseId.getValue().toString())))
+            .thenReturn(new CourseAccessSnapshot(true, false));
 
         PublicLessonStreamResult result = useCase.get(lessonId.toString(), null);
 
@@ -160,8 +162,8 @@ class GetPublicLessonStreamUseCaseImplTest {
         assertThat(access.allowed()).isFalse();
         assertThat(access.reason()).isEqualTo("SUBSCRIPTION_REQUIRED");
         assertThat(access.plansUrl()).isEqualTo("/api/v1/billing/plans");
-        // Anonymous → no entitlement candidate → port must never be called.
-        verify(entitlementPort, never()).resolveCourseAccess(any(), anyString());
+        // Billing supplies the plan-membership fact; a null caller never grants entitlement.
+        verify(entitlementPort).resolveCourseAccess(null, courseId.getValue().toString());
         // And no signature either: the use case rejected before signing.
         verify(signatureService, never()).generateSignedUrl(any(), anyLong());
     }

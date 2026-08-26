@@ -7,8 +7,8 @@ import com.menta.virtual.application.dto.PublicLessonStreamResult;
 import com.menta.virtual.application.dto.PublicLessonView;
 import com.menta.virtual.application.port.in.GetPublicLessonStreamUseCase;
 import com.menta.virtual.application.port.in.GetPublicLessonUseCase;
+import com.menta.virtual.domain.exception.ForbiddenLessonAccessException;
 import com.menta.virtual.domain.exception.LessonNotFoundException;
-import com.menta.virtual.infrastructure.web.dto.PublicLessonAccessDto;
 import com.menta.virtual.infrastructure.web.dto.PublicLessonFreeResponse;
 import com.menta.virtual.infrastructure.web.dto.PublicLessonPremiumAccessibleResponse;
 import com.menta.virtual.infrastructure.web.dto.PublicLessonRequiresSubscriptionResponse;
@@ -16,7 +16,6 @@ import com.menta.virtual.infrastructure.web.dto.PublicLessonResponse;
 import com.menta.virtual.infrastructure.web.dto.PublicLessonStreamResponse;
 import java.util.Optional;
 import java.util.UUID;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -39,8 +38,8 @@ import org.springframework.web.bind.annotation.RestController;
  *   <li>{@link PublicLessonFreeResponse} → free preview, no {@code videoId};</li>
  *   <li>{@link PublicLessonPremiumAccessibleResponse} → premium body
  *       WITH {@code videoId};</li>
- *   <li>{@link PublicLessonRequiresSubscriptionResponse} → preview with
- *       {@code access.allowed=false}.</li>
+ *   <li>protected callers → 403 {@code application/problem+json} through
+ *       {@link ForbiddenLessonAccessException}.</li>
  * </ul>
  *
  * <p>The streaming route {@code GET /api/v1/virtual/lessons/{lessonId}/stream}
@@ -48,9 +47,9 @@ import org.springframework.web.bind.annotation.RestController;
  * <ul>
  *   <li>{@link PublicLessonStreamResult.Authorized} → 200 OK with
  *       {@link PublicLessonStreamResponse} ({@code {stream, lesson}});</li>
- *   <li>{@link PublicLessonStreamResult.AccessDenied} → 403 Forbidden
- *       with the same {@link PublicLessonAccessDto} body the public
- *       lesson detail already exposes for its access-decision 200.</li>
+ *   <li>{@link PublicLessonStreamResult.AccessDenied} → 403
+ *       {@code application/problem+json} through the same public exception
+ *       mapping as lesson detail.</li>
  * </ul>
  *
  * <p>The 403 wire shape intentionally mirrors the
@@ -101,12 +100,10 @@ public class VirtualPublicLessonController {
      * unpublished) — handled by the public advice chain as a 404
      * ProblemDetail, mirroring the detail route. The 403 branch is
      * returned inline (sealed result → {@code 403} with the
-     * {@link PublicLessonAccessDto} body) rather than via a thrown
-     * {@link com.menta.virtual.domain.exception.ForbiddenLessonAccessException},
-     * because the wire shape required by the spec
-     * ({@code {access: {...}}}) is not a Spring RFC 9457 ProblemDetail.
-     * Adding yet another exception type to keep the handler chain would
-     * not buy anything the sealed result already gives us.</p>
+     * {@code application/problem+json} through
+     * {@link ForbiddenLessonAccessException}. Keeping both routes on the same
+     * exception mapping guarantees a stable recovery code and prevents a
+     * capability-shaped body from reaching a denied caller.</p>
      */
     @GetMapping("/{lessonId}/stream")
     public ResponseEntity<Object> getStream(
@@ -119,9 +116,8 @@ public class VirtualPublicLessonController {
         if (result instanceof PublicLessonStreamResult.Authorized authorized) {
             return ResponseEntity.ok(PublicLessonStreamResponse.from(authorized.view()));
         }
-        if (result instanceof PublicLessonStreamResult.AccessDenied denied) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(PublicLessonAccessDto.from(denied.access()));
+        if (result instanceof PublicLessonStreamResult.AccessDenied) {
+            throw new ForbiddenLessonAccessException();
         }
         // Sealed at compile time — the instanceof chain covers every permitted subtype.
         throw new IllegalStateException("unhandled stream result type: " + result.getClass());

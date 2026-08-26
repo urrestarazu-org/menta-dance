@@ -6,14 +6,16 @@ import com.menta.virtual.application.dto.PublicLessonFreeView;
 public record PublicLessonFreeResponse(
     PublicLessonDetailDto lesson,
     PublicLessonNavigationDto navigation,
-    PublicLessonSubscriptionPromptDto subscription
+    PublicLessonSubscriptionPromptDto subscription,
+    PublicLessonAccessMetadataDto access
 ) implements PublicLessonResponse {
 
     public static PublicLessonFreeResponse from(PublicLessonFreeView view) {
         return new PublicLessonFreeResponse(
             PublicLessonDetailDto.fromFree(view.lesson()),
             PublicLessonNavigationDto.from(view.navigation()),
-            PublicLessonSubscriptionPromptDto.from(view.subscription())
+            PublicLessonSubscriptionPromptDto.from(view.subscription()),
+            PublicLessonAccessMetadataDto.publicPreview()
         );
     }
 }

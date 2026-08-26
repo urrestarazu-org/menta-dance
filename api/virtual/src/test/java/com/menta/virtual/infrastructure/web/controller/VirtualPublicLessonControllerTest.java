@@ -100,6 +100,8 @@ class VirtualPublicLessonControllerTest {
         assertThat(body.lesson().lessonId()).isEqualTo(lessonId);
         assertThat(body.lesson().isFree()).isTrue();
         assertThat(body.lesson().videoId()).isNull();
+        assertThat(body.access().preview()).isTrue();
+        assertThat(body.access().requiresSubscription()).isFalse();
         assertThat(body.subscription().plansUrl()).isEqualTo("/api/v1/billing/plans");
     }
 
@@ -169,6 +171,8 @@ class VirtualPublicLessonControllerTest {
         PublicLessonPremiumAccessibleResponse body = (PublicLessonPremiumAccessibleResponse) response.getBody();
         assertThat(body.lesson().videoId()).isEqualTo("SECRET-VIDEO-ID-42");
         assertThat(body.lesson().isFree()).isFalse();
+        assertThat(body.access().preview()).isFalse();
+        assertThat(body.access().requiresSubscription()).isFalse();
     }
 
     @Test

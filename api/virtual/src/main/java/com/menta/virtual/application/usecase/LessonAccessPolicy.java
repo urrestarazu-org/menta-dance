@@ -41,10 +41,6 @@ public final class LessonAccessPolicy {
         if (module.isPreview()) {
             return LessonAccessDecision.PUBLIC_MODULE_PREVIEW;
         }
-        if (actingUserId == null) {
-            return LessonAccessDecision.SUBSCRIPTION_REQUIRED;
-        }
-
         try {
             CourseAccessSnapshot access = entitlementPort.resolveCourseAccess(
                 actingUserId, lesson.getCourseId().getValue().toString()
@@ -54,6 +50,9 @@ public final class LessonAccessPolicy {
             }
             if (!access.courseInAnyPlan()) {
                 return LessonAccessDecision.PUBLIC_UNPLANNED_COURSE;
+            }
+            if (actingUserId == null) {
+                return LessonAccessDecision.SUBSCRIPTION_REQUIRED;
             }
             return access.currentEntitlement()
                 ? LessonAccessDecision.SUBSCRIPTION_GRANTED

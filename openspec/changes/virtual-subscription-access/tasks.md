@@ -174,7 +174,7 @@ size exception.  PR 2 must target PR 1 and merge after it.
 
 ## TASK-007 — Update API contracts and perform the verification sweep
 
-- **Status**: pending
+- **Status**: completed
 - **Dependencies**: TASK-006
 - **Estimated LOC**: ~130 (contracts/tests/documentation)
 - **Modules**: OpenAPI, `bruno/`, `api:virtual`, `api:app`

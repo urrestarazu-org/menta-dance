@@ -238,10 +238,12 @@ class GetPublicLessonUseCaseImplTest {
         ));
         when(courseRepository.findPublishedById(courseId)).thenReturn(Optional.of(publishedCourse(courseId)));
 
-        // Anonymous caller → no userId at all → throw before even consulting billing.
+        // Billing supplies plan membership even for anonymous callers; null userId never grants entitlement.
+        when(entitlementPort.resolveCourseAccess(eq(null), eq(courseId.getValue().toString())))
+            .thenReturn(new CourseAccessSnapshot(true, false));
         assertThatThrownBy(() -> useCase.get(lessonId.toString(), null))
             .isInstanceOf(ForbiddenLessonAccessException.class);
-        verify(entitlementPort, never()).resolveCourseAccess(any(), anyString());
+        verify(entitlementPort).resolveCourseAccess(null, courseId.getValue().toString());
     }
 
     @Test

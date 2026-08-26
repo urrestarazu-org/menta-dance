@@ -44,13 +44,12 @@ class LessonAccessPolicyTest {
     }
 
     @Test
-    void unplanned_course_is_public_without_consulting_billing() {
-        UUID userId = UUID.randomUUID();
+    void unplanned_course_is_public_for_an_anonymous_caller() {
         VirtualLesson lesson = lesson(false);
-        when(entitlementPort.resolveCourseAccess(eq(userId), eq(lesson.getCourseId().getValue().toString())))
+        when(entitlementPort.resolveCourseAccess(eq(null), eq(lesson.getCourseId().getValue().toString())))
             .thenReturn(new CourseAccessSnapshot(false, false));
 
-        assertThat(policy.decide(lesson, module(false), userId))
+        assertThat(policy.decide(lesson, module(false), null))
             .isEqualTo(LessonAccessDecision.PUBLIC_UNPLANNED_COURSE);
     }
 
@@ -66,11 +65,15 @@ class LessonAccessPolicyTest {
     }
 
     @Test
-    void planned_course_without_identity_is_denied_without_consulting_billing() {
-        assertThat(policy.decide(lesson(false), module(false), null))
+    void planned_course_without_identity_is_denied_after_resolving_plan_membership() {
+        VirtualLesson lesson = lesson(false);
+        when(entitlementPort.resolveCourseAccess(eq(null), eq(lesson.getCourseId().getValue().toString())))
+            .thenReturn(new CourseAccessSnapshot(true, false));
+
+        assertThat(policy.decide(lesson, module(false), null))
             .isEqualTo(LessonAccessDecision.SUBSCRIPTION_REQUIRED);
 
-        verify(entitlementPort, never()).resolveCourseAccess(any(), anyString());
+        verify(entitlementPort).resolveCourseAccess(null, lesson.getCourseId().getValue().toString());
     }
 
     @Test
