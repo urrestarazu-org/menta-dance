@@ -21,6 +21,9 @@ public class VirtualModuleJpaEntity {
     @Column(name = "title", nullable = false)
     private String title;
 
+    @Column(name = "is_preview", nullable = false)
+    private boolean preview;
+
     @Column(name = "display_order", nullable = false)
     private int displayOrder;
 
@@ -28,11 +31,16 @@ public class VirtualModuleJpaEntity {
         // JPA requires a no-arg constructor.
     }
 
-    public VirtualModuleJpaEntity(UUID id, UUID courseId, String title, int displayOrder) {
+    public VirtualModuleJpaEntity(UUID id, UUID courseId, String title, boolean preview, int displayOrder) {
         this.id = id;
         this.courseId = courseId;
         this.title = title;
+        this.preview = preview;
         this.displayOrder = displayOrder;
+    }
+
+    public VirtualModuleJpaEntity(UUID id, UUID courseId, String title, int displayOrder) {
+        this(id, courseId, title, false, displayOrder);
     }
 
     public UUID getId() {
@@ -45,6 +53,10 @@ public class VirtualModuleJpaEntity {
 
     public String getTitle() {
         return title;
+    }
+
+    public boolean isPreview() {
+        return preview;
     }
 
     public int getDisplayOrder() {

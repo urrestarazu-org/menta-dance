@@ -179,7 +179,7 @@ public class VirtualCourseAdminController {
         Authentication authentication
     ) {
         CreateVirtualModuleCommand command =
-            new CreateVirtualModuleCommand(request.title(), Optional.ofNullable(request.order()));
+            new CreateVirtualModuleCommand(request.title(), Optional.ofNullable(request.order()), request.preview());
         VirtualModuleManagementResult result = createVirtualModuleUseCase.create(
             courseId, command, actingUserId(authentication), isAdmin(authentication)
         );

@@ -70,4 +70,13 @@ public interface SubscriptionRepository {
      * or expired subscription does not occupy the slot and must not be returned.
      */
     Optional<Subscription> findCurrentByUserId(UUID userId);
+
+    /**
+     * Returns every subscription for a student with its frozen course snapshot.
+     *
+     * <p>Entitlement reads use this rather than the checkout-slot lookup because
+     * cancelled subscriptions no longer occupy a slot but can retain paid access
+     * until their {@code endDate} (US-BILLING-011).</p>
+     */
+    java.util.List<Subscription> findAllByUserId(UUID userId);
 }

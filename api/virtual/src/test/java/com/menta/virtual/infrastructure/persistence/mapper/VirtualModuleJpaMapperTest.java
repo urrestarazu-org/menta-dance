@@ -13,18 +13,20 @@ class VirtualModuleJpaMapperTest {
     void round_trips_every_field() {
         UUID id = UUID.randomUUID();
         UUID courseId = UUID.randomUUID();
-        VirtualModuleJpaEntity entity = new VirtualModuleJpaEntity(id, courseId, "Módulo 1", 3);
+        VirtualModuleJpaEntity entity = new VirtualModuleJpaEntity(id, courseId, "Módulo 1", true, 3);
 
         VirtualModule domain = VirtualModuleJpaMapper.toDomain(entity);
 
         assertThat(domain.getId().getValue()).isEqualTo(id);
         assertThat(domain.getCourseId().getValue()).isEqualTo(courseId);
         assertThat(domain.getTitle()).isEqualTo("Módulo 1");
+        assertThat(domain.isPreview()).isTrue();
         assertThat(domain.getOrder()).isEqualTo(3);
 
         VirtualModuleJpaEntity roundTripped = VirtualModuleJpaMapper.toEntity(domain);
         assertThat(roundTripped.getId()).isEqualTo(id);
         assertThat(roundTripped.getCourseId()).isEqualTo(courseId);
+        assertThat(roundTripped.isPreview()).isTrue();
         assertThat(roundTripped.getDisplayOrder()).isEqualTo(3);
     }
 }

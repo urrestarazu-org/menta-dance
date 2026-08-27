@@ -12,11 +12,12 @@ class VirtualModuleJpaEntityTest {
         UUID id = UUID.randomUUID();
         UUID courseId = UUID.randomUUID();
 
-        VirtualModuleJpaEntity entity = new VirtualModuleJpaEntity(id, courseId, "Módulo 1", 2);
+        VirtualModuleJpaEntity entity = new VirtualModuleJpaEntity(id, courseId, "Módulo 1", true, 2);
 
         assertThat(entity.getId()).isEqualTo(id);
         assertThat(entity.getCourseId()).isEqualTo(courseId);
         assertThat(entity.getTitle()).isEqualTo("Módulo 1");
+        assertThat(entity.isPreview()).isTrue();
         assertThat(entity.getDisplayOrder()).isEqualTo(2);
     }
 }
