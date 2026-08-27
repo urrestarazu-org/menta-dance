@@ -1,0 +1,35 @@
+meta {
+  name: Get Free Lesson
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/virtual/lessons/{{virtualFreeLessonId}}
+  body: none
+  auth: none
+}
+
+script:pre-request {
+  if (!bru.getEnvVar("virtualFreeLessonId")) {
+    bru.runner.skipRequest();
+  }
+}
+
+tests {
+  test("Status is 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("Public lesson exposes explicit safe access metadata", function() {
+    expect(res.getBody().access.preview).to.equal(true);
+    expect(res.getBody().access.requiresSubscription).to.equal(false);
+    expect(res.getBody().lesson.videoId).to.not.exist;
+    expect(res.getBody().stream).to.not.exist;
+  });
+}
+
+docs {
+  US-VIRTUAL-007 public cascade branch: a free lesson is available without authentication.
+  Set virtualFreeLessonId in a local environment provisioned with this fixture.
+}

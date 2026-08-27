@@ -39,6 +39,8 @@ class VirtualPublicLessonExceptionHandlerTest {
         assertThat(response.getBody().getDetail()).contains("suscripción");
         assertThat(response.getBody().getProperties().get("code"))
             .isEqualTo("LESSON_FORBIDDEN_SUBSCRIPTION_REQUIRED");
+        assertThat(response.getBody().getProperties())
+            .doesNotContainKeys("videoId", "streamUrl", "url", "video");
     }
 
     @Test

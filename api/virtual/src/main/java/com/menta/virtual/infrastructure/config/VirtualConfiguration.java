@@ -27,6 +27,7 @@ import com.menta.virtual.application.usecase.CreateVirtualModuleUseCaseImpl;
 import com.menta.virtual.application.usecase.DeleteVirtualCourseUseCaseImpl;
 import com.menta.virtual.application.usecase.GetPublicLessonStreamUseCaseImpl;
 import com.menta.virtual.application.usecase.GetPublicLessonUseCaseImpl;
+import com.menta.virtual.application.usecase.LessonAccessPolicy;
 import com.menta.virtual.application.usecase.ListManagedVirtualCoursesUseCaseImpl;
 import com.menta.virtual.application.usecase.PublishVirtualCourseUseCaseImpl;
 import com.menta.virtual.application.usecase.ReorderVirtualModulesUseCaseImpl;
@@ -112,15 +113,22 @@ import org.springframework.context.annotation.Configuration;
      * a follow-up ticket.
      */
     @Bean
+    public LessonAccessPolicy lessonAccessPolicy(VirtualCourseEntitlementPort virtualCourseEntitlementPort) {
+        return new LessonAccessPolicy(virtualCourseEntitlementPort);
+    }
+
+    @Bean
     public GetPublicLessonStreamUseCase getPublicLessonStreamUseCase(
         VirtualLessonRepository lessonRepository,
-        VirtualCourseEntitlementPort virtualCourseEntitlementPort,
+        VirtualModuleRepository moduleRepository,
+        LessonAccessPolicy lessonAccessPolicy,
         BunnyNetSignatureService bunnyNetSignatureService,
         Clock clock
     ) {
         return new GetPublicLessonStreamUseCaseImpl(
             lessonRepository,
-            virtualCourseEntitlementPort,
+            moduleRepository,
+            lessonAccessPolicy,
             bunnyNetSignatureService,
             clock
         );
@@ -139,10 +147,10 @@ import org.springframework.context.annotation.Configuration;
         VirtualLessonRepository lessonRepository,
         VirtualModuleRepository moduleRepository,
         VirtualCourseRepository courseRepository,
-        VirtualCourseEntitlementPort virtualCourseEntitlementPort
+        LessonAccessPolicy lessonAccessPolicy
     ) {
         return new GetPublicLessonUseCaseImpl(
-            lessonRepository, moduleRepository, courseRepository, virtualCourseEntitlementPort
+            lessonRepository, moduleRepository, courseRepository, lessonAccessPolicy
         );
     }
 

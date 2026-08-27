@@ -8,15 +8,14 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.menta.virtual.application.dto.LessonAccessDecisionDto;
 import com.menta.virtual.application.dto.PublicLessonStreamResult;
 import com.menta.virtual.application.dto.PublicLessonStreamView;
 import com.menta.virtual.application.dto.PublicStreamQuality;
 import com.menta.virtual.application.port.in.GetPublicLessonStreamUseCase;
 import com.menta.virtual.application.port.in.GetPublicLessonUseCase;
 import com.menta.virtual.domain.exception.LessonNotFoundException;
-import com.menta.virtual.infrastructure.web.dto.PublicLessonAccessDto;
 import com.menta.virtual.infrastructure.web.dto.PublicLessonStreamResponse;
+import com.menta.virtual.domain.exception.ForbiddenLessonAccessException;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -34,9 +33,9 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
  * <ul>
  *   <li>{@link PublicLessonStreamResult.Authorized} → {@code 200 OK} with
  *       {@link PublicLessonStreamResponse};</li>
- *   <li>{@link PublicLessonStreamResult.AccessDenied} → {@code 403
- *       Forbidden} with {@link PublicLessonAccessDto} (NOT a Spring
- *       ProblemDetail — that would overshoot the spec body shape);</li>
+ *   <li>{@link PublicLessonStreamResult.AccessDenied} →
+ *       {@link ForbiddenLessonAccessException}, which the shared public
+ *       advice maps to a 403 RFC 9457 problem;</li>
  *   <li>missing or malformed id → {@link LessonNotFoundException}
  *       propagated up to the public advice chain
  *       ({@link VirtualPublicLessonExceptionHandler}) for a 404
@@ -126,41 +125,28 @@ class VirtualPublicLessonControllerStreamTest {
     }
 
     @Test
-    void stream_for_authenticated_caller_without_entitlement_returns_403_with_access_block() {
+    void stream_for_authenticated_caller_without_entitlement_uses_the_shared_403_problem_path() {
         String lessonId = UUID.randomUUID().toString();
         UUID userId = UUID.randomUUID();
 
         when(streamUseCase.get(eq(lessonId), eq(userId))).thenReturn(
-            new PublicLessonStreamResult.AccessDenied(
-                LessonAccessDecisionDto.requiresSubscription("/api/v1/billing/plans")
-            )
+            new PublicLessonStreamResult.AccessDenied(null)
         );
 
-        ResponseEntity<Object> response = controller.getStream(lessonId, authOf(userId));
-
-        // Spec: 403 Forbidden, NOT a Spring ProblemDetail.
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-        assertThat(response.getBody()).isInstanceOf(PublicLessonAccessDto.class);
-        PublicLessonAccessDto body = (PublicLessonAccessDto) response.getBody();
-        assertThat(body.allowed()).isFalse();
-        assertThat(body.reason()).isEqualTo("SUBSCRIPTION_REQUIRED");
-        assertThat(body.plansUrl()).isEqualTo("/api/v1/billing/plans");
+        assertThatThrownBy(() -> controller.getStream(lessonId, authOf(userId)))
+            .isInstanceOf(ForbiddenLessonAccessException.class);
     }
 
     @Test
-    void stream_for_anonymous_caller_on_a_premium_lesson_returns_403_with_access_block() {
+    void stream_for_anonymous_caller_on_a_premium_lesson_uses_the_shared_403_problem_path() {
         String lessonId = UUID.randomUUID().toString();
 
         when(streamUseCase.get(eq(lessonId), any())).thenReturn(
-            new PublicLessonStreamResult.AccessDenied(
-                LessonAccessDecisionDto.requiresSubscription("/api/v1/billing/plans")
-            )
+            new PublicLessonStreamResult.AccessDenied(null)
         );
 
-        ResponseEntity<Object> response = controller.getStream(lessonId, anonymous());
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-        assertThat(response.getBody()).isInstanceOf(PublicLessonAccessDto.class);
+        assertThatThrownBy(() -> controller.getStream(lessonId, anonymous()))
+            .isInstanceOf(ForbiddenLessonAccessException.class);
     }
 
     @Test

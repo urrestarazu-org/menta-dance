@@ -5,13 +5,15 @@ import com.menta.virtual.application.dto.PublicLessonPremiumAccessibleView;
 /** Premium accessible response — {@code lesson} DOES carry {@code videoId}. */
 public record PublicLessonPremiumAccessibleResponse(
     PublicLessonDetailDto lesson,
-    PublicLessonNavigationDto navigation
+    PublicLessonNavigationDto navigation,
+    PublicLessonAccessMetadataDto access
 ) implements PublicLessonResponse {
 
     public static PublicLessonPremiumAccessibleResponse from(PublicLessonPremiumAccessibleView view) {
         return new PublicLessonPremiumAccessibleResponse(
             PublicLessonDetailDto.fromPremium(view.lesson()),
-            PublicLessonNavigationDto.from(view.navigation())
+            PublicLessonNavigationDto.from(view.navigation()),
+            PublicLessonAccessMetadataDto.entitled()
         );
     }
 }

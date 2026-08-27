@@ -1,0 +1,37 @@
+meta {
+  name: Get Entitled Lesson Stream
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/v1/virtual/lessons/{{virtualEntitledLessonId}}/stream
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+script:pre-request {
+  if (!bru.getEnvVar("virtualEntitledLessonId") || !bru.getEnvVar("authToken")) {
+    bru.runner.skipRequest();
+  }
+}
+
+tests {
+  test("Status is 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("Only the stream endpoint returns the signed URL", function() {
+    expect(res.getBody().stream.url).to.be.a("string").and.not.empty;
+    expect(res.getBody().lesson.lessonId).to.equal(bru.getEnvVar("virtualEntitledLessonId"));
+  });
+}
+
+docs {
+  A current Billing entitlement is required for a protected stream. The URL is temporary.
+  Set virtualEntitledLessonId and authenticate as the entitled student.
+}

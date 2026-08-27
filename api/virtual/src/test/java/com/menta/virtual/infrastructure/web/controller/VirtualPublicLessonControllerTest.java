@@ -7,15 +7,12 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.menta.virtual.application.dto.LessonAccessDecisionDto;
 import com.menta.virtual.application.dto.PublicCourseRef;
 import com.menta.virtual.application.dto.PublicLessonDetailView;
 import com.menta.virtual.application.dto.PublicLessonFreeView;
 import com.menta.virtual.application.dto.PublicLessonNavigation;
 import com.menta.virtual.application.dto.PublicLessonNavigationRef;
 import com.menta.virtual.application.dto.PublicLessonPremiumAccessibleView;
-import com.menta.virtual.application.dto.PublicLessonPreviewView;
-import com.menta.virtual.application.dto.PublicLessonRequiresSubscriptionView;
 import com.menta.virtual.application.dto.PublicLessonSubscriptionPrompt;
 import com.menta.virtual.application.dto.PublicModuleRef;
 import com.menta.virtual.application.port.in.GetPublicLessonStreamUseCase;
@@ -103,6 +100,8 @@ class VirtualPublicLessonControllerTest {
         assertThat(body.lesson().lessonId()).isEqualTo(lessonId);
         assertThat(body.lesson().isFree()).isTrue();
         assertThat(body.lesson().videoId()).isNull();
+        assertThat(body.access().preview()).isTrue();
+        assertThat(body.access().requiresSubscription()).isFalse();
         assertThat(body.subscription().plansUrl()).isEqualTo("/api/v1/billing/plans");
     }
 
@@ -135,27 +134,14 @@ class VirtualPublicLessonControllerTest {
     }
 
     @Test
-    void premium_lesson_for_authenticated_caller_without_entitlement_returns_200_gated_response() {
+    void premium_lesson_for_authenticated_caller_without_entitlement_lets_the_use_case_throw_403() {
         String lessonId = UUID.randomUUID().toString();
         UUID userId = UUID.randomUUID();
 
-        PublicLessonPreviewView preview = new PublicLessonPreviewView(
-            lessonId, "Avanzado", "Vista previa", "15:00", false, "https://cdn/tango.jpg"
-        );
-        PublicLessonRequiresSubscriptionView gated = new PublicLessonRequiresSubscriptionView(
-            preview,
-            LessonAccessDecisionDto.requiresSubscription("/api/v1/billing/plans")
-        );
+        when(useCase.get(eq(lessonId), eq(userId))).thenThrow(new ForbiddenLessonAccessException());
 
-        when(useCase.get(eq(lessonId), eq(userId))).thenReturn(Optional.of(gated));
-
-        ResponseEntity<PublicLessonResponse> response = controller.get(lessonId, authOf(userId));
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).isInstanceOf(PublicLessonRequiresSubscriptionResponse.class);
-        PublicLessonRequiresSubscriptionResponse body = (PublicLessonRequiresSubscriptionResponse) response.getBody();
-        assertThat(body.access().allowed()).isFalse();
-        assertThat(body.access().reason()).isEqualTo("SUBSCRIPTION_REQUIRED");
+        assertThatThrownBy(() -> controller.get(lessonId, authOf(userId)))
+            .isInstanceOf(ForbiddenLessonAccessException.class);
     }
 
     @Test
@@ -185,6 +171,8 @@ class VirtualPublicLessonControllerTest {
         PublicLessonPremiumAccessibleResponse body = (PublicLessonPremiumAccessibleResponse) response.getBody();
         assertThat(body.lesson().videoId()).isEqualTo("SECRET-VIDEO-ID-42");
         assertThat(body.lesson().isFree()).isFalse();
+        assertThat(body.access().preview()).isFalse();
+        assertThat(body.access().requiresSubscription()).isFalse();
     }
 
     @Test

@@ -1,6 +1,6 @@
 package com.menta.virtual.application.usecase;
 
-import com.menta.shared.billing.VirtualCourseEntitlementPort;
+import com.menta.virtual.application.dto.LessonAccessDecision;
 import com.menta.virtual.application.dto.LessonAccessDecisionDto;
 import com.menta.virtual.application.dto.PublicCourseRef;
 import com.menta.virtual.application.dto.PublicLessonDetailView;
@@ -91,18 +91,18 @@ public class GetPublicLessonUseCaseImpl implements GetPublicLessonUseCase {
     private final VirtualLessonRepository lessonRepository;
     private final VirtualModuleRepository moduleRepository;
     private final VirtualCourseRepository courseRepository;
-    private final VirtualCourseEntitlementPort entitlementPort;
+    private final LessonAccessPolicy accessPolicy;
 
     public GetPublicLessonUseCaseImpl(
         VirtualLessonRepository lessonRepository,
         VirtualModuleRepository moduleRepository,
         VirtualCourseRepository courseRepository,
-        VirtualCourseEntitlementPort entitlementPort
+        LessonAccessPolicy accessPolicy
     ) {
         this.lessonRepository = lessonRepository;
         this.moduleRepository = moduleRepository;
         this.courseRepository = courseRepository;
-        this.entitlementPort = entitlementPort;
+        this.accessPolicy = accessPolicy;
     }
 
     @Override
@@ -141,7 +141,12 @@ public class GetPublicLessonUseCaseImpl implements GetPublicLessonUseCase {
         String thumbnailUrl = course.getImageUrl();
         String duration = formatDuration(lesson.getDurationMinutes());
 
-        if (lesson.isFree()) {
+        LessonAccessDecision accessDecision = accessPolicy.decide(lesson, module, actingUserId);
+        if (accessDecision == LessonAccessDecision.SUBSCRIPTION_REQUIRED) {
+            throw new ForbiddenLessonAccessException();
+        }
+
+        if (accessDecision == LessonAccessDecision.PUBLIC_FREE) {
             PublicLessonDetailView detail = PublicLessonDetailView.withoutVideoId(
                 lesson.getId().toString(), lesson.getTitle(), lesson.getDescription(),
                 duration, true, lesson.getOrder(),
@@ -152,39 +157,12 @@ public class GetPublicLessonUseCaseImpl implements GetPublicLessonUseCase {
             ));
         }
 
-        // From here on the lesson is premium. Three sub-cases:
-        //  (a) anonymous caller → there is NO entitlement candidate. Hard 403 for the controller:
-        //      throw ForbiddenLessonAccessException so a Spring handler at the public
-        //      RestControllerAdvice can serialize it to RFC 9457 ProblemDetail.
-        //  (b) authenticated + active entitlement → premium view, videoId included.
-        //  (c) authenticated + NO entitlement → 200 with preview + access.allowed=false.
-        //
-        // Order matters: we cannot check entitlement for an anonymous caller because we have
-        // no userId to ask about, and asking anonymously would be a privacy violation
-        // regardless of what billing does with it.
-        if (actingUserId == null) {
-            throw new ForbiddenLessonAccessException();
-        }
-
-        boolean entitled = entitlementPort.hasActiveEntitlement(
-            actingUserId, lesson.getCourseId().getValue().toString()
-        );
-        if (entitled) {
-            PublicLessonDetailView detail = PublicLessonDetailView.withVideoId(
-                lesson.getId().toString(), lesson.getTitle(), lesson.getDescription(),
-                duration, false, lesson.getOrder(),
-                moduleRef, courseRef, lesson.getVideoId(), thumbnailUrl
-            );
-            return Optional.of(new PublicLessonPremiumAccessibleView(detail, navigation));
-        }
-
-        PublicLessonPreviewView preview = new PublicLessonPreviewView(
+        PublicLessonDetailView detail = PublicLessonDetailView.withVideoId(
             lesson.getId().toString(), lesson.getTitle(), lesson.getDescription(),
-            duration, false, thumbnailUrl
+            duration, false, lesson.getOrder(),
+            moduleRef, courseRef, lesson.getVideoId(), thumbnailUrl
         );
-        return Optional.of(new PublicLessonRequiresSubscriptionView(
-            preview, LessonAccessDecisionDto.requiresSubscription(BILLING_PLANS_URL)
-        ));
+        return Optional.of(new PublicLessonPremiumAccessibleView(detail, navigation));
     }
 
     private static LessonId parseLessonId(String raw) {

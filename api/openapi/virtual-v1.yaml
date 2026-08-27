@@ -5,10 +5,9 @@ openapi: 3.1.0
 # Escrito y versionado a mano, mismo criterio que auth-v1.yaml/billing-v1.yaml/
 # physical-v1.yaml: el diff se revisa en el PR igual que la colección Bruno.
 #
-# Sólo describe endpoints IMPLEMENTADOS. Virtual no tiene ningún endpoint
-# público propio todavía — su catálogo de sólo lectura vive compuesto en
-# api:app (docs/07-CATALOG-API.md, #95). Este contrato es el primer HTTP que
-# Virtual expone directamente, y es exclusivamente de gestión (US-VIRTUAL-006).
+# Describe exclusivamente endpoints IMPLEMENTADOS. Además de la gestión,
+# Virtual publica detalle y streaming de lecciones con autorización resuelta
+# del lado del servidor (US-VIRTUAL-003/004/007).
 
 info:
   title: Menta Dance — Virtual API
@@ -46,8 +45,91 @@ tags:
     description: Administración de módulos de un curso virtual (ADMIN/PROFESOR).
   - name: Gestión de lecciones
     description: Administración de lecciones de un módulo (ADMIN/PROFESOR).
+  - name: Lecciones públicas
+    description: Detalle y streaming de lecciones con autorización de suscripción.
 
 paths:
+  /api/v1/virtual/lessons/{lessonId}:
+    get:
+      tags: [Lecciones públicas]
+      summary: Obtener detalle de una lección publicada
+      description: |
+        No requiere autenticación para las rutas públicas: lección gratuita,
+        módulo preview o curso que no pertenece a ningún plan. El resultado
+        200 incluye `access.preview` y `access.requiresSubscription` para que
+        el cliente pueda distinguir contenido público de acceso pago vigente.
+        El detalle nunca contiene una URL de streaming. Una lección protegida
+        sin entitlement actual responde 403 RFC 9457 y no expone `videoId`.
+      operationId: getPublicVirtualLesson
+      parameters:
+        - $ref: '#/components/parameters/LessonId'
+      responses:
+        '200':
+          description: Lección pública o protegida autorizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicLessonDetailResponse'
+        '403':
+          description: La lección pertenece a un plan y el caller no tiene un entitlement actual.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                subscription_required:
+                  value:
+                    type: about:blank
+                    title: Forbidden
+                    status: 403
+                    detail: Esta lección requiere una suscripción activa
+                    code: LESSON_FORBIDDEN_SUBSCRIPTION_REQUIRED
+        '404':
+          description: Lección inexistente, inválida o cuyo curso no está publicado.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /api/v1/virtual/lessons/{lessonId}/stream:
+    get:
+      tags: [Lecciones públicas]
+      summary: Emitir una URL temporal de streaming para una lección autorizada
+      description: |
+        Evalúa la misma política de acceso que el detalle. Sólo una respuesta
+        200 contiene `stream.url`; los 403 son `application/problem+json` y
+        nunca contienen URL, `videoId` ni otra capacidad de media.
+      operationId: getPublicVirtualLessonStream
+      parameters:
+        - $ref: '#/components/parameters/LessonId'
+      responses:
+        '200':
+          description: URL HLS firmada temporalmente para una lección autorizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicLessonStreamResponse'
+        '403':
+          description: La lección pertenece a un plan y el caller no tiene un entitlement actual.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                subscription_required:
+                  value:
+                    type: about:blank
+                    title: Forbidden
+                    status: 403
+                    detail: Esta lección requiere una suscripción activa
+                    code: LESSON_FORBIDDEN_SUBSCRIPTION_REQUIRED
+        '404':
+          description: Lección inexistente, inválida o no publicada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
   /api/v1/admin/virtual/courses:
     post:
       tags: [Gestión de cursos]
@@ -476,6 +558,176 @@ components:
           type: string
         code:
           type: string
+
+    PublicLessonDetailResponse:
+      oneOf:
+        - $ref: '#/components/schemas/PublicLessonPreviewResponse'
+        - $ref: '#/components/schemas/PublicLessonEntitledResponse'
+
+    PublicLessonPreviewResponse:
+      type: object
+      required: [lesson, navigation, subscription, access]
+      properties:
+        lesson:
+          $ref: '#/components/schemas/PublicLessonPreview'
+        navigation:
+          $ref: '#/components/schemas/PublicLessonNavigation'
+        subscription:
+          $ref: '#/components/schemas/PublicLessonSubscriptionPrompt'
+        access:
+          $ref: '#/components/schemas/PublicLessonAccessMetadata'
+
+    PublicLessonEntitledResponse:
+      type: object
+      required: [lesson, navigation, access]
+      properties:
+        lesson:
+          $ref: '#/components/schemas/PublicLessonEntitled'
+        navigation:
+          $ref: '#/components/schemas/PublicLessonNavigation'
+        access:
+          $ref: '#/components/schemas/PublicLessonAccessMetadata'
+
+    PublicLessonPreview:
+      type: object
+      required: [lessonId, title, description, duration, isFree, order, module, course, thumbnailUrl]
+      properties:
+        lessonId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        duration:
+          type: string
+          example: '15:00'
+        isFree:
+          type: boolean
+        order:
+          type: integer
+        module:
+          $ref: '#/components/schemas/PublicModuleRef'
+        course:
+          $ref: '#/components/schemas/PublicCourseRef'
+        thumbnailUrl:
+          type: string
+
+    PublicLessonEntitled:
+      allOf:
+        - $ref: '#/components/schemas/PublicLessonPreview'
+        - type: object
+          required: [videoId]
+          properties:
+            videoId:
+              type: string
+              description: Identificador opaco de Bunny.net, sólo para un caller autorizado.
+
+    PublicModuleRef:
+      type: object
+      required: [moduleId, title]
+      properties:
+        moduleId:
+          type: string
+          format: uuid
+        title:
+          type: string
+
+    PublicCourseRef:
+      type: object
+      required: [courseId, title]
+      properties:
+        courseId:
+          type: string
+          format: uuid
+        title:
+          type: string
+
+    PublicLessonNavigation:
+      type: object
+      required: [previousLesson, nextLesson]
+      properties:
+        previousLesson:
+          oneOf:
+            - $ref: '#/components/schemas/PublicLessonNavigationRef'
+            - type: 'null'
+        nextLesson:
+          oneOf:
+            - $ref: '#/components/schemas/PublicLessonNavigationRef'
+            - type: 'null'
+
+    PublicLessonNavigationRef:
+      type: object
+      required: [lessonId, title, isFree]
+      properties:
+        lessonId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        isFree:
+          type: boolean
+
+    PublicLessonSubscriptionPrompt:
+      type: object
+      required: [message, plansUrl]
+      properties:
+        message:
+          type: string
+        plansUrl:
+          type: string
+
+    PublicLessonAccessMetadata:
+      type: object
+      description: Metadatos seguros de autorización, sin capacidad de media.
+      required: [preview, requiresSubscription]
+      properties:
+        preview:
+          type: boolean
+          description: True para contenido público entregado como preview.
+        requiresSubscription:
+          type: boolean
+          description: Siempre false en una respuesta 200; los casos protegidos se expresan con 403 Problem Details.
+
+    PublicLessonStreamResponse:
+      type: object
+      required: [stream, lesson]
+      properties:
+        stream:
+          type: object
+          required: [url, type, qualities, expiresAt]
+          properties:
+            url:
+              type: string
+              format: uri
+            type:
+              type: string
+              enum: [HLS]
+            qualities:
+              type: array
+              items:
+                type: object
+                required: [label, bitrate]
+                properties:
+                  label:
+                    type: string
+                  bitrate:
+                    type: integer
+                    format: int64
+            expiresAt:
+              type: string
+              format: date-time
+        lesson:
+          type: object
+          required: [lessonId, title, duration]
+          properties:
+            lessonId:
+              type: string
+              format: uuid
+            title:
+              type: string
+            duration:
+              type: string
 
     CreateVirtualCourseRequest:
       type: object
