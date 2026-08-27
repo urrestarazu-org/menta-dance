@@ -50,7 +50,7 @@ exception. PR 2 must target PR 1 and merge after it.
 
 ## TASK-002 — Guard and seed the Auth E2E baseline
 
-- **Status**: pending
+- **Status**: completed
 - **Dependencies**: TASK-001
 - **Estimated LOC**: ~180 (75 production, 105 tests)
 - **Modules**: api:auth, api:app composition only if required
