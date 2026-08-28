@@ -153,7 +153,7 @@ exception. PR 2 must target PR 1 and merge after it.
 
 ## TASK-006 — Perform the end-to-end verification sweep
 
-- **Status**: pending
+- **Status**: completed
 - **Dependencies**: TASK-001, TASK-002, TASK-003, TASK-004, TASK-005
 - **Estimated LOC**: ~70 (test hardening/verification records)
 - **Modules**: api:auth, api:virtual, api:app, scripts/, bruno/, docs/

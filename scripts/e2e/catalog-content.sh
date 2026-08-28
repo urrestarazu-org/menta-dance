@@ -16,7 +16,7 @@ readonly MAILPIT_PORT="38025"
 readonly API_HEALTH_URL="http://localhost:${API_PORT}/actuator/health"
 readonly API_LOG="${PROJECT_ROOT}/.dev-logs/e2e-catalog-content-api.log"
 readonly API_PID_FILE="${PROJECT_ROOT}/.dev-pids/e2e-catalog-content-api.pid"
-readonly BRUNO_FOLDER="bruno/E2E/catalog-content"
+readonly BRUNO_FOLDER="E2E/catalog-content"
 readonly BRUNO_ENV="e2e-catalog-content"
 
 api_pid=""
@@ -116,6 +116,7 @@ start_api() {
     SPRING_PROFILES_ACTIVE=e2e-catalog-content SERVER_PORT="$API_PORT" \
         MYSQL_URL="jdbc:mysql://localhost:${MYSQL_PORT}/menta" \
         SPRING_DATA_REDIS_PORT="$REDIS_PORT" SMTP_PORT=31025 \
+        OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:34318" \
         "$PROJECT_ROOT/gradlew" --no-daemon :api:app:bootRun >"$API_LOG" 2>&1 &
     api_pid=$!
     printf '%s\n' "$api_pid" >"$API_PID_FILE"
@@ -143,16 +144,15 @@ main() {
     docker info >/dev/null 2>&1 || fail "Docker daemon is unavailable"
 
     trap stop_api EXIT INT TERM
-    compose down --volumes --remove-orphans
     compose up -d
     wait_for "MySQL" "docker inspect --format '{{.State.Health.Status}}' '${CONTAINER_PREFIX}-mysql' | grep -qx healthy"
     wait_for "Redis" "docker inspect --format '{{.State.Health.Status}}' '${CONTAINER_PREFIX}-redis' | grep -qx healthy"
     wait_for "Mailpit" "docker inspect --format '{{.State.Health.Status}}' '${CONTAINER_PREFIX}-mailpit' | grep -qx healthy"
     start_api
-    local student_email="catalog.e2e.student.${RANDOM}.$$.@menta.local"
+    local student_email="catalog.e2e.student.${RANDOM}.$$@menta.local"
     local student_password="CatalogE2eStudent123!"
     (
-        cd "$PROJECT_ROOT"
+        cd "$PROJECT_ROOT/bruno"
         npx --yes @usebruno/cli run "$BRUNO_FOLDER/01-registration" -r --env "$BRUNO_ENV" \
             --env-var "studentEmail=$student_email" --env-var "studentPassword=$student_password" \
             --reporter-skip-body

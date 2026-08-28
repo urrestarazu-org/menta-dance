@@ -91,6 +91,13 @@ Asegurate de tener instalado:
   docker --version
   docker-compose --version
   ```
+- **Node 20.11.1** para los assets y los recorridos E2E. Si usás nvm, el
+  repositorio incluye `.nvmrc`; ejecutá desde la raíz antes de trabajar:
+  ```bash
+  nvm install
+  nvm use
+  node --version  # v20.11.1
+  ```
 - **Git**
 - **Android Studio Quail 3 (2026.1.3) o más nuevo** (solo si vas a trabajar en la app
   móvil) — versiones anteriores a AGP 9.3 (julio 2026) fallan el sync sin causa obvia. Ver
