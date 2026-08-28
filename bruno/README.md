@@ -38,6 +38,31 @@ bruno/
 
 > **Nota**: Las variables `authToken` y `refreshToken` son runtime variables. NUNCA las guardes en archivos versionados.
 
+### e2e-catalog-content
+
+Este environment está reservado para el recorrido automatizado de
+`E2E/catalog-content`. No se ejecuta manualmente contra el stack normal: el
+comando canónico es, desde la raíz del repositorio:
+
+```bash
+scripts/e2e/catalog-content.sh
+```
+
+El runner crea su propio Compose project, usa `baseUrl` en el puerto aislado y
+orquesta dos fases: registra al estudiante y luego obtiene el mensaje de
+Mailpit para inyectar el token de activación únicamente durante la ejecución de
+Bruno. Las variables de IDs y access tokens también viven sólo en runtime.
+
+Para limpiar únicamente ese ambiente:
+
+```bash
+scripts/e2e/catalog-content.sh --clean
+```
+
+No agregues `activationToken`, access tokens ni refresh tokens al environment
+versionado. El flujo no llama a proveedores de pago, Bunny.net ni endpoints de
+streaming.
+
 ## Cómo usar
 
 ### Opción 1: Bruno Desktop (GUI)

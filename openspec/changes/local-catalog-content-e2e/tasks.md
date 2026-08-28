@@ -130,7 +130,7 @@ exception. PR 2 must target PR 1 and merge after it.
 
 ## TASK-005 — Document the canonical local E2E workflow
 
-- **Status**: pending
+- **Status**: completed
 - **Dependencies**: TASK-004
 - **Estimated LOC**: ~110 (documentation only)
 - **Modules**: docs/, bruno/

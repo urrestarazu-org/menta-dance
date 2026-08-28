@@ -44,6 +44,38 @@ cd bruno/BFF-Session-Custody && npx @usebruno/cli run --env Local .
 ./scripts/dev.sh logs bff  # Ver logs de BFF
 ```
 
+### Recorrido E2E aislado de catálogo y contenido
+
+Para verificar el recorrido reproducible de catálogo/contenido (registro,
+activación real por Mailpit, administración y lectura pública), ejecutá desde
+la raíz:
+
+```bash
+scripts/e2e/catalog-content.sh
+```
+
+El script requiere Docker Compose v2, JDK 21, Node **20.11.1**, `curl`, `jq`,
+el wrapper de Gradle y un `.env` local. No utiliza el Compose raíz/deprecado:
+crea exclusivamente el proyecto `menta-e2e-catalog-content`, con sus propios
+puertos y volúmenes. Por eso puede ejecutarse aunque tu stack habitual esté
+levantado.
+
+El runner genera el correo del estudiante, obtiene el token de activación de
+Mailpit en memoria y lo pasa a Bruno sólo como variable de ejecución. No copies
+ni guardes tokens de activación, access tokens o refresh tokens en `.bru`,
+`.env`, logs o artefactos versionados.
+
+Para eliminar **solamente** ese estado aislado cuando terminaste de diagnosticar:
+
+```bash
+scripts/e2e/catalog-content.sh --clean
+```
+
+`--clean` no toca contenedores, volúmenes ni puertos del entorno de desarrollo
+ordinario. Si el recorrido falla, conservá el stack aislado y revisá
+`.dev-logs/e2e-catalog-content-api.log`; no ejecutes `docker compose down -v`
+como sustituto.
+
 ---
 
 ## Requisitos Previos
