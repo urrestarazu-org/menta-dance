@@ -75,7 +75,7 @@ exception. PR 2 must target PR 1 and merge after it.
 
 ## TASK-003 — Seed Virtual published and draft baseline content
 
-- **Status**: pending
+- **Status**: completed
 - **Dependencies**: TASK-002
 - **Estimated LOC**: ~260 (110 production, 150 tests)
 - **Modules**: api:virtual, api:shared only if an existing minimal user lookup
