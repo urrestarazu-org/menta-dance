@@ -1,0 +1,29 @@
+meta {
+  name: Register Student
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/{{apiVersion}}/auth/register
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "{{studentEmail}}",
+    "password": "{{studentPassword}}",
+    "role": "STUDENT"
+  }
+}
+
+tests {
+  test("registration is accepted", function() {
+    expect(res.getStatus()).to.equal(202);
+  });
+}
+
+assert {
+  res.status: eq 202
+}

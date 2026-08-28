@@ -102,7 +102,7 @@ exception. PR 2 must target PR 1 and merge after it.
 
 ## TASK-004 — Build the real Bruno catalog/content journey
 
-- **Status**: pending
+- **Status**: completed
 - **Dependencies**: TASK-001, TASK-002, TASK-003
 - **Estimated LOC**: ~240 (Bruno requests/assertions and runner token handoff)
 - **Modules**: bruno/, scripts/e2e/

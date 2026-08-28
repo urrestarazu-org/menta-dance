@@ -1,0 +1,25 @@
+meta {
+  name: Get Public Course
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{baseUrl}}/api/{{apiVersion}}/catalog/courses/{{journeyCourseId}}
+  body: none
+  auth: none
+}
+
+tests {
+  test("public detail projects course content without video capabilities", function() {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().courseId).to.equal(bru.getVar("journeyCourseId"));
+    expect(res.getBody().modules).to.be.an("array").and.not.empty;
+    expect(res.getBody().modules[0].lessons).to.be.an("array").and.not.empty;
+    expect(res.getBody().modules[0].lessons[0]).to.not.have.property("videoId");
+  });
+}
+
+assert {
+  res.status: eq 200
+}
