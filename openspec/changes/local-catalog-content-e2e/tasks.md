@@ -102,7 +102,7 @@ exception. PR 2 must target PR 1 and merge after it.
 
 ## TASK-004 — Build the real Bruno catalog/content journey
 
-- **Status**: pending
+- **Status**: completed
 - **Dependencies**: TASK-001, TASK-002, TASK-003
 - **Estimated LOC**: ~240 (Bruno requests/assertions and runner token handoff)
 - **Modules**: bruno/, scripts/e2e/
@@ -130,7 +130,7 @@ exception. PR 2 must target PR 1 and merge after it.
 
 ## TASK-005 — Document the canonical local E2E workflow
 
-- **Status**: pending
+- **Status**: completed
 - **Dependencies**: TASK-004
 - **Estimated LOC**: ~110 (documentation only)
 - **Modules**: docs/, bruno/
@@ -153,7 +153,7 @@ exception. PR 2 must target PR 1 and merge after it.
 
 ## TASK-006 — Perform the end-to-end verification sweep
 
-- **Status**: pending
+- **Status**: completed
 - **Dependencies**: TASK-001, TASK-002, TASK-003, TASK-004, TASK-005
 - **Estimated LOC**: ~70 (test hardening/verification records)
 - **Modules**: api:auth, api:virtual, api:app, scripts/, bruno/, docs/

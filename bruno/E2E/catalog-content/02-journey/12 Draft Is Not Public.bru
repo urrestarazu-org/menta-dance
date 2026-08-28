@@ -1,0 +1,22 @@
+meta {
+  name: Draft Is Not Public
+  type: http
+  seq: 12
+}
+
+get {
+  url: {{baseUrl}}/api/{{apiVersion}}/catalog/courses/{{draftFixtureCourseId}}
+  body: none
+  auth: none
+}
+
+tests {
+  test("draft fixture remains non-enumerable through the public catalog", function() {
+    expect(res.getStatus()).to.equal(404);
+    expect(res.getBody().code).to.equal("COURSE_NOT_FOUND");
+  });
+}
+
+assert {
+  res.status: eq 404
+}

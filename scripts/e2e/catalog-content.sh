@@ -16,7 +16,8 @@ readonly MAILPIT_PORT="38025"
 readonly API_HEALTH_URL="http://localhost:${API_PORT}/actuator/health"
 readonly API_LOG="${PROJECT_ROOT}/.dev-logs/e2e-catalog-content-api.log"
 readonly API_PID_FILE="${PROJECT_ROOT}/.dev-pids/e2e-catalog-content-api.pid"
-readonly BRUNO_FOLDER="bruno/E2E/catalog-content"
+readonly BRUNO_FOLDER="E2E/catalog-content"
+readonly BRUNO_ENV="e2e-catalog-content"
 
 api_pid=""
 
@@ -77,6 +78,32 @@ wait_for() {
     fail "$description did not become ready; inspect: compose logs"
 }
 
+await_activation_token() {
+    local student_email=$1
+    local attempt=0
+    local messages message_id message_body token
+    while (( attempt < 60 )); do
+        messages="$(curl --fail --silent --show-error --max-time 2 \
+            "http://localhost:${MAILPIT_PORT}/api/v1/messages?limit=50")" || messages=""
+        message_id="$(jq -r --arg email "$student_email" '
+            .messages[]? | select(any(.To[]?; (.Address // .address // "") == $email)) | (.ID // .id)
+        ' <<<"$messages" | head -n 1)"
+        if [[ -n "$message_id" && "$message_id" != "null" ]]; then
+            message_body="$(curl --fail --silent --show-error --max-time 2 \
+                "http://localhost:${MAILPIT_PORT}/api/v1/message/${message_id}")" || message_body=""
+            token="$(jq -r '.Text // .text // .HTML // .html // ""' <<<"$message_body" \
+                | grep -Eo '/api/v1/auth/activate/[A-Za-z0-9_-]+' | head -n 1 | sed 's#.*/##')"
+            if [[ -n "$token" ]]; then
+                printf '%s' "$token"
+                return 0
+            fi
+        fi
+        attempt=$((attempt + 1))
+        sleep 2
+    done
+    fail "Activation email did not arrive in Mailpit for $student_email"
+}
+
 stop_api() {
     if [[ -n "$api_pid" ]] && kill -0 "$api_pid" 2>/dev/null; then
         kill "$api_pid" 2>/dev/null || true
@@ -89,6 +116,7 @@ start_api() {
     SPRING_PROFILES_ACTIVE=e2e-catalog-content SERVER_PORT="$API_PORT" \
         MYSQL_URL="jdbc:mysql://localhost:${MYSQL_PORT}/menta" \
         SPRING_DATA_REDIS_PORT="$REDIS_PORT" SMTP_PORT=31025 \
+        OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:34318" \
         "$PROJECT_ROOT/gradlew" --no-daemon :api:app:bootRun >"$API_LOG" 2>&1 &
     api_pid=$!
     printf '%s\n' "$api_pid" >"$API_PID_FILE"
@@ -116,15 +144,22 @@ main() {
     docker info >/dev/null 2>&1 || fail "Docker daemon is unavailable"
 
     trap stop_api EXIT INT TERM
-    compose down --volumes --remove-orphans
     compose up -d
     wait_for "MySQL" "docker inspect --format '{{.State.Health.Status}}' '${CONTAINER_PREFIX}-mysql' | grep -qx healthy"
     wait_for "Redis" "docker inspect --format '{{.State.Health.Status}}' '${CONTAINER_PREFIX}-redis' | grep -qx healthy"
     wait_for "Mailpit" "docker inspect --format '{{.State.Health.Status}}' '${CONTAINER_PREFIX}-mailpit' | grep -qx healthy"
     start_api
+    local student_email="catalog.e2e.student.${RANDOM}.$$@menta.local"
+    local student_password="CatalogE2eStudent123!"
     (
-        cd "$PROJECT_ROOT"
-        npx --yes @usebruno/cli run "$BRUNO_FOLDER" --env local
+        cd "$PROJECT_ROOT/bruno"
+        npx --yes @usebruno/cli run "$BRUNO_FOLDER/01-registration" -r --env "$BRUNO_ENV" \
+            --env-var "studentEmail=$student_email" --env-var "studentPassword=$student_password" \
+            --reporter-skip-body
+        activation_token="$(await_activation_token "$student_email")"
+        npx --yes @usebruno/cli run "$BRUNO_FOLDER/02-journey" -r --env "$BRUNO_ENV" \
+            --env-var "studentEmail=$student_email" --env-var "studentPassword=$student_password" \
+            --env-var "activationToken=$activation_token" --reporter-skip-body
     )
 }
 
