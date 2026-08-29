@@ -22,12 +22,22 @@ public final class LocalMercadoPagoPaymentStore {
     private static final String LOCAL_CHECKOUT_BASE_URL = "http://local.mercadopago/checkout/";
 
     private final Map<String, PaymentPreferenceResult> preferences = new ConcurrentHashMap<>();
+    private final Map<String, PaymentPreferenceRequest> preferenceRequests = new ConcurrentHashMap<>();
     private final Map<String, ProviderPaymentResult> payments = new ConcurrentHashMap<>();
 
     public PaymentPreferenceResult createPreference(PaymentPreferenceRequest request) {
+        preferenceRequests.putIfAbsent(request.externalReference(), request);
         return preferences.computeIfAbsent(request.externalReference(), reference -> new PaymentPreferenceResult(
             "local-preference-" + reference, LOCAL_CHECKOUT_BASE_URL + "local-preference-" + reference
         ));
+    }
+
+    PaymentPreferenceRequest preferenceRequest(String externalReference) {
+        PaymentPreferenceRequest request = preferenceRequests.get(externalReference);
+        if (request == null) {
+            throw new IllegalArgumentException("Unknown local Mercado Pago reference: " + externalReference);
+        }
+        return request;
     }
 
     public ProviderPaymentResult fetchPayment(String providerPaymentId) {
