@@ -30,6 +30,17 @@ public final class LocalMercadoPagoScenarioController {
         );
     }
 
+    /** Prepares a deterministic mismatch so Bruno can exercise the existing reconciliation path (spec §3). */
+    @PostMapping("/inconsistent-webhook")
+    public WebhookResponse prepareInconsistentWebhook(@RequestBody ApprovedWebhookRequest request) {
+        LocalWebhookPreparationService.LocalWebhookNotification notification = preparationService.prepareInconsistent(
+            request.externalReference(), request.providerPaymentId(), request.requestId()
+        );
+        return new WebhookResponse(
+            notification.providerPaymentId(), notification.requestId(), notification.signature()
+        );
+    }
+
     public record ApprovedWebhookRequest(String externalReference, String providerPaymentId, String requestId) { }
     public record WebhookResponse(String providerPaymentId, String requestId, String signature) { }
 }

@@ -31,9 +31,27 @@ public final class LocalWebhookPreparationService {
     }
 
     public LocalWebhookNotification prepareApproved(String externalReference, String providerPaymentId, String requestId) {
+        return prepare(externalReference, providerPaymentId, requestId, merchantAccountId);
+    }
+
+    /**
+     * Prepares an "approved" provider status that nonetheless fails {@code
+     * Payment.matchesExpected} on the merchant account — a deterministic
+     * mismatch (design.md "Outcome model") that exercises the existing
+     * reconciliation path instead of fulfillment.
+     */
+    public LocalWebhookNotification prepareInconsistent(
+        String externalReference, String providerPaymentId, String requestId
+    ) {
+        return prepare(externalReference, providerPaymentId, requestId, merchantAccountId + "-mismatched");
+    }
+
+    private LocalWebhookNotification prepare(
+        String externalReference, String providerPaymentId, String requestId, String reportedMerchantAccountId
+    ) {
         PaymentPreferenceRequest request = store.preferenceRequest(externalReference);
         store.registerPayment(providerPaymentId, new ProviderPaymentResult(
-            "approved", request.amount(), externalReference, merchantAccountId
+            "approved", request.amount(), externalReference, reportedMerchantAccountId
         ));
         String timestamp = Long.toString(Instant.now().getEpochSecond());
         return new LocalWebhookNotification(providerPaymentId, requestId, "ts=" + timestamp + ",v1="

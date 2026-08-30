@@ -29,4 +29,20 @@ class LocalMercadoPagoScenarioControllerTest {
             .andExpect(jsonPath("$.signature").value("ts=1,v1=abc"))
             .andExpect(jsonPath("$.secret").doesNotExist());
     }
+
+    @Test
+    void inconsistent_webhook_route_delegates_to_the_preparation_service() throws Exception {
+        LocalWebhookPreparationService service = org.mockito.Mockito.mock(LocalWebhookPreparationService.class);
+        when(service.prepareInconsistent("reference-2", "provider-2", "request-2")).thenReturn(
+            new LocalWebhookPreparationService.LocalWebhookNotification("provider-2", "request-2", "ts=2,v1=def")
+        );
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new LocalMercadoPagoScenarioController(service)).build();
+
+        mockMvc.perform(post("/api/v1/e2e/mercadopago/inconsistent-webhook")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"externalReference\":\"reference-2\",\"providerPaymentId\":\"provider-2\",\"requestId\":\"request-2\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.providerPaymentId").value("provider-2"))
+            .andExpect(jsonPath("$.signature").value("ts=2,v1=def"));
+    }
 }

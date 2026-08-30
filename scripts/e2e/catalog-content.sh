@@ -18,6 +18,19 @@ readonly API_LOG="${PROJECT_ROOT}/.dev-logs/e2e-catalog-content-api.log"
 readonly API_PID_FILE="${PROJECT_ROOT}/.dev-pids/e2e-catalog-content-api.pid"
 readonly BRUNO_FOLDER="E2E/catalog-content"
 readonly BRUNO_ENV="e2e-catalog-content"
+readonly MERCADOPAGO_BRUNO_FOLDER="E2E/mercadopago"
+readonly MERCADOPAGO_PLAN_ID="00000000-0000-0000-0000-000000000128"
+# Must equal BillingConfiguration.DEV_DEFAULT_WEBHOOK_HMAC_SECRET verbatim (it
+# is used as opaque HMAC key bytes, never base64-decoded) so
+# ReceiveWebhookUseCaseImpl and LocalWebhookPreparationService agree on the
+# same secret. LocalWebhookPreparationService has no built-in default and
+# fails to start without this property set.
+readonly MERCADOPAGO_DEV_WEBHOOK_HMAC_SECRET="ZGV2LW9ubHktd2ViaG9vay1zZWNyZXQtbm90LWZvci1wcm9kdWN0aW9uLXVzZQ=="
+# BillingConfiguration's checkout use case defaults this to "" while
+# LocalWebhookPreparationService defaults it to "local-merchant" — pin both
+# to the same explicit value so Payment.matchesExpected agrees on the
+# approved-path merchantAccountId.
+readonly MERCADOPAGO_MERCHANT_ACCOUNT_ID="local-merchant"
 
 api_pid=""
 
@@ -113,10 +126,12 @@ stop_api() {
 
 start_api() {
     mkdir -p "$(dirname "$API_LOG")" "$(dirname "$API_PID_FILE")"
-    SPRING_PROFILES_ACTIVE=e2e-catalog-content SERVER_PORT="$API_PORT" \
+    SPRING_PROFILES_ACTIVE=e2e-catalog-content,e2e-mercadopago SERVER_PORT="$API_PORT" \
         MYSQL_URL="jdbc:mysql://localhost:${MYSQL_PORT}/menta" \
         SPRING_DATA_REDIS_PORT="$REDIS_PORT" SMTP_PORT=31025 \
         OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:34318" \
+        BILLING_WEBHOOK_MERCADOPAGO_HMAC_SECRET="$MERCADOPAGO_DEV_WEBHOOK_HMAC_SECRET" \
+        BILLING_MERCADOPAGO_MERCHANT_ACCOUNT_ID="$MERCADOPAGO_MERCHANT_ACCOUNT_ID" \
         "$PROJECT_ROOT/gradlew" --no-daemon :api:app:bootRun >"$API_LOG" 2>&1 &
     api_pid=$!
     printf '%s\n' "$api_pid" >"$API_PID_FILE"
@@ -160,6 +175,47 @@ main() {
         npx --yes @usebruno/cli run "$BRUNO_FOLDER/02-journey" -r --env "$BRUNO_ENV" \
             --env-var "studentEmail=$student_email" --env-var "studentPassword=$student_password" \
             --env-var "activationToken=$activation_token" --reporter-skip-body
+    )
+    run_mercadopago_journey
+}
+
+# Local Mercado Pago simulator journey (issue #128): checkout, signed
+# webhook, worker fulfillment, duplicate idempotency and an
+# error/reconciliation case — all through local, profile-gated endpoints.
+# Runs against the same API instance as the catalog-content journey
+# (e2e-mercadopago is active alongside e2e-catalog-content), but with its own
+# dedicated student so the two journeys never share subscription state.
+run_mercadopago_journey() {
+    # Two independent students: a mismatched provider result leaves
+    # PaymentStatus.ReconciliationRequired, which is NOT terminal, so its
+    # Subscription stays PENDING (occupying the user's slot) rather than
+    # being cancelled — sharing one account would block the approved-path
+    # checkout with 409 SUBSCRIPTION_ALREADY_ACTIVE.
+    local student_email="mercadopago.e2e.student.${RANDOM}.$$@menta.local"
+    local student_password="MercadoPagoE2eStudent123!"
+    local mismatch_student_email="mercadopago.e2e.mismatch.${RANDOM}.$$@menta.local"
+    local mismatch_student_password="MercadoPagoE2eMismatch123!"
+    local approved_key="approved-${RANDOM}.$$"
+    local mismatch_key="mismatch-${RANDOM}.$$"
+    (
+        cd "$PROJECT_ROOT/bruno"
+        npx --yes @usebruno/cli run "$MERCADOPAGO_BRUNO_FOLDER/01-registration" -r --env "$BRUNO_ENV" \
+            --env-var "studentEmail=$student_email" --env-var "studentPassword=$student_password" \
+            --env-var "mismatchStudentEmail=$mismatch_student_email" \
+            --env-var "mismatchStudentPassword=$mismatch_student_password" \
+            --reporter-skip-body
+        activation_token="$(await_activation_token "$student_email")"
+        mismatch_activation_token="$(await_activation_token "$mismatch_student_email")"
+        npx --yes @usebruno/cli run "$MERCADOPAGO_BRUNO_FOLDER/02-journey" -r --env "$BRUNO_ENV" \
+            --env-var "studentEmail=$student_email" --env-var "studentPassword=$student_password" \
+            --env-var "activationToken=$activation_token" \
+            --env-var "mismatchStudentEmail=$mismatch_student_email" \
+            --env-var "mismatchStudentPassword=$mismatch_student_password" \
+            --env-var "mismatchActivationToken=$mismatch_activation_token" \
+            --env-var "planId=$MERCADOPAGO_PLAN_ID" \
+            --env-var "subscriptionIdempotencyKey=$approved_key" \
+            --env-var "mismatchSubscriptionIdempotencyKey=$mismatch_key" \
+            --reporter-skip-body
     )
 }
 

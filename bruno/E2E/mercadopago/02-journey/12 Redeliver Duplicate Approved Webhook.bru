@@ -1,0 +1,39 @@
+meta {
+  name: Redeliver Duplicate Approved Webhook
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{baseUrl}}/api/v1/billing/payments/mercadopago/webhook?data.id={{webhookDataId}}
+  body: none
+  auth: none
+}
+
+headers {
+  x-request-id: {{webhookRequestId}}
+  x-signature: {{webhookSignature}}
+}
+
+docs {
+  Redelivers the EXACT SAME data.id/x-request-id/x-signature as the previous
+  "Deliver Approved Webhook" step — deliberately, to exercise the dedupe
+  path (US-BILLING-002 spec: "the inbox MUST retain one logical row").
+
+  ReceiveWebhookUseCaseImpl.receive calls
+  WebhookInboxAppender.appendIfNew(dedupeKey, ...), whose unique constraint
+  on dedupe_key makes a replay a no-op insert rather than a second row;
+  the controller still answers 200 either way, which is the idempotent
+  contract this request proves. "Verify Subscription Activated Once"
+  proves fulfillment itself was not re-applied (dates/status unchanged).
+}
+
+tests {
+  test("a replayed notification is still accepted, never duplicated", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+}
+
+assert {
+  res.status: eq 200
+}
