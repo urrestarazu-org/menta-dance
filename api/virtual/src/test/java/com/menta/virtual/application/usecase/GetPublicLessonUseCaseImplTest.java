@@ -225,6 +225,32 @@ class GetPublicLessonUseCaseImplTest {
     }
 
     @Test
+    void unplanned_course_premium_lesson_is_forbidden_without_exposing_the_video_id() {
+        CourseId courseId = CourseId.generate();
+        ModuleId moduleId = ModuleId.generate();
+        LessonId lessonId = LessonId.generate();
+        UUID userId = UUID.randomUUID();
+
+        when(lessonRepository.findById(lessonId)).thenReturn(Optional.of(
+            lesson(lessonId, moduleId, courseId, "Avanzado", "should-not-leak", 15, false, 2)
+        ));
+        when(moduleRepository.findById(moduleId)).thenReturn(Optional.of(
+            module(courseId, moduleId, "Postura", 1)
+        ));
+        when(courseRepository.findPublishedById(courseId)).thenReturn(Optional.of(publishedCourse(courseId)));
+        when(lessonRepository.findByModuleId(moduleId)).thenReturn(List.of(
+            lesson(lessonId, moduleId, courseId, "Avanzado", "vid-a", 15, false, 2)
+        ));
+        // Course belongs to no billing plan (D7): must fall through to the same
+        // entitlement-denial path as a planned course, never a public grant.
+        when(entitlementPort.resolveCourseAccess(eq(userId), eq(courseId.getValue().toString())))
+            .thenReturn(new CourseAccessSnapshot(false, false));
+
+        assertThatThrownBy(() -> useCase.get(lessonId.toString(), userId))
+            .isInstanceOf(ForbiddenLessonAccessException.class);
+    }
+
+    @Test
     void premium_lesson_with_anonymous_caller_throws_ForbiddenLessonAccessException() {
         CourseId courseId = CourseId.generate();
         ModuleId moduleId = ModuleId.generate();

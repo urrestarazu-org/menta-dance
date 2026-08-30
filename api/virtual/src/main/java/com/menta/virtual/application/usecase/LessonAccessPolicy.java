@@ -13,10 +13,13 @@ import java.util.UUID;
  *
  * <p>Billing supplies only the commercial facts needed at the last step; this
  * policy owns the ordered content rules. Local public rules always win in the
- * order free lesson, preview module, then a course absent from all plans.
- * Only a planned protected course can be granted by a current frozen Billing
- * snapshot. The decision deliberately carries no media identifier or signing
- * material, so callers must authorize before requesting a capability.</p>
+ * order free lesson, then preview module. Every other lesson is protected and
+ * is granted only by a current frozen Billing entitlement for the caller — a
+ * course absent from every plan is a commercial configuration gap, not a
+ * grant, so it falls through to the same entitlement check as any planned
+ * course and denies by default (see ADR-0041). The decision deliberately
+ * carries no media identifier or signing material, so callers must authorize
+ * before requesting a capability.</p>
  */
 public final class LessonAccessPolicy {
 
@@ -45,13 +48,7 @@ public final class LessonAccessPolicy {
             CourseAccessSnapshot access = entitlementPort.resolveCourseAccess(
                 actingUserId, lesson.getCourseId().getValue().toString()
             );
-            if (access == null) {
-                return LessonAccessDecision.SUBSCRIPTION_REQUIRED;
-            }
-            if (!access.courseInAnyPlan()) {
-                return LessonAccessDecision.PUBLIC_UNPLANNED_COURSE;
-            }
-            if (actingUserId == null) {
+            if (access == null || actingUserId == null) {
                 return LessonAccessDecision.SUBSCRIPTION_REQUIRED;
             }
             return access.currentEntitlement()

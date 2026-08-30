@@ -44,13 +44,37 @@ class LessonAccessPolicyTest {
     }
 
     @Test
-    void unplanned_course_is_public_for_an_anonymous_caller() {
+    void unplanned_course_denies_a_protected_lesson_to_an_anonymous_caller() {
         VirtualLesson lesson = lesson(false);
         when(entitlementPort.resolveCourseAccess(eq(null), eq(lesson.getCourseId().getValue().toString())))
             .thenReturn(new CourseAccessSnapshot(false, false));
 
         assertThat(policy.decide(lesson, module(false), null))
-            .isEqualTo(LessonAccessDecision.PUBLIC_UNPLANNED_COURSE);
+            .isEqualTo(LessonAccessDecision.SUBSCRIPTION_REQUIRED);
+
+        verify(entitlementPort).resolveCourseAccess(null, lesson.getCourseId().getValue().toString());
+    }
+
+    @Test
+    void unplanned_course_denies_a_protected_lesson_to_an_authenticated_caller_without_entitlement() {
+        UUID userId = UUID.randomUUID();
+        VirtualLesson lesson = lesson(false);
+        when(entitlementPort.resolveCourseAccess(eq(userId), eq(lesson.getCourseId().getValue().toString())))
+            .thenReturn(new CourseAccessSnapshot(false, false));
+
+        assertThat(policy.decide(lesson, module(false), userId))
+            .isEqualTo(LessonAccessDecision.SUBSCRIPTION_REQUIRED);
+    }
+
+    @Test
+    void unplanned_course_still_honours_a_frozen_paid_entitlement() {
+        UUID userId = UUID.randomUUID();
+        VirtualLesson lesson = lesson(false);
+        when(entitlementPort.resolveCourseAccess(eq(userId), eq(lesson.getCourseId().getValue().toString())))
+            .thenReturn(new CourseAccessSnapshot(false, true));
+
+        assertThat(policy.decide(lesson, module(false), userId))
+            .isEqualTo(LessonAccessDecision.SUBSCRIPTION_GRANTED);
     }
 
     @Test
