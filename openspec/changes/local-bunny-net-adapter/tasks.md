@@ -31,17 +31,17 @@ Design's own 3-slice sketch overflowed (~950 in one slice); re-sliced to 4 per `
 
 ## Phase 1 — PR1: D7 Policy Correction (`virtual`)
 
-- [ ] 1.1 RED: `LessonAccessPolicyTest` — rename `unplanned_course_is_public_for_an_anonymous_caller` → `unplanned_course_denies_a_protected_lesson_to_an_anonymous_caller`, assert `SUBSCRIPTION_REQUIRED` for `(false,false)` + null user.
-- [ ] 1.2 RED: `LessonAccessPolicyTest` — add `unplanned_course_denies_a_protected_lesson_to_an_authenticated_caller_without_entitlement`, `(false,false)` + real user → `SUBSCRIPTION_REQUIRED`.
-- [ ] 1.3 RED: `LessonAccessPolicyTest` — add `unplanned_course_still_honours_a_frozen_paid_entitlement`, `(false,true)` + real user → `SUBSCRIPTION_GRANTED` (pins A6).
-- [ ] 1.4 RED: `GetPublicLessonUseCaseImplTest` — add `unplanned_course_premium_lesson_is_forbidden_without_exposing_the_video_id`, `(false,false)` → `ForbiddenLessonAccessException`, no `videoId`.
-- [ ] 1.5 RED: `GetPublicLessonStreamUseCaseImplTest` — add `unplanned_course_premium_lesson_is_denied_without_signing`, `(false,false)` → `AccessDenied`, `verify(signatureService, never()).generateSignedUrl(...)`.
-- [ ] 1.6 GREEN: `LessonAccessPolicy.java:51-53` — delete `!access.courseInAnyPlan()` branch (A6); cascade becomes free → preview → entitlement.
-- [ ] 1.7 GREEN: `LessonAccessDecision.java:17` — delete `PUBLIC_UNPLANNED_COURSE` constant + Javadoc line.
-- [ ] 1.8 REFACTOR: `LessonAccessPolicy.java:11-19` — rewrite class Javadoc (drop "course absent from all plans" as public rule; document ADR-0041).
-- [ ] 1.9 Update `api/openapi/virtual-v1.yaml` line 58 (drop unplanned-course public route) and line 74 (403 description covers unplanned courses); reuse `LESSON_FORBIDDEN_SUBSCRIPTION_REQUIRED`.
-- [ ] 1.10 Write `docs/adr/0041-lesson-access-unplanned-course-denial.md` (D7 ruling, A6/A7 rejected-alternative rationale, production data-audit release gate).
-- [ ] 1.11 Verify: run full `LessonAccessPolicyTest`, `GetPublicLessonUseCaseImplTest`, `GetPublicLessonStreamUseCaseImplTest`, `VirtualConfigurationTest` — confirm no other case implicitly depended on the deleted branch.
+- [x] 1.1 RED: `LessonAccessPolicyTest` — rename `unplanned_course_is_public_for_an_anonymous_caller` → `unplanned_course_denies_a_protected_lesson_to_an_anonymous_caller`, assert `SUBSCRIPTION_REQUIRED` for `(false,false)` + null user.
+- [x] 1.2 RED: `LessonAccessPolicyTest` — add `unplanned_course_denies_a_protected_lesson_to_an_authenticated_caller_without_entitlement`, `(false,false)` + real user → `SUBSCRIPTION_REQUIRED`.
+- [x] 1.3 RED: `LessonAccessPolicyTest` — add `unplanned_course_still_honours_a_frozen_paid_entitlement`, `(false,true)` + real user → `SUBSCRIPTION_GRANTED` (pins A6).
+- [x] 1.4 RED: `GetPublicLessonUseCaseImplTest` — add `unplanned_course_premium_lesson_is_forbidden_without_exposing_the_video_id`, `(false,false)` → `ForbiddenLessonAccessException`, no `videoId`.
+- [x] 1.5 RED: `GetPublicLessonStreamUseCaseImplTest` — add `unplanned_course_premium_lesson_is_denied_without_signing`, `(false,false)` → `AccessDenied`, `verify(signatureService, never()).generateSignedUrl(...)`.
+- [x] 1.6 GREEN: `LessonAccessPolicy.java:51-53` — delete `!access.courseInAnyPlan()` branch (A6); cascade becomes free → preview → entitlement.
+- [x] 1.7 GREEN: `LessonAccessDecision.java:17` — delete `PUBLIC_UNPLANNED_COURSE` constant + Javadoc line.
+- [x] 1.8 REFACTOR: `LessonAccessPolicy.java:11-19` — rewrite class Javadoc (drop "course absent from all plans" as public rule; document ADR-0041).
+- [x] 1.9 Update `api/openapi/virtual-v1.yaml` line 58 (drop unplanned-course public route) and line 74 (403 description covers unplanned courses); reuse `LESSON_FORBIDDEN_SUBSCRIPTION_REQUIRED`.
+- [x] 1.10 Write `docs/adr/0041-lesson-access-unplanned-course-denial.md` (D7 ruling, A6/A7 rejected-alternative rationale, production data-audit release gate).
+- [x] 1.11 Verify: run full `LessonAccessPolicyTest`, `GetPublicLessonUseCaseImplTest`, `GetPublicLessonStreamUseCaseImplTest`, `VirtualConfigurationTest` — confirm no other case implicitly depended on the deleted branch.
 
 ## Phase 2 — PR2: Local Adapter + Wiring (`virtual`)
 
