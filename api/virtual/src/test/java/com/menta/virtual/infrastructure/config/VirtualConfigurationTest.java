@@ -1,6 +1,7 @@
 package com.menta.virtual.infrastructure.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 import com.menta.virtual.application.port.in.CreateVirtualCourseUseCase;
@@ -30,6 +31,7 @@ import com.menta.virtual.application.usecase.LessonAccessPolicy;
 import com.menta.virtual.application.usecase.VirtualCourseCatalogPortImpl;
 import com.menta.virtual.infrastructure.cdn.BunnyNetProperties;
 import com.menta.virtual.infrastructure.cdn.StringFormatBunnyNetSignatureService;
+import com.menta.virtual.infrastructure.cdn.local.LocalBunnyNetSignatureService;
 import com.menta.virtual.infrastructure.transaction.TransactionalCreateVirtualCourseUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalCreateVirtualLessonUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalCreateVirtualModuleUseCase;
@@ -40,7 +42,13 @@ import com.menta.virtual.infrastructure.transaction.TransactionalUnpublishVirtua
 import com.menta.virtual.infrastructure.transaction.TransactionalUpdateVirtualCourseUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalUpdateVirtualLessonUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalUpdateVirtualModuleUseCase;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.BeanCreationException;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 
 class VirtualConfigurationTest {
 
@@ -171,16 +179,17 @@ class VirtualConfigurationTest {
      * US-VIRTUAL-004: the stream bean takes four collaborators — the
      * lesson repository, the cross-module entitlement port, the CDN
      * signature service, and the application's {@link Clock}. The
-     * signature service is a separate @Bean produced right above, so
-     * this test wires a real one with deterministic properties to make
-     * sure the cable chain goes all the way through the lambda.
+     * signature service bean is split by profile (ADR-0040, issue #129):
+     * this test drives the {@code !e2e-bunny-net} (default/production)
+     * branch directly to make sure the cable chain goes all the way
+     * through the lambda.
      */
     @Test
     void wires_the_get_public_lesson_stream_use_case_bean_with_all_four_collaborators() {
         BunnyNetProperties properties = new BunnyNetProperties();
         properties.setPullZoneHostname("vz-test.b-cdn.net");
         properties.setVideoLibraryId("9999");
-        BunnyNetSignatureService signatureService = configuration.bunnyNetSignatureService(properties);
+        BunnyNetSignatureService signatureService = configuration.defaultBunnyNetSignatureService(properties);
         Clock clock = configuration.clock();
 
         GetPublicLessonStreamUseCase useCase = configuration.getPublicLessonStreamUseCase(
@@ -199,5 +208,102 @@ class VirtualConfigurationTest {
         Clock clock = configuration.clock();
 
         assertThat(clock.now()).isNotNull();
+    }
+
+    /**
+     * ADR-0040 / issue #129 — profile-guarded, mutually exclusive adapter
+     * selection. These tests boot a real Spring context (mirrors {@code
+     * SecurityConfigTest}'s pattern) because the requirement is about bean
+     * RESOLUTION under active profiles, not just direct method calls: a
+     * missing/duplicate {@code @Profile} would only surface through the
+     * container.
+     */
+    @Nested
+    class BunnyNetAdapterProfileSelection {
+
+        private AnnotationConfigApplicationContext context;
+
+        @AfterEach
+        void closeContext() {
+            if (context != null) {
+                context.close();
+            }
+        }
+
+        @Test
+        void e2e_bunny_net_profile_resolves_to_the_local_adapter_as_the_sole_candidate() {
+            context = bootContext("e2e-bunny-net");
+
+            assertThat(context.getBeanNamesForType(BunnyNetSignatureService.class)).hasSize(1);
+            assertThat(context.getBean(BunnyNetSignatureService.class))
+                .isInstanceOf(LocalBunnyNetSignatureService.class);
+        }
+
+        @Test
+        void default_profiles_resolve_to_the_real_adapter_as_the_sole_candidate() {
+            context = bootContext();
+
+            assertThat(context.getBeanNamesForType(BunnyNetSignatureService.class)).hasSize(1);
+            assertThat(context.getBean(BunnyNetSignatureService.class))
+                .isInstanceOf(StringFormatBunnyNetSignatureService.class);
+        }
+
+        @Test
+        void e2e_bunny_net_combined_with_prod_fails_the_context_refresh() {
+            assertThatThrownBy(() -> bootContext("e2e-bunny-net", "prod"))
+                .isInstanceOf(BeanCreationException.class)
+                .hasStackTraceContaining("SECURITY");
+        }
+
+        @Test
+        void e2e_bunny_net_combined_with_production_fails_the_context_refresh() {
+            assertThatThrownBy(() -> bootContext("production", "e2e-bunny-net"))
+                .isInstanceOf(BeanCreationException.class)
+                .hasStackTraceContaining("SECURITY");
+        }
+
+        @Test
+        void e2e_bunny_net_combined_with_staging_fails_the_context_refresh() {
+            assertThatThrownBy(() -> bootContext("e2e-bunny-net", "staging"))
+                .isInstanceOf(BeanCreationException.class)
+                .hasStackTraceContaining("SECURITY");
+        }
+
+        private AnnotationConfigApplicationContext bootContext(String... profiles) {
+            AnnotationConfigApplicationContext ctx = new AnnotationConfigApplicationContext();
+            ctx.getEnvironment().setActiveProfiles(profiles);
+            ctx.register(VirtualConfiguration.class, TestSupportConfig.class);
+            ctx.refresh();
+            return ctx;
+        }
+
+        @Configuration
+        static class TestSupportConfig {
+
+            @Bean
+            VirtualCourseRepository virtualCourseRepository() {
+                return mock(VirtualCourseRepository.class);
+            }
+
+            @Bean
+            VirtualModuleRepository virtualModuleRepository() {
+                return mock(VirtualModuleRepository.class);
+            }
+
+            @Bean
+            VirtualLessonRepository virtualLessonRepository() {
+                return mock(VirtualLessonRepository.class);
+            }
+
+            @Bean
+            VirtualCourseAuditRepository virtualCourseAuditRepository() {
+                return mock(VirtualCourseAuditRepository.class);
+            }
+
+            @Bean
+            VirtualCourseEntitlementPort virtualCourseEntitlementPort() {
+                return mock(VirtualCourseEntitlementPort.class);
+            }
+        }
     }
 }

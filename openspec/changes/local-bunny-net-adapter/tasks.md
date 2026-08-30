@@ -45,14 +45,14 @@ Design's own 3-slice sketch overflowed (~950 in one slice); re-sliced to 4 per `
 
 ## Phase 2 — PR2: Local Adapter + Wiring (`virtual`)
 
-- [ ] 2.1 RED: `LocalBunnyNetSignatureServiceTest` (new, `infrastructure/cdn/local/`) — same TTL/videoId twice → identical `sig`; assert `exp` = TTL-derived; assert URL shape and no real credential.
-- [ ] 2.2 GREEN: `LocalBunnyNetSignatureService` POJO implementing `BunnyNetSignatureService`; `sig = SHA-256("menta-local-e2e|" + videoLibraryId + "|" + videoId + "|" + exp)`, 64 lowercase hex.
-- [ ] 2.3 RED: `VirtualConfigurationTest` — add case per profile combination (`e2e-bunny-net` vs default) asserting exactly one `BunnyNetSignatureService` bean of the expected type.
-- [ ] 2.4 RED: `VirtualConfigurationTest` — `e2e-bunny-net` + `prod|production|staging` → context refresh fails.
-- [ ] 2.5 GREEN: `VirtualConfiguration.java` — split `bunnyNetSignatureService` bean into two `@Profile("e2e-bunny-net")` / `@Profile("!e2e-bunny-net")` `@Bean` methods; guard reads `Environment` inside the local factory and throws on prod-like profiles (A2).
-- [ ] 2.6 `StringFormatBunnyNetSignatureService.java` — Javadoc-only update marking it the explicit non-local branch; fix ADR reference to `docs/adr/0040`.
-- [ ] 2.7 Write `docs/adr/0040-local-bunny-net-signature-adapter.md` (deterministic seam, non-secret `sig`, fail-closed guard, A7 debt note on `courseInAnyPlan`).
-- [ ] 2.8 Verify: `StringFormatBunnyNetSignatureServiceTest` still passes unmodified.
+- [x] 2.1 RED: `LocalBunnyNetSignatureServiceTest` (new, `infrastructure/cdn/local/`) — same TTL/videoId twice → identical `sig`; assert `exp` = TTL-derived; assert URL shape and no real credential.
+- [x] 2.2 GREEN: `LocalBunnyNetSignatureService` POJO implementing `BunnyNetSignatureService`; `sig = SHA-256("menta-local-e2e|" + videoLibraryId + "|" + videoId + "|" + exp)`, 64 lowercase hex.
+- [x] 2.3 RED: `VirtualConfigurationTest` — add case per profile combination (`e2e-bunny-net` vs default) asserting exactly one `BunnyNetSignatureService` bean of the expected type.
+- [x] 2.4 RED: `VirtualConfigurationTest` — `e2e-bunny-net` + `prod|production|staging` → context refresh fails.
+- [x] 2.5 GREEN: `VirtualConfiguration.java` — split `bunnyNetSignatureService` bean into two `@Profile("e2e-bunny-net")` / `@Profile("!e2e-bunny-net")` `@Bean` methods; guard reads `Environment` inside the local factory and throws on prod-like profiles (A2).
+- [x] 2.6 `StringFormatBunnyNetSignatureService.java` — Javadoc-only update marking it the explicit non-local branch; fix ADR reference to `docs/adr/0040`.
+- [x] 2.7 Write `docs/adr/0040-local-bunny-net-signature-adapter.md` (deterministic seam, non-secret `sig`, fail-closed guard, A7 debt note on `courseInAnyPlan`).
+- [x] 2.8 Verify: `StringFormatBunnyNetSignatureServiceTest` still passes unmodified.
 
 ## Phase 3 — PR3: E2E Fixtures (`virtual` + `billing`)
 

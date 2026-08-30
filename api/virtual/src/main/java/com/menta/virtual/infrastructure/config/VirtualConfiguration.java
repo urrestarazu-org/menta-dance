@@ -38,6 +38,7 @@ import com.menta.virtual.application.usecase.UpdateVirtualModuleUseCaseImpl;
 import com.menta.virtual.application.usecase.VirtualCourseCatalogPortImpl;
 import com.menta.virtual.infrastructure.cdn.BunnyNetProperties;
 import com.menta.virtual.infrastructure.cdn.StringFormatBunnyNetSignatureService;
+import com.menta.virtual.infrastructure.cdn.local.LocalBunnyNetSignatureService;
 import com.menta.virtual.infrastructure.transaction.TransactionalCreateVirtualCourseUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalCreateVirtualLessonUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalCreateVirtualModuleUseCase;
@@ -48,10 +49,14 @@ import com.menta.virtual.infrastructure.transaction.TransactionalUnpublishVirtua
 import com.menta.virtual.infrastructure.transaction.TransactionalUpdateVirtualCourseUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalUpdateVirtualLessonUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalUpdateVirtualModuleUseCase;
+import java.util.Locale;
+import java.util.Set;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
+import org.springframework.core.env.Environment;
 
 /**
      * Wires Virtual's use cases. Adapters are {@code @Component}-scanned; the
@@ -88,17 +93,59 @@ import org.springframework.context.annotation.Configuration;
     }
 
     /**
+     * Production-like profiles that MUST NEVER combine with {@code
+     * e2e-bunny-net} (ADR-0040, issue #129). Mirrors {@code
+     * BillingConfiguration}'s {@code PRODUCTION_PROFILES} set — same
+     * production/staging vocabulary across modules.
+     */
+    private static final Set<String> PRODUCTION_LIKE_PROFILES = Set.of("prod", "production", "staging");
+
+    /**
+     * US-VIRTUAL-004 / ADR-0040. Deterministic, credential-free local
+     * adapter for local development and E2E acceptance testing. The prod
+     * guard lives HERE, inside the factory method itself, rather than in
+     * a separate {@code @PostConstruct} or {@code ApplicationRunner}: a
+     * {@code @Bean} factory throw aborts context refresh before the web
+     * server starts accepting requests, and this method only runs at all
+     * when {@code e2e-bunny-net} is active (its own {@code @Profile}
+     * guards registration), so the check only has to defend against that
+     * one profile combining with a production-like one.
+     */
+    @Bean
+    @Profile("e2e-bunny-net")
+    public BunnyNetSignatureService localBunnyNetSignatureService(
+        BunnyNetProperties properties, Environment environment
+    ) {
+        failClosedIfProductionLike(environment);
+        return new LocalBunnyNetSignatureService(properties);
+    }
+
+    /**
      * US-VIRTUAL-004 placeholder. {@link StringFormatBunnyNetSignatureService}
      * returns a {@code pullZone/videoLibrary/videoId} string — unsafe for
      * production but structurally correct so a future HMAC-backed impl
      * (or the official Bunny.net SDK, once accepted onto the dep tree)
      * can replace THIS BEAN without touching the use case or the wire
      * contract. ADR-0040 is the architectural note behind that
-     * isolation.
+     * isolation. Active whenever {@code e2e-bunny-net} is NOT — i.e. by
+     * default, including every production-like profile.
      */
     @Bean
-    public BunnyNetSignatureService bunnyNetSignatureService(BunnyNetProperties properties) {
+    @Profile("!e2e-bunny-net")
+    public BunnyNetSignatureService defaultBunnyNetSignatureService(BunnyNetProperties properties) {
         return new StringFormatBunnyNetSignatureService(properties);
+    }
+
+    private static void failClosedIfProductionLike(Environment environment) {
+        for (String profile : environment.getActiveProfiles()) {
+            if (PRODUCTION_LIKE_PROFILES.contains(profile.toLowerCase(Locale.ROOT))) {
+                throw new IllegalStateException(
+                    "SECURITY: local Bunny.net signature adapter (profile e2e-bunny-net) cannot run "
+                        + "alongside a production-like profile. Active profiles: "
+                        + String.join(", ", environment.getActiveProfiles())
+                );
+            }
+        }
     }
 
     /**
