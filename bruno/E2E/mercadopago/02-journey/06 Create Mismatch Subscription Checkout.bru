@@ -1,0 +1,43 @@
+meta {
+  name: Create Mismatch Subscription Checkout
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/v1/billing/subscriptions
+  body: json
+  auth: bearer
+}
+
+headers {
+  content-type: application/json
+}
+
+auth:bearer {
+  token: {{mismatchAuthToken}}
+}
+
+body:json {
+  {
+    "planId": "{{planId}}",
+    "paymentMethod": "MERCADO_PAGO",
+    "idempotencyKey": "{{mismatchSubscriptionIdempotencyKey}}"
+  }
+}
+
+script:post-response {
+  bru.setVar('mismatchExternalReference', res.getBody().externalReference);
+}
+
+tests {
+  test("creates a pending checkout", function() {
+    expect(res.getStatus()).to.equal(201);
+    expect(res.getBody().status).to.equal("PENDING");
+    expect(res.getBody().externalReference).to.be.a("string").and.not.empty;
+  });
+}
+
+assert {
+  res.status: eq 201
+}
