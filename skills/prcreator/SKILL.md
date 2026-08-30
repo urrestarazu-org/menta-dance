@@ -36,6 +36,21 @@ Spanish / English):
 - The current branch has been pushed to the remote (the skill will push it if
   necessary)
 
+## Relationship with `.github/pull_request_template.md`
+
+This repository has a single generic PR template at `.github/pull_request_template.md`
+(Spanish, sections: Resumen, Tipo de cambio, Cambios realizados, Cómo probar,
+Checklist, Breaking changes, Issues relacionados). GitHub only auto-fills that
+template when a human opens a PR without an explicit body (web UI, or a bare
+`gh pr create` with no `--body`). Passing `--body` — which this skill always
+does — **replaces** that auto-fill entirely; nothing gets merged automatically.
+
+So: always build the full type-specific body per this skill's own templates
+(section 4 below), never just point to the static file. Keep the generated
+body's sections a **superset** of the static template's sections (same
+checklist items, same "Issues relacionados" / `Closes #` convention) so a
+Claude-authored PR is never thinner than what a human would get by default.
+
 ## Language Rules
 
 **Todo el contenido generado debe estar en español**, incluyendo:
@@ -495,7 +510,7 @@ gh pr list --head $(git branch --show-current) --json number,title,baseRefName,s
 
 - **Current branch**: `git branch --show-current`
 - **Base branch**: usually `main` or `develop`. Ask if unsure. Check the repo's
-  `.github/pull_request_template.md` or documented conventions if available.
+  documented Git Flow conventions.
 - Ensure the current branch is pushed:
   ```bash
   git push -u origin $(git branch --show-current)
@@ -599,8 +614,10 @@ Flags to consider:
 - `--assignee @username` — if assignment is required
 - `--milestone <title>` — if the PR belongs to a milestone
 
-If the repository contains `.github/pull_request_template.md`, read it first and
-merge its contents with the structured sections above rather than replacing it.
+This repository's `.github/pull_request_template.md` is not auto-merged by
+`gh pr create --body` (see "Relationship with `.github/pull_request_template.md`"
+above) — the generated body built in step 4 already covers and exceeds its
+sections, so no separate merge step is needed here.
 
 ### 6. Post-creation verification
 
@@ -633,7 +650,8 @@ After the PR is created, capture the PR URL and optionally:
   and documented in the PR body.
 - **NEVER** include secrets, tokens, `.env` contents, or private keys in the PR
   description or title.
-- Always respect the repository's `PULL_REQUEST_TEMPLATE.md` if it exists.
+- Always keep the generated body a superset of `.github/pull_request_template.md`'s
+  sections — never drop a checklist item or section it requires.
 - Prefer `--fill` only when commits are already perfectly formatted; otherwise
   craft the title and body explicitly to guarantee quality.
 
