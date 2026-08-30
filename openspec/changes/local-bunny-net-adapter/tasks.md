@@ -56,10 +56,10 @@ Design's own 3-slice sketch overflowed (~950 in one slice); re-sliced to 4 per `
 
 ## Phase 3 — PR3: E2E Fixtures (`virtual` + `billing`)
 
-- [ ] 3.1 RED: `E2eBunnyNetVirtualFixtureTest` (new, `api/virtual/.../infrastructure/e2e/`) — asserts fixed-id seeding of `UNPLANNED_COURSE_ID` (preview + protected module, no plan row) and `PLANNED_COURSE_ID` (protected module).
-- [ ] 3.2 GREEN: `E2eBunnyNetVirtualFixture`, `@Profile("e2e-bunny-net")`, seeds both courses via Virtual repository ports with id-carrying constructors (A3).
-- [ ] 3.3 RED: `E2eBunnyNetBillingFixtureTest` (new, `api/billing/.../infrastructure/e2e/`) — asserts `PLANNED_COURSE_ID` (UUID literal, comment cross-referencing the virtual fixture) is linked to a billing plan.
-- [ ] 3.4 GREEN: `E2eBunnyNetBillingFixture`, `@Profile("e2e-bunny-net & e2e-mercadopago")` per D7 scope reduction — only needed for the premium-grant scenario.
+- [x] 3.1 RED: `E2eBunnyNetVirtualFixtureTest` (new, `api/virtual/.../infrastructure/e2e/`) — asserts fixed-id seeding of `UNPLANNED_COURSE_ID` (preview + protected module, no plan row) and `PLANNED_COURSE_ID` (protected module).
+- [x] 3.2 GREEN: `E2eBunnyNetVirtualFixture`, `@Profile("e2e-bunny-net")`, seeds both courses via Virtual repository ports with id-carrying constructors (A3).
+- [x] 3.3 RED: `E2eBunnyNetBillingFixtureTest` (new, `api/billing/.../infrastructure/e2e/`) — asserts `PLANNED_COURSE_ID` (UUID literal, comment cross-referencing the virtual fixture) is linked to a billing plan.
+- [x] 3.4 GREEN: `E2eBunnyNetBillingFixture`, `@Profile("e2e-bunny-net & e2e-mercadopago")` per D7 scope reduction — only needed for the premium-grant scenario.
 
 ## Phase 4 — PR4: Bruno Journey + Runner
 
