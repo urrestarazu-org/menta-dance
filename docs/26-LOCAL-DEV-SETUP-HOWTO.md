@@ -76,6 +76,82 @@ ordinario. Si el recorrido falla, conservá el stack aislado y revisá
 `.dev-logs/e2e-catalog-content-api.log`; no ejecutes `docker compose down -v`
 como sustituto.
 
+### Simulador local de Mercado Pago (issue #128)
+
+El mismo comando (`scripts/e2e/catalog-content.sh`) ejecuta a continuación el
+recorrido `E2E/mercadopago`, contra la misma instancia de `:api:app` (perfil
+adicional `e2e-mercadopago` activado junto a `e2e-catalog-content`). Prueba
+checkout, webhook firmado, worker de fulfillment, idempotencia de webhooks
+duplicados y reconciliación por inconsistencia — todo a través de endpoints
+locales guardados por perfil, sin llamar nunca a `api.mercadopago.com`.
+
+**Qué demuestra:**
+- El checkout real de Billing (`POST /api/v1/billing/subscriptions`) persiste
+  sus registros normales usando el adaptador local de preferencias.
+- Un webhook con HMAC firmado y vigente llega al controller público real
+  (`PaymentWebhookController`), pasa por el verificador
+  `HmacSha256WebhookSignatureVerifier`, el inbox durable y el worker
+  asíncrono existentes — nada de eso se reemplaza ni se bypasea.
+- Un resultado aprobado activa la suscripción; un webhook duplicado es
+  idempotente (no se aplica el fulfillment dos veces); un resultado
+  inconsistente (mismatch de `merchantAccountId`) sigue el camino existente
+  de reconciliación y la suscripción **nunca** llega a `ACTIVE`.
+
+**Modelo de seguridad (guardado por perfil):**
+- Los adaptadores locales (`LocalMercadoPagoPaymentPreferenceAdapter`,
+  `LocalMercadoPagoPaymentProviderAdapter`, `LocalWebhookPreparationService`,
+  `LocalMercadoPagoScenarioController`) sólo se registran bajo
+  `@Profile("e2e-mercadopago")`. Los adaptadores reales de Mercado Pago usan
+  `@Profile("!e2e-mercadopago")` — son mutuamente excluyentes, nunca coexisten.
+- `BillingConfiguration` falla el arranque (`@PostConstruct`) si el perfil
+  `prod`/`production`/`staging` está activo y el secreto HMAC sigue siendo el
+  valor de desarrollo por defecto — el simulador local no puede activarse
+  accidentalmente en un ambiente productivo.
+- El simulador nunca expone el secreto HMAC real en logs ni en las respuestas
+  de sus endpoints; sólo devuelve la firma ya calculada para que Bruno la
+  reenvíe al endpoint público real.
+- El endpoint de preparación (`/api/v1/e2e/mercadopago/*-webhook`) sólo
+  calcula y entrega una firma válida; no marca pagos, no activa suscripciones
+  ni escribe filas del inbox directamente — esos efectos siguen siendo
+  responsabilidad exclusiva del checkout y del worker reales.
+
+**Modelo de resultados (outcome model):**
+- Implementados: `approved` (fulfillment exitoso) e `inconsistent`
+  (mismatch determinístico de `merchantAccountId` que dispara reconciliación).
+- **Brecha conocida, fuera de alcance de este cambio**: `design.md` también
+  contempla `pending` y `rejected` como resultados del proveedor. No están
+  implementados — sólo se prepararon los dos escenarios requeridos por la
+  especificación (`approved` e `inconsistent`). Quedan como trabajo futuro
+  para quien amplíe el simulador.
+
+**Gotchas documentados para quien mantenga este simulador:**
+1. **Defecto de valor por defecto de configuración (ya corregido en el
+   script)**: `BillingConfiguration` usa `""` como default de
+   `billing.mercadopago.merchant-account-id`, mientras que
+   `LocalWebhookPreparationService` usa `"local-merchant"` — es la misma
+   propiedad Spring, con dos defaults distintos. Si quedara sin fijar, TODO
+   webhook del camino aprobado fallaría `Payment.matchesExpected` en
+   `merchantAccountId` y terminaría en reconciliación en vez de activar la
+   suscripción. Además, `billing.webhook.mercadopago.hmac-secret` no tiene
+   default en `LocalWebhookPreparationService` (a diferencia de
+   `BillingConfiguration`), por lo que el bean falla al construirse si no se
+   fija. El script fija ambas variables explícitamente
+   (`BILLING_MERCADOPAGO_MERCHANT_ACCOUNT_ID` y
+   `BILLING_WEBHOOK_MERCADOPAGO_HMAC_SECRET`) al levantar la API.
+2. **Comportamiento de reconciliación no es cancelación**: un resultado
+   inconsistente lleva el pago a `PaymentStatus.ReconciliationRequired`, que
+   `Payment.isTerminal()` trata como **no terminal** — la suscripción queda
+   `PENDING` (nunca se cancela ni libera el cupo de una suscripción por
+   usuario) hasta que un operador reconcilie manualmente. Por eso el
+   recorrido usa dos estudiantes independientes: uno para el camino
+   aprobado/duplicado y otro exclusivo para el camino de mismatch, en vez de
+   reutilizar la misma cuenta.
+
+**Cómo ejecutarlo:** no requiere un comando separado — corre automáticamente
+al final de `scripts/e2e/catalog-content.sh` (ver arriba). Usa Bruno CLI sobre
+`bruno/E2E/mercadopago/01-registration` y `02-journey`, con el mismo
+environment `e2e-catalog-content`.
+
 ---
 
 ## Requisitos Previos

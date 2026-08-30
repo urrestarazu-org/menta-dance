@@ -7,7 +7,16 @@ Colección unificada para testing de API y BFF. Abrí `bruno/` como la colecció
 ```
 bruno/
 ├── environments/           # Configuración compartida
-│   └── local.bru          # Desarrollo local
+│   ├── local.bru          # Desarrollo local
+│   └── e2e-catalog-content.bru  # Recorridos aislados E2E/*
+│
+├── E2E/                    # Recorridos automatizados aislados
+│   ├── catalog-content/   # Registro, contenido, catálogo público
+│   │   ├── 01-registration/
+│   │   └── 02-journey/
+│   └── mercadopago/       # Simulador local de Mercado Pago (issue #128)
+│       ├── 01-registration/
+│       └── 02-journey/
 │
 ├── API - Direct/          # Tests directos contra la API
 │   ├── auth/              # Autenticación
@@ -62,6 +71,27 @@ scripts/e2e/catalog-content.sh --clean
 No agregues `activationToken`, access tokens ni refresh tokens al environment
 versionado. El flujo no llama a proveedores de pago, Bunny.net ni endpoints de
 streaming.
+
+### E2E/mercadopago
+
+Recorrido del simulador local de Mercado Pago (issue #128): checkout, webhook
+firmado, fulfillment por el worker existente, idempotencia de webhooks
+duplicados y reconciliación por inconsistencia. Reutiliza el environment
+`e2e-catalog-content` y corre automáticamente al final de:
+
+```bash
+scripts/e2e/catalog-content.sh
+```
+
+Usa dos estudiantes independientes (uno para el camino aprobado/duplicado, otro
+para el camino de mismatch/reconciliación) porque un resultado inconsistente
+deja la suscripción en `PENDING` — no la cancela — ocupando el cupo de
+suscripción única de esa cuenta. El endpoint de preparación
+(`/api/v1/e2e/mercadopago/*-webhook`) sólo existe bajo el perfil
+`e2e-mercadopago`, nunca calcula ni loguea el secreto HMAC, y sólo entrega la
+firma ya calculada para que Bruno reenvíe el webhook al controller público
+real. Detalle completo en
+[26-LOCAL-DEV-SETUP-HOWTO.md](../docs/26-LOCAL-DEV-SETUP-HOWTO.md#simulador-local-de-mercado-pago-issue-128).
 
 ## Cómo usar
 

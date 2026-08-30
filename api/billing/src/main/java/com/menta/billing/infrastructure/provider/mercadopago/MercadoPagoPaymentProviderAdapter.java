@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.context.annotation.Profile;
 import org.springframework.web.client.RestClient;
 
 /**
@@ -27,6 +28,7 @@ import org.springframework.web.client.RestClient;
  * failure.</p>
  */
 @Component
+@Profile("!e2e-mercadopago")
 public class MercadoPagoPaymentProviderAdapter implements PaymentProviderPort {
 
     private final RestClient restClient;

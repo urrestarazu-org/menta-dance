@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.context.annotation.Profile;
 import org.springframework.web.client.RestClient;
 
 /**
@@ -33,6 +34,7 @@ import org.springframework.web.client.RestClient;
  * exist yet with a local payment that already does.</p>
  */
 @Component
+@Profile("!e2e-mercadopago")
 public class MercadoPagoPaymentPreferenceAdapter implements PaymentPreferencePort {
 
     private final RestClient restClient;

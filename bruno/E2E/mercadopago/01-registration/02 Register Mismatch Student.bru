@@ -1,0 +1,37 @@
+meta {
+  name: Register Mismatch Student
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/{{apiVersion}}/auth/register
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "{{mismatchStudentEmail}}",
+    "password": "{{mismatchStudentPassword}}",
+    "role": "STUDENT"
+  }
+}
+
+docs {
+  A SEPARATE student for the reconciliation/mismatch scenario. Its subscription
+  stays PENDING forever after the mismatch (ReconciliationRequired is not
+  terminal — see Payment.isTerminal/PaymentVerificationService.applyOutcome),
+  which would otherwise block the primary student's own checkout if they
+  shared one account (SubscriptionStatus.PENDING occupies the user's slot).
+}
+
+tests {
+  test("registration is accepted", function() {
+    expect(res.getStatus()).to.equal(202);
+  });
+}
+
+assert {
+  res.status: eq 202
+}

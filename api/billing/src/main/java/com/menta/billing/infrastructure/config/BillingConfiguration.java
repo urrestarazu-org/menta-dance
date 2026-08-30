@@ -66,6 +66,7 @@ public class BillingConfiguration {
         "ZGV2LW9ubHktd2ViaG9vay1zZWNyZXQtbm90LWZvci1wcm9kdWN0aW9uLXVzZQ==";
 
     private static final Set<String> PRODUCTION_PROFILES = Set.of("prod", "production", "staging");
+    private static final String LOCAL_MERCADO_PAGO_PROFILE = "e2e-mercadopago";
 
     private final Environment environment;
 
@@ -79,6 +80,9 @@ public class BillingConfiguration {
     /** Fail-fast: reject the dev-only webhook HMAC secret in production profiles (US-BILLING-002). */
     @PostConstruct
     void validateWebhookSecretNotDefaultInProduction() {
+        if (isProductionProfile() && isLocalMercadoPagoProfileActive()) {
+            throw new IllegalStateException("SECURITY: local Mercado Pago simulation cannot run in a production profile");
+        }
         if (isProductionProfile() && DEV_DEFAULT_WEBHOOK_HMAC_SECRET.equals(webhookHmacSecret)) {
             throw new IllegalStateException(
                 "SECURITY: production requires a non-default Mercado Pago webhook HMAC secret. "
@@ -86,6 +90,15 @@ public class BillingConfiguration {
                     + String.join(", ", environment.getActiveProfiles())
             );
         }
+    }
+
+    private boolean isLocalMercadoPagoProfileActive() {
+        for (String profile : environment.getActiveProfiles()) {
+            if (LOCAL_MERCADO_PAGO_PROFILE.equalsIgnoreCase(profile)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean isProductionProfile() {

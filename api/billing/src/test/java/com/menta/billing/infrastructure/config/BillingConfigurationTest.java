@@ -132,6 +132,17 @@ class BillingConfigurationTest {
             .hasMessageContaining("SECURITY");
     }
 
+    @Test
+    void validateWebhookSecretNotDefaultInProduction_rejects_local_simulation_in_production()
+        throws NoSuchFieldException, IllegalAccessException {
+        when(environment.getActiveProfiles()).thenReturn(new String[] {"production", "e2e-mercadopago"});
+        setWebhookHmacSecret(configuration, "a-real-production-secret");
+
+        assertThatThrownBy(configuration::validateWebhookSecretNotDefaultInProduction)
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("local Mercado Pago simulation");
+    }
+
     private static String devDefaultSecret() throws NoSuchFieldException, IllegalAccessException {
         Field field = BillingConfiguration.class.getDeclaredField("DEV_DEFAULT_WEBHOOK_HMAC_SECRET");
         field.setAccessible(true);
