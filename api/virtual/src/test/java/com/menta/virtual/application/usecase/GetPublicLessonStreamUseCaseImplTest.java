@@ -190,6 +190,29 @@ class GetPublicLessonStreamUseCaseImplTest {
     }
 
     @Test
+    void unplanned_course_premium_lesson_is_denied_without_signing() {
+        CourseId courseId = CourseId.generate();
+        LessonId lessonId = LessonId.generate();
+        UUID userId = UUID.randomUUID();
+
+        when(lessonRepository.findById(lessonId)).thenReturn(
+            java.util.Optional.of(lesson(lessonId, courseId, "vid-target", false, 15))
+        );
+        // Course belongs to no billing plan (D7): must deny like a planned course
+        // without entitlement, never sign a URL.
+        when(entitlementPort.resolveCourseAccess(eq(userId), eq(courseId.getValue().toString())))
+            .thenReturn(new CourseAccessSnapshot(false, false));
+
+        PublicLessonStreamResult result = useCase.get(lessonId.toString(), userId);
+
+        assertThat(result).isInstanceOf(PublicLessonStreamResult.AccessDenied.class);
+        LessonAccessDecisionDto access = ((PublicLessonStreamResult.AccessDenied) result).access();
+        assertThat(access.allowed()).isFalse();
+        assertThat(access.reason()).isEqualTo("SUBSCRIPTION_REQUIRED");
+        verify(signatureService, never()).generateSignedUrl(any(), anyLong());
+    }
+
+    @Test
     void malformed_lesson_id_collapses_to_LessonNotFoundException() {
         assertThatThrownBy(() -> useCase.get("", UUID.randomUUID()))
             .isInstanceOf(LessonNotFoundException.class);

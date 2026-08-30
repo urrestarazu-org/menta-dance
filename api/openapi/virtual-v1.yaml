@@ -54,9 +54,9 @@ paths:
       tags: [Lecciones públicas]
       summary: Obtener detalle de una lección publicada
       description: |
-        No requiere autenticación para las rutas públicas: lección gratuita,
-        módulo preview o curso que no pertenece a ningún plan. El resultado
-        200 incluye `access.preview` y `access.requiresSubscription` para que
+        No requiere autenticación para las rutas públicas: lección gratuita o
+        módulo preview. El resultado 200 incluye `access.preview` y
+        `access.requiresSubscription` para que
         el cliente pueda distinguir contenido público de acceso pago vigente.
         El detalle nunca contiene una URL de streaming. Una lección protegida
         sin entitlement actual responde 403 RFC 9457 y no expone `videoId`.
@@ -71,7 +71,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/PublicLessonDetailResponse'
         '403':
-          description: La lección pertenece a un plan y el caller no tiene un entitlement actual.
+          description: >-
+            La lección protegida no tiene un entitlement actual para el
+            caller — incluye cursos sin plan asociado.
           content:
             application/problem+json:
               schema:
@@ -110,7 +112,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/PublicLessonStreamResponse'
         '403':
-          description: La lección pertenece a un plan y el caller no tiene un entitlement actual.
+          description: >-
+            La lección protegida no tiene un entitlement actual para el
+            caller — incluye cursos sin plan asociado.
           content:
             application/problem+json:
               schema:

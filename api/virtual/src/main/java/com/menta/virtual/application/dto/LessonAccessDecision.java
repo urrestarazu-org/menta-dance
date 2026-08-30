@@ -14,10 +14,8 @@ public enum LessonAccessDecision {
     PUBLIC_FREE,
     /** A premium lesson is public because its containing module is a preview. */
     PUBLIC_MODULE_PREVIEW,
-    /** A premium lesson is public because its course is not sold by any Billing plan. */
-    PUBLIC_UNPLANNED_COURSE,
     /** A protected course has a current frozen-snapshot entitlement for this caller. */
     SUBSCRIPTION_GRANTED,
-    /** A planned, protected lesson has no current entitlement and must not expose media. */
+    /** A protected lesson has no current entitlement and must not expose media (see ADR-0041). */
     SUBSCRIPTION_REQUIRED
 }
