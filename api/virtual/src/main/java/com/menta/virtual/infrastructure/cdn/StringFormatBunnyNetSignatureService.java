@@ -17,6 +17,15 @@ import com.menta.virtual.application.port.out.BunnyNetSignatureService;
  * integration ticket but the orchestrator's decision was to defer the
  * SDK adoption: the auth side of the contract has to be ready before a
  * real signing scheme is decided.</p>
+ *
+ * <p><strong>This is the explicit non-local branch</strong> (ADR-0040,
+ * issue #129): {@code VirtualConfiguration} registers it under {@code
+ * @Profile("!e2e-bunny-net")}, so it is the sole candidate whenever the
+ * local/E2E profile is not active — every production-like deployment
+ * included. Its counterpart, {@link
+ * com.menta.virtual.infrastructure.cdn.local.LocalBunnyNetSignatureService},
+ * is a deterministic, credential-free adapter reserved for local
+ * development and E2E acceptance testing under {@code e2e-bunny-net}.</p>
  */
 public class StringFormatBunnyNetSignatureService implements BunnyNetSignatureService {
 
