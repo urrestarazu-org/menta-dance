@@ -22,6 +22,7 @@ comunican por HTTP, broker, repositorios, `JOIN` ni claves foráneas entre sí.
 | Datos | [22-DATA-MODEL.md](22-DATA-MODEL.md) | Modelo lógico y ownership |
 | Pagos presenciales | [28-PHYSICAL-CLASS-PAYMENTS.md](28-PHYSICAL-CLASS-PAYMENTS.md) | Pricing, cupos y conciliación |
 | Calidad y entrega | [14-TEST-STRATEGY.md](14-TEST-STRATEGY.md), [16-CICD-PIPELINE.md](16-CICD-PIPELINE.md), [24-LOCAL-DEV-SETUP-REQUIREMENTS.md](24-LOCAL-DEV-SETUP-REQUIREMENTS.md), [26-LOCAL-DEV-SETUP-HOWTO.md](26-LOCAL-DEV-SETUP-HOWTO.md) | Scaffold, CI/CD y contrato / guía práctica de operación local |
+| Contribución | [30-SDD-CONTRIBUTION-GUIDE.md](30-SDD-CONTRIBUTION-GUIDE.md) | Selección de ruta, artefactos SDD, implementación, pruebas y entrega |
 | Operación | [18-SLA-DEFINITION.md](18-SLA-DEFINITION.md), [21-NFR-REQUIREMENTS.md](21-NFR-REQUIREMENTS.md) | Objetivos y restricciones |
 | Plan | [13-DEVELOPMENT-PLAN.md](13-DEVELOPMENT-PLAN.md) | Fases de implementación |
 | Costos y riesgos | [12-COST-ANALYSIS.md](12-COST-ANALYSIS.md), [15-RISK-MATRIX.md](15-RISK-MATRIX.md) | Supuestos operativos y mitigaciones |
