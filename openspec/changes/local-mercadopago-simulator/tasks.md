@@ -34,7 +34,7 @@
     an error/reconciliation case using only local endpoints.
   - **Commit:** `test(e2e): cover local Mercado Pago checkout journey`
 
-- [ ] **3.2** Document and verify
+- [x] **3.2** Document and verify
   - **Owns:** local E2E/Bruno docs and verification records.
   - Run focused Billing tests, Bruno, Compose validation and `./gradlew check`;
     record environmental blockers without weakening security assertions.
