@@ -4,6 +4,7 @@ import com.menta.billing.domain.exception.PaymentMethodNotAcceptedException;
 import com.menta.billing.domain.exception.PaymentPreferenceUnavailableException;
 import com.menta.billing.domain.exception.PlanNotAvailableException;
 import com.menta.billing.domain.exception.SubscriptionAlreadyActiveException;
+import com.menta.billing.domain.exception.SubscriptionNotFoundException;
 import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.infrastructure.web.ProblemDetails;
 import java.util.List;
@@ -54,6 +55,17 @@ public class SubscriptionExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT)
             .contentType(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON)
             .body(problemDetail);
+    }
+
+    /**
+     * US-BILLING-011 escenario 2 / A5. Absent, not-ACTIVE and (on the admin route) not-admin all
+     * map here — never a 403, so the response cannot be used to probe which is true.
+     */
+    @ExceptionHandler(SubscriptionNotFoundException.class)
+    ResponseEntity<ProblemDetail> subscriptionNotFound(SubscriptionNotFoundException exception) {
+        return ProblemDetails.response(
+            HttpStatus.NOT_FOUND, "No se encontró una suscripción cancelable.", exception.getErrorCode()
+        );
     }
 
     /** The provider could not open a checkout — nothing was written and nothing was charged. */
