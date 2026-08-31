@@ -6,18 +6,24 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.menta.billing.application.dto.CancelSubscriptionCommand;
+import com.menta.billing.application.dto.CancellationResult;
+import com.menta.billing.application.dto.CancellationTarget;
 import com.menta.billing.application.dto.CreateSubscriptionCheckoutCommand;
 import com.menta.billing.application.dto.SubscriptionCheckoutResult;
+import com.menta.billing.application.port.in.CancelSubscriptionUseCase;
 import com.menta.billing.application.port.in.CreateSubscriptionCheckoutUseCase;
 import com.menta.billing.domain.exception.PaymentMethodNotAcceptedException;
 import com.menta.billing.domain.exception.PaymentPreferenceUnavailableException;
 import com.menta.billing.domain.exception.PlanNotAvailableException;
 import com.menta.billing.domain.exception.SubscriptionAlreadyActiveException;
+import com.menta.billing.domain.exception.SubscriptionNotFoundException;
 import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.domain.model.SubscriptionStatus;
 import java.time.Instant;
@@ -30,6 +36,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.MediaType;
+import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
@@ -41,14 +49,23 @@ class SubscriptionControllerTest {
     private static final String PLAN_ID = UUID.randomUUID().toString();
 
     private CreateSubscriptionCheckoutUseCase useCase;
+    private CancelSubscriptionUseCase cancelUseCase;
     private MockMvc mockMvc;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
     void setUp() {
         useCase = mock(CreateSubscriptionCheckoutUseCase.class);
-        mockMvc = MockMvcBuilders.standaloneSetup(new SubscriptionController(useCase))
+        cancelUseCase = mock(CancelSubscriptionUseCase.class);
+        mockMvc = MockMvcBuilders.standaloneSetup(new SubscriptionController(useCase, cancelUseCase))
             .setControllerAdvice(new SubscriptionExceptionHandler())
+            // Matches production's Spring Boot auto-configured ObjectMapper — registers the
+            // JavaTimeModule (ISO-8601 Instants, not epoch seconds) and the ProblemDetail
+            // Jackson mixin (flattens setProperty("code", ...) to the top level), neither of
+            // which a bare `new ObjectMapper()` provides.
+            .setMessageConverters(new MappingJackson2HttpMessageConverter(Jackson2ObjectMapperBuilder.json()
+                .featuresToDisable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+                .build()))
             .build();
     }
 
@@ -216,5 +233,62 @@ class SubscriptionControllerTest {
                 .content(body("not-a-uuid", "MERCADO_PAGO", "idem-1")))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code", is("INVALID_REQUEST")));
+    }
+
+    // --- DELETE /me (US-BILLING-011) ----------------------------------------
+
+    private static CancellationResult cancellationResult() {
+        return new CancellationResult(
+            "sub-1", SubscriptionStatus.CANCELLED, Instant.parse("2026-09-17T12:00:00Z"), "Política de reembolso"
+        );
+    }
+
+    @Test
+    void cancel_own_returns_200_with_end_date_and_cancellation_policy() throws Exception {
+        when(cancelUseCase.cancel(any())).thenReturn(cancellationResult());
+
+        mockMvc.perform(delete("/api/v1/billing/subscriptions/me").with(authenticatedAs(USER_ID)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.subscriptionId", is("sub-1")))
+            .andExpect(jsonPath("$.status", is("CANCELLED")))
+            .andExpect(jsonPath("$.accessEndsAt", is("2026-09-17T12:00:00Z")))
+            .andExpect(jsonPath("$.cancellationPolicy", is("Política de reembolso")));
+    }
+
+    /**
+     * D2: the reason must never appear in a student-facing response — not present at all, not
+     * present-but-null. Verifying the JSON key itself does not exist is what actually proves
+     * this, not merely that some assertion about the value passes.
+     */
+    @Test
+    void cancel_own_response_never_includes_a_cancellation_reason_key() throws Exception {
+        when(cancelUseCase.cancel(any())).thenReturn(cancellationResult());
+
+        mockMvc.perform(delete("/api/v1/billing/subscriptions/me").with(authenticatedAs(USER_ID)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.cancellationReason").doesNotExist());
+    }
+
+    @Test
+    void cancel_own_resolves_by_the_token_subject_never_a_body_field() throws Exception {
+        when(cancelUseCase.cancel(any())).thenReturn(cancellationResult());
+
+        mockMvc.perform(delete("/api/v1/billing/subscriptions/me").with(authenticatedAs(USER_ID)))
+            .andExpect(status().isOk());
+
+        ArgumentCaptor<CancelSubscriptionCommand> command = ArgumentCaptor.forClass(CancelSubscriptionCommand.class);
+        verify(cancelUseCase).cancel(command.capture());
+        Assertions.assertThat(command.getValue().target()).isEqualTo(new CancellationTarget.Own());
+        Assertions.assertThat(command.getValue().actingUserId()).isEqualTo(USER_ID);
+        Assertions.assertThat(command.getValue().isAdmin()).isFalse();
+    }
+
+    @Test
+    void cancel_own_with_no_cancellable_subscription_returns_404_and_changes_nothing() throws Exception {
+        when(cancelUseCase.cancel(any())).thenThrow(new SubscriptionNotFoundException());
+
+        mockMvc.perform(delete("/api/v1/billing/subscriptions/me").with(authenticatedAs(USER_ID)))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.code", is("SUBSCRIPTION_NOT_FOUND")));
     }
 }
