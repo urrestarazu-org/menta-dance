@@ -79,4 +79,20 @@ public interface SubscriptionRepository {
      * until their {@code endDate} (US-BILLING-011).</p>
      */
     java.util.List<Subscription> findAllByUserId(UUID userId);
+
+    /**
+     * Finds the subscription that is currently {@code ACTIVE} for a user, or empty if none is
+     * (US-BILLING-011, self-service cancellation).
+     *
+     * <p>Unlike {@link #findCurrentByUserId(UUID)}, which also matches {@code PENDING}, this
+     * filters strictly to {@code ACTIVE} so cancelling a still-unsettled checkout correctly
+     * reports "no cancellable subscription" (404) instead of cancelling it.</p>
+     */
+    Optional<Subscription> findActiveByUserId(UUID userId);
+
+    /**
+     * Finds a subscription by its id regardless of status. The admin cancellation route
+     * resolves any subscription this way before checking it is {@code ACTIVE} (US-BILLING-011).
+     */
+    Optional<Subscription> findById(UUID subscriptionId);
 }

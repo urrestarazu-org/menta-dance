@@ -1,5 +1,6 @@
 package com.menta.billing.infrastructure.persistence.mapper;
 
+import com.menta.billing.domain.model.Cancellation;
 import com.menta.billing.domain.model.FulfillmentStatus;
 import com.menta.billing.domain.model.PaymentId;
 import com.menta.billing.domain.model.PlanId;
@@ -34,11 +35,13 @@ public final class SubscriptionJpaMapper {
             courseIds,
             entity.getProviderPreferenceId(),
             entity.getCheckoutUrl(),
-            entity.getCreatedAt()
+            entity.getCreatedAt(),
+            toCancellation(entity)
         );
     }
 
     public static SubscriptionJpaEntity toEntity(Subscription subscription) {
+        Cancellation cancellation = subscription.getCancellation().orElse(null);
         return new SubscriptionJpaEntity(
             subscription.getId(),
             subscription.getPaymentId().getValue(),
@@ -52,7 +55,18 @@ public final class SubscriptionJpaMapper {
             subscription.getEndDate().orElse(null),
             subscription.getProviderPreferenceId().orElse(null),
             subscription.getCheckoutUrl().orElse(null),
-            subscription.getCreatedAt()
+            subscription.getCreatedAt(),
+            cancellation != null ? cancellation.at() : null,
+            cancellation != null ? cancellation.by() : null,
+            cancellation != null ? cancellation.reason() : null
         );
+    }
+
+    /** NULL {@code cancelled_at} means this row was never cancelled through {@code Subscription.cancel} — pre-existing terminal-payment rows map to {@link java.util.Optional#empty()} (A8 / V17 migration note). */
+    private static Cancellation toCancellation(SubscriptionJpaEntity entity) {
+        if (entity.getCancelledAt() == null) {
+            return null;
+        }
+        return new Cancellation(entity.getCancelledAt(), entity.getCancelledBy(), entity.getCancellationReason());
     }
 }

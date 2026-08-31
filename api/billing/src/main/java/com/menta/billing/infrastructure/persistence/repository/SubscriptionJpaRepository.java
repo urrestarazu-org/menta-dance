@@ -16,4 +16,11 @@ public interface SubscriptionJpaRepository extends JpaRepository<SubscriptionJpa
     Optional<SubscriptionJpaEntity> findByActiveUserId(UUID activeUserId);
 
     List<SubscriptionJpaEntity> findAllByUserId(UUID userId);
+
+    /**
+     * Strictly {@code ACTIVE} filter — {@code findByActiveUserId} also matches {@code PENDING}
+     * through the {@code active_user_id} projection, which cannot serve self-service
+     * cancellation (US-BILLING-011).
+     */
+    Optional<SubscriptionJpaEntity> findByUserIdAndStatus(UUID userId, String status);
 }

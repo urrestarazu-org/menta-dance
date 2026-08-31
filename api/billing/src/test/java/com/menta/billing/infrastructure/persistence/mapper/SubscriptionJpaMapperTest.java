@@ -78,4 +78,31 @@ class SubscriptionJpaMapperTest {
         assertThat(activeEntity.getActiveUserId()).isEqualTo(USER_ID);
         assertThat(cancelledEntity.getActiveUserId()).isNull();
     }
+
+    @Test
+    void round_trips_the_cancellation_audit_trail() {
+        UUID adminId = UUID.randomUUID();
+        Subscription original = pending().activate(NOW, 30, List.of("course-1"))
+            .cancel(adminId, "fraude confirmado", NOW.plusSeconds(3600));
+
+        Subscription restored = SubscriptionJpaMapper.toDomain(
+            SubscriptionJpaMapper.toEntity(original), List.of("course-1")
+        );
+
+        assertThat(restored.getStatus()).isEqualTo(SubscriptionStatus.CANCELLED);
+        assertThat(restored.getCancellation()).isPresent();
+        assertThat(restored.getCancellation().get().at()).isEqualTo(NOW.plusSeconds(3600));
+        assertThat(restored.getCancellation().get().by()).isEqualTo(adminId);
+        assertThat(restored.getCancellation().get().reason()).isEqualTo("fraude confirmado");
+    }
+
+    @Test
+    void round_trips_a_legacy_cancelled_row_with_no_cancellation_actor_or_reason() {
+        SubscriptionJpaEntity legacyCancelledEntity = SubscriptionJpaMapper.toEntity(pending().cancelled());
+
+        Subscription restored = SubscriptionJpaMapper.toDomain(legacyCancelledEntity, List.of());
+
+        assertThat(restored.getStatus()).isEqualTo(SubscriptionStatus.CANCELLED);
+        assertThat(restored.getCancellation()).isEmpty();
+    }
 }

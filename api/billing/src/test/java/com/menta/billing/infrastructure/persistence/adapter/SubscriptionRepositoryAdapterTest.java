@@ -160,4 +160,50 @@ class SubscriptionRepositoryAdapterTest {
 
         assertThat(adapter.findCurrentByUserId(USER_ID)).isEmpty();
     }
+
+    /** Strictly ACTIVE, unlike {@code findCurrentByUserId} which also matches PENDING (US-BILLING-011). */
+    @Test
+    void findActiveByUserId_maps_when_an_active_subscription_exists() {
+        Subscription subscription = pending().activate(NOW, 30, List.of("course-1"));
+        when(jpaRepository.findByUserIdAndStatus(USER_ID, "ACTIVE"))
+            .thenReturn(Optional.of(SubscriptionJpaMapper.toEntity(subscription)));
+        when(courseJpaRepository.findBySubscriptionId(subscription.getId()))
+            .thenReturn(List.of(new SubscriptionCourseJpaEntity(subscription.getId(), "course-1")));
+
+        Optional<Subscription> found = adapter.findActiveByUserId(USER_ID);
+
+        assertThat(found).isPresent();
+        assertThat(found.get().getStatus()).isEqualTo(com.menta.billing.domain.model.SubscriptionStatus.ACTIVE);
+        assertThat(found.get().getCourseIds()).containsExactly("course-1");
+    }
+
+    @Test
+    void findActiveByUserId_empty_when_no_active_subscription_exists() {
+        when(jpaRepository.findByUserIdAndStatus(USER_ID, "ACTIVE")).thenReturn(Optional.empty());
+
+        assertThat(adapter.findActiveByUserId(USER_ID)).isEmpty();
+    }
+
+    @Test
+    void findById_maps_when_present_including_its_snapshot() {
+        Subscription subscription = pending().activate(NOW, 30, List.of("course-1"));
+        when(jpaRepository.findById(subscription.getId()))
+            .thenReturn(Optional.of(SubscriptionJpaMapper.toEntity(subscription)));
+        when(courseJpaRepository.findBySubscriptionId(subscription.getId()))
+            .thenReturn(List.of(new SubscriptionCourseJpaEntity(subscription.getId(), "course-1")));
+
+        Optional<Subscription> found = adapter.findById(subscription.getId());
+
+        assertThat(found).isPresent();
+        assertThat(found.get().getId()).isEqualTo(subscription.getId());
+        assertThat(found.get().getCourseIds()).containsExactly("course-1");
+    }
+
+    @Test
+    void findById_empty_when_absent() {
+        UUID subscriptionId = UUID.randomUUID();
+        when(jpaRepository.findById(subscriptionId)).thenReturn(Optional.empty());
+
+        assertThat(adapter.findById(subscriptionId)).isEmpty();
+    }
 }

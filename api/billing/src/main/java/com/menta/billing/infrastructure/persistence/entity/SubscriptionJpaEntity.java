@@ -80,6 +80,16 @@ public class SubscriptionJpaEntity {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    /** NULL unless {@code cancel()} has run — the cancellation audit trail (US-BILLING-011). */
+    @Column(name = "cancelled_at")
+    private Instant cancelledAt;
+
+    @Column(name = "cancelled_by", columnDefinition = "BINARY(16)")
+    private UUID cancelledBy;
+
+    @Column(name = "cancellation_reason", length = 500)
+    private String cancellationReason;
+
     protected SubscriptionJpaEntity() {
         // JPA requires a no-arg constructor.
     }
@@ -87,7 +97,8 @@ public class SubscriptionJpaEntity {
     public SubscriptionJpaEntity(
         UUID id, UUID paymentId, UUID userId, UUID planId, String idempotencyKey, UUID activeUserId,
         String status, String fulfillmentStatus, Instant startDate, Instant endDate,
-        String providerPreferenceId, String checkoutUrl, Instant createdAt
+        String providerPreferenceId, String checkoutUrl, Instant createdAt,
+        Instant cancelledAt, UUID cancelledBy, String cancellationReason
     ) {
         this.id = id;
         this.paymentId = paymentId;
@@ -102,6 +113,9 @@ public class SubscriptionJpaEntity {
         this.providerPreferenceId = providerPreferenceId;
         this.checkoutUrl = checkoutUrl;
         this.createdAt = createdAt;
+        this.cancelledAt = cancelledAt;
+        this.cancelledBy = cancelledBy;
+        this.cancellationReason = cancellationReason;
     }
 
     public UUID getId() {
@@ -154,5 +168,17 @@ public class SubscriptionJpaEntity {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public Instant getCancelledAt() {
+        return cancelledAt;
+    }
+
+    public UUID getCancelledBy() {
+        return cancelledBy;
+    }
+
+    public String getCancellationReason() {
+        return cancellationReason;
     }
 }
