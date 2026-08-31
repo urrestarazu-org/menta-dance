@@ -1,0 +1,36 @@
+meta {
+  name: Get Unplanned Protected Lesson Stream
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/{{apiVersion}}/virtual/lessons/{{unplannedProtectedLessonId}}/stream
+  body: none
+  auth: none
+}
+
+tests {
+  test("Status is 403", function() {
+    expect(res.getStatus()).to.equal(403);
+  });
+
+  test("D7: a course absent from every plan denies its protected lesson (no signed URL, no videoId)", function() {
+    expect(res.getHeader("content-type")).to.contain("application/problem+json");
+    expect(res.getBody().code).to.equal("LESSON_FORBIDDEN_SUBSCRIPTION_REQUIRED");
+    expect(res.getBody().stream).to.not.exist;
+    expect(res.getBody().url).to.not.exist;
+    expect(res.getBody().videoId).to.not.exist;
+  });
+}
+
+docs {
+  D7 (ADR-0041): the pre-D7 "unplanned course is public" rule is inverted —
+  a non-preview lesson in a course absent from every billing plan is denied
+  by default, exactly like a planned course without entitlement. This is
+  the acceptance scenario the whole change exists to prove locally.
+}
+
+assert {
+  res.status: eq 403
+}
