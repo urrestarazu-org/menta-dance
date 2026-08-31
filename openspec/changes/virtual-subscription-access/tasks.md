@@ -151,7 +151,21 @@ size exception.  PR 2 must target PR 1 and merge after it.
 
 ## TASK-006 — Lock the module and cross-module boundaries with regressions
 
-- **Status**: pending
+- **Status**: completed
+- **Note**: The ArchUnit regression
+  (`app_should_not_own_virtual_lesson_access_policy`,
+  `api/app/src/test/java/com/menta/app/ArchitectureTest.java:58`) already
+  existed from an earlier batch. This closeout adds the missing
+  application/controller integration coverage:
+  `api/app/src/test/java/com/menta/app/integration/virtual/VirtualLessonAccessIntegrationTest.java`
+  (6 scenarios — planned course + active subscription grants detail/stream;
+  protected denial for anonymous and authenticated-without-entitlement with
+  no-leak assertions; frozen snapshot surviving a live-plan course removal;
+  cancellation-before-`endDate` still grants; expiry denies; D7 — a course
+  never associated with any plan denies by default, matching the CURRENT
+  `specs/virtual/spec.md` contract, not the original proposal's "unplanned
+  course is public" semantics). All 6 pass against the real Spring context
+  (Testcontainers MySQL), no cross-module port mocked.
 - **Dependencies**: TASK-005
 - **Estimated LOC**: ~120 (tests only)
 - **Modules**: `api:virtual`, `api:billing`, `api:app`
