@@ -50,6 +50,15 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *     (US-BILLING-010, #116; the subscription and its payment are bound to
  *     the token's user — the client never says whose they are. Same
  *     explicit-matcher reasoning as the quotes rule above.)
+ *   - DELETE /api/v1/billing/subscriptions/me → authenticated (any role)
+ *     (US-BILLING-011, #130; self-service cancellation of the caller's own
+ *     subscription. The POST rule above is method-scoped and does not cover
+ *     DELETE, so without this explicit matcher the path would fall through
+ *     to anyRequest()'s permissive default grant — see this same rule's own
+ *     comment below.)
+ *   - DELETE /api/v1/admin/billing/subscriptions/{subscriptionId} → ADMIN
+ *     (US-BILLING-011, #130; already covered by the generic
+ *     /api/v1/admin/** rule below — no separate matcher needed.)
  *   - /api/v1/catalog/courses and /api/v1/catalog/courses/** → permitAll
  *     (#95; public course catalog composed from Physical/Virtual, no
  *     account required to browse).
@@ -154,6 +163,11 @@ public class SecurityConfig {
                 // before anyRequest(), same first-match-wins ordering as #37 and #34.
                 // The owning user comes from the token, never from the body.
                 .requestMatchers(HttpMethod.POST, "/api/v1/billing/subscriptions").authenticated()
+                // US-BILLING-011, #130: self-service cancellation is DELETE, a different HTTP
+                // method than the POST rule immediately above — Spring Security matches per
+                // method, so it needs its own explicit entry or it falls through to a grant via
+                // anyRequest() below (that method's own comment already documents why).
+                .requestMatchers(HttpMethod.DELETE, "/api/v1/billing/subscriptions/me").authenticated()
                 // US-PHYSICAL-001 escenario 2: the door reader has no user session — it
                 // authenticates with a shared device token the use case itself verifies.
                 .requestMatchers(HttpMethod.POST, "/api/v1/physical/sessions/*/check-ins").permitAll()
