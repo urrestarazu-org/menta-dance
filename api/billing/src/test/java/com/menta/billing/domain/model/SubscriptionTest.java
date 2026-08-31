@@ -13,6 +13,7 @@ class SubscriptionTest {
     private static final Instant CREATED_AT = Instant.parse("2026-08-18T10:00:00Z");
     private static final Instant CONFIRMED_AT = Instant.parse("2026-08-18T12:00:00Z");
     private static final UUID USER_ID = UUID.randomUUID();
+    private static final UUID ADMIN_ID = UUID.randomUUID();
 
     private static Subscription pending() {
         return Subscription.pendingCheckout(
@@ -168,7 +169,7 @@ class SubscriptionTest {
         assertThatThrownBy(() -> new Subscription(
             UUID.randomUUID(), PaymentId.generate(), USER_ID, PlanId.generate(), "idem-1",
             SubscriptionStatus.PENDING, FulfillmentStatus.PENDING_FULFILLMENT, null, null, null, null, null,
-            CREATED_AT
+            CREATED_AT, null
         )).isInstanceOf(NullPointerException.class);
     }
 
@@ -178,5 +179,73 @@ class SubscriptionTest {
         assertThat(SubscriptionStatus.ACTIVE.occupiesUserSlot()).isTrue();
         assertThat(SubscriptionStatus.EXPIRED.occupiesUserSlot()).isFalse();
         assertThat(SubscriptionStatus.CANCELLED.occupiesUserSlot()).isFalse();
+    }
+
+    @Test
+    void cancel_from_active_sets_the_cancellation_audit_and_leaves_endDate_untouched() {
+        Subscription active = pending().activate(CONFIRMED_AT, 30, List.of("course-1"));
+        Instant cancelledAt = CONFIRMED_AT.plusSeconds(3600);
+
+        Subscription cancelled = active.cancel(USER_ID, null, cancelledAt);
+
+        assertThat(cancelled.getStatus()).isEqualTo(SubscriptionStatus.CANCELLED);
+        assertThat(cancelled.getEndDate()).isEqualTo(active.getEndDate());
+        assertThat(cancelled.getCancellation()).isPresent();
+        assertThat(cancelled.getCancellation().get().at()).isEqualTo(cancelledAt);
+        assertThat(cancelled.getCancellation().get().by()).isEqualTo(USER_ID);
+        assertThat(cancelled.getCancellation().get().reason()).isNull();
+    }
+
+    @Test
+    void cancel_rejects_a_subscription_that_is_not_active() {
+        Subscription pendingSubscription = pending();
+        assertThatThrownBy(() -> pendingSubscription.cancel(USER_ID, null, CONFIRMED_AT))
+            .isInstanceOf(IllegalStateException.class);
+
+        Subscription alreadyCancelled = pending().activate(CONFIRMED_AT, 30, List.of())
+            .cancel(USER_ID, null, CONFIRMED_AT.plusSeconds(10));
+        assertThatThrownBy(() -> alreadyCancelled.cancel(USER_ID, null, CONFIRMED_AT.plusSeconds(20)))
+            .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void cancel_stamps_cancelledBy_even_for_self_cancellation_without_a_reason() {
+        Subscription active = pending().activate(CONFIRMED_AT, 30, List.of());
+
+        Subscription cancelled = active.cancel(USER_ID, null, CONFIRMED_AT.plusSeconds(1));
+
+        assertThat(cancelled.getCancellation()).isPresent();
+        assertThat(cancelled.getCancellation().get().by()).isEqualTo(USER_ID);
+    }
+
+    @Test
+    void cancel_rejects_a_blank_or_absent_reason_from_a_non_owner_actor() {
+        Subscription active = pending().activate(CONFIRMED_AT, 30, List.of());
+
+        assertThatThrownBy(() -> active.cancel(ADMIN_ID, " ", CONFIRMED_AT))
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> active.cancel(ADMIN_ID, null, CONFIRMED_AT))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void cancel_accepts_a_non_blank_reason_from_a_non_owner_actor() {
+        Subscription active = pending().activate(CONFIRMED_AT, 30, List.of());
+
+        Subscription cancelled = active.cancel(ADMIN_ID, "fraud", CONFIRMED_AT);
+
+        assertThat(cancelled.getCancellation()).isPresent();
+        assertThat(cancelled.getCancellation().get().reason()).isEqualTo("fraud");
+        assertThat(cancelled.getCancellation().get().by()).isEqualTo(ADMIN_ID);
+    }
+
+    @Test
+    void activate_and_cancelled_transitions_stay_unaffected_by_the_new_cancellation_audit() {
+        Subscription activated = pending().activate(CONFIRMED_AT, 30, List.of("course-1"));
+        Subscription slotReleased = pending().cancelled();
+
+        assertThat(activated.getCancellation()).isEmpty();
+        assertThat(slotReleased.getCancellation()).isEmpty();
+        assertThat(slotReleased.getStatus()).isEqualTo(SubscriptionStatus.CANCELLED);
     }
 }

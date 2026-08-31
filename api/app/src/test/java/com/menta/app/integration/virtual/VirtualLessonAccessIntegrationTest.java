@@ -193,7 +193,8 @@ class VirtualLessonAccessIntegrationTest {
         UUID subscriptionId = UUID.randomUUID();
         subscriptionRepository.save(new SubscriptionJpaEntity(
             subscriptionId, paymentId, userId, planId, "idem-" + subscriptionId, null,
-            status, "ASSIGNED", now.minus(1, ChronoUnit.DAYS), endDate, null, null, now
+            status, "ASSIGNED", now.minus(1, ChronoUnit.DAYS), endDate, null, null, now,
+            null, null, null
         ));
         for (String courseId : snapshotCourseIds) {
             subscriptionCourseRepository.save(new SubscriptionCourseJpaEntity(subscriptionId, courseId));

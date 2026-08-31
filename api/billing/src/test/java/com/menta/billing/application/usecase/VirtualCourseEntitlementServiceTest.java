@@ -146,7 +146,7 @@ class VirtualCourseEntitlementServiceTest {
     ) {
         return new Subscription(
             UUID.randomUUID(), PaymentId.generate(), USER_ID, PlanId.generate(), "idempotency-key", status,
-            fulfillmentStatus, startDate, endDate, courseIds, null, null, NOW
+            fulfillmentStatus, startDate, endDate, courseIds, null, null, NOW, null
         );
     }
 }

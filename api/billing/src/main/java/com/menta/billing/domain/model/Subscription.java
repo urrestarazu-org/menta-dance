@@ -41,11 +41,13 @@ public final class Subscription {
     private final String providerPreferenceId;
     private final String checkoutUrl;
     private final Instant createdAt;
+    private final Cancellation cancellation;
 
     public Subscription(
         UUID id, PaymentId paymentId, UUID userId, PlanId planId, String idempotencyKey,
         SubscriptionStatus status, FulfillmentStatus fulfillmentStatus, Instant startDate, Instant endDate,
-        List<String> courseIds, String providerPreferenceId, String checkoutUrl, Instant createdAt
+        List<String> courseIds, String providerPreferenceId, String checkoutUrl, Instant createdAt,
+        Cancellation cancellation
     ) {
         this.id = Objects.requireNonNull(id, "id cannot be null");
         this.paymentId = Objects.requireNonNull(paymentId, "paymentId cannot be null");
@@ -63,6 +65,7 @@ public final class Subscription {
         this.providerPreferenceId = providerPreferenceId;
         this.checkoutUrl = checkoutUrl;
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt cannot be null");
+        this.cancellation = cancellation;
     }
 
     /** Escenario 1: created together with its {@code Payment}, before any provider call. */
@@ -71,13 +74,16 @@ public final class Subscription {
     ) {
         return new Subscription(
             id, paymentId, userId, planId, idempotencyKey, SubscriptionStatus.PENDING,
-            FulfillmentStatus.PENDING_FULFILLMENT, null, null, List.of(), null, null, createdAt
+            FulfillmentStatus.PENDING_FULFILLMENT, null, null, List.of(), null, null, createdAt, null
         );
     }
 
     /** Records the provider preference the buyer was redirected to — never the payment id, which does not exist yet. */
     public Subscription withCheckout(String newProviderPreferenceId, String newCheckoutUrl) {
-        return copy(status, fulfillmentStatus, startDate, endDate, courseIds, newProviderPreferenceId, newCheckoutUrl);
+        return copy(
+            status, fulfillmentStatus, startDate, endDate, courseIds, newProviderPreferenceId, newCheckoutUrl,
+            cancellation
+        );
     }
 
     /**
@@ -99,7 +105,8 @@ public final class Subscription {
         }
         return copy(
             SubscriptionStatus.ACTIVE, fulfillmentStatus, confirmedAt,
-            confirmedAt.plus(durationDays, ChronoUnit.DAYS), planCourseIds, providerPreferenceId, checkoutUrl
+            confirmedAt.plus(durationDays, ChronoUnit.DAYS), planCourseIds, providerPreferenceId, checkoutUrl,
+            cancellation
         );
     }
 
@@ -114,21 +121,56 @@ public final class Subscription {
         }
         return copy(
             SubscriptionStatus.CANCELLED, fulfillmentStatus, startDate, endDate, courseIds,
-            providerPreferenceId, checkoutUrl
+            providerPreferenceId, checkoutUrl, cancellation
+        );
+    }
+
+    /**
+     * A user-initiated cancellation of the subscription's auto-renewal (US-BILLING-011).
+     *
+     * <p>Unlike {@link #cancelled()}, this is <strong>not</strong> idempotent: cancelling a
+     * subscription that is not {@code ACTIVE} is a caller bug, unreachable over HTTP since
+     * both the self-service and admin lookups filter to {@code ACTIVE} before calling this.
+     * {@code endDate} is left untouched — the student keeps access until the term they
+     * already paid for ends.</p>
+     *
+     * @param by the acting user id — the subscription's owner for self-service cancellation,
+     *     an admin otherwise
+     * @param reason mandatory only when {@code by} is not the owner (admin override, D1);
+     *     never exposed back to the student (D2)
+     * @param at the cancellation instant
+     * @throws IllegalStateException if this subscription is not {@code ACTIVE}
+     * @throws IllegalArgumentException if {@code by} is not the owner and {@code reason} is
+     *     blank or absent
+     */
+    public Subscription cancel(UUID by, String reason, Instant at) {
+        if (status != SubscriptionStatus.ACTIVE) {
+            throw new IllegalStateException("cannot cancel a subscription that is not ACTIVE");
+        }
+        Objects.requireNonNull(by, "by cannot be null");
+        Objects.requireNonNull(at, "at cannot be null");
+        if (!by.equals(userId) && (reason == null || reason.isBlank())) {
+            throw new IllegalArgumentException("reason cannot be blank when cancelling on behalf of another user");
+        }
+        return copy(
+            SubscriptionStatus.CANCELLED, fulfillmentStatus, startDate, endDate, courseIds,
+            providerPreferenceId, checkoutUrl, new Cancellation(at, by, reason)
         );
     }
 
     /** Marks the locally stored entitlement snapshot as available to Virtual. */
     public Subscription assigned() {
         return copy(
-            status, FulfillmentStatus.ASSIGNED, startDate, endDate, courseIds, providerPreferenceId, checkoutUrl
+            status, FulfillmentStatus.ASSIGNED, startDate, endDate, courseIds, providerPreferenceId, checkoutUrl,
+            cancellation
         );
     }
 
     /** Snapshot activation failed; the settled payment remains recoverable on a later retry. */
     public Subscription exception() {
         return copy(
-            status, FulfillmentStatus.EXCEPTION, startDate, endDate, courseIds, providerPreferenceId, checkoutUrl
+            status, FulfillmentStatus.EXCEPTION, startDate, endDate, courseIds, providerPreferenceId, checkoutUrl,
+            cancellation
         );
     }
 
@@ -147,11 +189,12 @@ public final class Subscription {
 
     private Subscription copy(
         SubscriptionStatus newStatus, FulfillmentStatus newFulfillmentStatus, Instant newStartDate,
-        Instant newEndDate, List<String> newCourseIds, String newProviderPreferenceId, String newCheckoutUrl
+        Instant newEndDate, List<String> newCourseIds, String newProviderPreferenceId, String newCheckoutUrl,
+        Cancellation newCancellation
     ) {
         return new Subscription(
             id, paymentId, userId, planId, idempotencyKey, newStatus, newFulfillmentStatus, newStartDate,
-            newEndDate, newCourseIds, newProviderPreferenceId, newCheckoutUrl, createdAt
+            newEndDate, newCourseIds, newProviderPreferenceId, newCheckoutUrl, createdAt, newCancellation
         );
     }
 
@@ -206,5 +249,10 @@ public final class Subscription {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    /** The cancellation audit trail — present only once {@link #cancel} has run (US-BILLING-011). */
+    public Optional<Cancellation> getCancellation() {
+        return Optional.ofNullable(cancellation);
     }
 }
