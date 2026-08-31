@@ -1,0 +1,47 @@
+meta {
+  name: Prepare Approved Webhook
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/api/v1/e2e/mercadopago/approved-webhook
+  body: json
+  auth: none
+}
+
+script:pre-request {
+  bru.setVar('preparePaymentId', 'e2e-bunny-net-approved-payment-' + Date.now());
+  bru.setVar('prepareRequestId', 'e2e-bunny-net-approved-request-' + Date.now());
+}
+
+body:json {
+  {
+    "externalReference": "{{externalReference}}",
+    "providerPaymentId": "{{preparePaymentId}}",
+    "requestId": "{{prepareRequestId}}"
+  }
+}
+
+script:post-response {
+  bru.setVar('webhookDataId', res.getBody().providerPaymentId);
+  bru.setVar('webhookRequestId', res.getBody().requestId);
+  bru.setVar('webhookSignature', res.getBody().signature);
+}
+
+docs {
+  Profile-gated, local-only endpoint (e2e-mercadopago). Registers a matching
+  approved provider result for this journey's checkout and returns a
+  current, valid signature computed server-side — never the raw HMAC secret.
+}
+
+tests {
+  test("prepares a deliverable signed notification", function() {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().signature).to.match(/^ts=\d+,v1=[0-9a-f]+$/);
+  });
+}
+
+assert {
+  res.status: eq 200
+}

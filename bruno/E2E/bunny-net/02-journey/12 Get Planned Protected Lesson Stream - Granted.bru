@@ -1,0 +1,42 @@
+meta {
+  name: Get Planned Protected Lesson Stream - Granted
+  type: http
+  seq: 12
+}
+
+get {
+  url: {{baseUrl}}/api/{{apiVersion}}/virtual/lessons/{{plannedProtectedLessonId}}/stream
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+tests {
+  test("Status is 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("An active entitlement grants a deterministic local signed URL", function() {
+    const url = res.getBody().stream.url;
+    const pullZoneHostname = bru.getEnvVar("bunnyNetPullZoneHostname");
+    const videoLibraryId = bru.getEnvVar("bunnyNetVideoLibraryId");
+    const prefix = pullZoneHostname + "/" + videoLibraryId + "/";
+    expect(url).to.be.a("string").and.to.satisfy((value) => value.startsWith(prefix));
+    expect(url).to.match(/\?exp=\d+&sig=[0-9a-f]{64}$/);
+    expect(res.getBody().lesson.lessonId).to.equal(bru.getVar("plannedProtectedLessonId"));
+  });
+}
+
+docs {
+  The end-to-end premium-grant scenario (design.md "Journey order"): a real
+  checkout plus a signed approved webhook, fulfilled asynchronously by
+  WebhookVerificationWorker, is the only path that unlocks this stream — no
+  entitlement was ever seeded directly.
+}
+
+assert {
+  res.status: eq 200
+}

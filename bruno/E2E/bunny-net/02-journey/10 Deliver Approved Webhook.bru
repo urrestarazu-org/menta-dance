@@ -1,0 +1,40 @@
+meta {
+  name: Deliver Approved Webhook
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/api/v1/billing/payments/mercadopago/webhook?data.id={{webhookDataId}}
+  body: none
+  auth: none
+}
+
+headers {
+  x-request-id: {{webhookRequestId}}
+  x-signature: {{webhookSignature}}
+}
+
+docs {
+  Delivers the notification prepared by "Prepare Approved Webhook" to the
+  real public webhook endpoint (US-BILLING-002) — the controller,
+  HmacSha256WebhookSignatureVerifier, durable inbox and async
+  WebhookVerificationWorker are all production code paths; nothing here is
+  a mock server. The signature was computed server-side by
+  LocalWebhookPreparationService, so no HMAC secret is ever embedded in
+  this collection.
+
+  200 on success — verified, persisted, never a 500. Fulfillment
+  (subscription activation) happens later, off this request, in
+  WebhookVerificationWorker — see "Poll Subscription Activated".
+}
+
+tests {
+  test("verified and persisted, never a 500", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+}
+
+assert {
+  res.status: eq 200
+}

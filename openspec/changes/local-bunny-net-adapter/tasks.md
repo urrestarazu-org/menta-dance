@@ -63,9 +63,9 @@ Design's own 3-slice sketch overflowed (~950 in one slice); re-sliced to 4 per `
 
 ## Phase 4 — PR4: Bruno Journey + Runner
 
-- [ ] 4.1 RED: `scripts/e2e/bunny-net-runner-test.sh` (mirrors `catalog-content-runner-test.sh`) — unknown arg exits non-zero; missing Docker prerequisite fails closed; `--clean` isolates only `menta-e2e-bunny-net`.
-- [ ] 4.2 GREEN: `scripts/e2e/bunny-net.sh` — `set -euo pipefail`, `readonly` ports (API 18082, MySQL 33307, Redis 36380, Mailpit 38026, SMTP 31026, OTEL 34319/34320, Grafana 33001), `trap stop_api EXIT INT TERM`, Compose project `menta-e2e-bunny-net`, activates `e2e-bunny-net,e2e-catalog-content,e2e-mercadopago`.
-- [ ] 4.3 Create `bruno/environments/e2e-bunny-net.bru` pinning `APP_CDN_BUNNYNET_PULLZONEHOSTNAME=https://local-bunny-net.invalid`, `APP_CDN_BUNNYNET_VIDEOLIBRARYID=e2e-library`.
-- [ ] 4.4 Create `bruno/E2E/bunny-net/` ordered journey: login student → unplanned preview `/stream` 200 → unplanned protected `/stream` 403 (D7, no `videoId`/signed URL) → planned protected `/stream` 403 (pre-checkout) → checkout → signed approved webhook → poll activation → planned protected `/stream` 200.
-- [ ] 4.5 Update Bruno/local-dev docs with the one documented command (`scripts/e2e/bunny-net.sh`) reproducing all three acceptance scenarios.
-- [ ] 4.6 Verify: `scripts/e2e/bunny-net.sh` exits zero end-to-end; `catalog-content.sh` unaffected (disjoint Compose project/ports).
+- [x] 4.1 RED: `scripts/e2e/bunny-net-runner-test.sh` (mirrors `catalog-content-runner-test.sh`) — unknown arg exits non-zero; missing Docker prerequisite fails closed; `--clean` isolates only `menta-e2e-bunny-net`.
+- [x] 4.2 GREEN: `scripts/e2e/bunny-net.sh` — `set -euo pipefail`, `readonly` ports (API 18082, MySQL 33307, Redis 36380, Mailpit 38026, SMTP 31026, OTEL 34319/34320, Grafana 33001), `trap stop_api EXIT INT TERM`, Compose project `menta-e2e-bunny-net`, activates `e2e-bunny-net,e2e-catalog-content,e2e-mercadopago`.
+- [x] 4.3 Create `bruno/environments/e2e-bunny-net.bru` pinning `APP_CDN_BUNNYNET_PULLZONEHOSTNAME=https://local-bunny-net.invalid`, `APP_CDN_BUNNYNET_VIDEOLIBRARYID=e2e-library`.
+- [x] 4.4 Create `bruno/E2E/bunny-net/` ordered journey: login student → unplanned preview `/stream` 200 → unplanned protected `/stream` 403 (D7, no `videoId`/signed URL) → planned protected `/stream` 403 (pre-checkout) → checkout → signed approved webhook → poll activation → planned protected `/stream` 200.
+- [x] 4.5 Update Bruno/local-dev docs with the one documented command (`scripts/e2e/bunny-net.sh`) reproducing all three acceptance scenarios.
+- [x] 4.6 Verify: `scripts/e2e/bunny-net.sh` exits zero end-to-end; `catalog-content.sh` unaffected (disjoint Compose project/ports).
