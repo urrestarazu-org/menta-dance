@@ -152,6 +152,73 @@ al final de `scripts/e2e/catalog-content.sh` (ver arriba). Usa Bruno CLI sobre
 `bruno/E2E/mercadopago/01-registration` y `02-journey`, con el mismo
 environment `e2e-catalog-content`.
 
+### Adaptador local de Bunny.net (issue #129)
+
+Para verificar localmente el streaming de video sin credenciales reales de
+Bunny.net y sin salir nunca a la CDN real, ejecutá desde la raíz:
+
+```bash
+scripts/e2e/bunny-net.sh
+```
+
+El script requiere los mismos prerrequisitos que `catalog-content.sh`
+(Docker Compose v2, JDK 21, Node **20.11.1**, `curl`, `jq`, el wrapper de
+Gradle y un `.env` local). No comparte proyecto de Compose, puertos ni
+volúmenes con `catalog-content.sh`: crea exclusivamente el proyecto
+`menta-e2e-bunny-net`, por lo que ambos recorridos pueden ejecutarse en
+paralelo sin colisionar.
+
+Este único comando reproduce, en un solo recorrido de Bruno, los tres
+escenarios de aceptación del issue #129:
+
+1. **Streaming de preview sin suscripción** — un alumno anónimo obtiene una
+   URL firmada local para una lección de un módulo `isPreview`, sin tocar
+   Bunny.net.
+2. **Denegación D7** — la misma lección protegida de un curso que no
+   pertenece a ningún plan de facturación devuelve `403` sin exponer
+   `videoId` ni URL firmada (ADR-0041: un curso sin plan ya no es público
+   por defecto).
+3. **Acceso premium tras checkout real** — el mismo alumno se suscribe con
+   el simulador local de Mercado Pago (checkout, webhook firmado, worker de
+   fulfillment) y sólo entonces la lección protegida del curso *planned*
+   devuelve `200` con una URL firmada determinista.
+
+**Cómo funciona el adaptador local (ADR-0040):**
+- `VirtualConfiguration` registra `LocalBunnyNetSignatureService` únicamente
+  bajo `@Profile("e2e-bunny-net")`; el adaptador real
+  (`StringFormatBunnyNetSignatureService`) usa `@Profile("!e2e-bunny-net")`
+  — son mutuamente excluyentes, nunca coexisten. El propio factory `@Bean`
+  falla el arranque si `e2e-bunny-net` se combina con `prod`/`production`/
+  `staging`, antes de que el servidor acepte ningún request.
+- La firma (`sig`) es SHA-256 de un salt público + `videoLibraryId` +
+  `videoId` + `exp` — determinística, sin credencial real y sin uso posible
+  contra la CDN de producción.
+- El runner fija `APP_CDN_BUNNYNET_PULLZONEHOSTNAME=https://local-bunny-net.invalid`
+  (dominio reservado por RFC 2606, nunca resuelve) y
+  `APP_CDN_BUNNYNET_VIDEOLIBRARYID=e2e-library`.
+
+**Fixtures usadas (perfil `e2e-bunny-net`):**
+- `E2eBunnyNetVirtualFixture` (Virtual) siembra dos cursos con id fijo: uno
+  sin plan asociado (`UNPLANNED_COURSE_ID`, con un módulo preview y uno
+  protegido) y otro con un módulo protegido vinculado a un plan
+  (`PLANNED_COURSE_ID`).
+- `E2eBunnyNetBillingFixture` (Billing, perfil compuesto
+  `e2e-bunny-net & e2e-mercadopago`) vincula `PLANNED_COURSE_ID` al mismo
+  plan fixture (`E2eMercadoPagoBillingFixture.PLAN_ID`) que usa el recorrido
+  de Mercado Pago — el checkout de este recorrido es el mismo checkout real,
+  no un simulacro adicional.
+
+Para eliminar **solamente** ese estado aislado cuando terminaste de
+diagnosticar:
+
+```bash
+scripts/e2e/bunny-net.sh --clean
+```
+
+`--clean` no toca contenedores, volúmenes ni puertos de `catalog-content.sh`
+ni del entorno de desarrollo ordinario. Si el recorrido falla, conservá el
+stack aislado y revisá `.dev-logs/e2e-bunny-net-api.log`.
+
 ---
 
 ## Requisitos Previos
