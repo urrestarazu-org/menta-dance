@@ -1,5 +1,6 @@
 package com.menta.billing.infrastructure.config;
 
+import com.menta.billing.application.port.in.CancelSubscriptionUseCase;
 import com.menta.billing.application.port.in.CreatePhysicalCourseQuoteUseCase;
 import com.menta.billing.application.port.in.CreateSubscriptionCheckoutUseCase;
 import com.menta.billing.application.port.in.GetPhysicalCoursePricingUseCase;
@@ -25,6 +26,7 @@ import com.menta.billing.application.usecase.CreatePurchaseFromPaymentEventUseCa
 import com.menta.billing.application.usecase.MarkPurchaseExceptionUseCase;
 import com.menta.billing.application.port.out.WebhookInboxAppender;
 import com.menta.billing.application.port.out.WebhookSignatureVerifier;
+import com.menta.billing.application.usecase.CancelSubscriptionUseCaseImpl;
 import com.menta.billing.application.usecase.CreatePhysicalCourseQuoteUseCaseImpl;
 import com.menta.billing.application.usecase.CreateSubscriptionCheckoutUseCaseImpl;
 import com.menta.billing.application.usecase.GetPhysicalCoursePricingUseCaseImpl;
@@ -37,6 +39,7 @@ import com.menta.billing.application.usecase.UpdatePhysicalCoursePricingUseCaseI
 import com.menta.billing.application.usecase.VirtualCourseEntitlementService;
 import com.menta.shared.billing.VirtualCourseEntitlementPort;
 import com.menta.billing.infrastructure.security.RedisBillingPlansRateLimitPort;
+import com.menta.billing.infrastructure.transaction.TransactionalCancelSubscriptionUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalCreateSubscriptionCheckoutUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalReceiveWebhookUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalUpdatePhysicalCoursePricingUseCase;
@@ -168,6 +171,19 @@ public class BillingConfiguration {
             planRepository, paymentRepository, subscriptionRepository, paymentPreferencePort, clock,
             merchantAccountId
         ));
+    }
+
+    /**
+     * US-BILLING-011. Wrapped the same way as {@code createSubscriptionCheckoutUseCase}: a
+     * single write today, kept transactional so a caller never observes a partial cancellation.
+     */
+    @Bean
+    public CancelSubscriptionUseCase cancelSubscriptionUseCase(
+        SubscriptionRepository subscriptionRepository, PlanRepository planRepository, Clock clock
+    ) {
+        return new TransactionalCancelSubscriptionUseCase(
+            new CancelSubscriptionUseCaseImpl(subscriptionRepository, planRepository, clock)
+        );
     }
 
     @Bean

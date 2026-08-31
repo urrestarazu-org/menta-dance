@@ -114,8 +114,16 @@ public class SubscriptionRepositoryAdapter implements SubscriptionRepository {
             .toList();
     }
 
+    /**
+     * Flushes the delete before queuing the inserts. Without it, Hibernate's action queue can
+     * flush insertions before deletions regardless of call order, and a save that repeats an
+     * unchanged snapshot (US-BILLING-011: cancelling an already-{@code ASSIGNED} subscription
+     * calls {@link #save} a second time with the same course ids) would collide with the
+     * still-present old rows under {@code uq_billing_subscription_courses (subscription_id, course_id)}.
+     */
     private List<String> replaceCourses(Subscription subscription) {
         courseJpaRepository.deleteBySubscriptionId(subscription.getId());
+        courseJpaRepository.flush();
         courseJpaRepository.saveAll(subscription.getCourseIds().stream()
             .map(courseId -> new SubscriptionCourseJpaEntity(subscription.getId(), courseId))
             .toList());
