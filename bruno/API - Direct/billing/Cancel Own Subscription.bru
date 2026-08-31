@@ -1,0 +1,43 @@
+meta {
+  name: Cancel Own Subscription
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/billing/subscriptions/me
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  US-BILLING-011 escenario 1. Cancels the authenticated user's own ACTIVE
+  subscription. Run Auth Login first with a student who has an ACTIVE
+  subscription (run Create Subscription Checkout + the webhook flow first).
+
+  endDate is never moved — access stays granted until the already-paid term
+  ends. The response never includes cancellationReason, by design (D2).
+
+  Success contract (200):
+    { subscriptionId, status: "CANCELLED", accessEndsAt, cancellationPolicy }
+
+  Error contract:
+    404 SUBSCRIPTION_NOT_FOUND → no ACTIVE subscription to cancel
+}
+
+tests {
+  test("Cancels the active subscription", function() {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().status).to.equal("CANCELLED");
+    expect(res.getBody().cancellationPolicy).to.be.a("string");
+    expect(res.getBody()).to.not.have.property("cancellationReason");
+  });
+}
+
+assert {
+  res.status: eq 200
+}
