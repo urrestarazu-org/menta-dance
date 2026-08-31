@@ -1,0 +1,56 @@
+meta {
+  name: Cancel Subscription (Admin)
+  type: http
+  seq: 6
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/admin/billing/subscriptions/{{subscriptionId}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  content-type: application/json
+}
+
+body:json {
+  {
+    "reason": "Reembolso por reclamo del cliente"
+  }
+}
+
+docs {
+  US-BILLING-011 escenario 8. Requires an ADMIN bearer token (log in first
+  with a fixture that has that role) and a target subscriptionId that is
+  currently ACTIVE.
+
+  reason is mandatory here — a blank or absent value is rejected with 400
+  before any state change (D1). Like the self-service route, the response
+  never includes cancellationReason (D2); actor and reason are persisted,
+  never returned.
+
+  Success contract (200):
+    { subscriptionId, status: "CANCELLED", accessEndsAt, cancellationPolicy }
+
+  Error contract:
+    400 INVALID_REQUEST         → reason missing or blank
+    403                         → caller is not ADMIN
+    404 SUBSCRIPTION_NOT_FOUND  → id does not exist or is not ACTIVE
+}
+
+tests {
+  test("Cancels the target subscription with an auditable reason", function() {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().status).to.equal("CANCELLED");
+    expect(res.getBody()).to.not.have.property("cancellationReason");
+  });
+}
+
+assert {
+  res.status: eq 200
+}

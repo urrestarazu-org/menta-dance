@@ -38,7 +38,9 @@ tags:
   - name: Planes
     description: Catálogo público de planes de suscripción.
   - name: Suscripciones
-    description: Inicio autenticado de checkouts de suscripción virtual.
+    description: Inicio de checkout y cancelación autogestionada de la propia suscripción.
+  - name: Gestión de suscripciones
+    description: Cancelación administrativa de la suscripción de un alumno (ADMIN).
   - name: Webhooks
     description: Notificaciones asíncronas de proveedores de pago.
 
@@ -193,6 +195,109 @@ paths:
                     status: 503
                     detail: No pudimos iniciar el pago en este momento. Intentá de nuevo en unos minutos.
                     code: PAYMENT_PREFERENCE_UNAVAILABLE
+
+  /api/v1/billing/subscriptions/me:
+    delete:
+      tags: [Suscripciones]
+      summary: Cancelar la propia suscripción activa
+      description: |
+        Cancela el auto-renovado de la suscripción `ACTIVE` del usuario autenticado.
+        `endDate` no cambia — el acceso se mantiene hasta el final del período ya pagado
+        (US-BILLING-011 escenario 1).
+
+        El body de la respuesta nunca incluye `cancellationReason`: no existe ese campo en
+        este contrato, no se serializa como `null` ni se filtra — su ausencia es estructural.
+      operationId: cancelOwnSubscription
+      responses:
+        '200':
+          description: Suscripción cancelada; el acceso persiste hasta `accessEndsAt`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancelSubscriptionResponse'
+        '401':
+          description: Falta un access token válido.
+        '404':
+          description: El usuario no tiene una suscripción `ACTIVE` para cancelar.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                sin_suscripcion_cancelable:
+                  value:
+                    type: https://menta.dance/problems/subscription_not_found
+                    title: Not Found
+                    status: 404
+                    detail: No se encontró una suscripción cancelable.
+                    code: SUBSCRIPTION_NOT_FOUND
+
+  /api/v1/admin/billing/subscriptions/{subscriptionId}:
+    delete:
+      tags: [Gestión de suscripciones]
+      summary: Cancelar la suscripción de un alumno (ADMIN)
+      description: |
+        Cancela cualquier suscripción `ACTIVE` con un `reason` auditable, obligatorio.
+        Actor y motivo quedan persistidos, pero `cancellationReason` nunca aparece en la
+        respuesta — la misma garantía estructural que la ruta de autoservicio
+        (US-BILLING-011 escenario 8).
+      operationId: cancelSubscriptionAsAdmin
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelSubscriptionRequest'
+      responses:
+        '200':
+          description: Suscripción cancelada; el acceso persiste hasta `accessEndsAt`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancelSubscriptionResponse'
+        '400':
+          description: '`reason` ausente o en blanco. No se modifica la suscripción.'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                motivo_requerido:
+                  value:
+                    type: https://menta.dance/problems/invalid_request
+                    title: Bad Request
+                    status: 400
+                    detail: La solicitud contiene datos inválidos.
+                    code: INVALID_REQUEST
+        '401':
+          description: Falta un access token válido.
+        '403':
+          description: El caller autenticado no tiene rol ADMIN.
+        '404':
+          description: >-
+            La suscripción no existe o no está `ACTIVE` — mismo código para ambos casos, para
+            no funcionar como oráculo de existencia de ids.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                sin_suscripcion_cancelable:
+                  value:
+                    type: https://menta.dance/problems/subscription_not_found
+                    title: Not Found
+                    status: 404
+                    detail: No se encontró una suscripción cancelable.
+                    code: SUBSCRIPTION_NOT_FOUND
 
   /api/v1/billing/payments/mercadopago/webhook:
     post:
@@ -370,6 +475,36 @@ components:
           type: string
           format: uri
           description: URL de redirección al Checkout Pro.
+
+    CancelSubscriptionResponse:
+      type: object
+      description: |
+        Compartido por ambas rutas de cancelación. No declara `cancellationReason` — esa
+        ausencia es intencional (US-BILLING-011 D2), no un campo opcional omitido.
+      required: [subscriptionId, status, accessEndsAt, cancellationPolicy]
+      properties:
+        subscriptionId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [CANCELLED]
+        accessEndsAt:
+          type: string
+          format: date-time
+          description: Igual al `endDate` ya vigente — la cancelación nunca lo mueve.
+        cancellationPolicy:
+          type: string
+          description: Texto informativo del plan (`Plan.cancellationPolicy`).
+
+    CancelSubscriptionRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          description: Obligatorio y auditable en esta ruta; nunca se devuelve en la respuesta.
 
     PlanCourseResponse:
       type: object

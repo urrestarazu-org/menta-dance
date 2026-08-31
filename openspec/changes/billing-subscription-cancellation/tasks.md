@@ -52,35 +52,35 @@ Chain strategy: stacked-to-main
 
 ## Phase 3: Use Case (PR 2)
 
-- [ ] 3.1 RED `CancelSubscriptionUseCaseImplTest`: `Own` resolves by `actingUserId`; `ById` by non-admin → `SubscriptionNotFoundException` (A4, A5)
-- [ ] 3.2 RED `CancelSubscriptionUseCaseImplTest`: blank/absent `reason` on admin path rejected before any `save` (D1)
-- [ ] 3.3 RED `CancelSubscriptionUseCaseImplTest`: `cancellationPolicy` read via `PlanRepository.findById` (not `findActiveById`)
-- [ ] 3.4 GREEN create `application/dto/CancellationTarget.java`: `sealed interface CancellationTarget { record Own() {} record ById(UUID subscriptionId) {} }` (A4)
-- [ ] 3.5 GREEN create `application/dto/CancelSubscriptionCommand.java`, `application/dto/CancellationResult.java`
-- [ ] 3.6 GREEN create `domain/exception/SubscriptionNotFoundException.java` (`SUBSCRIPTION_NOT_FOUND`, A5)
-- [ ] 3.7 GREEN create `application/port/in/CancelSubscriptionUseCase.java`
-- [ ] 3.8 GREEN create `application/usecase/CancelSubscriptionUseCaseImpl.java`: authorization + `Subscription.cancel(...)` + `save`
-- [ ] 3.9 GREEN create `infrastructure/transaction/TransactionalCancelSubscriptionUseCase.java`
-- [ ] 3.10 GREEN `infrastructure/config/BillingConfiguration.java`: wire new beans
+- [x] 3.1 RED `CancelSubscriptionUseCaseImplTest`: `Own` resolves by `actingUserId`; `ById` by non-admin → `SubscriptionNotFoundException` (A4, A5)
+- [x] 3.2 RED `CancelSubscriptionUseCaseImplTest`: blank/absent `reason` on admin path rejected before any `save` (D1)
+- [x] 3.3 RED `CancelSubscriptionUseCaseImplTest`: `cancellationPolicy` read via `PlanRepository.findById` (not `findActiveById`)
+- [x] 3.4 GREEN create `application/dto/CancellationTarget.java`: `sealed interface CancellationTarget { record Own() {} record ById(UUID subscriptionId) {} }` (A4)
+- [x] 3.5 GREEN create `application/dto/CancelSubscriptionCommand.java`, `application/dto/CancellationResult.java`
+- [x] 3.6 GREEN create `domain/exception/SubscriptionNotFoundException.java` (`SUBSCRIPTION_NOT_FOUND`, A5)
+- [x] 3.7 GREEN create `application/port/in/CancelSubscriptionUseCase.java`
+- [x] 3.8 GREEN create `application/usecase/CancelSubscriptionUseCaseImpl.java`: authorization + `Subscription.cancel(...)` + `save`
+- [x] 3.9 GREEN create `infrastructure/transaction/TransactionalCancelSubscriptionUseCase.java`
+- [x] 3.10 GREEN `infrastructure/config/BillingConfiguration.java`: wire new beans
 
 ## Phase 4: HTTP + Security Fix (PR 2)
 
-- [ ] 4.1 RED security test: unauthenticated `DELETE /api/v1/billing/subscriptions/me` currently falls through to permissive `anyRequest()` — assert `401` fails today (A7)
-- [ ] 4.2 GREEN `SecurityConfig.java`: add `.requestMatchers(HttpMethod.DELETE, "/api/v1/billing/subscriptions/me").authenticated()` before line 186 `anyRequest()` (A7, mandatory)
-- [ ] 4.3 RED `SubscriptionControllerTest`: `DELETE /me` → 200, body has `endDate`+`cancellationPolicy`; JSON key `cancellationReason` absent (S1, D2)
-- [ ] 4.4 RED `SubscriptionControllerTest`: `DELETE /me` with no `ACTIVE` subscription → 404, no state change (S2)
-- [ ] 4.5 GREEN create `infrastructure/web/dto/CancelSubscriptionResponse.java` (no `cancellationReason` component, D2)
-- [ ] 4.6 GREEN `SubscriptionController.java`: add `DELETE /me` mapping using `CancellationTarget.Own`
-- [ ] 4.7 RED `SubscriptionAdminControllerTest`: valid reason → 200, `cancelledBy`+`cancellationReason` persisted (S8)
-- [ ] 4.8 RED `SubscriptionAdminControllerTest`: blank/absent reason → 400, no state change (S9)
-- [ ] 4.9 RED `SubscriptionAdminControllerTest`: non-admin caller → 403 (S11)
-- [ ] 4.10 GREEN create `infrastructure/web/dto/CancelSubscriptionRequest.java` (`@NotBlank reason`)
-- [ ] 4.11 GREEN create `infrastructure/web/controller/SubscriptionAdminController.java`: `@SubscriptionEndpoint`, `DELETE /api/v1/admin/billing/subscriptions/{id}` (A6)
-- [ ] 4.12 GREEN `SubscriptionExceptionHandler.java`: map `SubscriptionNotFoundException` → 404
-- [ ] 4.13 GREEN `api/openapi/billing-v1.yaml`: add both `DELETE` paths + response schemas
-- [ ] 4.14 GREEN `bruno/API - Direct/billing/*.bru`: add `/me` and `/admin/{id}` DELETE requests (repo convention, `api/openapi/README.md`)
-- [ ] 4.15 Integration test (`api/app` `@SpringBootTest`): S1, S2, S8, S9, S10, S11 end-to-end; S3 access-retention regression via `VirtualCourseEntitlementService`
-- [ ] 4.16 Run `./gradlew :api:billing:test :api:app:test :api:billing:jacocoTestCoverageVerification`
+- [x] 4.1 RED security test: unauthenticated `DELETE /api/v1/billing/subscriptions/me` currently falls through to permissive `anyRequest()` — assert `401` fails today (A7)
+- [x] 4.2 GREEN `SecurityConfig.java`: add `.requestMatchers(HttpMethod.DELETE, "/api/v1/billing/subscriptions/me").authenticated()` before `anyRequest()` (A7, mandatory)
+- [x] 4.3 RED `SubscriptionControllerTest`: `DELETE /me` → 200, body has `endDate`+`cancellationPolicy`; JSON key `cancellationReason` absent (S1, D2)
+- [x] 4.4 RED `SubscriptionControllerTest`: `DELETE /me` with no `ACTIVE` subscription → 404, no state change (S2)
+- [x] 4.5 GREEN create `infrastructure/web/dto/CancelSubscriptionResponse.java` (no `cancellationReason` component, D2)
+- [x] 4.6 GREEN `SubscriptionController.java`: add `DELETE /me` mapping using `CancellationTarget.Own`
+- [x] 4.7 RED `SubscriptionAdminControllerTest`: valid reason → 200, `cancelledBy`+`cancellationReason` persisted (S8) — controller-level defense-in-depth test; true 403 for S11 is `SecurityConfigTest` (standalone MockMvc has no security filter chain)
+- [x] 4.8 RED `SubscriptionAdminControllerTest`: blank/absent reason → 400, no state change (S9)
+- [x] 4.9 RED `SubscriptionAdminControllerTest` + `SecurityConfigTest`: non-admin caller → 403 (S11) — regression-tested at the real `/api/v1/admin/**` matcher, confirmed no new SecurityConfig entry needed
+- [x] 4.10 GREEN create `infrastructure/web/dto/CancelSubscriptionRequest.java` (`@NotBlank reason`)
+- [x] 4.11 GREEN create `infrastructure/web/controller/SubscriptionAdminController.java`: `@SubscriptionEndpoint`, `DELETE /api/v1/admin/billing/subscriptions/{id}` (A6)
+- [x] 4.12 GREEN `SubscriptionExceptionHandler.java`: map `SubscriptionNotFoundException` → 404
+- [x] 4.13 GREEN `api/openapi/billing-v1.yaml`: add both `DELETE` paths + response schemas
+- [x] 4.14 GREEN `bruno/API - Direct/billing/*.bru`: add `/me` and `/admin/{id}` DELETE requests (repo convention, `api/openapi/README.md`)
+- [x] 4.15 Integration test (`api/app` `@SpringBootTest`): S1, S2, S8, S9, S11 end-to-end (`SubscriptionCancellationIntegrationTest`); S3 access-retention regression already covered by Slice 1's `VirtualLessonAccessIntegrationTest` (re-verified green this batch); S10 covered structurally at controller-test level (JSON-key-absent assertions), not duplicated at integration level
+- [x] 4.16 Run `./gradlew :api:billing:test :api:app:test :api:billing:jacocoTestCoverageVerification`
 
 ## Phase 5: D3 Overlap Notice (PR 3)
 
