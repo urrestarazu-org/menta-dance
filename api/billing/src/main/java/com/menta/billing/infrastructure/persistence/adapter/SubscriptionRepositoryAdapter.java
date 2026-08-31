@@ -4,6 +4,7 @@ import com.menta.billing.application.port.out.SubscriptionRepository;
 import com.menta.billing.domain.exception.SubscriptionAlreadyActiveException;
 import com.menta.billing.domain.model.PaymentId;
 import com.menta.billing.domain.model.Subscription;
+import com.menta.billing.domain.model.SubscriptionStatus;
 import com.menta.billing.infrastructure.persistence.entity.SubscriptionCourseJpaEntity;
 import com.menta.billing.infrastructure.persistence.entity.SubscriptionJpaEntity;
 import com.menta.billing.infrastructure.persistence.mapper.SubscriptionJpaMapper;
@@ -88,6 +89,19 @@ public class SubscriptionRepositoryAdapter implements SubscriptionRepository {
     @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
     public List<Subscription> findAllByUserId(UUID userId) {
         return jpaRepository.findAllByUserId(userId).stream().map(this::toDomainWithCourses).toList();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public Optional<Subscription> findActiveByUserId(UUID userId) {
+        return jpaRepository.findByUserIdAndStatus(userId, SubscriptionStatus.ACTIVE.name())
+            .map(this::toDomainWithCourses);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public Optional<Subscription> findById(UUID subscriptionId) {
+        return jpaRepository.findById(subscriptionId).map(this::toDomainWithCourses);
     }
 
     private Subscription toDomainWithCourses(SubscriptionJpaEntity entity) {

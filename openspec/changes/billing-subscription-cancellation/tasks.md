@@ -29,26 +29,26 @@ Chain strategy: stacked-to-main
 
 ## Phase 1: Domain — `Cancellation` + `Subscription.cancel()` (PR 1)
 
-- [ ] 1.1 RED `SubscriptionTest`: `cancel(by, reason, now)` from `ACTIVE` sets status/`cancelledAt`/`cancelledBy`/`cancellationReason`, `endDate` unchanged (A2)
-- [ ] 1.2 RED `SubscriptionTest`: `cancel()` from `PENDING`/`CANCELLED`/`EXPIRED` throws `IllegalStateException` (A3)
-- [ ] 1.3 RED `SubscriptionTest`: self-cancel stamps `cancelledBy` non-null even when `by == owner`; blank `reason` from non-owner rejected (D1)
-- [ ] 1.4 RED `SubscriptionTest.rejects_null_or_blank_required_fields`: update 13-arg raw `new Subscription(...)` call (lines 168-172) to 14 args
-- [ ] 1.5 RED `SubscriptionTest`: `cancelled()`/`activate()` behavior unchanged (regression, A2)
-- [ ] 1.6 GREEN create `domain/model/Cancellation.java`: `record Cancellation(Instant at, UUID by, String reason)` (A1)
-- [ ] 1.7 GREEN `Subscription.java`: add `cancellation` field, 14-arg constructor, `cancel(UUID by, String reason, Instant at)`, `getCancellation()`; update `copy()` (7→8 params) and `pendingCheckout` to pass `null`
-- [ ] 1.8 REFACTOR: confirm domain package still 100% covered (`jacocoTestReport` for `api:billing`)
+- [x] 1.1 RED `SubscriptionTest`: `cancel(by, reason, now)` from `ACTIVE` sets status/`cancelledAt`/`cancelledBy`/`cancellationReason`, `endDate` unchanged (A2)
+- [x] 1.2 RED `SubscriptionTest`: `cancel()` from `PENDING`/`CANCELLED`/`EXPIRED` throws `IllegalStateException` (A3)
+- [x] 1.3 RED `SubscriptionTest`: self-cancel stamps `cancelledBy` non-null even when `by == owner`; blank `reason` from non-owner rejected (D1)
+- [x] 1.4 RED `SubscriptionTest.rejects_null_or_blank_required_fields`: update 13-arg raw `new Subscription(...)` call (lines 168-172) to 14 args
+- [x] 1.5 RED `SubscriptionTest`: `cancelled()`/`activate()` behavior unchanged (regression, A2)
+- [x] 1.6 GREEN create `domain/model/Cancellation.java`: `record Cancellation(Instant at, UUID by, String reason)` (A1)
+- [x] 1.7 GREEN `Subscription.java`: add `cancellation` field, 14-arg constructor, `cancel(UUID by, String reason, Instant at)`, `getCancellation()`; update `copy()` (7→8 params) and `pendingCheckout` to pass `null`
+- [x] 1.8 REFACTOR: confirm domain package still 100% covered (`jacocoTestReport` for `api:billing`)
 
 ## Phase 2: Persistence (PR 1)
 
-- [ ] 2.1 RED `SubscriptionJpaMapperTest`: `toDomain`/`toEntity` round-trip `Cancellation` incl. all-null legacy rows
-- [ ] 2.2 RED `SubscriptionRepositoryAdapterTest`: `findActiveByUserId`, `findById` return mapped `Subscription`
-- [ ] 2.3 GREEN create `api/app/src/main/resources/db/migration/V17__billing_subscription_cancellation.sql`: `cancelled_at DATETIME(3) NULL`, `cancelled_by BINARY(16) NULL`, `cancellation_reason VARCHAR(500) NULL`, no new index (A8)
-- [ ] 2.4 GREEN `SubscriptionJpaEntity`: add 3 nullable columns + getters
-- [ ] 2.5 GREEN `SubscriptionJpaMapper`: map `Cancellation` in `toDomain`/`toEntity`
-- [ ] 2.6 GREEN `SubscriptionRepository` port: add `findActiveByUserId(UUID)`, `findById(UUID)`
-- [ ] 2.7 GREEN `SubscriptionJpaRepository`: add `findByActiveUserId`-style derived query for active-by-user, reuse `CrudRepository#findById`
-- [ ] 2.8 GREEN `SubscriptionRepositoryAdapter`: implement `findActiveByUserId`, `findById` with course mapping
-- [ ] 2.9 Run `./gradlew :api:billing:test :api:billing:jacocoTestCoverageVerification` — confirm PR 1 green, no HTTP change
+- [x] 2.1 RED `SubscriptionJpaMapperTest`: `toDomain`/`toEntity` round-trip `Cancellation` incl. all-null legacy rows
+- [x] 2.2 RED `SubscriptionRepositoryAdapterTest`: `findActiveByUserId`, `findById` return mapped `Subscription`
+- [x] 2.3 GREEN create `api/app/src/main/resources/db/migration/V17__billing_subscription_cancellation.sql`: `cancelled_at DATETIME(3) NULL`, `cancelled_by BINARY(16) NULL`, `cancellation_reason VARCHAR(500) NULL`, no new index (A8)
+- [x] 2.4 GREEN `SubscriptionJpaEntity`: add 3 nullable columns + getters
+- [x] 2.5 GREEN `SubscriptionJpaMapper`: map `Cancellation` in `toDomain`/`toEntity`
+- [x] 2.6 GREEN `SubscriptionRepository` port: add `findActiveByUserId(UUID)`, `findById(UUID)`
+- [x] 2.7 GREEN `SubscriptionJpaRepository`: add `findByUserIdAndStatus` derived query for strictly-active-by-user, reuse `CrudRepository#findById`
+- [x] 2.8 GREEN `SubscriptionRepositoryAdapter`: implement `findActiveByUserId`, `findById` with course mapping
+- [x] 2.9 Run `./gradlew :api:billing:test :api:billing:jacocoTestCoverageVerification` — confirm PR 1 green, no HTTP change
 
 ## Phase 3: Use Case (PR 2)
 
