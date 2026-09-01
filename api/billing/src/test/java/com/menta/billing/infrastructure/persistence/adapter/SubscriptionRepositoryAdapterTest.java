@@ -206,4 +206,39 @@ class SubscriptionRepositoryAdapterTest {
 
         assertThat(adapter.findById(subscriptionId)).isEmpty();
     }
+
+    /**
+     * D3: the derived query is the whole implementation, so this test only proves the adapter
+     * wires the right column values through — not the ordering/filtering itself (that lives in
+     * the Spring Data method name and is proven at the integration layer, task 5.12).
+     */
+    @Test
+    void findLatestCancelledWithRemainingAccess_maps_when_a_matching_row_exists() {
+        PlanId planId = PlanId.generate();
+        Instant at = NOW;
+        Subscription cancelled = pending().activate(NOW, 30, List.of("course-1"))
+            .cancel(USER_ID, null, NOW);
+        when(jpaRepository.findFirstByUserIdAndPlanIdAndStatusAndEndDateAfterOrderByEndDateDesc(
+            USER_ID, planId.getValue(), "CANCELLED", at
+        )).thenReturn(Optional.of(SubscriptionJpaMapper.toEntity(cancelled)));
+        when(courseJpaRepository.findBySubscriptionId(cancelled.getId()))
+            .thenReturn(List.of(new SubscriptionCourseJpaEntity(cancelled.getId(), "course-1")));
+
+        Optional<Subscription> found = adapter.findLatestCancelledWithRemainingAccess(USER_ID, planId, at);
+
+        assertThat(found).isPresent();
+        assertThat(found.get().getStatus())
+            .isEqualTo(com.menta.billing.domain.model.SubscriptionStatus.CANCELLED);
+    }
+
+    @Test
+    void findLatestCancelledWithRemainingAccess_empty_when_no_matching_row_exists() {
+        PlanId planId = PlanId.generate();
+        Instant at = NOW;
+        when(jpaRepository.findFirstByUserIdAndPlanIdAndStatusAndEndDateAfterOrderByEndDateDesc(
+            USER_ID, planId.getValue(), "CANCELLED", at
+        )).thenReturn(Optional.empty());
+
+        assertThat(adapter.findLatestCancelledWithRemainingAccess(USER_ID, planId, at)).isEmpty();
+    }
 }

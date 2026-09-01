@@ -1,6 +1,7 @@
 package com.menta.billing.application.usecase;
 
 import com.menta.billing.application.dto.CreateSubscriptionCheckoutCommand;
+import com.menta.billing.application.dto.OverlapNotice;
 import com.menta.billing.application.dto.PaymentPreferenceRequest;
 import com.menta.billing.application.dto.PaymentPreferenceResult;
 import com.menta.billing.application.dto.SubscriptionCheckoutResult;
@@ -128,10 +129,22 @@ public class CreateSubscriptionCheckoutUseCaseImpl implements CreateSubscription
         }
     }
 
-    private static SubscriptionCheckoutResult toResult(Subscription subscription) {
+    /**
+     * Instance method, not {@code static}: both the replay branch and the new-checkout branch
+     * fold through here, which is what makes computing the D3 overlap notice on only one of
+     * them structurally impossible (A9) instead of a fact you must remember to keep true.
+     */
+    private SubscriptionCheckoutResult toResult(Subscription subscription) {
         return SubscriptionCheckoutResult.from(
-            subscription, externalReferenceFor(subscription.getPaymentId())
+            subscription, externalReferenceFor(subscription.getPaymentId()), overlapNoticeFor(subscription)
         );
+    }
+
+    private OverlapNotice overlapNoticeFor(Subscription subscription) {
+        return subscriptionRepository
+            .findLatestCancelledWithRemainingAccess(subscription.getUserId(), subscription.getPlanId(), clock.now())
+            .map(overlapping -> OverlapNotice.of(overlapping.getEndDate().orElseThrow()))
+            .orElse(null);
     }
 
     private static String externalReferenceFor(PaymentId paymentId) {

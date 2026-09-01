@@ -451,7 +451,10 @@ components:
     SubscriptionCheckoutResponse:
       type: object
       required:
-        [subscriptionId, paymentId, planId, status, providerPreferenceId, externalReference, checkoutUrl]
+        [
+          subscriptionId, paymentId, planId, status, providerPreferenceId, externalReference, checkoutUrl,
+          overlapNotice,
+        ]
       properties:
         subscriptionId:
           type: string
@@ -475,6 +478,29 @@ components:
           type: string
           format: uri
           description: URL de redirección al Checkout Pro.
+        overlapNotice:
+          description: |
+            Presente y no bloqueante (`null` en caso contrario) cuando este checkout se
+            superpone con una suscripción `CANCELLED` del mismo plan cuyo `endDate` todavía no
+            venció (US-BILLING-011 D3). Se recalcula también en la respuesta de un replay por
+            `idempotencyKey`.
+          oneOf:
+            - $ref: "#/components/schemas/OverlapNotice"
+            - type: "null"
+
+    OverlapNotice:
+      type: object
+      required: [code, currentAccessEndsAt]
+      properties:
+        code:
+          type: string
+          enum: [OVERLAPPING_PAID_PERIOD]
+        currentAccessEndsAt:
+          type: string
+          format: date-time
+          description: >-
+            `endDate` de la suscripción cancelada más reciente que aún otorga acceso para
+            este plan.
 
     CancelSubscriptionResponse:
       type: object

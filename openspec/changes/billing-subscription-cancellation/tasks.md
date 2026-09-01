@@ -84,16 +84,17 @@ Chain strategy: stacked-to-main
 
 ## Phase 5: D3 Overlap Notice (PR 3)
 
-- [ ] 5.1 RED port/adapter test: `findLatestCancelledWithRemainingAccess` returns latest matching row (same `planId`, `CANCELLED`, `endDate` > now); empty for different plan / expired / null `endDate`
-- [ ] 5.2 GREEN `SubscriptionRepository` port: add `findLatestCancelledWithRemainingAccess(UUID, PlanId, Instant)`
-- [ ] 5.3 GREEN `SubscriptionJpaRepository`: derived query `findFirstByUserIdAndPlanIdAndStatusAndEndDateAfterOrderByEndDateDesc`
-- [ ] 5.4 GREEN `SubscriptionRepositoryAdapter`: implement 5.2 (A8: no new index)
-- [ ] 5.5 RED `CreateSubscriptionCheckoutUseCaseImplTest`: new checkout with overlap → `201` + `overlapNotice` (S5); no overlap → `null` (S6); replay branch (line 86) also returns notice (S7, A9)
-- [ ] 5.6 GREEN create `application/dto/OverlapNotice.java`: `record OverlapNotice(String code, Instant currentAccessEndsAt)`, `code = "OVERLAPPING_PAID_PERIOD"`
-- [ ] 5.7 GREEN `SubscriptionCheckoutResult.java`: add nullable `overlapNotice` component
-- [ ] 5.8 GREEN `CreateSubscriptionCheckoutUseCaseImpl.java`: convert `toResult` (line 131) from `static` to instance method computing overlap via 5.2; apply at both call sites (lines 86, 116) (A9)
-- [ ] 5.9 GREEN `infrastructure/web/dto/SubscriptionCheckoutResponse.java`: add `overlapNotice` field
-- [ ] 5.10 GREEN `api/openapi/billing-v1.yaml`: add `overlapNotice` to checkout response schema
-- [ ] 5.11 GREEN `bruno/API - Direct/billing/*.bru`: update checkout response example/assertions
-- [ ] 5.12 Integration test: re-purchase after cancellation with remaining access → `201` + non-null `overlapNotice`; old subscription never reactivated (S4)
-- [ ] 5.13 Run full regression `./gradlew :api:billing:test :api:app:test` + `jacocoTestCoverageVerification`
+- [x] 5.1 RED port/adapter test: `findLatestCancelledWithRemainingAccess` returns latest matching row (same `planId`, `CANCELLED`, `endDate` > now); empty for different plan / expired / null `endDate`
+- [x] 5.2 GREEN `SubscriptionRepository` port: add `findLatestCancelledWithRemainingAccess(UUID, PlanId, Instant)`
+- [x] 5.3 GREEN `SubscriptionJpaRepository`: derived query `findFirstByUserIdAndPlanIdAndStatusAndEndDateAfterOrderByEndDateDesc`
+- [x] 5.4 GREEN `SubscriptionRepositoryAdapter`: implement 5.2 (A8: no new index)
+- [x] 5.5 RED `CreateSubscriptionCheckoutUseCaseImplTest`: new checkout with overlap → `201` + `overlapNotice` (S5); no overlap → `null` (S6); replay branch (line 86) also returns notice (S7, A9)
+- [x] 5.6 GREEN create `application/dto/OverlapNotice.java`: `record OverlapNotice(String code, Instant currentAccessEndsAt)`, `code = "OVERLAPPING_PAID_PERIOD"`
+- [x] 5.7 GREEN `SubscriptionCheckoutResult.java`: add nullable `overlapNotice` component
+- [x] 5.8 GREEN `CreateSubscriptionCheckoutUseCaseImpl.java`: convert `toResult` (line 131) from `static` to instance method computing overlap via 5.2; apply at both call sites (lines 86, 116) (A9)
+- [x] 5.9 GREEN `infrastructure/web/dto/SubscriptionCheckoutResponse.java`: add `overlapNotice` field
+- [x] 5.10 GREEN `api/openapi/billing-v1.yaml`: add `overlapNotice` + `OverlapNotice` schema to checkout response (validated with `redocly lint`, only the 2 pre-existing accepted warnings)
+- [x] 5.11 GREEN `bruno/API - Direct/billing/*.bru`: update checkout response example/assertions (`Create Subscription Checkout.bru`)
+- [x] 5.12 Integration test: re-purchase after cancellation with remaining access → `201` + non-null `overlapNotice`; old subscription never reactivated (S4); plus a no-prior-cancellation → `null` companion (S6) — added to `SubscriptionCancellationIntegrationTest` (reuses its existing checkout+activate+cancel fixtures)
+- [x] 5.13 Run full regression `./gradlew :api:billing:test :api:app:test` + `jacocoTestCoverageVerification`
+- [x] 5.14 `sdd-verify` remediation (CRITICAL): add `SubscriptionJpaRepositoryTest` (`@DataJpaTest`, real derived-query execution against 5 seeded rows incl. wrong-plan/expired/never-activated/closer-endDate distractors) — 5.1's adapter test only stubbed the repository call, never exercising the query itself

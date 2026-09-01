@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.menta.billing.application.dto.CreateSubscriptionCheckoutCommand;
+import com.menta.billing.application.dto.OverlapNotice;
 import com.menta.billing.application.dto.PaymentPreferenceRequest;
 import com.menta.billing.application.dto.PaymentPreferenceResult;
 import com.menta.billing.application.dto.SubscriptionCheckoutResult;
@@ -71,6 +72,8 @@ class CreateSubscriptionCheckoutUseCaseImplTest {
         when(subscriptionRepository.saveNewCheckout(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(subscriptionRepository.findByUserIdAndIdempotencyKey(any(), any())).thenReturn(Optional.empty());
         when(subscriptionRepository.findCurrentByUserId(any())).thenReturn(Optional.empty());
+        when(subscriptionRepository.findLatestCancelledWithRemainingAccess(any(), any(), any()))
+            .thenReturn(Optional.empty());
         when(paymentPreferencePort.createPreference(any()))
             .thenReturn(new PaymentPreferenceResult("pref-1", "https://mp.example/checkout/pref-1"));
         useCase = new CreateSubscriptionCheckoutUseCaseImpl(
@@ -298,6 +301,62 @@ class CreateSubscriptionCheckoutUseCaseImplTest {
 
         // No second attempt: US-BILLING-010 forbids opening another charge on an uncertain result.
         verify(paymentPreferencePort).createPreference(any());
+    }
+
+    // --- D3: overlap notice ---
+
+    /** S5: a new checkout for the same plan the buyer already paid for, still cancelled-but-live. */
+    @Test
+    void a_checkout_overlapping_a_still_paid_cancellation_for_the_same_plan_carries_a_notice() {
+        when(planRepository.findActiveById(PLAN_ID)).thenReturn(Optional.of(activePlan(PaymentMethod.MERCADO_PAGO)));
+        Subscription cancelledWithAccess = Subscription
+            .pendingCheckout(UUID.randomUUID(), PaymentId.generate(), USER_ID, PLAN_ID, "idem-0", NOW)
+            .activate(NOW, 30, List.of("course-1"))
+            .cancel(USER_ID, null, NOW);
+        when(subscriptionRepository.findLatestCancelledWithRemainingAccess(USER_ID, PLAN_ID, NOW))
+            .thenReturn(Optional.of(cancelledWithAccess));
+
+        SubscriptionCheckoutResult result = useCase.create(command());
+
+        assertThat(result.overlapNotice()).isEqualTo(
+            new OverlapNotice("OVERLAPPING_PAID_PERIOD", cancelledWithAccess.getEndDate().orElseThrow())
+        );
+    }
+
+    /** S6: no overlap-eligible cancellation for this plan — the buyer gets no notice at all. */
+    @Test
+    void a_checkout_with_no_overlapping_cancellation_reports_no_notice() {
+        when(planRepository.findActiveById(PLAN_ID)).thenReturn(Optional.of(activePlan(PaymentMethod.MERCADO_PAGO)));
+
+        SubscriptionCheckoutResult result = useCase.create(command());
+
+        assertThat(result.overlapNotice()).isNull();
+    }
+
+    /**
+     * S7, A9: the replay branch returns before the new-checkout path ever runs, so it must
+     * compute the notice through the very same centralized {@code toResult} — never a
+     * second, drifted copy of the overlap logic.
+     */
+    @Test
+    void a_replayed_idempotency_key_still_carries_the_overlap_notice() {
+        Subscription existing = Subscription
+            .pendingCheckout(UUID.randomUUID(), PaymentId.generate(), USER_ID, PLAN_ID, "idem-1", NOW)
+            .withCheckout("pref-1", "https://mp.example/checkout/pref-1");
+        when(subscriptionRepository.findByUserIdAndIdempotencyKey(USER_ID, "idem-1"))
+            .thenReturn(Optional.of(existing));
+        Subscription cancelledWithAccess = Subscription
+            .pendingCheckout(UUID.randomUUID(), PaymentId.generate(), USER_ID, PLAN_ID, "idem-0", NOW)
+            .activate(NOW, 30, List.of("course-1"))
+            .cancel(USER_ID, null, NOW);
+        when(subscriptionRepository.findLatestCancelledWithRemainingAccess(USER_ID, PLAN_ID, NOW))
+            .thenReturn(Optional.of(cancelledWithAccess));
+
+        SubscriptionCheckoutResult result = useCase.create(command());
+
+        assertThat(result.overlapNotice()).isEqualTo(
+            new OverlapNotice("OVERLAPPING_PAID_PERIOD", cancelledWithAccess.getEndDate().orElseThrow())
+        );
     }
 
     @Test

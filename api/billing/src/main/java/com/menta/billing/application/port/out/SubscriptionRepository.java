@@ -2,7 +2,9 @@ package com.menta.billing.application.port.out;
 
 import com.menta.billing.domain.exception.SubscriptionAlreadyActiveException;
 import com.menta.billing.domain.model.PaymentId;
+import com.menta.billing.domain.model.PlanId;
 import com.menta.billing.domain.model.Subscription;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -95,4 +97,16 @@ public interface SubscriptionRepository {
      * resolves any subscription this way before checking it is {@code ACTIVE} (US-BILLING-011).
      */
     Optional<Subscription> findById(UUID subscriptionId);
+
+    /**
+     * Finds the most recent {@code CANCELLED} subscription for the same user and plan whose
+     * {@code endDate} has not yet passed (US-BILLING-011 D3).
+     *
+     * <p>A new checkout for that same plan warns the buyer through {@code
+     * OverlapNotice} rather than blocking — the buyer is paying again for a
+     * period they may already have access to. Different plan, expired access,
+     * or a {@code PENDING}-cancelled row with no {@code endDate} are never a
+     * match: only "still paid, still cancelled, same plan" counts.
+     */
+    Optional<Subscription> findLatestCancelledWithRemainingAccess(UUID userId, PlanId planId, Instant at);
 }

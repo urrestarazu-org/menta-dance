@@ -41,6 +41,9 @@ dependencies {
     // Testing
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("com.tngtech.archunit:archunit-junit5:1.3.0")
+    // Embedded DB for @DataJpaTest repository tests against a real derived query
+    // (same convention as api/auth's ActivationTokenJpaRepositoryTest).
+    testRuntimeOnly("com.h2database:h2")
 }
 
 tasks.jar {
