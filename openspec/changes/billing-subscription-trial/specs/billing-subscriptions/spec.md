@@ -59,20 +59,21 @@ NOT be used as an authorization input anywhere in the access decision.
 
 ### Requirement: Automatic subscription expiry
 
-The system MUST transition any subscription with `status = ACTIVE` and `endDate` in the past to
-`status = EXPIRED` without manual intervention, regardless of `type` (`PAID` or `TRIAL`).
-Expiry MUST be idempotent: a subscription not currently `ACTIVE` MUST NOT be altered, and
-`endDate` MUST NOT change.
+The system MUST transition any subscription with `status = ACTIVE` and `endDate` at or before
+the current time to `status = EXPIRED` without manual intervention, regardless of `type` (`PAID`
+or `TRIAL`) — a subscription expires the instant `endDate` is reached, not only once it is
+strictly in the past. Expiry MUST be idempotent: a subscription not currently `ACTIVE` MUST NOT
+be altered, and `endDate` MUST NOT change.
 
 #### Scenario: A stale trial expires automatically
 
-- GIVEN a `TRIAL` subscription with `status = ACTIVE` and `endDate` in the past
+- GIVEN a `TRIAL` subscription with `status = ACTIVE` and `endDate` at or before now
 - WHEN the expiry process runs
 - THEN its `status` becomes `EXPIRED` and `endDate` is unchanged
 
 #### Scenario: A stale paid subscription expires automatically
 
-- GIVEN a `PAID` subscription with `status = ACTIVE` and `endDate` in the past
+- GIVEN a `PAID` subscription with `status = ACTIVE` and `endDate` at or before now
 - WHEN the expiry process runs
 - THEN its `status` becomes `EXPIRED` and `endDate` is unchanged
 
