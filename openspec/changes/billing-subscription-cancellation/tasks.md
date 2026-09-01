@@ -97,3 +97,4 @@ Chain strategy: stacked-to-main
 - [x] 5.11 GREEN `bruno/API - Direct/billing/*.bru`: update checkout response example/assertions (`Create Subscription Checkout.bru`)
 - [x] 5.12 Integration test: re-purchase after cancellation with remaining access → `201` + non-null `overlapNotice`; old subscription never reactivated (S4); plus a no-prior-cancellation → `null` companion (S6) — added to `SubscriptionCancellationIntegrationTest` (reuses its existing checkout+activate+cancel fixtures)
 - [x] 5.13 Run full regression `./gradlew :api:billing:test :api:app:test` + `jacocoTestCoverageVerification`
+- [x] 5.14 `sdd-verify` remediation (CRITICAL): add `SubscriptionJpaRepositoryTest` (`@DataJpaTest`, real derived-query execution against 5 seeded rows incl. wrong-plan/expired/never-activated/closer-endDate distractors) — 5.1's adapter test only stubbed the repository call, never exercising the query itself
