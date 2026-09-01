@@ -87,7 +87,7 @@ class SubscriptionControllerTest {
     private static SubscriptionCheckoutResult result() {
         return new SubscriptionCheckoutResult(
             "sub-1", "pay-1", PLAN_ID, SubscriptionStatus.PENDING, "pref-1",
-            "https://mp.example/checkout/pref-1", "SUB-pay-1"
+            "https://mp.example/checkout/pref-1", "SUB-pay-1", null
         );
     }
 
@@ -105,7 +105,9 @@ class SubscriptionControllerTest {
             .andExpect(jsonPath("$.status", is("PENDING")))
             .andExpect(jsonPath("$.providerPreferenceId", is("pref-1")))
             .andExpect(jsonPath("$.externalReference", is("SUB-pay-1")))
-            .andExpect(jsonPath("$.checkoutUrl", is("https://mp.example/checkout/pref-1")));
+            .andExpect(jsonPath("$.checkoutUrl", is("https://mp.example/checkout/pref-1")))
+            // D3: present as JSON null, not an absent key — this checkout has no overlap.
+            .andExpect(jsonPath("$.overlapNotice").value(org.hamcrest.Matchers.nullValue()));
     }
 
     /** The owning user comes from the token — the body has nowhere to name someone else. */

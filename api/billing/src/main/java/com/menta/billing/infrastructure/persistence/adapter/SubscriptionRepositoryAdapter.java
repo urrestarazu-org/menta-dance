@@ -3,8 +3,10 @@ package com.menta.billing.infrastructure.persistence.adapter;
 import com.menta.billing.application.port.out.SubscriptionRepository;
 import com.menta.billing.domain.exception.SubscriptionAlreadyActiveException;
 import com.menta.billing.domain.model.PaymentId;
+import com.menta.billing.domain.model.PlanId;
 import com.menta.billing.domain.model.Subscription;
 import com.menta.billing.domain.model.SubscriptionStatus;
+import java.time.Instant;
 import com.menta.billing.infrastructure.persistence.entity.SubscriptionCourseJpaEntity;
 import com.menta.billing.infrastructure.persistence.entity.SubscriptionJpaEntity;
 import com.menta.billing.infrastructure.persistence.mapper.SubscriptionJpaMapper;
@@ -102,6 +104,14 @@ public class SubscriptionRepositoryAdapter implements SubscriptionRepository {
     @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
     public Optional<Subscription> findById(UUID subscriptionId) {
         return jpaRepository.findById(subscriptionId).map(this::toDomainWithCourses);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public Optional<Subscription> findLatestCancelledWithRemainingAccess(UUID userId, PlanId planId, Instant at) {
+        return jpaRepository.findFirstByUserIdAndPlanIdAndStatusAndEndDateAfterOrderByEndDateDesc(
+            userId, planId.getValue(), SubscriptionStatus.CANCELLED.name(), at
+        ).map(this::toDomainWithCourses);
     }
 
     private Subscription toDomainWithCourses(SubscriptionJpaEntity entity) {

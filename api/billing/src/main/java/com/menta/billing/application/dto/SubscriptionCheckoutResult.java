@@ -15,9 +15,11 @@ import com.menta.billing.domain.model.SubscriptionStatus;
  */
 public record SubscriptionCheckoutResult(
     String subscriptionId, String paymentId, String planId, SubscriptionStatus status,
-    String providerPreferenceId, String checkoutUrl, String externalReference
+    String providerPreferenceId, String checkoutUrl, String externalReference, OverlapNotice overlapNotice
 ) {
-    public static SubscriptionCheckoutResult from(Subscription subscription, String externalReference) {
+    public static SubscriptionCheckoutResult from(
+        Subscription subscription, String externalReference, OverlapNotice overlapNotice
+    ) {
         return new SubscriptionCheckoutResult(
             subscription.getId().toString(),
             subscription.getPaymentId().toString(),
@@ -25,7 +27,8 @@ public record SubscriptionCheckoutResult(
             subscription.getStatus(),
             subscription.getProviderPreferenceId().orElse(null),
             subscription.getCheckoutUrl().orElse(null),
-            externalReference
+            externalReference,
+            overlapNotice
         );
     }
 }
