@@ -38,10 +38,17 @@ docs {
 
   Success contract (201):
     { subscriptionId, paymentId, planId, status: "PENDING",
-      providerPreferenceId, externalReference, checkoutUrl }
+      providerPreferenceId, externalReference, checkoutUrl, overlapNotice }
 
   checkoutUrl is a browser-navigation URL, not payment confirmation. The
   signed Mercado Pago webhook remains the source of truth for settlement.
+
+  overlapNotice (US-BILLING-011 D3) is null unless the user already has a
+  CANCELLED subscription for this same plan whose endDate has not passed
+  yet — e.g. re-purchasing right after Cancel Own Subscription.bru while
+  still inside the paid period. When present:
+    { code: "OVERLAPPING_PAID_PERIOD", currentAccessEndsAt }
+  Non-blocking: the checkout still returns 201 either way.
 }
 
 tests {
@@ -51,6 +58,9 @@ tests {
     expect(res.getBody().checkoutUrl).to.be.a("string").and.not.empty;
     expect(res.getBody().providerPreferenceId).to.be.a("string").and.not.empty;
     expect(res.getBody().externalReference).to.be.a("string").and.not.empty;
+    // overlapNotice is present as a JSON key either way (null when no overlap);
+    // this checkout runs before any cancellation exists for a fresh plan/user.
+    expect(res.getBody()).to.have.property("overlapNotice");
   });
 }
 
