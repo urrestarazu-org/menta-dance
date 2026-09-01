@@ -15,9 +15,28 @@ builds the first expiry sweep the platform has.
 - `SubscriptionType { PAID, TRIAL }` on `Subscription`, plus `Subscription.trial(...)` creating an
   `ACTIVE` + `ASSIGNED` row with the same frozen `courseIds` snapshot as a paid subscription,
   `startDate = now`, `endDate = now + days`, and **no** `Payment` row.
-- Nullable `payment_id` (D1) and the `TrialGrant` audit VO (D5), with migration `V18`.
-- `SubscriptionExpiryReconciler` + `Subscription.expire(at)` — the first `ACTIVE → EXPIRED`
-  transition, covering **PAID and TRIAL alike** (D2).
+- Nullable `payment_id` (D1) and the `TrialGrant` audit VO (D5), with migration `V18` in
+  `api/app/src/main/resources/db/migration/` — the repository's single Flyway location.
+- The aggregate invariants that replace the dropped `requireNonNull` (design A17): `PAID` implies a
+  payment and no grant, `TRIAL` implies a grant and no payment, enforced in the canonical constructor.
+- A new repository write, `saveNewSubscription` (design A12): a trial is born `ACTIVE` with its course
+  snapshot already known, so the slot claim **and** the snapshot must commit together. Reusing the
+  checkout write would have produced a `201` with zero enabled courses.
+- `SubscriptionExpiryReconciler` + a separate `SubscriptionExpiryWorker` bean + `Subscription.expire(at)`
+  — the first `ACTIVE → EXPIRED` transition, covering **PAID and TRIAL alike** (D2). The split is
+  required, not cosmetic (design A6): Spring's proxy does not intercept self-invocation, and the
+  repository's `save` is `Propagation.MANDATORY`. `expire(at)` carries a temporal guard (design A13):
+  a non-`ACTIVE` row is a silent no-op, a not-yet-due `endDate` throws.
+- A real off switch for the sweep (design A16): `billing.subscription.expiry.enabled`, evaluated by
+  `@ConditionalOnProperty` on the reconciler class. The pre-existing rate property cannot disable a
+  `@Scheduled` job at any value.
+- Optimistic locking on `billing_subscriptions` (design A14): `@Version` plus a
+  `ObjectOptimisticLockingFailureException → 409 SUBSCRIPTION_CONFLICT` mapping, so the sweep and a
+  concurrent cancellation cannot silently overwrite each other. **This widens an existing contract**:
+  the handler is a `@RestControllerAdvice(annotations = SubscriptionEndpoint.class)`, so the `409`
+  becomes reachable on the cancellation routes delivered in #130 and on the checkout route, not only
+  on `/trial`. It is a `500 → 409` narrowing — no previously successful call starts failing — and it
+  is documented on all four routes in OpenAPI and Bruno.
 - **Cross-module existence check (D8)**: new `shared/auth/UserExistencePort`, its `auth` adapter, and a
   `UserNotFoundException` → `404` so a trial can never be granted to a `userId` that does not exist.
 - Reused unchanged: `findCurrentByUserId` + `SubscriptionAlreadyActiveException` (409, AC4),
@@ -82,22 +101,25 @@ user id exists — and a mistyped id is precisely what the admin needs told apar
 
 | Area | Impact | Description |
 |---|---|---|
-| `domain/model/Subscription.java` | Modified | `Optional<PaymentId>`, `SubscriptionType`, `TrialGrant`, `trial(...)`, `expire(...)` |
+| `domain/model/Subscription.java` | Modified | `Optional<PaymentId>`, `SubscriptionType`, `TrialGrant`, `trial(...)`, `expire(...)` with its temporal guard (A13), the type/payment/grant invariants (A17), and the `version` the aggregate now carries (A14) |
 | `domain/model/SubscriptionType.java`, `TrialGrant.java` | New | Enum + audit VO |
 | `application/port/in/AssignTrialSubscriptionUseCase` + impl | New | Admin-only, `actingUserId`/`isAdmin` |
-| `application/port/out/SubscriptionRepository.java` | Modified | Paginated expiry-eligible read |
+| `application/port/out/SubscriptionRepository.java` | Modified | Two methods: the id-projection expiry read (A2) and `saveNewSubscription` — slot claim plus course snapshot in one transaction (A12) |
 | `application/dto/TrialAssignmentResult.java` | New | D3 |
 | `infrastructure/web/controller/SubscriptionAdminController.java` | Modified | New `POST /trial` |
 | `infrastructure/web/dto/` | New | Request (`@NotBlank reason`, `@Positive days`) + response |
-| `infrastructure/scheduling/SubscriptionExpiryReconciler.java` | New | D2 |
-| `infrastructure/persistence/` (entity, mapper, adapter, repo) | Modified | Nullable `payment_id`, type, grant columns, sweep query |
-| `db/migration/V18__billing_subscription_trial.sql` | New | Nullability + 5 columns |
+| `infrastructure/scheduling/SubscriptionExpiryReconciler.java` | New | D2 — `@Component`, `@ConditionalOnProperty` on the class (A16), `tick()` not transactional |
+| `infrastructure/scheduling/SubscriptionExpiryWorker.java` | New | A6 — separate `@Component` with `@Transactional(REQUIRES_NEW)`; the self-invocation fix, not a refactor. Registered by `@Component` only, like the webhook pair — **no `@Bean` in `BillingConfiguration`** (A6b) |
+| `infrastructure/config/BillingConfiguration.java` | Modified | One new `@Bean`: the trial use case with its `UserExistencePort` |
+| `infrastructure/persistence/` (entity, mapper, adapter, repo) | Modified | Nullable `payment_id`, type, grant columns, `@Version`, sweep query, `saveNewSubscription` |
+| `api/app/src/main/resources/db/migration/V18__billing_subscription_trial.sql` | New | Nullability + 5 columns + `version` + sweep index. Flyway scripts live only under `api/app/` (verified against V14/V15/V17), never under a feature module |
 | `api/shared/.../shared/auth/UserExistencePort.java` | New | D8 — new package; boolean-only contract |
 | `api/auth/.../infrastructure/persistence/adapter/UserExistenceAdapter.java` | New | D8 — `@Component`, matching `UserRepositoryAdapter`'s location and naming; delegates to `UserRepository` |
 | `api/auth/.../domain/repository/UserRepository.java` + `UserRepositoryAdapter.java` | Modified | D8 — add `existsById(UserId)` mirroring the existing `existsByEmail` |
 | `domain/exception/UserNotFoundException.java` (billing) | New | D8 — extends `BusinessException`, code `USER_NOT_FOUND` |
-| `infrastructure/web/controller/SubscriptionExceptionHandler.java` | Modified | D8 — `UserNotFoundException` → `404`, same shape as `subscriptionNotFound` |
-| `api/openapi/billing-v1.yaml`, `bruno/API - Direct/billing/` | Modified | Route contract (incl. the D8 `404`) + manual collection |
+| `infrastructure/web/controller/SubscriptionExceptionHandler.java` | Modified | D8 — `UserNotFoundException` → `404`, same shape as `subscriptionNotFound`; A14 — `ObjectOptimisticLockingFailureException` → `409 SUBSCRIPTION_CONFLICT`, which applies to **every** `@SubscriptionEndpoint` controller |
+| `api/v1/subscriptions`, `/subscriptions/me`, `/admin/billing/subscriptions/{id}` | **Contract widened** | A14 — already-merged routes (#130 cancellation, checkout) gain a reachable `409`. No code change in those controllers; the change is in the shared advice and must be documented and reviewed as a contract change |
+| `api/openapi/billing-v1.yaml`, `bruno/API - Direct/billing/` | Modified | `/trial` route contract (incl. the D8 `404`) + manual collection, **plus the A14 `409` on the three pre-existing subscription routes** |
 | `VirtualCourseEntitlementService`, `SecurityConfig`, `build.gradle.kts` | **Unchanged** | Confirmed by exploration; D8 needs no build change — both modules already depend on `api:shared` |
 
 ## Risks
@@ -105,7 +127,12 @@ user id exists — and a mistyped id is precisely what the admin needs told apar
 | Risk | Likelihood | Mitigation |
 |---|---|---|
 | `Optional<PaymentId>` ripple breaks a paid-path call site | Med | Compiler finds all of them; regression test on checkout + webhook fulfillment |
-| Sweep expires a paid subscription wrongly | Med | Guard is `status == ACTIVE && endDate < now`; `expire()` is monotonic and never touches `endDate` |
+| Sweep expires a paid subscription wrongly | Med | Guard is `status == ACTIVE && endDate <= now` in **both** the SQL predicate and the domain guard (A13), so the sweep can never select a row the aggregate would refuse; `expire()` is monotonic and never touches `endDate`, and a not-yet-due row throws loudly instead of expiring |
+| A trial is created with an empty course snapshot | **Was High, now closed** | Design A12 found that reusing `saveNewCheckout` would have returned `201` with zero enabled courses and no exception anywhere. Closed by the dedicated `saveNewSubscription` write plus a regression lock: one test asserts the trial write persists every course id, a twin test asserts the checkout write still persists none |
+| Sweep and a concurrent cancellation overwrite each other (lost update, incl. erasing a cancellation audit trail) | Med | Design A14: `@Version` on the entity and the version carried through the aggregate; the loser gets `ObjectOptimisticLockingFailureException`, which the sweep logs and retries next tick and the HTTP layer maps to `409` instead of `500`. Verified by an integration test that commits a cancellation between the sweep's read and its write |
+| **A14 changes the observable contract of endpoints already in production** | Med | The `409` mapping lives in a `@RestControllerAdvice(annotations = SubscriptionEndpoint.class)` shared by `SubscriptionController` and `SubscriptionAdminController`, so it reaches the #130 cancellation routes and the checkout route. It is a `500 → 409` narrowing, so nothing that succeeded before now fails; it is documented on all four routes in OpenAPI and Bruno and flagged in the PR description rather than shipped implicitly |
+| The sweep is registered twice and two ticks run concurrently | Med | A6b fixes a single registration path: `@Component` on both classes, no `@Bean` in `BillingConfiguration` — matching `WebhookInboxReconciler`/`WebhookVerificationWorker`, which are scanned only. Asserted on the running context: exactly one bean of each type |
+| The documented sweep off switch does not actually switch anything | Med | A16: `billing.subscription.expiry.rate-ms` can only change the interval, never disable a `@Scheduled` job. The switch is `billing.subscription.expiry.enabled` via `@ConditionalOnProperty` **on the reconciler class** — Spring ignores that annotation on a plain method — and a test asserts the bean is absent when it is `false` |
 | Multi-instance deployment double-runs the sweep | Low | `expire()` is idempotent (non-`ACTIVE` is a no-op); topology matches existing single-instance reconcilers |
 | A future reader treats `TRIAL` as an authorization input | Low | D6 asserted by test: identical access assertions for PAID and TRIAL |
 | Migration on an existing NOT NULL column | Low | Relaxing NOT NULL is backward-compatible; no data rewrite |
@@ -120,7 +147,10 @@ user id exists — and a mistyped id is precisely what the admin needs told apar
 Revert the PR and apply a compensating migration dropping the type/grant columns and restoring
 `payment_id NOT NULL` — **only after** deleting or back-filling trial rows, which are the sole rows
 with a NULL `payment_id`. Expired rows need no compensation: `EXPIRED` is terminal and access
-already derives from `endDate`. The sweep can be disabled alone by setting its rate property.
+already derives from `endDate`. The sweep can be disabled alone by setting
+`billing.subscription.expiry.enabled=false` — **not** by the rate property, which only changes the
+interval and can never stop a `@Scheduled` job (design A16). The A14 `409` mapping reverts with the
+sweep slice, restoring the previous behaviour on the pre-existing subscription routes.
 
 D8 reverts independently and needs no migration: dropping the `UserExistencePort` call restores the
 prior (permissive) behaviour, and the port plus its `auth` adapter are additive — nothing else reads
@@ -142,7 +172,13 @@ them, and no existing row was validated or rewritten.
 - [ ] A trial row exists with `payment_id IS NULL` and **zero** `billing_payments` rows created.
 - [ ] A TRIAL and a PAID subscription produce byte-identical virtual access assertions.
 - [ ] The sweep moves both a stale PAID and a stale TRIAL to `EXPIRED` with no manual action.
-- [ ] Assignment without a non-blank `reason` or with `days <= 0` returns `400` and changes nothing.
+- [ ] Assignment without a non-blank `reason` or with `days` absent, zero or negative returns `400` and
+      changes nothing (normative scenario in `spec.md`, not just a criterion here).
+- [ ] `endDate` is `now + days` where `days` comes from the admin's request; a plan whose
+      `durationDays` differs proves it was never derived from the plan.
+- [ ] `V18` applies cleanly to the existing schema under Testcontainers **in the same slice that
+      introduces it**, leaving pre-existing rows at `type = 'PAID'`, `version = 0` and their
+      `payment_id` intact.
 - [ ] After expiry or cancellation, buying a paid plan creates a new row; the trial is never reused.
 
 ## Amendments
@@ -152,6 +188,19 @@ to verify that an admin-supplied `userId` exists, and `billing_subscriptions.use
 so a typo would have returned `201` and created an orphan trial. The product owner chose to widen
 this change's scope rather than defer it. D8 records that decision; D1–D7 are unaffected — none of
 them constrains validation, module topology, or error mapping, so nothing above is reverted.
+
+**A2 — scope and risk description brought up to date after adversarial design review.** Two review
+rounds over `design.md` surfaced implementation-level facts this proposal had not described: the
+born-`ACTIVE` write needs its own repository method or the trial ships with no courses (A12); the
+sweep must be two beans because Spring cannot proxy self-invocation and the repository save is
+`MANDATORY` (A6), each registered exactly once via `@Component` (A6b); `expire(at)` needs a temporal
+guard that fails loudly on a not-yet-due row (A13); the sweep races cancellation, so the row needs
+`@Version` and a `409` mapping that — importantly — widens the contract of endpoints already merged
+in #130 (A14); the documented sweep off switch did not exist and now does (A16); and dropping
+`requireNonNull` on `paymentId` requires stating the type/payment/grant invariants explicitly (A17).
+The In Scope, Affected Areas, Risks and Rollback sections above now reflect all of them. **D1–D8 are
+unchanged**: every item here is a consequence of how those decisions are implemented, not a revision
+of what was decided.
 
 ## Proposal question round (auto mode — assumptions pending review)
 

@@ -6,25 +6,36 @@
 
 An authenticated user with `ROLE_ADMIN` MUST be able to grant a target user an `ACTIVE`
 `TRIAL` subscription with no associated `Payment`, for an existing, non-`INACTIVE` plan, using
-the same frozen `courseIds` snapshot a paid subscription would use. The grant MUST record actor,
-timestamp, a mandatory non-blank reason, and the granted number of days. No non-admin route MAY
-grant a trial, including to oneself.
+the same frozen `courseIds` snapshot a paid subscription would use. The trial's duration in
+days MUST be taken from the admin's request and MUST NOT be derived from the plan's own
+duration. The grant MUST record actor, timestamp, a mandatory non-blank reason, and the
+granted number of days. The request MUST be rejected with `400`, changing nothing, when
+`reason` is blank or absent or when `days` is absent, zero, or negative. No non-admin route
+MAY grant a trial, including to oneself.
 
 #### Scenario: Admin grants a trial subscription
 
-- GIVEN an admin, a target user with no current subscription, and an available plan with
-  `days = N`
-- WHEN the admin submits the trial grant with a non-blank `reason`
+- GIVEN an admin, a target user with no current subscription, and an available plan
+- WHEN the admin submits the trial grant for that user and plan with a non-blank `reason` and
+  `days = N` in the request, where `N` is the admin's own decision and is unrelated to the
+  plan's configured duration
 - THEN a new subscription is created with `status = ACTIVE`, `type = TRIAL`,
   `fulfillmentStatus = ASSIGNED`, `startDate = now`, `endDate = now + N days`, the plan's
   `courseIds` snapshot, and no `Payment` row
-- AND the grant's actor, timestamp, reason, and `days` are persisted
+- AND the grant's actor, timestamp, reason, and the requested `days` are persisted
 
 #### Scenario: Missing reason is rejected
 
 - GIVEN an admin and a target user eligible for a trial
 - WHEN the admin submits the grant with a blank or absent `reason`
 - THEN the system returns `400` and no subscription is created
+
+#### Scenario: A non-positive or absent days value is rejected
+
+- GIVEN an admin and a target user eligible for a trial
+- WHEN the admin submits the grant with `days` absent, zero, or negative
+- THEN the system returns `400` and no subscription is created
+- AND the plan's own duration is never substituted for the missing or invalid value
 
 #### Scenario: Non-admin cannot grant a trial to anyone, including self
 
@@ -102,7 +113,7 @@ run last, only after confirming the target user exists (`404`) and the plan is a
 
 - GIVEN a target user with a current subscription whose status is `ACTIVE` or `PENDING`
   (`TRIAL` or `PAID`)
-- WHEN an admin attempts to grant a trial to that student
+- WHEN an admin attempts to grant a trial to that user
 - THEN the system returns `409 SUBSCRIPTION_ALREADY_ACTIVE` and no new subscription is created
 
 ### Requirement: Re-purchase permitted after trial ends
