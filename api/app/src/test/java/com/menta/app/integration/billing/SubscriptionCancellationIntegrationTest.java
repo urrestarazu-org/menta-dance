@@ -206,6 +206,18 @@ class SubscriptionCancellationIntegrationTest {
     }
 
     @SuppressWarnings("rawtypes")
+    private ResponseEntity<Map> checkout(UUID userId, UUID planId, String idempotencyKey) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("planId", planId.toString());
+        body.put("paymentMethod", "MERCADO_PAGO");
+        body.put("idempotencyKey", idempotencyKey);
+        return http.exchange(
+            "/api/v1/billing/subscriptions", HttpMethod.POST,
+            new HttpEntity<>(body, headersFor(userId, Role.STUDENT)), Map.class
+        );
+    }
+
+    @SuppressWarnings("rawtypes")
     private ResponseEntity<Map> cancelOwn(UUID userId) {
         return http.exchange(
             "/api/v1/billing/subscriptions/me", HttpMethod.DELETE, new HttpEntity<>(headersFor(userId, Role.STUDENT)),
@@ -319,5 +331,51 @@ class SubscriptionCancellationIntegrationTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         SubscriptionJpaEntity unchanged = subscriptionRepository.findAll().get(0);
         assertThat(unchanged.getStatus()).isEqualTo("ACTIVE");
+    }
+
+    // --- D3 / Escenario 4: re-purchase after cancellation, overlap notice -----
+
+    /**
+     * S4 + S5 end-to-end: cancelling still leaves paid access until {@code endDate}, so a
+     * re-purchase of the same plan must succeed (never blocked) and carry the D3 notice — and
+     * the old, still-live row must never be reactivated by the new checkout.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void a_repurchase_after_cancellation_with_remaining_access_carries_an_overlap_notice() {
+        UUID userId = seedUser(Role.STUDENT);
+        UUID planId = seedPlan();
+        UUID cancelledSubscriptionId = checkoutAndActivate(userId, planId);
+        assertThat(cancelOwn(userId).getStatusCode()).isEqualTo(HttpStatus.OK);
+        SubscriptionJpaEntity cancelledSubscription =
+            subscriptionRepository.findById(cancelledSubscriptionId).orElseThrow();
+
+        ResponseEntity<Map> repurchase = checkout(userId, planId, "idem-repurchase-" + UUID.randomUUID());
+
+        assertThat(repurchase.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        Map<String, Object> overlapNotice = (Map<String, Object>) repurchase.getBody().get("overlapNotice");
+        assertThat(overlapNotice).isNotNull();
+        assertThat(overlapNotice.get("code")).isEqualTo("OVERLAPPING_PAID_PERIOD");
+        assertThat(Instant.parse((String) overlapNotice.get("currentAccessEndsAt")))
+            .isEqualTo(cancelledSubscription.getEndDate());
+
+        assertThat(subscriptionRepository.findAll()).hasSize(2);
+        SubscriptionJpaEntity stillCancelled = subscriptionRepository.findById(cancelledSubscriptionId).orElseThrow();
+        assertThat(stillCancelled.getStatus()).isEqualTo("CANCELLED");
+        assertThat(stillCancelled.getActiveUserId()).isNull();
+    }
+
+    /** S6: no prior cancellation for this plan means the checkout reports no notice at all. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void a_first_time_checkout_with_no_prior_cancellation_reports_no_overlap_notice() {
+        UUID userId = seedUser(Role.STUDENT);
+        UUID planId = seedPlan();
+
+        ResponseEntity<Map> response = checkout(userId, planId, "idem-" + UUID.randomUUID());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(response.getBody()).containsKey("overlapNotice");
+        assertThat(response.getBody().get("overlapNotice")).isNull();
     }
 }
