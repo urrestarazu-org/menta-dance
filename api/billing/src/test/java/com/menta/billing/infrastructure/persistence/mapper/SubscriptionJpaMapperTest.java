@@ -133,7 +133,7 @@ class SubscriptionJpaMapperTest {
         UUID adminId = UUID.randomUUID();
         TrialGrant grant = new TrialGrant(NOW, adminId, "evaluación de producto", 14);
         Subscription original = Subscription.trial(
-            UUID.randomUUID(), USER_ID, PlanId.generate(), NOW, 14, List.of("course-1", "course-2"), grant
+            UUID.randomUUID(), USER_ID, PlanId.generate(), NOW, List.of("course-1", "course-2"), grant
         );
 
         SubscriptionJpaEntity entity = SubscriptionJpaMapper.toEntity(original);

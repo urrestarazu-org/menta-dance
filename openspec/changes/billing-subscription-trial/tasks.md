@@ -32,7 +32,7 @@ Chain strategy: stacked-to-main
 - [x] 1.1 RED `TrialGrantTest`: reject null `at`/`by`, blank `reason`, `days <= 0` — `TrialGrant.java` invariants [S1, S2, S3]
 - [x] 1.2 GREEN `billing/domain/model/TrialGrant.java`: `record TrialGrant(Instant at, UUID by, String reason, int days)` with guards
 - [x] 1.3 GREEN `billing/domain/model/SubscriptionType.java`: `PAID`, `TRIAL` enum
-- [x] 1.4 RED `SubscriptionTest#trial`: `trial(...)` yields `ACTIVE`+`ASSIGNED`+`TRIAL`, null payment, `grantsAccess()` true, `endDate = now + days` where `days` is the caller-supplied value, never `Plan.durationDays`, non-empty course snapshot [S1, S5]
+- [x] 1.4 RED `SubscriptionTest#trial`: `trial(...)` yields `ACTIVE`+`ASSIGNED`+`TRIAL`, null payment, `grantsAccess()` true, `endDate = now + grant.days()` — there is no separate `days` parameter, so `endDate` can never diverge from the persisted audit trail, and it is never `Plan.durationDays`, non-empty course snapshot [S1, S5]
 - [x] 1.5 RED `SubscriptionTest#expire`: no-op (returns `this`) from every non-`ACTIVE` status [S8]
 - [x] 1.6 RED `SubscriptionTest#expire`: throws `IllegalStateException` when `endDate` is future; transitions to `EXPIRED` when `endDate == at`, `endDate` unchanged (A13 boundary `!endDate.isAfter(at)`) [S6, S7]
 - [x] 1.7 RED `SubscriptionTest#typeInvariants` (A17): all four illegal pairs throw `IllegalArgumentException` from the canonical constructor — `PAID` with null `paymentId`, `PAID` with a non-null `trialGrant`, `TRIAL` with a non-null `paymentId`, `TRIAL` with a null `trialGrant`; and both legal pairs survive a full transition chain (`trial → expire`, `pendingCheckout → activate → cancel`), proving `copy(...)` cannot drift out of the invariant [S1]

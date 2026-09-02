@@ -181,7 +181,7 @@ class SubscriptionTest {
         TrialGrant grant = new TrialGrant(CONFIRMED_AT, ADMIN_ID, "evaluación de producto", 14);
 
         Subscription trial = Subscription.trial(
-            UUID.randomUUID(), USER_ID, PlanId.generate(), CONFIRMED_AT, 14,
+            UUID.randomUUID(), USER_ID, PlanId.generate(), CONFIRMED_AT,
             List.of("course-1", "course-2"), grant
         );
 
@@ -202,10 +202,29 @@ class SubscriptionTest {
         TrialGrant grant = new TrialGrant(CONFIRMED_AT, ADMIN_ID, "cortesía", 5);
 
         Subscription trial = Subscription.trial(
-            UUID.randomUUID(), USER_ID, PlanId.generate(), CONFIRMED_AT, 5, List.of("course-9"), grant
+            UUID.randomUUID(), USER_ID, PlanId.generate(), CONFIRMED_AT, List.of("course-9"), grant
         );
 
         assertThat(trial.getEndDate()).contains(CONFIRMED_AT.plus(5, ChronoUnit.DAYS));
+    }
+
+    /**
+     * Regression (PR #163 review): {@code trial(...)} used to take a separate {@code int days}
+     * parameter alongside {@code grant}, so a caller could pass a {@code days} value that
+     * disagreed with {@code grant.days()} — granting real access for one duration while the
+     * audit trail recorded another. There is now no separate parameter to diverge: {@code
+     * endDate} can only ever come from {@code grant.days()}.
+     */
+    @Test
+    void trial_derives_endDate_exclusively_from_the_grant_days_no_separate_days_parameter_exists() {
+        TrialGrant grant = new TrialGrant(CONFIRMED_AT, ADMIN_ID, "evaluación de producto", 30);
+
+        Subscription trial = Subscription.trial(
+            UUID.randomUUID(), USER_ID, PlanId.generate(), CONFIRMED_AT, List.of("course-1"), grant
+        );
+
+        assertThat(trial.getEndDate()).contains(CONFIRMED_AT.plus(30, ChronoUnit.DAYS));
+        assertThat(trial.getTrialGrant()).contains(grant);
     }
 
     // --- expire(at) (US-BILLING-012, A13) ---
@@ -237,7 +256,7 @@ class SubscriptionTest {
     void expire_moves_a_stale_trial_to_expired_too() {
         TrialGrant grant = new TrialGrant(CONFIRMED_AT, ADMIN_ID, "cortesía", 5);
         Subscription trial = Subscription.trial(
-            UUID.randomUUID(), USER_ID, PlanId.generate(), CONFIRMED_AT, 5, List.of("course-1"), grant
+            UUID.randomUUID(), USER_ID, PlanId.generate(), CONFIRMED_AT, List.of("course-1"), grant
         );
 
         Subscription expired = trial.expire(trial.getEndDate().orElseThrow());
@@ -289,7 +308,7 @@ class SubscriptionTest {
     @Test
     void the_legal_type_pairings_survive_a_full_transition_chain() {
         Subscription trial = Subscription.trial(
-            UUID.randomUUID(), USER_ID, PlanId.generate(), CONFIRMED_AT, 5, List.of("course-1"),
+            UUID.randomUUID(), USER_ID, PlanId.generate(), CONFIRMED_AT, List.of("course-1"),
             new TrialGrant(CONFIRMED_AT, ADMIN_ID, "cortesía", 5)
         );
         Subscription expiredTrial = trial.expire(trial.getEndDate().orElseThrow());
@@ -328,7 +347,7 @@ class SubscriptionTest {
     void getPaymentId_is_present_for_a_paid_subscription_and_empty_for_a_trial() {
         Subscription paid = pending();
         Subscription trial = Subscription.trial(
-            UUID.randomUUID(), USER_ID, PlanId.generate(), CONFIRMED_AT, 5, List.of(),
+            UUID.randomUUID(), USER_ID, PlanId.generate(), CONFIRMED_AT, List.of(),
             new TrialGrant(CONFIRMED_AT, ADMIN_ID, "cortesía", 5)
         );
 

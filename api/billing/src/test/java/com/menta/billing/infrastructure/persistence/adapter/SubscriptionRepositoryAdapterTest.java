@@ -109,7 +109,7 @@ class SubscriptionRepositoryAdapterTest {
 
     private static Subscription trialSubscription() {
         return Subscription.trial(
-            UUID.randomUUID(), USER_ID, PlanId.generate(), NOW, 14, List.of("course-1", "course-2"),
+            UUID.randomUUID(), USER_ID, PlanId.generate(), NOW, List.of("course-1", "course-2"),
             new TrialGrant(NOW, UUID.randomUUID(), "evaluación de producto", 14)
         );
     }

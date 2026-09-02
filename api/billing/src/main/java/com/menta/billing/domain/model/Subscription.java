@@ -145,20 +145,26 @@ public final class Subscription {
     /**
      * Admin-assigned trial (US-BILLING-012): born {@code ACTIVE} and {@code ASSIGNED} with no
      * {@code Payment}, using the same frozen {@code courseIds} snapshot a paid subscription
-     * would use. {@code endDate} is derived only from {@code days} — the admin's own decision,
-     * never {@code Plan.durationDays} — and the idempotency key is server-generated (design D7)
-     * since no client-supplied one exists for this admin-only flow.
+     * would use. {@code endDate} is derived only from {@code grant.days()} — the admin's own
+     * decision, never {@code Plan.durationDays}, and never a value independent from the audit
+     * trail — and the idempotency key is server-generated (design D7) since no client-supplied
+     * one exists for this admin-only flow.
      *
-     * @param days the trial's duration, taken from the admin's request
-     * @param grant the audit trail — actor, timestamp, reason, and the granted number of days
+     * <p>There is deliberately no separate {@code days} parameter here: {@code grant} is the
+     * single source of truth for how many days were granted, so the real access window and the
+     * persisted audit trail can never disagree.</p>
+     *
+     * @param grant the audit trail — actor, timestamp, reason, and the granted number of days;
+     *     also the sole input to {@code endDate}
      */
     public static Subscription trial(
-        UUID id, UUID userId, PlanId planId, Instant now, int days, List<String> courseIds, TrialGrant grant
+        UUID id, UUID userId, PlanId planId, Instant now, List<String> courseIds, TrialGrant grant
     ) {
         Objects.requireNonNull(now, "now cannot be null");
         return new Subscription(
             id, null, userId, planId, "trial:" + id, SubscriptionStatus.ACTIVE, FulfillmentStatus.ASSIGNED,
-            now, now.plus(days, ChronoUnit.DAYS), courseIds, null, null, now, null, SubscriptionType.TRIAL, grant
+            now, now.plus(grant.days(), ChronoUnit.DAYS), courseIds, null, null, now, null, SubscriptionType.TRIAL,
+            grant
         );
     }
 

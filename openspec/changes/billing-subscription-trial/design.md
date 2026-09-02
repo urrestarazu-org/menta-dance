@@ -99,9 +99,9 @@ public TrialAssignmentResult assign(AssignTrialCommand command) {
     Instant now = clock.now();
     // A12: slot claim AND course snapshot in one transaction. saveNewCheckout would silently
     // persist zero courses, because it maps with List.of() and never calls replaceCourses.
+    TrialGrant grant = new TrialGrant(now, command.actingUserId(), command.reason(), command.days());
     return TrialAssignmentResult.from(subscriptionRepository.saveNewSubscription(Subscription.trial(
-        UUID.randomUUID(), command.userId(), plan.getId(), now, command.days(),
-        plan.courseIds(), new TrialGrant(now, command.actingUserId(), command.reason(), command.days())
+        UUID.randomUUID(), command.userId(), plan.getId(), now, plan.courseIds(), grant
     )));
 }
 
@@ -188,7 +188,7 @@ so no previously successful call becomes a failure, and no existing client contr
 
 | Layer | What | Approach |
 |---|---|---|
-| Unit (billing domain, 100%) | `trial(...)` yields ACTIVE+ASSIGNED+TRIAL, null payment, `grantsAccess()` true, `endDate = now + days`, snapshot non-empty; `expire()` no-ops from every non-`ACTIVE` status; **`expire()` throws `IllegalStateException` when `endDate` is in the future, and expires at `endDate == at`** (A13); `version` survives `copy(...)`; `TrialGrant` invariants | `SubscriptionTest`, `TrialGrantTest` |
+| Unit (billing domain, 100%) | `trial(...)` yields ACTIVE+ASSIGNED+TRIAL, null payment, `grantsAccess()` true, `endDate = now + grant.days()` (no separate `days` parameter exists to diverge from it), snapshot non-empty; `expire()` no-ops from every non-`ACTIVE` status; **`expire()` throws `IllegalStateException` when `endDate` is in the future, and expires at `endDate == at`** (A13); `version` survives `copy(...)`; `TrialGrant` invariants | `SubscriptionTest`, `TrialGrantTest` |
 | **Unit (billing domain, A17)** | The four illegal pairs all throw `IllegalArgumentException` from the constructor: `PAID` + null `paymentId`, `PAID` + non-null `trialGrant`, `TRIAL` + non-null `paymentId`, `TRIAL` + null `trialGrant`; and both legal pairs survive a full `copy(...)` transition chain (`trial → expire`, `pendingCheckout → activate → cancel`) | `SubscriptionTest` |
 | **Unit (billing infra, A12)** | **`saveNewSubscription` persists the course rows** — regression lock on the real bug: assert `SubscriptionCourseJpaRepository.saveAll` receives every `courseId`, and that a slot violation still maps to `SubscriptionAlreadyActiveException`. A twin test asserts `saveNewCheckout` still persists **no** courses, so the paid contract is not silently widened | `SubscriptionRepositoryAdapterTest` (existing Mockito class) |
 | **Unit (sweep, A6)** | `tick()` delegates to the **injected worker** (mocked), once per id; a worker throwing on row 1 still processes rows 2..n; `expireOne` skips the `save` when `expire` returned the same instance | `SubscriptionExpiryReconcilerTest`, `SubscriptionExpiryWorkerTest` |
