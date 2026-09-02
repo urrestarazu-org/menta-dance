@@ -3,6 +3,7 @@ package com.menta.billing.infrastructure.persistence.adapter;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -13,6 +14,7 @@ import com.menta.billing.domain.exception.SubscriptionAlreadyActiveException;
 import com.menta.billing.domain.model.PaymentId;
 import com.menta.billing.domain.model.PlanId;
 import com.menta.billing.domain.model.Subscription;
+import com.menta.billing.domain.model.TrialGrant;
 import com.menta.billing.infrastructure.persistence.entity.SubscriptionCourseJpaEntity;
 import com.menta.billing.infrastructure.persistence.mapper.SubscriptionJpaMapper;
 import com.menta.billing.infrastructure.persistence.repository.SubscriptionCourseJpaRepository;
@@ -92,15 +94,68 @@ class SubscriptionRepositoryAdapterTest {
         verify(courseJpaRepository, never()).saveAll(any());
     }
 
+    /**
+     * Regression guard (A12): {@code saveNewCheckout} must keep persisting zero courses — its
+     * snapshot is written later, at activation. Reusing it for a trial would silently ship a
+     * subscription with no enabled courses.
+     */
+    @Test
+    void saveNewCheckout_persists_zero_courses_guarding_against_reuse_for_a_trial() {
+        adapter.saveNewCheckout(pending());
+
+        verify(courseJpaRepository, never()).saveAll(any());
+        verify(courseJpaRepository, never()).deleteBySubscriptionId(any());
+    }
+
+    private static Subscription trialSubscription() {
+        return Subscription.trial(
+            UUID.randomUUID(), USER_ID, PlanId.generate(), NOW, List.of("course-1", "course-2"),
+            new TrialGrant(NOW, UUID.randomUUID(), "evaluación de producto", 14)
+        );
+    }
+
+    /** A12 regression lock: reusing saveNewCheckout for a trial would silently persist zero courses. */
+    @Test
+    void saveNewSubscription_persists_the_full_course_snapshot_atomically() {
+        Subscription trial = trialSubscription();
+
+        Subscription saved = adapter.saveNewSubscription(trial);
+
+        verify(courseJpaRepository).deleteBySubscriptionId(trial.getId());
+        verify(courseJpaRepository).saveAll(any());
+        verify(jpaRepository).flush();
+        assertThat(saved.getCourseIds()).containsExactly("course-1", "course-2");
+    }
+
+    @Test
+    void saveNewSubscription_translates_a_slot_violation_into_a_domain_conflict() {
+        doThrow(new DataIntegrityViolationException("uq_billing_subscriptions_active_user"))
+            .when(jpaRepository).flush();
+
+        assertThatThrownBy(() -> adapter.saveNewSubscription(trialSubscription()))
+            .isInstanceOf(SubscriptionAlreadyActiveException.class);
+        verify(courseJpaRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void findExpirableIds_delegates_to_the_id_projection_query() {
+        UUID expirableId = UUID.randomUUID();
+        when(jpaRepository.findExpirableIds(eq(NOW), any())).thenReturn(List.of(expirableId));
+
+        List<UUID> found = adapter.findExpirableIds(NOW, 50);
+
+        assertThat(found).containsExactly(expirableId);
+    }
+
     @Test
     void findByPaymentId_maps_when_present_including_its_snapshot() {
         Subscription subscription = pending().activate(NOW, 30, List.of("course-1"));
-        when(jpaRepository.findByPaymentId(subscription.getPaymentId().getValue()))
+        when(jpaRepository.findByPaymentId(subscription.getPaymentId().orElseThrow().getValue()))
             .thenReturn(Optional.of(SubscriptionJpaMapper.toEntity(subscription)));
         when(courseJpaRepository.findBySubscriptionId(subscription.getId()))
             .thenReturn(List.of(new SubscriptionCourseJpaEntity(subscription.getId(), "course-1")));
 
-        Optional<Subscription> found = adapter.findByPaymentId(subscription.getPaymentId());
+        Optional<Subscription> found = adapter.findByPaymentId(subscription.getPaymentId().orElseThrow());
 
         assertThat(found).isPresent();
         assertThat(found.get().getCourseIds()).containsExactly("course-1");

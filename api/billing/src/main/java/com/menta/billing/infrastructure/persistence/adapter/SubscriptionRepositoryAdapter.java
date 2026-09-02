@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -67,6 +68,30 @@ public class SubscriptionRepositoryAdapter implements SubscriptionRepository {
         } catch (DataIntegrityViolationException slotTaken) {
             throw new SubscriptionAlreadyActiveException(null);
         }
+    }
+
+    /**
+     * A trial is born {@code ACTIVE} with its course snapshot already known (US-BILLING-012),
+     * so unlike {@link #saveNewCheckout(Subscription)} the slot claim and the snapshot must
+     * commit together (design A12): reusing {@code saveNewCheckout} would map back with an
+     * empty course list, since its snapshot is written later at activation.
+     */
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Subscription saveNewSubscription(Subscription subscription) {
+        try {
+            SubscriptionJpaEntity saved = jpaRepository.save(SubscriptionJpaMapper.toEntity(subscription));
+            jpaRepository.flush();
+            return SubscriptionJpaMapper.toDomain(saved, replaceCourses(subscription));
+        } catch (DataIntegrityViolationException slotTaken) {
+            throw new SubscriptionAlreadyActiveException(null);
+        }
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public List<UUID> findExpirableIds(Instant now, int limit) {
+        return jpaRepository.findExpirableIds(now, PageRequest.of(0, limit));
     }
 
     @Override

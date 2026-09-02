@@ -7,6 +7,8 @@ import com.menta.billing.domain.model.PaymentId;
 import com.menta.billing.domain.model.PlanId;
 import com.menta.billing.domain.model.Subscription;
 import com.menta.billing.domain.model.SubscriptionStatus;
+import com.menta.billing.domain.model.SubscriptionType;
+import com.menta.billing.domain.model.TrialGrant;
 import com.menta.billing.infrastructure.persistence.entity.SubscriptionJpaEntity;
 import java.time.Instant;
 import java.util.List;
@@ -104,5 +106,62 @@ class SubscriptionJpaMapperTest {
 
         assertThat(restored.getStatus()).isEqualTo(SubscriptionStatus.CANCELLED);
         assertThat(restored.getCancellation()).isEmpty();
+    }
+
+    // --- type/grant/version (US-BILLING-012) ---
+
+    @Test
+    void round_trips_a_paid_subscription_with_no_grant_columns_populated() {
+        Subscription original = pending().activate(NOW, 30, List.of("course-1"));
+
+        SubscriptionJpaEntity entity = SubscriptionJpaMapper.toEntity(original);
+        Subscription restored = SubscriptionJpaMapper.toDomain(entity, List.of("course-1"));
+
+        assertThat(entity.getType()).isEqualTo("PAID");
+        assertThat(entity.getPaymentId()).isNotNull();
+        assertThat(entity.getGrantedAt()).isNull();
+        assertThat(entity.getGrantedBy()).isNull();
+        assertThat(entity.getGrantReason()).isNull();
+        assertThat(entity.getGrantDays()).isNull();
+        assertThat(restored.getType()).isEqualTo(SubscriptionType.PAID);
+        assertThat(restored.getTrialGrant()).isEmpty();
+        assertThat(restored.getPaymentId()).isPresent();
+    }
+
+    @Test
+    void round_trips_a_trial_subscription_with_no_payment_and_its_full_grant_audit() {
+        UUID adminId = UUID.randomUUID();
+        TrialGrant grant = new TrialGrant(NOW, adminId, "evaluación de producto", 14);
+        Subscription original = Subscription.trial(
+            UUID.randomUUID(), USER_ID, PlanId.generate(), NOW, List.of("course-1", "course-2"), grant
+        );
+
+        SubscriptionJpaEntity entity = SubscriptionJpaMapper.toEntity(original);
+        Subscription restored = SubscriptionJpaMapper.toDomain(entity, List.of("course-1", "course-2"));
+
+        assertThat(entity.getType()).isEqualTo("TRIAL");
+        assertThat(entity.getPaymentId()).isNull();
+        assertThat(entity.getGrantedAt()).isEqualTo(NOW);
+        assertThat(entity.getGrantedBy()).isEqualTo(adminId);
+        assertThat(entity.getGrantReason()).isEqualTo("evaluación de producto");
+        assertThat(entity.getGrantDays()).isEqualTo(14);
+        assertThat(restored.getType()).isEqualTo(SubscriptionType.TRIAL);
+        assertThat(restored.getPaymentId()).isEmpty();
+        assertThat(restored.getTrialGrant()).contains(grant);
+    }
+
+    @Test
+    void preserves_the_optimistic_lock_version_in_both_directions() {
+        Subscription rehydrated = new Subscription(
+            UUID.randomUUID(), PaymentId.generate(), USER_ID, PlanId.generate(), "idem-1",
+            SubscriptionStatus.ACTIVE, FulfillmentStatus.ASSIGNED, NOW, NOW.plusSeconds(100), List.of("course-1"),
+            null, null, NOW, null, SubscriptionType.PAID, null, 5L
+        );
+
+        SubscriptionJpaEntity entity = SubscriptionJpaMapper.toEntity(rehydrated);
+        Subscription restored = SubscriptionJpaMapper.toDomain(entity, List.of("course-1"));
+
+        assertThat(entity.getVersion()).isEqualTo(5L);
+        assertThat(restored.getVersion()).isEqualTo(5L);
     }
 }

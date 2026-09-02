@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -169,8 +170,189 @@ class SubscriptionTest {
         assertThatThrownBy(() -> new Subscription(
             UUID.randomUUID(), PaymentId.generate(), USER_ID, PlanId.generate(), "idem-1",
             SubscriptionStatus.PENDING, FulfillmentStatus.PENDING_FULFILLMENT, null, null, null, null, null,
-            CREATED_AT, null
+            CREATED_AT, null, SubscriptionType.PAID, null
         )).isInstanceOf(NullPointerException.class);
+    }
+
+    // --- trial(...) (US-BILLING-012) ---
+
+    @Test
+    void trial_yields_an_active_assigned_trial_with_no_payment_and_the_admins_own_duration() {
+        TrialGrant grant = new TrialGrant(CONFIRMED_AT, ADMIN_ID, "evaluación de producto", 14);
+
+        Subscription trial = Subscription.trial(
+            UUID.randomUUID(), USER_ID, PlanId.generate(), CONFIRMED_AT,
+            List.of("course-1", "course-2"), grant
+        );
+
+        assertThat(trial.getStatus()).isEqualTo(SubscriptionStatus.ACTIVE);
+        assertThat(trial.getFulfillmentStatus()).isEqualTo(FulfillmentStatus.ASSIGNED);
+        assertThat(trial.getType()).isEqualTo(SubscriptionType.TRIAL);
+        assertThat(trial.getPaymentId()).isEmpty();
+        assertThat(trial.grantsAccess()).isTrue();
+        assertThat(trial.getStartDate()).contains(CONFIRMED_AT);
+        assertThat(trial.getEndDate()).contains(CONFIRMED_AT.plus(14, ChronoUnit.DAYS));
+        assertThat(trial.getCourseIds()).containsExactly("course-1", "course-2");
+        assertThat(trial.getTrialGrant()).contains(grant);
+    }
+
+    /** Triangulation: a days value with no relation to any plan's durationDays proves no derivation from the plan. */
+    @Test
+    void trial_endDate_is_derived_only_from_the_admins_days_never_a_plan_duration() {
+        TrialGrant grant = new TrialGrant(CONFIRMED_AT, ADMIN_ID, "cortesía", 5);
+
+        Subscription trial = Subscription.trial(
+            UUID.randomUUID(), USER_ID, PlanId.generate(), CONFIRMED_AT, List.of("course-9"), grant
+        );
+
+        assertThat(trial.getEndDate()).contains(CONFIRMED_AT.plus(5, ChronoUnit.DAYS));
+    }
+
+    /**
+     * Regression (PR #163 review): {@code trial(...)} used to take a separate {@code int days}
+     * parameter alongside {@code grant}, so a caller could pass a {@code days} value that
+     * disagreed with {@code grant.days()} — granting real access for one duration while the
+     * audit trail recorded another. There is now no separate parameter to diverge: {@code
+     * endDate} can only ever come from {@code grant.days()}.
+     */
+    @Test
+    void trial_derives_endDate_exclusively_from_the_grant_days_no_separate_days_parameter_exists() {
+        TrialGrant grant = new TrialGrant(CONFIRMED_AT, ADMIN_ID, "evaluación de producto", 30);
+
+        Subscription trial = Subscription.trial(
+            UUID.randomUUID(), USER_ID, PlanId.generate(), CONFIRMED_AT, List.of("course-1"), grant
+        );
+
+        assertThat(trial.getEndDate()).contains(CONFIRMED_AT.plus(30, ChronoUnit.DAYS));
+        assertThat(trial.getTrialGrant()).contains(grant);
+    }
+
+    // --- expire(at) (US-BILLING-012, A13) ---
+
+    @Test
+    void expire_is_a_no_op_from_every_non_active_status() {
+        Subscription pendingSubscription = pending();
+        Subscription cancelledSubscription = pending().cancelled();
+
+        assertThat(pendingSubscription.expire(CONFIRMED_AT)).isSameAs(pendingSubscription);
+        assertThat(cancelledSubscription.expire(CONFIRMED_AT)).isSameAs(cancelledSubscription);
+    }
+
+    @Test
+    void expire_throws_when_endDate_has_not_passed_and_expires_exactly_at_the_boundary() {
+        Subscription active = pending().activate(CONFIRMED_AT, 30, List.of("course-1"));
+        Instant endDate = active.getEndDate().orElseThrow();
+
+        assertThatThrownBy(() -> active.expire(endDate.minusSeconds(1)))
+            .isInstanceOf(IllegalStateException.class);
+
+        Subscription expired = active.expire(endDate);
+        assertThat(expired.getStatus()).isEqualTo(SubscriptionStatus.EXPIRED);
+        assertThat(expired.getEndDate()).isEqualTo(active.getEndDate());
+    }
+
+    /** Triangulation: a TRIAL expires through the exact same guard as a PAID subscription. */
+    @Test
+    void expire_moves_a_stale_trial_to_expired_too() {
+        TrialGrant grant = new TrialGrant(CONFIRMED_AT, ADMIN_ID, "cortesía", 5);
+        Subscription trial = Subscription.trial(
+            UUID.randomUUID(), USER_ID, PlanId.generate(), CONFIRMED_AT, List.of("course-1"), grant
+        );
+
+        Subscription expired = trial.expire(trial.getEndDate().orElseThrow());
+
+        assertThat(expired.getStatus()).isEqualTo(SubscriptionStatus.EXPIRED);
+        assertThat(expired.getType()).isEqualTo(SubscriptionType.TRIAL);
+        assertThat(expired.getEndDate()).isEqualTo(trial.getEndDate());
+    }
+
+    // --- type/payment/grant invariants (US-BILLING-012, A17) ---
+
+    @Test
+    void rejects_a_paid_subscription_with_no_payment() {
+        assertThatThrownBy(() -> new Subscription(
+            UUID.randomUUID(), null, USER_ID, PlanId.generate(), "idem-1", SubscriptionStatus.PENDING,
+            FulfillmentStatus.PENDING_FULFILLMENT, null, null, List.of(), null, null, CREATED_AT, null,
+            SubscriptionType.PAID, null
+        )).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void rejects_a_paid_subscription_carrying_a_trial_grant() {
+        assertThatThrownBy(() -> new Subscription(
+            UUID.randomUUID(), PaymentId.generate(), USER_ID, PlanId.generate(), "idem-1",
+            SubscriptionStatus.PENDING, FulfillmentStatus.PENDING_FULFILLMENT, null, null, List.of(), null, null,
+            CREATED_AT, null, SubscriptionType.PAID, new TrialGrant(CREATED_AT, ADMIN_ID, "reason", 5)
+        )).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void rejects_a_trial_subscription_carrying_a_payment() {
+        assertThatThrownBy(() -> new Subscription(
+            UUID.randomUUID(), PaymentId.generate(), USER_ID, PlanId.generate(), "idem-1",
+            SubscriptionStatus.ACTIVE, FulfillmentStatus.ASSIGNED, CREATED_AT, CREATED_AT.plusSeconds(10),
+            List.of(), null, null, CREATED_AT, null, SubscriptionType.TRIAL,
+            new TrialGrant(CREATED_AT, ADMIN_ID, "reason", 5)
+        )).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void rejects_a_trial_subscription_with_no_grant() {
+        assertThatThrownBy(() -> new Subscription(
+            UUID.randomUUID(), null, USER_ID, PlanId.generate(), "idem-1", SubscriptionStatus.ACTIVE,
+            FulfillmentStatus.ASSIGNED, CREATED_AT, CREATED_AT.plusSeconds(10), List.of(), null, null, CREATED_AT,
+            null, SubscriptionType.TRIAL, null
+        )).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void the_legal_type_pairings_survive_a_full_transition_chain() {
+        Subscription trial = Subscription.trial(
+            UUID.randomUUID(), USER_ID, PlanId.generate(), CONFIRMED_AT, List.of("course-1"),
+            new TrialGrant(CONFIRMED_AT, ADMIN_ID, "cortesía", 5)
+        );
+        Subscription expiredTrial = trial.expire(trial.getEndDate().orElseThrow());
+        assertThat(expiredTrial.getType()).isEqualTo(SubscriptionType.TRIAL);
+        assertThat(expiredTrial.getStatus()).isEqualTo(SubscriptionStatus.EXPIRED);
+
+        Subscription cancelledPaid = pending().activate(CONFIRMED_AT, 30, List.of("course-1"))
+            .cancel(USER_ID, null, CONFIRMED_AT.plusSeconds(10));
+        assertThat(cancelledPaid.getType()).isEqualTo(SubscriptionType.PAID);
+        assertThat(cancelledPaid.getStatus()).isEqualTo(SubscriptionStatus.CANCELLED);
+    }
+
+    // --- version (US-BILLING-012, A14) ---
+
+    @Test
+    void version_survives_copy_transitions() {
+        Subscription rehydrated = new Subscription(
+            UUID.randomUUID(), PaymentId.generate(), USER_ID, PlanId.generate(), "idem-1",
+            SubscriptionStatus.ACTIVE, FulfillmentStatus.ASSIGNED, CONFIRMED_AT, CONFIRMED_AT.plusSeconds(100),
+            List.of("course-1"), null, null, CREATED_AT, null, SubscriptionType.PAID, null, 7L
+        );
+
+        Subscription cancelled = rehydrated.cancel(USER_ID, null, CONFIRMED_AT.plusSeconds(10));
+
+        assertThat(cancelled.getVersion()).isEqualTo(7L);
+    }
+
+    @Test
+    void a_freshly_created_subscription_starts_at_version_zero() {
+        assertThat(pending().getVersion()).isEqualTo(0L);
+    }
+
+    // --- getPaymentId() ripple (US-BILLING-012, A1) ---
+
+    @Test
+    void getPaymentId_is_present_for_a_paid_subscription_and_empty_for_a_trial() {
+        Subscription paid = pending();
+        Subscription trial = Subscription.trial(
+            UUID.randomUUID(), USER_ID, PlanId.generate(), CONFIRMED_AT, List.of(),
+            new TrialGrant(CONFIRMED_AT, ADMIN_ID, "cortesía", 5)
+        );
+
+        assertThat(paid.getPaymentId()).isPresent();
+        assertThat(trial.getPaymentId()).isEmpty();
     }
 
     @Test

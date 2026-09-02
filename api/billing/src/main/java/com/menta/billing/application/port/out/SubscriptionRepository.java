@@ -47,6 +47,31 @@ public interface SubscriptionRepository {
     Subscription saveNewCheckout(Subscription subscription);
 
     /**
+     * Inserts a subscription that is already {@code ACTIVE} at creation — an admin-assigned
+     * trial (US-BILLING-012) — claiming the user's slot the same way {@link
+     * #saveNewCheckout(Subscription)} does, <em>plus</em> persisting the course snapshot in the
+     * same transaction (design A12).
+     *
+     * <p>Deliberately not a widening of {@link #saveNewCheckout(Subscription)}: a checkout's
+     * snapshot is written later, at activation, so that method maps back with an empty course
+     * list on purpose. A trial has no later step — reusing it here would silently ship a {@code
+     * 201} with zero enabled courses.
+     *
+     * @throws SubscriptionAlreadyActiveException when the constraint rejects the insert because
+     *     another subscription already holds the user's slot
+     */
+    Subscription saveNewSubscription(Subscription subscription);
+
+    /**
+     * Id-only projection for the automatic expiry sweep (design A2): {@code status = 'ACTIVE'
+     * AND end_date <= now}, the same {@code <=} boundary as {@link
+     * com.menta.billing.domain.model.Subscription#expire}. Never a full {@code Subscription} —
+     * the reconciler never reads the course snapshot, and loading it would run one extra query
+     * per row for nothing.
+     */
+    java.util.List<UUID> findExpirableIds(Instant now, int limit);
+
+    /**
      * Finds the subscription funded by a payment.
      *
      * <p>Payment verification uses this to activate or recover fulfillment for

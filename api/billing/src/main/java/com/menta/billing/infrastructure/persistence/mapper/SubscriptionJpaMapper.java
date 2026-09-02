@@ -6,6 +6,8 @@ import com.menta.billing.domain.model.PaymentId;
 import com.menta.billing.domain.model.PlanId;
 import com.menta.billing.domain.model.Subscription;
 import com.menta.billing.domain.model.SubscriptionStatus;
+import com.menta.billing.domain.model.SubscriptionType;
+import com.menta.billing.domain.model.TrialGrant;
 import com.menta.billing.infrastructure.persistence.entity.SubscriptionJpaEntity;
 import java.util.List;
 
@@ -24,7 +26,7 @@ public final class SubscriptionJpaMapper {
     public static Subscription toDomain(SubscriptionJpaEntity entity, List<String> courseIds) {
         return new Subscription(
             entity.getId(),
-            PaymentId.of(entity.getPaymentId()),
+            entity.getPaymentId() == null ? null : PaymentId.of(entity.getPaymentId()),
             entity.getUserId(),
             PlanId.of(entity.getPlanId()),
             entity.getIdempotencyKey(),
@@ -36,15 +38,19 @@ public final class SubscriptionJpaMapper {
             entity.getProviderPreferenceId(),
             entity.getCheckoutUrl(),
             entity.getCreatedAt(),
-            toCancellation(entity)
+            toCancellation(entity),
+            SubscriptionType.valueOf(entity.getType()),
+            toTrialGrant(entity),
+            entity.getVersion()
         );
     }
 
     public static SubscriptionJpaEntity toEntity(Subscription subscription) {
         Cancellation cancellation = subscription.getCancellation().orElse(null);
+        TrialGrant grant = subscription.getTrialGrant().orElse(null);
         return new SubscriptionJpaEntity(
             subscription.getId(),
-            subscription.getPaymentId().getValue(),
+            subscription.getPaymentId().map(PaymentId::getValue).orElse(null),
             subscription.getUserId(),
             subscription.getPlanId().getValue(),
             subscription.getIdempotencyKey(),
@@ -58,7 +64,13 @@ public final class SubscriptionJpaMapper {
             subscription.getCreatedAt(),
             cancellation != null ? cancellation.at() : null,
             cancellation != null ? cancellation.by() : null,
-            cancellation != null ? cancellation.reason() : null
+            cancellation != null ? cancellation.reason() : null,
+            subscription.getType().name(),
+            grant != null ? grant.at() : null,
+            grant != null ? grant.by() : null,
+            grant != null ? grant.reason() : null,
+            grant != null ? grant.days() : null,
+            subscription.getVersion()
         );
     }
 
@@ -68,5 +80,15 @@ public final class SubscriptionJpaMapper {
             return null;
         }
         return new Cancellation(entity.getCancelledAt(), entity.getCancelledBy(), entity.getCancellationReason());
+    }
+
+    /** NULL {@code granted_at} means this row is not a TRIAL — every PAID row back-filled by V18 (US-BILLING-012 A17). */
+    private static TrialGrant toTrialGrant(SubscriptionJpaEntity entity) {
+        if (entity.getGrantedAt() == null) {
+            return null;
+        }
+        return new TrialGrant(
+            entity.getGrantedAt(), entity.getGrantedBy(), entity.getGrantReason(), entity.getGrantDays()
+        );
     }
 }

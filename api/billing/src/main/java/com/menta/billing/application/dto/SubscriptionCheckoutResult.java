@@ -22,7 +22,7 @@ public record SubscriptionCheckoutResult(
     ) {
         return new SubscriptionCheckoutResult(
             subscription.getId().toString(),
-            subscription.getPaymentId().toString(),
+            subscription.getPaymentId().map(Object::toString).orElse(null),
             subscription.getPlanId().toString(),
             subscription.getStatus(),
             subscription.getProviderPreferenceId().orElse(null),

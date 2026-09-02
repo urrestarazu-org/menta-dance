@@ -17,6 +17,7 @@ import com.menta.billing.domain.model.PlanId;
 import com.menta.billing.domain.model.PlanStatus;
 import com.menta.billing.domain.model.FulfillmentStatus;
 import com.menta.billing.domain.model.SubscriptionStatus;
+import com.menta.billing.domain.model.SubscriptionType;
 import com.menta.billing.domain.model.Subscription;
 import com.menta.shared.billing.CourseAccessSnapshot;
 import java.math.BigDecimal;
@@ -146,7 +147,7 @@ class VirtualCourseEntitlementServiceTest {
     ) {
         return new Subscription(
             UUID.randomUUID(), PaymentId.generate(), USER_ID, PlanId.generate(), "idempotency-key", status,
-            fulfillmentStatus, startDate, endDate, courseIds, null, null, NOW, null
+            fulfillmentStatus, startDate, endDate, courseIds, null, null, NOW, null, SubscriptionType.PAID, null
         );
     }
 }

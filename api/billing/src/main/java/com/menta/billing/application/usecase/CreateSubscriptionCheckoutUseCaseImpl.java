@@ -136,7 +136,7 @@ public class CreateSubscriptionCheckoutUseCaseImpl implements CreateSubscription
      */
     private SubscriptionCheckoutResult toResult(Subscription subscription) {
         return SubscriptionCheckoutResult.from(
-            subscription, externalReferenceFor(subscription.getPaymentId()), overlapNoticeFor(subscription)
+            subscription, externalReferenceFor(subscription.getPaymentId().orElseThrow()), overlapNoticeFor(subscription)
         );
     }
 
