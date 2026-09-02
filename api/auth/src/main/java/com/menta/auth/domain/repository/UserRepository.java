@@ -20,4 +20,7 @@ public interface UserRepository {
     void deleteById(UserId id);
 
     boolean existsByEmail(Email email);
+
+    /** D8 (US-BILLING-012): backs the cross-module {@code UserExistencePort}. */
+    boolean existsById(UserId id);
 }

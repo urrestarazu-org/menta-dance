@@ -50,13 +50,14 @@ Chain strategy: stacked-to-main
 
 ## Phase 2: D8 Cross-module User-existence Port (PR 2)
 
-- [ ] 2.1 RED `UserRepositoryAdapterTest#existsById_delegates_to_the_jpa_repository`: true/false cases [supports S9]
-- [ ] 2.2 GREEN `auth/domain/repository/UserRepository.java`: `boolean existsById(UserId id)`; `UserRepositoryAdapter.java`: `jpaRepository.existsById(id.getValue())` (A9)
-- [ ] 2.3 RED `UserExistenceAdapterTest`: maps `UUID → UserId`, returns verdict unchanged, mocked `UserRepository` [supports S9]
-- [ ] 2.4 GREEN `shared/src/.../shared/auth/UserExistencePort.java`: `boolean existsById(UUID userId)`, Javadoc states boolean-only rule (A15); `auth/infrastructure/persistence/adapter/UserExistenceAdapter.java` (`@Component`)
-- [ ] 2.5 GREEN `billing/domain/exception/UserNotFoundException.java`: extends `BusinessException`, code `USER_NOT_FOUND`
-- [ ] 2.6 RED `SubscriptionExceptionHandlerTest`: `UserNotFoundException` → `404` [S9]
-- [ ] 2.7 GREEN `SubscriptionExceptionHandler.java`: map `UserNotFoundException` → `404`
+- [x] 2.1 RED `UserRepositoryAdapterTest#existsById_delegates_to_the_jpa_repository`: true/false cases [supports S9]
+- [x] 2.2 GREEN `auth/domain/repository/UserRepository.java`: `boolean existsById(UserId id)`; `UserRepositoryAdapter.java`: `jpaRepository.existsById(id.getValue())` (A9)
+- [x] 2.3 RED `UserExistenceAdapterTest`: maps `UUID → UserId`, returns verdict unchanged, mocked `UserRepository` [supports S9]
+- [x] 2.4 GREEN `shared/src/.../shared/auth/UserExistencePort.java`: `boolean existsById(UUID userId)`, Javadoc states boolean-only rule (A15); `auth/infrastructure/persistence/adapter/UserExistenceAdapter.java` (`@Component`)
+- [x] 2.5 GREEN `billing/domain/exception/UserNotFoundException.java`: extends `BusinessException`, code `USER_NOT_FOUND`
+- [x] 2.6 RED `SubscriptionExceptionHandlerTest`: `UserNotFoundException` → `404` [S9]
+- [x] 2.7 GREEN `SubscriptionExceptionHandler.java`: map `UserNotFoundException` → `404`
+- [x] 2.8 (added beyond the original plan) RED+GREEN `UserExistenceCrossModuleIntegrationTest` (`api/app`, Testcontainers MySQL, `@SpringBootTest(webEnvironment = NONE)`): seeds a real user via `auth`'s `UserRepository`, confirms the real Spring-wired `UserExistencePort` bean (no mock) returns `true` for that id and `false` for a random `UUID` — proves the D8 bean resolves via component scan alone, pulled forward from Phase 4 for this slice per explicit instruction
 
 ## Phase 3: Assign-Trial Use Case (PR 3)
 

@@ -111,4 +111,27 @@ class UserRepositoryAdapterTest {
 
         assertThat(exists).isTrue();
     }
+
+    /**
+     * D8 (US-BILLING-012): the cross-module {@code UserExistencePort} adapter delegates through
+     * this method, which in turn delegates to {@code CrudRepository#existsById(UUID)} — no new
+     * method on {@code UserJpaRepository} is needed for it.
+     */
+    @Test
+    void existsById_delegates_to_the_jpa_repository_true_case() {
+        when(jpaRepository.existsById(USER_ID)).thenReturn(true);
+
+        boolean exists = adapter.existsById(UserId.of(USER_ID));
+
+        assertThat(exists).isTrue();
+    }
+
+    @Test
+    void existsById_delegates_to_the_jpa_repository_false_case() {
+        when(jpaRepository.existsById(USER_ID)).thenReturn(false);
+
+        boolean exists = adapter.existsById(UserId.of(USER_ID));
+
+        assertThat(exists).isFalse();
+    }
 }
