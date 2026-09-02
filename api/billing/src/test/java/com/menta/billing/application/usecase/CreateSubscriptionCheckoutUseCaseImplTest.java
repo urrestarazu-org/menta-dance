@@ -119,7 +119,7 @@ class CreateSubscriptionCheckoutUseCaseImplTest {
         assertThat(claimed.getValue().getStatus()).isEqualTo(SubscriptionStatus.PENDING);
         assertThat(claimed.getValue().getUserId()).isEqualTo(USER_ID);
         assertThat(claimed.getValue().getPlanId()).isEqualTo(PLAN_ID);
-        assertThat(claimed.getValue().getPaymentId()).isEqualTo(payment.getValue().getId());
+        assertThat(claimed.getValue().getPaymentId()).contains(payment.getValue().getId());
 
         assertThat(result.status()).isEqualTo(SubscriptionStatus.PENDING);
         assertThat(result.checkoutUrl()).isEqualTo("https://mp.example/checkout/pref-1");
@@ -274,9 +274,9 @@ class CreateSubscriptionCheckoutUseCaseImplTest {
         SubscriptionCheckoutResult result = useCase.create(command());
 
         assertThat(result.subscriptionId()).isEqualTo(existing.getId().toString());
-        assertThat(result.paymentId()).isEqualTo(existing.getPaymentId().toString());
+        assertThat(result.paymentId()).isEqualTo(existing.getPaymentId().orElseThrow().toString());
         assertThat(result.checkoutUrl()).isEqualTo("https://mp.example/checkout/pref-1");
-        assertThat(result.externalReference()).isEqualTo("SUB-" + existing.getPaymentId());
+        assertThat(result.externalReference()).isEqualTo("SUB-" + existing.getPaymentId().orElseThrow());
         verify(paymentPreferencePort, never()).createPreference(any());
         verify(paymentRepository, never()).save(any());
         verify(subscriptionRepository, never()).saveNewCheckout(any());

@@ -5,7 +5,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface SubscriptionJpaRepository extends JpaRepository<SubscriptionJpaEntity, UUID> {
 
@@ -33,4 +36,14 @@ public interface SubscriptionJpaRepository extends JpaRepository<SubscriptionJpa
     Optional<SubscriptionJpaEntity> findFirstByUserIdAndPlanIdAndStatusAndEndDateAfterOrderByEndDateDesc(
         UUID userId, UUID planId, String status, Instant endDateAfter
     );
+
+    /**
+     * Id-only projection for the automatic expiry sweep (US-BILLING-012, design A2). {@code <=}
+     * mirrors {@code Subscription.expire}'s own guard exactly, so the sweep can never select a
+     * row the domain would refuse. Served by the new {@code
+     * idx_billing_subscriptions_status_end_date} index (V18) — the existing user-scoped index
+     * would force a full scan for a query with no {@code user_id}.
+     */
+    @Query("SELECT s.id FROM SubscriptionJpaEntity s WHERE s.status = 'ACTIVE' AND s.endDate <= :now")
+    List<UUID> findExpirableIds(@Param("now") Instant now, Pageable pageable);
 }

@@ -82,7 +82,7 @@ class SubscriptionJpaRepositoryTest {
             id, UUID.randomUUID(), userId, planId, "idem-" + id, null,
             SubscriptionStatus.CANCELLED.name(), FulfillmentStatus.ASSIGNED.name(),
             NOW.minusSeconds(60 * DAY), endDate, null, null, NOW.minusSeconds(90 * DAY),
-            NOW.minusSeconds(DAY), userId, null
+            NOW.minusSeconds(DAY), userId, null, "PAID", null, null, null, null, 0L
         );
     }
 
@@ -91,7 +91,7 @@ class SubscriptionJpaRepositoryTest {
         return new SubscriptionJpaEntity(
             id, UUID.randomUUID(), userId, planId, "idem-" + id, null,
             SubscriptionStatus.PENDING.name(), FulfillmentStatus.PENDING_FULFILLMENT.name(),
-            null, null, null, null, NOW.minusSeconds(DAY), null, null, null
+            null, null, null, null, NOW.minusSeconds(DAY), null, null, null, "PAID", null, null, null, null, 0L
         );
     }
 }

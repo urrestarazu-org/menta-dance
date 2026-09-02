@@ -25,6 +25,7 @@ import com.menta.billing.domain.model.PlanStatus;
 import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.domain.model.Subscription;
 import com.menta.billing.domain.model.SubscriptionStatus;
+import com.menta.billing.domain.model.SubscriptionType;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -56,7 +57,8 @@ class CancelSubscriptionUseCaseImplTest {
         return new Subscription(
             id, PaymentId.generate(), userId, planId, "idem-1", SubscriptionStatus.ACTIVE,
             FulfillmentStatus.ASSIGNED, NOW.minusSeconds(86400), NOW.plusSeconds(86400 * 10), List.of("course-1"),
-            "pref-1", "https://mp.example/checkout/pref-1", NOW.minusSeconds(86400 * 2), null
+            "pref-1", "https://mp.example/checkout/pref-1", NOW.minusSeconds(86400 * 2), null,
+            SubscriptionType.PAID, null
         );
     }
 
@@ -159,7 +161,7 @@ class CancelSubscriptionUseCaseImplTest {
         Subscription cancelled = new Subscription(
             subscriptionId, PaymentId.generate(), ownerId, planId, "idem-1", SubscriptionStatus.CANCELLED,
             FulfillmentStatus.ASSIGNED, NOW.minusSeconds(86400), NOW.plusSeconds(86400), List.of(), null, null,
-            NOW.minusSeconds(86400 * 2), null
+            NOW.minusSeconds(86400 * 2), null, SubscriptionType.PAID, null
         );
         when(subscriptionRepository.findById(subscriptionId)).thenReturn(Optional.of(cancelled));
 

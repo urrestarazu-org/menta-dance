@@ -194,7 +194,7 @@ class VirtualLessonAccessIntegrationTest {
         subscriptionRepository.save(new SubscriptionJpaEntity(
             subscriptionId, paymentId, userId, planId, "idem-" + subscriptionId, null,
             status, "ASSIGNED", now.minus(1, ChronoUnit.DAYS), endDate, null, null, now,
-            null, null, null
+            null, null, null, "PAID", null, null, null, null, 0L
         ));
         for (String courseId : snapshotCourseIds) {
             subscriptionCourseRepository.save(new SubscriptionCourseJpaEntity(subscriptionId, courseId));
