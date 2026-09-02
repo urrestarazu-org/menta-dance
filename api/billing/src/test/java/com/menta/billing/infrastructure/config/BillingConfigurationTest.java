@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.menta.billing.application.port.in.AssignTrialSubscriptionUseCase;
 import com.menta.billing.application.port.in.CreateSubscriptionCheckoutUseCase;
 import com.menta.billing.application.port.in.GetPlanUseCase;
 import com.menta.billing.application.port.in.ListPlansUseCase;
@@ -26,8 +27,10 @@ import com.menta.billing.application.usecase.PaymentVerificationService;
 import com.menta.billing.application.usecase.VirtualCourseEntitlementService;
 import com.menta.shared.billing.VirtualCourseEntitlementPort;
 import com.menta.billing.infrastructure.security.RedisBillingPlansRateLimitPort;
+import com.menta.billing.infrastructure.transaction.TransactionalAssignTrialSubscriptionUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalCreateSubscriptionCheckoutUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalReceiveWebhookUseCase;
+import com.menta.shared.auth.UserExistencePort;
 import java.lang.reflect.Field;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.env.Environment;
@@ -75,6 +78,16 @@ class BillingConfigurationTest {
         );
 
         assertThat(useCase).isInstanceOf(TransactionalCreateSubscriptionCheckoutUseCase.class);
+    }
+
+    @Test
+    void wires_the_assign_trial_subscription_use_case_bean_transactionally_with_the_user_existence_port() {
+        AssignTrialSubscriptionUseCase useCase = configuration.assignTrialSubscriptionUseCase(
+            mock(SubscriptionRepository.class), mock(PlanRepository.class), mock(UserExistencePort.class),
+            mock(Clock.class)
+        );
+
+        assertThat(useCase).isInstanceOf(TransactionalAssignTrialSubscriptionUseCase.class);
     }
 
     @Test

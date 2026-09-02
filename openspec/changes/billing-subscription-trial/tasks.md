@@ -61,16 +61,16 @@ Chain strategy: stacked-to-main
 
 ## Phase 3: Assign-Trial Use Case (PR 3)
 
-- [ ] 3.1 RED `AssignTrialSubscriptionUseCaseImplTest#unknownUser`: absent user → `UserNotFoundException`, `verifyNoInteractions` on plan/subscription repositories [S9]
-- [ ] 3.2 RED `AssignTrialSubscriptionUseCaseImplTest#unknownUserBeatsInactivePlan`: unknown `userId` + inactive `planId` → `404`, not `422` [S10]
-- [ ] 3.3 RED `AssignTrialSubscriptionUseCaseImplTest#planNotAvailable`: known user, inactive/missing plan → `PlanNotAvailableException` (422) [S13]
-- [ ] 3.4 RED `AssignTrialSubscriptionUseCaseImplTest#slotOccupied`: known user, active plan, subscription in force (`ACTIVE`/`PENDING`, either type) → `SubscriptionAlreadyActiveException` (409) [S11]
-- [ ] 3.5 RED `AssignTrialSubscriptionUseCaseImplTest#happyPath`: calls `saveNewSubscription`, never `saveNewCheckout`; the `days` used for `endDate` is the command's, asserted against a plan whose `durationDays` differs; validation order `reason`/`days`(400) → admin guard → user(404) → plan(422) → slot(409) [S1]
-- [ ] 3.6 GREEN `billing/application/dto/AssignTrialCommand.java`, `TrialAssignmentResult.java` (D3, carries `type`)
-- [ ] 3.7 GREEN `billing/application/port/in/AssignTrialSubscriptionUseCase` + `AssignTrialSubscriptionUseCaseImpl`: A4 admin guard, A5 order, injects `UserExistencePort`
-- [ ] 3.8 GREEN `billing/infrastructure/transaction/TransactionalAssignTrialSubscriptionUseCase.java`: decorator mirroring the cancellation precedent
-- [ ] 3.9 RED `BillingConfigurationTest#trialUseCaseBean`: trial use-case bean is built with the injected `UserExistencePort`
-- [ ] 3.10 GREEN `BillingConfiguration.java`: new `@Bean` for `assignTrialSubscriptionUseCase`
+- [x] 3.1 RED `AssignTrialSubscriptionUseCaseImplTest#unknownUser`: absent user → `UserNotFoundException`, `verifyNoInteractions` on plan/subscription repositories [S9]
+- [x] 3.2 RED `AssignTrialSubscriptionUseCaseImplTest#unknownUserBeatsInactivePlan`: unknown `userId` + inactive `planId` → `404`, not `422` [S10]
+- [x] 3.3 RED `AssignTrialSubscriptionUseCaseImplTest#planNotAvailable`: known user, inactive/missing plan → `PlanNotAvailableException` (422) [S13]
+- [x] 3.4 RED `AssignTrialSubscriptionUseCaseImplTest#slotOccupied`: known user, active plan, subscription in force (`ACTIVE`/`PENDING`, either type) → `SubscriptionAlreadyActiveException` (409) [S11]
+- [x] 3.5 RED `AssignTrialSubscriptionUseCaseImplTest#happyPath`: calls `saveNewSubscription`, never `saveNewCheckout`; the `days` used for `endDate` is the command's, asserted against a plan whose `durationDays` differs; validation order `reason`/`days`(400) → admin guard → user(404) → plan(422) → slot(409) [S1]
+- [x] 3.6 GREEN `billing/application/dto/AssignTrialCommand.java`, `TrialAssignmentResult.java` (D3, carries `type`)
+- [x] 3.7 GREEN `billing/application/port/in/AssignTrialSubscriptionUseCase` + `AssignTrialSubscriptionUseCaseImpl`: A4 admin guard, A5 order, injects `UserExistencePort`
+- [x] 3.8 GREEN `billing/infrastructure/transaction/TransactionalAssignTrialSubscriptionUseCase.java`: decorator mirroring the cancellation precedent
+- [x] 3.9 RED `BillingConfigurationTest#trialUseCaseBean`: trial use-case bean is built with the injected `UserExistencePort`
+- [x] 3.10 GREEN `BillingConfiguration.java`: new `@Bean` for `assignTrialSubscriptionUseCase`
 
 ## Phase 4: Admin Route, Web DTOs & Cross-module Verification (PR 4)
 
