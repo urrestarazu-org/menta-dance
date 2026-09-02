@@ -5,6 +5,7 @@ import com.menta.billing.domain.exception.PaymentPreferenceUnavailableException;
 import com.menta.billing.domain.exception.PlanNotAvailableException;
 import com.menta.billing.domain.exception.SubscriptionAlreadyActiveException;
 import com.menta.billing.domain.exception.SubscriptionNotFoundException;
+import com.menta.billing.domain.exception.UserNotFoundException;
 import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.infrastructure.web.ProblemDetails;
 import java.util.List;
@@ -65,6 +66,17 @@ public class SubscriptionExceptionHandler {
     ResponseEntity<ProblemDetail> subscriptionNotFound(SubscriptionNotFoundException exception) {
         return ProblemDetails.response(
             HttpStatus.NOT_FOUND, "No se encontró una suscripción cancelable.", exception.getErrorCode()
+        );
+    }
+
+    /**
+     * D8 (US-BILLING-012): the target {@code userId} does not reference an existing user. This
+     * check runs before the plan-availability and already-in-force checks (design.md A5).
+     */
+    @ExceptionHandler(UserNotFoundException.class)
+    ResponseEntity<ProblemDetail> userNotFound(UserNotFoundException exception) {
+        return ProblemDetails.response(
+            HttpStatus.NOT_FOUND, "No se encontró un usuario para el userId indicado.", exception.getErrorCode()
         );
     }
 

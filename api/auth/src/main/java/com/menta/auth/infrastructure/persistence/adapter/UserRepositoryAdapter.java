@@ -51,4 +51,13 @@ public class UserRepositoryAdapter implements UserRepository {
     public boolean existsByEmail(Email email) {
         return jpaRepository.existsByEmail(email.getValue());
     }
+
+    /**
+     * D8 (US-BILLING-012): delegates to {@link org.springframework.data.repository.CrudRepository
+     * #existsById}, inherited by {@code UserJpaRepository} — no new JPA method needed.
+     */
+    @Override
+    public boolean existsById(UserId id) {
+        return jpaRepository.existsById(id.getValue());
+    }
 }
