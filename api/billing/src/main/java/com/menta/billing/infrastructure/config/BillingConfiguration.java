@@ -1,5 +1,6 @@
 package com.menta.billing.infrastructure.config;
 
+import com.menta.billing.application.port.in.AssignTrialSubscriptionUseCase;
 import com.menta.billing.application.port.in.CancelSubscriptionUseCase;
 import com.menta.billing.application.port.in.CreatePhysicalCourseQuoteUseCase;
 import com.menta.billing.application.port.in.CreateSubscriptionCheckoutUseCase;
@@ -26,6 +27,7 @@ import com.menta.billing.application.usecase.CreatePurchaseFromPaymentEventUseCa
 import com.menta.billing.application.usecase.MarkPurchaseExceptionUseCase;
 import com.menta.billing.application.port.out.WebhookInboxAppender;
 import com.menta.billing.application.port.out.WebhookSignatureVerifier;
+import com.menta.billing.application.usecase.AssignTrialSubscriptionUseCaseImpl;
 import com.menta.billing.application.usecase.CancelSubscriptionUseCaseImpl;
 import com.menta.billing.application.usecase.CreatePhysicalCourseQuoteUseCaseImpl;
 import com.menta.billing.application.usecase.CreateSubscriptionCheckoutUseCaseImpl;
@@ -39,10 +41,12 @@ import com.menta.billing.application.usecase.UpdatePhysicalCoursePricingUseCaseI
 import com.menta.billing.application.usecase.VirtualCourseEntitlementService;
 import com.menta.shared.billing.VirtualCourseEntitlementPort;
 import com.menta.billing.infrastructure.security.RedisBillingPlansRateLimitPort;
+import com.menta.billing.infrastructure.transaction.TransactionalAssignTrialSubscriptionUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalCancelSubscriptionUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalCreateSubscriptionCheckoutUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalReceiveWebhookUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalUpdatePhysicalCoursePricingUseCase;
+import com.menta.shared.auth.UserExistencePort;
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.util.Set;
@@ -183,6 +187,22 @@ public class BillingConfiguration {
     ) {
         return new TransactionalCancelSubscriptionUseCase(
             new CancelSubscriptionUseCaseImpl(subscriptionRepository, planRepository, clock)
+        );
+    }
+
+    /**
+     * US-BILLING-012. Wrapped the same way as {@code cancelSubscriptionUseCase}: the slot claim
+     * and the course snapshot (design A12) must commit together. {@code UserExistencePort} is
+     * the D8 cross-module port — {@code auth}'s {@code UserExistenceAdapter} resolves it via
+     * component scan alone.
+     */
+    @Bean
+    public AssignTrialSubscriptionUseCase assignTrialSubscriptionUseCase(
+        SubscriptionRepository subscriptionRepository, PlanRepository planRepository,
+        UserExistencePort userExistencePort, Clock clock
+    ) {
+        return new TransactionalAssignTrialSubscriptionUseCase(
+            new AssignTrialSubscriptionUseCaseImpl(subscriptionRepository, planRepository, userExistencePort, clock)
         );
     }
 
