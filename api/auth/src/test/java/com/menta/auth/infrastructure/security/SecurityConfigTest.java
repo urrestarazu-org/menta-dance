@@ -5,6 +5,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -94,6 +95,29 @@ class SecurityConfigTest {
         mockMvc.perform(delete(
             "/api/v1/admin/billing/subscriptions/00000000-0000-0000-0000-000000000001"
         ).with(user("admin").roles("ADMIN")))
+            .andExpect(status().isNotFound());
+    }
+
+    /**
+     * US-BILLING-012 (#131), Phase 4 — confirms the trial-grant route also needs no new matcher:
+     * it is covered by the same generic {@code /api/v1/admin/**} → {@code hasRole("ADMIN")} rule.
+     */
+    @Test
+    void an_authenticated_non_admin_post_of_the_trial_grant_route_is_forbidden() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(post("/api/v1/admin/billing/subscriptions/trial")
+            .with(user("student").roles("STUDENT")))
+            .andExpect(status().isForbidden());
+    }
+
+    /** The trial-grant route is not denied outright for an actual admin — same shape as cancellation above. */
+    @Test
+    void an_authenticated_admin_post_of_the_trial_grant_route_passes_the_security_layer() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(post("/api/v1/admin/billing/subscriptions/trial")
+            .with(user("admin").roles("ADMIN")))
             .andExpect(status().isNotFound());
     }
 

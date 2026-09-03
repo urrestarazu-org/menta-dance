@@ -40,7 +40,9 @@ tags:
   - name: Suscripciones
     description: Inicio de checkout y cancelación autogestionada de la propia suscripción.
   - name: Gestión de suscripciones
-    description: Cancelación administrativa de la suscripción de un alumno (ADMIN).
+    description: >-
+      Cancelación administrativa y asignación de suscripciones de prueba para un alumno
+      (ADMIN).
   - name: Webhooks
     description: Notificaciones asíncronas de proveedores de pago.
 
@@ -299,6 +301,97 @@ paths:
                     detail: No se encontró una suscripción cancelable.
                     code: SUBSCRIPTION_NOT_FOUND
 
+  /api/v1/admin/billing/subscriptions/trial:
+    post:
+      tags: [Gestión de suscripciones]
+      summary: Asignar una suscripción de prueba (ADMIN)
+      description: |
+        Crea una suscripción `ACTIVE` de tipo `TRIAL`, sin `Payment` asociado, usando el mismo
+        snapshot de `courseIds` congelado que usaría una suscripción paga. La duración en días
+        la decide el admin en la request — nunca se deriva de `Plan.durationDays`.
+
+        `reason` es obligatorio y auditable, igual que en la cancelación administrativa; nunca
+        se devuelve en la respuesta. `userId` se valida antes que cualquier otro chequeo: un
+        `userId` inexistente devuelve `404` incluso si además el `planId` es inválido.
+      operationId: assignTrialSubscription
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignTrialRequest'
+      responses:
+        '201':
+          description: Suscripción de prueba creada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssignTrialResponse'
+        '400':
+          description: >-
+            `reason` ausente o en blanco, o `days` ausente, cero o negativo. No se crea
+            ninguna suscripción.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                motivo_o_dias_invalido:
+                  value:
+                    type: https://menta.dance/problems/invalid_request
+                    title: Bad Request
+                    status: 400
+                    detail: La solicitud contiene datos inválidos.
+                    code: INVALID_REQUEST
+        '401':
+          description: Falta un access token válido.
+        '403':
+          description: El caller autenticado no tiene rol ADMIN.
+        '404':
+          description: El `userId` indicado no existe. Se evalúa antes que la disponibilidad del plan.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                usuario_no_encontrado:
+                  value:
+                    type: https://menta.dance/problems/user_not_found
+                    title: Not Found
+                    status: 404
+                    detail: No se encontró un usuario para el userId indicado.
+                    code: USER_NOT_FOUND
+        '409':
+          description: El usuario ya tiene una suscripción vigente (`ACTIVE` o `PENDING`), de cualquier tipo.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                subscription_already_active:
+                  value:
+                    type: https://menta.dance/problems/subscription_already_active
+                    title: Conflict
+                    status: 409
+                    detail: Ya tenés una suscripción vigente.
+                    code: SUBSCRIPTION_ALREADY_ACTIVE
+        '422':
+          description: El plan no existe o no está `ACTIVE`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                plan_not_available:
+                  value:
+                    type: https://menta.dance/problems/plan_not_available
+                    title: Unprocessable Entity
+                    status: 422
+                    detail: El plan no está disponible para suscribirse.
+                    code: PLAN_NOT_AVAILABLE
+
   /api/v1/billing/payments/mercadopago/webhook:
     post:
       tags: [Webhooks]
@@ -531,6 +624,56 @@ components:
           type: string
           minLength: 1
           description: Obligatorio y auditable en esta ruta; nunca se devuelve en la respuesta.
+
+    AssignTrialRequest:
+      type: object
+      required: [userId, planId, reason, days]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        planId:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          minLength: 1
+          description: Obligatorio y auditable en esta ruta; nunca se devuelve en la respuesta.
+        days:
+          type: integer
+          minimum: 1
+          description: >-
+            Duración de la prueba en días, a criterio exclusivo del admin. Nunca se sustituye
+            por `Plan.durationDays`.
+
+    AssignTrialResponse:
+      type: object
+      required: [subscriptionId, userId, planId, type, status, startDate, endDate, days]
+      properties:
+        subscriptionId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        planId:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [TRIAL]
+        status:
+          type: string
+          enum: [ACTIVE]
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+        days:
+          type: integer
+          description: Igual al `days` solicitado por el admin — nunca `Plan.durationDays`.
 
     PlanCourseResponse:
       type: object

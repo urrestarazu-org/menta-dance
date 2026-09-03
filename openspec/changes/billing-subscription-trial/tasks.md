@@ -74,19 +74,19 @@ Chain strategy: stacked-to-main
 
 ## Phase 4: Admin Route, Web DTOs & Cross-module Verification (PR 4)
 
-- [ ] 4.1 RED `AssignTrialRequestTest`/`SubscriptionAdminControllerTest#blankReason`: blank/absent `reason` → `400` [S2]
-- [ ] 4.2 RED `SubscriptionAdminControllerTest#nonPositiveDays`: `days` absent, zero or negative → `400` (bean validation `@Positive`), and no subscription is created [S3]
-- [ ] 4.3 RED `SubscriptionAdminControllerTest#created`: valid request → `201` with `TrialSubscriptionResponse` body [S1]
-- [ ] 4.4 GREEN `billing/infrastructure/web/dto/AssignTrialRequest.java`/`Response.java`: `@NotBlank userId/planId/reason`, `@Positive days`, response exposes `type`
-- [ ] 4.5 GREEN `SubscriptionAdminController.java`: `POST /api/v1/admin/billing/subscriptions/trial` → `201`
-- [ ] 4.6 RED `SubscriptionAdminControllerTest#nonAdmin`/security test: non-`ROLE_ADMIN` caller → `403`, no subscription created [S4]
-- [ ] 4.7 RED (integration) `SubscriptionTrialIntegrationTest#unknownUserId`: seed real `auth` user, `POST /trial` with random `UUID` → `404`, zero rows written; no mock of `UserExistencePort` [S9]
-- [ ] 4.8 RED (integration) `SubscriptionTrialIntegrationTest#courseSnapshot`: after grant, `billing_subscription_courses` holds **exactly** the plan's `courseIds` (A12 regression the current `saveNewCheckout` reuse would fail); `payment_id IS NULL`, zero `billing_payments` rows [S1]
-- [ ] 4.9 RED (integration) `SubscriptionTrialIntegrationTest#accessParity`: TRIAL and PAID subscriptions produce byte-identical `VirtualCourseEntitlementService` assertions [S5]
-- [ ] 4.10 RED (integration) `SubscriptionTrialIntegrationTest#slotConflict`: second assignment to the same user → `409` [S11]
-- [ ] 4.11 RED (integration) `SubscriptionTrialIntegrationTest#repurchaseAfterTrial`: student whose only subscription is `TRIAL` in `EXPIRED`/`CANCELLED` starts a paid checkout → new distinguishable `PAID` row, trial row never reactivated [S12]
-- [ ] 4.12 GREEN `api/app/src/test/.../integration/billing/SubscriptionTrialIntegrationTest.java`: Testcontainers MySQL + `@SpringBootTest` implementing 4.7–4.11
-- [ ] 4.13 Update `api/openapi/billing-v1.yaml` and create `bruno/API - Direct/billing/Assign Trial Subscription.bru` with the `/trial` route contract, including the `400` (blank `reason`, non-positive `days`) and the D8 `404`
+- [x] 4.1 RED `SubscriptionAdminControllerTest#a_blank_trial_reason_is_rejected_with_400_before_the_use_case_runs`/`#an_absent_trial_reason_is_rejected_with_400_before_the_use_case_runs`: blank/absent `reason` → `400` [S2]
+- [x] 4.2 RED `SubscriptionAdminControllerTest#a_zero_days_value_is_rejected_with_400_and_nothing_is_created`/`#a_negative_days_value_is_rejected_with_400_and_nothing_is_created`/`#an_absent_days_value_is_rejected_with_400_and_nothing_is_created`: `days` absent, zero or negative → `400` (bean validation `@Positive`), and no subscription is created [S3]
+- [x] 4.3 RED `SubscriptionAdminControllerTest#assign_trial_with_a_valid_request_returns_201_and_forwards_it_to_the_use_case`: valid request → `201` with `AssignTrialResponse` body [S1]
+- [x] 4.4 GREEN `billing/infrastructure/web/dto/AssignTrialRequest.java`/`AssignTrialResponse.java`: `@NotBlank userId/planId/reason`, `@Positive days`, response exposes `type`
+- [x] 4.5 GREEN `SubscriptionAdminController.java`: `POST /api/v1/admin/billing/subscriptions/trial` → `201`
+- [x] 4.6 RED `SubscriptionAdminControllerTest#a_non_admin_principal_is_passed_through_as_not_admin_for_the_trial_route` (defense-in-depth pass-through) + `SecurityConfigTest#an_authenticated_non_admin_post_of_the_trial_grant_route_is_forbidden` (real `403` via the existing generic `/api/v1/admin/**` matcher, same split as the cancellation route) + `SubscriptionTrialIntegrationTest#a_non_admin_cannot_grant_a_trial_via_the_admin_route` (real end-to-end `403`) [S4]
+- [x] 4.7 RED (integration) `SubscriptionTrialIntegrationTest#an_unknown_user_id_returns_404_and_creates_no_subscription`: seed real `auth` user, `POST /trial` with random `UUID` → `404`, zero rows written; no mock of `UserExistencePort` [S9]
+- [x] 4.8 RED (integration) `SubscriptionTrialIntegrationTest#a_trial_grant_persists_the_full_course_snapshot_with_no_payment_and_no_provider_charge`: after grant, `billing_subscription_courses` holds **exactly** the plan's `courseIds` (A12 regression the current `saveNewCheckout` reuse would fail); `payment_id IS NULL`, zero `billing_payments` rows [S1]
+- [x] 4.9 RED (integration) `SubscriptionTrialIntegrationTest#trial_and_paid_subscriptions_produce_identical_virtual_access_decisions`: TRIAL and PAID subscriptions produce byte-identical `VirtualCourseEntitlementPort.resolveCourseAccess(...)` assertions via the real Spring-wired `VirtualCourseEntitlementService` bean [S5]
+- [x] 4.10 RED (integration) `SubscriptionTrialIntegrationTest#a_second_trial_grant_to_the_same_user_is_rejected_with_409`: second assignment to the same user → `409` [S11]
+- [x] 4.11 RED (integration) `SubscriptionTrialIntegrationTest#a_student_can_repurchase_after_their_trial_is_cancelled` (real admin-cancel flow) + `#a_student_can_repurchase_after_their_trial_expires` (Phase 5's sweep effect simulated directly at the persistence level, since the sweep itself ships in Phase 5): student whose only subscription is `TRIAL` in `EXPIRED`/`CANCELLED` starts a paid checkout → new distinguishable `PAID` row, trial row never reactivated [S12]
+- [x] 4.12 GREEN `api/app/src/test/.../integration/billing/SubscriptionTrialIntegrationTest.java`: Testcontainers MySQL + `@SpringBootTest` implementing 4.7–4.11 (9 tests total, including 4.1–4.3/4.6's blank-reason/non-positive-days/non-admin real end-to-end regression locks)
+- [x] 4.13 Update `api/openapi/billing-v1.yaml` and create `bruno/API - Direct/billing/Assign Trial Subscription.bru` with the `/trial` route contract, including the `400` (blank `reason`, non-positive `days`) and the D8 `404`. **Deviation**: did NOT add the A14 `409 SUBSCRIPTION_CONFLICT` to the three pre-existing routes in this batch — see apply-progress "Deviations from Design" for the rationale (the mapping ships in task 5.16/Phase 5, and this file's own header states it documents only implemented endpoints)
 
 ## Phase 5: Automatic Expiry Sweep (PR 5)
 
