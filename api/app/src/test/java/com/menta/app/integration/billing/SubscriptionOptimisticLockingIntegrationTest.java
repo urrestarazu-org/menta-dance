@@ -67,6 +67,12 @@ class SubscriptionOptimisticLockingIntegrationTest {
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
         registry.add("billing.webhook.mercadopago.hmac-secret", () -> HMAC_SECRET);
         registry.add("billing.webhook.reconcile-rate-ms", () -> "999999999");
+        // OutboxBlacklistReconciler's real @Scheduled tick (default 5s) calls
+        // tokenBlacklistPort.writeHeartbeat() — a void method — on this class's @MockBean.
+        // Left at its default, a background tick can fire mid-@BeforeEach while Mockito is
+        // still recording when(tokenBlacklistPort.isBlacklisted(...)), corrupting Mockito's
+        // stubbing state and throwing CannotStubVoidMethodWithReturnValue nondeterministically.
+        registry.add("auth.outbox.reconcile-rate-ms", () -> "999999999");
         registry.add("billing.mercadopago.merchant-account-id", () -> MERCHANT_ACCOUNT_ID);
         registry.add("billing.subscription.expiry.rate-ms", () -> "999999999");
     }
