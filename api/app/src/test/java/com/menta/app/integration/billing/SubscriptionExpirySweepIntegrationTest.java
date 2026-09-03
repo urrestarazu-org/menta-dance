@@ -14,6 +14,7 @@ import com.menta.billing.infrastructure.persistence.repository.SubscriptionJpaRe
 import com.menta.billing.infrastructure.scheduling.SubscriptionExpiryReconciler;
 import com.menta.billing.infrastructure.scheduling.SubscriptionExpiryWorker;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -90,6 +91,23 @@ class SubscriptionExpirySweepIntegrationTest {
 
     // --- fixtures -------------------------------------------------------------
 
+    /**
+     * {@code Instant.now()} truncated to microseconds — the precision the auto-generated
+     * {@code datetime(6)} column for {@code end_date} actually preserves on a MySQL round-trip
+     * (this test class runs with {@code ddl-auto: create-drop}, so the schema comes from
+     * Hibernate's own {@code Instant} mapping, not the {@code V18} migration's explicit DDL).
+     * The JVM's real clock resolution is platform-dependent: on macOS {@link Instant#now()}
+     * already only ever produces microsecond-aligned nanoseconds, so a raw value round-trips
+     * losslessly there, but on Linux (this project's CI) it commonly carries genuine
+     * sub-microsecond entropy that MySQL silently rounds away — comparing the read-back {@code
+     * end_date} against an untruncated fixture value then fails non-deterministically depending
+     * on the host, not on any interference between test classes. Truncating at fixture creation
+     * keeps the expected and persisted values byte-identical everywhere.
+     */
+    private static Instant now() {
+        return Instant.now().truncatedTo(ChronoUnit.MICROS);
+    }
+
     private UUID seedSubscription(String status, String type, Instant startDate, Instant endDate, long version) {
         UUID id = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
@@ -124,7 +142,7 @@ class SubscriptionExpirySweepIntegrationTest {
 
     @Test
     void stalePaidAndTrial() {
-        Instant now = Instant.now();
+        Instant now = now();
         Instant past = now.minusSeconds(3600);
         UUID stalePaidId = seedSubscription("ACTIVE", "PAID", past.minusSeconds(600), past, 0L);
         UUID staleTrialId = seedSubscription("ACTIVE", "TRIAL", past.minusSeconds(600), past, 0L);
@@ -141,7 +159,7 @@ class SubscriptionExpirySweepIntegrationTest {
 
     @Test
     void untouched() {
-        Instant now = Instant.now();
+        Instant now = now();
         Instant past = now.minusSeconds(3600);
         UUID cancelledId = seedSubscription("CANCELLED", "PAID", past.minusSeconds(600), past, 0L);
         UUID alreadyExpiredId = seedSubscription("EXPIRED", "PAID", past.minusSeconds(600), past, 0L);
@@ -160,7 +178,7 @@ class SubscriptionExpirySweepIntegrationTest {
 
     @Test
     void batchResilience() {
-        Instant now = Instant.now();
+        Instant now = now();
         Instant past = now.minusSeconds(3600);
         UUID malformedId = seedMalformedActivePaidWithNoPayment(past.minusSeconds(600), past);
         UUID healthyId = seedSubscription("ACTIVE", "PAID", past.minusSeconds(600), past, 0L);
