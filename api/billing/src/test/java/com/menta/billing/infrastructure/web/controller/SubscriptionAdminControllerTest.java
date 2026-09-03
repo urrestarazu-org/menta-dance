@@ -20,6 +20,7 @@ import com.menta.billing.application.dto.CancellationTarget;
 import com.menta.billing.application.dto.TrialAssignmentResult;
 import com.menta.billing.application.port.in.AssignTrialSubscriptionUseCase;
 import com.menta.billing.application.port.in.CancelSubscriptionUseCase;
+import com.menta.billing.domain.exception.PlanNotAvailableException;
 import com.menta.billing.domain.exception.SubscriptionNotFoundException;
 import com.menta.billing.domain.exception.UserNotFoundException;
 import com.menta.billing.domain.model.SubscriptionStatus;
@@ -351,6 +352,20 @@ class SubscriptionAdminControllerTest {
                 .principal(authOf(UUID.randomUUID(), "ADMIN")))
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.code", is("USER_NOT_FOUND")));
+    }
+
+    /** Proves the shared {@code @SubscriptionEndpoint} advice maps this route's own
+     * {@link PlanNotAvailableException} to 422, not just the sibling checkout route. */
+    @Test
+    void an_unavailable_plan_maps_to_422() throws Exception {
+        when(assignTrialUseCase.assign(any())).thenThrow(new PlanNotAvailableException());
+
+        mockMvc.perform(post("/api/v1/admin/billing/subscriptions/trial")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(trialBody(UUID.randomUUID().toString(), UUID.randomUUID().toString(), "motivo", 7))
+                .principal(authOf(UUID.randomUUID(), "ADMIN")))
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.code", is("PLAN_NOT_AVAILABLE")));
     }
 
     @Test
