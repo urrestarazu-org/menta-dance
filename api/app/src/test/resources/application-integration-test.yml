@@ -37,6 +37,19 @@ spring:
     exclude:
       - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
 
+# SubscriptionExpiryReconciler's @Scheduled(fixedRateString=...) has no initialDelayString, so
+# Spring runs its first tick almost immediately at context startup regardless of how high
+# rate-ms is set — a huge rate-ms only spaces out SUBSEQUENT ticks, it never suppresses the
+# first one. Under CI's heavier load that first tick can land inside a test method's own
+# window instead of safely before it, racing real writes against tests that manually simulate
+# a race (see SubscriptionOptimisticLockingIntegrationTest). Default the reconciler off for
+# every integration test; SubscriptionExpirySweepIntegrationTest re-enables it explicitly,
+# since proving the real sweep is its whole point.
+billing:
+  subscription:
+    expiry:
+      enabled: false
+
 # Logging for integration tests
 logging:
   level:

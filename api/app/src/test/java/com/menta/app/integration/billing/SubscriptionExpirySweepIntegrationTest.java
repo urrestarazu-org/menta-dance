@@ -71,6 +71,10 @@ class SubscriptionExpirySweepIntegrationTest {
         registry.add("billing.mercadopago.merchant-account-id", () -> MERCHANT_ACCOUNT_ID);
         // The scheduled tick must never fire on its own — every assertion drives tick() by hand.
         registry.add("billing.subscription.expiry.rate-ms", () -> "999999999");
+        // The shared integration-test profile now defaults this reconciler off (see
+        // application-integration-test.yml); this class is the one place that needs the real
+        // bean to exist, since it wires SubscriptionExpiryReconciler directly.
+        registry.add("billing.subscription.expiry.enabled", () -> "true");
     }
 
     @Autowired private SubscriptionJpaRepository subscriptionRepository;

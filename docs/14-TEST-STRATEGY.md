@@ -117,3 +117,27 @@ scopeando el **input** de la task (`classDirectories`, vía
 `BUNDLE` simple sin `includes` — es la única forma comprobada que
 efectivamente falla. Usar `registerLayeredCoverageVerification` de
 `buildSrc` en vez de reimplementar el patrón.
+
+### Nota técnica: `rate-ms` alto no apaga un `@Scheduled` (issue #131)
+
+Silenciar un job periódico en un test de integración fijando su intervalo
+(`fixedRateString`) a un número gigante (`999999999`) **no evita su primera
+ejecución** — `@Scheduled(fixedRateString = ...)` sin `initialDelayString`
+corre esa primera vez casi de inmediato al arrancar el contexto,
+independientemente de cuán alto sea el `rate`; el número grande solo separa
+las ejecuciones *siguientes*. Confirmado en CI (no en local): bajo la carga
+más lenta del runner, esa primera ejecución "inmediata" podía correrse lo
+suficiente como para caer dentro de la ventana de un test method en vez de
+antes, compitiendo por una fila real contra una escritura que el test
+simulaba manualmente — `SubscriptionOptimisticLockingIntegrationTest`
+fallaba con `ObjectOptimisticLockingFailureException` en CI mientras pasaba
+siempre en local.
+
+**Regla a seguir para cualquier `@Scheduled` nuevo con `@ConditionalOnProperty`
+de encendido/apagado**: en el perfil compartido de test de integración
+(`application-integration-test.yml`), default el job **apagado**
+(`enabled: false`), no solo con un `rate-ms` alto. Prenderlo explícitamente
+solo en la clase de test que necesita el bean real (vía `@DynamicPropertySource`
+o `@TestPropertySource`). Un `rate-ms` alto sigue siendo necesario en esas
+clases para que la única ejecución sea la manual del test, pero no reemplaza
+el apagado por defecto en el resto de la suite.
