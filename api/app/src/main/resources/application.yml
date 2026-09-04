@@ -115,6 +115,15 @@ auth:
     reconcile-backoff-seconds: ${AUTH_OUTBOX_RECONCILE_BACKOFF_SECONDS:30}
     degraded-window-seconds: ${AUTH_OUTBOX_DEGRADED_WINDOW_SECONDS:30}
 
+# Billing module configuration (US-BILLING-012)
+billing:
+  subscription:
+    expiry:
+      # Real off switch (design A16) — rate-ms alone cannot disable a @Scheduled job.
+      enabled: ${BILLING_SUBSCRIPTION_EXPIRY_ENABLED:true}
+      rate-ms: ${BILLING_SUBSCRIPTION_EXPIRY_RATE_MS:60000}
+      batch-size: ${BILLING_SUBSCRIPTION_EXPIRY_BATCH_SIZE:100}
+
 server:
   port: 8081
   servlet:

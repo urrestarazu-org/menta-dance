@@ -41,6 +41,8 @@ docs {
     400 INVALID_REQUEST         → reason missing or blank
     403                         → caller is not ADMIN
     404 SUBSCRIPTION_NOT_FOUND  → id does not exist or is not ACTIVE
+    409 SUBSCRIPTION_CONFLICT   → the subscription was modified by a concurrent operation
+                                  (US-BILLING-012 A14 — e.g. the automatic expiry sweep raced it)
 }
 
 tests {

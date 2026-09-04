@@ -27,6 +27,8 @@ docs {
 
   Error contract:
     404 SUBSCRIPTION_NOT_FOUND → no ACTIVE subscription to cancel
+    409 SUBSCRIPTION_CONFLICT  → the subscription was modified by a concurrent operation
+                                 (US-BILLING-012 A14 — e.g. the automatic expiry sweep raced it)
 }
 
 tests {

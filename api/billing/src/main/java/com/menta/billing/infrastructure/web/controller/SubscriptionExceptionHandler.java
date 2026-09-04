@@ -12,6 +12,7 @@ import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -77,6 +78,24 @@ public class SubscriptionExceptionHandler {
     ResponseEntity<ProblemDetail> userNotFound(UserNotFoundException exception) {
         return ProblemDetails.response(
             HttpStatus.NOT_FOUND, "No se encontró un usuario para el userId indicado.", exception.getErrorCode()
+        );
+    }
+
+    /**
+     * US-BILLING-012 design A14. The automatic expiry sweep and a cancellation (self-service or
+     * admin) can both read the same {@code ACTIVE} row; whichever commits second loses the race
+     * instead of silently overwriting the other, including erasing a cancellation audit trail.
+     * This mapping widens the HTTP contract of every route carrying {@code @SubscriptionEndpoint}
+     * — {@code POST /subscriptions}, {@code DELETE /subscriptions/me}, {@code DELETE
+     * /admin/.../{subscriptionId}} and {@code POST .../trial} — from an unhandled {@code 500} to
+     * a deterministic {@code 409}; a retry reads the terminal state.
+     */
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    ResponseEntity<ProblemDetail> optimisticLockConflict(ObjectOptimisticLockingFailureException exception) {
+        return ProblemDetails.response(
+            HttpStatus.CONFLICT,
+            "La suscripción fue modificada por otra operación. Reintentá la solicitud.",
+            "SUBSCRIPTION_CONFLICT"
         );
     }
 
