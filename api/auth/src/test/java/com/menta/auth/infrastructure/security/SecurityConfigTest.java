@@ -5,7 +5,9 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -119,6 +121,58 @@ class SecurityConfigTest {
         mockMvc.perform(post("/api/v1/admin/billing/subscriptions/trial")
             .with(user("admin").roles("ADMIN")))
             .andExpect(status().isNotFound());
+    }
+
+    /**
+     * #52, US-VIRTUAL-005 (Slice 1). Before this matcher existed, {@code
+     * /api/v1/virtual/lessons/**} was granted by {@code permitAll()} with no
+     * {@code HttpMethod} restriction (see the class Javadoc), so this write
+     * endpoint was anonymously reachable.
+     */
+    @Test
+    void an_unauthenticated_put_of_the_lesson_progress_route_is_rejected() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(put("/api/v1/virtual/lessons/00000000-0000-0000-0000-000000000001/progress"))
+            .andExpect(status().isUnauthorized());
+    }
+
+    /**
+     * #52, US-VIRTUAL-005 (Slice 1). Same {@code permitAll()} wildcard as the
+     * PUT case above also covered this GET before this matcher existed.
+     */
+    @Test
+    void an_unauthenticated_get_of_the_lesson_progress_route_is_rejected() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get("/api/v1/virtual/lessons/00000000-0000-0000-0000-000000000001/progress"))
+            .andExpect(status().isUnauthorized());
+    }
+
+    /**
+     * #52, US-VIRTUAL-005 (Slice 1). Same {@code permitAll()} wildcard as the
+     * PUT case above also covered this POST before this matcher existed.
+     */
+    @Test
+    void an_unauthenticated_post_of_the_lesson_complete_route_is_rejected() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(post("/api/v1/virtual/lessons/00000000-0000-0000-0000-000000000001/complete"))
+            .andExpect(status().isUnauthorized());
+    }
+
+    /**
+     * #52, US-VIRTUAL-005 (Slice 1). Before this matcher existed, this path
+     * had no matcher at all and fell through to {@code
+     * anyRequest().access(roleAuthorizationManager)}, whose own fall-through
+     * semantics grant unmapped paths regardless of authentication.
+     */
+    @Test
+    void an_unauthenticated_get_of_the_course_progress_route_is_rejected() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get("/api/v1/virtual/courses/00000000-0000-0000-0000-000000000001/progress"))
+            .andExpect(status().isUnauthorized());
     }
 
     @Test

@@ -74,13 +74,13 @@ unmerged tracker branch.
 **Branch**: `feature/virtual-lesson-progress-security-schema` off `develop`,
 merges back into `develop`.
 
-- [ ] 1.1 RED: In `api/auth/src/test/java/com/menta/auth/infrastructure/security/SecurityConfigTest.java`, add four `@Test` methods (matching the file's existing one-method-per-case style, not `@ParameterizedTest`) asserting `401` for anonymous `PUT /api/v1/virtual/lessons/{id}/progress`, `GET .../progress`, `POST .../complete`, `GET /api/v1/virtual/courses/{id}/progress`.
-- [ ] 1.2 Verify RED: run `./gradlew :api:auth:test --tests "*SecurityConfigTest*"` — confirm the new cases fail with `404`/`200` (falls through the `permitAll` wildcard or `anyRequest().access(...)`), not a compile error.
-- [ ] 1.3 GREEN: in `SecurityConfig.java`, insert the four `.requestMatchers(HttpMethod.X, "...").authenticated()` matchers immediately before the `permitAll` block at line 135, per the `DELETE /billing/subscriptions/me` precedent (lines 166-170). Add the same kind of inline comment explaining why each method-scoped entry is required.
-- [ ] 1.4 Verify GREEN: re-run `./gradlew :api:auth:test` — new cases pass `401`; full `SecurityConfigTest` suite and `:api:auth:test` stay green (no existing matcher regressed).
-- [ ] 1.5 Create `api/app/src/main/resources/db/migration/V19__virtual_lesson_progress.sql` with the `virtual_lesson_progress` table from `design.md` (surrogate `id`, unique `(user_id, lesson_id)`, FKs to `virtual_lessons`/`virtual_courses` without `ON DELETE CASCADE`, `chk_virtual_lesson_progress_position` check).
-- [ ] 1.6 Verify: `./gradlew :api:app:test` — existing Spring context-load integration tests apply `V19` cleanly as part of the normal migration chain (no dedicated migration test needed; see forecast correction above).
-- [ ] 1.7 Run `./gradlew check` to confirm the slice is green end-to-end (Checkstyle, ArchUnit unaffected, ordinary test suites) before opening PR 1.
+- [x] 1.1 RED: In `api/auth/src/test/java/com/menta/auth/infrastructure/security/SecurityConfigTest.java`, add four `@Test` methods (matching the file's existing one-method-per-case style, not `@ParameterizedTest`) asserting `401` for anonymous `PUT /api/v1/virtual/lessons/{id}/progress`, `GET .../progress`, `POST .../complete`, `GET /api/v1/virtual/courses/{id}/progress`.
+- [x] 1.2 Verify RED: run `./gradlew :api:auth:test --tests "*SecurityConfigTest*"` — confirm the new cases fail with `404`/`200` (falls through the `permitAll` wildcard or `anyRequest().access(...)`), not a compile error.
+- [x] 1.3 GREEN: in `SecurityConfig.java`, insert the four `.requestMatchers(HttpMethod.X, "...").authenticated()` matchers immediately before the `permitAll` block at line 135, per the `DELETE /billing/subscriptions/me` precedent (lines 166-170). Add the same kind of inline comment explaining why each method-scoped entry is required.
+- [x] 1.4 Verify GREEN: re-run `./gradlew :api:auth:test` — new cases pass `401`; full `SecurityConfigTest` suite and `:api:auth:test` stay green (no existing matcher regressed).
+- [x] 1.5 Create `api/app/src/main/resources/db/migration/V19__virtual_lesson_progress.sql` with the `virtual_lesson_progress` table from `design.md` (surrogate `id`, unique `(user_id, lesson_id)`, FKs to `virtual_lessons`/`virtual_courses` without `ON DELETE CASCADE`, `chk_virtual_lesson_progress_position` check).
+- [x] 1.6 Verify: `./gradlew :api:app:test` — existing Spring context-load integration tests apply `V19` cleanly as part of the normal migration chain (no dedicated migration test needed; see forecast correction above).
+- [x] 1.7 Run `./gradlew check` to confirm the slice is green end-to-end (Checkstyle, ArchUnit unaffected, ordinary test suites) before opening PR 1.
 
 ## Slice 2 — Lesson progress core (save, read, complete)
 
