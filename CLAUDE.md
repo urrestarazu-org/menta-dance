@@ -186,6 +186,10 @@ Antes de iniciar una tarea, considerar el modelo apropiado:
 Cuando el usuario pida "crear un PR", "prcreator", o variantes, leer y ejecutar:
 - **prcreator**: @skills/prcreator/SKILL.md
 
+Cuando el usuario pida "prsync", "actualizar la descripción del PR", "sincronizar el PR",
+o variantes, leer y ejecutar:
+- **prsync**: @skills/prsync/SKILL.md
+
 ### ⚠️ Lección importante sobre PRs
 
 **SIEMPRE verificar PRs existentes antes de crear uno nuevo:**
