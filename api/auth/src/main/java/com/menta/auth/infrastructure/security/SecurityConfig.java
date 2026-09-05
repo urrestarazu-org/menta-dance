@@ -29,6 +29,17 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * default-deny fail policy.
  *
  * Path policy:
+ *   - PUT/GET /api/v1/virtual/lessons/{lessonId}/progress and
+ *     POST /api/v1/virtual/lessons/{lessonId}/complete → authenticated
+ *     (any role) (#52, US-VIRTUAL-005; these share the
+ *     /api/v1/virtual/lessons/** prefix with the public lesson-detail
+ *     permitAll rule below, which has no HttpMethod restriction and would
+ *     otherwise cover them too — declared first so first-match-wins picks
+ *     these method-scoped entries instead).
+ *   - GET /api/v1/virtual/courses/{courseId}/progress → authenticated
+ *     (any role) (#52, US-VIRTUAL-005; unmapped otherwise, which would fall
+ *     through to anyRequest()'s permissive default grant — same
+ *     explicit-matcher reasoning as #130's DELETE rule below).
  *   - /api/v1/auth/login and /api/v1/auth/refresh → permitAll (controllers handle credentials).
  *   - /api/v1/auth/logout → authenticated Bearer access token required.
  *   - /api/v1/auth/forgot-password and /api/v1/auth/reset-password → permitAll
@@ -130,6 +141,28 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
+                // #52, US-VIRTUAL-005: lesson progress and completion are per-caller
+                // student data, but /api/v1/virtual/lessons/** below is permitAll with
+                // no HttpMethod restriction, so it covers every verb on this same
+                // prefix. Declared first — first-match-wins — so these method-scoped
+                // entries win over that wildcard instead of falling through to it.
+                .requestMatchers(
+                    HttpMethod.PUT, "/api/v1/virtual/lessons/*/progress"
+                ).authenticated()
+                .requestMatchers(
+                    HttpMethod.GET, "/api/v1/virtual/lessons/*/progress"
+                ).authenticated()
+                .requestMatchers(
+                    HttpMethod.POST, "/api/v1/virtual/lessons/*/complete"
+                ).authenticated()
+                // #52, US-VIRTUAL-005: the course-progress aggregate has no other
+                // matcher at all, so without this explicit entry it would fall through
+                // to anyRequest().access(roleAuthorizationManager) below, whose own
+                // fall-through semantics grant unmapped paths regardless of
+                // authentication (see that rule's comment further down).
+                .requestMatchers(
+                    HttpMethod.GET, "/api/v1/virtual/courses/*/progress"
+                ).authenticated()
                 // Login and refresh authenticate their own credentials. Logout requires
                 // a valid access Bearer token, while its refresh is supplied separately.
                 .requestMatchers(
