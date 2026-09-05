@@ -4,15 +4,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
+import com.menta.virtual.application.port.in.CompleteLessonUseCase;
 import com.menta.virtual.application.port.in.CreateVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.CreateVirtualLessonUseCase;
 import com.menta.virtual.application.port.in.CreateVirtualModuleUseCase;
 import com.menta.virtual.application.port.in.DeleteVirtualCourseUseCase;
+import com.menta.virtual.application.port.in.GetLessonProgressUseCase;
 import com.menta.virtual.application.port.in.GetPublicLessonStreamUseCase;
 import com.menta.virtual.application.port.in.GetPublicLessonUseCase;
 import com.menta.virtual.application.port.in.ListManagedVirtualCoursesUseCase;
 import com.menta.virtual.application.port.in.PublishVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.ReorderVirtualModulesUseCase;
+import com.menta.virtual.application.port.in.SaveLessonProgressUseCase;
 import com.menta.virtual.application.port.in.UnpublishVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.UpdateVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.UpdateVirtualLessonUseCase;
@@ -20,11 +23,13 @@ import com.menta.virtual.application.port.in.UpdateVirtualModuleUseCase;
 import com.menta.virtual.application.port.in.VirtualCourseCatalogPort;
 import com.menta.virtual.application.port.out.BunnyNetSignatureService;
 import com.menta.virtual.application.port.out.Clock;
+import com.menta.virtual.application.port.out.LessonProgressRepository;
 import com.menta.virtual.application.port.out.VirtualCourseAuditRepository;
 import com.menta.virtual.application.port.out.VirtualCourseRepository;
 import com.menta.virtual.application.port.out.VirtualLessonRepository;
 import com.menta.shared.billing.VirtualCourseEntitlementPort;
 import com.menta.virtual.application.port.out.VirtualModuleRepository;
+import com.menta.virtual.application.usecase.GetLessonProgressUseCaseImpl;
 import com.menta.virtual.application.usecase.GetPublicLessonStreamUseCaseImpl;
 import com.menta.virtual.application.usecase.GetPublicLessonUseCaseImpl;
 import com.menta.virtual.application.usecase.LessonAccessPolicy;
@@ -32,6 +37,8 @@ import com.menta.virtual.application.usecase.VirtualCourseCatalogPortImpl;
 import com.menta.virtual.infrastructure.cdn.BunnyNetProperties;
 import com.menta.virtual.infrastructure.cdn.StringFormatBunnyNetSignatureService;
 import com.menta.virtual.infrastructure.cdn.local.LocalBunnyNetSignatureService;
+import com.menta.virtual.infrastructure.transaction.RetryOnDuplicateKeyCompleteLessonUseCase;
+import com.menta.virtual.infrastructure.transaction.RetryOnDuplicateKeySaveLessonProgressUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalCreateVirtualCourseUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalCreateVirtualLessonUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalCreateVirtualModuleUseCase;
@@ -210,6 +217,41 @@ class VirtualConfigurationTest {
         assertThat(clock.now()).isNotNull();
     }
 
+    @Test
+    void wires_the_get_lesson_progress_use_case_bean() {
+        LessonProgressRepository progressRepository = mock(LessonProgressRepository.class);
+
+        GetLessonProgressUseCase useCase = configuration.getLessonProgressUseCase(
+            lessonRepository, moduleRepository, progressRepository, new LessonAccessPolicy(entitlementPort)
+        );
+
+        assertThat(useCase).isInstanceOf(GetLessonProgressUseCaseImpl.class);
+    }
+
+    @Test
+    void wires_the_save_lesson_progress_use_case_bean_with_retry_and_transaction() {
+        LessonProgressRepository progressRepository = mock(LessonProgressRepository.class);
+
+        SaveLessonProgressUseCase useCase = configuration.saveLessonProgressUseCase(
+            lessonRepository, moduleRepository, progressRepository, new LessonAccessPolicy(entitlementPort),
+            configuration.clock()
+        );
+
+        assertThat(useCase).isInstanceOf(RetryOnDuplicateKeySaveLessonProgressUseCase.class);
+    }
+
+    @Test
+    void wires_the_complete_lesson_use_case_bean_with_retry_and_transaction() {
+        LessonProgressRepository progressRepository = mock(LessonProgressRepository.class);
+
+        CompleteLessonUseCase useCase = configuration.completeLessonUseCase(
+            lessonRepository, moduleRepository, progressRepository, new LessonAccessPolicy(entitlementPort),
+            configuration.clock()
+        );
+
+        assertThat(useCase).isInstanceOf(RetryOnDuplicateKeyCompleteLessonUseCase.class);
+    }
+
     /**
      * ADR-0040 / issue #129 — profile-guarded, mutually exclusive adapter
      * selection. These tests boot a real Spring context (mirrors {@code
@@ -303,6 +345,11 @@ class VirtualConfigurationTest {
             @Bean
             VirtualCourseEntitlementPort virtualCourseEntitlementPort() {
                 return mock(VirtualCourseEntitlementPort.class);
+            }
+
+            @Bean
+            LessonProgressRepository lessonProgressRepository() {
+                return mock(LessonProgressRepository.class);
             }
         }
     }

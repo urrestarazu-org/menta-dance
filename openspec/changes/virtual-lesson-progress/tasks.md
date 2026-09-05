@@ -89,49 +89,49 @@ Slice 1 merges), merges back into `develop`.
 
 ### Domain
 
-- [ ] 2.1 RED: `api/virtual/src/test/java/com/menta/virtual/domain/model/LessonProgressTest.java` — position must satisfy `0 ≤ position ≤ maxSeconds` (throws `InvalidLessonPositionException` outside bounds); `markCompleted()` sets `completed`/`completedAt` without touching `position`/`positionUpdatedAt`; `markCompleted()` is a no-op when already complete.
-- [ ] 2.2 Verify RED: `./gradlew :api:virtual:test --tests "*LessonProgressTest*"` fails for the missing class/methods, not a typo.
-- [ ] 2.3 GREEN: create `domain/model/LessonProgress.java` (immutable + `with*`, mirrors `VirtualLesson`), `domain/model/LessonProgressId.java` (value-object convention, mirrors `LessonId`), `domain/exception/InvalidLessonPositionException.java` (`extends BusinessException`).
-- [ ] 2.4 Verify GREEN: re-run the domain test class — all green.
+- [x] 2.1 RED: `api/virtual/src/test/java/com/menta/virtual/domain/model/LessonProgressTest.java` — position must satisfy `0 ≤ position ≤ maxSeconds` (throws `InvalidLessonPositionException` outside bounds); `markCompleted()` sets `completed`/`completedAt` without touching `position`/`positionUpdatedAt`; `markCompleted()` is a no-op when already complete.
+- [x] 2.2 Verify RED: `./gradlew :api:virtual:test --tests "*LessonProgressTest*"` fails for the missing class/methods, not a typo.
+- [x] 2.3 GREEN: create `domain/model/LessonProgress.java` (immutable + `with*`, mirrors `VirtualLesson`), `domain/model/LessonProgressId.java` (value-object convention, mirrors `LessonId`), `domain/exception/InvalidLessonPositionException.java` (`extends BusinessException`).
+- [x] 2.4 Verify GREEN: re-run the domain test class — all green.
 
 ### Application: ports and DTOs
 
-- [ ] 2.5 Create `application/port/in/SaveLessonProgressUseCase.java` (`LessonProgressView save(String lessonId, UUID actingUserId, int positionSeconds)`), `GetLessonProgressUseCase.java` (`Optional<LessonProgressView> get(String lessonId, UUID actingUserId)`), `CompleteLessonUseCase.java` (`LessonProgressView complete(String lessonId, UUID actingUserId)`).
-- [ ] 2.6 Create `application/port/out/LessonProgressRepository.java` with `Optional<LessonProgress> findByUserIdAndLessonId(UUID, LessonId)` and `LessonProgress save(LessonProgress)` only — the two course-aggregate query methods are added in Slice 3.
-- [ ] 2.7 Create `application/dto/LessonProgressView.java` (record: lessonId, positionSeconds, completed, completedAt).
+- [x] 2.5 Create `application/port/in/SaveLessonProgressUseCase.java` (`LessonProgressView save(String lessonId, UUID actingUserId, int positionSeconds)`), `GetLessonProgressUseCase.java` (`Optional<LessonProgressView> get(String lessonId, UUID actingUserId)`), `CompleteLessonUseCase.java` (`LessonProgressView complete(String lessonId, UUID actingUserId)`).
+- [x] 2.6 Create `application/port/out/LessonProgressRepository.java` with `Optional<LessonProgress> findByUserIdAndLessonId(UUID, LessonId)` and `LessonProgress save(LessonProgress)` only — the two course-aggregate query methods are added in Slice 3.
+- [x] 2.7 Create `application/dto/LessonProgressView.java` (record: lessonId, positionSeconds, completed, completedAt).
 
 ### Application: use cases (Mockito on ports, no Spring context)
 
-- [ ] 2.8 RED: `application/usecase/SaveLessonProgressUseCaseImplTest.java` — free lesson without entitlement saves and returns `200`-equivalent view; protected lesson without entitlement throws `ForbiddenLessonAccessException`; out-of-bounds position throws `InvalidLessonPositionException` before any repository write; repeating the identical position calls `repository.save` with unchanged persisted state (idempotent, spec scenario "Repeated identical save").
-- [ ] 2.9 Verify RED, then GREEN: implement `SaveLessonProgressUseCaseImpl.java` calling `LessonAccessPolicy.decide(...)`, clamping the read-time-vs-write-time duration bound at write time, `findByUserIdAndLessonId` → mutate-or-create → `save`.
-- [ ] 2.10 RED: `application/usecase/GetLessonProgressUseCaseImplTest.java` — no saved row returns a default view (`position = 0`, `completed = false`) once access is granted, not `Optional.empty()`; a lapsed-subscription/protected-lesson denial throws `ForbiddenLessonAccessException` (spec: "A lapsed subscriber loses read access"); unknown lesson id yields `Optional.empty()` (anti-enumeration, mirrors `GetPublicLessonUseCaseImpl`); returned `positionSeconds` is clamped to `min(stored, durationMinutes * 60)` at read time (stale-position-after-edit rule).
-- [ ] 2.11 Verify RED, then GREEN: implement `GetLessonProgressUseCaseImpl.java`.
-- [ ] 2.12 RED: `application/usecase/CompleteLessonUseCaseImplTest.java` — completing sets `completed = true` and leaves `positionSeconds`/`positionUpdatedAt` untouched (spec: "Completing a lesson does not move its saved position"); repeating is a no-op returning the same state; access cascade denies identically to save/get.
-- [ ] 2.13 Verify RED, then GREEN: implement `CompleteLessonUseCaseImpl.java`.
+- [x] 2.8 RED: `application/usecase/SaveLessonProgressUseCaseImplTest.java` — free lesson without entitlement saves and returns `200`-equivalent view; protected lesson without entitlement throws `ForbiddenLessonAccessException`; out-of-bounds position throws `InvalidLessonPositionException` before any repository write; repeating the identical position calls `repository.save` with unchanged persisted state (idempotent, spec scenario "Repeated identical save").
+- [x] 2.9 Verify RED, then GREEN: implement `SaveLessonProgressUseCaseImpl.java` calling `LessonAccessPolicy.decide(...)`, clamping the read-time-vs-write-time duration bound at write time, `findByUserIdAndLessonId` → mutate-or-create → `save`.
+- [x] 2.10 RED: `application/usecase/GetLessonProgressUseCaseImplTest.java` — no saved row returns a default view (`position = 0`, `completed = false`) once access is granted, not `Optional.empty()`; a lapsed-subscription/protected-lesson denial throws `ForbiddenLessonAccessException` (spec: "A lapsed subscriber loses read access"); unknown lesson id yields `Optional.empty()` (anti-enumeration, mirrors `GetPublicLessonUseCaseImpl`); returned `positionSeconds` is clamped to `min(stored, durationMinutes * 60)` at read time (stale-position-after-edit rule).
+- [x] 2.11 Verify RED, then GREEN: implement `GetLessonProgressUseCaseImpl.java`.
+- [x] 2.12 RED: `application/usecase/CompleteLessonUseCaseImplTest.java` — completing sets `completed = true` and leaves `positionSeconds`/`positionUpdatedAt` untouched (spec: "Completing a lesson does not move its saved position"); repeating is a no-op returning the same state; access cascade denies identically to save/get.
+- [x] 2.13 Verify RED, then GREEN: implement `CompleteLessonUseCaseImpl.java`.
 
 ### Infrastructure: write-side concurrency and transactions
 
-- [ ] 2.14 Create `infrastructure/transaction/DuplicateKeyRetry.java` (shared static `once(Supplier<T>)` helper).
-- [ ] 2.15 RED: a `DuplicateKeyRetryTest.java` (or inline in the decorator tests) proving one retry on `DataIntegrityViolationException` and no retry on any other exception type.
-- [ ] 2.16 GREEN: implement `DuplicateKeyRetry`, then `infrastructure/transaction/TransactionalSaveLessonProgressUseCase.java`, `TransactionalCompleteLessonUseCase.java`, `RetryOnDuplicateKeySaveLessonProgressUseCase.java`, `RetryOnDuplicateKeyCompleteLessonUseCase.java` — outermost retry decorator wraps the transactional decorator, one transaction per attempt, per design's "Upsert concurrency" section.
+- [x] 2.14 Create `infrastructure/transaction/DuplicateKeyRetry.java` (shared static `once(Supplier<T>)` helper).
+- [x] 2.15 RED: a `DuplicateKeyRetryTest.java` (or inline in the decorator tests) proving one retry on `DataIntegrityViolationException` and no retry on any other exception type.
+- [x] 2.16 GREEN: implement `DuplicateKeyRetry`, then `infrastructure/transaction/TransactionalSaveLessonProgressUseCase.java`, `TransactionalCompleteLessonUseCase.java`, `RetryOnDuplicateKeySaveLessonProgressUseCase.java`, `RetryOnDuplicateKeyCompleteLessonUseCase.java` — outermost retry decorator wraps the transactional decorator, one transaction per attempt, per design's "Upsert concurrency" section.
 
 ### Infrastructure: persistence (plain unit tests, no `@DataJpaTest`)
 
-- [ ] 2.17 RED: `infrastructure/persistence/mapper/LessonProgressJpaMapperTest.java` — round-trip domain ↔ entity, including a null `positionUpdatedAt`.
-- [ ] 2.18 GREEN: create `infrastructure/persistence/entity/LessonProgressJpaEntity.java`, `infrastructure/persistence/mapper/LessonProgressJpaMapper.java`.
-- [ ] 2.19 RED: `infrastructure/persistence/adapter/LessonProgressRepositoryAdapterTest.java` — Mockito against a mocked `LessonProgressJpaRepository`, mirroring `VirtualLessonRepositoryAdapterTest`'s pattern (no Spring context).
-- [ ] 2.20 GREEN: create `infrastructure/persistence/repository/LessonProgressJpaRepository.java` (Spring Data interface) and `infrastructure/persistence/adapter/LessonProgressRepositoryAdapter.java`.
+- [x] 2.17 RED: `infrastructure/persistence/mapper/LessonProgressJpaMapperTest.java` — round-trip domain ↔ entity, including a null `positionUpdatedAt`.
+- [x] 2.18 GREEN: create `infrastructure/persistence/entity/LessonProgressJpaEntity.java`, `infrastructure/persistence/mapper/LessonProgressJpaMapper.java`.
+- [x] 2.19 RED: `infrastructure/persistence/adapter/LessonProgressRepositoryAdapterTest.java` — Mockito against a mocked `LessonProgressJpaRepository`, mirroring `VirtualLessonRepositoryAdapterTest`'s pattern (no Spring context).
+- [x] 2.20 GREEN: create `infrastructure/persistence/repository/LessonProgressJpaRepository.java` (Spring Data interface) and `infrastructure/persistence/adapter/LessonProgressRepositoryAdapter.java`.
 
 ### Infrastructure: web
 
-- [ ] 2.21 Create `infrastructure/web/controller/VirtualStudentEndpoint.java` (marker annotation).
-- [ ] 2.22 RED: `infrastructure/web/controller/VirtualStudentProgressExceptionHandlerTest.java` — `InvalidLessonPositionException` → `400`/`INVALID_LESSON_POSITION`; `ForbiddenLessonAccessException` → `403`/`LESSON_FORBIDDEN_SUBSCRIPTION_REQUIRED`; `LessonNotFoundException` → `404`; `IllegalArgumentException` (malformed id) → `404` anti-enumeration; confirm the typed position exception is declared before the generic `IllegalArgumentException` handler.
-- [ ] 2.23 GREEN: create `infrastructure/web/controller/VirtualStudentProgressExceptionHandler.java` reusing virtual's `ProblemDetails`.
-- [ ] 2.24 RED: `infrastructure/web/controller/VirtualStudentProgressControllerTest.java` (`@WebMvcTest` or MockMvc-with-mocked-use-cases, no security context) — `PUT`/`GET .../progress` and `POST .../complete` wire request → command → use case → response for the success and each denial path; `actingUserId` extraction mirrors `VirtualLessonAdminController.actingUserId()`, never from path/body.
-- [ ] 2.25 GREEN: create `infrastructure/web/controller/VirtualStudentProgressController.java`.
-- [ ] 2.26 Wire the four beans (three use cases behind their decorators, plus reuse of the existing `LessonAccessPolicy` bean) in `infrastructure/config/VirtualConfiguration.java`.
-- [ ] 2.27 Verify: `./gradlew :api:virtual:test` and `./gradlew :api:virtual:jacocoDomainApplicationCoverageVerification :api:virtual:jacocoInfrastructureCoverageVerification` both pass at 0.95/0.90 BUNDLE.
-- [ ] 2.28 Run `./gradlew check` (ArchUnit: domain/application untouched by `com.menta.billing.infrastructure..`; Checkstyle 100-col) before opening PR 2.
+- [x] 2.21 Create `infrastructure/web/controller/VirtualStudentEndpoint.java` (marker annotation).
+- [x] 2.22 RED: `infrastructure/web/controller/VirtualStudentProgressExceptionHandlerTest.java` — `InvalidLessonPositionException` → `400`/`INVALID_LESSON_POSITION`; `ForbiddenLessonAccessException` → `403`/`LESSON_FORBIDDEN_SUBSCRIPTION_REQUIRED`; `LessonNotFoundException` → `404`; `IllegalArgumentException` (malformed id) → `404` anti-enumeration; confirm the typed position exception is declared before the generic `IllegalArgumentException` handler.
+- [x] 2.23 GREEN: create `infrastructure/web/controller/VirtualStudentProgressExceptionHandler.java` reusing virtual's `ProblemDetails`.
+- [x] 2.24 RED: `infrastructure/web/controller/VirtualStudentProgressControllerTest.java` (`@WebMvcTest` or MockMvc-with-mocked-use-cases, no security context) — `PUT`/`GET .../progress` and `POST .../complete` wire request → command → use case → response for the success and each denial path; `actingUserId` extraction mirrors `VirtualLessonAdminController.actingUserId()`, never from path/body.
+- [x] 2.25 GREEN: create `infrastructure/web/controller/VirtualStudentProgressController.java`.
+- [x] 2.26 Wire the four beans (three use cases behind their decorators, plus reuse of the existing `LessonAccessPolicy` bean) in `infrastructure/config/VirtualConfiguration.java`.
+- [x] 2.27 Verify: `./gradlew :api:virtual:test` and `./gradlew :api:virtual:jacocoDomainApplicationCoverageVerification :api:virtual:jacocoInfrastructureCoverageVerification` both pass at 0.95/0.90 BUNDLE.
+- [x] 2.28 Run `./gradlew check` (ArchUnit: domain/application untouched by `com.menta.billing.infrastructure..`; Checkstyle 100-col) before opening PR 2.
 
 ## Slice 3 — Course aggregate, resume point, Bruno
 
