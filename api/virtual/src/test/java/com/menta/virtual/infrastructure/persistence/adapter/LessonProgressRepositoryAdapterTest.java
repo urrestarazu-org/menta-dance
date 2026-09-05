@@ -5,13 +5,16 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.menta.virtual.application.port.out.CourseProgressRowProjection;
 import com.menta.virtual.domain.model.CourseId;
 import com.menta.virtual.domain.model.LessonId;
 import com.menta.virtual.domain.model.LessonProgress;
 import com.menta.virtual.domain.model.LessonProgressId;
 import com.menta.virtual.infrastructure.persistence.entity.LessonProgressJpaEntity;
 import com.menta.virtual.infrastructure.persistence.repository.LessonProgressJpaRepository;
+import com.menta.virtual.infrastructure.persistence.repository.VirtualLessonJpaRepository;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -19,7 +22,9 @@ import org.junit.jupiter.api.Test;
 class LessonProgressRepositoryAdapterTest {
 
     private final LessonProgressJpaRepository jpaRepository = mock(LessonProgressJpaRepository.class);
-    private final LessonProgressRepositoryAdapter adapter = new LessonProgressRepositoryAdapter(jpaRepository);
+    private final VirtualLessonJpaRepository lessonJpaRepository = mock(VirtualLessonJpaRepository.class);
+    private final LessonProgressRepositoryAdapter adapter =
+        new LessonProgressRepositoryAdapter(jpaRepository, lessonJpaRepository);
 
     private static LessonProgressJpaEntity entity(UUID id, UUID userId, UUID lessonId, UUID courseId) {
         return new LessonProgressJpaEntity(
@@ -78,5 +83,23 @@ class LessonProgressRepositoryAdapterTest {
         LessonProgress saved = adapter.save(progress);
 
         assertThat(saved.getPositionSeconds()).isZero();
+    }
+
+    @Test
+    void find_rows_for_user_and_course_delegates_to_the_jpa_repository() {
+        UUID userId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        CourseProgressRowProjection row = mock(CourseProgressRowProjection.class);
+        when(jpaRepository.findRowsForUserAndCourse(userId, courseId)).thenReturn(List.of(row));
+
+        assertThat(adapter.findRowsForUserAndCourse(userId, courseId)).containsExactly(row);
+    }
+
+    @Test
+    void count_lessons_by_course_id_delegates_to_the_lesson_jpa_repository() {
+        UUID courseId = UUID.randomUUID();
+        when(lessonJpaRepository.countByCourseId(courseId)).thenReturn(3L);
+
+        assertThat(adapter.countLessonsByCourseId(courseId)).isEqualTo(3L);
     }
 }
