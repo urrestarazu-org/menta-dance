@@ -24,5 +24,8 @@ public interface VirtualLessonJpaRepository extends JpaRepository<VirtualLessonJ
 
     long countByModuleId(UUID moduleId);
 
+    /** Live denominator for the course-progress aggregate (US-VIRTUAL-005, Slice 3). */
+    long countByCourseId(UUID courseId);
+
     void deleteByCourseId(UUID courseId);
 }
