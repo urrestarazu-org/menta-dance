@@ -1,15 +1,18 @@
 package com.menta.virtual.infrastructure.config;
 
 import com.menta.shared.billing.VirtualCourseEntitlementPort;
+import com.menta.virtual.application.port.in.CompleteLessonUseCase;
 import com.menta.virtual.application.port.in.CreateVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.CreateVirtualLessonUseCase;
 import com.menta.virtual.application.port.in.CreateVirtualModuleUseCase;
 import com.menta.virtual.application.port.in.DeleteVirtualCourseUseCase;
+import com.menta.virtual.application.port.in.GetLessonProgressUseCase;
 import com.menta.virtual.application.port.in.GetPublicLessonStreamUseCase;
 import com.menta.virtual.application.port.in.GetPublicLessonUseCase;
 import com.menta.virtual.application.port.in.ListManagedVirtualCoursesUseCase;
 import com.menta.virtual.application.port.in.PublishVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.ReorderVirtualModulesUseCase;
+import com.menta.virtual.application.port.in.SaveLessonProgressUseCase;
 import com.menta.virtual.application.port.in.UnpublishVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.UpdateVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.UpdateVirtualLessonUseCase;
@@ -17,20 +20,24 @@ import com.menta.virtual.application.port.in.UpdateVirtualModuleUseCase;
 import com.menta.virtual.application.port.in.VirtualCourseCatalogPort;
 import com.menta.virtual.application.port.out.BunnyNetSignatureService;
 import com.menta.virtual.application.port.out.Clock;
+import com.menta.virtual.application.port.out.LessonProgressRepository;
 import com.menta.virtual.application.port.out.VirtualCourseAuditRepository;
 import com.menta.virtual.application.port.out.VirtualCourseRepository;
 import com.menta.virtual.application.port.out.VirtualLessonRepository;
 import com.menta.virtual.application.port.out.VirtualModuleRepository;
+import com.menta.virtual.application.usecase.CompleteLessonUseCaseImpl;
 import com.menta.virtual.application.usecase.CreateVirtualCourseUseCaseImpl;
 import com.menta.virtual.application.usecase.CreateVirtualLessonUseCaseImpl;
 import com.menta.virtual.application.usecase.CreateVirtualModuleUseCaseImpl;
 import com.menta.virtual.application.usecase.DeleteVirtualCourseUseCaseImpl;
+import com.menta.virtual.application.usecase.GetLessonProgressUseCaseImpl;
 import com.menta.virtual.application.usecase.GetPublicLessonStreamUseCaseImpl;
 import com.menta.virtual.application.usecase.GetPublicLessonUseCaseImpl;
 import com.menta.virtual.application.usecase.LessonAccessPolicy;
 import com.menta.virtual.application.usecase.ListManagedVirtualCoursesUseCaseImpl;
 import com.menta.virtual.application.usecase.PublishVirtualCourseUseCaseImpl;
 import com.menta.virtual.application.usecase.ReorderVirtualModulesUseCaseImpl;
+import com.menta.virtual.application.usecase.SaveLessonProgressUseCaseImpl;
 import com.menta.virtual.application.usecase.UnpublishVirtualCourseUseCaseImpl;
 import com.menta.virtual.application.usecase.UpdateVirtualCourseUseCaseImpl;
 import com.menta.virtual.application.usecase.UpdateVirtualLessonUseCaseImpl;
@@ -39,12 +46,16 @@ import com.menta.virtual.application.usecase.VirtualCourseCatalogPortImpl;
 import com.menta.virtual.infrastructure.cdn.BunnyNetProperties;
 import com.menta.virtual.infrastructure.cdn.StringFormatBunnyNetSignatureService;
 import com.menta.virtual.infrastructure.cdn.local.LocalBunnyNetSignatureService;
+import com.menta.virtual.infrastructure.transaction.RetryOnDuplicateKeyCompleteLessonUseCase;
+import com.menta.virtual.infrastructure.transaction.RetryOnDuplicateKeySaveLessonProgressUseCase;
+import com.menta.virtual.infrastructure.transaction.TransactionalCompleteLessonUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalCreateVirtualCourseUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalCreateVirtualLessonUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalCreateVirtualModuleUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalDeleteVirtualCourseUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalPublishVirtualCourseUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalReorderVirtualModulesUseCase;
+import com.menta.virtual.infrastructure.transaction.TransactionalSaveLessonProgressUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalUnpublishVirtualCourseUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalUpdateVirtualCourseUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalUpdateVirtualLessonUseCase;
@@ -315,5 +326,46 @@ import org.springframework.core.env.Environment;
         return new TransactionalReorderVirtualModulesUseCase(
             new ReorderVirtualModulesUseCaseImpl(courseRepository, moduleRepository, auditRepository)
         );
+    }
+
+    /**
+     * US-VIRTUAL-005. Read-only, so it skips the transactional/retry decorators entirely — same
+     * shape as {@link #getPublicLessonUseCase}.
+     */
+    @Bean
+    public GetLessonProgressUseCase getLessonProgressUseCase(
+        VirtualLessonRepository lessonRepository, VirtualModuleRepository moduleRepository,
+        LessonProgressRepository progressRepository, LessonAccessPolicy lessonAccessPolicy
+    ) {
+        return new GetLessonProgressUseCaseImpl(
+            lessonRepository, moduleRepository, progressRepository, lessonAccessPolicy
+        );
+    }
+
+    /**
+     * US-VIRTUAL-005. Write path per design's "Upsert concurrency": the retry decorator wraps the
+     * transactional one, so a duplicate-key collision retries in a fresh transaction.
+     */
+    @Bean
+    public SaveLessonProgressUseCase saveLessonProgressUseCase(
+        VirtualLessonRepository lessonRepository, VirtualModuleRepository moduleRepository,
+        LessonProgressRepository progressRepository, LessonAccessPolicy lessonAccessPolicy, Clock clock
+    ) {
+        SaveLessonProgressUseCaseImpl impl = new SaveLessonProgressUseCaseImpl(
+            lessonRepository, moduleRepository, progressRepository, lessonAccessPolicy, clock
+        );
+        return new RetryOnDuplicateKeySaveLessonProgressUseCase(new TransactionalSaveLessonProgressUseCase(impl));
+    }
+
+    /** US-VIRTUAL-005. Same write-path shape as {@link #saveLessonProgressUseCase}. */
+    @Bean
+    public CompleteLessonUseCase completeLessonUseCase(
+        VirtualLessonRepository lessonRepository, VirtualModuleRepository moduleRepository,
+        LessonProgressRepository progressRepository, LessonAccessPolicy lessonAccessPolicy, Clock clock
+    ) {
+        CompleteLessonUseCaseImpl impl = new CompleteLessonUseCaseImpl(
+            lessonRepository, moduleRepository, progressRepository, lessonAccessPolicy, clock
+        );
+        return new RetryOnDuplicateKeyCompleteLessonUseCase(new TransactionalCompleteLessonUseCase(impl));
     }
 }
