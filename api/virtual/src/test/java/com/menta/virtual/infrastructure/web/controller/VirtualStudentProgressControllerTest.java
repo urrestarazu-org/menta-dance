@@ -5,12 +5,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.menta.virtual.application.dto.CourseProgressView;
 import com.menta.virtual.application.dto.LessonProgressView;
 import com.menta.virtual.application.port.in.CompleteLessonUseCase;
+import com.menta.virtual.application.port.in.GetCourseProgressUseCase;
 import com.menta.virtual.application.port.in.GetLessonProgressUseCase;
 import com.menta.virtual.application.port.in.SaveLessonProgressUseCase;
+import com.menta.virtual.domain.exception.CourseNotFoundException;
+import com.menta.virtual.domain.exception.ForbiddenCourseProgressException;
 import com.menta.virtual.domain.exception.ForbiddenLessonAccessException;
 import com.menta.virtual.domain.exception.LessonNotFoundException;
+import com.menta.virtual.infrastructure.web.dto.CourseProgressResponse;
 import com.menta.virtual.infrastructure.web.dto.LessonProgressResponse;
 import com.menta.virtual.infrastructure.web.dto.SaveLessonProgressRequest;
 import java.time.Instant;
@@ -29,8 +34,10 @@ class VirtualStudentProgressControllerTest {
     private final SaveLessonProgressUseCase saveUseCase = mock(SaveLessonProgressUseCase.class);
     private final GetLessonProgressUseCase getUseCase = mock(GetLessonProgressUseCase.class);
     private final CompleteLessonUseCase completeUseCase = mock(CompleteLessonUseCase.class);
-    private final VirtualStudentProgressController controller =
-        new VirtualStudentProgressController(saveUseCase, getUseCase, completeUseCase);
+    private final GetCourseProgressUseCase getCourseProgressUseCase = mock(GetCourseProgressUseCase.class);
+    private final VirtualStudentProgressController controller = new VirtualStudentProgressController(
+        saveUseCase, getUseCase, completeUseCase, getCourseProgressUseCase
+    );
 
     private static Authentication authOf(UUID userId) {
         return new UsernamePasswordAuthenticationToken(
@@ -96,5 +103,57 @@ class VirtualStudentProgressControllerTest {
 
         assertThatThrownBy(() -> controller.save(lessonId, new SaveLessonProgressRequest(0), authOf(userId)))
             .isInstanceOf(ForbiddenLessonAccessException.class);
+    }
+
+    @Test
+    void course_progress_returns_the_use_cases_assembled_view() {
+        UUID userId = UUID.randomUUID();
+        String courseId = UUID.randomUUID().toString();
+        CourseProgressView.ResumeLesson resume =
+            new CourseProgressView.ResumeLesson(UUID.randomUUID().toString(), UUID.randomUUID().toString(), 30, false);
+        CourseProgressView view = new CourseProgressView(courseId, 1, 4, 25, resume);
+        when(getCourseProgressUseCase.get(courseId, userId)).thenReturn(view);
+
+        ResponseEntity<CourseProgressResponse> response = controller.courseProgress(courseId, authOf(userId));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().completedLessons()).isEqualTo(1);
+        assertThat(response.getBody().totalLessons()).isEqualTo(4);
+        assertThat(response.getBody().percentage()).isEqualTo(25);
+        assertThat(response.getBody().resumeLesson().lessonId()).isEqualTo(resume.lessonId());
+    }
+
+    @Test
+    void course_progress_zero_lesson_course_returns_a_zeroed_body_not_a_thrown_signal() {
+        UUID userId = UUID.randomUUID();
+        String courseId = UUID.randomUUID().toString();
+        CourseProgressView view = new CourseProgressView(courseId, 0, 0, 0, null);
+        when(getCourseProgressUseCase.get(courseId, userId)).thenReturn(view);
+
+        ResponseEntity<CourseProgressResponse> response = controller.courseProgress(courseId, authOf(userId));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().totalLessons()).isZero();
+        assertThat(response.getBody().resumeLesson()).isNull();
+    }
+
+    @Test
+    void course_progress_denial_propagates_from_the_use_case_unchanged() {
+        UUID userId = UUID.randomUUID();
+        String courseId = UUID.randomUUID().toString();
+        when(getCourseProgressUseCase.get(courseId, userId)).thenThrow(new ForbiddenCourseProgressException());
+
+        assertThatThrownBy(() -> controller.courseProgress(courseId, authOf(userId)))
+            .isInstanceOf(ForbiddenCourseProgressException.class);
+    }
+
+    @Test
+    void course_progress_unknown_course_propagates_not_found_unchanged() {
+        UUID userId = UUID.randomUUID();
+        String courseId = UUID.randomUUID().toString();
+        when(getCourseProgressUseCase.get(courseId, userId)).thenThrow(new CourseNotFoundException());
+
+        assertThatThrownBy(() -> controller.courseProgress(courseId, authOf(userId)))
+            .isInstanceOf(CourseNotFoundException.class);
     }
 }

@@ -14,21 +14,30 @@ public interface LessonProgressJpaRepository extends JpaRepository<LessonProgres
     Optional<LessonProgressJpaEntity> findByUserIdAndLessonId(UUID userId, UUID lessonId);
 
     /**
-     * Resume ordering MUST stay in native SQL (design.md): MySQL 8.0 orders NULL last under
+     * Resume ordering MUST stay in the query (design.md): MySQL 8.0 orders NULL last under
      * {@code ORDER BY ... DESC}, so a row created only by {@code POST /complete} on a
      * never-played lesson (null {@code position_updated_at}) never wins resume selection over a
      * played one, with no null-handling in this query or in {@code CourseProgressAssembler}.
+     *
+     * <p>Deliberately JPQL, NOT a native query: {@code virtual_lessons}/{@code virtual_modules}
+     * are joined ad hoc (JPA 2.1 {@code ON}-clause join between otherwise-unassociated entities —
+     * this module never maps a JPA relationship between them, see {@code
+     * VirtualCourseRepositoryAdapter}'s Javadoc) so Hibernate's own {@code UUID}/{@code Instant}
+     * conversions apply to the projected columns. A native query here returns raw JDBC {@code
+     * byte[]} for every {@code BINARY(16)} column, which Spring Data's interface-projection
+     * factory cannot convert to {@code UUID} on its own ({@code
+     * LessonProgressRepositoryAdapterProjectionTest} caught this against real MySQL — it never
+     * surfaced against Mockito).</p>
      */
     @Query(
-        value = "SELECT p.lesson_id AS lessonId, m.id AS moduleId, p.position_seconds AS positionSeconds, "
-            + "p.completed AS completed, p.position_updated_at AS positionUpdatedAt, "
-            + "l.display_order AS lessonOrder, m.display_order AS moduleOrder "
-            + "FROM virtual_lesson_progress p "
-            + "JOIN virtual_lessons l ON l.id = p.lesson_id "
-            + "JOIN virtual_modules m ON m.id = l.module_id "
-            + "WHERE p.user_id = :userId AND p.course_id = :courseId "
-            + "ORDER BY p.position_updated_at DESC, m.display_order ASC, l.display_order ASC, p.lesson_id ASC",
-        nativeQuery = true
+        "SELECT p.lessonId AS lessonId, m.id AS moduleId, p.positionSeconds AS positionSeconds, "
+            + "p.completed AS completed, p.positionUpdatedAt AS positionUpdatedAt, "
+            + "l.displayOrder AS lessonOrder, m.displayOrder AS moduleOrder "
+            + "FROM LessonProgressJpaEntity p "
+            + "JOIN VirtualLessonJpaEntity l ON l.id = p.lessonId "
+            + "JOIN VirtualModuleJpaEntity m ON m.id = l.moduleId "
+            + "WHERE p.userId = :userId AND p.courseId = :courseId "
+            + "ORDER BY p.positionUpdatedAt DESC, m.displayOrder ASC, l.displayOrder ASC, p.lessonId ASC"
     )
     List<CourseProgressRowProjection> findRowsForUserAndCourse(
         @Param("userId") UUID userId, @Param("courseId") UUID courseId

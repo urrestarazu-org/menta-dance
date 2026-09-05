@@ -6,6 +6,7 @@ import com.menta.virtual.application.port.in.CreateVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.CreateVirtualLessonUseCase;
 import com.menta.virtual.application.port.in.CreateVirtualModuleUseCase;
 import com.menta.virtual.application.port.in.DeleteVirtualCourseUseCase;
+import com.menta.virtual.application.port.in.GetCourseProgressUseCase;
 import com.menta.virtual.application.port.in.GetLessonProgressUseCase;
 import com.menta.virtual.application.port.in.GetPublicLessonStreamUseCase;
 import com.menta.virtual.application.port.in.GetPublicLessonUseCase;
@@ -29,7 +30,9 @@ import com.menta.virtual.application.usecase.CompleteLessonUseCaseImpl;
 import com.menta.virtual.application.usecase.CreateVirtualCourseUseCaseImpl;
 import com.menta.virtual.application.usecase.CreateVirtualLessonUseCaseImpl;
 import com.menta.virtual.application.usecase.CreateVirtualModuleUseCaseImpl;
+import com.menta.virtual.application.usecase.CourseProgressAccessPolicy;
 import com.menta.virtual.application.usecase.DeleteVirtualCourseUseCaseImpl;
+import com.menta.virtual.application.usecase.GetCourseProgressUseCaseImpl;
 import com.menta.virtual.application.usecase.GetLessonProgressUseCaseImpl;
 import com.menta.virtual.application.usecase.GetPublicLessonStreamUseCaseImpl;
 import com.menta.virtual.application.usecase.GetPublicLessonUseCaseImpl;
@@ -367,5 +370,28 @@ public class VirtualConfiguration {
             lessonRepository, moduleRepository, progressRepository, lessonAccessPolicy, clock
         );
         return new RetryOnDuplicateKeyCompleteLessonUseCase(new TransactionalCompleteLessonUseCase(impl));
+    }
+
+    /**
+     * US-VIRTUAL-005, Slice 3. Unlike {@link #lessonAccessPolicy}, there is no free/preview
+     * exception here (design.md decision 5) — see {@link CourseProgressAccessPolicy}'s Javadoc.
+     */
+    @Bean
+    public CourseProgressAccessPolicy courseProgressAccessPolicy(VirtualCourseEntitlementPort virtualCourseEntitlementPort) {
+        return new CourseProgressAccessPolicy(virtualCourseEntitlementPort);
+    }
+
+    /**
+     * US-VIRTUAL-005, Slice 3. Read-only, so it skips the transactional/retry decorators entirely
+     * — same shape as {@link #getLessonProgressUseCase}. {@link
+     * com.menta.virtual.application.usecase.CourseProgressAssembler} is a pure static helper, not
+     * a bean — it needs no collaborators and is called directly by the use case.
+     */
+    @Bean
+    public GetCourseProgressUseCase getCourseProgressUseCase(
+        VirtualCourseRepository courseRepository, LessonProgressRepository progressRepository,
+        CourseProgressAccessPolicy courseProgressAccessPolicy
+    ) {
+        return new GetCourseProgressUseCaseImpl(courseRepository, progressRepository, courseProgressAccessPolicy);
     }
 }
