@@ -70,26 +70,26 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.core.env.Environment;
 
 /**
-     * Wires Virtual's use cases. Adapters are {@code @Component}-scanned; the
-     * use cases are plain Java classes composed here, mirroring {@code
-     * AuthConfiguration}/{@code BillingConfiguration}'s rationale: no implicit
-     * {@code @Autowired} on use-case classes.
-     *
-     * <p>Every mutating use case is wrapped in its {@code Transactional*}
-     * decorator (#54 review follow-up) — each performs its domain mutation and
-     * its {@code virtual_course_audit} write as separate repository calls, which
-     * without a wrapping transaction would commit independently.</p>
-     *
-     * <p>{@link BunnyNetProperties} is picked up by the package-scoped
-     * {@code @ConfigurationPropertiesScan} below: {@code MentaDanceApplication}'s
-     * {@code scanBasePackages = "com.menta"} would otherwise auto-discover it
-     * via component scan from {@code @Component}, but we keep the
-     * properties classes annotation-free to avoid the dual-registration
-     * gotcha and to be explicit about package ownership inside Virtual.</p>
-     */
-    @Configuration
-    @ConfigurationPropertiesScan(basePackages = "com.menta.virtual.infrastructure.cdn")
-    public class VirtualConfiguration {
+ * Wires Virtual's use cases. Adapters are {@code @Component}-scanned; the
+ * use cases are plain Java classes composed here, mirroring {@code
+ * AuthConfiguration}/{@code BillingConfiguration}'s rationale: no implicit
+ * {@code @Autowired} on use-case classes.
+ *
+ * <p>Every mutating use case is wrapped in its {@code Transactional*}
+ * decorator (#54 review follow-up) — each performs its domain mutation and
+ * its {@code virtual_course_audit} write as separate repository calls, which
+ * without a wrapping transaction would commit independently.</p>
+ *
+ * <p>{@link BunnyNetProperties} is picked up by the package-scoped
+ * {@code @ConfigurationPropertiesScan} below: {@code MentaDanceApplication}'s
+ * {@code scanBasePackages = "com.menta"} would otherwise auto-discover it
+ * via component scan from {@code @Component}, but we keep the
+ * properties classes annotation-free to avoid the dual-registration
+ * gotcha and to be explicit about package ownership inside Virtual.</p>
+ */
+@Configuration
+@ConfigurationPropertiesScan(basePackages = "com.menta.virtual.infrastructure.cdn")
+public class VirtualConfiguration {
 
     /**
      * Production {@link java.time.Clock} adapter for the application-layer
