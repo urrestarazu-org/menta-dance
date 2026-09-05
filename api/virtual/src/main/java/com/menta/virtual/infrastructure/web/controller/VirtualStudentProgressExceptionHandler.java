@@ -1,5 +1,7 @@
 package com.menta.virtual.infrastructure.web.controller;
 
+import com.menta.virtual.domain.exception.CourseNotFoundException;
+import com.menta.virtual.domain.exception.ForbiddenCourseProgressException;
 import com.menta.virtual.domain.exception.ForbiddenLessonAccessException;
 import com.menta.virtual.domain.exception.InvalidLessonPositionException;
 import com.menta.virtual.domain.exception.LessonNotFoundException;
@@ -34,6 +36,22 @@ public class VirtualStudentProgressExceptionHandler {
     @ExceptionHandler(LessonNotFoundException.class)
     ResponseEntity<ProblemDetail> lessonNotFound(LessonNotFoundException exception) {
         return ProblemDetails.response(HttpStatus.NOT_FOUND, "Lección no encontrada.", exception.getErrorCode());
+    }
+
+    /**
+     * Course-progress aggregate (Slice 3). Unlike {@link ForbiddenLessonAccessException}, there
+     * is no free/preview exception on this path (design.md decision 5).
+     */
+    @ExceptionHandler(ForbiddenCourseProgressException.class)
+    ResponseEntity<ProblemDetail> forbiddenCourseProgress(ForbiddenCourseProgressException exception) {
+        return ProblemDetails.response(
+            HttpStatus.FORBIDDEN, "Este curso requiere una suscripción activa", exception.getErrorCode()
+        );
+    }
+
+    @ExceptionHandler(CourseNotFoundException.class)
+    ResponseEntity<ProblemDetail> courseNotFound(CourseNotFoundException exception) {
+        return ProblemDetails.response(HttpStatus.NOT_FOUND, "Curso no encontrado.", exception.getErrorCode());
     }
 
     /** Anti-enumeration: a malformed path id collapses into the same 404 a missing row would produce. */

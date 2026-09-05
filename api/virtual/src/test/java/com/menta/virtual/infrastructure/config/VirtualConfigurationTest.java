@@ -9,6 +9,7 @@ import com.menta.virtual.application.port.in.CreateVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.CreateVirtualLessonUseCase;
 import com.menta.virtual.application.port.in.CreateVirtualModuleUseCase;
 import com.menta.virtual.application.port.in.DeleteVirtualCourseUseCase;
+import com.menta.virtual.application.port.in.GetCourseProgressUseCase;
 import com.menta.virtual.application.port.in.GetLessonProgressUseCase;
 import com.menta.virtual.application.port.in.GetPublicLessonStreamUseCase;
 import com.menta.virtual.application.port.in.GetPublicLessonUseCase;
@@ -29,6 +30,8 @@ import com.menta.virtual.application.port.out.VirtualCourseRepository;
 import com.menta.virtual.application.port.out.VirtualLessonRepository;
 import com.menta.shared.billing.VirtualCourseEntitlementPort;
 import com.menta.virtual.application.port.out.VirtualModuleRepository;
+import com.menta.virtual.application.usecase.CourseProgressAccessPolicy;
+import com.menta.virtual.application.usecase.GetCourseProgressUseCaseImpl;
 import com.menta.virtual.application.usecase.GetLessonProgressUseCaseImpl;
 import com.menta.virtual.application.usecase.GetPublicLessonStreamUseCaseImpl;
 import com.menta.virtual.application.usecase.GetPublicLessonUseCaseImpl;
@@ -250,6 +253,24 @@ class VirtualConfigurationTest {
         );
 
         assertThat(useCase).isInstanceOf(RetryOnDuplicateKeyCompleteLessonUseCase.class);
+    }
+
+    @Test
+    void wires_the_course_progress_access_policy_bean() {
+        CourseProgressAccessPolicy policy = configuration.courseProgressAccessPolicy(entitlementPort);
+
+        assertThat(policy).isNotNull();
+    }
+
+    @Test
+    void wires_the_get_course_progress_use_case_bean() {
+        LessonProgressRepository progressRepository = mock(LessonProgressRepository.class);
+
+        GetCourseProgressUseCase useCase = configuration.getCourseProgressUseCase(
+            courseRepository, progressRepository, new CourseProgressAccessPolicy(entitlementPort)
+        );
+
+        assertThat(useCase).isInstanceOf(GetCourseProgressUseCaseImpl.class);
     }
 
     /**

@@ -1,0 +1,51 @@
+meta {
+  name: Save Lesson Progress
+  type: http
+  seq: 8
+}
+
+put {
+  url: {{baseUrl}}/api/v1/virtual/lessons/{{virtualEntitledLessonId}}/progress
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  content-type: application/json
+}
+
+body:json {
+  {
+    "positionSeconds": 120
+  }
+}
+
+script:pre-request {
+  if (!bru.getEnvVar("virtualEntitledLessonId") || !bru.getEnvVar("authToken")) {
+    bru.runner.skipRequest();
+  }
+}
+
+tests {
+  test("Status is 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("Saving is idempotent and never auto-completes", function() {
+    expect(res.getBody().positionSeconds).to.equal(120);
+    expect(res.getBody().completed).to.equal(false);
+  });
+}
+
+docs {
+  US-VIRTUAL-005 (#52). Requires the same access cascade as lesson detail/stream
+  (LessonAccessPolicy): a current Billing entitlement for a protected lesson.
+  Set virtualEntitledLessonId and authenticate as the entitled student.
+
+  Position is validated (0 <= position <= durationMinutes*60): out-of-range
+  returns 400 INVALID_LESSON_POSITION.
+}

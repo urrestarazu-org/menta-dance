@@ -2,6 +2,8 @@ package com.menta.virtual.infrastructure.web.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.menta.virtual.domain.exception.CourseNotFoundException;
+import com.menta.virtual.domain.exception.ForbiddenCourseProgressException;
 import com.menta.virtual.domain.exception.ForbiddenLessonAccessException;
 import com.menta.virtual.domain.exception.InvalidLessonPositionException;
 import com.menta.virtual.domain.exception.LessonNotFoundException;
@@ -47,6 +49,24 @@ class VirtualStudentProgressExceptionHandlerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(response.getBody().getDetail()).isEqualTo("Lección no encontrada.");
+    }
+
+    @Test
+    void maps_forbidden_course_progress_to_403() {
+        ResponseEntity<ProblemDetail> response =
+            handler.forbiddenCourseProgress(new ForbiddenCourseProgressException());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(response.getBody().getProperties().get("code"))
+            .isEqualTo("COURSE_PROGRESS_FORBIDDEN_SUBSCRIPTION_REQUIRED");
+    }
+
+    @Test
+    void maps_course_not_found_to_404() {
+        ResponseEntity<ProblemDetail> response = handler.courseNotFound(new CourseNotFoundException());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getBody().getDetail()).isEqualTo("Curso no encontrado.");
     }
 
     @Test
