@@ -67,15 +67,15 @@ Branches (each cut from `develop` after its predecessor merges):
 
 **Branch**: `feature/bff-virtual-learning-view-api-catalog` off `develop`.
 
-- [ ] 1a.1 Create `application/port/out/VirtualApiClient.java`: interface with all 3 methods (`getCourseDetail`, `getLesson`, `getStream`) and 3 nested exceptions (`NotFoundException`, `ForbiddenException`, `ServiceUnavailableException`), mirroring `AuthApiClient`.
-- [ ] 1a.2 Create `application/dto/CourseDetail.java` (record, nested `Module`/`Lesson`/`Stats`) mirroring `CatalogCourseDetailResponse`'s exact JSON shape (`courseId, title, description, thumbnailUrl, category, level, isPremium, modules[], stats`).
-- [ ] 1a.3 Create `infrastructure/config/VirtualApiProperties.java` (`@ConfigurationProperties(prefix = "menta.api")`, `baseUrl` + `timeout` default 5s), mirroring `AuthProperties`. Note: `menta.api.base-url` already exists in `application.yml`; add `menta.api.timeout: 5s`.
-- [ ] 1a.4 Modify `infrastructure/config/WebClientConfig.java`: add qualified `@Bean @Qualifier("virtualApiWebClient") WebClient virtualApiWebClient(VirtualApiProperties)`. Existing unqualified `webClient()` bean and `AuthApiAdapter`'s parameter-name resolution stay untouched (design decision C).
-- [ ] 1a.5 RED: `infrastructure/adapter/VirtualApiAdapterTest.java` (`@WireMockTest`, plain constructor, mirrors `AuthApiAdapterTest`) — `getCourseDetail`: 200 maps to `CourseDetail`; 404 → `NotFoundException`; 503 → `ServiceUnavailableException` preserving `Retry-After`; the outbound request **never** carries `Authorization`, verified via `withoutHeader("Authorization")` even when a token is passed to the adapter's constructor context (there is none — the method takes no token, proving it structurally).
-- [ ] 1a.6 Verify RED: `./gradlew :bff:test --tests "*VirtualApiAdapterTest*"` fails on missing `VirtualApiAdapter` class, not a typo.
-- [ ] 1a.7 GREEN: create `infrastructure/adapter/VirtualApiAdapter.java` with an explicit constructor (`@Qualifier("virtualApiWebClient")`, no Lombok — design decision C) implementing `getCourseDetail` fully; `getLesson`/`getStream` throw `UnsupportedOperationException("implemented in PR 1b")` as an explicit, temporary, compiling placeholder — nothing calls them yet.
-- [ ] 1a.8 Verify GREEN: re-run `*VirtualApiAdapterTest*` — all catalog cases pass.
-- [ ] 1a.9 Run `./gradlew :bff:test check` to confirm the slice is green (ArchUnit, Checkstyle) before opening PR 1a.
+- [x] 1a.1 Create `application/port/out/VirtualApiClient.java`: interface with all 3 methods (`getCourseDetail`, `getLesson`, `getStream`) and 3 nested exceptions (`NotFoundException`, `ForbiddenException`, `ServiceUnavailableException`), mirroring `AuthApiClient`.
+- [x] 1a.2 Create `application/dto/CourseDetail.java` (record, nested `Module`/`Lesson`/`Stats`) mirroring `CatalogCourseDetailResponse`'s exact JSON shape (`courseId, title, description, thumbnailUrl, category, level, isPremium, modules[], stats`).
+- [x] 1a.3 Create `infrastructure/config/VirtualApiProperties.java` (`@ConfigurationProperties(prefix = "menta.api")`, `baseUrl` + `timeout` default 5s), mirroring `AuthProperties`. Note: `menta.api.base-url` already exists in `application.yml`; add `menta.api.timeout: 5s`.
+- [x] 1a.4 Modify `infrastructure/config/WebClientConfig.java`: add qualified `@Bean @Qualifier("virtualApiWebClient") WebClient virtualApiWebClient(VirtualApiProperties)`. Existing unqualified `webClient()` bean and `AuthApiAdapter`'s parameter-name resolution stay untouched (design decision C).
+- [x] 1a.5 RED: `infrastructure/adapter/VirtualApiAdapterTest.java` (`@WireMockTest`, plain constructor, mirrors `AuthApiAdapterTest`) — `getCourseDetail`: 200 maps to `CourseDetail`; 404 → `NotFoundException`; 503 → `ServiceUnavailableException` preserving `Retry-After`; the outbound request **never** carries `Authorization`, verified via `withoutHeader("Authorization")` even when a token is passed to the adapter's constructor context (there is none — the method takes no token, proving it structurally).
+- [x] 1a.6 Verify RED: `./gradlew :bff:test --tests "*VirtualApiAdapterTest*"` fails on missing `VirtualApiAdapter` class, not a typo.
+- [x] 1a.7 GREEN: create `infrastructure/adapter/VirtualApiAdapter.java` with an explicit constructor (`@Qualifier("virtualApiWebClient")`, no Lombok — design decision C) implementing `getCourseDetail` fully; `getLesson`/`getStream` throw `UnsupportedOperationException("implemented in PR 1b")` as an explicit, temporary, compiling placeholder — nothing calls them yet.
+- [x] 1a.8 Verify GREEN: re-run `*VirtualApiAdapterTest*` — all catalog cases pass.
+- [x] 1a.9 Run `./gradlew :bff:test check` to confirm the slice is green (ArchUnit, Checkstyle) before opening PR 1a.
 
 ## PR 1b — API integration: lesson + stream calls, conditional Bearer
 
