@@ -29,8 +29,9 @@ public interface VirtualApiClient {
     /**
      * Retrieves lesson detail, gated by subscription entitlement.
      * <p>
-     * Calls GET /api/v1/virtual/lessons/{lessonId} with a conditional Bearer token.
-     * Implemented in PR 1b; this PR declares the method as a compiling stub.
+     * Calls GET /api/v1/virtual/lessons/{lessonId} with a conditional Bearer token:
+     * present iff {@code accessToken} is non-null, omitted entirely (not blank)
+     * when {@code null} (design D2).
      * </p>
      *
      * @param lessonId    lesson identifier
@@ -45,8 +46,10 @@ public interface VirtualApiClient {
     /**
      * Retrieves a signed lesson stream URL, gated by subscription entitlement.
      * <p>
-     * Calls GET /api/v1/virtual/lessons/{lessonId}/stream with a conditional Bearer
-     * token. Implemented in PR 1b; this PR declares the method as a compiling stub.
+     * Calls GET /api/v1/virtual/lessons/{lessonId}/stream with the same
+     * conditional Bearer token rule as {@link #getLesson}. A granted lesson
+     * always needs this call, free ones included — {@code videoId == null}
+     * on the lesson detail does not mean no stream exists.
      * </p>
      *
      * @param lessonId    lesson identifier

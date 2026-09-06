@@ -81,14 +81,14 @@ Branches (each cut from `develop` after its predecessor merges):
 
 **Branch**: `feature/bff-virtual-learning-view-api-lesson-stream` off `develop` (cut after PR 1a merges).
 
-- [ ] 1b.1 Create `application/dto/LessonDetail.java` (record with nested `CourseRef`/`ModuleRef`, nullable `videoId`, `Nav navigation`) mirroring `PublicLessonFreeResponse`/`PublicLessonPremiumAccessibleResponse`'s `lesson`+`navigation` shape.
-- [ ] 1b.2 Create `application/dto/Nav.java` (record `previousLesson`/`nextLesson`, each a small `lessonId`/`title` ref) mirroring `PublicLessonNavigationDto`.
-- [ ] 1b.3 Create `application/dto/LessonStream.java` (record: `url`, `expiresAt`) mirroring `PublicLessonStreamResponse.StreamBlock`, trimmed to what the player needs.
-- [ ] 1b.4 RED: extend `VirtualApiAdapterTest.java` — `getLesson`: 200 (free, `videoId: null`) and 200 (premium, `videoId` present) both map correctly; 403 → `ForbiddenException` **without attempting to parse a body**; 404/503 map as in 1a.5; `Authorization: Bearer <token>` present iff a non-null token is passed, absent (not blank) when `null`. `getStream`: identical status/Bearer matrix, **including a 200 case with a `null` token** (free-lesson anonymous stream, per design's "granted lesson always needs the stream call" — the test must NOT skip this case just because the lesson is free).
-- [ ] 1b.5 Verify RED: run `*VirtualApiAdapterTest*` — new cases fail against the 1a `UnsupportedOperationException` stub, not a typo.
-- [ ] 1b.6 GREEN: implement `getLesson`/`getStream` in `VirtualApiAdapter.java`, replacing the stubs; conditional header via `headers -> { if (token != null) headers.setBearerAuth(token); }`.
-- [ ] 1b.7 Verify GREEN: full `*VirtualApiAdapterTest*` suite green, catalog cases from 1a still pass (no `Authorization` leak regression).
-- [ ] 1b.8 Run `./gradlew :bff:test check` before opening PR 1b.
+- [x] 1b.1 Create `application/dto/LessonDetail.java` (record with nested `CourseRef`/`ModuleRef`, nullable `videoId`, `Nav navigation`) mirroring `PublicLessonFreeResponse`/`PublicLessonPremiumAccessibleResponse`'s `lesson`+`navigation` shape.
+- [x] 1b.2 Create `application/dto/Nav.java` (record `previousLesson`/`nextLesson`, each a small `lessonId`/`title` ref) mirroring `PublicLessonNavigationDto`.
+- [x] 1b.3 Create `application/dto/LessonStream.java` (record: `url`, `expiresAt`) mirroring `PublicLessonStreamResponse.StreamBlock`, trimmed to what the player needs.
+- [x] 1b.4 RED: extend `VirtualApiAdapterTest.java` — `getLesson`: 200 (free, `videoId: null`) and 200 (premium, `videoId` present) both map correctly; 403 → `ForbiddenException` **without attempting to parse a body**; 404/503 map as in 1a.5; `Authorization: Bearer <token>` present iff a non-null token is passed, absent (not blank) when `null`. `getStream`: identical status/Bearer matrix, **including a 200 case with a `null` token** (free-lesson anonymous stream, per design's "granted lesson always needs the stream call" — the test must NOT skip this case just because the lesson is free).
+- [x] 1b.5 Verify RED: run `*VirtualApiAdapterTest*` — new cases fail against the 1a `UnsupportedOperationException` stub, not a typo.
+- [x] 1b.6 GREEN: implement `getLesson`/`getStream` in `VirtualApiAdapter.java`, replacing the stubs; conditional header via `headers -> { if (token != null) headers.setBearerAuth(token); }`.
+- [x] 1b.7 Verify GREEN: full `*VirtualApiAdapterTest*` suite green, catalog cases from 1a still pass (no `Authorization` leak regression).
+- [x] 1b.8 Run `./gradlew :bff:test check` before opening PR 1b.
 
 ## PR 2 — `virtual-course-detail-view`
 

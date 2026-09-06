@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import com.menta.bff.application.dto.CourseDetail;
+import com.menta.bff.application.dto.LessonDetail;
+import com.menta.bff.application.dto.LessonStream;
 import com.menta.bff.application.port.out.VirtualApiClient;
 import com.menta.bff.infrastructure.config.VirtualApiProperties;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,6 +27,10 @@ class VirtualApiAdapterTest {
 
     private static final String COURSE_ID = "course-1";
     private static final String COURSE_DETAIL_PATH = "/api/v1/catalog/courses/" + COURSE_ID;
+    private static final String LESSON_ID = "lesson-1";
+    private static final String LESSON_PATH = "/api/v1/virtual/lessons/" + LESSON_ID;
+    private static final String LESSON_STREAM_PATH = LESSON_PATH + "/stream";
+    private static final String ACCESS_TOKEN = "eyJhbGciOiJIUzI1NiJ9.token";
 
     private VirtualApiAdapter virtualApiAdapter;
     private ObjectMapper objectMapper;
@@ -125,6 +131,239 @@ class VirtualApiAdapterTest {
                 .withoutHeader("Authorization"));
     }
 
+    // -- getLesson ------------------------------------------------------
+
+    @Test
+    @DisplayName("should return LessonDetail with a null videoId when the lesson is free")
+    void shouldReturnLessonDetailWithNullVideoIdWhenTheLessonIsFree() {
+        // Given
+        stubFor(get(urlEqualTo(LESSON_PATH))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(toJson(lessonResponseBody(null)))));
+
+        // When
+        LessonDetail result = virtualApiAdapter.getLesson(LESSON_ID, null);
+
+        // Then
+        assertThat(result).isNotNull();
+        assertThat(result.lessonId()).isEqualTo(LESSON_ID);
+        assertThat(result.videoId()).isNull();
+        assertThat(result.course().courseId()).isEqualTo(COURSE_ID);
+        assertThat(result.module().moduleId()).isEqualTo("module-1");
+        assertThat(result.navigation().nextLesson().lessonId()).isEqualTo("lesson-2");
+        assertThat(result.navigation().previousLesson()).isNull();
+    }
+
+    @Test
+    @DisplayName("should return LessonDetail with a non-null videoId when the lesson is premium accessible")
+    void shouldReturnLessonDetailWithVideoIdWhenTheLessonIsPremiumAccessible() {
+        // Given
+        stubFor(get(urlEqualTo(LESSON_PATH))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(toJson(lessonResponseBody("bunny-video-id")))));
+
+        // When
+        LessonDetail result = virtualApiAdapter.getLesson(LESSON_ID, ACCESS_TOKEN);
+
+        // Then
+        assertThat(result.videoId()).isEqualTo("bunny-video-id");
+    }
+
+    @Test
+    @DisplayName("should throw ForbiddenException on a bare 403 without parsing the body")
+    void shouldThrowForbiddenExceptionOnLessonWithoutParsingBody() {
+        // Given
+        stubFor(get(urlEqualTo(LESSON_PATH))
+                .willReturn(aResponse()
+                        .withStatus(403)
+                        .withHeader("Content-Type", "application/problem+json")
+                        .withBody("not-valid-json-at-all")));
+
+        // When / Then
+        assertThatThrownBy(() -> virtualApiAdapter.getLesson(LESSON_ID, ACCESS_TOKEN))
+                .isInstanceOf(VirtualApiClient.ForbiddenException.class);
+    }
+
+    @Test
+    @DisplayName("should throw NotFoundException when the lesson does not exist")
+    void shouldThrowNotFoundExceptionWhenLessonDoesNotExist() {
+        // Given
+        stubFor(get(urlEqualTo(LESSON_PATH))
+                .willReturn(aResponse()
+                        .withStatus(404)
+                        .withHeader("Content-Type", "application/problem+json")
+                        .withBody("{\"detail\":\"Lesson not found\"}")));
+
+        // When / Then
+        assertThatThrownBy(() -> virtualApiAdapter.getLesson(LESSON_ID, null))
+                .isInstanceOf(VirtualApiClient.NotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("should throw ServiceUnavailableException preserving Retry-After when the lesson call fails")
+    void shouldThrowServiceUnavailableExceptionWhenLessonCallFails() {
+        // Given
+        stubFor(get(urlEqualTo(LESSON_PATH))
+                .willReturn(aResponse()
+                        .withStatus(503)
+                        .withHeader("Retry-After", "45")));
+
+        // When / Then
+        assertThatThrownBy(() -> virtualApiAdapter.getLesson(LESSON_ID, null))
+                .isInstanceOf(VirtualApiClient.ServiceUnavailableException.class)
+                .satisfies(exception -> assertThat(
+                        ((VirtualApiClient.ServiceUnavailableException) exception).getRetryAfterSeconds())
+                        .isEqualTo(45L));
+    }
+
+    @Test
+    @DisplayName("should send Authorization: Bearer <token> on the lesson call when a token is present")
+    void shouldSendBearerTokenOnLessonCallWhenTokenPresent() {
+        // Given
+        stubFor(get(urlEqualTo(LESSON_PATH))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(toJson(lessonResponseBody(null)))));
+
+        // When
+        virtualApiAdapter.getLesson(LESSON_ID, ACCESS_TOKEN);
+
+        // Then
+        verify(getRequestedFor(urlEqualTo(LESSON_PATH))
+                .withHeader("Authorization", equalTo("Bearer " + ACCESS_TOKEN)));
+    }
+
+    @Test
+    @DisplayName("should omit the Authorization header entirely on the lesson call when the token is null")
+    void shouldOmitAuthorizationHeaderOnLessonCallWhenTokenIsNull() {
+        // Given
+        stubFor(get(urlEqualTo(LESSON_PATH))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(toJson(lessonResponseBody(null)))));
+
+        // When
+        virtualApiAdapter.getLesson(LESSON_ID, null);
+
+        // Then
+        verify(getRequestedFor(urlEqualTo(LESSON_PATH))
+                .withoutHeader("Authorization"));
+    }
+
+    // -- getStream --------------------------------------------------------
+
+    @Test
+    @DisplayName("should return LessonStream when the upstream grants access with a token")
+    void shouldReturnLessonStreamWhenUpstreamGrantsAccessWithToken() {
+        // Given
+        stubFor(get(urlEqualTo(LESSON_STREAM_PATH))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(toJson(streamResponseBody()))));
+
+        // When
+        LessonStream result = virtualApiAdapter.getStream(LESSON_ID, ACCESS_TOKEN);
+
+        // Then
+        assertThat(result.url()).isEqualTo("https://cdn.menta.dance/signed.m3u8");
+        assertThat(result.expiresAt()).isEqualTo(java.time.Instant.parse("2026-01-01T00:00:00Z"));
+    }
+
+    @Test
+    @DisplayName("should return LessonStream for a free lesson requested anonymously (null token)")
+    void shouldReturnLessonStreamForFreeLessonWithNullToken() {
+        // A granted lesson always needs the stream call, free ones included:
+        // a 200 here must not be skipped just because the caller is anonymous.
+        // Given
+        stubFor(get(urlEqualTo(LESSON_STREAM_PATH))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(toJson(streamResponseBody()))));
+
+        // When
+        LessonStream result = virtualApiAdapter.getStream(LESSON_ID, null);
+
+        // Then
+        assertThat(result).isNotNull();
+        assertThat(result.url()).isEqualTo("https://cdn.menta.dance/signed.m3u8");
+
+        verify(getRequestedFor(urlEqualTo(LESSON_STREAM_PATH))
+                .withoutHeader("Authorization"));
+    }
+
+    @Test
+    @DisplayName("should throw ForbiddenException on a bare 403 from the stream call without parsing the body")
+    void shouldThrowForbiddenExceptionOnStreamWithoutParsingBody() {
+        // Given
+        stubFor(get(urlEqualTo(LESSON_STREAM_PATH))
+                .willReturn(aResponse()
+                        .withStatus(403)
+                        .withHeader("Content-Type", "application/problem+json")
+                        .withBody("not-valid-json-at-all")));
+
+        // When / Then
+        assertThatThrownBy(() -> virtualApiAdapter.getStream(LESSON_ID, ACCESS_TOKEN))
+                .isInstanceOf(VirtualApiClient.ForbiddenException.class);
+    }
+
+    @Test
+    @DisplayName("should throw NotFoundException when the stream's lesson does not exist")
+    void shouldThrowNotFoundExceptionWhenStreamLessonDoesNotExist() {
+        // Given
+        stubFor(get(urlEqualTo(LESSON_STREAM_PATH))
+                .willReturn(aResponse()
+                        .withStatus(404)
+                        .withHeader("Content-Type", "application/problem+json")
+                        .withBody("{\"detail\":\"Lesson not found\"}")));
+
+        // When / Then
+        assertThatThrownBy(() -> virtualApiAdapter.getStream(LESSON_ID, null))
+                .isInstanceOf(VirtualApiClient.NotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("should throw ServiceUnavailableException preserving Retry-After when the stream call fails")
+    void shouldThrowServiceUnavailableExceptionWhenStreamCallFails() {
+        // Given
+        stubFor(get(urlEqualTo(LESSON_STREAM_PATH))
+                .willReturn(aResponse()
+                        .withStatus(503)
+                        .withHeader("Retry-After", "12")));
+
+        // When / Then
+        assertThatThrownBy(() -> virtualApiAdapter.getStream(LESSON_ID, ACCESS_TOKEN))
+                .isInstanceOf(VirtualApiClient.ServiceUnavailableException.class)
+                .satisfies(exception -> assertThat(
+                        ((VirtualApiClient.ServiceUnavailableException) exception).getRetryAfterSeconds())
+                        .isEqualTo(12L));
+    }
+
+    @Test
+    @DisplayName("should send Authorization: Bearer <token> on the stream call when a token is present")
+    void shouldSendBearerTokenOnStreamCallWhenTokenPresent() {
+        // Given
+        stubFor(get(urlEqualTo(LESSON_STREAM_PATH))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(toJson(streamResponseBody()))));
+
+        // When
+        virtualApiAdapter.getStream(LESSON_ID, ACCESS_TOKEN);
+
+        // Then
+        verify(getRequestedFor(urlEqualTo(LESSON_STREAM_PATH))
+                .withHeader("Authorization", equalTo("Bearer " + ACCESS_TOKEN)));
+    }
+
     private Map<String, Object> courseDetailResponseBody() {
         return Map.of(
                 "courseId", COURSE_ID,
@@ -150,6 +389,45 @@ class VirtualApiAdapterTest {
                         "moduleCount", 1,
                         "lessonCount", 1,
                         "totalDuration", "5m"
+                )
+        );
+    }
+
+    private Map<String, Object> lessonResponseBody(String videoId) {
+        Map<String, Object> lesson = new java.util.HashMap<>();
+        lesson.put("lessonId", LESSON_ID);
+        lesson.put("title", "Lesson 1");
+        lesson.put("description", "First lesson");
+        lesson.put("duration", "05:00");
+        lesson.put("order", 1);
+        lesson.put("videoId", videoId);
+        lesson.put("course", Map.of("courseId", COURSE_ID, "title", "Intro to Salsa"));
+        lesson.put("module", Map.of("moduleId", "module-1", "title", "Module 1"));
+
+        Map<String, Object> navigation = new java.util.HashMap<>();
+        navigation.put("previousLesson", null);
+        navigation.put("nextLesson", Map.of("lessonId", "lesson-2", "title", "Lesson 2", "isFree", false));
+
+        Map<String, Object> body = new java.util.HashMap<>();
+        body.put("lesson", lesson);
+        body.put("navigation", navigation);
+        body.put("subscription", Map.of("message", "Suscríbete para ver esta lección", "plansUrl", "/plans"));
+        body.put("access", Map.of("preview", videoId == null, "requiresSubscription", false));
+        return body;
+    }
+
+    private Map<String, Object> streamResponseBody() {
+        return Map.of(
+                "stream", Map.of(
+                        "url", "https://cdn.menta.dance/signed.m3u8",
+                        "type", "HLS",
+                        "qualities", List.of(),
+                        "expiresAt", "2026-01-01T00:00:00Z"
+                ),
+                "lesson", Map.of(
+                        "lessonId", LESSON_ID,
+                        "title", "Lesson 1",
+                        "duration", "05:00"
                 )
         );
     }
