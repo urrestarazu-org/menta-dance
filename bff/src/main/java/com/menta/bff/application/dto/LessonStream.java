@@ -1,13 +1,15 @@
 package com.menta.bff.application.dto;
 
+import java.time.Instant;
+
 /**
- * Placeholder wire shape for {@code GET /api/v1/virtual/lessons/{lessonId}/stream}.
- * <p>
- * Exists in this PR only so {@code VirtualApiClient.getStream} compiles;
- * {@code VirtualApiAdapter.getStream} is stubbed with
- * {@code UnsupportedOperationException} until PR 1b, which replaces this
- * record with the full shape ({@code url}, {@code expiresAt}).
- * </p>
+ * Signed stream descriptor, trimmed from
+ * {@code PublicLessonStreamResponse.StreamBlock} to what the player needs.
+ * The fixed {@code type: "HLS"} and the quality ladder are dropped —
+ * neither varies today, so there is nothing for the BFF to branch on.
+ *
+ * @param url       signed CDN URL the player consumes as-is
+ * @param expiresAt when the signed URL stops being valid
  */
-public record LessonStream() {
+public record LessonStream(String url, Instant expiresAt) {
 }
