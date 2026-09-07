@@ -90,15 +90,15 @@ before the controller cutover.
 
 **Branch**: `feature/bff-continue-course-usecase` off `develop` (cut after PR 1 merges).
 
-- [ ] 2.1 Create `application/usecase/CourseDetailView.java`: sealed interface
+- [x] 2.1 Create `application/usecase/CourseDetailView.java`: sealed interface
       `Plain(CourseDetail course)` / `Resumable(CourseDetail course, Resume resume)`,
       nested `Resume(String lessonId, String title, int percentage, int
       completedLessons, int totalLessons)` — exact shape from design D1;
       javadoc states explicitly that `positionSeconds` is read from the wire
       DTO but never carried into `Resume` (locked decision — no seek link).
-- [ ] 2.2 Create `application/usecase/GetCourseDetailViewUseCase.java`:
+- [x] 2.2 Create `application/usecase/GetCourseDetailViewUseCase.java`:
       `CourseDetailView execute(String courseId, String accessToken)`.
-- [ ] 2.3 RED: `application/usecase/GetCourseDetailViewUseCaseImplTest.java`
+- [x] 2.3 RED: `application/usecase/GetCourseDetailViewUseCaseImplTest.java`
       (Mockito on `VirtualApiClient`), covering exactly:
       - `accessToken == null` → `Plain`, and `verify(virtualApiClient,
         never()).getCourseProgress(any(), any())` — the call itself never
@@ -117,9 +117,9 @@ before the controller cutover.
         `getCourseProgress` — every one collapses to `Plain`;
       - a catalog-call (`getCourseDetail`) exception is **not** caught by the
         same guard — it propagates untranslated, exactly as in #170.
-- [ ] 2.4 Verify RED: run `./gradlew :bff:test --tests "*GetCourseDetailViewUseCase*"`
+- [x] 2.4 Verify RED: run `./gradlew :bff:test --tests "*GetCourseDetailViewUseCase*"`
       — fails on the missing class, not a typo.
-- [ ] 2.5 GREEN: create `GetCourseDetailViewUseCaseImpl.java` — fetch catalog
+- [x] 2.5 GREEN: create `GetCourseDetailViewUseCaseImpl.java` — fetch catalog
       first (untranslated propagation); if `accessToken == null` return
       `Plain`; else call `getCourseProgress` in a `try`/`catch
       (RuntimeException)` that logs at `WARN` and returns `Plain`; if
@@ -128,8 +128,8 @@ before the controller cutover.
       `GetLessonViewUseCaseImpl`, but a null-safe lookup, not
       `indexOfLesson`'s throwing one) — not found → `Plain`; found → build
       `Resumable` with the resolved title.
-- [ ] 2.6 Verify GREEN: full `GetCourseDetailViewUseCaseImplTest` suite green.
-- [ ] 2.7 Run `./gradlew :bff:test check` before opening PR 2. Note: the old
+- [x] 2.6 Verify GREEN: full `GetCourseDetailViewUseCaseImplTest` suite green.
+- [x] 2.7 Run `./gradlew :bff:test check` before opening PR 2. Note: the old
       `GetCourseDetailUseCase`/`Impl` and their `UseCaseConfig` bean stay
       untouched and still wired into `CourseDetailController` — this PR ships
       new, tested, currently-unused code; the cutover happens in PR 3.
