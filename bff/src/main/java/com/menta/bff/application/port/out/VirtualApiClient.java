@@ -1,6 +1,7 @@
 package com.menta.bff.application.port.out;
 
 import com.menta.bff.application.dto.CourseDetail;
+import com.menta.bff.application.dto.CourseProgress;
 import com.menta.bff.application.dto.LessonDetail;
 import com.menta.bff.application.dto.LessonStream;
 import org.springframework.http.HttpStatus;
@@ -62,6 +63,30 @@ public interface VirtualApiClient {
      * @throws ServiceUnavailableException if the upstream is unreachable (503)
      */
     LessonStream getStream(String lessonId, String accessToken);
+
+    /**
+     * Retrieves the caller's progress on a course.
+     * <p>
+     * Calls GET /api/v1/virtual/courses/{courseId}/progress. Unlike
+     * {@link #getLesson} and {@link #getStream}, this call has no anonymous
+     * form at all: {@code accessToken} is mandatory and the
+     * {@code Authorization} header is always sent (design D3). A bare {@code
+     * 403} (no current entitlement) and an unmapped {@code 401} (unexpected,
+     * since the call is only ever made with a token) both reuse the existing
+     * exception paths — {@code 403} maps to {@link ForbiddenException} and an
+     * unmapped {@code 401} falls through to a generic {@link RuntimeException} —
+     * no new exception type is introduced for this call.
+     * </p>
+     *
+     * @param courseId    course identifier
+     * @param accessToken caller's access token; must not be {@code null}
+     * @return the caller's progress on the course
+     * @throws NullPointerException        if {@code accessToken} is {@code null}
+     * @throws NotFoundException           if the course does not exist (404)
+     * @throws ForbiddenException          if the caller lacks entitlement (403)
+     * @throws ServiceUnavailableException if the upstream is unreachable (503)
+     */
+    CourseProgress getCourseProgress(String courseId, String accessToken);
 
     /**
      * Exception thrown when the requested resource does not exist upstream (404).
