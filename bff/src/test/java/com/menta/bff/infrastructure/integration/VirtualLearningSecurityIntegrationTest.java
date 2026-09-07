@@ -27,6 +27,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class VirtualLearningSecurityIntegrationTest extends BaseIntegrationTest {
 
     private static final String COURSE_ID = "course-1";
+    private static final String LESSON_ID = "lesson-1";
 
     private static final String COURSE_DETAIL_BODY = """
             {
@@ -61,12 +62,53 @@ class VirtualLearningSecurityIntegrationTest extends BaseIntegrationTest {
             }
             """;
 
+    private static final String LESSON_BODY = """
+            {
+              "lesson": {
+                "lessonId": "lesson-1",
+                "title": "Postura básica",
+                "description": "Introducción a la postura",
+                "duration": "05:00",
+                "order": 1,
+                "videoId": null,
+                "course": {"courseId": "course-1", "title": "Ballet Básico"},
+                "module": {"moduleId": "module-1", "title": "Módulo 1"}
+              },
+              "navigation": {
+                "previousLesson": null,
+                "nextLesson": null
+              }
+            }
+            """;
+
+    private static final String STREAM_BODY = """
+            {
+              "stream": {
+                "url": "https://cdn/stream.m3u8",
+                "expiresAt": "2026-01-01T00:00:00Z"
+              }
+            }
+            """;
+
     private void stubCourseDetail() {
         WIRE_MOCK_SERVER.stubFor(WireMock.get(urlEqualTo("/api/v1/catalog/courses/" + COURSE_ID))
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody(COURSE_DETAIL_BODY)));
+    }
+
+    private void stubGrantedLesson() {
+        WIRE_MOCK_SERVER.stubFor(WireMock.get(urlEqualTo("/api/v1/virtual/lessons/" + LESSON_ID))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(LESSON_BODY)));
+        WIRE_MOCK_SERVER.stubFor(WireMock.get(urlEqualTo("/api/v1/virtual/lessons/" + LESSON_ID + "/stream"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(STREAM_BODY)));
     }
 
     @Test
@@ -112,5 +154,32 @@ class VirtualLearningSecurityIntegrationTest extends BaseIntegrationTest {
         // request never reaches CourseDetailController.
         mockMvc.perform(post("/courses/{courseId}", COURSE_ID))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("anonymous GET /courses/{courseId}/lessons/{lessonId} returns 200 with no redirect to /login")
+    void anonymousLessonRequest_shouldReturn200_withNoLoginRedirect() throws Exception {
+        stubCourseDetail();
+        stubGrantedLesson();
+
+        mockMvc.perform(get("/courses/{courseId}/lessons/{lessonId}", COURSE_ID, LESSON_ID))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("POST /courses/{courseId}/lessons/{lessonId} is not permitted — the matcher is GET-only")
+    void postToLessonRoute_shouldRemainAuthenticatedOnly() throws Exception {
+        // Same reasoning as postToCourseRoute_shouldRemainAuthenticatedOnly: a
+        // mutating verb never reaches LessonViewController.
+        mockMvc.perform(post("/courses/{courseId}/lessons/{lessonId}", COURSE_ID, LESSON_ID))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("a path resembling the lesson route with an extra segment is still authenticated-only")
+    void pathResemblingLessonMatcher_withExtraSegment_shouldRemainAuthenticatedOnly() throws Exception {
+        mockMvc.perform(get("/courses/{courseId}/lessons/{lessonId}/extra", COURSE_ID, LESSON_ID))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrlPattern("**/login"));
     }
 }

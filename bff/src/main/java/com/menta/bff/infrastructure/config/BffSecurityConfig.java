@@ -59,6 +59,11 @@ public class BffSecurityConfig {
                         // settings page) stay authenticated by default, and GET-only
                         // keeps mutating verbs closed (design decision G).
                         .requestMatchers(HttpMethod.GET, "/courses/*").permitAll()
+                        // Lesson player is equally access-agnostic at the route level
+                        // (design D2/G, #170): the controller forwards whatever token is
+                        // present, and GetLessonViewUseCase renders the upstream access
+                        // decision. Method-scoped GET-only, same reasoning as above.
+                        .requestMatchers(HttpMethod.GET, "/courses/*/lessons/*").permitAll()
                         // All other endpoints require authentication
                         .anyRequest().authenticated()
                 )
