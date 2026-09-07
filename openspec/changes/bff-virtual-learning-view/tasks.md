@@ -133,18 +133,18 @@ Branches (each cut from `develop` after its predecessor merges):
 
 **Branch**: `feature/bff-virtual-learning-view-lesson-web` off `develop` (cut after PR 3a merges).
 
-- [ ] 3b.1 RED: `infrastructure/web/controller/LessonViewControllerTest.java` (standalone MockMvc) — attribute present on the request → token forwarded to the use case; absent → `null` forwarded; a Java 21 `switch` on `LessonView` renders `lesson` for `Playable` and `lesson-sample` (or a `th:if` branch in one template, per decision F) for `Sample`, exhaustively (compiler-enforced, no `default` branch needed).
-- [ ] 3b.2 GREEN: create `infrastructure/web/controller/LessonViewController.java` reading `TokenRefreshFilter.ACCESS_TOKEN_ATTRIBUTE` from the request.
-- [ ] 3b.3 Create `templates/lesson.html` (flat, `lang="es"`): player branch (video/stream URL) and sample-gate branch (title, duration, subscription message with **no navigable link**) in the same file via `th:if`/`th:unless` on view type (decision F — no fragments yet); prev/next links from `Nav` in both branches.
-- [ ] 3b.4 Wire `GetLessonViewUseCase` bean in `infrastructure/config/UseCaseConfig.java`.
-- [ ] 3b.5 Modify `infrastructure/config/BffSecurityConfig.java`: add `.requestMatchers(HttpMethod.GET, "/courses/*/lessons/*").permitAll()` next to the PR 2 matcher (decision G).
-- [ ] 3b.6 RED, then GREEN: extend `VirtualLearningSecurityIntegrationTest.java` — anonymous `GET /courses/{c}/lessons/{l}` returns 200, no redirect; `POST /courses/{c}/lessons/{l}` is NOT permitted (method-scoped matcher, decision G); a path resembling the lesson route but with an extra segment is still authenticated-only.
-- [ ] 3b.7 RED, then GREEN: extend `VirtualLearningViewIntegrationTest.java`:
+- [x] 3b.1 RED: `infrastructure/web/controller/LessonViewControllerTest.java` (standalone MockMvc) — attribute present on the request → token forwarded to the use case; absent → `null` forwarded; a Java 21 `switch` on `LessonView` renders `lesson` for `Playable` and `lesson-sample` (or a `th:if` branch in one template, per decision F) for `Sample`, exhaustively (compiler-enforced, no `default` branch needed).
+- [x] 3b.2 GREEN: create `infrastructure/web/controller/LessonViewController.java` reading `TokenRefreshFilter.ACCESS_TOKEN_ATTRIBUTE` from the request.
+- [x] 3b.3 Create `templates/lesson.html` (flat, `lang="es"`): player branch (video/stream URL) and sample-gate branch (title, duration, subscription message with **no navigable link**) in the same file via `th:if`/`th:unless` on view type (decision F — no fragments yet); prev/next links from `Nav` in both branches.
+- [x] 3b.4 Wire `GetLessonViewUseCase` bean in `infrastructure/config/UseCaseConfig.java`.
+- [x] 3b.5 Modify `infrastructure/config/BffSecurityConfig.java`: add `.requestMatchers(HttpMethod.GET, "/courses/*/lessons/*").permitAll()` next to the PR 2 matcher (decision G).
+- [x] 3b.6 RED, then GREEN: extend `VirtualLearningSecurityIntegrationTest.java` — anonymous `GET /courses/{c}/lessons/{l}` returns 200, no redirect; `POST /courses/{c}/lessons/{l}` is NOT permitted (method-scoped matcher, decision G); a path resembling the lesson route but with an extra segment is still authenticated-only.
+- [x] 3b.7 RED, then GREEN: extend `VirtualLearningViewIntegrationTest.java`:
   - anonymous free lesson renders a player with a non-empty stream URL;
   - anonymous/non-entitled premium lesson renders the sample view with **no `videoId` and no stream URL anywhere in the response body**, and WireMock verifies **zero requests** to the stream endpoint for this case;
   - entitled student navigates prev/next via the upstream `navigation` block;
   - a `503` from `/stream` after a granted `200` lesson renders the error view, never a partial player.
-- [ ] 3b.8 Run `./gradlew :bff:test check` (full suite, ArchUnit, Checkstyle, `BffArchitectureTest`) before opening PR 3b.
+- [x] 3b.8 Run `./gradlew :bff:test check` (full suite, ArchUnit, Checkstyle, `BffArchitectureTest`) before opening PR 3b.
 
 ## Key Learnings
 

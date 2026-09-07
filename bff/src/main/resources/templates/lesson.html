@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:if="${playable}" th:text="${playable.lesson().title()} + ' - Menta Dance'">Lección - Menta Dance</title>
+    <title th:if="${sample}" th:text="${sample.lesson().title()} + ' - Menta Dance'">Lección - Menta Dance</title>
+</head>
+<body>
+
+<div th:if="${playable}">
+    <h1 th:text="${playable.lesson().title()}">Título de la lección</h1>
+    <p th:text="${playable.lesson().description()}">Descripción de la lección</p>
+    <video controls th:src="${playable.streamUrl()}"></video>
+
+    <p>
+        <a th:if="${playable.nav().previousLesson()}"
+           th:href="@{'/courses/' + ${playable.course().courseId()} + '/lessons/' + ${playable.nav().previousLesson().lessonId()}}"
+           th:text="'&larr; ' + ${playable.nav().previousLesson().title()}">Anterior</a>
+        <a th:if="${playable.nav().nextLesson()}"
+           th:href="@{'/courses/' + ${playable.course().courseId()} + '/lessons/' + ${playable.nav().nextLesson().lessonId()}}"
+           th:text="${playable.nav().nextLesson().title()} + ' &rarr;'">Siguiente</a>
+    </p>
+</div>
+
+<div th:if="${sample}">
+    <h1 th:text="${sample.lesson().title()}">Título de la lección</h1>
+    <p th:text="${sample.lesson().duration()}">00:00</p>
+    <p>Esta lección requiere una suscripción activa. Todavía no contamos con una página de
+        planes — vuelve pronto para suscribirte.</p>
+
+    <p>
+        <a th:if="${sample.nav().previousLesson()}"
+           th:href="@{'/courses/' + ${sample.course().courseId()} + '/lessons/' + ${sample.nav().previousLesson().lessonId()}}"
+           th:text="'&larr; ' + ${sample.nav().previousLesson().title()}">Anterior</a>
+        <a th:if="${sample.nav().nextLesson()}"
+           th:href="@{'/courses/' + ${sample.course().courseId()} + '/lessons/' + ${sample.nav().nextLesson().lessonId()}}"
+           th:text="${sample.nav().nextLesson().title()} + ' &rarr;'">Siguiente</a>
+    </p>
+</div>
+</body>
+</html>
