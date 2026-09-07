@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import com.menta.bff.application.dto.CourseDetail;
+import com.menta.bff.application.dto.CourseProgress;
 import com.menta.bff.application.dto.LessonDetail;
 import com.menta.bff.application.dto.LessonStream;
 import com.menta.bff.application.port.out.VirtualApiClient;
@@ -30,6 +31,7 @@ class VirtualApiAdapterTest {
     private static final String LESSON_ID = "lesson-1";
     private static final String LESSON_PATH = "/api/v1/virtual/lessons/" + LESSON_ID;
     private static final String LESSON_STREAM_PATH = LESSON_PATH + "/stream";
+    private static final String COURSE_PROGRESS_PATH = "/api/v1/virtual/courses/" + COURSE_ID + "/progress";
     private static final String ACCESS_TOKEN = "eyJhbGciOiJIUzI1NiJ9.token";
 
     private VirtualApiAdapter virtualApiAdapter;
@@ -362,6 +364,174 @@ class VirtualApiAdapterTest {
         // Then
         verify(getRequestedFor(urlEqualTo(LESSON_STREAM_PATH))
                 .withHeader("Authorization", equalTo("Bearer " + ACCESS_TOKEN)));
+    }
+
+    // -- getCourseProgress ------------------------------------------------
+
+    @Test
+    @DisplayName("should return CourseProgress with a resolved resumeLesson when upstream responds with 200")
+    void shouldReturnCourseProgressWithResumeLessonWhenUpstreamRespondsWith200() {
+        // Given
+        stubFor(get(urlEqualTo(COURSE_PROGRESS_PATH))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(toJson(courseProgressResponseBody(true)))));
+
+        // When
+        CourseProgress result = virtualApiAdapter.getCourseProgress(COURSE_ID, ACCESS_TOKEN);
+
+        // Then
+        assertThat(result).isNotNull();
+        assertThat(result.courseId()).isEqualTo(COURSE_ID);
+        assertThat(result.completedLessons()).isEqualTo(3);
+        assertThat(result.totalLessons()).isEqualTo(10);
+        assertThat(result.percentage()).isEqualTo(30);
+        assertThat(result.resumeLesson()).isNotNull();
+        assertThat(result.resumeLesson().lessonId()).isEqualTo(LESSON_ID);
+        assertThat(result.resumeLesson().moduleId()).isEqualTo("module-1");
+        assertThat(result.resumeLesson().positionSeconds()).isEqualTo(42);
+        assertThat(result.resumeLesson().completed()).isFalse();
+    }
+
+    @Test
+    @DisplayName("should return CourseProgress with a null resumeLesson when upstream reports zero progress")
+    void shouldReturnCourseProgressWithNullResumeLessonWhenUpstreamReportsZeroProgress() {
+        // Given
+        stubFor(get(urlEqualTo(COURSE_PROGRESS_PATH))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(toJson(courseProgressResponseBody(false)))));
+
+        // When
+        CourseProgress result = virtualApiAdapter.getCourseProgress(COURSE_ID, ACCESS_TOKEN);
+
+        // Then
+        assertThat(result).isNotNull();
+        assertThat(result.resumeLesson()).isNull();
+    }
+
+    @Test
+    @DisplayName("should throw NotFoundException when the course progress endpoint responds with 404")
+    void shouldThrowNotFoundExceptionWhenCourseProgressDoesNotExist() {
+        // Given
+        stubFor(get(urlEqualTo(COURSE_PROGRESS_PATH))
+                .willReturn(aResponse()
+                        .withStatus(404)
+                        .withHeader("Content-Type", "application/problem+json")
+                        .withBody("{\"detail\":\"Course not found\"}")));
+
+        // When / Then
+        assertThatThrownBy(() -> virtualApiAdapter.getCourseProgress(COURSE_ID, ACCESS_TOKEN))
+                .isInstanceOf(VirtualApiClient.NotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("should throw ForbiddenException on a bare 403 from the course progress call without parsing the body")
+    void shouldThrowForbiddenExceptionOnCourseProgressWithoutParsingBody() {
+        // Given
+        stubFor(get(urlEqualTo(COURSE_PROGRESS_PATH))
+                .willReturn(aResponse()
+                        .withStatus(403)
+                        .withHeader("Content-Type", "application/problem+json")
+                        .withBody("not-valid-json-at-all")));
+
+        // When / Then
+        assertThatThrownBy(() -> virtualApiAdapter.getCourseProgress(COURSE_ID, ACCESS_TOKEN))
+                .isInstanceOf(VirtualApiClient.ForbiddenException.class);
+    }
+
+    @Test
+    @DisplayName("should throw ServiceUnavailableException preserving Retry-After when the course progress call fails")
+    void shouldThrowServiceUnavailableExceptionWhenCourseProgressCallFails() {
+        // Given
+        stubFor(get(urlEqualTo(COURSE_PROGRESS_PATH))
+                .willReturn(aResponse()
+                        .withStatus(503)
+                        .withHeader("Retry-After", "20")));
+
+        // When / Then
+        assertThatThrownBy(() -> virtualApiAdapter.getCourseProgress(COURSE_ID, ACCESS_TOKEN))
+                .isInstanceOf(VirtualApiClient.ServiceUnavailableException.class)
+                .satisfies(exception -> assertThat(
+                        ((VirtualApiClient.ServiceUnavailableException) exception).getRetryAfterSeconds())
+                        .isEqualTo(20L));
+    }
+
+    @Test
+    @DisplayName("should fall through to a generic RuntimeException on an unexpected 401 from the course progress call")
+    void shouldFallThroughToGenericRuntimeExceptionOnCourseProgressWith401() {
+        // 401 is unexpected (this call is only ever made with a token) and is
+        // deliberately not given its own branch in the shared mappers (design D3) —
+        // this test proves the gap is intentional, not an oversight.
+        // Given
+        stubFor(get(urlEqualTo(COURSE_PROGRESS_PATH))
+                .willReturn(aResponse()
+                        .withStatus(401)
+                        .withHeader("Content-Type", "application/problem+json")
+                        .withBody("{\"detail\":\"Unauthorized\"}")));
+
+        // When / Then
+        assertThatThrownBy(() -> virtualApiAdapter.getCourseProgress(COURSE_ID, ACCESS_TOKEN))
+                .isExactlyInstanceOf(RuntimeException.class)
+                .isNotInstanceOf(VirtualApiClient.NotFoundException.class)
+                .isNotInstanceOf(VirtualApiClient.ForbiddenException.class)
+                .isNotInstanceOf(VirtualApiClient.ServiceUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("should always send Authorization: Bearer <token> on the course progress call")
+    void shouldAlwaysSendBearerTokenOnCourseProgressCall() {
+        // Given
+        stubFor(get(urlEqualTo(COURSE_PROGRESS_PATH))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(toJson(courseProgressResponseBody(false)))));
+
+        // When
+        virtualApiAdapter.getCourseProgress(COURSE_ID, ACCESS_TOKEN);
+
+        // Then
+        verify(getRequestedFor(urlEqualTo(COURSE_PROGRESS_PATH))
+                .withHeader("Authorization", equalTo("Bearer " + ACCESS_TOKEN)));
+    }
+
+    @Test
+    @DisplayName("should throw NullPointerException and make no request when accessToken is null")
+    void shouldThrowNullPointerExceptionAndMakeNoRequestWhenAccessTokenIsNull() {
+        // Given
+        stubFor(get(urlEqualTo(COURSE_PROGRESS_PATH))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(toJson(courseProgressResponseBody(false)))));
+
+        // When / Then
+        assertThatThrownBy(() -> virtualApiAdapter.getCourseProgress(COURSE_ID, null))
+                .isInstanceOf(NullPointerException.class);
+
+        // The guard must fire before any WireMock request is recorded — unlike
+        // getLesson/getStream's conditional header, there is no anonymous form
+        // for this call at all (design D3).
+        verify(0, getRequestedFor(urlEqualTo(COURSE_PROGRESS_PATH)));
+    }
+
+    private Map<String, Object> courseProgressResponseBody(boolean withResumeLesson) {
+        Map<String, Object> body = new java.util.HashMap<>();
+        body.put("courseId", COURSE_ID);
+        body.put("completedLessons", 3);
+        body.put("totalLessons", 10);
+        body.put("percentage", 30);
+        body.put("resumeLesson", withResumeLesson
+                ? Map.of(
+                        "lessonId", LESSON_ID,
+                        "moduleId", "module-1",
+                        "positionSeconds", 42,
+                        "completed", false)
+                : null);
+        return body;
     }
 
     private Map<String, Object> courseDetailResponseBody() {

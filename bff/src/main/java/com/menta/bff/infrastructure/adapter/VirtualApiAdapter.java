@@ -1,6 +1,7 @@
 package com.menta.bff.infrastructure.adapter;
 
 import com.menta.bff.application.dto.CourseDetail;
+import com.menta.bff.application.dto.CourseProgress;
 import com.menta.bff.application.dto.LessonDetail;
 import com.menta.bff.application.dto.LessonStream;
 import com.menta.bff.application.dto.Nav;
@@ -37,6 +38,7 @@ public class VirtualApiAdapter implements VirtualApiClient {
     private static final String COURSE_DETAIL_ENDPOINT = "/api/v1/catalog/courses/{courseId}";
     private static final String LESSON_ENDPOINT = "/api/v1/virtual/lessons/{lessonId}";
     private static final String LESSON_STREAM_ENDPOINT = "/api/v1/virtual/lessons/{lessonId}/stream";
+    private static final String COURSE_PROGRESS_ENDPOINT = "/api/v1/virtual/courses/{courseId}/progress";
     private static final String RETRY_AFTER_HEADER = "Retry-After";
 
     private final WebClient webClient;
@@ -129,6 +131,37 @@ public class VirtualApiAdapter implements VirtualApiClient {
         }
     }
 
+    @Override
+    public CourseProgress getCourseProgress(String courseId, String accessToken) {
+        Objects.requireNonNull(courseId, "courseId cannot be null");
+        Objects.requireNonNull(accessToken, "accessToken cannot be null");
+
+        log.debug("Calling Virtual API course progress endpoint");
+
+        try {
+            ClientResponse response = webClient.get()
+                    .uri(COURSE_PROGRESS_ENDPOINT, courseId)
+                    .headers(headers -> headers.setBearerAuth(accessToken))
+                    .exchange()
+                    .timeout(virtualApiProperties.getTimeout())
+                    .block();
+
+            return handleCourseProgressResponse(response);
+
+        } catch (WebClientResponseException e) {
+            throw mapHttpException(e, "Course progress");
+        } catch (RuntimeException e) {
+            // Re-throw domain exceptions (NotFoundException/ForbiddenException/
+            // ServiceUnavailableException) and the deliberate unmapped-status
+            // RuntimeException from mapErrorStatus (e.g. 401) without wrapping —
+            // no new exception type is introduced for this call (design D3).
+            throw e;
+        } catch (Exception e) {
+            log.error("Virtual API course progress call failed: {}", e.getMessage());
+            throw new ServiceUnavailableException("Virtual API unavailable: " + e.getMessage(), e);
+        }
+    }
+
     /**
      * Sets {@code Authorization: Bearer <token>} only when a token is present.
      * When {@code accessToken} is {@code null} (anonymous caller) the header is
@@ -211,6 +244,27 @@ public class VirtualApiAdapter implements VirtualApiClient {
         }
 
         throw mapErrorStatus(response, status, "Lesson stream");
+    }
+
+    /**
+     * Handles the course progress response, mapping success/error statuses.
+     */
+    private CourseProgress handleCourseProgressResponse(ClientResponse response) {
+        if (response == null) {
+            throw new ServiceUnavailableException("Virtual API returned null response");
+        }
+
+        HttpStatus status = (HttpStatus) response.statusCode();
+
+        if (status.is2xxSuccessful()) {
+            CourseProgress body = response.bodyToMono(CourseProgress.class).block();
+            if (body == null) {
+                throw new ServiceUnavailableException("Virtual API returned empty response body");
+            }
+            return body;
+        }
+
+        throw mapErrorStatus(response, status, "Course progress");
     }
 
     /**

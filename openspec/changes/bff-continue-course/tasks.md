@@ -53,16 +53,16 @@ before the controller cutover.
 
 **Branch**: `feature/bff-continue-course-api-progress` off `develop`.
 
-- [ ] 1.1 Create `application/dto/CourseProgress.java`: record mirroring
+- [x] 1.1 Create `application/dto/CourseProgress.java`: record mirroring
       `api:virtual`'s `CourseProgressResponse` byte-for-byte —
       `(String courseId, int completedLessons, int totalLessons, int percentage, ResumeLesson resumeLesson)`
       with nested `ResumeLesson(String lessonId, String moduleId, int positionSeconds, boolean completed)`.
-- [ ] 1.2 Modify `application/port/out/VirtualApiClient.java`: add
+- [x] 1.2 Modify `application/port/out/VirtualApiClient.java`: add
       `CourseProgress getCourseProgress(String courseId, String accessToken)`,
       javadoc noting the call is Bearer-required (no anonymous form) and that
       `403`/unmapped `401` both reuse the existing `ForbiddenException`/generic
       `RuntimeException` paths — no new exception type.
-- [ ] 1.3 RED: extend `VirtualApiAdapterTest.java` with a `-- getCourseProgress --`
+- [x] 1.3 RED: extend `VirtualApiAdapterTest.java` with a `-- getCourseProgress --`
       section: 200 with `resumeLesson` present maps fields correctly; 200 with
       `resumeLesson` null maps to a null `resumeLesson()`; 404 →
       `NotFoundException`; 403 → `ForbiddenException` without parsing the body;
@@ -72,9 +72,9 @@ before the controller cutover.
       <token>` always present; passing a `null` token throws `NullPointerException`
       from `requireNonNull` **before any WireMock request is recorded**
       (`verify(0, ...)`).
-- [ ] 1.4 Verify RED: run `*VirtualApiAdapterTest*` — new cases fail on the
+- [x] 1.4 Verify RED: run `*VirtualApiAdapterTest*` — new cases fail on the
       missing `getCourseProgress` method, not a typo.
-- [ ] 1.5 GREEN: implement `getCourseProgress` in `VirtualApiAdapter.java` —
+- [x] 1.5 GREEN: implement `getCourseProgress` in `VirtualApiAdapter.java` —
       endpoint constant `/api/v1/virtual/courses/{courseId}/progress`,
       `Objects.requireNonNull(accessToken, "accessToken cannot be null")`
       **before** the `try` block (mirrors the id guards), unconditional
@@ -82,9 +82,9 @@ before the controller cutover.
       `getLesson`/`getStream`'s conditional header), reuse `mapErrorStatus`/
       `mapHttpException` with label `"Course progress"` — no new branch added to
       either shared method.
-- [ ] 1.6 Verify GREEN: full `VirtualApiAdapterTest` suite green, including
+- [x] 1.6 Verify GREEN: full `VirtualApiAdapterTest` suite green, including
       pre-existing catalog/lesson/stream cases (no regression).
-- [ ] 1.7 Run `./gradlew :bff:test check` before opening PR 1.
+- [x] 1.7 Run `./gradlew :bff:test check` before opening PR 1.
 
 ## PR 2 — Use case + view model
 
