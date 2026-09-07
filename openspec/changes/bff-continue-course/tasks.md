@@ -138,39 +138,39 @@ before the controller cutover.
 
 **Branch**: `feature/bff-continue-course-controller` off `develop` (cut after PR 2 merges).
 
-- [ ] 3.1 RED: extend `CourseDetailControllerTest.java` (standalone MockMvc) —
+- [x] 3.1 RED: extend `CourseDetailControllerTest.java` (standalone MockMvc) —
       no token attribute on the request → use case invoked with a `null`
       `accessToken`, model carries no `resume` attribute; token attribute
       present + a stubbed `Resumable` result → model contains `resume` with
       its exact fields; token attribute present + a stubbed `Plain` result →
       no `resume` attribute. The `switch` is exhaustive (compiler-enforced, no
       `default` branch).
-- [ ] 3.2 Verify RED: fails against the old controller (wrong use case
+- [x] 3.2 Verify RED: fails against the old controller (wrong use case
       type, no token read), not a typo.
-- [ ] 3.3 GREEN: modify `CourseDetailController.java` — inject
+- [x] 3.3 GREEN: modify `CourseDetailController.java` — inject
       `GetCourseDetailViewUseCase`, read
       `TokenRefreshFilter.ACCESS_TOKEN_ATTRIBUTE` from `HttpServletRequest`
       (mirrors `LessonViewController`), exhaustive `switch` over
       `CourseDetailView`: `Plain` adds only `course`; `Resumable` additionally
       adds `resume`.
-- [ ] 3.4 Modify `infrastructure/config/UseCaseConfig.java`: replace the
+- [x] 3.4 Modify `infrastructure/config/UseCaseConfig.java`: replace the
       `GetCourseDetailUseCase` bean with a `GetCourseDetailViewUseCase` bean
       backed by `GetCourseDetailViewUseCaseImpl`.
-- [ ] 3.5 Delete `application/usecase/GetCourseDetailUseCase.java`,
+- [x] 3.5 Delete `application/usecase/GetCourseDetailUseCase.java`,
       `GetCourseDetailUseCaseImpl.java`, and
       `GetCourseDetailUseCaseImplTest.java` — superseded, nothing references
       them after 3.3-3.4 (folded into `GetCourseDetailViewUseCaseImplTest`
       from PR 2).
-- [ ] 3.6 Modify `templates/course-detail.html`: add a `th:if="${resume}"`
+- [x] 3.6 Modify `templates/course-detail.html`: add a `th:if="${resume}"`
       block rendering "Continuar" with `resume.percentage()`,
       `resume.completedLessons()`/`resume.totalLessons()`, and a link built
       as `/courses/{courseId}/lessons/{lessonId}` (no query string, no
       fragment); the existing "Comenzar" rendering is the implicit
       `th:unless`/default and stays byte-identical for `Plain`.
-- [ ] 3.7 Run `./gradlew :bff:test check` — full build green,
+- [x] 3.7 Run `./gradlew :bff:test check` — full build green,
       `BffArchitectureTest` passes (no new `application → infrastructure`
       import), Checkstyle clean.
-- [ ] 3.8 RED, then GREEN: extend `VirtualLearningViewIntegrationTest.java`,
+- [x] 3.8 RED, then GREEN: extend `VirtualLearningViewIntegrationTest.java`,
       reusing the existing login→cookie helper flow (lines 234-257) for every
       authenticated case:
       - entitled + progress → response contains "Continuar", the exact
@@ -185,4 +185,4 @@ before the controller cutover.
         getRequestedFor(urlEqualTo(progressUrl)))` — zero progress calls;
       - progress `503` → page still `200` with catalog content, no upstream
         problem-detail body and no generic error view.
-- [ ] 3.9 Run `./gradlew :bff:test check` before opening PR 3.
+- [x] 3.9 Run `./gradlew :bff:test check` before opening PR 3.

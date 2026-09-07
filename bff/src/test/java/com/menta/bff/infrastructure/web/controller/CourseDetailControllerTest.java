@@ -2,7 +2,9 @@ package com.menta.bff.infrastructure.web.controller;
 
 import com.menta.bff.application.dto.CourseDetail;
 import com.menta.bff.application.port.out.VirtualApiClient;
-import com.menta.bff.application.usecase.GetCourseDetailUseCase;
+import com.menta.bff.application.usecase.CourseDetailView;
+import com.menta.bff.application.usecase.GetCourseDetailViewUseCase;
+import com.menta.bff.infrastructure.web.filter.TokenRefreshFilter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -14,6 +16,8 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.List;
 
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
@@ -30,33 +34,67 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class CourseDetailControllerTest {
 
     private static final String COURSE_ID = "course-1";
+    private static final String ACCESS_TOKEN = "access-token-abc";
 
     @Mock
-    private GetCourseDetailUseCase getCourseDetailUseCase;
+    private GetCourseDetailViewUseCase getCourseDetailViewUseCase;
 
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new CourseDetailController(getCourseDetailUseCase)).build();
+        mockMvc = MockMvcBuilders.standaloneSetup(new CourseDetailController(getCourseDetailViewUseCase)).build();
     }
 
     @Test
-    @DisplayName("renders course-detail with the module/lesson tree and free/premium markers")
-    void shouldRenderCourseDetailWithModuleLessonTree() throws Exception {
+    @DisplayName("anonymous request: no access-token attribute forwards null and renders with no resume attribute")
+    void shouldForwardNullTokenAndRenderPlainWhenNoAccessTokenAttribute() throws Exception {
         CourseDetail courseDetail = sampleCourseDetail();
-        when(getCourseDetailUseCase.execute(COURSE_ID)).thenReturn(courseDetail);
+        when(getCourseDetailViewUseCase.execute(eq(COURSE_ID), isNull()))
+                .thenReturn(new CourseDetailView.Plain(courseDetail));
 
         mockMvc.perform(get("/courses/{courseId}", COURSE_ID))
                 .andExpect(status().isOk())
                 .andExpect(view().name("course-detail"))
-                .andExpect(model().attribute("course", courseDetail));
+                .andExpect(model().attribute("course", courseDetail))
+                .andExpect(model().attributeDoesNotExist("resume"));
+    }
+
+    @Test
+    @DisplayName("authenticated request with Resumable view: renders with the resume attribute populated")
+    void shouldRenderResumeAttributeWhenViewIsResumable() throws Exception {
+        CourseDetail courseDetail = sampleCourseDetail();
+        CourseDetailView.Resume resume = new CourseDetailView.Resume("lesson-2", "Primeros pasos", 50, 1, 2);
+        when(getCourseDetailViewUseCase.execute(eq(COURSE_ID), eq(ACCESS_TOKEN)))
+                .thenReturn(new CourseDetailView.Resumable(courseDetail, resume));
+
+        mockMvc.perform(get("/courses/{courseId}", COURSE_ID)
+                        .requestAttr(TokenRefreshFilter.ACCESS_TOKEN_ATTRIBUTE, ACCESS_TOKEN))
+                .andExpect(status().isOk())
+                .andExpect(view().name("course-detail"))
+                .andExpect(model().attribute("course", courseDetail))
+                .andExpect(model().attribute("resume", resume));
+    }
+
+    @Test
+    @DisplayName("authenticated request with Plain view: renders with no resume attribute")
+    void shouldRenderNoResumeAttributeWhenViewIsPlain() throws Exception {
+        CourseDetail courseDetail = sampleCourseDetail();
+        when(getCourseDetailViewUseCase.execute(eq(COURSE_ID), eq(ACCESS_TOKEN)))
+                .thenReturn(new CourseDetailView.Plain(courseDetail));
+
+        mockMvc.perform(get("/courses/{courseId}", COURSE_ID)
+                        .requestAttr(TokenRefreshFilter.ACCESS_TOKEN_ATTRIBUTE, ACCESS_TOKEN))
+                .andExpect(status().isOk())
+                .andExpect(view().name("course-detail"))
+                .andExpect(model().attribute("course", courseDetail))
+                .andExpect(model().attributeDoesNotExist("resume"));
     }
 
     @Test
     @DisplayName("propagates NotFoundException, which resolves to HTTP 404 via @ResponseStatus")
     void shouldResolveNotFoundExceptionTo404() throws Exception {
-        when(getCourseDetailUseCase.execute(COURSE_ID))
+        when(getCourseDetailViewUseCase.execute(eq(COURSE_ID), isNull()))
                 .thenThrow(new VirtualApiClient.NotFoundException("Course not found"));
 
         mockMvc.perform(get("/courses/{courseId}", COURSE_ID))
@@ -66,7 +104,7 @@ class CourseDetailControllerTest {
     @Test
     @DisplayName("propagates ServiceUnavailableException, which resolves to HTTP 503 via @ResponseStatus")
     void shouldResolveServiceUnavailableExceptionTo503() throws Exception {
-        when(getCourseDetailUseCase.execute(COURSE_ID))
+        when(getCourseDetailViewUseCase.execute(eq(COURSE_ID), isNull()))
                 .thenThrow(new VirtualApiClient.ServiceUnavailableException("Virtual API unavailable"));
 
         mockMvc.perform(get("/courses/{courseId}", COURSE_ID))
