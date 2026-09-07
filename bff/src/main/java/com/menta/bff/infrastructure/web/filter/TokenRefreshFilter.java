@@ -6,6 +6,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -27,6 +28,13 @@ import java.util.Objects;
  * Fail-closed behavior:
  * - Refresh failures (401, 423) → clear session + redirect to login
  * - Auth API unavailable (503) → return 503 error
+ * </p>
+ * <p>
+ * Anonymous requests are skipped by two independent defenses: filter ordering
+ * (this filter runs before {@code AnonymousAuthenticationFilter}, so the
+ * security context authentication is still {@code null}) and an explicit
+ * {@link AnonymousAuthenticationToken} check in {@link #doFilterInternal} —
+ * see that method's comment for why both exist (#170).
  * </p>
  * <p>
  * Part of Clean Architecture infrastructure layer.
@@ -70,11 +78,29 @@ public class TokenRefreshFilter extends OncePerRequestFilter {
             return;
         }
 
-        // Check if request is authenticated
+        // Check if request is authenticated.
+        //
+        // Two independent defenses skip anonymous traffic here, per #170's
+        // security hardening (this change is the first to route anonymous
+        // visitors through this filter on a real page):
+        //   1. Ordering (load-bearing today): BffSecurityConfig registers this
+        //      filter via addFilterBefore(..., UsernamePasswordAuthenticationFilter.class),
+        //      ahead of AnonymousAuthenticationFilter, so `authentication` is
+        //      still null here for an anonymous request — caught by the first
+        //      clause below.
+        //   2. Explicit type check (defense in depth, not load-bearing while
+        //      #1 holds): a real AnonymousAuthenticationToken returns true
+        //      from isAuthenticated(), so it would slip past a bare
+        //      `!authentication.isAuthenticated()` guard. If the filter is
+        //      ever reordered after AnonymousAuthenticationFilter, this
+        //      second clause is what keeps anonymous visitors browsing
+        //      instead of being bounced to /login?sessionExpired=true.
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
-        if (authentication == null || !authentication.isAuthenticated()) {
-            // Unauthenticated request - skip filter
+        if (authentication == null
+                || !authentication.isAuthenticated()
+                || authentication instanceof AnonymousAuthenticationToken) {
+            // Unauthenticated or anonymous request - skip filter
             filterChain.doFilter(request, response);
             return;
         }

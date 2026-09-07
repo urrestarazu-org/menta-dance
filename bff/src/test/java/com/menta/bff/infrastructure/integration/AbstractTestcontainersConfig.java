@@ -78,5 +78,8 @@ public abstract class AbstractTestcontainersConfig {
 
         // Auth API base URL (WireMock)
         registry.add("menta.auth.base-url", () -> "http://localhost:" + WIRE_MOCK_SERVER.port());
+
+        // Virtual/Catalog API base URL (same singleton WireMock server, #170)
+        registry.add("menta.api.base-url", () -> "http://localhost:" + WIRE_MOCK_SERVER.port());
     }
 }

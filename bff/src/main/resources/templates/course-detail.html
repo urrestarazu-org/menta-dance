@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${course.title()} + ' - Menta Dance'">Curso - Menta Dance</title>
+</head>
+<body>
+<h1 th:text="${course.title()}">Título del curso</h1>
+<p th:text="${course.description()}">Descripción del curso</p>
+
+<p>
+    <span th:text="${course.stats().moduleCount()} + ' módulos'">0 módulos</span> ·
+    <span th:text="${course.stats().lessonCount()} + ' lecciones'">0 lecciones</span> ·
+    <span th:text="${course.stats().totalDuration()}">0m</span>
+</p>
+
+<div th:each="module : ${course.modules()}">
+    <h2 th:text="${module.title()}">Módulo</h2>
+    <ul>
+        <li th:each="lesson : ${module.lessons()}">
+            <a th:href="@{'/courses/' + ${course.courseId()} + '/lessons/' + ${lesson.lessonId()}}"
+               th:text="${lesson.title()}">Lección</a>
+            <span th:text="${lesson.duration()}">00:00</span>
+            <span th:if="${lesson.isFree()}">Gratis</span>
+            <span th:unless="${lesson.isFree()}">Restringida</span>
+        </li>
+    </ul>
+</div>
+</body>
+</html>
