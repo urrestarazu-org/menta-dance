@@ -115,19 +115,19 @@ Branches (each cut from `develop` after its predecessor merges):
 
 **Branch**: `feature/bff-virtual-learning-view-lesson-core` off `develop` (cut after PR 2 merges).
 
-- [ ] 3a.1 Create `application/dto/LessonSummary.java` (record: `lessonId, title, duration, isFree, order`), derived from a `CourseDetail.Lesson` entry.
-- [ ] 3a.2 Create `application/usecase/LessonView.java`: sealed interface, `Playable(CourseDetail, LessonDetail, String streamUrl, Nav)` and `Sample(CourseDetail, LessonSummary, Nav)` — `Sample` carries **no `plansUrl` field of any kind** (the CTA is a message, not a link, until #177).
-- [ ] 3a.3 RED: `application/usecase/GetLessonViewUseCaseImplTest.java` (Mockito on `VirtualApiClient`) covering, in this order:
+- [x] 3a.1 Create `application/dto/LessonSummary.java` (record: `lessonId, title, duration, isFree, order`), derived from a `CourseDetail.Lesson` entry.
+- [x] 3a.2 Create `application/usecase/LessonView.java`: sealed interface, `Playable(CourseDetail, LessonDetail, String streamUrl, Nav)` and `Sample(CourseDetail, LessonSummary, Nav)` — `Sample` carries **no `plansUrl` field of any kind** (the CTA is a message, not a link, until #177).
+- [x] 3a.3 RED: `application/usecase/GetLessonViewUseCaseImplTest.java` (Mockito on `VirtualApiClient`) covering, in this order:
   - catalog failure (`NotFoundException`/`ServiceUnavailableException`) short-circuits before any lesson/stream call;
   - lesson `403` → `Sample` built from the course-detail lesson summary, nav derived from course-detail module/lesson order, **zero calls to `getStream`**;
   - lesson `200` with `isFree: true` and `videoId: null` (free, granted) → `Playable`, **`getStream` IS called** with a `null` token, `streamUrl` is non-empty (this is the corrected case — a free lesson must never end up with an empty `streamUrl`);
   - lesson `200` with a `videoId` (entitled) → `Playable`, `getStream` called with the caller's token;
   - lesson `200` → nav comes from the lesson endpoint's own navigation block, not course order;
   - `getStream` `503` after a granted lesson → exception propagates (controller renders the error view, no partial player).
-- [ ] 3a.4 Verify RED: run `./gradlew :bff:test --tests "*GetLessonViewUseCase*"` — fails on the missing class, not a typo.
-- [ ] 3a.5 GREEN: create `application/usecase/GetLessonViewUseCase.java` + `GetLessonViewUseCaseImpl.java` implementing the 1→2→(3) flow from design's Data Flow section.
-- [ ] 3a.6 Verify GREEN: full `GetLessonViewUseCaseImplTest` suite green.
-- [ ] 3a.7 Run `./gradlew :bff:test check` before opening PR 3a.
+- [x] 3a.4 Verify RED: run `./gradlew :bff:test --tests "*GetLessonViewUseCase*"` — fails on the missing class, not a typo.
+- [x] 3a.5 GREEN: create `application/usecase/GetLessonViewUseCase.java` + `GetLessonViewUseCaseImpl.java` implementing the 1→2→(3) flow from design's Data Flow section.
+- [x] 3a.6 Verify GREEN: full `GetLessonViewUseCaseImplTest` suite green.
+- [x] 3a.7 Run `./gradlew :bff:test check` before opening PR 3a.
 
 ## PR 3b — `virtual-lesson-view` web + security
 
