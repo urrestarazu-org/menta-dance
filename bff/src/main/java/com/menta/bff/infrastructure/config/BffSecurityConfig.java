@@ -8,6 +8,7 @@ import com.menta.bff.infrastructure.web.filter.TokenRefreshFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -53,6 +54,11 @@ public class BffSecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         // Public endpoints - no authentication required
                         .requestMatchers("/login", "/error", "/actuator/health").permitAll()
+                        // Course detail is access-agnostic (design D2, #170) — a single
+                        // "*" does not cross "/", so future subpaths (e.g. a course's
+                        // settings page) stay authenticated by default, and GET-only
+                        // keeps mutating verbs closed (design decision G).
+                        .requestMatchers(HttpMethod.GET, "/courses/*").permitAll()
                         // All other endpoints require authentication
                         .anyRequest().authenticated()
                 )

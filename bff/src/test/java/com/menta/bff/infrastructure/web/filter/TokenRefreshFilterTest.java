@@ -11,12 +11,16 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.io.IOException;
+import java.util.List;
 
 import static org.mockito.Mockito.*;
 
@@ -88,17 +92,26 @@ class TokenRefreshFilterTest {
     }
 
     @Test
-    @DisplayName("Should skip filter for anonymous authentication")
+    @DisplayName(
+            "Should skip filter for a real AnonymousAuthenticationToken "
+                    + "(isAuthenticated() == true, unlike a mock stubbed to false)"
+    )
     void shouldSkipFilterForAnonymousAuthentication() throws ServletException, IOException {
-        // Given: anonymous authentication
-        Authentication authentication = mock(Authentication.class);
-        when(authentication.isAuthenticated()).thenReturn(false);
+        // Given: a REAL AnonymousAuthenticationToken, the exact type Spring Security's
+        // AnonymousAuthenticationFilter installs for an unauthenticated caller. Unlike
+        // a mock stubbed isAuthenticated() -> false, this token's isAuthenticated()
+        // genuinely returns true — anonymous traffic never produces the state the old
+        // version of this test asserted.
+        List<GrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("ROLE_ANONYMOUS"));
+        Authentication authentication = new AnonymousAuthenticationToken("key", "anonymousUser", authorities);
         when(securityContext.getAuthentication()).thenReturn(authentication);
 
         // When
         filter.doFilterInternal(request, response, filterChain);
 
-        // Then: use case NOT called
+        // Then: the filter must still skip refresh — proven here by the explicit
+        // AnonymousAuthenticationToken guard (BffSecurityConfig's filter-ordering
+        // defense is a second, independent line, not exercised by this unit test).
         verifyNoInteractions(getValidAccessTokenUseCase);
         verify(filterChain).doFilter(request, response);
     }
