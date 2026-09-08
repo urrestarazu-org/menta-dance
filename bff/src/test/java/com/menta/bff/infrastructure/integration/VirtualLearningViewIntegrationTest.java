@@ -1,6 +1,7 @@
 package com.menta.bff.infrastructure.integration;
 
 import com.github.tomakehurst.wiremock.client.WireMock;
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -351,5 +352,171 @@ class VirtualLearningViewIntegrationTest extends BaseIntegrationTest {
         assertThat(body).doesNotContain("<video");
         assertThat(body).doesNotContain("about:blank");
         assertThat(body).doesNotContain("Service unavailable");
+    }
+
+    // --- Course-detail progress-aware CTA (#58, PR 3) --------------------
+
+    private String progressUrl(String courseId) {
+        return "/api/v1/virtual/courses/" + courseId + "/progress";
+    }
+
+    /**
+     * Reuses the login→session-cookie flow already proven by {@code
+     * entitledStudentRequest_shouldRenderPlayerWithUpstreamNavigation}
+     * (lines 234-257), factored out for the progress-aware cases below.
+     */
+    private Cookie loginAndGetSessionCookie() throws Exception {
+        String accessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdHVkZW50QGV4YW1wbGUuY29tIn0.signature";
+        WIRE_MOCK_SERVER.stubFor(WireMock.post(urlEqualTo("/api/v1/auth/login"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withHeader("X-Refresh-Token", "refresh-token-abc")
+                        .withBody("""
+                                {
+                                  "access_token": "%s",
+                                  "token_type": "Bearer",
+                                  "expires_in": 3600
+                                }
+                                """.formatted(accessToken))));
+
+        var loginResult = mockMvc.perform(post("/login")
+                        .param("username", "student@example.com")
+                        .param("password", "password123")
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+        return loginResult.getResponse().getCookie("SESSION");
+    }
+
+    @Test
+    @DisplayName("entitled student with resumable progress: renders Continuar with exact data and a query/fragment-free link")
+    void entitledStudentWithProgress_shouldRenderContinuarWithExactDataAndCleanLink() throws Exception {
+        Cookie sessionCookie = loginAndGetSessionCookie();
+        stubCourseDetail();
+        WIRE_MOCK_SERVER.stubFor(WireMock.get(urlEqualTo(progressUrl(COURSE_ID)))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                {
+                                  "courseId": "course-1",
+                                  "completedLessons": 1,
+                                  "totalLessons": 2,
+                                  "percentage": 50,
+                                  "resumeLesson": {
+                                    "lessonId": "lesson-2",
+                                    "moduleId": "module-1",
+                                    "positionSeconds": 45,
+                                    "completed": false
+                                  }
+                                }
+                                """)));
+
+        var result = mockMvc.perform(get("/courses/{courseId}", COURSE_ID).cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(view().name("course-detail"))
+                .andReturn();
+
+        String body = result.getResponse().getContentAsString();
+        assertThat(body).contains("Continuar");
+        assertThat(body).contains("Giro avanzado");
+        assertThat(body).contains(">1<");
+        assertThat(body).contains(">2<");
+        assertThat(body).contains(">50<");
+        assertThat(body).contains("href=\"/courses/course-1/lessons/lesson-2\"");
+        // Locked D1/D4: no seek/position hint, no query string or fragment on the link.
+        assertThat(body).doesNotContain("lessons/lesson-2?");
+        assertThat(body).doesNotContain("lessons/lesson-2#");
+    }
+
+    @Test
+    @DisplayName("entitled student with zero progress: renders Comenzar, never Continuar or a percentage")
+    void entitledStudentWithZeroProgress_shouldRenderComenzarNotContinuar() throws Exception {
+        Cookie sessionCookie = loginAndGetSessionCookie();
+        stubCourseDetail();
+        WIRE_MOCK_SERVER.stubFor(WireMock.get(urlEqualTo(progressUrl(COURSE_ID)))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                {
+                                  "courseId": "course-1",
+                                  "completedLessons": 0,
+                                  "totalLessons": 2,
+                                  "percentage": 0,
+                                  "resumeLesson": null
+                                }
+                                """)));
+
+        var result = mockMvc.perform(get("/courses/{courseId}", COURSE_ID).cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(view().name("course-detail"))
+                .andReturn();
+
+        String body = result.getResponse().getContentAsString();
+        assertThat(body).contains("Comenzar");
+        assertThat(body).doesNotContain("Continuar");
+    }
+
+    @Test
+    @DisplayName("403 on the progress call renders byte-identical to the anonymous rendering")
+    void progressForbidden_shouldRenderByteEquivalentToAnonymous() throws Exception {
+        stubCourseDetail();
+        var anonymousResult = mockMvc.perform(get("/courses/{courseId}", COURSE_ID))
+                .andExpect(status().isOk())
+                .andReturn();
+        String anonymousBody = anonymousResult.getResponse().getContentAsString();
+
+        Cookie sessionCookie = loginAndGetSessionCookie();
+        stubCourseDetail();
+        WIRE_MOCK_SERVER.stubFor(WireMock.get(urlEqualTo(progressUrl(COURSE_ID)))
+                .willReturn(aResponse().withStatus(403)));
+
+        var authenticatedResult = mockMvc.perform(get("/courses/{courseId}", COURSE_ID).cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andReturn();
+        String authenticatedBody = authenticatedResult.getResponse().getContentAsString();
+
+        assertThat(authenticatedBody).isEqualTo(anonymousBody);
+    }
+
+    @Test
+    @DisplayName("anonymous request never calls the progress endpoint")
+    void anonymousRequest_shouldNeverCallProgressEndpoint() throws Exception {
+        stubCourseDetail();
+
+        mockMvc.perform(get("/courses/{courseId}", COURSE_ID))
+                .andExpect(status().isOk());
+
+        WIRE_MOCK_SERVER.verify(0, getRequestedFor(urlEqualTo(progressUrl(COURSE_ID))));
+    }
+
+    @Test
+    @DisplayName("progress 503 still renders the catalog page with 200, no problem-detail leak and no error view")
+    void progressUnavailable_shouldStillRenderCatalogPageWithoutLeakingUpstreamError() throws Exception {
+        Cookie sessionCookie = loginAndGetSessionCookie();
+        stubCourseDetail();
+        WIRE_MOCK_SERVER.stubFor(WireMock.get(urlEqualTo(progressUrl(COURSE_ID)))
+                .willReturn(aResponse()
+                        .withStatus(503)
+                        .withHeader("Retry-After", "30")
+                        .withHeader("Content-Type", "application/problem+json")
+                        .withBody("""
+                                {"type":"about:blank","title":"Service unavailable","status":503}
+                                """)));
+
+        var result = mockMvc.perform(get("/courses/{courseId}", COURSE_ID).cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(view().name("course-detail"))
+                .andReturn();
+
+        assertThat(result.getResponse().getHeader("Retry-After")).isNull();
+        String body = result.getResponse().getContentAsString();
+        assertThat(body).contains("Ballet Básico");
+        assertThat(body).doesNotContain("about:blank");
+        assertThat(body).doesNotContain("application/problem+json");
+        assertThat(body).doesNotContain("Service unavailable");
+        assertThat(body).contains("Comenzar");
     }
 }

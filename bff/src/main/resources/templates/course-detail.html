@@ -15,6 +15,17 @@
     <span th:text="${course.stats().totalDuration()}">0m</span>
 </p>
 
+<p th:if="${resume}">
+    <a th:href="@{'/courses/' + ${course.courseId()} + '/lessons/' + ${resume.lessonId()}}">
+        Continuar: <span th:text="${resume.title()}">Lección</span>
+        (<span th:text="${resume.completedLessons()}">0</span>/<span th:text="${resume.totalLessons()}">0</span> ·
+        <span th:text="${resume.percentage()}">0</span>%)
+    </a>
+</p>
+<p th:unless="${resume}">
+    <a th:href="@{'/courses/' + ${course.courseId()}}">Comenzar</a>
+</p>
+
 <div th:each="module : ${course.modules()}">
     <h2 th:text="${module.title()}">Módulo</h2>
     <ul>

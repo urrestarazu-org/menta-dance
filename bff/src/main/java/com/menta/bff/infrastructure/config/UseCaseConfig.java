@@ -47,8 +47,8 @@ public class UseCaseConfig {
     }
 
     @Bean
-    public GetCourseDetailUseCase getCourseDetailUseCase(VirtualApiClient virtualApiClient) {
-        return new GetCourseDetailUseCaseImpl(virtualApiClient);
+    public GetCourseDetailViewUseCase getCourseDetailViewUseCase(VirtualApiClient virtualApiClient) {
+        return new GetCourseDetailViewUseCaseImpl(virtualApiClient);
     }
 
     @Bean
