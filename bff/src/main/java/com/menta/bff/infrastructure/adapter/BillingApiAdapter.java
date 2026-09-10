@@ -12,15 +12,28 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * WebClient adapter for the upstream billing plans endpoint.
  * <p>
  * Implements {@link BillingApiClient} using Spring WebClient to call
- * api:billing's public plans endpoint. This PR covers the fetch and
- * status-mapping behavior only — no caching yet, every call reaches
- * upstream (the single-entry TTL cache is added on top in a later PR).
+ * api:billing's public plans endpoint. Holds a single-entry TTL cache in
+ * front of the upstream call (design: cache lives in the adapter, hand-rolled,
+ * single-entry) — {@code getPlans()} serves a fresh cache entry without
+ * calling upstream, and collapses concurrent cold/expired callers into a
+ * single upstream refresh (single-flight, guarding against D1's rate-limit
+ * concern under concurrent traffic).
+ * </p>
+ * <p>
+ * <b>No stale-on-failure</b>: an expired entry is never served, whether the
+ * cache is cold or holds an expired entry — a refresh failure always
+ * propagates and leaves the existing cache entry untouched (D6, strict, per
+ * design's corrected reasoning). Only a successful {@code 200} response ever
+ * replaces the cached {@link Entry}.
  * </p>
  * <p>
  * Part of Clean Architecture infrastructure layer. Uses an explicit
@@ -38,6 +51,8 @@ public class BillingApiAdapter implements BillingApiClient {
 
     private final WebClient webClient;
     private final BillingApiProperties billingApiProperties;
+    private final AtomicReference<Entry> cache = new AtomicReference<>();
+    private final ReentrantLock refreshLock = new ReentrantLock();
 
     public BillingApiAdapter(
             @Qualifier("billingApiWebClient") WebClient webClient,
@@ -48,6 +63,39 @@ public class BillingApiAdapter implements BillingApiClient {
 
     @Override
     public List<PlanSummary> getPlans() {
+        Entry cached = cache.get();
+        if (isFresh(cached)) {
+            return cached.plans();
+        }
+
+        refreshLock.lock();
+        try {
+            // Double-check: another thread may have refreshed the cache while
+            // this one waited for the lock (single-flight).
+            cached = cache.get();
+            if (isFresh(cached)) {
+                return cached.plans();
+            }
+
+            List<PlanSummary> fresh = fetchPlans();
+            cache.set(new Entry(fresh, Instant.now().plus(billingApiProperties.getCacheTtl())));
+            return fresh;
+        } finally {
+            refreshLock.unlock();
+        }
+    }
+
+    private boolean isFresh(Entry entry) {
+        return entry != null && Instant.now().isBefore(entry.expiresAt());
+    }
+
+    /**
+     * Performs the actual upstream call. Called only while holding {@link
+     * #refreshLock}. A thrown exception here propagates as-is — the cache is
+     * never populated or re-dated on failure, so an existing expired entry is
+     * left untouched and the next call retries upstream (no stale-on-failure).
+     */
+    private List<PlanSummary> fetchPlans() {
         log.debug("Calling Billing API plans endpoint");
 
         try {
@@ -146,6 +194,14 @@ public class BillingApiAdapter implements BillingApiClient {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    /**
+     * A single-entry cache slot: the last successfully fetched plans list and
+     * when it expires. Only a {@code 200} response ever produces a new
+     * {@code Entry} — see the "No stale-on-failure" note on the class.
+     */
+    private record Entry(List<PlanSummary> plans, Instant expiresAt) {
     }
 
     /**
