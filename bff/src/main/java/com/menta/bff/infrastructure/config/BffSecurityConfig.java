@@ -64,6 +64,12 @@ public class BffSecurityConfig {
                         // present, and GetLessonViewUseCase renders the upstream access
                         // decision. Method-scoped GET-only, same reasoning as above.
                         .requestMatchers(HttpMethod.GET, "/courses/*/lessons/*").permitAll()
+                        // Plans listing is public and caller-agnostic (design
+                        // decision "GET /plans, no wildcard", #177): exact
+                        // path only — the route takes no path variable, so a
+                        // wildcard would also permit a future /plans/{id}
+                        // that this change never intended to open.
+                        .requestMatchers(HttpMethod.GET, "/plans").permitAll()
                         // All other endpoints require authentication
                         .anyRequest().authenticated()
                 )

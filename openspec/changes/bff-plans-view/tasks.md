@@ -159,41 +159,41 @@ controller/template slice rather than stand alone.
 
 **Branch**: `feature/bff-plans-view-usecase-controller` off `develop` (cut after PR 3 merges).
 
-- [ ] 4.1 Create `application/usecase/GetPlansViewUseCase.java`:
+- [x] 4.1 Create `application/usecase/GetPlansViewUseCase.java`:
       `List<PlanSummary> execute()`.
-- [ ] 4.2 RED: `application/usecase/GetPlansViewUseCaseImplTest.java`
+- [x] 4.2 RED: `application/usecase/GetPlansViewUseCaseImplTest.java`
       (Mockito on `BillingApiClient`): delegates to `billingApiClient.getPlans()`
       and returns its result unchanged; a thrown `NotFoundException`/
       `ServiceUnavailableException` propagates untranslated (no catch).
-- [ ] 4.3 Verify RED: run `./gradlew :bff:test --tests "*GetPlansViewUseCase*"`
+- [x] 4.3 Verify RED: run `./gradlew :bff:test --tests "*GetPlansViewUseCase*"`
       — fails on the missing `GetPlansViewUseCaseImpl` class.
-- [ ] 4.4 GREEN: create `GetPlansViewUseCaseImpl.java` — pass-through, no
+- [x] 4.4 GREEN: create `GetPlansViewUseCaseImpl.java` — pass-through, no
       try/catch.
-- [ ] 4.5 Modify `infrastructure/config/UseCaseConfig.java`: add the
+- [x] 4.5 Modify `infrastructure/config/UseCaseConfig.java`: add the
       `GetPlansViewUseCase` bean backed by `GetPlansViewUseCaseImpl`.
-- [ ] 4.6 RED: create `infrastructure/web/controller/PlansControllerTest.java`
+- [x] 4.6 RED: create `infrastructure/web/controller/PlansControllerTest.java`
       (standalone MockMvc, mocked use case): `GET /plans` → model attribute
       `plans` equals the use case's returned list, view name `"plans"`.
-- [ ] 4.7 Verify RED: fails on the missing `PlansController` class.
-- [ ] 4.8 GREEN: create `PlansController.java` — flat `@Controller`,
+- [x] 4.7 Verify RED: fails on the missing `PlansController` class.
+- [x] 4.8 GREEN: create `PlansController.java` — flat `@Controller`,
       `@GetMapping("/plans")`, injects `GetPlansViewUseCase`, adds `plans` to
       the model, returns view name `"plans"`; no try/catch — uncaught
       `@ResponseStatus` exceptions fall through to `/error` → `error.html`
       (D6, mirrors `CourseDetailController`).
-- [ ] 4.9 Modify `infrastructure/config/BffSecurityConfig.java`: add
+- [x] 4.9 Modify `infrastructure/config/BffSecurityConfig.java`: add
       `.requestMatchers(HttpMethod.GET, "/plans").permitAll()` — exact path,
       no wildcard (bff-plans-view spec: "no wildcard, since the route takes
       no path variable"), placed after the existing course/lesson entries and
       before `anyRequest().authenticated()`.
-- [ ] 4.10 Create `bff/src/main/resources/templates/plans.html`: flat
+- [x] 4.10 Create `bff/src/main/resources/templates/plans.html`: flat
       `lang="es"` list, no fragments. For each plan: name, description, price
       formatted with `#numbers.formatDecimal` + currency, `'cada ' +
       durationDays + (durationDays == 1 ? ' día' : ' días')`, and a
       `th:if="${plan.featured()}"` "Destacado" badge — list order follows the
       upstream response order unchanged (D5, no reordering).
-- [ ] 4.11 Verify GREEN: `PlansControllerTest` and
+- [x] 4.11 Verify GREEN: `PlansControllerTest` and
       `GetPlansViewUseCaseImplTest` both green.
-- [ ] 4.12 Run `./gradlew :bff:test check` before opening PR 4.
+- [x] 4.12 Run `./gradlew :bff:test check` before opening PR 4.
 
 ## PR 5 — Integration tests, security regression, lesson CTA cutover
 
