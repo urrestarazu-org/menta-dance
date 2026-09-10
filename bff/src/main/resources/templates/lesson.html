@@ -26,8 +26,9 @@
 <div th:if="${sample}">
     <h1 th:text="${sample.lesson().title()}">Título de la lección</h1>
     <p th:text="${sample.lesson().duration()}">00:00</p>
-    <p>Esta lección requiere una suscripción activa. Todavía no contamos con una página de
-        planes — vuelve pronto para suscribirte.</p>
+    <p>Esta lección requiere una suscripción activa.
+        <a th:href="@{/plans}">Ver planes disponibles</a>
+    </p>
 
     <p>
         <a th:if="${sample.nav().previousLesson()}"

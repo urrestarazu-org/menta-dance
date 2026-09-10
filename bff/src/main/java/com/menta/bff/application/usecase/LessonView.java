@@ -44,11 +44,13 @@ public sealed interface LessonView {
      * endpoint. Built entirely from data already fetched in the course-detail
      * call — the 403 response carries no lesson metadata to parse.
      * <p>
-     * Deliberately carries no {@code plansUrl} or any other navigable link:
-     * the subscription call-to-action is a message with no destination until
-     * issue #177 (BFF plans page) lands. A placeholder link was explicitly
-     * rejected — it would repeat the exact debt pattern (#56) that motivated
-     * filing #170 in the first place.
+     * Issue #177 (BFF plans page) is now resolved: the subscription
+     * call-to-action links to {@code /plans} via a hardcoded
+     * {@code th:href="@{/plans}"} route literal in {@code lesson.html}'s
+     * sample branch. This record still deliberately carries no
+     * {@code plansUrl} field — the link lives in the template, not the
+     * type, exactly as locked in #170's original design; nothing about that
+     * decision changes here.
      * </p>
      *
      * @param course the course detail fetched for this request

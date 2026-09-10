@@ -199,7 +199,7 @@ controller/template slice rather than stand alone.
 
 **Branch**: `feature/bff-plans-view-integration` off `develop` (cut after PR 4 merges).
 
-- [ ] 5.1 RED: create
+- [x] 5.1 RED: create
       `infrastructure/integration/BillingPlansSecurityIntegrationTest.java`,
       extending the `VirtualLearningSecurityIntegrationTest` pattern
       (Testcontainers + WireMock): anonymous `GET /plans` → `200`, no redirect
@@ -208,7 +208,16 @@ controller/template slice rather than stand alone.
       segment) still redirects — the exact-path matcher does not widen to a
       prefix; anonymous `POST /plans` → not permitted (`403` or redirect, not
       `200`).
-- [ ] 5.2 RED: create
+
+      Deviation (orchestrator-directed): the both-directions plans coverage
+      was added as new `@Test` methods directly on the existing
+      `VirtualLearningSecurityIntegrationTest` class, not a separate
+      `BillingPlansSecurityIntegrationTest` class — the established
+      convention in this module is one security-regression class extended
+      per feature (#170's own class). The `/dashboard` and unmapped-path
+      redirect regressions were already present and green in that class; no
+      duplicate assertions were added for them.
+- [x] 5.2 RED: create
       `infrastructure/integration/BillingPlansViewIntegrationTest.java`:
       stubbed billing plans response → rendered HTML contains each plan's
       name, description, price+currency, and duration text; a plan with
@@ -219,32 +228,49 @@ controller/template slice rather than stand alone.
       false` → no badge; stubbed `503` from billing → renders the shared
       error view with no leaked problem-detail body and no plans-specific
       copy.
-- [ ] 5.3 Verify RED: run
+- [x] 5.3 Verify RED: run
       `./gradlew :bff:test --tests "*BillingPlansSecurityIntegrationTest*" --tests "*BillingPlansViewIntegrationTest*"`
       — fails for the intended reason (route not yet reachable in this test's
       WireMock/security wiring context, or assertions against not-yet-present
       markup), not a typo. (Both classes should already pass once PR 4's
       wiring is present — this step confirms these NEW test files, not
       already-covered production code, drive the fix if anything is missing.)
-- [ ] 5.4 GREEN: fix any wiring gap surfaced by 5.3 (expected to be none, since
+
+      Confirmed a real wiring gap: `AbstractTestcontainersConfig` registered
+      dynamic `menta.auth.base-url`/`menta.api.base-url` overrides but never
+      `menta.billing.base-url`, so `BillingPlansViewIntegrationTest` would
+      have hit `application.yml`'s `http://localhost:8081` default instead
+      of WireMock. The non-featured-badge case also failed once the base-url
+      fix was in — the shared plans-cache bean (5-minute TTL) was leaking
+      the previous test's stubbed response across test methods on the same
+      Spring context.
+- [x] 5.4 GREEN: fix any wiring gap surfaced by 5.3 (expected to be none, since
       PR 4 already wires `/plans` end to end); otherwise this step is a no-op
       verification.
-- [ ] 5.5 RED: modify `templates/lesson.html`'s sample-branch CTA — currently
+
+      Added `menta.billing.base-url` to `AbstractTestcontainersConfig`'s
+      `@DynamicPropertySource`, pointing at the singleton WireMock server.
+      Also added `menta.billing.cache-ttl` = `PT0S` there, mirroring
+      `BillingApiAdapterTest`'s own `Duration.ZERO` convention for
+      deterministically disabling the cache, so each integration test's
+      WireMock stub stays authoritative for its own request instead of being
+      shadowed by a prior test's cached response.
+- [x] 5.5 RED: modify `templates/lesson.html`'s sample-branch CTA — currently
       a dead-end message — asserting via `VirtualLearningViewIntegrationTest`
       (existing lesson-sample test) that the CTA now links to `/plans`
       instead of the old dead-end copy. Update that existing assertion first
       so it fails against the current `lesson.html`.
-- [ ] 5.6 Verify RED: run
+- [x] 5.6 Verify RED: run
       `./gradlew :bff:test --tests "*VirtualLearningViewIntegrationTest*"` —
       the updated assertion fails against the still-dead-end CTA.
-- [ ] 5.7 GREEN: modify `templates/lesson.html` — replace the dead-end message
+- [x] 5.7 GREEN: modify `templates/lesson.html` — replace the dead-end message
       with `th:href="@{/plans}"` (D2); `LessonView.java`'s `Sample` javadoc
       updated to note #177 is resolved via the template route, the field
       itself still deliberately absent.
-- [ ] 5.8 Verify GREEN: full `VirtualLearningViewIntegrationTest`,
+- [x] 5.8 Verify GREEN: full `VirtualLearningViewIntegrationTest`,
       `BillingPlansSecurityIntegrationTest`, `BillingPlansViewIntegrationTest`
       suites green.
-- [ ] 5.9 Run `./gradlew test check` (full monorepo build) — confirms
+- [x] 5.9 Run `./gradlew test check` (full monorepo build) — confirms
       `BffArchitectureTest` still passes (cache lives in `infrastructure`, no
       new `application → infrastructure` import) and JaCoCo layer thresholds
       hold before opening PR 5.

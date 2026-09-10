@@ -15,12 +15,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Security-regression coverage for #170's two new anonymous-reachable routes
  * (spec {@code virtual-api-integration}, "Anonymous-reachable course and
  * lesson routes" and "The new permitAll entries widen access to nothing
- * else").
+ * else"), extended by #177's {@code GET /plans} route (spec {@code
+ * bff-plans-view}, "Plans-list route is permitted without widening access
+ * elsewhere").
  * <p>
  * Both directions are exercised in the same class: new routes must be
  * anonymously reachable, AND every previously-protected route must still
  * redirect — a matcher tested only positively can fail open silently and no
- * error would ever surface it.
+ * error would ever surface it. Every new anonymous-reachable route's
+ * both-directions coverage is added here rather than split into a
+ * per-feature security test class.
  * </p>
  */
 @DisplayName("Virtual Learning Security Integration Tests")
@@ -181,5 +185,62 @@ class VirtualLearningSecurityIntegrationTest extends BaseIntegrationTest {
         mockMvc.perform(get("/courses/{courseId}/lessons/{lessonId}/extra", COURSE_ID, LESSON_ID))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrlPattern("**/login"));
+    }
+
+    // --- Plans route (#177) ----------------------------------------------
+    //
+    // Extends this same class rather than a separate one, per this module's
+    // established convention (#170): every new anonymous-reachable route
+    // gets its both-directions regression coverage added here, not split
+    // into a per-feature security test class.
+
+    private static final String PLANS_BODY = """
+            {
+              "plans": [
+                {
+                  "id": "plan-1",
+                  "name": "Plan Mensual",
+                  "description": "Acceso completo por un mes",
+                  "price": 4999.00,
+                  "currency": "ARS",
+                  "durationDays": 30,
+                  "featured": false
+                }
+              ]
+            }
+            """;
+
+    private void stubPlans() {
+        WIRE_MOCK_SERVER.stubFor(WireMock.get(urlEqualTo("/api/v1/billing/plans"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(PLANS_BODY)));
+    }
+
+    @Test
+    @DisplayName("anonymous GET /plans returns 200 with no redirect to /login")
+    void anonymousPlansRequest_shouldReturn200_withNoLoginRedirect() throws Exception {
+        stubPlans();
+
+        mockMvc.perform(get("/plans"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("a path resembling /plans but with an extra segment is still authenticated-only")
+    void pathResemblingPlansMatcher_withExtraSegment_shouldRemainAuthenticatedOnly() throws Exception {
+        mockMvc.perform(get("/plans/x"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrlPattern("**/login"));
+    }
+
+    @Test
+    @DisplayName("POST /plans is not permitted — the matcher is GET-only")
+    void postToPlansRoute_shouldRemainAuthenticatedOnly() throws Exception {
+        // Same reasoning as postToCourseRoute_shouldRemainAuthenticatedOnly: a
+        // mutating verb never reaches PlansController.
+        mockMvc.perform(post("/plans"))
+                .andExpect(status().isForbidden());
     }
 }
