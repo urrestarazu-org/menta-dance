@@ -1,6 +1,7 @@
 package com.menta.bff.infrastructure.config;
 
 import com.menta.bff.application.port.out.AuthApiClient;
+import com.menta.bff.application.port.out.BillingApiClient;
 import com.menta.bff.application.port.out.SessionTokenRepository;
 import com.menta.bff.application.port.out.VirtualApiClient;
 import com.menta.bff.application.usecase.*;
@@ -54,5 +55,10 @@ public class UseCaseConfig {
     @Bean
     public GetLessonViewUseCase getLessonViewUseCase(VirtualApiClient virtualApiClient) {
         return new GetLessonViewUseCaseImpl(virtualApiClient);
+    }
+
+    @Bean
+    public GetPlansViewUseCase getPlansViewUseCase(BillingApiClient billingApiClient) {
+        return new GetPlansViewUseCaseImpl(billingApiClient);
     }
 }

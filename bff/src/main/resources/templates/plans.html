@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planes - Menta Dance</title>
+</head>
+<body>
+<h1>Planes</h1>
+
+<div th:each="plan : ${plans}">
+    <h2 th:text="${plan.name()}">Plan</h2>
+    <span th:if="${plan.featured()}">Destacado</span>
+    <p th:text="${plan.description()}">Descripción del plan</p>
+    <p>
+        <span th:text="${#numbers.formatDecimal(plan.price(), 1, 'POINT', 2, 'COMMA')} + ' ' + ${plan.currency()}">0,00 ARS</span>
+        ·
+        <span th:text="'cada ' + ${plan.durationDays()} + (${plan.durationDays()} == 1 ? ' día' : ' días')">cada 30 días</span>
+    </p>
+</div>
+</body>
+</html>
