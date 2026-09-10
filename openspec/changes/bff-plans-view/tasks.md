@@ -89,7 +89,7 @@ controller/template slice rather than stand alone.
 
 **Branch**: `feature/bff-plans-view-adapter` off `develop` (cut after PR 1 merges).
 
-- [ ] 2.1 RED: create `infrastructure/adapter/BillingApiAdapterTest.java`
+- [x] 2.1 RED: create `infrastructure/adapter/BillingApiAdapterTest.java`
       (`@WireMockTest`, plain constructor, `Duration.ofMinutes(5)` cacheTtl for
       now — cache behavior is out of scope for this PR, tests here only prove
       a single call each): 200 → mapped `List<PlanSummary>`, unknown `courses`
@@ -98,9 +98,9 @@ controller/template slice rather than stand alone.
       404 → `NotFoundException`; 429 → `ServiceUnavailableException` with
       `retryAfterSeconds` captured from `Retry-After`; 503 → same, no
       `Retry-After` present; timeout → `ServiceUnavailableException`.
-- [ ] 2.2 Verify RED: run `./gradlew :bff:test --tests "*BillingApiAdapterTest*"`
+- [x] 2.2 Verify RED: run `./gradlew :bff:test --tests "*BillingApiAdapterTest*"`
       — fails on the missing `BillingApiAdapter` class, not a typo.
-- [ ] 2.3 GREEN: create `infrastructure/adapter/BillingApiAdapter.java` —
+- [x] 2.3 GREEN: create `infrastructure/adapter/BillingApiAdapter.java` —
       explicit constructor taking `@Qualifier("billingApiWebClient") WebClient`
       + `BillingApiProperties` (Lombok cannot carry the qualifier); private
       `PlanListWireResponse(List<PlanWire> plans)` record for the `{"plans":
@@ -109,8 +109,8 @@ controller/template slice rather than stand alone.
       ServiceUnavailableException` (parse `Retry-After`); anything else →
       generic `RuntimeException`, mirroring `mapErrorStatus`/`mapHttpException`
       in `VirtualApiAdapter`. No caching yet — every call hits upstream.
-- [ ] 2.4 Verify GREEN: full `BillingApiAdapterTest` suite green.
-- [ ] 2.5 Run `./gradlew :bff:test check` before opening PR 2.
+- [x] 2.4 Verify GREEN: full `BillingApiAdapterTest` suite green.
+- [x] 2.5 Run `./gradlew :bff:test check` before opening PR 2.
 
 ## PR 3 — Cache: single-entry TTL, single-flight, no stale-on-failure
 
