@@ -229,6 +229,10 @@ class VirtualLearningViewIntegrationTest extends BaseIntegrationTest {
         assertThat(body).doesNotContain(".m3u8");
         assertThat(body).doesNotContainIgnoringCase("streamUrl");
         assertThat(body).doesNotContain("<video");
+        // #177: the subscription CTA is a real link to the plans page, not
+        // the dead-end message that predated it (spec virtual-lesson-view,
+        // "Subscription CTA links to the plans page").
+        assertThat(body).contains("href=\"/plans\"");
         WIRE_MOCK_SERVER.verify(0, getRequestedFor(urlEqualTo(streamUrl(PREMIUM_LESSON_ID))));
     }
 

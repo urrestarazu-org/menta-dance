@@ -81,5 +81,21 @@ public abstract class AbstractTestcontainersConfig {
 
         // Virtual/Catalog API base URL (same singleton WireMock server, #170)
         registry.add("menta.api.base-url", () -> "http://localhost:" + WIRE_MOCK_SERVER.port());
+
+        // Billing API base URL (same singleton WireMock server, #177) —
+        // without this override integration tests would hit
+        // application.yml's http://localhost:8081 default instead of the
+        // stubbed WireMock server.
+        registry.add("menta.billing.base-url", () -> "http://localhost:" + WIRE_MOCK_SERVER.port());
+
+        // The plans cache is a singleton bean shared across every test
+        // method that reuses this Spring context (JUnit 5's cached-context
+        // pattern). application.yml's 5-minute TTL would let one test's
+        // stubbed response leak into the next test's assertions. Forcing
+        // zero TTL here — mirroring BillingApiAdapterTest's own
+        // Duration.ZERO convention for deterministically disabling caching —
+        // keeps every integration test's WireMock stub authoritative for
+        // its own request.
+        registry.add("menta.billing.cache-ttl", () -> "PT0S");
     }
 }
