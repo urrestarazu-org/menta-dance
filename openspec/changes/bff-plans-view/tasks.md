@@ -58,31 +58,31 @@ controller/template slice rather than stand alone.
 
 **Branch**: `feature/bff-plans-view-port` off `develop`.
 
-- [ ] 1.1 Create `application/port/out/BillingApiClient.java`: `List<PlanSummary>
+- [x] 1.1 Create `application/port/out/BillingApiClient.java`: `List<PlanSummary>
       getPlans()` (no token parameter — billing-api-integration spec: "the
       plans call never carries an Authorization header"), nested
       `NotFoundException` (`@ResponseStatus(404)`) and
       `ServiceUnavailableException` (`@ResponseStatus(503)`, optional
       `retryAfterSeconds`), mirroring `VirtualApiClient`'s shapes exactly. No
       `ForbiddenException` — the endpoint is public.
-- [ ] 1.2 Create `application/dto/PlanSummary.java`: record `(String id, String
+- [x] 1.2 Create `application/dto/PlanSummary.java`: record `(String id, String
       name, String description, BigDecimal price, String currency, int
       durationDays, boolean featured)`. Javadoc explicitly states `courses` is
       dropped and why (design: `LessonStream`'s trim-and-document convention,
       not `CourseDetail`'s byte-for-byte mirror — nothing on this page renders
       it).
-- [ ] 1.3 Create `infrastructure/config/BillingApiProperties.java`: `@Data
+- [x] 1.3 Create `infrastructure/config/BillingApiProperties.java`: `@Data
       @Component @Validated @ConfigurationProperties(prefix = "menta.billing")`
       — `baseUrl` (`@NotBlank`), `timeout` default `Duration.ofSeconds(5)`,
       `cacheTtl` default `Duration.ofMinutes(5)` (D4), mirroring
       `VirtualApiProperties`.
-- [ ] 1.4 Modify `infrastructure/config/WebClientConfig.java`: add
+- [x] 1.4 Modify `infrastructure/config/WebClientConfig.java`: add
       `billingApiWebClient()` bean bound to `BillingApiProperties.getBaseUrl()`,
       javadoc citing the same qualifier reasoning as `virtualApiWebClient()`.
-- [ ] 1.5 Modify `bff/src/main/resources/application.yml`: add
+- [x] 1.5 Modify `bff/src/main/resources/application.yml`: add
       `menta.billing.{base-url,timeout,cache-ttl}`, mirroring the existing
       `menta.api`/`menta.auth` blocks.
-- [ ] 1.6 Run `./gradlew :bff:compileJava` — confirms the new types compile;
+- [x] 1.6 Run `./gradlew :bff:compileJava` — confirms the new types compile;
       no behavior to RED/GREEN yet (declarations only, nothing calls them).
 
 ## PR 2 — Adapter: fetch + status mapping, no cache

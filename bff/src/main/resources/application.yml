@@ -44,6 +44,10 @@ menta:
   auth:
     base-url: ${AUTH_API_BASE_URL:http://localhost:8081}
     timeout: 5s
+  billing:
+    base-url: ${BILLING_API_BASE_URL:http://localhost:8081}
+    timeout: 5s
+    cache-ttl: 5m
 
 # Actuator
 management:
