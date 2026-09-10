@@ -14,6 +14,7 @@ public class WebClientConfig {
 
     private final AuthProperties authProperties;
     private final VirtualApiProperties virtualApiProperties;
+    private final BillingApiProperties billingApiProperties;
 
     @Bean
     public WebClient webClient() {
@@ -35,6 +36,21 @@ public class WebClientConfig {
     public WebClient virtualApiWebClient() {
         return WebClient.builder()
                 .baseUrl(virtualApiProperties.getBaseUrl())
+                .build();
+    }
+
+    /**
+     * Third, explicitly-named {@link WebClient} bean bound to the Billing
+     * API's base URL, mirroring {@link #virtualApiWebClient()} exactly. The
+     * bean name doubles as its implicit qualifier, so {@code BillingApiAdapter}
+     * resolves it via {@code @Qualifier("billingApiWebClient")} on an explicit
+     * constructor — Lombok's {@code @RequiredArgsConstructor} cannot carry a
+     * per-parameter {@code @Qualifier}.
+     */
+    @Bean
+    public WebClient billingApiWebClient() {
+        return WebClient.builder()
+                .baseUrl(billingApiProperties.getBaseUrl())
                 .build();
     }
 }
