@@ -116,7 +116,7 @@ controller/template slice rather than stand alone.
 
 **Branch**: `feature/bff-plans-view-cache` off `develop` (cut after PR 2 merges).
 
-- [ ] 3.1 RED: extend `BillingApiAdapterTest.java` with a `-- caching --`
+- [x] 3.1 RED: extend `BillingApiAdapterTest.java` with a `-- caching --`
       section, constructing the adapter with an explicit `cacheTtl` per case
       (property-driven, no `Clock` injection, per design):
       - `cacheTtl = Duration.ofMinutes(5)`, two calls in a row →
@@ -138,10 +138,10 @@ controller/template slice rather than stand alone.
         call `getPlans()` concurrently against a cold cache with a WireMock
         fixed delay → `verify(1, getRequestedFor(...))`, all N threads
         receive the same result.
-- [ ] 3.2 Verify RED: run `./gradlew :bff:test --tests "*BillingApiAdapterTest*"`
+- [x] 3.2 Verify RED: run `./gradlew :bff:test --tests "*BillingApiAdapterTest*"`
       — the new cases fail because every call still reaches WireMock (no
       cache exists yet), not because of a typo.
-- [ ] 3.3 GREEN: add the cache core to `BillingApiAdapter.java` — private
+- [x] 3.3 GREEN: add the cache core to `BillingApiAdapter.java` — private
       `record Entry(List<PlanSummary> plans, Instant expiresAt)`, `final
       AtomicReference<Entry> cache`, `final ReentrantLock refreshLock`.
       `getPlans()`: read `cache.get()`; if non-null and unexpired, return it;
@@ -151,9 +151,9 @@ controller/template slice rather than stand alone.
       exception propagates without touching the existing cache value (D6,
       strict — no stale-on-failure, per design's corrected reasoning).
       `finally { refreshLock.unlock(); }`.
-- [ ] 3.4 Verify GREEN: full `BillingApiAdapterTest` suite green, including
+- [x] 3.4 Verify GREEN: full `BillingApiAdapterTest` suite green, including
       all PR 2 mapping cases (no regression).
-- [ ] 3.5 Run `./gradlew :bff:test check` before opening PR 3.
+- [x] 3.5 Run `./gradlew :bff:test check` before opening PR 3.
 
 ## PR 4 — Use case, controller, template, wiring
 
