@@ -76,6 +76,30 @@ class SecurityConfigTest {
     }
 
     /**
+     * US-BILLING-004, #32. Before this rule existed, both GET routes fell through to
+     * {@code anyRequest().access(roleAuthorizationManager)}, which grants unmapped paths by
+     * default — an unauthenticated caller reached the controller with a {@code null}
+     * {@code Authentication} instead of being rejected here, surfaced end-to-end by
+     * {@code SubscriptionStatusIntegrationTest}.
+     */
+    @Test
+    void an_unauthenticated_get_of_the_current_subscription_route_is_rejected() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get("/api/v1/billing/subscriptions/me"))
+            .andExpect(status().isUnauthorized());
+    }
+
+    /** Same rule, the history path — a different endpoint than {@code /me}, same matcher. */
+    @Test
+    void an_unauthenticated_get_of_the_subscription_history_route_is_rejected() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get("/api/v1/billing/subscriptions/me/history"))
+            .andExpect(status().isUnauthorized());
+    }
+
+    /**
      * Confirms the admin cancellation route needs no new matcher: the existing generic
      * {@code /api/v1/admin/**} → {@code hasRole("ADMIN")} rule already rejects a non-admin.
      */

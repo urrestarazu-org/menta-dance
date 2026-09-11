@@ -271,7 +271,7 @@ after PR 3 merges).
       for that rule, not a new security decision. No change to the filter
       chain itself; `SecurityConfigTest` (if one exists) needs no new
       assertion since no matcher was added — this step is prose-only.
-- [ ] 4.12 Run `./gradlew :api:billing:test :api:auth:test :api:billing:jacocoTestCoverageVerification`
+- [x] 4.12 Run `./gradlew :api:billing:test :api:auth:test :api:billing:jacocoTestCoverageVerification`
       before opening PR 4 — confirms `api:billing` infrastructure stays ≥85%
       and `api:auth` still compiles/passes with the javadoc-only change.
 
@@ -280,7 +280,7 @@ after PR 3 merges).
 **Branch**: `feature/billing-subscription-status-integration` off `develop`
 (cut after PR 4 merges).
 
-- [ ] 5.1 RED: create `api/app/src/test/java/com/menta/app/integration/billing/SubscriptionStatusIntegrationTest.java`
+- [x] 5.1 RED: create `api/app/src/test/java/com/menta/app/integration/billing/SubscriptionStatusIntegrationTest.java`
       (Testcontainers, mirrors `SubscriptionCancellationIntegrationTest`'s
       harness): the 6 issue scenarios end-to-end —
       - active subscription → `200`, `status: "ACTIVE"`, correct `daysRemaining`;
@@ -297,18 +297,40 @@ after PR 3 merges).
       `SubscriptionExpiryWorker` flips from ACTIVE to EXPIRED moments earlier
       is reflected immediately on the next `GET /me` (no caching — spec
       "Responses are never cached").
-- [ ] 5.2 Verify RED: `./gradlew :api:app:test --tests "*SubscriptionStatusIntegrationTest*"`
+- [x] 5.2 Verify RED: `./gradlew :api:app:test --tests "*SubscriptionStatusIntegrationTest*"`
       fails for the intended reason (routes not yet exercised in this
       Testcontainers context / assertions against not-yet-present response
       shape), not a typo. Both endpoints should already be fully wired by
       PR 4 — this step confirms the new test file drives verification, not
       that it drives new production code.
-- [ ] 5.3 GREEN: fix any wiring gap surfaced by 5.2 (expected to be none,
-      since PR 4 already wires both routes end to end through
-      `SecurityConfig`'s existing fallback and `BillingConfiguration`'s
-      beans); otherwise this step is a no-op verification.
-- [ ] 5.4 Verify GREEN: full `SubscriptionStatusIntegrationTest` suite green.
-- [ ] 5.5 Run `./gradlew test check` (full monorepo build) before opening
+
+      **Deviation found**: 3 of 9 scenarios failed on first run — not a test
+      typo, but a real gap. PR 4's javadoc claim ("GET /me and GET
+      /me/history fall through to `anyRequest().authenticated()`") was
+      false: `SecurityConfig`'s actual fall-through is
+      `anyRequest().access(roleAuthorizationManager)`, whose own documented
+      semantics grant unmapped paths regardless of authentication (same
+      class of gap the existing `DELETE /me` matcher was added to close in
+      US-BILLING-011). An unauthenticated `GET /me`/`GET /me/history`
+      reached the controller with a `null` `Authentication` and threw an
+      NPE (500), not 401. The PENDING-subscription integration fixture also
+      violated the PAID/paymentId domain invariant (A17), which surfaced as
+      a 400 rather than 200 (test fixture bug, not production code).
+- [x] 5.3 GREEN: fixed the wiring gap surfaced by 5.2 — added an explicit
+      `requestMatchers(HttpMethod.GET, "/api/v1/billing/subscriptions/me",
+      "/api/v1/billing/subscriptions/me/history").authenticated()` matcher
+      to `SecurityConfig` (mirrors the existing `DELETE /me` matcher),
+      corrected that class's javadoc and `SubscriptionController`'s own
+      javadoc to stop claiming the (false) `anyRequest().authenticated()`
+      fallback, and added two focused `SecurityConfigTest` cases
+      (`an_unauthenticated_get_of_the_current_subscription_route_is_rejected`,
+      `an_unauthenticated_get_of_the_subscription_history_route_is_rejected`)
+      mirroring the existing DELETE-route regression test. Also fixed the
+      integration test's PENDING fixture to always populate a `paymentId`.
+- [x] 5.4 Verify GREEN: full `SubscriptionStatusIntegrationTest` suite green
+      (9/9), plus `SecurityConfigTest` (2 new cases) and `api:billing`/`api:auth`
+      full module suites green.
+- [x] 5.5 Run `./gradlew test check` (full monorepo build) before opening
       PR 5 — confirms `BillingArchitectureTest` still passes (domain gained
       no Spring/JPA import from `daysRemaining`/`isExpiringSoon`) and every
       module's JaCoCo layer threshold holds, including `api:billing`'s
