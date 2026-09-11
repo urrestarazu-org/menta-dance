@@ -7,7 +7,9 @@ import static org.mockito.Mockito.when;
 
 import com.menta.billing.application.port.in.AssignTrialSubscriptionUseCase;
 import com.menta.billing.application.port.in.CreateSubscriptionCheckoutUseCase;
+import com.menta.billing.application.port.in.GetCurrentSubscriptionUseCase;
 import com.menta.billing.application.port.in.GetPlanUseCase;
+import com.menta.billing.application.port.in.GetSubscriptionHistoryUseCase;
 import com.menta.billing.application.port.in.ListPlansUseCase;
 import com.menta.billing.application.port.in.ReceiveWebhookUseCase;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
@@ -21,7 +23,9 @@ import com.menta.billing.application.port.out.PurchaseRepository;
 import com.menta.billing.application.port.out.SubscriptionRepository;
 import com.menta.billing.application.port.out.WebhookInboxAppender;
 import com.menta.billing.application.port.out.WebhookSignatureVerifier;
+import com.menta.billing.application.usecase.GetCurrentSubscriptionUseCaseImpl;
 import com.menta.billing.application.usecase.GetPlanUseCaseImpl;
+import com.menta.billing.application.usecase.GetSubscriptionHistoryUseCaseImpl;
 import com.menta.billing.application.usecase.ListPlansUseCaseImpl;
 import com.menta.billing.application.usecase.PaymentVerificationService;
 import com.menta.billing.application.usecase.VirtualCourseEntitlementService;
@@ -116,6 +120,24 @@ class BillingConfigurationTest {
         );
 
         assertThat(useCase).isInstanceOf(GetPlanUseCaseImpl.class);
+    }
+
+    @Test
+    void wires_the_get_current_subscription_use_case_bean() {
+        GetCurrentSubscriptionUseCase useCase = configuration.getCurrentSubscriptionUseCase(
+            mock(SubscriptionRepository.class), mock(Clock.class)
+        );
+
+        assertThat(useCase).isInstanceOf(GetCurrentSubscriptionUseCaseImpl.class);
+    }
+
+    @Test
+    void wires_the_get_subscription_history_use_case_bean() {
+        GetSubscriptionHistoryUseCase useCase = configuration.getSubscriptionHistoryUseCase(
+            mock(SubscriptionRepository.class)
+        );
+
+        assertThat(useCase).isInstanceOf(GetSubscriptionHistoryUseCaseImpl.class);
     }
 
     @Test

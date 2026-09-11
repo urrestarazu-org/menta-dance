@@ -162,7 +162,7 @@ work needs them).
 (cut after PR 2 merges; depends on both PR 1's domain methods and PR 2's
 repository methods).
 
-- [ ] 3.1 Create `application/dto/CurrentSubscriptionResult.java` — sealed
+- [x] 3.1 Create `application/dto/CurrentSubscriptionResult.java` — sealed
       interface (A4): `Active(String subscriptionId, String planId, Instant
       startDate, Instant endDate, long daysRemaining, boolean expiringSoon)`,
       `Expired(String subscriptionId, String planId, Instant startDate,
@@ -170,11 +170,11 @@ repository methods).
       String checkoutUrl)`. No test file needed on its own — a sealed
       interface of records has no behavior; exhaustiveness is enforced by the
       compiler and exercised through the use-case tests below.
-- [ ] 3.2 Create `application/port/in/GetCurrentSubscriptionUseCase.java` —
+- [x] 3.2 Create `application/port/in/GetCurrentSubscriptionUseCase.java` —
       `CurrentSubscriptionResult current(UUID userId)`.
-- [ ] 3.3 Create `application/port/in/GetSubscriptionHistoryUseCase.java` —
+- [x] 3.3 Create `application/port/in/GetSubscriptionHistoryUseCase.java` —
       `List<SubscriptionHistoryEntry> history(UUID userId)`.
-- [ ] 3.4 RED: create `application/usecase/GetCurrentSubscriptionUseCaseImplTest.java`
+- [x] 3.4 RED: create `application/usecase/GetCurrentSubscriptionUseCaseImplTest.java`
       (Mockito on `SubscriptionRepository` + a fixed injected `Clock`, mirrors
       `CancelSubscriptionUseCaseImplTest`'s harness style): slot-first
       precedence — an ACTIVE row from `findCurrentByUserId` beats an older
@@ -185,9 +185,9 @@ repository methods).
       throws `NoSubscriptionException`; a CANCELLED-with-remaining-access row
       is never returned by either lookup path exercised here (D1 — regression
       guard, not a new lookup).
-- [ ] 3.5 Verify RED: `./gradlew :api:billing:test --tests "*GetCurrentSubscriptionUseCaseImplTest*"`
+- [x] 3.5 Verify RED: `./gradlew :api:billing:test --tests "*GetCurrentSubscriptionUseCaseImplTest*"`
       fails on the missing `GetCurrentSubscriptionUseCaseImpl` class.
-- [ ] 3.6 GREEN: create `application/usecase/GetCurrentSubscriptionUseCaseImpl.java`
+- [x] 3.6 GREEN: create `application/usecase/GetCurrentSubscriptionUseCaseImpl.java`
       — injects `SubscriptionRepository` + `Clock`; resolution order:
       `findCurrentByUserId` (PENDING → `PendingPayment`, ACTIVE → `Active`
       with `daysRemaining`/`isExpiringSoon` computed from the injected
@@ -195,21 +195,21 @@ repository methods).
       `NoSubscriptionException`. No `@Transactional*` decorator (matches
       `ListPlansUseCaseImpl`/`GetPlanUseCaseImpl` — the adapter's own
       per-method `readOnly = true` already covers it).
-- [ ] 3.7 Verify GREEN: `GetCurrentSubscriptionUseCaseImplTest` suite green.
-- [ ] 3.8 RED: create `application/usecase/GetSubscriptionHistoryUseCaseImplTest.java`
+- [x] 3.7 Verify GREEN: `GetCurrentSubscriptionUseCaseImplTest` suite green.
+- [x] 3.8 RED: create `application/usecase/GetSubscriptionHistoryUseCaseImplTest.java`
       (Mockito): delegates to `subscriptionRepository.findHistoryByUserId`
       and returns its result unchanged, preserving repository order; an empty
       list from the repository stays an empty list, no exception thrown.
-- [ ] 3.9 Verify RED: fails on the missing `GetSubscriptionHistoryUseCaseImpl` class.
-- [ ] 3.10 GREEN: create `application/usecase/GetSubscriptionHistoryUseCaseImpl.java`
+- [x] 3.9 Verify RED: fails on the missing `GetSubscriptionHistoryUseCaseImpl` class.
+- [x] 3.10 GREEN: create `application/usecase/GetSubscriptionHistoryUseCaseImpl.java`
       — pass-through, no branching.
-- [ ] 3.11 Verify GREEN: `GetSubscriptionHistoryUseCaseImplTest` suite green.
-- [ ] 3.12 Modify `infrastructure/config/BillingConfiguration.java` — add both
+- [x] 3.11 Verify GREEN: `GetSubscriptionHistoryUseCaseImplTest` suite green.
+- [x] 3.12 Modify `infrastructure/config/BillingConfiguration.java` — add both
       new use-case beans, unwrapped (no `Transactional*` decorator), mirroring
       how `listPlansUseCase` is wired. Update
       `infrastructure/config/BillingConfigurationTest.java` to assert both
       beans are present and correctly typed.
-- [ ] 3.13 Run `./gradlew :api:billing:test :api:billing:jacocoTestCoverageVerification`
+- [x] 3.13 Run `./gradlew :api:billing:test :api:billing:jacocoTestCoverageVerification`
       before opening PR 3 — confirms domain+application stays at 100%.
 
 ## PR 4 — Web: response DTOs, controller, exception handler, SecurityConfig doc
