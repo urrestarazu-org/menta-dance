@@ -33,11 +33,10 @@ import org.springframework.web.bind.annotation.RestController;
  * views (US-BILLING-004, US-BILLING-010, US-BILLING-011).
  *
  * <p>{@code SecurityConfig} gates {@code POST}, {@code DELETE /me}, {@code GET /me} and {@code
- * GET /me/history} with {@code .authenticated()}; no role is required for any of them — the two
- * new GET routes fall through to the same {@code anyRequest().authenticated()} default as the
- * existing {@code DELETE /me} (no dedicated matcher needed). The owning user is read from the
- * token and never from the body or a request parameter — the same {@code actingUserId} pattern
- * {@code PhysicalCoursePricingController} uses.</p>
+ * GET /me/history} with dedicated {@code .authenticated()} matchers; no role is required for any
+ * of them. The owning user is read from the token and never from the body or a request
+ * parameter — the same {@code actingUserId} pattern {@code PhysicalCoursePricingController}
+ * uses.</p>
  */
 @RestController
 @RequestMapping("/api/v1/billing/subscriptions")

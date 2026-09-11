@@ -70,9 +70,12 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *   - GET /api/v1/billing/subscriptions/me and
  *     GET /api/v1/billing/subscriptions/me/history → authenticated (any role)
  *     (US-BILLING-004, #32; a user reading their own subscription status and
- *     history. No dedicated matcher is added for either — both fall through
- *     to anyRequest()'s authenticated default, same reasoning already
- *     documented for the DELETE /me rule above.)
+ *     history. Unlike the DELETE /me rule above, these two GET paths need an
+ *     explicit matcher: {@code anyRequest()} below defers to {@code
+ *     RoleAuthorizationManager}, whose own fall-through semantics grant an
+ *     unmapped path regardless of authentication — confirmed end-to-end by
+ *     {@code SubscriptionStatusIntegrationTest}'s unauthenticated-request
+ *     scenarios, which is why this matcher exists rather than only javadoc.)
  *   - DELETE /api/v1/admin/billing/subscriptions/{subscriptionId} → ADMIN
  *     (US-BILLING-011, #130; already covered by the generic
  *     /api/v1/admin/** rule below — no separate matcher needed.)
@@ -207,6 +210,16 @@ public class SecurityConfig {
                 // method, so it needs its own explicit entry or it falls through to a grant via
                 // anyRequest() below (that method's own comment already documents why).
                 .requestMatchers(HttpMethod.DELETE, "/api/v1/billing/subscriptions/me").authenticated()
+                // US-BILLING-004, #32: reading one's own subscription status/history is GET, a
+                // different HTTP method than the DELETE rule immediately above — same
+                // first-match-wins reasoning, and required because anyRequest() below defers to
+                // RoleAuthorizationManager, which grants unmapped paths regardless of
+                // authentication (see that rule's own comment further down).
+                .requestMatchers(
+                    HttpMethod.GET,
+                    "/api/v1/billing/subscriptions/me",
+                    "/api/v1/billing/subscriptions/me/history"
+                ).authenticated()
                 // US-PHYSICAL-001 escenario 2: the door reader has no user session — it
                 // authenticates with a shared device token the use case itself verifies.
                 .requestMatchers(HttpMethod.POST, "/api/v1/physical/sessions/*/check-ins").permitAll()
