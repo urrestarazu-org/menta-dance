@@ -1,5 +1,6 @@
 package com.menta.billing.infrastructure.web.controller;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -7,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -16,9 +18,14 @@ import com.menta.billing.application.dto.CancelSubscriptionCommand;
 import com.menta.billing.application.dto.CancellationResult;
 import com.menta.billing.application.dto.CancellationTarget;
 import com.menta.billing.application.dto.CreateSubscriptionCheckoutCommand;
+import com.menta.billing.application.dto.CurrentSubscriptionResult;
 import com.menta.billing.application.dto.SubscriptionCheckoutResult;
+import com.menta.billing.application.dto.SubscriptionHistoryEntry;
 import com.menta.billing.application.port.in.CancelSubscriptionUseCase;
 import com.menta.billing.application.port.in.CreateSubscriptionCheckoutUseCase;
+import com.menta.billing.application.port.in.GetCurrentSubscriptionUseCase;
+import com.menta.billing.application.port.in.GetSubscriptionHistoryUseCase;
+import com.menta.billing.domain.exception.NoSubscriptionException;
 import com.menta.billing.domain.exception.PaymentMethodNotAcceptedException;
 import com.menta.billing.domain.exception.PaymentPreferenceUnavailableException;
 import com.menta.billing.domain.exception.PlanNotAvailableException;
@@ -28,6 +35,7 @@ import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.domain.model.SubscriptionStatus;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -50,6 +58,9 @@ class SubscriptionControllerTest {
 
     private CreateSubscriptionCheckoutUseCase useCase;
     private CancelSubscriptionUseCase cancelUseCase;
+    private GetCurrentSubscriptionUseCase getCurrentSubscriptionUseCase;
+    private GetSubscriptionHistoryUseCase getSubscriptionHistoryUseCase;
+    private SubscriptionController controller;
     private MockMvc mockMvc;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -57,7 +68,12 @@ class SubscriptionControllerTest {
     void setUp() {
         useCase = mock(CreateSubscriptionCheckoutUseCase.class);
         cancelUseCase = mock(CancelSubscriptionUseCase.class);
-        mockMvc = MockMvcBuilders.standaloneSetup(new SubscriptionController(useCase, cancelUseCase))
+        getCurrentSubscriptionUseCase = mock(GetCurrentSubscriptionUseCase.class);
+        getSubscriptionHistoryUseCase = mock(GetSubscriptionHistoryUseCase.class);
+        controller = new SubscriptionController(
+            useCase, cancelUseCase, getCurrentSubscriptionUseCase, getSubscriptionHistoryUseCase
+        );
+        mockMvc = MockMvcBuilders.standaloneSetup(controller)
             .setControllerAdvice(new SubscriptionExceptionHandler())
             // Matches production's Spring Boot auto-configured ObjectMapper — registers the
             // JavaTimeModule (ISO-8601 Instants, not epoch seconds) and the ProblemDetail
@@ -292,5 +308,149 @@ class SubscriptionControllerTest {
         mockMvc.perform(delete("/api/v1/billing/subscriptions/me").with(authenticatedAs(USER_ID)))
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.code", is("SUBSCRIPTION_NOT_FOUND")));
+    }
+
+    // --- GET /me (US-BILLING-004) --------------------------------------------
+
+    @Test
+    void current_own_resolves_by_the_token_subject_never_a_request_parameter() throws Exception {
+        when(getCurrentSubscriptionUseCase.current(any())).thenReturn(new CurrentSubscriptionResult.Active(
+            "sub-1", PLAN_ID, Instant.parse("2026-09-01T00:00:00Z"), Instant.parse("2026-10-01T00:00:00Z"), 20, false
+        ));
+
+        mockMvc.perform(get("/api/v1/billing/subscriptions/me").with(authenticatedAs(USER_ID)))
+            .andExpect(status().isOk());
+
+        ArgumentCaptor<UUID> userId = ArgumentCaptor.forClass(UUID.class);
+        verify(getCurrentSubscriptionUseCase).current(userId.capture());
+        Assertions.assertThat(userId.getValue()).isEqualTo(USER_ID);
+    }
+
+    @Test
+    void current_own_maps_an_active_subscription() throws Exception {
+        when(getCurrentSubscriptionUseCase.current(any())).thenReturn(new CurrentSubscriptionResult.Active(
+            "sub-1", PLAN_ID, Instant.parse("2026-09-01T00:00:00Z"), Instant.parse("2026-10-01T00:00:00Z"), 20, false
+        ));
+
+        mockMvc.perform(get("/api/v1/billing/subscriptions/me").with(authenticatedAs(USER_ID)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.subscriptionId", is("sub-1")))
+            .andExpect(jsonPath("$.planId", is(PLAN_ID)))
+            .andExpect(jsonPath("$.status", is("ACTIVE")))
+            .andExpect(jsonPath("$.startDate", is("2026-09-01T00:00:00Z")))
+            .andExpect(jsonPath("$.endDate", is("2026-10-01T00:00:00Z")))
+            .andExpect(jsonPath("$.daysRemaining", is(20)))
+            .andExpect(jsonPath("$.expiringSoon", is(false)))
+            .andExpect(jsonPath("$.checkoutUrl").value(org.hamcrest.Matchers.nullValue()))
+            .andExpect(jsonPath("$.plansUrl").value(org.hamcrest.Matchers.nullValue()));
+    }
+
+    @Test
+    void current_own_maps_an_active_subscription_expiring_soon() throws Exception {
+        when(getCurrentSubscriptionUseCase.current(any())).thenReturn(new CurrentSubscriptionResult.Active(
+            "sub-1", PLAN_ID, Instant.parse("2026-09-01T00:00:00Z"), Instant.parse("2026-09-08T00:00:00Z"), 7, true
+        ));
+
+        mockMvc.perform(get("/api/v1/billing/subscriptions/me").with(authenticatedAs(USER_ID)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status", is("ACTIVE")))
+            .andExpect(jsonPath("$.daysRemaining", is(7)))
+            .andExpect(jsonPath("$.expiringSoon", is(true)));
+    }
+
+    @Test
+    void current_own_maps_an_expired_subscription_with_a_plans_hint() throws Exception {
+        when(getCurrentSubscriptionUseCase.current(any())).thenReturn(new CurrentSubscriptionResult.Expired(
+            "sub-1", PLAN_ID, Instant.parse("2026-08-01T00:00:00Z"), Instant.parse("2026-08-31T00:00:00Z")
+        ));
+
+        mockMvc.perform(get("/api/v1/billing/subscriptions/me").with(authenticatedAs(USER_ID)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status", is("EXPIRED")))
+            .andExpect(jsonPath("$.startDate", is("2026-08-01T00:00:00Z")))
+            .andExpect(jsonPath("$.endDate", is("2026-08-31T00:00:00Z")))
+            .andExpect(jsonPath("$.plansUrl", is("/api/v1/billing/plans")))
+            .andExpect(jsonPath("$.daysRemaining").value(org.hamcrest.Matchers.nullValue()))
+            .andExpect(jsonPath("$.expiringSoon").value(org.hamcrest.Matchers.nullValue()))
+            .andExpect(jsonPath("$.checkoutUrl").value(org.hamcrest.Matchers.nullValue()));
+    }
+
+    @Test
+    void current_own_maps_a_pending_subscription_with_no_dates() throws Exception {
+        when(getCurrentSubscriptionUseCase.current(any())).thenReturn(new CurrentSubscriptionResult.PendingPayment(
+            "sub-1", PLAN_ID, "https://mp.example/checkout/pref-1"
+        ));
+
+        mockMvc.perform(get("/api/v1/billing/subscriptions/me").with(authenticatedAs(USER_ID)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status", is("PENDING")))
+            .andExpect(jsonPath("$.checkoutUrl", is("https://mp.example/checkout/pref-1")))
+            .andExpect(jsonPath("$.startDate").value(org.hamcrest.Matchers.nullValue()))
+            .andExpect(jsonPath("$.endDate").value(org.hamcrest.Matchers.nullValue()))
+            .andExpect(jsonPath("$.daysRemaining").value(org.hamcrest.Matchers.nullValue()))
+            .andExpect(jsonPath("$.expiringSoon").value(org.hamcrest.Matchers.nullValue()))
+            .andExpect(jsonPath("$.plansUrl").value(org.hamcrest.Matchers.nullValue()));
+    }
+
+    /**
+     * The controller has no try/catch around the use case — {@link NoSubscriptionException} must
+     * reach {@link SubscriptionExceptionHandler} untranslated. Exercised as a direct method call
+     * (not through {@code MockMvc}) so this assertion stays independent of the handler mapping,
+     * which has its own dedicated coverage in {@code SubscriptionExceptionHandlerTest}.
+     */
+    @Test
+    void current_own_lets_no_subscription_exception_propagate_untranslated() {
+        when(getCurrentSubscriptionUseCase.current(USER_ID)).thenThrow(new NoSubscriptionException());
+
+        assertThatThrownBy(() -> controller.currentOwn(authentication(USER_ID)))
+            .isInstanceOf(NoSubscriptionException.class);
+    }
+
+    // --- GET /me/history (US-BILLING-004) ------------------------------------
+
+    @Test
+    void history_own_resolves_by_the_token_subject_never_a_request_parameter() throws Exception {
+        when(getSubscriptionHistoryUseCase.history(any())).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/v1/billing/subscriptions/me/history").with(authenticatedAs(USER_ID)))
+            .andExpect(status().isOk());
+
+        ArgumentCaptor<UUID> userId = ArgumentCaptor.forClass(UUID.class);
+        verify(getSubscriptionHistoryUseCase).history(userId.capture());
+        Assertions.assertThat(userId.getValue()).isEqualTo(USER_ID);
+    }
+
+    @Test
+    void history_own_returns_the_mapped_list_in_the_use_cases_own_order() throws Exception {
+        when(getSubscriptionHistoryUseCase.history(any())).thenReturn(List.of(
+            new SubscriptionHistoryEntry(
+                "sub-2", PLAN_ID, SubscriptionStatus.ACTIVE, Instant.parse("2026-09-01T00:00:00Z"),
+                Instant.parse("2026-10-01T00:00:00Z"), Instant.parse("2026-09-01T00:00:00Z")
+            ),
+            new SubscriptionHistoryEntry(
+                "sub-1", PLAN_ID, SubscriptionStatus.EXPIRED, Instant.parse("2026-08-01T00:00:00Z"),
+                Instant.parse("2026-08-31T00:00:00Z"), Instant.parse("2026-08-01T00:00:00Z")
+            )
+        ));
+
+        mockMvc.perform(get("/api/v1/billing/subscriptions/me/history").with(authenticatedAs(USER_ID)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].id", is("sub-2")))
+            .andExpect(jsonPath("$[0].status", is("ACTIVE")))
+            .andExpect(jsonPath("$[1].id", is("sub-1")))
+            .andExpect(jsonPath("$[1].status", is("EXPIRED")));
+    }
+
+    @Test
+    void history_own_returns_an_empty_list_when_the_use_case_returns_empty() throws Exception {
+        when(getSubscriptionHistoryUseCase.history(any())).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/v1/billing/subscriptions/me/history").with(authenticatedAs(USER_ID)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(0)));
+    }
+
+    private static org.springframework.security.core.Authentication authentication(UUID userId) {
+        return new UsernamePasswordAuthenticationToken(userId.toString(), "n/a");
     }
 }

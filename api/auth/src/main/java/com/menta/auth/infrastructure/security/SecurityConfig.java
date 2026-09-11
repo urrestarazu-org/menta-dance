@@ -67,6 +67,12 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *     DELETE, so without this explicit matcher the path would fall through
  *     to anyRequest()'s permissive default grant — see this same rule's own
  *     comment below.)
+ *   - GET /api/v1/billing/subscriptions/me and
+ *     GET /api/v1/billing/subscriptions/me/history → authenticated (any role)
+ *     (US-BILLING-004, #32; a user reading their own subscription status and
+ *     history. No dedicated matcher is added for either — both fall through
+ *     to anyRequest()'s authenticated default, same reasoning already
+ *     documented for the DELETE /me rule above.)
  *   - DELETE /api/v1/admin/billing/subscriptions/{subscriptionId} → ADMIN
  *     (US-BILLING-011, #130; already covered by the generic
  *     /api/v1/admin/** rule below — no separate matcher needed.)
