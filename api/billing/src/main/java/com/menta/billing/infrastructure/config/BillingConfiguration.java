@@ -4,8 +4,10 @@ import com.menta.billing.application.port.in.AssignTrialSubscriptionUseCase;
 import com.menta.billing.application.port.in.CancelSubscriptionUseCase;
 import com.menta.billing.application.port.in.CreatePhysicalCourseQuoteUseCase;
 import com.menta.billing.application.port.in.CreateSubscriptionCheckoutUseCase;
+import com.menta.billing.application.port.in.GetCurrentSubscriptionUseCase;
 import com.menta.billing.application.port.in.GetPhysicalCoursePricingUseCase;
 import com.menta.billing.application.port.in.GetPlanUseCase;
+import com.menta.billing.application.port.in.GetSubscriptionHistoryUseCase;
 import com.menta.billing.application.port.in.ListPlansUseCase;
 import com.menta.billing.application.port.in.ReceiveWebhookUseCase;
 import com.menta.billing.application.port.in.UpdatePhysicalCoursePricingUseCase;
@@ -31,8 +33,10 @@ import com.menta.billing.application.usecase.AssignTrialSubscriptionUseCaseImpl;
 import com.menta.billing.application.usecase.CancelSubscriptionUseCaseImpl;
 import com.menta.billing.application.usecase.CreatePhysicalCourseQuoteUseCaseImpl;
 import com.menta.billing.application.usecase.CreateSubscriptionCheckoutUseCaseImpl;
+import com.menta.billing.application.usecase.GetCurrentSubscriptionUseCaseImpl;
 import com.menta.billing.application.usecase.GetPhysicalCoursePricingUseCaseImpl;
 import com.menta.billing.application.usecase.GetPlanUseCaseImpl;
+import com.menta.billing.application.usecase.GetSubscriptionHistoryUseCaseImpl;
 import com.menta.billing.application.usecase.ListPlansUseCaseImpl;
 import com.menta.billing.application.usecase.PaymentVerificationService;
 import com.menta.billing.application.usecase.PublishPhysicalPaymentCompletedUseCase;
@@ -229,6 +233,26 @@ public class BillingConfiguration {
         BillingPlansRateLimitPort billingPlansRateLimitPort
     ) {
         return new GetPlanUseCaseImpl(planRepository, courseCatalogPort, billingPlansRateLimitPort);
+    }
+
+    /**
+     * US-BILLING-004. No {@code Transactional*} decorator, mirroring {@code listPlansUseCase} /
+     * {@code getPlanUseCase}: a read-only query, already covered by the adapter's own per-method
+     * {@code readOnly = true}.
+     */
+    @Bean
+    public GetCurrentSubscriptionUseCase getCurrentSubscriptionUseCase(
+        SubscriptionRepository subscriptionRepository, Clock clock
+    ) {
+        return new GetCurrentSubscriptionUseCaseImpl(subscriptionRepository, clock);
+    }
+
+    /** US-BILLING-004. Same rationale as {@code getCurrentSubscriptionUseCase} above. */
+    @Bean
+    public GetSubscriptionHistoryUseCase getSubscriptionHistoryUseCase(
+        SubscriptionRepository subscriptionRepository
+    ) {
+        return new GetSubscriptionHistoryUseCaseImpl(subscriptionRepository);
     }
 
     @Bean
