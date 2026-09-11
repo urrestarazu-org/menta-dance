@@ -94,4 +94,80 @@ class SubscriptionJpaRepositoryTest {
             null, null, null, null, NOW.minusSeconds(DAY), null, null, null, "PAID", null, null, null, null, 0L
         );
     }
+
+    /**
+     * US-BILLING-004 (design.md A1): {@code findCurrentByUserId} resolves through {@code
+     * active_user_id}, which is released the moment a row leaves PENDING/ACTIVE, so it structurally
+     * cannot return an EXPIRED row. This derived query is the only way {@code GET /me} can resolve
+     * the third display state.
+     */
+    @Test
+    void finds_the_latest_expired_row_by_end_date_when_several_exist() {
+        UUID userId = UUID.randomUUID();
+        UUID planId = UUID.randomUUID();
+
+        SubscriptionJpaEntity older = expiredRow(userId, planId, NOW.minusSeconds(60 * DAY));
+        SubscriptionJpaEntity latest = expiredRow(userId, planId, NOW.minusSeconds(DAY));
+        SubscriptionJpaEntity otherUser = expiredRow(UUID.randomUUID(), planId, NOW.minusSeconds(1));
+        repository.saveAllAndFlush(List.of(older, latest, otherUser));
+
+        Optional<SubscriptionJpaEntity> found = repository
+            .findFirstByUserIdAndStatusOrderByEndDateDesc(userId, SubscriptionStatus.EXPIRED.name());
+
+        assertThat(found).isPresent();
+        assertThat(found.get().getId()).isEqualTo(latest.getId());
+    }
+
+    @Test
+    void finds_no_expired_row_when_the_user_has_none() {
+        UUID userId = UUID.randomUUID();
+
+        Optional<SubscriptionJpaEntity> found = repository
+            .findFirstByUserIdAndStatusOrderByEndDateDesc(userId, SubscriptionStatus.EXPIRED.name());
+
+        assertThat(found).isEmpty();
+    }
+
+    /** History (design.md A3): every row for the user, newest created first, regardless of status. */
+    @Test
+    void finds_all_rows_for_the_user_ordered_newest_created_first() {
+        UUID userId = UUID.randomUUID();
+        UUID planId = UUID.randomUUID();
+
+        SubscriptionJpaEntity oldest = rowCreatedAt(userId, planId, SubscriptionStatus.EXPIRED.name(), NOW.minusSeconds(3 * DAY));
+        SubscriptionJpaEntity middle = rowCreatedAt(userId, planId, SubscriptionStatus.CANCELLED.name(), NOW.minusSeconds(2 * DAY));
+        SubscriptionJpaEntity newest = rowCreatedAt(userId, planId, SubscriptionStatus.ACTIVE.name(), NOW.minusSeconds(DAY));
+        SubscriptionJpaEntity otherUser = rowCreatedAt(UUID.randomUUID(), planId, SubscriptionStatus.ACTIVE.name(), NOW);
+        repository.saveAllAndFlush(List.of(oldest, middle, newest, otherUser));
+
+        List<SubscriptionJpaEntity> found = repository.findAllByUserIdOrderByCreatedAtDesc(userId);
+
+        assertThat(found).extracting(SubscriptionJpaEntity::getId)
+            .containsExactly(newest.getId(), middle.getId(), oldest.getId());
+    }
+
+    @Test
+    void finds_no_rows_when_the_user_has_none() {
+        assertThat(repository.findAllByUserIdOrderByCreatedAtDesc(UUID.randomUUID())).isEmpty();
+    }
+
+    private static SubscriptionJpaEntity expiredRow(UUID userId, UUID planId, Instant endDate) {
+        UUID id = UUID.randomUUID();
+        return new SubscriptionJpaEntity(
+            id, UUID.randomUUID(), userId, planId, "idem-" + id, null,
+            SubscriptionStatus.EXPIRED.name(), FulfillmentStatus.ASSIGNED.name(),
+            NOW.minusSeconds(60 * DAY), endDate, null, null, NOW.minusSeconds(90 * DAY),
+            null, null, null, "PAID", null, null, null, null, 0L
+        );
+    }
+
+    private static SubscriptionJpaEntity rowCreatedAt(UUID userId, UUID planId, String status, Instant createdAt) {
+        UUID id = UUID.randomUUID();
+        return new SubscriptionJpaEntity(
+            id, UUID.randomUUID(), userId, planId, "idem-" + id, null,
+            status, FulfillmentStatus.ASSIGNED.name(),
+            createdAt, createdAt.plusSeconds(30 * DAY), null, null, createdAt,
+            null, null, null, "PAID", null, null, null, null, 0L
+        );
+    }
 }

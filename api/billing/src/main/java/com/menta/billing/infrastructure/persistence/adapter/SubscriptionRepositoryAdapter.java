@@ -1,5 +1,6 @@
 package com.menta.billing.infrastructure.persistence.adapter;
 
+import com.menta.billing.application.dto.SubscriptionHistoryEntry;
 import com.menta.billing.application.port.out.SubscriptionRepository;
 import com.menta.billing.domain.exception.SubscriptionAlreadyActiveException;
 import com.menta.billing.domain.model.PaymentId;
@@ -137,6 +138,32 @@ public class SubscriptionRepositoryAdapter implements SubscriptionRepository {
         return jpaRepository.findFirstByUserIdAndPlanIdAndStatusAndEndDateAfterOrderByEndDateDesc(
             userId, planId.getValue(), SubscriptionStatus.CANCELLED.name(), at
         ).map(this::toDomainWithCourses);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public Optional<Subscription> findLatestExpiredByUserId(UUID userId) {
+        return jpaRepository.findFirstByUserIdAndStatusOrderByEndDateDesc(userId, SubscriptionStatus.EXPIRED.name())
+            .map(this::toDomainWithCourses);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public List<SubscriptionHistoryEntry> findHistoryByUserId(UUID userId) {
+        return jpaRepository.findAllByUserIdOrderByCreatedAtDesc(userId).stream()
+            .map(this::toHistoryEntry)
+            .toList();
+    }
+
+    private SubscriptionHistoryEntry toHistoryEntry(SubscriptionJpaEntity entity) {
+        return new SubscriptionHistoryEntry(
+            entity.getId().toString(),
+            entity.getPlanId().toString(),
+            SubscriptionStatus.valueOf(entity.getStatus()),
+            entity.getStartDate(),
+            entity.getEndDate(),
+            entity.getCreatedAt()
+        );
     }
 
     private Subscription toDomainWithCourses(SubscriptionJpaEntity entity) {

@@ -1,5 +1,6 @@
 package com.menta.billing.application.port.out;
 
+import com.menta.billing.application.dto.SubscriptionHistoryEntry;
 import com.menta.billing.domain.exception.SubscriptionAlreadyActiveException;
 import com.menta.billing.domain.model.PaymentId;
 import com.menta.billing.domain.model.PlanId;
@@ -134,4 +135,27 @@ public interface SubscriptionRepository {
      * match: only "still paid, still cancelled, same plan" counts.
      */
     Optional<Subscription> findLatestCancelledWithRemainingAccess(UUID userId, PlanId planId, Instant at);
+
+    /**
+     * The current-subscription resolution's second step (US-BILLING-004, design.md A1): the
+     * latest {@code EXPIRED} row for a user, by {@code endDate}.
+     *
+     * <p>Unlike {@link #findCurrentByUserId(UUID)}, which resolves through {@code
+     * active_user_id} and therefore structurally cannot see a row once it has left
+     * PENDING/ACTIVE, this method scans by status directly — it is only ever consulted after
+     * {@link #findCurrentByUserId(UUID)} has already returned empty, so a live PENDING/ACTIVE
+     * slot always wins.</p>
+     */
+    Optional<Subscription> findLatestExpiredByUserId(UUID userId);
+
+    /**
+     * The full chronological history for a user, newest created first (US-BILLING-004,
+     * design.md A3): one immutable row per checkout, never mutated into a different logical
+     * subscription, so the table is already a correct audit trail.
+     *
+     * <p>Returns a lightweight projection rather than a full {@link Subscription} — history
+     * renders id/plan/status/dates and never courses, and {@link #findAllByUserId(UUID)} already
+     * hydrates the course snapshot for the callers that need it.</p>
+     */
+    java.util.List<SubscriptionHistoryEntry> findHistoryByUserId(UUID userId);
 }
