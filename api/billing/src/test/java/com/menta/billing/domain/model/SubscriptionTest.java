@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -429,5 +430,58 @@ class SubscriptionTest {
         assertThat(activated.getCancellation()).isEmpty();
         assertThat(slotReleased.getCancellation()).isEmpty();
         assertThat(slotReleased.getStatus()).isEqualTo(SubscriptionStatus.CANCELLED);
+    }
+
+    // --- daysRemaining(at) / isExpiringSoon(at) (US-BILLING-004) ---
+
+    @Test
+    void daysRemaining_ceils_a_partial_day_so_it_never_falsely_reads_zero() {
+        Subscription active = pending().activate(CONFIRMED_AT, 30, List.of("course-1"));
+        Instant endDate = active.getEndDate().orElseThrow();
+        Instant eighteenHoursBeforeEnd = endDate.minus(18, ChronoUnit.HOURS);
+
+        assertThat(active.daysRemaining(eighteenHoursBeforeEnd)).isEqualTo(OptionalLong.of(1L));
+    }
+
+    @Test
+    void daysRemaining_is_absent_while_pending_because_there_is_no_endDate_yet() {
+        Subscription pendingSubscription = pending();
+
+        assertThat(pendingSubscription.daysRemaining(CONFIRMED_AT)).isEmpty();
+    }
+
+    @Test
+    void daysRemaining_is_zero_once_endDate_has_passed_but_status_has_not_flipped_yet() {
+        Subscription active = pending().activate(CONFIRMED_AT, 30, List.of("course-1"));
+        Instant endDate = active.getEndDate().orElseThrow();
+
+        assertThat(active.daysRemaining(endDate.plusSeconds(3600))).isEqualTo(OptionalLong.of(0L));
+    }
+
+    @Test
+    void isExpiringSoon_is_true_at_exactly_seven_days_remaining_inclusive_boundary() {
+        Subscription active = pending().activate(CONFIRMED_AT, 30, List.of("course-1"));
+        Instant endDate = active.getEndDate().orElseThrow();
+
+        assertThat(active.isExpiringSoon(endDate.minus(7, ChronoUnit.DAYS))).isTrue();
+    }
+
+    @Test
+    void isExpiringSoon_is_false_at_eight_days_remaining() {
+        Subscription active = pending().activate(CONFIRMED_AT, 30, List.of("course-1"));
+        Instant endDate = active.getEndDate().orElseThrow();
+
+        assertThat(active.isExpiringSoon(endDate.minus(8, ChronoUnit.DAYS))).isFalse();
+    }
+
+    @Test
+    void isExpiringSoon_is_always_false_for_expired_and_pending_regardless_of_computed_days() {
+        Subscription active = pending().activate(CONFIRMED_AT, 30, List.of("course-1"));
+        Instant endDate = active.getEndDate().orElseThrow();
+        Subscription expired = active.expire(endDate);
+        Subscription pendingSubscription = pending();
+
+        assertThat(expired.isExpiringSoon(endDate.minus(1, ChronoUnit.DAYS))).isFalse();
+        assertThat(pendingSubscription.isExpiringSoon(CONFIRMED_AT)).isFalse();
     }
 }

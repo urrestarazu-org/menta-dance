@@ -1,10 +1,12 @@
 package com.menta.billing.domain.model;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.UUID;
 
 /**
@@ -35,6 +37,14 @@ import java.util.UUID;
  * (design D6).</p>
  */
 public final class Subscription {
+
+    /**
+     * Read-time "expiring soon" window (US-BILLING-004, design A2): a fixed domain constant, not
+     * externally configurable — nothing in this codebase reads {@code menta.billing.*} for
+     * domain rules today, and promoting this to configuration later is a one-line change no
+     * client contract blocks.
+     */
+    private static final int EXPIRING_SOON_THRESHOLD_DAYS = 7;
 
     private final UUID id;
     private final PaymentId paymentId;
@@ -276,6 +286,46 @@ public final class Subscription {
             SubscriptionStatus.EXPIRED, fulfillmentStatus, startDate, endDate, courseIds, providerPreferenceId,
             checkoutUrl, cancellation
         );
+    }
+
+    /**
+     * Days left until {@code endDate}, read-time computed and never stored (US-BILLING-004,
+     * design A2). Absent while {@code PENDING} — there is no {@code endDate} yet, and reporting
+     * a fabricated zero would be worse than reporting nothing.
+     *
+     * <p>Rounds up ({@code ceil}): 18 remaining hours read as {@code 1}, never a falsely
+     * reassuring {@code 0}, while the subscription still grants access. The result is floored at
+     * {@code 0} for the sweep-lag window where {@code endDate} has already passed but the
+     * automatic expiry sweep has not yet flipped the row to {@code EXPIRED} — same boundary
+     * style as {@link #expire}, which expires on {@code endDate <= at}.</p>
+     *
+     * @param at the instant to compute remaining days from
+     * @return the ceiled, non-negative day count, or empty while {@code PENDING}
+     */
+    public OptionalLong daysRemaining(Instant at) {
+        Objects.requireNonNull(at, "at cannot be null");
+        if (endDate == null) {
+            return OptionalLong.empty();
+        }
+        long secondsRemaining = Duration.between(at, endDate).getSeconds();
+        long days = -Math.floorDiv(-secondsRemaining, 86_400L);
+        return OptionalLong.of(Math.max(days, 0L));
+    }
+
+    /**
+     * Whether this subscription falls within the {@link #EXPIRING_SOON_THRESHOLD_DAYS}-day
+     * window (US-BILLING-004, design A2). Inclusive boundary (mirrors {@link #expire}'s own
+     * {@code <=} style): exactly {@value #EXPIRING_SOON_THRESHOLD_DAYS} days remaining already
+     * counts as expiring soon. Always {@code false} outside {@code ACTIVE} — an {@code EXPIRED}
+     * or {@code PENDING} subscription is never "about to expire".
+     *
+     * @param at the instant to evaluate at
+     */
+    public boolean isExpiringSoon(Instant at) {
+        if (status != SubscriptionStatus.ACTIVE) {
+            return false;
+        }
+        return daysRemaining(at).orElse(Long.MAX_VALUE) <= EXPIRING_SOON_THRESHOLD_DAYS;
     }
 
     /** Marks the locally stored entitlement snapshot as available to Virtual. */
