@@ -116,27 +116,27 @@ strictly sequential (steps 3-7). Five PRs, one per architectural seam.
 dependency order, but sequenced second here so both land before application
 work needs them).
 
-- [ ] 2.1 RED: extend `infrastructure/persistence/repository/SubscriptionJpaRepositoryTest.java`
+- [x] 2.1 RED: extend `infrastructure/persistence/repository/SubscriptionJpaRepositoryTest.java`
       — `findFirstByUserIdAndStatusOrderByEndDateDesc(userId, EXPIRED)` returns
       the latest EXPIRED row by `endDate` when several exist, empty when none
       do; `findAllByUserIdOrderByCreatedAtDesc(userId)` returns every row for
       the user ordered newest-created-first, `[]` for a user with none.
-- [ ] 2.2 Verify RED: `./gradlew :api:billing:test --tests "*SubscriptionJpaRepositoryTest*"`
+- [x] 2.2 Verify RED: `./gradlew :api:billing:test --tests "*SubscriptionJpaRepositoryTest*"`
       fails on the missing derived-query methods, not a typo.
-- [ ] 2.3 GREEN: modify `infrastructure/persistence/repository/SubscriptionJpaRepository.java`
+- [x] 2.3 GREEN: modify `infrastructure/persistence/repository/SubscriptionJpaRepository.java`
       — add both derived-query methods (Spring Data method-name derivation,
       no `@Query`, matching the file's existing convention).
-- [ ] 2.4 Verify GREEN: `SubscriptionJpaRepositoryTest` suite green.
-- [ ] 2.5 Create `application/dto/SubscriptionHistoryEntry.java` — projection
+- [x] 2.4 Verify GREEN: `SubscriptionJpaRepositoryTest` suite green.
+- [x] 2.5 Create `application/dto/SubscriptionHistoryEntry.java` — projection
       record: `id`, `planId`, `status`, `startDate`, `endDate`, `createdAt`
       (A3; entity → record mapped directly in the adapter, never a rehydrated
       `Subscription` with a falsified empty course snapshot).
-- [ ] 2.6 Modify `application/port/out/SubscriptionRepository.java` — add
+- [x] 2.6 Modify `application/port/out/SubscriptionRepository.java` — add
       `Optional<Subscription> findLatestExpiredByUserId(UUID userId)` (exact
       name from design.md A1, javadoc contrasting it with
       `findCurrentByUserId`'s slot-only scope — see "Verified Facts" above)
       and `List<SubscriptionHistoryEntry> findHistoryByUserId(UUID userId)`.
-- [ ] 2.7 RED: extend `infrastructure/persistence/adapter/SubscriptionRepositoryAdapterTest.java`
+- [x] 2.7 RED: extend `infrastructure/persistence/adapter/SubscriptionRepositoryAdapterTest.java`
       — `findLatestExpiredByUserId` picks the latest EXPIRED row only, empty
       when none exists, does not resolve through `active_user_id` (unlike
       `findCurrentByUserId`, per the file's own existing doc-comment
@@ -144,16 +144,16 @@ work needs them).
       `created_at DESC` and issues no per-row `subscription_courses` query
       (A3 — assert query count, not just result shape, mirroring this test
       file's existing style).
-- [ ] 2.8 Verify RED: fails on the missing adapter methods, not a typo.
-- [ ] 2.9 GREEN: modify `infrastructure/persistence/adapter/SubscriptionRepositoryAdapter.java`
+- [x] 2.8 Verify RED: fails on the missing adapter methods, not a typo.
+- [x] 2.9 GREEN: modify `infrastructure/persistence/adapter/SubscriptionRepositoryAdapter.java`
       — implement both methods, `@Transactional(propagation = REQUIRED,
       readOnly = true)` on each, matching every other query method in this
       adapter; `findHistoryByUserId` maps `SubscriptionJpaEntity` → record
       directly, no `toDomainWithCourses` call.
-- [ ] 2.10 Verify GREEN: `SubscriptionRepositoryAdapterTest` suite green,
+- [x] 2.10 Verify GREEN: `SubscriptionRepositoryAdapterTest` suite green,
       including all pre-existing cases (no regression on `findCurrentByUserId`
       or `findAllByUserId`).
-- [ ] 2.11 Run `./gradlew :api:billing:test :api:billing:jacocoTestCoverageVerification`
+- [x] 2.11 Run `./gradlew :api:billing:test :api:billing:jacocoTestCoverageVerification`
       before opening PR 2 — confirms infrastructure stays ≥85%.
 
 ## PR 3 — Application: use cases and wiring

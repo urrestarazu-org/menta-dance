@@ -22,6 +22,21 @@ public interface SubscriptionJpaRepository extends JpaRepository<SubscriptionJpa
     List<SubscriptionJpaEntity> findAllByUserId(UUID userId);
 
     /**
+     * The current-subscription resolution's second step (US-BILLING-004, design.md A1): {@code
+     * findByActiveUserId} resolves through {@code active_user_id}, which is released the moment a
+     * row leaves PENDING/ACTIVE, so it structurally cannot return EXPIRED. This derived query is
+     * the only way to reach the latest EXPIRED row for a user once the slot is free.
+     */
+    Optional<SubscriptionJpaEntity> findFirstByUserIdAndStatusOrderByEndDateDesc(UUID userId, String status);
+
+    /**
+     * Every row for a user, newest created first (US-BILLING-004, design.md A3) — the history
+     * listing's ordering. Deliberately separate from {@link #findAllByUserId(UUID)}, which keeps
+     * its existing callers and its existing lack of ordering.
+     */
+    List<SubscriptionJpaEntity> findAllByUserIdOrderByCreatedAtDesc(UUID userId);
+
+    /**
      * Strictly {@code ACTIVE} filter — {@code findByActiveUserId} also matches {@code PENDING}
      * through the {@code active_user_id} projection, which cannot serve self-service
      * cancellation (US-BILLING-011).

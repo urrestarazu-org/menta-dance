@@ -10,6 +10,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.menta.billing.application.dto.SubscriptionHistoryEntry;
 import com.menta.billing.domain.exception.SubscriptionAlreadyActiveException;
 import com.menta.billing.domain.model.PaymentId;
 import com.menta.billing.domain.model.PlanId;
@@ -295,5 +296,58 @@ class SubscriptionRepositoryAdapterTest {
         )).thenReturn(Optional.empty());
 
         assertThat(adapter.findLatestCancelledWithRemainingAccess(USER_ID, planId, at)).isEmpty();
+    }
+
+    /**
+     * (design.md A1) Unlike {@code findCurrentByUserId}, which resolves through {@code
+     * active_user_id}, this method scans by status directly and picks the latest EXPIRED row.
+     */
+    @Test
+    void findLatestExpiredByUserId_maps_the_latest_expired_row_when_present() {
+        Subscription expired = pending().activate(NOW, 30, List.of("course-1")).expire(NOW.plusSeconds(30 * 86_400L));
+        when(jpaRepository.findFirstByUserIdAndStatusOrderByEndDateDesc(USER_ID, "EXPIRED"))
+            .thenReturn(Optional.of(SubscriptionJpaMapper.toEntity(expired)));
+        when(courseJpaRepository.findBySubscriptionId(expired.getId()))
+            .thenReturn(List.of(new SubscriptionCourseJpaEntity(expired.getId(), "course-1")));
+
+        Optional<Subscription> found = adapter.findLatestExpiredByUserId(USER_ID);
+
+        assertThat(found).isPresent();
+        assertThat(found.get().getStatus())
+            .isEqualTo(com.menta.billing.domain.model.SubscriptionStatus.EXPIRED);
+    }
+
+    @Test
+    void findLatestExpiredByUserId_empty_when_no_expired_row_exists() {
+        when(jpaRepository.findFirstByUserIdAndStatusOrderByEndDateDesc(USER_ID, "EXPIRED"))
+            .thenReturn(Optional.empty());
+
+        assertThat(adapter.findLatestExpiredByUserId(USER_ID)).isEmpty();
+    }
+
+    /**
+     * (design.md A3) History maps entity → record directly — never through {@code
+     * toDomainWithCourses} — so it must never touch {@code courseJpaRepository}.
+     */
+    @Test
+    void findHistoryByUserId_maps_every_row_ordered_created_at_desc_without_a_course_query() {
+        Subscription newer = pending().activate(NOW, 30, List.of("course-1"));
+        Subscription older = pending();
+        when(jpaRepository.findAllByUserIdOrderByCreatedAtDesc(USER_ID)).thenReturn(List.of(
+            SubscriptionJpaMapper.toEntity(newer), SubscriptionJpaMapper.toEntity(older)
+        ));
+
+        List<SubscriptionHistoryEntry> found = adapter.findHistoryByUserId(USER_ID);
+
+        assertThat(found).extracting(SubscriptionHistoryEntry::id)
+            .containsExactly(newer.getId().toString(), older.getId().toString());
+        verify(courseJpaRepository, never()).findBySubscriptionId(any());
+    }
+
+    @Test
+    void findHistoryByUserId_empty_when_the_user_has_no_rows() {
+        when(jpaRepository.findAllByUserIdOrderByCreatedAtDesc(USER_ID)).thenReturn(List.of());
+
+        assertThat(adapter.findHistoryByUserId(USER_ID)).isEmpty();
     }
 }
