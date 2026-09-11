@@ -217,17 +217,17 @@ repository methods).
 **Branch**: `feature/billing-subscription-status-web` off `develop` (cut
 after PR 3 merges).
 
-- [ ] 4.1 Create `infrastructure/web/dto/CurrentSubscriptionResponse.java` —
+- [x] 4.1 Create `infrastructure/web/dto/CurrentSubscriptionResponse.java` —
       flat record discriminated by `status`, all four issue states share one
       shape with a bounded, documented nullable set (`endDate`,
       `daysRemaining`, `expiringSoon`, `checkoutUrl`; nulls serialize as
       `null`, no `@JsonInclude`, matching `SubscriptionCheckoutResponse`'s
       precedent). Static `from(CurrentSubscriptionResult)` — exhaustive
       `switch` over the sealed type, `EXPIRED` branch also sets `plansUrl`.
-- [ ] 4.2 Create `infrastructure/web/dto/SubscriptionHistoryItemResponse.java`
+- [x] 4.2 Create `infrastructure/web/dto/SubscriptionHistoryItemResponse.java`
       — flat record: `id`, `planId`, `status`, `startDate`, `endDate`. Static
       `from(SubscriptionHistoryEntry)`.
-- [ ] 4.3 RED: extend `infrastructure/web/controller/SubscriptionControllerTest.java`
+- [x] 4.3 RED: extend `infrastructure/web/controller/SubscriptionControllerTest.java`
       (standalone mocked-use-case unit test, mirrors this file's existing
       pattern): `GET /me` — `actingUserId` is read from the token, never a
       request parameter (same assertion style as the existing `DELETE /me`
@@ -237,30 +237,30 @@ after PR 3 merges).
       propagates untranslated (no try/catch in the controller). `GET
       /me/history` — returns the mapped list in the use case's own order,
       `[]` stays `[]`.
-- [ ] 4.4 Verify RED: `./gradlew :api:billing:test --tests "*SubscriptionControllerTest*"`
+- [x] 4.4 Verify RED: `./gradlew :api:billing:test --tests "*SubscriptionControllerTest*"`
       fails on the two missing `@GetMapping` methods, not a typo.
-- [ ] 4.5 GREEN: modify `infrastructure/web/controller/SubscriptionController.java`
+- [x] 4.5 GREEN: modify `infrastructure/web/controller/SubscriptionController.java`
       — add `@GetMapping("/me")` (`currentOwn`) and `@GetMapping("/me/history")`
       (`historyOwn`), reusing `actingUserId(Authentication)` verbatim (no new
       resolution logic); inject `GetCurrentSubscriptionUseCase` and
       `GetSubscriptionHistoryUseCase` via the constructor alongside the
       existing two use cases. Javadoc documents both routes fall under the
       class's inherited `@SubscriptionEndpoint` advice.
-- [ ] 4.6 Verify GREEN: `SubscriptionControllerTest` suite green, including
+- [x] 4.6 Verify GREEN: `SubscriptionControllerTest` suite green, including
       all pre-existing `POST`/`DELETE /me` cases (no regression).
-- [ ] 4.7 RED: extend `infrastructure/web/controller/SubscriptionExceptionHandlerTest.java`
+- [x] 4.7 RED: extend `infrastructure/web/controller/SubscriptionExceptionHandlerTest.java`
       — `NoSubscriptionException` maps to `404`, `application/problem+json`,
       `errorCode: "NO_SUBSCRIPTION"`, and a `plansUrl` property pointing at
       `/api/v1/billing/plans`.
-- [ ] 4.8 Verify RED: fails on the missing handler branch, not a typo.
-- [ ] 4.9 GREEN: modify `infrastructure/web/controller/SubscriptionExceptionHandler.java`
+- [x] 4.8 Verify RED: fails on the missing handler branch, not a typo.
+- [x] 4.9 GREEN: modify `infrastructure/web/controller/SubscriptionExceptionHandler.java`
       — add `@ExceptionHandler(NoSubscriptionException.class)` mirroring
       `subscriptionNotFound`'s shape (`ProblemDetails.body(...)` + one
       `setProperty("plansUrl", ...)`, `404`), sourcing the `/api/v1/billing/plans`
       constant from the web layer (A4 — infrastructure is the only layer that
       legitimately knows its own routes).
-- [ ] 4.10 Verify GREEN: `SubscriptionExceptionHandlerTest` suite green.
-- [ ] 4.11 Modify `api/auth/.../infrastructure/security/SecurityConfig.java` —
+- [x] 4.10 Verify GREEN: `SubscriptionExceptionHandlerTest` suite green.
+- [x] 4.11 Modify `api/auth/.../infrastructure/security/SecurityConfig.java` —
       documentation-only change. Add two entries to the class javadoc (same
       block that documents the existing `DELETE /api/v1/billing/subscriptions/me
       → authenticated` rule at line 64), in the same prose style, stating that

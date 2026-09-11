@@ -1,5 +1,6 @@
 package com.menta.billing.infrastructure.web.controller;
 
+import com.menta.billing.domain.exception.NoSubscriptionException;
 import com.menta.billing.domain.exception.PaymentMethodNotAcceptedException;
 import com.menta.billing.domain.exception.PaymentPreferenceUnavailableException;
 import com.menta.billing.domain.exception.PlanNotAvailableException;
@@ -8,6 +9,7 @@ import com.menta.billing.domain.exception.SubscriptionNotFoundException;
 import com.menta.billing.domain.exception.UserNotFoundException;
 import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.infrastructure.web.ProblemDetails;
+import com.menta.billing.infrastructure.web.dto.CurrentSubscriptionResponse;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -68,6 +70,24 @@ public class SubscriptionExceptionHandler {
         return ProblemDetails.response(
             HttpStatus.NOT_FOUND, "No se encontró una suscripción cancelable.", exception.getErrorCode()
         );
+    }
+
+    /**
+     * US-BILLING-004, D2: the acting user has no {@code PENDING}, {@code ACTIVE} or {@code
+     * EXPIRED} subscription row at all. Distinct code from {@link SubscriptionNotFoundException}'s
+     * {@code SUBSCRIPTION_NOT_FOUND} — that one is deliberately ambiguous for cancellation
+     * anti-enumeration, a concern that does not apply when a user reads their own dashboard
+     * (design.md A5). Clones {@code subscriptionNotFound}'s shape, plus a {@code plansUrl} hint.
+     */
+    @ExceptionHandler(NoSubscriptionException.class)
+    ResponseEntity<ProblemDetail> noSubscription(NoSubscriptionException exception) {
+        ProblemDetail problemDetail = ProblemDetails.body(
+            HttpStatus.NOT_FOUND, "No tenés ninguna suscripción.", exception.getErrorCode()
+        );
+        problemDetail.setProperty("plansUrl", CurrentSubscriptionResponse.PLANS_URL);
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+            .contentType(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON)
+            .body(problemDetail);
     }
 
     /**

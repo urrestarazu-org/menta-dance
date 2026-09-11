@@ -4,31 +4,40 @@ import com.menta.billing.application.dto.CancelSubscriptionCommand;
 import com.menta.billing.application.dto.CancellationResult;
 import com.menta.billing.application.dto.CancellationTarget;
 import com.menta.billing.application.dto.CreateSubscriptionCheckoutCommand;
+import com.menta.billing.application.dto.CurrentSubscriptionResult;
 import com.menta.billing.application.dto.SubscriptionCheckoutResult;
 import com.menta.billing.application.port.in.CancelSubscriptionUseCase;
 import com.menta.billing.application.port.in.CreateSubscriptionCheckoutUseCase;
+import com.menta.billing.application.port.in.GetCurrentSubscriptionUseCase;
+import com.menta.billing.application.port.in.GetSubscriptionHistoryUseCase;
 import com.menta.billing.infrastructure.web.dto.CancelSubscriptionResponse;
 import com.menta.billing.infrastructure.web.dto.CreateSubscriptionRequest;
+import com.menta.billing.infrastructure.web.dto.CurrentSubscriptionResponse;
 import com.menta.billing.infrastructure.web.dto.SubscriptionCheckoutResponse;
+import com.menta.billing.infrastructure.web.dto.SubscriptionHistoryItemResponse;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * HTTP adapter for subscription checkout and self-service cancellation (US-BILLING-010,
- * US-BILLING-011).
+ * HTTP adapter for subscription checkout, self-service cancellation and the read-side status
+ * views (US-BILLING-004, US-BILLING-010, US-BILLING-011).
  *
- * <p>{@code SecurityConfig} gates {@code POST} and {@code DELETE /me} with {@code
- * .authenticated()}; no role is required for either. The owning user is read from the token and
- * never from the body — the same {@code actingUserId} pattern {@code
- * PhysicalCoursePricingController} uses.</p>
+ * <p>{@code SecurityConfig} gates {@code POST}, {@code DELETE /me}, {@code GET /me} and {@code
+ * GET /me/history} with {@code .authenticated()}; no role is required for any of them — the two
+ * new GET routes fall through to the same {@code anyRequest().authenticated()} default as the
+ * existing {@code DELETE /me} (no dedicated matcher needed). The owning user is read from the
+ * token and never from the body or a request parameter — the same {@code actingUserId} pattern
+ * {@code PhysicalCoursePricingController} uses.</p>
  */
 @RestController
 @RequestMapping("/api/v1/billing/subscriptions")
@@ -37,13 +46,19 @@ public class SubscriptionController {
 
     private final CreateSubscriptionCheckoutUseCase createSubscriptionCheckoutUseCase;
     private final CancelSubscriptionUseCase cancelSubscriptionUseCase;
+    private final GetCurrentSubscriptionUseCase getCurrentSubscriptionUseCase;
+    private final GetSubscriptionHistoryUseCase getSubscriptionHistoryUseCase;
 
     public SubscriptionController(
         CreateSubscriptionCheckoutUseCase createSubscriptionCheckoutUseCase,
-        CancelSubscriptionUseCase cancelSubscriptionUseCase
+        CancelSubscriptionUseCase cancelSubscriptionUseCase,
+        GetCurrentSubscriptionUseCase getCurrentSubscriptionUseCase,
+        GetSubscriptionHistoryUseCase getSubscriptionHistoryUseCase
     ) {
         this.createSubscriptionCheckoutUseCase = createSubscriptionCheckoutUseCase;
         this.cancelSubscriptionUseCase = cancelSubscriptionUseCase;
+        this.getCurrentSubscriptionUseCase = getCurrentSubscriptionUseCase;
+        this.getSubscriptionHistoryUseCase = getSubscriptionHistoryUseCase;
     }
 
     @PostMapping
@@ -69,6 +84,33 @@ public class SubscriptionController {
             new CancellationTarget.Own(), actingUserId(authentication), false, null
         ));
         return ResponseEntity.ok(CancelSubscriptionResponse.from(result));
+    }
+
+    /**
+     * Current subscription (US-BILLING-004). Resolves PENDING, ACTIVE or EXPIRED only (D1); a
+     * thrown {@code NoSubscriptionException} is never caught here — it reaches {@code
+     * SubscriptionExceptionHandler} untranslated, the same pattern every other exception on this
+     * controller follows. This route falls under the class's inherited {@code
+     * @SubscriptionEndpoint} advice.
+     */
+    @GetMapping("/me")
+    public ResponseEntity<CurrentSubscriptionResponse> currentOwn(Authentication authentication) {
+        CurrentSubscriptionResult result = getCurrentSubscriptionUseCase.current(actingUserId(authentication));
+        return ResponseEntity.ok(CurrentSubscriptionResponse.from(result));
+    }
+
+    /**
+     * Full subscription history, newest first (US-BILLING-004). Never throws for a user with no
+     * rows — an empty list is a valid {@code 200}. This route falls under the class's inherited
+     * {@code @SubscriptionEndpoint} advice.
+     */
+    @GetMapping("/me/history")
+    public ResponseEntity<List<SubscriptionHistoryItemResponse>> historyOwn(Authentication authentication) {
+        List<SubscriptionHistoryItemResponse> history = getSubscriptionHistoryUseCase
+            .history(actingUserId(authentication)).stream()
+            .map(SubscriptionHistoryItemResponse::from)
+            .toList();
+        return ResponseEntity.ok(history);
     }
 
     private static UUID actingUserId(Authentication authentication) {
