@@ -7,6 +7,7 @@ import com.menta.billing.domain.model.FulfillmentStatus;
 import com.menta.billing.domain.model.PaymentId;
 import com.menta.billing.domain.model.Purchase;
 import com.menta.shared.billing.PaymentCompletedOutboxPayload;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
@@ -21,8 +22,15 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>Read {@link PurchaseRepository#findByPaymentId(PaymentId)}.</li>
  *   <li>If present AND non-EXCEPTION → return existing; never save.</li>
  *   <li>If absent OR existing is EXCEPTION (recovery) → build
- *       {@link Purchase#pendingFulfillment(PaymentId, String)} and save.
- *       The save never re-resurrects a settled purchase.</li>
+ *       {@link Purchase#pendingFulfillment(PaymentId, java.util.List)} and
+ *       save. The save never re-resurrects a settled purchase.
+ *
+ *       <p>Still single-session here (design A1's schema exists in this PR,
+ *       but resolving the full eligible-session list is #41's PR5 —
+ *       {@code CreatePurchaseFromPaymentEventUseCase} keeps accepting one
+ *       {@code targetReference} today and wraps it in a singleton list so
+ *       this class compiles against {@link Purchase}'s new list-based shape
+ *       without pre-empting PR5's actual multi-session resolution work).</p></li>
  *   <li>If save raises {@link DataIntegrityViolationException} against V8
  *       line 31 {@code uq_billing_purchases_payment_id} (UNIQUE collision
  *       with a concurrent handler) → re-fetch and return whatever is there.</li>
@@ -48,7 +56,7 @@ public class CreatePurchaseFromPaymentEventUseCase implements PurchaseCreationFr
         if (existing.isPresent() && existing.get().getStatus() != FulfillmentStatus.EXCEPTION) {
             return existing.get();
         }
-        Purchase pending = Purchase.pendingFulfillment(paymentId, payload.targetReference());
+        Purchase pending = Purchase.pendingFulfillment(paymentId, List.of(payload.targetReference()));
         try {
             return purchaseRepository.save(pending);
         } catch (DataIntegrityViolationException concurrentInsert) {
