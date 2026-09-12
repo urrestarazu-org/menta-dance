@@ -26,25 +26,25 @@ class PurchaseStateMachineTest {
 
     @Test
     void pendingFulfillment_supplier_does_not_grant_attendance() {
-        Purchase p = Purchase.pendingFulfillment(PAYMENT_ID, SESSION_ID);
+        Purchase p = Purchase.pendingFulfillment(PAYMENT_ID, java.util.List.of(SESSION_ID));
         assertThat(p.getStatus()).isEqualTo(FulfillmentStatus.PENDING_FULFILLMENT);
         assertThat(p.grantsAttendance()).isFalse();
     }
 
     @Test
     void assigned_supplier_grants_attendance() {
-        Purchase assigned = Purchase.pendingFulfillment(PAYMENT_ID, SESSION_ID).assigned();
+        Purchase assigned = Purchase.pendingFulfillment(PAYMENT_ID, java.util.List.of(SESSION_ID)).assigned();
         assertThat(assigned.getStatus()).isEqualTo(FulfillmentStatus.ASSIGNED);
         assertThat(assigned.grantsAttendance()).isTrue();
     }
 
     @Test
     void exception_supplier_does_not_grant_attendance_and_keeps_identity() {
-        Purchase exception = Purchase.pendingFulfillment(PAYMENT_ID, SESSION_ID).exception();
+        Purchase exception = Purchase.pendingFulfillment(PAYMENT_ID, java.util.List.of(SESSION_ID)).exception();
         assertThat(exception.getStatus()).isEqualTo(FulfillmentStatus.EXCEPTION);
         assertThat(exception.grantsAttendance()).isFalse();
         // Identity preservation — same paymentId and sessionId across transitions.
         assertThat(exception.getPaymentId()).isEqualTo(PAYMENT_ID);
-        assertThat(exception.getPhysicalSessionId()).isEqualTo(SESSION_ID);
+        assertThat(exception.getPhysicalSessionIds()).containsExactly(SESSION_ID);
     }
 }

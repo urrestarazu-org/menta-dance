@@ -16,9 +16,6 @@ public class PurchaseJpaEntity {
     @Column(name = "payment_id", columnDefinition = "BINARY(16)", nullable = false, unique = true)
     private UUID paymentId;
 
-    @Column(name = "physical_session_id", nullable = false)
-    private String physicalSessionId;
-
     @Column(name = "status", nullable = false, columnDefinition = "VARCHAR(20)")
     private String status;
 
@@ -26,10 +23,9 @@ public class PurchaseJpaEntity {
         // JPA requires a no-arg constructor.
     }
 
-    public PurchaseJpaEntity(UUID id, UUID paymentId, String physicalSessionId, String status) {
+    public PurchaseJpaEntity(UUID id, UUID paymentId, String status) {
         this.id = id;
         this.paymentId = paymentId;
-        this.physicalSessionId = physicalSessionId;
         this.status = status;
     }
 
@@ -39,10 +35,6 @@ public class PurchaseJpaEntity {
 
     public UUID getPaymentId() {
         return paymentId;
-    }
-
-    public String getPhysicalSessionId() {
-        return physicalSessionId;
     }
 
     public String getStatus() {

@@ -71,7 +71,7 @@ class CreatePurchaseFromPaymentEventUseCaseTest {
 
             assertThat(result.getStatus()).isEqualTo(FulfillmentStatus.PENDING_FULFILLMENT);
             assertThat(result.getPaymentId()).isEqualTo(PAYMENT_ID);
-            assertThat(result.getPhysicalSessionId()).isEqualTo(SESSION_REF);
+            assertThat(result.getPhysicalSessionIds()).containsExactly(SESSION_REF);
             verify(purchaseRepository, times(1)).save(any(Purchase.class));
         }
     }
@@ -82,7 +82,7 @@ class CreatePurchaseFromPaymentEventUseCaseTest {
 
         @Test
         void returns_existing_pendingFulfillment_without_saving() {
-            Purchase existing = Purchase.pendingFulfillment(PAYMENT_ID, SESSION_REF);
+            Purchase existing = Purchase.pendingFulfillment(PAYMENT_ID, java.util.List.of(SESSION_REF));
             when(purchaseRepository.findByPaymentId(PAYMENT_ID)).thenReturn(Optional.of(existing));
 
             Purchase result = useCase.createPurchaseFromPaymentEvent(payload());
@@ -93,7 +93,7 @@ class CreatePurchaseFromPaymentEventUseCaseTest {
 
         @Test
         void returns_existing_assigned_without_saving() {
-            Purchase existing = Purchase.pendingFulfillment(PAYMENT_ID, SESSION_REF).assigned();
+            Purchase existing = Purchase.pendingFulfillment(PAYMENT_ID, java.util.List.of(SESSION_REF)).assigned();
             when(purchaseRepository.findByPaymentId(PAYMENT_ID)).thenReturn(Optional.of(existing));
 
             Purchase result = useCase.createPurchaseFromPaymentEvent(payload());
@@ -104,7 +104,7 @@ class CreatePurchaseFromPaymentEventUseCaseTest {
 
         @Test
         void rebuilds_when_existing_is_EXCEPTION_per_iso_double_recovery() {
-            Purchase exception = Purchase.pendingFulfillment(PAYMENT_ID, SESSION_REF).exception();
+            Purchase exception = Purchase.pendingFulfillment(PAYMENT_ID, java.util.List.of(SESSION_REF)).exception();
             when(purchaseRepository.findByPaymentId(PAYMENT_ID))
                 .thenReturn(Optional.of(exception));
 
@@ -121,7 +121,7 @@ class CreatePurchaseFromPaymentEventUseCaseTest {
 
         @Test
         void recovers_by_re_fetching_when_save_throws_DataIntegrityViolationException() {
-            Purchase existing = Purchase.pendingFulfillment(PAYMENT_ID, SESSION_REF);
+            Purchase existing = Purchase.pendingFulfillment(PAYMENT_ID, java.util.List.of(SESSION_REF));
             // First findByPaymentId() returns empty (handler-A inserted first
             // but not committed yet). Then save() raises DIV. Then the second
             // findByPaymentId() returns the now-committed row.
