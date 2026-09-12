@@ -3,6 +3,8 @@ package com.menta.physical.application.usecase;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -15,12 +17,17 @@ import com.menta.physical.domain.exception.SessionNotFoundException;
 import com.menta.physical.domain.model.PhysicalSession;
 import com.menta.physical.domain.model.SessionId;
 import com.menta.shared.physical.CapacityAssignmentCommand;
+import com.menta.shared.physical.MultiSessionCapacityAssignmentCommand;
+import com.menta.shared.physical.MultiSessionCapacityAssignmentCommand.SessionClaim;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 import org.springframework.dao.DataIntegrityViolationException;
 
 /**
@@ -124,6 +131,79 @@ class AssignCapacityUseCaseTest {
             assertThatThrownBy(() -> useCase.assign(cmd()))
                 .isInstanceOf(SessionNotFoundException.class);
             verify(assignmentWriter, never()).assertAssignment(any(UUID.class), any(UUID.class));
+        }
+    }
+
+    /**
+     * PR3 (design A3): {@code assignAll} claims an ordered set of sessions
+     * under one transactional boundary, all-or-nothing. {@code assign}
+     * degenerates to a singleton call into the same loop.
+     */
+    @Nested
+    @DisplayName("assignAll: ordered, all-or-nothing multi-session claim (design A3)")
+    class AssignAll {
+
+        private static final UUID SESSION_UUID_2 = UUID.fromString("66666666-6666-6666-6666-666666666666");
+        private static final UUID SESSION_UUID_3 = UUID.fromString("88888888-8888-8888-8888-888888888888");
+        private static final SessionId SESSION_ID_2 = SessionId.of(SESSION_UUID_2);
+        private static final SessionId SESSION_ID_3 = SessionId.of(SESSION_UUID_3);
+
+        private static SessionClaim claim(UUID sessionId, long secondsFromEpoch) {
+            return new SessionClaim(sessionId, Instant.ofEpochSecond(secondsFromEpoch));
+        }
+
+        private static MultiSessionCapacityAssignmentCommand multiCmd(List<SessionClaim> claims) {
+            return new MultiSessionCapacityAssignmentCommand(claims, STUDENT_UUID, PAYMENT_UUID);
+        }
+
+        @Test
+        @DisplayName("Claims are attempted in list order and all three are assigned")
+        void claims_are_attempted_in_list_order() {
+            when(sessionRepository.findById(any(SessionId.class)))
+                .thenReturn(Optional.of(sessionWithCapacity(2, 0)));
+
+            List<SessionClaim> claims = List.of(
+                claim(SESSION_UUID, 1), claim(SESSION_UUID_2, 2), claim(SESSION_UUID_3, 3)
+            );
+
+            CapacityAssignments result = useCase.assignAll(multiCmd(claims));
+
+            assertThat(result.assignedSessionIds())
+                .containsExactly(SESSION_UUID, SESSION_UUID_2, SESSION_UUID_3);
+
+            InOrder inOrder = inOrder(assignmentWriter);
+            inOrder.verify(assignmentWriter).assertAssignment(SESSION_UUID, STUDENT_UUID);
+            inOrder.verify(assignmentWriter).assertAssignment(SESSION_UUID_2, STUDENT_UUID);
+            inOrder.verify(assignmentWriter).assertAssignment(SESSION_UUID_3, STUDENT_UUID);
+        }
+
+        @Test
+        @DisplayName("A failure at claim k throws and attempts no k+1 insert")
+        void failure_at_claim_k_aborts_and_attempts_no_further_insert() {
+            when(sessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(sessionWithCapacity(2, 0)));
+            when(sessionRepository.findById(SESSION_ID_2)).thenReturn(Optional.of(sessionWithCapacity(1, 1)));
+
+            List<SessionClaim> claims = List.of(
+                claim(SESSION_UUID, 1), claim(SESSION_UUID_2, 2), claim(SESSION_UUID_3, 3)
+            );
+
+            assertThatThrownBy(() -> useCase.assignAll(multiCmd(claims)))
+                .isInstanceOf(CapacityBelowAssignedException.class);
+
+            verify(assignmentWriter).assertAssignment(SESSION_UUID, STUDENT_UUID);
+            verify(assignmentWriter, never()).assertAssignment(eq(SESSION_UUID_3), any(UUID.class));
+            verify(sessionRepository, never()).findById(SESSION_ID_3);
+        }
+
+        @Test
+        @DisplayName("N=1 through assignAll matches today's assign behavior")
+        void n_equal_one_through_assign_all_matches_assign_behavior() {
+            when(sessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(sessionWithCapacity(2, 0)));
+
+            CapacityAssignments result = useCase.assignAll(multiCmd(List.of(claim(SESSION_UUID, 1))));
+
+            assertThat(result.assignedSessionIds()).containsExactly(SESSION_UUID);
+            verify(assignmentWriter).assertAssignment(SESSION_UUID, STUDENT_UUID);
         }
     }
 }
