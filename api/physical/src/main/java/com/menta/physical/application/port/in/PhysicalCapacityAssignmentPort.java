@@ -1,7 +1,9 @@
 package com.menta.physical.application.port.in;
 
 import com.menta.physical.application.usecase.AssignmentOutcome;
+import com.menta.physical.application.usecase.CapacityAssignments;
 import com.menta.shared.physical.CapacityAssignmentCommand;
+import com.menta.shared.physical.MultiSessionCapacityAssignmentCommand;
 
 /**
  * Entry port Physical exposes for {@code api:app}'s outbox handler
@@ -29,4 +31,19 @@ public interface PhysicalCapacityAssignmentPort {
      *         design §5.3 — "the SOLE exception type").
      */
     AssignmentOutcome assign(CapacityAssignmentCommand command);
+
+    /**
+     * Ordered, all-or-nothing counterpart of {@link #assign} (design A3):
+     * claims every session in {@code command.claims()}, in that exact
+     * order, under one transaction. A failure on any claim aborts the
+     * entire set — no partial subset is ever persisted.
+     *
+     * @return the assigned session ids, in claim order, when every claim
+     *         succeeded.
+     * @throws com.menta.physical.domain.exception.CapacityBelowAssignedException
+     *         on the first claim that trips the capacity invariant OR a V7
+     *         UNIQUE row collision; every earlier insert in this call is
+     *         rolled back with it.
+     */
+    CapacityAssignments assignAll(MultiSessionCapacityAssignmentCommand command);
 }

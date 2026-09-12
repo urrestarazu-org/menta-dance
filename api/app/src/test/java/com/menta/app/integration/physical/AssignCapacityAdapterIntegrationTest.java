@@ -22,9 +22,13 @@ import com.menta.physical.infrastructure.persistence.entity.PhysicalSessionJpaEn
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityAssignmentJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
+import com.menta.physical.application.usecase.CapacityAssignments;
 import com.menta.shared.physical.CapacityAssignmentCommand;
+import com.menta.shared.physical.MultiSessionCapacityAssignmentCommand;
+import com.menta.shared.physical.MultiSessionCapacityAssignmentCommand.SessionClaim;
 import java.time.Instant;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -145,5 +149,65 @@ class AssignCapacityAdapterIntegrationTest {
         assertThat(assignmentRepository.findAll())
             .as("Capacity-full trip must NOT insert a second row")
             .hasSize(1);
+    }
+
+    /**
+     * PR3 (design A3): {@code assignAll} claims an ordered, all-or-nothing
+     * set of sessions under one {@code REQUIRES_NEW} transaction — real
+     * MySQL/Flyway coverage of the invariant the unit test can only mock.
+     */
+    @Test
+    void assignAll_all_sessions_available_inserts_exactly_n_rows() {
+        UUID session1 = seedSession(2);
+        UUID session2 = seedSession(2);
+        UUID session3 = seedSession(2);
+        UUID studentId = UUID.randomUUID();
+        Instant base = Instant.now();
+
+        MultiSessionCapacityAssignmentCommand command = new MultiSessionCapacityAssignmentCommand(
+            List.of(
+                new SessionClaim(session1, base),
+                new SessionClaim(session2, base.plusSeconds(1)),
+                new SessionClaim(session3, base.plusSeconds(2))
+            ),
+            studentId, UUID.randomUUID()
+        );
+
+        CapacityAssignments result = capacityPort.assignAll(command);
+
+        assertThat(result.assignedSessionIds()).containsExactly(session1, session2, session3);
+        assertThat(assignmentRepository.findAll()).hasSize(3);
+    }
+
+    @Test
+    void assignAll_one_of_three_full_persists_zero_rows_for_that_student() {
+        UUID session1 = seedSession(2);
+        UUID session2 = seedSession(2);
+        UUID session3 = seedSession(1);
+        // Pre-fill session3 with an unrelated student so it reads full.
+        assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
+            UUID.randomUUID(), session3, UUID.randomUUID(), Instant.now()
+        ));
+        UUID studentId = UUID.randomUUID();
+        Instant base = Instant.now();
+
+        MultiSessionCapacityAssignmentCommand command = new MultiSessionCapacityAssignmentCommand(
+            List.of(
+                new SessionClaim(session1, base),
+                new SessionClaim(session2, base.plusSeconds(1)),
+                new SessionClaim(session3, base.plusSeconds(2))
+            ),
+            studentId, UUID.randomUUID()
+        );
+
+        assertThatThrownBy(() -> capacityPort.assignAll(command))
+            .isInstanceOf(CapacityBelowAssignedException.class);
+
+        long rowsForThisStudent = assignmentRepository.findAll().stream()
+            .filter(row -> row.getStudentId().equals(studentId))
+            .count();
+        assertThat(rowsForThisStudent)
+            .as("All-or-nothing: one failed claim in the set must leave literally zero rows for this student")
+            .isZero();
     }
 }

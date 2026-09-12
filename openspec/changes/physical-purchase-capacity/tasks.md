@@ -162,29 +162,29 @@ downstream PRs have one stable base).
 **Branch**: `feature/physical-purchase-capacity-assign-all` off `develop`
 (cut after PR 2 merges; needs PR 2's command type).
 
-- [ ] 3.1 RED: extend `AssignCapacityUseCaseTest.java` — ordered claims are
+- [x] 3.1 RED: extend `AssignCapacityUseCaseTest.java` — ordered claims are
       attempted in list order; a failure at claim k throws and attempts no
       k+1 insert; N=1 through `assignAll` matches today's `assign` behavior.
-- [ ] 3.2 Verify RED: fails on the missing `assignAll` method.
-- [ ] 3.3 GREEN: modify `AssignCapacityUseCase.java` — add
+- [x] 3.2 Verify RED: fails on the missing `assignAll` method.
+- [x] 3.3 GREEN: modify `AssignCapacityUseCase.java` — add
       `assignAll(MultiSessionCapacityAssignmentCommand)` under one
       `@Transactional(propagation = REQUIRES_NEW)` around the ordered loop,
       each iteration reading the live invariant, inserting, and calling
       `flush()` per insert (matches
       `SubscriptionRepositoryAdapter.saveNewCheckout:62-72`); reimplement
       `assign(...)` as a singleton-list delegation to `assignAll`.
-- [ ] 3.4 Modify `application/port/in/PhysicalCapacityAssignmentPort.java` —
+- [x] 3.4 Modify `application/port/in/PhysicalCapacityAssignmentPort.java` —
       add `assignAll(...)`; create `application/usecase/CapacityAssignments.java`
       — typed result `record CapacityAssignments(List<UUID> assignedSessionIds)`.
-- [ ] 3.5 Verify GREEN: `AssignCapacityUseCaseTest` suite green, including all
+- [x] 3.5 Verify GREEN: `AssignCapacityUseCaseTest` suite green, including all
       pre-existing single-session cases.
-- [ ] 3.6 RED: extend `AssignCapacityAdapterIntegrationTest.java` — 3-session
+- [x] 3.6 RED: extend `AssignCapacityAdapterIntegrationTest.java` — 3-session
       set, session 3 full ⇒ zero `physical_capacity_assignments` rows for
       that student (assert literal `COUNT(*) = 0`); success ⇒ exactly N rows.
-- [ ] 3.7 Verify RED then GREEN against the real DB.
-- [ ] 3.8 Verify `PhysicalArchitectureTest` still passes — no dependency on
+- [x] 3.7 Verify RED then GREEN against the real DB.
+- [x] 3.8 Verify `PhysicalArchitectureTest` still passes — no dependency on
       any `com.menta.billing.*` type from the new method.
-- [ ] 3.9 Run `./gradlew :api:physical:test :api:physical:jacocoTestCoverageVerification` — confirms 95%/90% floors.
+- [x] 3.9 Run `./gradlew :api:physical:test :api:physical:jacocoTestCoverageVerification` — confirms 95%/90% floors.
 
 ## PR 4 — `billing`: `CoveragePlanner` (pure function)
 
