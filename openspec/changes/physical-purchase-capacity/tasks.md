@@ -192,21 +192,27 @@ downstream PRs have one stable base).
 `develop` (cut after PR 3 merges for a stable base; independent of PR 2/3's
 content per design's dependency order — can be reviewed in parallel).
 
-- [ ] 4.1 RED: create `CoveragePlannerTest.java`
+- [x] 4.1 RED: create `CoveragePlannerTest.java`
       (`api/billing/.../application/usecase/`): exactly N sessions picked;
       forward extension past a calendar gap never truncates (design A4);
       shortfall inside the `120`-day horizon returns "cannot fill"; horizon
       boundary inclusive/exclusive; `requireAvailable=true` filters
       `availableSpots = 0` (feeds A6's `409`); order is
       `(scheduledAt, sessionId)` with a same-instant tiebreak.
-- [ ] 4.2 Verify RED: fails on the missing class.
-- [ ] 4.3 GREEN: create `CoveragePlanner.java` — pure
-      `plan(List<ScheduledSessionSnapshot>, Instant, int scheduledSessionCount, boolean requireAvailable)`,
-      no Spring, no JPA, `COVERAGE_LOOKAHEAD = 120 days` constant.
-- [ ] 4.4 Verify GREEN: suite green.
-- [ ] 4.5 Verify `BillingArchitectureTest` — `CoveragePlanner` imports no
+- [x] 4.2 Verify RED: fails on the missing class.
+- [x] 4.3 GREEN: create `CoveragePlanner.java` — pure
+      `planMonthly(List<ScheduledSessionSnapshot>, Instant, int scheduledSessionCount, boolean requireAvailable)`
+      and `planIndividual(List<ScheduledSessionSnapshot>, String selectedSessionId, boolean requireAvailable)`,
+      no Spring, no JPA, `COVERAGE_LOOKAHEAD = 120 days` constant. Two named
+      entry points instead of one method with a purchase-type flag, mirroring
+      this module's own `PhysicalCourseQuote.monthly()`/`.individual()`
+      precedent. Result is the sealed `CoveragePlanner.Plan`
+      (`Complete(List<EligibleSession>)` / `Insufficient()`), mirroring
+      `CurrentSubscriptionResult`'s sealed-variant style.
+- [x] 4.4 Verify GREEN: suite green.
+- [x] 4.5 Verify `BillingArchitectureTest` — `CoveragePlanner` imports no
       Spring/JPA type.
-- [ ] 4.6 Run `./gradlew :api:billing:test :api:billing:jacocoTestCoverageVerification` — confirms 100% domain+application.
+- [x] 4.6 Run `./gradlew :api:billing:test :api:billing:jacocoTestCoverageVerification` — confirms 100% domain+application.
 
 ## PR 5 — `PaymentTarget.Physical` → quoteId + purchase creation
 
