@@ -47,8 +47,13 @@ import org.springframework.transaction.annotation.Transactional;
  *      no Redis errors occurred in this tick. This ensures AuthDegradedGuard
  *      sees degraded state when Redis is actually down.
  *
- * Scheduling is wired with @Scheduled(fixedRate) so the cadence is
- * configurable via `auth.outbox.reconcile-rate-ms`. PR3 can tune.
+ * <p>This is the <em>worker</em>: it owns the reconciliation logic and is always present in the
+ * context, so anything that needs to reconcile on demand can autowire it and call
+ * {@link #tick()} or {@link #processBatch()} directly. The periodic cadence lives in
+ * {@link OutboxBlacklistReconcilerTrigger}, a separate bean gated by
+ * {@code auth.outbox.reconcile.enabled} — the same worker/trigger split billing already uses for
+ * {@code SubscriptionExpiryWorker} and {@code SubscriptionExpiryReconciler}, and for the same
+ * reason: turning the schedule off must not take the behaviour with it (#172).</p>
  */
 @Component
 public class OutboxBlacklistReconciler {
@@ -76,10 +81,10 @@ public class OutboxBlacklistReconciler {
     }
 
     /**
-     * Public for tests + Spring scheduler entry. Production callers do NOT
-     * invoke this directly — the @Scheduled annotation drives the cadence.
+     * One reconciliation pass. Driven periodically by
+     * {@link OutboxBlacklistReconcilerTrigger}, and directly by tests that need a deterministic
+     * pass instead of waiting on a schedule.
      */
-    @Scheduled(fixedRateString = "${auth.outbox.reconcile-rate-ms:5000}")
     public void tick() {
         processBatch();
     }
