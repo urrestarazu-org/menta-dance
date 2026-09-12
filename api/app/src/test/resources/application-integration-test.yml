@@ -50,6 +50,22 @@ billing:
     expiry:
       enabled: false
 
+# Same defect, same reasoning, different job (#172). The reconciler's first tick calls the VOID
+# tokenBlacklistPort.writeHeartbeat(), and TokenBlacklistPort is a @MockBean in nearly every
+# integration context here. Mockito's ongoing-stubbing state is per-mock, not per-thread, so a
+# scheduler thread landing between a test's own invocation on that mock and the when(...)
+# wrapping it makes Mockito believe the void method is the one being stubbed — the failure then
+# surfaces as CannotStubVoidMethodWithReturnValue from a @BeforeEach that never mentioned the
+# reconciler. Raising auth.outbox.reconcile-rate-ms cannot help, for the reason spelled out above.
+#
+# This switches off OutboxBlacklistReconcilerTrigger only. The reconciler itself stays in the
+# context: AuthRevocationIntegrationTest autowires it and drives processBatch() by hand, so
+# removing the worker along with its schedule would break that test's startup outright.
+auth:
+  outbox:
+    reconcile:
+      enabled: false
+
 # Logging for integration tests
 logging:
   level:
