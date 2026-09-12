@@ -143,19 +143,19 @@ review it in isolation, before anything else depends on the new shape.
 (cut after PR 1 merges; independent of PR 1's content, sequenced second so
 downstream PRs have one stable base).
 
-- [ ] 2.1 RED: create `MultiSessionCapacityAssignmentCommandTest.java`
+- [x] 2.1 RED: create `MultiSessionCapacityAssignmentCommandTest.java`
       (`api/shared/.../physical/`, mirrors `CapacityAssignmentCommandTest.java`):
       rejects empty claims, duplicate `sessionId`, and a non-ascending
       `(scheduledAt, sessionId)` list; accepts a correctly ordered list;
       defensive-copies the input list.
-- [ ] 2.2 Verify RED: fails on the missing class, not a typo.
-- [ ] 2.3 GREEN: create `MultiSessionCapacityAssignmentCommand.java` — record
+- [x] 2.2 Verify RED: fails on the missing class, not a typo.
+- [x] 2.3 GREEN: create `MultiSessionCapacityAssignmentCommand.java` — record
       with nested `SessionClaim(sessionId, scheduledAt)`, `studentId`,
       `paymentId`; compact constructor enforces design A2's total order
       (`List.copyOf`, non-null, non-empty, no duplicate `sessionId`, strictly
       ascending by `(scheduledAt, sessionId)`).
-- [ ] 2.4 Verify GREEN: suite green.
-- [ ] 2.5 Run `./gradlew :api:shared:test` — no coverage floor regression.
+- [x] 2.4 Verify GREEN: suite green.
+- [x] 2.5 Run `./gradlew :api:shared:test` — no coverage floor regression.
 
 ## PR 3 — `api:physical`: ordered all-or-nothing `assignAll`
 
