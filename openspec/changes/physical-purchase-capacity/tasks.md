@@ -219,28 +219,60 @@ content per design's dependency order — can be reviewed in parallel).
 **Branch**: `feature/physical-purchase-capacity-payment-target` off
 `develop` (cut after PR 4 merges; needs PR 1's `Purchase` list shape).
 
-- [ ] 5.1 RED: extend `PaymentTargetTest.java` — `Physical`'s reference is
+- [x] 5.1 RED: extend `PaymentTargetTest.java` — `Physical`'s reference is
       documented and treated as a `quoteId`, not a `sessionId`; javadoc
       updated on the type itself.
-- [ ] 5.2 GREEN: modify `domain/model/PaymentTarget.java` — update javadoc
+- [x] 5.2 GREEN: modify `domain/model/PaymentTarget.java` — update javadoc
       only (no field/shape change; the column stays `VARCHAR`, only the
       meaning of new values changes per design A5).
-- [ ] 5.3 RED: extend `PublishPhysicalPaymentCompletedUseCaseTest.java` —
+      **Deviation**: interpreted "no field/shape change" as referring to the
+      DB persistence shape (column stays `VARCHAR`, no migration — matching
+      design A5's own wording), not the Java record's accessor name. Renamed
+      the record component `sessionId` → `quoteId` (compact-constructor
+      variable and message too) so the accessor itself is honest, per this
+      session's explicit direction ("el código no debe mentir"). This forced
+      an atomic fix of every `.sessionId()` caller across `api:billing` and
+      `api:app` (see 5.4/5.5 and the outbox-handler note below) since Java
+      cannot compile a partially-renamed public accessor.
+- [x] 5.3 RED: extend `PublishPhysicalPaymentCompletedUseCaseTest.java` —
       the outbox payload's `targetReference` carries the quoteId, not the
       old session id; update the test fixture accordingly.
-- [ ] 5.4 GREEN: modify `PublishPhysicalPaymentCompletedUseCase.java:95` —
+- [x] 5.4 GREEN: modify `PublishPhysicalPaymentCompletedUseCase.java:95` —
       pass the quoteId to the payload; update its javadoc to stop describing
       the field as a session id.
-- [ ] 5.5 Modify `PaymentCompletedOutboxPayload.java` javadoc — `targetReference`
-      now documented as the quoteId, not the sessionId.
-- [ ] 5.6 RED: extend `CreatePurchaseFromPaymentEventUseCaseTest.java` —
+- [x] 5.5 Modify `PaymentCompletedOutboxPayload.java` javadoc — `targetReference`
+      now documented as the quoteId, not the sessionId. Field name
+      `targetReference` was already generic (not misleading) — kept as is,
+      per this session's explicit "only rename if the current name would be
+      misleading" guidance.
+- [x] 5.6 RED: extend `CreatePurchaseFromPaymentEventUseCaseTest.java` —
       accepts the resolved eligible-session list (not a single id); creates
       one `Purchase` covering all of them; re-delivery for the same
       `payment_id` is idempotent and yields the same session set (spec
       scenario 5).
-- [ ] 5.7 GREEN: modify `CreatePurchaseFromPaymentEventUseCase.java` — accept
+- [x] 5.7 GREEN: modify `CreatePurchaseFromPaymentEventUseCase.java` — accept
       the resolved session list; `payment_id` idempotency key unchanged.
-- [ ] 5.8 Run `./gradlew :api:billing:test :api:billing:jacocoTestCoverageVerification` — 100%/85% floors hold.
+      Also updated `PurchaseCreationFromEventPort`'s signature (necessary
+      companion change for the port/impl pair to compile).
+- [x] 5.9 (added — explicit user direction this session, not in the original
+      task list) Light-touch update to
+      `PhysicalCapacityAssignmentOutboxEventHandler.java:86,98` — renamed the
+      consumed value from `physical.sessionId()` to `physical.quoteId()`
+      (required for compilation after 5.2's rename) via an explicit local
+      `quoteId` variable, added a `TODO(#41 PR6)` comment and a javadoc
+      section stating that real multi-session resolution via
+      `CoveragePlanner` + `assignAll` is PR6's job — this PR keeps the exact
+      N=1 pass-through behavior unchanged. Updated
+      `PurchaseCreationFromEventPort`'s new second argument at this call
+      site (`List.of(quoteId)`, singleton, matching prior behavior) and the
+      3 `createPurchaseFromPaymentEvent(any())` mock verifications in
+      `PhysicalCapacityAssignmentOutboxEventHandlerTest.java` to
+      `(any(), any())` — no functional/logic change, compile-compatibility
+      only. **Found a 4th production call site not named in this session's
+      three**: `PaymentJpaMapper.java:58` (`physical.sessionId()`, the
+      domain→entity write-side mapping, sibling to the already-known
+      read-side `PaymentJpaMapper.java:52`) — updated to `.quoteId()`.
+- [x] 5.8 Run `./gradlew :api:billing:test :api:billing:jacocoTestCoverageVerification` — 100%/85% floors hold.
 
 ## PR 6 — `api:app`: wiring the outbox handler to N sessions
 

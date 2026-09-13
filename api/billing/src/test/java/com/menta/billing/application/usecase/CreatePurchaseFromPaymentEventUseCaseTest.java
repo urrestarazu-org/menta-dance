@@ -20,6 +20,7 @@ import com.menta.billing.domain.model.Purchase;
 import com.menta.shared.billing.PaymentCompletedOutboxPayload;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,8 +40,12 @@ class CreatePurchaseFromPaymentEventUseCaseTest {
 
     private static final UUID PAYMENT_UUID = UUID.fromString("55555555-5555-5555-5555-555555555555");
     private static final PaymentId PAYMENT_ID = PaymentId.of(PAYMENT_UUID);
-    private static final String SESSION_ID = "33333333-3333-3333-3333-333333333333";
-    private static final String SESSION_REF = SESSION_ID;
+    // The payload's targetReference is now the quoteId (design A5) — decoupled
+    // from the eligible session list, which the caller resolves separately
+    // (via CoveragePlanner in PR6) and passes in explicitly.
+    private static final String QUOTE_REF = "77777777-7777-7777-7777-777777777777";
+    private static final String SESSION_REF = "33333333-3333-3333-3333-333333333333";
+    private static final List<String> ONE_ELIGIBLE_SESSION = List.of(SESSION_REF);
 
     private PurchaseRepository purchaseRepository;
     private CreatePurchaseFromPaymentEventUseCase useCase;
@@ -54,7 +59,7 @@ class CreatePurchaseFromPaymentEventUseCaseTest {
 
     private static PaymentCompletedOutboxPayload payload() {
         return new PaymentCompletedOutboxPayload(
-            PAYMENT_UUID, "mp-1", "ext-1", "merchant-1", SESSION_REF,
+            PAYMENT_UUID, "mp-1", "ext-1", "merchant-1", QUOTE_REF,
             BigDecimal.TEN, "ARS", Instant.parse("2026-08-24T13:00:00Z")
         );
     }
@@ -67,11 +72,23 @@ class CreatePurchaseFromPaymentEventUseCaseTest {
         void builds_pendingFulfillment_then_saves_when_no_existing_row() {
             when(purchaseRepository.findByPaymentId(PAYMENT_ID)).thenReturn(Optional.empty());
 
-            Purchase result = useCase.createPurchaseFromPaymentEvent(payload());
+            Purchase result = useCase.createPurchaseFromPaymentEvent(payload(), ONE_ELIGIBLE_SESSION);
 
             assertThat(result.getStatus()).isEqualTo(FulfillmentStatus.PENDING_FULFILLMENT);
             assertThat(result.getPaymentId()).isEqualTo(PAYMENT_ID);
             assertThat(result.getPhysicalSessionIds()).containsExactly(SESSION_REF);
+            verify(purchaseRepository, times(1)).save(any(Purchase.class));
+        }
+
+        @Test
+        void covers_every_session_in_the_resolved_eligible_set_for_a_monthly_purchase() {
+            List<String> monthlyEligibleSessions = List.of("s1", "s2", "s3");
+            when(purchaseRepository.findByPaymentId(PAYMENT_ID)).thenReturn(Optional.empty());
+
+            Purchase result = useCase.createPurchaseFromPaymentEvent(payload(), monthlyEligibleSessions);
+
+            assertThat(result.getPhysicalSessionIds()).containsExactly("s1", "s2", "s3");
+            assertThat(result.getStatus()).isEqualTo(FulfillmentStatus.PENDING_FULFILLMENT);
             verify(purchaseRepository, times(1)).save(any(Purchase.class));
         }
     }
@@ -82,10 +99,10 @@ class CreatePurchaseFromPaymentEventUseCaseTest {
 
         @Test
         void returns_existing_pendingFulfillment_without_saving() {
-            Purchase existing = Purchase.pendingFulfillment(PAYMENT_ID, java.util.List.of(SESSION_REF));
+            Purchase existing = Purchase.pendingFulfillment(PAYMENT_ID, ONE_ELIGIBLE_SESSION);
             when(purchaseRepository.findByPaymentId(PAYMENT_ID)).thenReturn(Optional.of(existing));
 
-            Purchase result = useCase.createPurchaseFromPaymentEvent(payload());
+            Purchase result = useCase.createPurchaseFromPaymentEvent(payload(), ONE_ELIGIBLE_SESSION);
 
             assertThat(result).isSameAs(existing);
             verify(purchaseRepository, never()).save(any(Purchase.class));
@@ -93,10 +110,10 @@ class CreatePurchaseFromPaymentEventUseCaseTest {
 
         @Test
         void returns_existing_assigned_without_saving() {
-            Purchase existing = Purchase.pendingFulfillment(PAYMENT_ID, java.util.List.of(SESSION_REF)).assigned();
+            Purchase existing = Purchase.pendingFulfillment(PAYMENT_ID, ONE_ELIGIBLE_SESSION).assigned();
             when(purchaseRepository.findByPaymentId(PAYMENT_ID)).thenReturn(Optional.of(existing));
 
-            Purchase result = useCase.createPurchaseFromPaymentEvent(payload());
+            Purchase result = useCase.createPurchaseFromPaymentEvent(payload(), ONE_ELIGIBLE_SESSION);
 
             assertThat(result).isSameAs(existing);
             verify(purchaseRepository, never()).save(any(Purchase.class));
@@ -104,14 +121,27 @@ class CreatePurchaseFromPaymentEventUseCaseTest {
 
         @Test
         void rebuilds_when_existing_is_EXCEPTION_per_iso_double_recovery() {
-            Purchase exception = Purchase.pendingFulfillment(PAYMENT_ID, java.util.List.of(SESSION_REF)).exception();
+            Purchase exception = Purchase.pendingFulfillment(PAYMENT_ID, ONE_ELIGIBLE_SESSION).exception();
             when(purchaseRepository.findByPaymentId(PAYMENT_ID))
                 .thenReturn(Optional.of(exception));
 
-            Purchase result = useCase.createPurchaseFromPaymentEvent(payload());
+            Purchase result = useCase.createPurchaseFromPaymentEvent(payload(), ONE_ELIGIBLE_SESSION);
 
             assertThat(result.getStatus()).isEqualTo(FulfillmentStatus.PENDING_FULFILLMENT);
             verify(purchaseRepository, times(1)).save(any(Purchase.class));
+        }
+
+        @Test
+        void re_delivery_yields_the_same_session_set_never_a_different_one() {
+            Purchase existing = Purchase.pendingFulfillment(PAYMENT_ID, List.of("s1", "s2", "s3"));
+            when(purchaseRepository.findByPaymentId(PAYMENT_ID)).thenReturn(Optional.of(existing));
+
+            // Re-delivery passes a freshly-resolved set again (e.g. CoveragePlanner
+            // re-run in PR6); idempotency must still surface the ORIGINAL set.
+            Purchase result = useCase.createPurchaseFromPaymentEvent(payload(), List.of("s1", "s2", "s3"));
+
+            assertThat(result.getPhysicalSessionIds()).containsExactly("s1", "s2", "s3");
+            verify(purchaseRepository, never()).save(any(Purchase.class));
         }
     }
 
@@ -121,7 +151,7 @@ class CreatePurchaseFromPaymentEventUseCaseTest {
 
         @Test
         void recovers_by_re_fetching_when_save_throws_DataIntegrityViolationException() {
-            Purchase existing = Purchase.pendingFulfillment(PAYMENT_ID, java.util.List.of(SESSION_REF));
+            Purchase existing = Purchase.pendingFulfillment(PAYMENT_ID, ONE_ELIGIBLE_SESSION);
             // First findByPaymentId() returns empty (handler-A inserted first
             // but not committed yet). Then save() raises DIV. Then the second
             // findByPaymentId() returns the now-committed row.
@@ -132,7 +162,7 @@ class CreatePurchaseFromPaymentEventUseCaseTest {
                 "Duplicate entry for key 'uq_billing_purchases_payment_id'"))
                 .when(purchaseRepository).save(any(Purchase.class));
 
-            Purchase result = useCase.createPurchaseFromPaymentEvent(payload());
+            Purchase result = useCase.createPurchaseFromPaymentEvent(payload(), ONE_ELIGIBLE_SESSION);
 
             assertThat(result).isSameAs(existing);
             verify(purchaseRepository, times(2)).findByPaymentId(PAYMENT_ID);
@@ -148,7 +178,7 @@ class CreatePurchaseFromPaymentEventUseCaseTest {
             when(purchaseRepository.findByPaymentId(any(PaymentId.class)))
                 .thenThrow(new PaymentNotFoundException(PAYMENT_ID));
 
-            assertThatThrownBy(() -> useCase.createPurchaseFromPaymentEvent(payload()))
+            assertThatThrownBy(() -> useCase.createPurchaseFromPaymentEvent(payload(), ONE_ELIGIBLE_SESSION))
                 .isInstanceOf(PaymentNotFoundException.class);
         }
     }

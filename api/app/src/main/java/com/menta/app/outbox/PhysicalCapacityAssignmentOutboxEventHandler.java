@@ -37,6 +37,15 @@ import org.springframework.stereotype.Component;
  * through {@link MarkPurchaseExceptionAdapter} with
  * {@link Reason#TARGET_NOT_SCHEDULED} — a conservative terminal
  * classification rather than a silent dead-letter.</p>
+ *
+ * <h2>Interim single-session behavior (PR5 of #41 US-PHYSICAL-004)</h2>
+ * <p>{@link com.menta.billing.domain.model.PaymentTarget.Physical}'s
+ * reference is now the {@code quoteId}, not a session id (design A5). This
+ * handler does NOT yet resolve it into the real eligible-session set — that
+ * requires loading the quote and running Billing's {@code CoveragePlanner}
+ * ({@code MONTHLY} vs. {@code INDIVIDUAL} coverage), which is #41's PR6. For
+ * now the quoteId is passed through exactly as the old sessionId was,
+ * preserving today's N=1 behavior verbatim until PR6 lands.</p>
  */
 @Component
 public class PhysicalCapacityAssignmentOutboxEventHandler implements OutboxEventHandler {
@@ -92,10 +101,18 @@ public class PhysicalCapacityAssignmentOutboxEventHandler implements OutboxEvent
             return;
         }
 
-        purchaseCreationFromEventPort.createPurchaseFromPaymentEvent(payload);
+        // TODO(#41 PR6): physical.quoteId() is the quote reference (design A5),
+        // not a session id. Real resolution loads the quote and runs
+        // CoveragePlanner (MONTHLY -> N sessions, INDIVIDUAL -> selectedSessionId),
+        // then builds a MultiSessionCapacityAssignmentCommand and calls
+        // assignAll(...) instead of the single-session path below. Until then,
+        // the quoteId is passed through unchanged, preserving today's N=1
+        // behavior verbatim.
+        String quoteId = physical.quoteId();
+        purchaseCreationFromEventPort.createPurchaseFromPaymentEvent(payload, java.util.List.of(quoteId));
 
         CapacityAssignmentCommand cmd = new CapacityAssignmentCommand(
-            UUID.fromString(physical.sessionId()),
+            UUID.fromString(quoteId),
             payment.getUserId(),
             payload.paymentId()
         );

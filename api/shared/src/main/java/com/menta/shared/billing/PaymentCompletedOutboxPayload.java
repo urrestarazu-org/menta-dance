@@ -29,7 +29,9 @@ import java.util.UUID;
  * @param providerPaymentId the Mercado Pago payment id, already bound to this local payment by the webhook flow.
  * @param externalReference the merchant-side correlation key established by the checkout flow.
  * @param merchantAccountId the merchant account (matches expected merchant from the buyer-facing checkout).
- * @param targetReference the {@link com.menta.billing.domain.model.PaymentTarget.Physical#sessionId()} reference.
+ * @param targetReference the {@link com.menta.billing.domain.model.PaymentTarget.Physical#quoteId()} this
+ *     payment funds (design A5) — a single session id cannot represent a {@code MONTHLY} purchase, so the
+ *     consumer resolves the concrete eligible session(s) from this quote only at confirmation time.
  * @param amount gross amount captured by the provider.
  * @param currency ISO-4217 currency code (3 chars).
  * @param confirmedAt instant the payment reached {@link com.menta.billing.domain.model.PaymentStatus.Completed}.

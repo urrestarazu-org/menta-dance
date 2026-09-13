@@ -151,7 +151,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
 
             handler.handle(rowWithPayload(payload()));
 
-            verify(purchaseCreationFromEventPort, times(1)).createPurchaseFromPaymentEvent(any());
+            verify(purchaseCreationFromEventPort, times(1)).createPurchaseFromPaymentEvent(any(), any());
             verify(physicalCapacityAssignmentPort, times(1)).assign(
                 org.mockito.ArgumentMatchers.eq(new CapacityAssignmentCommand(
                     SESSION_UUID, STUDENT_UUID, PAYMENT_UUID
@@ -192,7 +192,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
             handler.handle(rowWithPayload(payload()));
             handler.handle(rowWithPayload(payload()));
 
-            verify(purchaseCreationFromEventPort, times(2)).createPurchaseFromPaymentEvent(any());
+            verify(purchaseCreationFromEventPort, times(2)).createPurchaseFromPaymentEvent(any(), any());
             verify(physicalCapacityAssignmentPort, times(2)).assign(any());
         }
     }
@@ -211,7 +211,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
                 org.mockito.ArgumentMatchers.eq(PAYMENT_ID),
                 org.mockito.ArgumentMatchers.eq(Reason.TARGET_NOT_SCHEDULED)
             );
-            verify(purchaseCreationFromEventPort, never()).createPurchaseFromPaymentEvent(any());
+            verify(purchaseCreationFromEventPort, never()).createPurchaseFromPaymentEvent(any(), any());
             verify(physicalCapacityAssignmentPort, never()).assign(any());
         }
     }

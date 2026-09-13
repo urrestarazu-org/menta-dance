@@ -84,6 +84,7 @@ public final class PublishPhysicalPaymentCompletedUseCase {
     }
 
     private static PaymentCompletedOutboxPayload toPayload(Payment payment) {
+        String quoteId = ((PaymentTarget.Physical) payment.getTarget()).quoteId();
         return new PaymentCompletedOutboxPayload(
             payment.getId().getValue(),
             payment.getProviderPaymentId()
@@ -92,7 +93,7 @@ public final class PublishPhysicalPaymentCompletedUseCase {
                 )),
             payment.getExpectedExternalReference(),
             payment.getExpectedMerchantAccountId(),
-            ((PaymentTarget.Physical) payment.getTarget()).sessionId(),
+            quoteId,
             payment.getExpectedAmount().getAmount(),
             payment.getExpectedAmount().getCurrency(),
             ((PaymentStatus.Completed) payment.getStatus()).confirmedAt()

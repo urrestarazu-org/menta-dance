@@ -55,7 +55,7 @@ public final class PaymentJpaMapper {
 
     private static TargetColumns toTargetColumns(PaymentTarget target) {
         return switch (target) {
-            case PaymentTarget.Physical physical -> new TargetColumns("PHYSICAL", physical.sessionId());
+            case PaymentTarget.Physical physical -> new TargetColumns("PHYSICAL", physical.quoteId());
             case PaymentTarget.Virtual virtual -> new TargetColumns("VIRTUAL", virtual.planId());
         };
     }
