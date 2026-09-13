@@ -8,12 +8,12 @@ import org.junit.jupiter.api.Test;
 class PaymentTargetTest {
 
     @Test
-    void physical_exposes_the_session_id() {
-        assertThat(new PaymentTarget.Physical("session-1").sessionId()).isEqualTo("session-1");
+    void physical_exposes_the_quote_id() {
+        assertThat(new PaymentTarget.Physical("quote-1").quoteId()).isEqualTo("quote-1");
     }
 
     @Test
-    void physical_rejects_null_or_blank_session_id() {
+    void physical_rejects_null_or_blank_quote_id() {
         assertThatThrownBy(() -> new PaymentTarget.Physical(null)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new PaymentTarget.Physical(" ")).isInstanceOf(IllegalArgumentException.class);
     }
