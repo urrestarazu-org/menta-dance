@@ -22,15 +22,16 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>Read {@link PurchaseRepository#findByPaymentId(PaymentId)}.</li>
  *   <li>If present AND non-EXCEPTION → return existing; never save.</li>
  *   <li>If absent OR existing is EXCEPTION (recovery) → build
- *       {@link Purchase#pendingFulfillment(PaymentId, java.util.List)} and
- *       save. The save never re-resurrects a settled purchase.
+ *       {@link Purchase#pendingFulfillment(PaymentId, java.util.List)} from
+ *       the caller-resolved {@code eligibleSessionIds} and save. The save
+ *       never re-resurrects a settled purchase.
  *
- *       <p>Still single-session here (design A1's schema exists in this PR,
- *       but resolving the full eligible-session list is #41's PR5 —
- *       {@code CreatePurchaseFromPaymentEventUseCase} keeps accepting one
- *       {@code targetReference} today and wraps it in a singleton list so
- *       this class compiles against {@link Purchase}'s new list-based shape
- *       without pre-empting PR5's actual multi-session resolution work).</p></li>
+ *       <p>{@code payload.targetReference()} is now the {@code quoteId}
+ *       (design A5) and is no longer used to derive the session set here —
+ *       a single reference cannot represent a {@code MONTHLY} purchase's N
+ *       sessions. The caller resolves the concrete eligible-session list
+ *       (Billing's {@code CoveragePlanner}, wired from {@code api:app}) and
+ *       passes it explicitly.</p></li>
  *   <li>If save raises {@link DataIntegrityViolationException} against V8
  *       line 31 {@code uq_billing_purchases_payment_id} (UNIQUE collision
  *       with a concurrent handler) → re-fetch and return whatever is there.</li>
@@ -50,13 +51,16 @@ public class CreatePurchaseFromPaymentEventUseCase implements PurchaseCreationFr
 
     @Override
     @Transactional(propagation = Propagation.REQUIRED)
-    public Purchase createPurchaseFromPaymentEvent(PaymentCompletedOutboxPayload payload) {
+    public Purchase createPurchaseFromPaymentEvent(
+        PaymentCompletedOutboxPayload payload,
+        List<String> eligibleSessionIds
+    ) {
         PaymentId paymentId = PaymentId.of(payload.paymentId());
         Optional<Purchase> existing = purchaseRepository.findByPaymentId(paymentId);
         if (existing.isPresent() && existing.get().getStatus() != FulfillmentStatus.EXCEPTION) {
             return existing.get();
         }
-        Purchase pending = Purchase.pendingFulfillment(paymentId, List.of(payload.targetReference()));
+        Purchase pending = Purchase.pendingFulfillment(paymentId, eligibleSessionIds);
         try {
             return purchaseRepository.save(pending);
         } catch (DataIntegrityViolationException concurrentInsert) {

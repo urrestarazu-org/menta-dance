@@ -21,16 +21,22 @@ package com.menta.billing.domain.model;
 public sealed interface PaymentTarget {
 
     /**
-     * Funds one place in a scheduled physical session.
+     * Funds a physical-course purchase priced by a {@code PhysicalCourseQuote}.
      *
-     * <p>After confirmation, {@code api:app} converts the existing hold and
-     * assigns capacity. The {@code sessionId} is a reference only; Billing
-     * never owns, loads, or writes the Physical module's session entity.
+     * <p>The reference is the {@code quoteId}, not a session id (design A5):
+     * a {@code MONTHLY} purchase has no single session to represent, only a
+     * quote that snapshots {@code purchaseType}, {@code courseId},
+     * {@code scheduledSessionCount} and {@code selectedSessionId} —
+     * everything confirmation needs. At confirmation time, {@code api:app}
+     * resolves this quote into the concrete eligible session set (Billing's
+     * {@code CoveragePlanner}) and assigns capacity for each of them; Billing
+     * never owns, loads, or writes the Physical module's session entities
+     * directly.
      */
-    record Physical(String sessionId) implements PaymentTarget {
+    record Physical(String quoteId) implements PaymentTarget {
         public Physical {
-            if (sessionId == null || sessionId.isBlank()) {
-                throw new IllegalArgumentException("sessionId cannot be null or blank");
+            if (quoteId == null || quoteId.isBlank()) {
+                throw new IllegalArgumentException("quoteId cannot be null or blank");
             }
         }
     }
