@@ -379,7 +379,7 @@ content per design's dependency order — can be reviewed in parallel).
 shape — could theoretically branch off PR 5, but sequenced after PR 6 to
 keep `develop` linear for this change).
 
-- [ ] 7.1 RED: create `CreatePhysicalPurchaseCheckoutUseCaseImplTest.java`
+- [x] 7.1 RED: create `CreatePhysicalPurchaseCheckoutUseCaseImplTest.java`
       (Mockito + fixed `Clock`, mirrors `CreateSubscriptionCheckoutUseCaseImplTest.java`):
       expired quote → `PhysicalCourseQuoteExpiredException`, no
       `paymentRepository.save` call; visibly-full quote (planner with
@@ -388,30 +388,43 @@ keep `develop` linear for this change).
       authenticated principal (never the request body), writes `Payment`
       before calling the provider; same idempotency key replays identical
       checkout data, creates no second `Payment`.
-- [ ] 7.2 Verify RED: fails on the missing use case class.
-- [ ] 7.3 GREEN: create `domain/exception/PhysicalCapacityUnavailableException.java`
-      — `BusinessException`, code `CAPACITY_UNAVAILABLE`.
-- [ ] 7.4 GREEN: create `CreatePhysicalPurchaseCheckoutUseCaseImpl.java` +
+- [x] 7.2 Verify RED: fails on the missing use case class (confirmed with
+      `--rerun-tasks`: 23 real `cannot find symbol` compiler errors, not a
+      typo).
+- [x] 7.3 GREEN: create `domain/exception/PhysicalCapacityUnavailableException.java`
+      — `BusinessException`, code `CAPACITY_UNAVAILABLE`. Also created
+      `domain/exception/PhysicalCourseQuoteExpiredException.java` (code
+      `PHYSICAL_COURSE_QUOTE_EXPIRED`), referenced by 7.1 but with no
+      explicit creation sub-task of its own.
+- [x] 7.4 GREEN: create `CreatePhysicalPurchaseCheckoutUseCaseImpl.java` +
       its in-port + DTOs — validity check first (410 before 409, design A7),
       then `CoveragePlanner.plan(..., clock.now(), requireAvailable=true)`,
       then `Payment.awaitingProvider(PaymentTarget.Physical(quoteId))` + MP
       preference.
-- [ ] 7.5 Verify GREEN: suite green.
-- [ ] 7.6 RED: create `PhysicalPurchaseControllerTest.java` — 401 without a
+- [x] 7.5 Verify GREEN: suite green — 12/12 in
+      `CreatePhysicalPurchaseCheckoutUseCaseImplTest`, verified against the
+      real JUnit XML (`tests="12" failures="0" errors="0"`).
+- [x] 7.6 RED: create `PhysicalPurchaseControllerTest.java` — 401 without a
       token (threat-matrix routing case, design's Threat Matrix section);
       missing `quoteId`/`paymentMethod`/idempotency key rejected before any
       `Payment` row; expired quote → `410` with a quote-expired ProblemDetail
       code; visibly-full quote → `409` with a `CAPACITY_UNAVAILABLE`
       ProblemDetail code, distinct from `410`.
-- [ ] 7.7 Verify RED: fails on the missing controller.
-- [ ] 7.8 GREEN: create `PhysicalPurchaseController.java` + exception
+- [x] 7.7 Verify RED: fails on the missing controller (real `cannot find
+      symbol` compiler errors, verified with `--rerun-tasks`).
+- [x] 7.8 GREEN: create `PhysicalPurchaseController.java` + exception
       handler entries + request/response DTOs — `POST
       /api/v1/billing/physical/purchases`; resolve `actingUserId` from the
       token exactly as `SubscriptionController` does.
-- [ ] 7.9 Modify `BillingConfiguration.java` — wire the new use-case bean.
-- [ ] 7.10 Verify `BillingArchitectureTest` — the checkout use case
-      references no `com.menta.physical.*` type.
-- [ ] 7.11 Run `./gradlew :api:billing:test :api:billing:jacocoTestCoverageVerification` — 100%/85% floors hold.
+- [x] 7.9 Modify `BillingConfiguration.java` — wire the new use-case bean.
+- [x] 7.10 Verify `ArchitectureTest` (this module's only ArchUnit suite;
+      `BillingArchitectureTest` does not exist as a separate class) — added
+      an explicit rule forbidding `com.menta.physical..` from
+      `CreatePhysicalPurchaseCheckoutUseCaseImpl`. Also structurally
+      enforced: `api:billing`'s `build.gradle.kts` has no dependency on
+      `api:physical` at all, so this is a compile-time guarantee, not only a
+      test.
+- [x] 7.11 Run `./gradlew :api:billing:test :api:billing:jacocoTestCoverageVerification` — 100%/85% floors hold.
 
 ## PR 8 — OpenAPI + end-to-end integration
 

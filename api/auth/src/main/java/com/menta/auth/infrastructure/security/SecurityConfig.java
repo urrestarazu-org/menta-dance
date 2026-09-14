@@ -61,6 +61,12 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *     (US-BILLING-010, #116; the subscription and its payment are bound to
  *     the token's user — the client never says whose they are. Same
  *     explicit-matcher reasoning as the quotes rule above.)
+ *   - POST /api/v1/billing/physical/purchases → authenticated (any role)
+ *     (#41, US-PHYSICAL-004; the purchase's Payment is bound to the token's
+ *     user, never a body field. Unmapped otherwise, which would fall through
+ *     to anyRequest()'s permissive default grant — same explicit-matcher
+ *     reasoning as #32's GET /subscriptions/me rule below, verified with a
+ *     real security-filter-chain test in SecurityConfigTest.)
  *   - DELETE /api/v1/billing/subscriptions/me → authenticated (any role)
  *     (US-BILLING-011, #130; self-service cancellation of the caller's own
  *     subscription. The POST rule above is method-scoped and does not cover
@@ -205,6 +211,10 @@ public class SecurityConfig {
                 // before anyRequest(), same first-match-wins ordering as #37 and #34.
                 // The owning user comes from the token, never from the body.
                 .requestMatchers(HttpMethod.POST, "/api/v1/billing/subscriptions").authenticated()
+                // #41, US-PHYSICAL-004: any authenticated user may open a physical purchase
+                // checkout. Otherwise unmapped, so it would fall through to anyRequest()'s
+                // permissive default grant without this explicit matcher.
+                .requestMatchers(HttpMethod.POST, "/api/v1/billing/physical/purchases").authenticated()
                 // US-BILLING-011, #130: self-service cancellation is DELETE, a different HTTP
                 // method than the POST rule immediately above — Spring Security matches per
                 // method, so it needs its own explicit entry or it falls through to a grant via

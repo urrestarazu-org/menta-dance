@@ -68,6 +68,23 @@ class ArchitectureTest {
             .check(classes);
     }
 
+    /**
+     * #41, US-PHYSICAL-004 (design "Checkout never references
+     * {@code api:physical}"). Also structurally guaranteed at compile time —
+     * {@code api:billing}'s {@code build.gradle.kts} has no dependency on
+     * {@code api:physical} at all — but this rule keeps the boundary
+     * self-documenting for the specific checkout use case even if that
+     * ever changes.
+     */
+    @Test
+    void checkout_use_case_should_not_depend_on_physical_module() {
+        noClasses()
+            .that().haveSimpleName("CreatePhysicalPurchaseCheckoutUseCaseImpl")
+            .should().dependOnClassesThat().resideInAPackage("com.menta.physical..")
+            .allowEmptyShould(true)
+            .check(classes);
+    }
+
     @Test
     void layered_architecture_should_be_respected() {
         layeredArchitecture()

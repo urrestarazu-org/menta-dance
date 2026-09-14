@@ -3,6 +3,7 @@ package com.menta.billing.infrastructure.config;
 import com.menta.billing.application.port.in.AssignTrialSubscriptionUseCase;
 import com.menta.billing.application.port.in.CancelSubscriptionUseCase;
 import com.menta.billing.application.port.in.CreatePhysicalCourseQuoteUseCase;
+import com.menta.billing.application.port.in.CreatePhysicalPurchaseCheckoutUseCase;
 import com.menta.billing.application.port.in.CreateSubscriptionCheckoutUseCase;
 import com.menta.billing.application.port.in.GetCurrentSubscriptionUseCase;
 import com.menta.billing.application.port.in.GetPhysicalCoursePricingUseCase;
@@ -32,6 +33,7 @@ import com.menta.billing.application.port.out.WebhookSignatureVerifier;
 import com.menta.billing.application.usecase.AssignTrialSubscriptionUseCaseImpl;
 import com.menta.billing.application.usecase.CancelSubscriptionUseCaseImpl;
 import com.menta.billing.application.usecase.CreatePhysicalCourseQuoteUseCaseImpl;
+import com.menta.billing.application.usecase.CreatePhysicalPurchaseCheckoutUseCaseImpl;
 import com.menta.billing.application.usecase.CreateSubscriptionCheckoutUseCaseImpl;
 import com.menta.billing.application.usecase.GetCurrentSubscriptionUseCaseImpl;
 import com.menta.billing.application.usecase.GetPhysicalCoursePricingUseCaseImpl;
@@ -284,6 +286,25 @@ public class BillingConfiguration {
         PhysicalCourseQuoteRepository quoteRepository, Clock clock
     ) {
         return new CreatePhysicalCourseQuoteUseCaseImpl(pricingRepository, availabilityPort, quoteRepository, clock);
+    }
+
+    /**
+     * #41, US-PHYSICAL-004. No {@code Transactional*UseCase} decorator here, same rationale as
+     * {@code createPhysicalCourseQuoteUseCase}: a single {@code Payment} write, not two writes
+     * that must commit atomically — unlike {@code createSubscriptionCheckoutUseCase}, this
+     * checkout creates no second local aggregate (the {@code Purchase} is created later, from the
+     * confirmed webhook).
+     */
+    @Bean
+    public CreatePhysicalPurchaseCheckoutUseCase createPhysicalPurchaseCheckoutUseCase(
+        PhysicalCourseQuoteRepository quoteRepository, PaymentRepository paymentRepository,
+        PhysicalCourseAvailabilityPort physicalCourseAvailabilityPort, PaymentPreferencePort paymentPreferencePort,
+        Clock clock, @Value("${billing.mercadopago.merchant-account-id:}") String merchantAccountId
+    ) {
+        return new CreatePhysicalPurchaseCheckoutUseCaseImpl(
+            quoteRepository, paymentRepository, physicalCourseAvailabilityPort, paymentPreferencePort, clock,
+            merchantAccountId
+        );
     }
 
     /** Task TASK-004: idempotently upserts a {@code Purchase(PENDING_FULFILLMENT)}
