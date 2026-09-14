@@ -31,6 +31,7 @@ import com.menta.auth.infrastructure.persistence.repository.OutboxRowJpaReposito
 import com.menta.shared.domain.vo.Email;
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -155,13 +156,25 @@ class AccountActivationIntegrationTest {
         assertThat(outboxRowJpaRepository.findAll()).isEmpty();
     }
 
+    /**
+     * Issue #216 (methodological finding): {@code executor.invokeAll}
+     * imposes no barrier — the first activation can run to completion
+     * before the second is scheduled, in which case this test proves only
+     * that a sequential second activation is rejected, which is a
+     * different and much weaker claim than the one its name makes. The
+     * {@link CountDownLatch} starting gun is what makes the two threads
+     * actually contend, following {@code SubscriptionCheckoutIntegrationTest
+     * .two_simultaneous_checkouts_for_the_same_user_produce_exactly_one_subscription}.
+     */
     @Test
     void concurrentDoubleActivationAllowsExactlyOneTransition() throws Exception {
         allowRegistration();
         registerUserUseCase.register(new RegisterUserCommand(EMAIL, PASSWORD, Role.STUDENT, "client-fingerprint"));
         ExecutorService executor = Executors.newFixedThreadPool(2);
         try {
+            CountDownLatch start = new CountDownLatch(1);
             Callable<Boolean> activate = () -> {
+                start.await();
                 try {
                     activateAccountUseCase.activate(new ActivateAccountCommand(RAW_TOKEN));
                     return true;
@@ -169,8 +182,11 @@ class AccountActivationIntegrationTest {
                     return false;
                 }
             };
-            List<Future<Boolean>> outcomes = executor.invokeAll(List.of(activate, activate));
-            assertThat(outcomes.stream().filter(future -> get(future)).count()).isEqualTo(1);
+            List<Future<Boolean>> submitted = List.of(
+                executor.submit(activate), executor.submit(activate)
+            );
+            start.countDown();
+            assertThat(submitted.stream().filter(future -> get(future)).count()).isEqualTo(1);
         } finally {
             executor.shutdownNow();
         }

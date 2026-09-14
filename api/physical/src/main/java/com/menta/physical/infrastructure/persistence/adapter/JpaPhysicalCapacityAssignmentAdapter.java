@@ -21,18 +21,41 @@ import org.springframework.transaction.annotation.Transactional;
  * The TASK-005 plan explicitly forbids putting a new write method on the
  * existing read port; this adapter strictly honours that contract.</p>
  *
- * <h2>Capacity invariant after commit</h2>
- * <p>The plain read-then-insert pattern is racy under high concurrency:
- * two handlers can both observe {@code assignedSpots = 0 < capacity = 1}
- * (the SELECT reads before the peer's INSERT commits) and both insert
- * successfully because V7 {@code UNIQUE (session_id, student_id)} only
- * blocks SAME-pair duplicates. After the local INSERT commits, this
- * adapter re-reads the live count of rows for the session and ROLLBACKS
- * the insert via {@link com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityAssignmentJpaRepository#deleteBySessionIdAndStudentId}
- * if the count exceeds capacity, then throws
- * {@link CapacityBelowAssignedException}. The same exception type the
- * use case's read-time check throws — single point of recovery on the
- * handler side.</p>
+ * <h2>Capacity invariant under concurrency (issue #216)</h2>
+ * <p>The plain read-then-insert pattern is racy: two handlers can both
+ * observe {@code assignedSpots = 0 < capacity = 1} and both insert
+ * successfully, because V7 {@code UNIQUE (session_id, student_id)} only
+ * blocks SAME-pair duplicates. Measured failure rate before the fix: 7 of
+ * 11 runs (64%) with a real starting gun.</p>
+ *
+ * <p>This adapter is the single point where the invariant is decided, and
+ * it decides it from TWO locking reads and nothing else:</p>
+ * <ol>
+ *   <li>{@code SELECT capacity ... FOR UPDATE} on {@code physical_sessions}
+ *       — the row lock every claimant for this session queues on, plus the
+ *       capacity, in one statement.</li>
+ *   <li>{@code SELECT COUNT(*) ... FOR UPDATE} on
+ *       {@code physical_capacity_assignments} — the assigned count. Being a
+ *       locking read it reads the latest committed rows rather than the
+ *       transaction's MVCC snapshot, and its gap lock keeps a peer from
+ *       inserting underneath us before we commit.</li>
+ * </ol>
+ *
+ * <p>Neither step may be replaced by a consistent (non-locking) read. The
+ * previous implementation decided from the correlated {@code COUNT(*)}
+ * subquery of {@code findByIdWithAvailabilityForUpdate}: {@code FOR UPDATE}
+ * does not extend to a subquery, so that count came from the snapshot. Any
+ * plain read earlier in the transaction — the use case used to do exactly
+ * one, before calling in here — fixes that snapshot before the row lock is
+ * ever granted, and the lock then arrives too late to matter.</p>
+ *
+ * <p>The decision is taken BEFORE the INSERT, so there is no
+ * insert-then-delete compensation any more: a claim that loses the race
+ * writes nothing at all. A V7 {@code UNIQUE} collision still surfaces as
+ * {@code DataIntegrityViolationException} from the explicit flush, which
+ * {@code AssignCapacityUseCase} maps to
+ * {@link CapacityBelowAssignedException} — the single exception type the
+ * handler side recovers from.</p>
  */
 @Component
 public class JpaPhysicalCapacityAssignmentAdapter implements PhysicalCapacityAssignmentWriter {
@@ -57,26 +80,30 @@ public class JpaPhysicalCapacityAssignmentAdapter implements PhysicalCapacityAss
         Instant now = clock.now();
         UUID rowId = UUID.randomUUID();
 
-        // Acquire exclusive row lock through SELECT ... FOR UPDATE — concurrent
-        // adapters serialize here. After the lock is granted, the row's
-        // committed capacity-driven count reflects any peer's already-committed
-        // INSERT (because the peer's row would have committed BEFORE releasing
-        // the lock and we always wait on the lock until they commit).
-        var projection = sessionRepository
-            .findByIdWithAvailabilityForUpdate(sessionId, now)
+        // Step 1 — exclusive row lock on the session AND its capacity, in one
+        // locking statement. Every claimant for this session queues here, so
+        // the lock order is identical for all of them.
+        int capacity = sessionRepository
+            .lockCapacityForUpdate(sessionId)
             .orElseThrow(com.menta.physical.domain.exception.SessionNotFoundException::new);
+
+        // Step 2 — the assigned count as a LOCKING read: immune to this
+        // transaction's MVCC snapshot, and gap-locking the session's range so
+        // no peer can insert before we commit.
+        long assigned = jpaRepository.countBySessionIdForUpdate(sessionId);
+
+        if (assigned + 1 > capacity) {
+            // Invariant would be violated — refuse before writing anything.
+            throw new CapacityBelowAssignedException();
+        }
 
         jpaRepository.save(new com.menta.physical.infrastructure.persistence.entity.PhysicalCapacityAssignmentJpaEntity(
             rowId, sessionId, studentId, now
         ));
-        // Force flush so the correlated subquery on the next read sees our row.
+        // Force flush so a V7 UNIQUE (session_id, student_id) collision is
+        // raised here, attributed to this claim, and not at commit time.
         jpaRepository.flush();
 
-        if (projection.getAssignedSpots() + 1 > projection.getCapacity()) {
-            // Invariant violated — race lost. Roll back our row before throwing.
-            jpaRepository.deleteById(rowId);
-            throw new CapacityBelowAssignedException();
-        }
         return now;
     }
 }
