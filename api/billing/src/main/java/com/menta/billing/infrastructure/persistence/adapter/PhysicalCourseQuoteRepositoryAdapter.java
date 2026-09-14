@@ -4,6 +4,7 @@ import com.menta.billing.application.port.out.PhysicalCourseQuoteRepository;
 import com.menta.billing.domain.model.PhysicalCourseQuote;
 import com.menta.billing.infrastructure.persistence.mapper.PhysicalCourseQuoteJpaMapper;
 import com.menta.billing.infrastructure.persistence.repository.PhysicalCourseQuoteJpaRepository;
+import java.util.Optional;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,5 +25,11 @@ public class PhysicalCourseQuoteRepositoryAdapter implements PhysicalCourseQuote
         return PhysicalCourseQuoteJpaMapper.toDomain(
             jpaRepository.save(PhysicalCourseQuoteJpaMapper.toEntity(quote))
         );
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public Optional<PhysicalCourseQuote> findById(String quoteId) {
+        return jpaRepository.findById(quoteId).map(PhysicalCourseQuoteJpaMapper::toDomain);
     }
 }

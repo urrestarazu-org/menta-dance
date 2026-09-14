@@ -18,8 +18,10 @@ import com.menta.billing.application.port.out.CourseCatalogPort;
 import com.menta.billing.application.port.out.PaymentProviderPort;
 import com.menta.billing.domain.model.Money;
 import com.menta.billing.infrastructure.persistence.entity.PaymentJpaEntity;
+import com.menta.billing.infrastructure.persistence.entity.PhysicalCourseQuoteJpaEntity;
 import com.menta.billing.infrastructure.persistence.entity.WebhookInboxJpaEntity;
 import com.menta.billing.infrastructure.persistence.repository.PaymentJpaRepository;
+import com.menta.billing.infrastructure.persistence.repository.PhysicalCourseQuoteJpaRepository;
 import com.menta.billing.infrastructure.persistence.repository.PurchaseJpaRepository;
 import com.menta.billing.infrastructure.persistence.repository.WebhookInboxJpaRepository;
 import com.menta.billing.infrastructure.webhook.WebhookInboxStatus;
@@ -80,6 +82,7 @@ class PresentialPurchaseExceptionPathIntegrationTest {
     @Autowired private PhysicalCapacityAssignmentJpaRepository assignmentRepository;
     @Autowired private PhysicalCourseJpaRepository courseRepository;
     @Autowired private PhysicalSessionJpaRepository sessionRepository;
+    @Autowired private PhysicalCourseQuoteJpaRepository quoteRepository;
     @Autowired private WebhookVerificationWorker webhookWorker;
     @Autowired private OutboxReconciliationWorker outboxWorker;
 
@@ -105,20 +108,23 @@ class PresentialPurchaseExceptionPathIntegrationTest {
         outboxRepository.deleteAll();
         inboxRepository.deleteAll();
         paymentRepository.deleteAll();
+        quoteRepository.deleteAll();
         sessionRepository.deleteAll();
         courseRepository.deleteAll();
     }
 
     @Test
     void capacity_trip_preserves_completed_payment_and_records_exception_purchase() {
-        UUID sessionId = seedSessionWithCapacityOne();
+        UUID courseId = UUID.randomUUID();
+        UUID sessionId = seedSessionWithCapacityOne(courseId);
         assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
             UUID.randomUUID(), sessionId, UUID.randomUUID(), Instant.now()
         ));
         UUID paymentId = UUID.randomUUID();
+        String quoteId = seedIndividualQuote(courseId, sessionId).toString();
         paymentRepository.save(new PaymentJpaEntity(
             paymentId, UUID.randomUUID(), "mp-exception-path", new BigDecimal("100.00"), "ARS",
-            "ext-1", "merchant-1", "PHYSICAL", sessionId.toString(), "AWAITING_PROVIDER",
+            "ext-1", "merchant-1", "PHYSICAL", quoteId, "AWAITING_PROVIDER",
             null, null, Instant.now()
         ));
         when(paymentProviderPort.fetchPayment("mp-exception-path")).thenReturn(
@@ -142,8 +148,7 @@ class PresentialPurchaseExceptionPathIntegrationTest {
         assertThat(assignmentRepository.countBySessionId(sessionId)).isEqualTo(1);
     }
 
-    private UUID seedSessionWithCapacityOne() {
-        UUID courseId = UUID.randomUUID();
+    private UUID seedSessionWithCapacityOne(UUID courseId) {
         Instant now = Instant.now();
         courseRepository.save(new PhysicalCourseJpaEntity(
             courseId, "Integration course", "Test course", UUID.randomUUID(), "Test professor",
@@ -154,5 +159,21 @@ class PresentialPurchaseExceptionPathIntegrationTest {
             sessionId, courseId, now, 1, "SCHEDULED", null
         ));
         return sessionId;
+    }
+
+    /**
+     * #41 PR6: {@code PaymentTarget.Physical}'s reference is the quoteId, not
+     * a raw session id (design A5) — the outbox handler now resolves it via
+     * {@code PhysicalCourseQuoteRepository} and runs {@code CoveragePlanner}.
+     */
+    private UUID seedIndividualQuote(UUID courseId, UUID selectedSessionId) {
+        UUID quoteId = UUID.randomUUID();
+        Instant now = Instant.now();
+        quoteRepository.save(new PhysicalCourseQuoteJpaEntity(
+            quoteId.toString(), courseId.toString(), "INDIVIDUAL",
+            new BigDecimal("100.00"), "ARS", BigDecimal.ZERO, 1, 1, selectedSessionId.toString(),
+            new BigDecimal("100.00"), "ARS", "AVAILABLE", now, now.plusSeconds(3600)
+        ));
+        return quoteId;
     }
 }

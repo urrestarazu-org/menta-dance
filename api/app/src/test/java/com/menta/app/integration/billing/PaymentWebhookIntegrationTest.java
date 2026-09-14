@@ -22,11 +22,13 @@ import com.menta.billing.domain.model.Money;
 import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.domain.model.PlanStatus;
 import com.menta.billing.infrastructure.persistence.entity.PaymentJpaEntity;
+import com.menta.billing.infrastructure.persistence.entity.PhysicalCourseQuoteJpaEntity;
 import com.menta.billing.infrastructure.persistence.entity.PlanCourseJpaEntity;
 import com.menta.billing.infrastructure.persistence.entity.PlanJpaEntity;
 import com.menta.billing.infrastructure.persistence.entity.PlanPaymentMethodJpaEntity;
 import com.menta.billing.infrastructure.persistence.entity.WebhookInboxJpaEntity;
 import com.menta.billing.infrastructure.persistence.repository.PaymentJpaRepository;
+import com.menta.billing.infrastructure.persistence.repository.PhysicalCourseQuoteJpaRepository;
 import com.menta.billing.infrastructure.persistence.repository.PlanCourseJpaRepository;
 import com.menta.billing.infrastructure.persistence.repository.PlanJpaRepository;
 import com.menta.billing.infrastructure.persistence.repository.PlanPaymentMethodJpaRepository;
@@ -121,6 +123,7 @@ class PaymentWebhookIntegrationTest {
     @Autowired private PhysicalCapacityAssignmentJpaRepository physicalCapacityAssignmentRepository;
     @Autowired private PhysicalCourseJpaRepository physicalCourseRepository;
     @Autowired private PhysicalSessionJpaRepository physicalSessionRepository;
+    @Autowired private PhysicalCourseQuoteJpaRepository physicalCourseQuoteRepository;
 
     @MockBean private PaymentProviderPort paymentProviderPort;
     @MockBean private PaymentPreferencePort paymentPreferencePort;
@@ -149,6 +152,7 @@ class PaymentWebhookIntegrationTest {
         inboxRepository.deleteAll();
         outboxRepository.deleteAll();
         physicalCapacityAssignmentRepository.deleteAll();
+        physicalCourseQuoteRepository.deleteAll();
         physicalSessionRepository.deleteAll();
         physicalCourseRepository.deleteAll();
     }
@@ -175,12 +179,33 @@ class PaymentWebhookIntegrationTest {
 
     private UUID seedPendingPhysicalPayment(String providerPaymentId, UUID studentId, UUID sessionId) {
         UUID id = UUID.randomUUID();
+        String quoteId = seedIndividualQuoteFor(sessionId).toString();
         paymentRepository.save(new PaymentJpaEntity(
             id, studentId, providerPaymentId, new BigDecimal("100.00"), "ARS",
-            "ext-1", "merchant-1", "PHYSICAL", sessionId.toString(), "AWAITING_PROVIDER",
+            "ext-1", "merchant-1", "PHYSICAL", quoteId, "AWAITING_PROVIDER",
             null, null, Instant.now()
         ));
         return id;
+    }
+
+    /**
+     * #41 PR6: {@code PaymentTarget.Physical}'s reference is the quoteId, not
+     * a raw session id (design A5) — the outbox handler now resolves it via
+     * {@code PhysicalCourseQuoteRepository} and runs {@code CoveragePlanner}.
+     * Every fixture that seeds a physical payment must therefore seed a real
+     * {@code billing_physical_course_quotes} row, not just pass the session
+     * id through as if it were the target reference.
+     */
+    private UUID seedIndividualQuoteFor(UUID sessionId) {
+        PhysicalSessionJpaEntity session = physicalSessionRepository.findById(sessionId).orElseThrow();
+        UUID quoteId = UUID.randomUUID();
+        Instant now = Instant.now();
+        physicalCourseQuoteRepository.save(new PhysicalCourseQuoteJpaEntity(
+            quoteId.toString(), session.getCourseId().toString(), "INDIVIDUAL",
+            new BigDecimal("100.00"), "ARS", BigDecimal.ZERO, 1, 1, sessionId.toString(),
+            new BigDecimal("100.00"), "ARS", "AVAILABLE", now, now.plusSeconds(3600)
+        ));
+        return quoteId;
     }
 
     private UUID seedActivePlanWithCourses(String... courseIds) {
