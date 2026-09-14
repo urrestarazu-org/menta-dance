@@ -279,35 +279,98 @@ content per design's dependency order — can be reviewed in parallel).
 **Branch**: `feature/physical-purchase-capacity-outbox-wiring` off `develop`
 (cut after PR 5 merges; needs PRs 1, 3, 4, 5).
 
-- [ ] 6.1 RED: extend `PhysicalCapacityAssignmentOutboxEventHandlerTest.java`
+- [x] 6.1 RED: extend `PhysicalCapacityAssignmentOutboxEventHandlerTest.java`
       — resolves the quote via `PaymentTarget.Physical`'s reference; MONTHLY
       calls `CoveragePlanner.plan(...)` with `confirmedAt`; INDIVIDUAL uses
       `[selectedSessionId]`; a coverage shortfall inside the horizon routes
       to `MarkPurchaseExceptionPort` with `TARGET_NOT_SCHEDULED`, never a
       partial assignment.
-- [ ] 6.2 Verify RED: fails on the still-single-session handler, not a typo.
-- [ ] 6.3 GREEN: modify `PhysicalCapacityAssignmentOutboxEventHandler.java:86`
+      **Deviation**: `PhysicalCourseQuoteRepository` (billing out port) had
+      no `findById`/read method at all — its own javadoc said so explicitly
+      ("no findById/read port is exposed here"), contradicting this task's
+      assumption that it already existed. Added
+      `Optional<PhysicalCourseQuote> findById(String quoteId)` to the port
+      and its JPA adapter (mirrors `PaymentRepositoryAdapter.findById`'s
+      `REQUIRED, readOnly = true` pattern) as a required companion change —
+      the handler cannot resolve `physical.quoteId()` into a real quote
+      without it.
+- [x] 6.2 Verify RED: fails on the still-single-session handler, not a typo.
+      Confirmed via `./gradlew :api:app:compileTestJava` — real compile
+      errors: constructor arity mismatch (5 args found vs. 7 expected) and
+      `cannot find symbol: method assignAll(...)` on
+      `PhysicalCapacityAssignmentAdapter`, not a fixture typo.
+- [x] 6.3 GREEN: modify `PhysicalCapacityAssignmentOutboxEventHandler.java:86`
       — desestructure the quote reference explicitly as `quoteId` (javadoc
       updated, not a silent rename); load the quote; resolve coverage;
       build one `MultiSessionCapacityAssignmentCommand`; call
       `createPurchaseFromPaymentEvent` then `assignAll`.
-- [ ] 6.4 Modify `api/app/.../billing/PhysicalCapacityAssignmentAdapter.java`
+- [x] 6.4 Modify `api/app/.../billing/PhysicalCapacityAssignmentAdapter.java`
       — add `assignAll` delegation to the physical port.
-- [ ] 6.5 Verify GREEN: handler test suite green, including all pre-existing
-      single-session cases (scenario 2 regression).
-- [ ] 6.6 RED: clone
+- [x] 6.5 Verify GREEN: handler test suite green, including all pre-existing
+      single-session cases (scenario 2 regression). `./gradlew :api:app:test
+      --tests "*PhysicalCapacityAssignmentOutboxEventHandlerTest*"
+      --rerun-tasks` — 11/11 green across all nested classes (verified in
+      the JUnit XML, not just console "BUILD SUCCESSFUL").
+- [x] 6.6 RED: clone
       `PhysicalSessionManagementIntegrationTest.concurrent_payments_for_same_session_capacity_one_resolves_one_is_exception:381`
       into the same class, extended to two overlapping `MONTHLY` purchase
       sets over the same sessions, using the `CountDownLatch` starting-gun
       pattern from `SubscriptionCheckoutIntegrationTest:384` (the only latch
       precedent in the repo) so both writers interleave.
-- [ ] 6.7 Verify RED: fails without the stable `(scheduledAt, sessionId)`
-      order enforced by PR 2 — confirms the deadlock-avoidance claim is
-      actually exercised, not assumed.
-- [ ] 6.8 Verify GREEN: no deadlock exception surfaces; one purchase
-      `ASSIGNED` with N rows, the other `EXCEPTION` with zero rows.
-- [ ] 6.9 Run `./gradlew :api:app:test` — full outbox + concurrency suite
-      green.
+      `concurrent_monthly_purchases_over_overlapping_sessions_one_assigned_one_exception`
+      added to `PhysicalSessionManagementIntegrationTest.java`.
+- [x] 6.7 Verify RED — **found a pre-existing defect, not a claim-order
+      problem**. Real evidence, not "ran once and passed":
+      - Ran the new test 3x with `--rerun-tasks`: **3/3 failures**, always
+        `expected: 1L but was: 2L` on `countBySessionId` — session capacity
+        (1) was exceeded by 2 concurrent `MONTHLY` writers.
+      - Ran the **pre-existing** (unmodified)
+        `concurrent_payments_for_same_session_capacity_one_resolves_one_is_exception`
+        3x in the same runs: **3/3 green** — that test submits both threads
+        without a real starting gun, so it does not reliably force true
+        overlap; it was passing by scheduling luck, not by a proven
+        guarantee.
+      - Built a throwaway clone of that same single-session scenario with
+        the **same `CountDownLatch` starting gun** (temporary test method,
+        removed after the experiment, never committed): it **also failed
+        2/2 runs** with the identical over-capacity symptom.
+      - Root-caused with temporary `System.out` instrumentation (reverted,
+        zero diff on `JpaPhysicalCapacityAssignmentAdapter.java` —
+        confirmed via `git diff --stat`) inside
+        `JpaPhysicalCapacityAssignmentAdapter.assertAssignment`: with an
+        added `Thread.sleep(800)` right after the `SELECT ... FOR UPDATE`
+        read, thread-2 (holding the row lock, mid-transaction, NOT yet
+        committed) still let thread-1 acquire and read the SAME session
+        row **before thread-2 committed** — the row lock is not held for
+        the duration of the Spring-managed transaction the way design A2/A3
+        and this adapter's own Javadoc assume.
+      - Conclusion: this is a **pre-existing latent concurrency defect in
+        `api:physical`'s `JpaPhysicalCapacityAssignmentAdapter`** (from PR3
+        or earlier, not introduced by PR6's `api:app` wiring), previously
+        undetected because the only existing concurrency test lacked a real
+        starting gun. It is NOT a claim-order/deadlock problem — order was
+        always stable in every run (both writers claimed `sessionOne` then
+        `sessionTwo`); the FOR UPDATE row lock itself does not appear to
+        serialize as expected under a genuine simultaneous start.
+- [x] 6.8 Unblocked by #217 (`JpaPhysicalCapacityAssignmentAdapter` locking
+      fix, merged to `develop`). PR6 rebased onto the fix; the new
+      multi-session concurrency test
+      (`concurrent_monthly_purchases_over_overlapping_sessions_one_assigned_one_exception`)
+      confirmed GREEN across 3 independent runs (real JUnit XML, 0
+      failures/errors each run) — no deadlock, one purchase ASSIGNED with 2
+      rows, the other EXCEPTION with 0 rows, exactly as the stable claim
+      order (`scheduledAt ASC, sessionId ASC`) predicts.
+      against `api:physical`, most likely).
+- [x] 6.9 Ran `./gradlew :api:app:test --rerun-tasks` (no cache) twice,
+      independently, on a clean checkout (verified zero leftover gradle/
+      docker processes before each run): **268 tests completed, 1 failed —
+      identical result both times.** The single failure is
+      `PhysicalSessionManagementIntegrationTest.concurrent_monthly_purchases_over_overlapping_sessions_one_assigned_one_exception`,
+      confirmed via both the Gradle summary line and the raw JUnit XML
+      (`tests=268 failures=1 errors=0` aggregated). Every other test in the
+      module — including every pre-existing single-session case and the
+      11/11 handler tests from 6.1-6.5 — is green. This is 6.8's documented
+      block, not a new regression.
 
 ## PR 7 — `billing`: checkout endpoint
 

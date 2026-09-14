@@ -2,7 +2,9 @@ package com.menta.app.billing;
 
 import com.menta.physical.application.port.in.PhysicalCapacityAssignmentPort;
 import com.menta.physical.application.usecase.AssignmentOutcome;
+import com.menta.physical.application.usecase.CapacityAssignments;
 import com.menta.shared.physical.CapacityAssignmentCommand;
+import com.menta.shared.physical.MultiSessionCapacityAssignmentCommand;
 import org.springframework.stereotype.Component;
 
 /**
@@ -28,5 +30,15 @@ public class PhysicalCapacityAssignmentAdapter {
      */
     public AssignmentOutcome assign(CapacityAssignmentCommand command) {
         return physicalCapacityAssignmentPort.assign(command);
+    }
+
+    /**
+     * Ordered, all-or-nothing multi-session counterpart of {@link #assign}
+     * (design A3) — added by #41 PR6 so the outbox handler can claim every
+     * session a {@code MONTHLY} or {@code INDIVIDUAL} purchase covers in one
+     * call.
+     */
+    public CapacityAssignments assignAll(MultiSessionCapacityAssignmentCommand command) {
+        return physicalCapacityAssignmentPort.assignAll(command);
     }
 }

@@ -26,8 +26,10 @@ import com.menta.billing.application.port.out.CourseCatalogPort;
 import com.menta.billing.application.port.out.PaymentProviderPort;
 import com.menta.billing.domain.model.Money;
 import com.menta.billing.infrastructure.persistence.entity.PaymentJpaEntity;
+import com.menta.billing.infrastructure.persistence.entity.PhysicalCourseQuoteJpaEntity;
 import com.menta.billing.infrastructure.persistence.entity.WebhookInboxJpaEntity;
 import com.menta.billing.infrastructure.persistence.repository.PaymentJpaRepository;
+import com.menta.billing.infrastructure.persistence.repository.PhysicalCourseQuoteJpaRepository;
 import com.menta.billing.infrastructure.persistence.repository.PurchaseJpaRepository;
 import com.menta.billing.infrastructure.persistence.repository.WebhookInboxJpaRepository;
 import com.menta.billing.infrastructure.webhook.WebhookVerificationWorker;
@@ -119,6 +121,7 @@ class PhysicalSessionManagementIntegrationTest {
     @Autowired private PhysicalSessionJpaRepository sessionRepository;
     @Autowired private PhysicalCapacityAssignmentJpaRepository assignmentRepository;
     @Autowired private PaymentJpaRepository paymentRepository;
+    @Autowired private PhysicalCourseQuoteJpaRepository quoteRepository;
     @Autowired private PurchaseJpaRepository purchaseRepository;
     @Autowired private WebhookInboxJpaRepository inboxRepository;
     @Autowired private OutboxRowJpaRepository outboxRepository;
@@ -146,6 +149,7 @@ class PhysicalSessionManagementIntegrationTest {
         outboxRepository.deleteAll();
         inboxRepository.deleteAll();
         paymentRepository.deleteAll();
+        quoteRepository.deleteAll();
         sessionRepository.deleteAll();
         courseRepository.deleteAll();
     }
@@ -191,13 +195,44 @@ class PhysicalSessionManagementIntegrationTest {
     }
 
     private UUID seedPendingPhysicalPayment(String providerPaymentId, UUID studentId, UUID sessionId) {
+        return seedPendingPhysicalPaymentForTarget(
+            providerPaymentId, studentId, seedIndividualQuoteFor(sessionId).toString()
+        );
+    }
+
+    private UUID seedPendingPhysicalPaymentForTarget(String providerPaymentId, UUID studentId, String targetReference) {
         UUID paymentId = UUID.randomUUID();
         paymentRepository.save(new PaymentJpaEntity(
             paymentId, studentId, providerPaymentId, new BigDecimal("100.00"), "ARS",
-            "ext-" + providerPaymentId, "merchant-1", "PHYSICAL", sessionId.toString(),
+            "ext-" + providerPaymentId, "merchant-1", "PHYSICAL", targetReference,
             "AWAITING_PROVIDER", null, null, Instant.now()
         ));
         return paymentId;
+    }
+
+    /**
+     * #41 PR6: {@code PaymentTarget.Physical}'s reference is the quoteId, not
+     * a raw session id (design A5) — the outbox handler now resolves it via
+     * {@code PhysicalCourseQuoteRepository} and runs {@code CoveragePlanner}.
+     */
+    private UUID seedIndividualQuoteFor(UUID sessionId) {
+        PhysicalSessionJpaEntity session = sessionRepository.findById(sessionId).orElseThrow();
+        return seedQuote(session.getCourseId(), "INDIVIDUAL", 1, sessionId.toString());
+    }
+
+    private UUID seedMonthlyQuote(UUID courseId, int scheduledSessionCount) {
+        return seedQuote(courseId, "MONTHLY", scheduledSessionCount, null);
+    }
+
+    private UUID seedQuote(UUID courseId, String purchaseType, int scheduledSessionCount, String selectedSessionId) {
+        UUID quoteId = UUID.randomUUID();
+        Instant now = Instant.now();
+        quoteRepository.save(new PhysicalCourseQuoteJpaEntity(
+            quoteId.toString(), courseId.toString(), purchaseType,
+            new BigDecimal("100.00"), "ARS", BigDecimal.ZERO, 1, scheduledSessionCount, selectedSessionId,
+            new BigDecimal("100.00"), "ARS", "AVAILABLE", now, now.plusSeconds(3600)
+        ));
+        return quoteId;
     }
 
     private void verifyAndDispatch(String providerPaymentId) {
@@ -519,6 +554,117 @@ class PhysicalSessionManagementIntegrationTest {
                 .as("iteration %d: exactly one claim wins, the other is the residual", iteration)
                 .containsExactlyInAnyOrder("PENDING_FULFILLMENT", "EXCEPTION");
         }
+    }
+
+    /**
+     * #41 PR6 (design A2, A3): two MONTHLY purchases racing over the SAME
+     * two-session set must not deadlock. Both purchases resolve their
+     * eligible sessions through the same {@code CoveragePlanner}, which
+     * always sorts {@code (scheduledAt ASC, sessionId ASC)} — every
+     * concurrent writer claims {@code sessionOne} then {@code sessionTwo} in
+     * that same relative order, so InnoDB's row locks form a chain (never a
+     * cycle): whichever writer claims {@code sessionOne} first proceeds to
+     * claim {@code sessionTwo} and commits with both rows ASSIGNED; the
+     * other blocks on {@code sessionOne}, then loses the capacity check
+     * there and rolls its own single insert back — it never even attempts
+     * {@code sessionTwo}. A {@link CountDownLatch} starting gun (pattern
+     * from {@code SubscriptionCheckoutIntegrationTest:384}) makes both
+     * writers actually interleave instead of running sequentially.
+     */
+    @Test
+    void concurrent_monthly_purchases_over_overlapping_sessions_one_assigned_one_exception() throws Exception {
+        UUID courseId = seedCourse(UUID.randomUUID());
+        Instant base = Instant.now().plusSeconds(3600);
+        UUID sessionOne = seedSession(courseId, base, 1, "SCHEDULED");
+        UUID sessionTwo = seedSession(courseId, base.plusSeconds(3600), 1, "SCHEDULED");
+
+        UUID firstQuoteId = seedMonthlyQuote(courseId, 2);
+        UUID secondQuoteId = seedMonthlyQuote(courseId, 2);
+        UUID firstPaymentId = seedPendingPhysicalPaymentForTarget(
+            "mp-monthly-1", UUID.randomUUID(), firstQuoteId.toString()
+        );
+        UUID secondPaymentId = seedPendingPhysicalPaymentForTarget(
+            "mp-monthly-2", UUID.randomUUID(), secondQuoteId.toString()
+        );
+        when(paymentProviderPort.fetchPayment("mp-monthly-1")).thenReturn(
+            new ProviderPaymentResult(
+                "approved", Money.of(new BigDecimal("100.00"), "ARS"), "ext-mp-monthly-1", "merchant-1"
+            )
+        );
+        when(paymentProviderPort.fetchPayment("mp-monthly-2")).thenReturn(
+            new ProviderPaymentResult(
+                "approved", Money.of(new BigDecimal("100.00"), "ARS"), "ext-mp-monthly-2", "merchant-1"
+            )
+        );
+        WebhookInboxJpaEntity firstInbox = inboxRepository.save(new WebhookInboxJpaEntity(
+            "mp-monthly-1:req-1", "mp-monthly-1", "req-1",
+            com.menta.billing.infrastructure.webhook.WebhookInboxStatus.RECEIVED,
+            0, null, null, Instant.now(), null
+        ));
+        WebhookInboxJpaEntity secondInbox = inboxRepository.save(new WebhookInboxJpaEntity(
+            "mp-monthly-2:req-1", "mp-monthly-2", "req-1",
+            com.menta.billing.infrastructure.webhook.WebhookInboxStatus.RECEIVED,
+            0, null, null, Instant.now(), null
+        ));
+        webhookWorker.process(firstInbox);
+        webhookWorker.process(secondInbox);
+        List<OutboxRowJpaEntity> events = outboxRepository.findAll();
+
+        CountDownLatch start = new CountDownLatch(1);
+        CountDownLatch done = new CountDownLatch(2);
+        boolean[] sideEffectFailed = new boolean[2];
+        try (ExecutorService pool = Executors.newFixedThreadPool(2)) {
+            pool.submit(() -> {
+                try {
+                    start.await();
+                    sideEffectFailed[0] = outboxWorker.process(events.get(0));
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    done.countDown();
+                }
+            });
+            pool.submit(() -> {
+                try {
+                    start.await();
+                    sideEffectFailed[1] = outboxWorker.process(events.get(1));
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    done.countDown();
+                }
+            });
+            start.countDown();
+            assertThat(done.await(30, TimeUnit.SECONDS)).isTrue();
+        }
+
+        // Neither side effect failed unexpectedly — a real deadlock
+        // (CannotAcquireLockException/PessimisticLockingFailureException)
+        // would be caught by OutboxReconciliationWorker.process and reported
+        // as `true` here, exactly like an assertion failure would surface.
+        assertThat(sideEffectFailed[0]).isFalse();
+        assertThat(sideEffectFailed[1]).isFalse();
+
+        assertThat(assignmentRepository.countBySessionId(sessionOne)).isEqualTo(1);
+        assertThat(assignmentRepository.countBySessionId(sessionTwo)).isEqualTo(1);
+        List<PhysicalCapacityAssignmentJpaEntity> assignments = assignmentRepository.findAll();
+        assertThat(assignments).hasSize(2);
+        assertThat(assignments).extracting(PhysicalCapacityAssignmentJpaEntity::getStudentId)
+            .containsOnly(assignments.get(0).getStudentId());
+
+        // NOTE: the handler never calls Purchase.assigned() anywhere in this
+        // codebase today (confirmed: no production call site exists) — a
+        // successful assignAll leaves the row at PENDING_FULFILLMENT, exactly
+        // like the pre-existing single-session concurrency test above
+        // asserts. That gap is pre-existing and out of PR6's scope (not in
+        // tasks.md 6.1-6.9); this assertion matches actual current behavior,
+        // not the aspirational "ASSIGNED" wording in the fulfillment spec.
+        assertThat(purchaseRepository.findAll()).extracting(purchase -> purchase.getStatus())
+            .containsExactlyInAnyOrder("PENDING_FULFILLMENT", "EXCEPTION");
+        assertThat(purchaseRepository.findByPaymentId(firstPaymentId).orElseThrow().getStatus())
+            .isIn("PENDING_FULFILLMENT", "EXCEPTION");
+        assertThat(purchaseRepository.findByPaymentId(secondPaymentId).orElseThrow().getStatus())
+            .isIn("PENDING_FULFILLMENT", "EXCEPTION");
     }
 
 }
