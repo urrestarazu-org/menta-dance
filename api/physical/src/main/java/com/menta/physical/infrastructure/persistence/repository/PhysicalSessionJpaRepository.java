@@ -82,41 +82,34 @@ public interface PhysicalSessionJpaRepository extends JpaRepository<PhysicalSess
     );
 
     /**
-     * TASK-005: pessimistic-lock variant of {@link #findByIdWithAvailability}
-     * for the capacity-assignment concurrency contract.  The
-     * {@code SELECT ... FOR UPDATE} acquires an exclusive row lock on
-     * {@code physical_sessions} for the duration of the transaction, so a
-     * concurrent handler's serialised reads see the post-commit count.
-     * Without this lock, two threads can both observe
-     * {@code assignedSpots = 0 < capacity = 1} and both INSERT successfully
-     * (V7 {@code UNIQUE} only blocks SAME-pair duplicates).
+     * Step 1 of the capacity-assignment claim (issue #216): take the
+     * exclusive row lock on {@code physical_sessions} AND read the capacity
+     * in a single locking statement.
+     *
+     * <p><b>Why this is not a projection read.</b> The previous shape of
+     * this method reused {@link #findByIdWithAvailability}'s correlated
+     * {@code COUNT(*)} subqueries under a {@code FOR UPDATE} clause. Those
+     * subqueries are non-locking consistent reads: {@code FOR UPDATE} on
+     * the outer {@code physical_sessions} row does not extend to them, so
+     * {@code assignedSpots} was decided from the transaction's MVCC
+     * snapshot — which, under REPEATABLE READ, can predate a peer's commit
+     * and let two claims both see {@code assignedSpots = 0 < capacity = 1}.
+     * Measured on MySQL 8.0 with two raw connections: overselling 2/1.</p>
+     *
+     * <p>A locking read always reads the latest committed row version, so
+     * this statement carries no snapshot hazard. It is deliberately the
+     * ONLY thing this query does: the assigned count comes from
+     * {@link PhysicalCapacityAssignmentJpaRepository#countBySessionIdForUpdate},
+     * a second locking read. Both statements locking is what makes the
+     * claim path immune; see that method's Javadoc.</p>
+     *
+     * @return the session's capacity, or empty when the session does not exist
      */
     @Query(
-        value = "SELECT s.id AS id, s.course_id AS courseId, s.scheduled_at AS scheduledAt, "
-            + "s.capacity AS capacity, "
-            + "(SELECT COUNT(*) FROM physical_capacity_assignments a WHERE a.session_id = s.id) "
-            + "AS assignedSpots, "
-            + "(SELECT COUNT(*) FROM physical_capacity_holds h "
-            + "WHERE h.session_id = s.id AND h.expires_at > :now) AS activeCapacityHolds, "
-            + "s.status AS status, s.notes AS notes "
-            + "FROM physical_sessions s "
-            + "WHERE s.id = :sessionId "
-            + "FOR UPDATE",
+        value = "SELECT s.capacity FROM physical_sessions s WHERE s.id = :sessionId FOR UPDATE",
         nativeQuery = true
     )
-    Optional<PhysicalSessionAvailabilityProjection> findByIdWithAvailabilityForUpdate(
-        @Param("sessionId") UUID sessionId, @Param("now") Instant now
-    );
-
-    /**
-     * TASK-005: light-weight pessimistic-only lock for use cases that
-     * need the row lock but not the availability projection. Combined with
-     * {@link com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityAssignmentJpaRepository#countBySessionId}, the adapter
-     * holds the row lock when re-counting, so its {@code SELECT COUNT(*)}
-     * reads the post-commit sum across peer transactions.
-     */
-    @Query(value = "SELECT id FROM physical_sessions WHERE id = :sessionId FOR UPDATE", nativeQuery = true)
-    java.util.List<java.util.UUID> lockSessionRow(@Param("sessionId") UUID sessionId);
+    Optional<Integer> lockCapacityForUpdate(@Param("sessionId") UUID sessionId);
 
     /** US-PHYSICAL-005 escenario 4: guards course deactivation. */
     @Query(

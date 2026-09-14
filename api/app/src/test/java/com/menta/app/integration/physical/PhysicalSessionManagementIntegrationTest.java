@@ -44,8 +44,12 @@ import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -85,6 +89,14 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @ActiveProfiles("integration-test")
 @Testcontainers
 class PhysicalSessionManagementIntegrationTest {
+
+    /**
+     * Independent races run by {@link
+     * #concurrent_claims_never_oversell_a_capacity_one_session}. Sized
+     * against the measured 64% per-race failure rate of issue #216: ten
+     * races put a false green below 1 in 250.000.
+     */
+    private static final int OVERSELL_ITERATIONS = 10;
 
     @Container
     private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
@@ -377,59 +389,136 @@ class PhysicalSessionManagementIntegrationTest {
         assertThat(qrResponse.getBody().get("qrCredentials")).isNotNull();
     }
 
-    @Test
-    void concurrent_payments_for_same_session_capacity_one_resolves_one_is_exception() throws Exception {
+    /**
+     * Seeds a capacity-1 session with two approved payments racing for it,
+     * and returns the two outbox events that must be dispatched
+     * concurrently. Each call uses a distinct {@code tag} so iterations
+     * never collide on the webhook-inbox or provider-payment keys.
+     */
+    private RaceFixture seedOversellRace(String tag) {
         UUID courseId = seedCourse(UUID.randomUUID());
         UUID sessionId = seedSession(courseId, Instant.now(), 1, "SCHEDULED");
-        UUID firstPaymentId = seedPendingPhysicalPayment(
-            "mp-concurrent-1", UUID.randomUUID(), sessionId
-        );
-        UUID secondPaymentId = seedPendingPhysicalPayment(
-            "mp-concurrent-2", UUID.randomUUID(), sessionId
-        );
-        when(paymentProviderPort.fetchPayment("mp-concurrent-1")).thenReturn(
-            new ProviderPaymentResult(
-                "approved", Money.of(new BigDecimal("100.00"), "ARS"),
-                "ext-mp-concurrent-1", "merchant-1"
-            )
-        );
-        when(paymentProviderPort.fetchPayment("mp-concurrent-2")).thenReturn(
-            new ProviderPaymentResult(
-                "approved", Money.of(new BigDecimal("100.00"), "ARS"),
-                "ext-mp-concurrent-2", "merchant-1"
-            )
-        );
-        WebhookInboxJpaEntity firstInbox = inboxRepository.save(new WebhookInboxJpaEntity(
-            "mp-concurrent-1:req-1", "mp-concurrent-1", "req-1",
-            com.menta.billing.infrastructure.webhook.WebhookInboxStatus.RECEIVED,
-            0, null, null, Instant.now(), null
-        ));
-        WebhookInboxJpaEntity secondInbox = inboxRepository.save(new WebhookInboxJpaEntity(
-            "mp-concurrent-2:req-1", "mp-concurrent-2", "req-1",
-            com.menta.billing.infrastructure.webhook.WebhookInboxStatus.RECEIVED,
-            0, null, null, Instant.now(), null
-        ));
-        webhookWorker.process(firstInbox);
-        webhookWorker.process(secondInbox);
-        List<OutboxRowJpaEntity> events = outboxRepository.findAll();
-        try (var executor = Executors.newFixedThreadPool(2)) {
-            var first = executor.submit(
-                () -> assertThat(outboxWorker.process(events.get(0))).isFalse()
+        String firstProviderId = "mp-" + tag + "-1";
+        String secondProviderId = "mp-" + tag + "-2";
+        UUID firstPaymentId = seedPendingPhysicalPayment(firstProviderId, UUID.randomUUID(), sessionId);
+        UUID secondPaymentId = seedPendingPhysicalPayment(secondProviderId, UUID.randomUUID(), sessionId);
+        for (String providerId : List.of(firstProviderId, secondProviderId)) {
+            when(paymentProviderPort.fetchPayment(providerId)).thenReturn(
+                new ProviderPaymentResult(
+                    "approved", Money.of(new BigDecimal("100.00"), "ARS"),
+                    "ext-" + providerId, "merchant-1"
+                )
             );
-            var second = executor.submit(
-                () -> assertThat(outboxWorker.process(events.get(1))).isFalse()
-            );
-            first.get();
-            second.get();
         }
 
-        assertThat(assignmentRepository.countBySessionId(sessionId)).isEqualTo(1);
-        assertThat(purchaseRepository.findByPaymentId(firstPaymentId).orElseThrow().getStatus())
+        Set<Long> alreadyDispatched = outboxRepository.findAll().stream()
+            .map(OutboxRowJpaEntity::getId)
+            .collect(java.util.stream.Collectors.toSet());
+        for (String providerId : List.of(firstProviderId, secondProviderId)) {
+            webhookWorker.process(inboxRepository.save(new WebhookInboxJpaEntity(
+                providerId + ":req-1", providerId, "req-1",
+                com.menta.billing.infrastructure.webhook.WebhookInboxStatus.RECEIVED,
+                0, null, null, Instant.now(), null
+            )));
+        }
+        List<OutboxRowJpaEntity> events = outboxRepository.findAll().stream()
+            .filter(row -> !alreadyDispatched.contains(row.getId()))
+            .toList();
+        assertThat(events).hasSize(2);
+
+        return new RaceFixture(sessionId, firstPaymentId, secondPaymentId, events);
+    }
+
+    private record RaceFixture(
+        UUID sessionId, UUID firstPaymentId, UUID secondPaymentId, List<OutboxRowJpaEntity> events
+    ) {}
+
+    /**
+     * Dispatches both events from a real starting gun so the two claims
+     * genuinely interleave.
+     *
+     * <p>Issue #216: a thread pool plus {@code submit(...)} plus
+     * {@code get()} — what this test used to do — imposes no barrier at
+     * all. One task can run to completion before the other is even
+     * scheduled, which is exactly what happened: the green test never
+     * exercised the race it was named after. With the latch in place, the
+     * pre-fix code oversold in 7 of 11 runs.</p>
+     */
+    private void dispatchConcurrently(List<OutboxRowJpaEntity> events) throws InterruptedException {
+        CountDownLatch start = new CountDownLatch(1);
+        CountDownLatch done = new CountDownLatch(events.size());
+        ExecutorService pool = Executors.newFixedThreadPool(events.size());
+        try {
+            for (OutboxRowJpaEntity event : events) {
+                pool.submit(() -> {
+                    try {
+                        start.await();
+                        outboxWorker.process(event);
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                    } catch (RuntimeException losingClaim) {
+                        // The loser surfaces through the Purchase status,
+                        // asserted by the caller — never by swallowing it here.
+                    } finally {
+                        done.countDown();
+                    }
+                });
+            }
+            start.countDown();
+            assertThat(done.await(30, TimeUnit.SECONDS)).isTrue();
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    void concurrent_payments_for_same_session_capacity_one_resolves_one_is_exception() throws Exception {
+        RaceFixture race = seedOversellRace("concurrent");
+
+        dispatchConcurrently(race.events());
+
+        assertThat(assignmentRepository.countBySessionId(race.sessionId())).isEqualTo(1);
+        assertThat(purchaseRepository.findByPaymentId(race.firstPaymentId()).orElseThrow().getStatus())
             .isIn("PENDING_FULFILLMENT", "EXCEPTION");
-        assertThat(purchaseRepository.findByPaymentId(secondPaymentId).orElseThrow().getStatus())
+        assertThat(purchaseRepository.findByPaymentId(race.secondPaymentId()).orElseThrow().getStatus())
             .isIn("PENDING_FULFILLMENT", "EXCEPTION");
         assertThat(purchaseRepository.findAll()).extracting(purchase -> purchase.getStatus())
             .containsExactlyInAnyOrder("PENDING_FULFILLMENT", "EXCEPTION");
+    }
+
+    /**
+     * Regression test for issue #216 — overselling a capacity-1 session.
+     *
+     * <p><b>Why this iterates.</b> The defect was probabilistic: measured
+     * at 7 failures in 11 runs (64%) of the single-shot race. A one-shot
+     * test would therefore have let the bug through roughly one time in
+     * three — useless as a gate. At {@value #OVERSELL_ITERATIONS}
+     * independent races, a regression survives undetected with probability
+     * {@code 0.36^10}, below 1 in 250.000.</p>
+     *
+     * <p>Every iteration is a fresh session with its own pair of payments,
+     * so the races are independent rather than one race retried against
+     * already-consumed capacity. The assertion is the invariant itself:
+     * never more assignments than capacity, and exactly one winner.</p>
+     */
+    @Test
+    void concurrent_claims_never_oversell_a_capacity_one_session() throws Exception {
+        for (int iteration = 0; iteration < OVERSELL_ITERATIONS; iteration++) {
+            RaceFixture race = seedOversellRace("oversell-" + iteration);
+
+            dispatchConcurrently(race.events());
+
+            String first = purchaseRepository.findByPaymentId(race.firstPaymentId())
+                .orElseThrow().getStatus();
+            String second = purchaseRepository.findByPaymentId(race.secondPaymentId())
+                .orElseThrow().getStatus();
+            assertThat(assignmentRepository.countBySessionId(race.sessionId()))
+                .as("iteration %d: assignments on a capacity-1 session", iteration)
+                .isEqualTo(1);
+            assertThat(List.of(first, second))
+                .as("iteration %d: exactly one claim wins, the other is the residual", iteration)
+                .containsExactlyInAnyOrder("PENDING_FULFILLMENT", "EXCEPTION");
+        }
     }
 
 }
