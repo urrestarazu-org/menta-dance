@@ -199,6 +199,24 @@ class SecurityConfigTest {
             .andExpect(status().isUnauthorized());
     }
 
+    /**
+     * #41, US-PHYSICAL-004. Before this matcher existed, this path had no
+     * matcher at all and fell through to {@code
+     * anyRequest().access(roleAuthorizationManager)}, whose own fall-through
+     * semantics grant unmapped paths regardless of authentication (see this
+     * class's other tests for the same shape, e.g. #32's GET
+     * /subscriptions/me above) — demonstrated for real here rather than
+     * assumed, per the #32 precedent where the documentation had drifted
+     * from the actual filter-chain behaviour.
+     */
+    @Test
+    void an_unauthenticated_post_of_the_physical_purchases_route_is_rejected() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(post("/api/v1/billing/physical/purchases"))
+            .andExpect(status().isUnauthorized());
+    }
+
     @Test
     void constructs_the_configuration_instance() {
         assertThat(new SecurityConfig()).isNotNull();
