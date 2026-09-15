@@ -126,7 +126,9 @@ class PhysicalCourseAvailabilityIntegrationTest {
     }
 
     private void seedHold(UUID sessionId, Instant expiresAt) {
-        holdRepository.save(new PhysicalCapacityHoldJpaEntity(UUID.randomUUID(), sessionId, expiresAt, Instant.now()));
+        holdRepository.save(new PhysicalCapacityHoldJpaEntity(
+            UUID.randomUUID(), sessionId, UUID.randomUUID(), expiresAt, null, Instant.now()
+        ));
     }
 
     @Test
