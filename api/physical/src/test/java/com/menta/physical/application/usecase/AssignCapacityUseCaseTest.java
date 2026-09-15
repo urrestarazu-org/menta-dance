@@ -15,7 +15,7 @@ import com.menta.physical.domain.exception.CapacityBelowAssignedException;
 import com.menta.physical.domain.exception.SessionNotFoundException;
 import com.menta.shared.physical.CapacityAssignmentCommand;
 import com.menta.shared.physical.MultiSessionCapacityAssignmentCommand;
-import com.menta.shared.physical.MultiSessionCapacityAssignmentCommand.SessionClaim;
+import com.menta.shared.physical.SessionClaim;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;

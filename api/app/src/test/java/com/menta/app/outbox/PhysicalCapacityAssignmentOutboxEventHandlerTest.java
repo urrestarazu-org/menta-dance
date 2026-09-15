@@ -41,7 +41,7 @@ import com.menta.physical.domain.exception.CapacityBelowAssignedException;
 import com.menta.shared.billing.PaymentCompletedOutboxPayload;
 import com.menta.shared.physical.CapacityAssignmentCommand;
 import com.menta.shared.physical.MultiSessionCapacityAssignmentCommand;
-import com.menta.shared.physical.MultiSessionCapacityAssignmentCommand.SessionClaim;
+import com.menta.shared.physical.SessionClaim;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;

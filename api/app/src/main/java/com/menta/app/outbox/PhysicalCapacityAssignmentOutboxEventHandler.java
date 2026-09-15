@@ -19,7 +19,7 @@ import com.menta.billing.domain.model.PurchaseType;
 import com.menta.billing.domain.model.Reason;
 import com.menta.shared.billing.PaymentCompletedOutboxPayload;
 import com.menta.shared.physical.MultiSessionCapacityAssignmentCommand;
-import com.menta.shared.physical.MultiSessionCapacityAssignmentCommand.SessionClaim;
+import com.menta.shared.physical.SessionClaim;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
