@@ -198,36 +198,28 @@ class HoldCapacityAdapterIntegrationTest {
     }
 
     /**
-     * TASK-3.6 (order: hold committed first, assignment attempted second)
-     * — the proposal's own High risk, tested directly and deterministically
-     * for the same reason as the test above.
+     * TASK-3.6 / 4.4 (order: hold committed first, assignment attempted
+     * second) — the proposal's own High risk, tested directly and
+     * deterministically for the same reason as the test above.
      *
-     * <p><b>Currently oversells, on purpose left un-asserted as a
-     * pass/fail.</b> Fixing this ordering is explicitly Phase 4's job
-     * (today's unmodified {@code assertAssignment} — design step 4, task
-     * 4.2, a later PR — does not yet count {@code activeHolds}, so
-     * {@code assigned + 1 > capacity} reads false and the assignment
-     * wrongly succeeds). Measured against THIS PR's hold writer with
-     * today's unmodified {@code assertAssignment}: the oversell reproduces
-     * on every run. This test intentionally documents that measured,
-     * expected-until-Phase-4 state instead of asserting the still-missing
-     * invariant, so PR3 stays green without silently deleting the proof.
-     * Phase 4 flips the assertion below to expect the thrown exception.</p>
+     * <p>Phase 4's corrected {@code assertAssignment} now counts
+     * {@code activeHolds} via {@code countActiveBySessionIdForUpdate}, so
+     * {@code assigned + activeHolds + 1 > capacity} correctly refuses the
+     * assignment: the opposing active hold already occupies the session's
+     * only spot. Zero assignment rows are written (design B4 — spec
+     * scenario "assignment is blocked by an opposing active hold").</p>
      */
     @Test
-    void hold_first_then_assignment_currently_oversells_until_Phase_4() {
+    void hold_first_then_assignment_is_refused() {
         UUID sessionId = seedSession(1);
 
         holdPort.holdAll(holdCommand(sessionId, UUID.randomUUID()), Instant.now().plusSeconds(1800));
 
-        // NOT the desired end-state: recorded here as the measured proof of
-        // the proposal's High risk (Phase 4 must flip this to a thrown
-        // CapacityBelowAssignedException with zero assignment rows).
-        assignmentPort.assign(new CapacityAssignmentCommand(sessionId, UUID.randomUUID(), UUID.randomUUID()));
+        assertThatThrownBy(() -> assignmentPort.assign(
+            new CapacityAssignmentCommand(sessionId, UUID.randomUUID(), UUID.randomUUID())
+        )).isInstanceOf(CapacityBelowAssignedException.class);
 
         assertThat(holdRepository.findAll()).hasSize(1);
-        assertThat(assignmentRepository.findAll())
-            .as("Known oversell (proposal Risk table) — closed by Phase 4's assertAssignment invariant fix")
-            .hasSize(1);
+        assertThat(assignmentRepository.findAll()).isEmpty();
     }
 }
