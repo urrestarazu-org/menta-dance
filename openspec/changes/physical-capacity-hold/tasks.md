@@ -59,11 +59,11 @@ end-to-end proof on top of a bridge already proven safe.
 
 ## Phase 2: `shared` ordered hold command (design step 2, RED-shared-ordering first)
 
-- [ ] 2.1 RED: `SessionClaimOrderingTest` — rejects empty/duplicate/non-ascending over the **whole** claim list, not adjacent pairs.
-- [ ] 2.2 GREEN: promote `SessionClaim` to `com.menta.shared.physical.SessionClaim`; create `SessionClaimOrdering.requireTotalOrder(List<SessionClaim>)`.
-- [ ] 2.3 Modify `MultiSessionCapacityAssignmentCommand` — delegate to `SessionClaimOrdering`; verify its existing test suite still green unmodified in behavior.
-- [ ] 2.4 RED+GREEN: `MultiSessionCapacityHoldCommandTest`/class — ordered claims + `paymentId`, no `studentId` (B2).
-- [ ] 2.5 Run `:api:shared:test` — no coverage floor regression.
+- [x] 2.1 RED: `SessionClaimOrderingTest` — rejects empty/duplicate/non-ascending over the **whole** claim list, not adjacent pairs.
+- [x] 2.2 GREEN: promote `SessionClaim` to `com.menta.shared.physical.SessionClaim`; create `SessionClaimOrdering.requireTotalOrder(List<SessionClaim>)`.
+- [x] 2.3 Modify `MultiSessionCapacityAssignmentCommand` — delegate to `SessionClaimOrdering`; verify its existing test suite still green unmodified in behavior.
+- [x] 2.4 RED+GREEN: `MultiSessionCapacityHoldCommandTest`/class — ordered claims + `paymentId`, no `studentId` (B2).
+- [x] 2.5 Run `:api:shared:test` — no coverage floor regression.
 
 ## Phase 3: `api:physical` hold write (design step 3, RED-adapter-invariant then RED-concurrency)
 
