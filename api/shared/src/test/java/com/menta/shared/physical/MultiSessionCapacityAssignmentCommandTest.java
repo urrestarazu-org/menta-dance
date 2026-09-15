@@ -3,7 +3,6 @@ package com.menta.shared.physical;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.menta.shared.physical.MultiSessionCapacityAssignmentCommand.SessionClaim;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;

@@ -25,7 +25,7 @@ import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJ
 import com.menta.physical.application.usecase.CapacityAssignments;
 import com.menta.shared.physical.CapacityAssignmentCommand;
 import com.menta.shared.physical.MultiSessionCapacityAssignmentCommand;
-import com.menta.shared.physical.MultiSessionCapacityAssignmentCommand.SessionClaim;
+import com.menta.shared.physical.SessionClaim;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
