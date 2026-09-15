@@ -431,23 +431,83 @@ keep `develop` linear for this change).
 **Branch**: `feature/physical-purchase-capacity-e2e` off `develop` (cut
 after PR 7 merges; needs everything).
 
-- [ ] 8.1 Modify `api/openapi/billing-v1.yaml` — document
+- [x] 8.1 Modify `api/openapi/billing-v1.yaml` — document
       `POST /api/v1/billing/physical/purchases`, its request/response
       shapes, `410` and `409` ProblemDetail responses.
-- [ ] 8.2 RED: create `PhysicalPurchaseIntegrationTest.java`
-      (`api/app/.../integration/physical/` or `billing/`, structured like
-      `PresentialPurchaseExceptionPathIntegrationTest`): scenario 1 —
-      monthly buy → confirm → N `ASSIGNED`; scenario 2 — individual N=1;
-      scenario 5 — duplicate webhook consumes zero extra spots; scenario 6 —
-      unfillable coverage ⇒ `Payment COMPLETED` + `Purchase EXCEPTION`; plus
-      the checkout-level `409` on a visibly-full quote.
-- [ ] 8.3 Verify RED: fails for the intended end-to-end reason (routes not
-      yet exercised together in this Testcontainers context), not a fixture
-      typo.
-- [ ] 8.4 Verify GREEN: all listed scenarios pass together.
-- [ ] 8.5 Run `./gradlew test check` (full monorepo build) — confirms every
-      module's JaCoCo layer threshold holds (`billing` 100%/85%, `physical`
-      95%/90%) and all ArchUnit suites pass.
+- [x] 8.2 RED: create `PhysicalPurchaseIntegrationTest.java`
+      (`api/app/.../integration/billing/`, structured like
+      `PresentialPurchaseExceptionPathIntegrationTest` +
+      `SubscriptionCheckoutIntegrationTest`'s `RANDOM_PORT`/`TestRestTemplate`
+      harness): scenario 1 — monthly buy → confirm → N `ASSIGNED`; scenario 2
+      — individual N=1; scenario 5 — duplicate outbox redelivery consumes
+      zero extra spots; scenario 6 (proposal's own wording, "computed
+      sessions cannot all be assigned") — a capacity trip at confirmation ⇒
+      `Payment COMPLETED` + `Purchase EXCEPTION`, zero partial rows; plus the
+      checkout-level `409` (D5), `410` (A7) and `401` end-to-end.
+- [x] 8.3 Verify RED: real failures, not fixture typos — three genuine
+      production defects surfaced only by a real Spring context + real
+      MySQL, none catchable by the existing Mockito-based unit tests:
+      1) `CreatePhysicalPurchaseCheckoutUseCaseImpl` was never wrapped in a
+         `@Transactional` decorator (unlike `CreateSubscriptionCheckoutUseCaseImpl`),
+         so `PaymentRepository.save`'s `MANDATORY` propagation threw
+         `IllegalTransactionStateException` on every real checkout call (500).
+      2) The outbox handler never called `Purchase.assigned()` on a
+         successful `assignAll` — a pre-existing gap explicitly flagged as
+         "out of PR6's scope" in a comment in
+         `PhysicalSessionManagementIntegrationTest` — so every real purchase
+         settled at `PENDING_FULFILLMENT` forever, never `ASSIGNED`.
+      3) `PhysicalCapacityAssignmentJpaEntity` had no `uniqueConstraints`
+         mirroring V7's real `uq_physical_assignment_session_student`; since
+         the integration-test profile runs Hibernate `ddl-auto=create-drop`
+         with Flyway disabled, the test schema silently dropped that DB-level
+         guarantee, letting a redelivered event insert a second assignment
+         row for the same (session, student) pair.
+- [x] 8.4 Verify GREEN: all 7 scenarios pass together after fixing the three
+      defects above:
+      - Added `TransactionalCreatePhysicalPurchaseCheckoutUseCase` (mirrors
+        `TransactionalCreateSubscriptionCheckoutUseCase`) and wired it in
+        `BillingConfiguration`.
+      - Added `MarkPurchaseAssignedPort`/`MarkPurchaseAssignedUseCase`/
+        `MarkPurchaseAssignedAdapter` (mirror image of
+        `MarkPurchaseException*`) and call it from
+        `PhysicalCapacityAssignmentOutboxEventHandler` right after a
+        successful `assignAll` (design A3: "assignAll -- ok -->
+        purchase.assigned()"). Updated every pre-existing test asserting the
+        old `PENDING_FULFILLMENT` result to the now-correct `ASSIGNED`
+        (`PaymentWebhookIntegrationTest`, `PhysicalSessionManagementIntegrationTest`).
+      - Added `uniqueConstraints` to `PhysicalCapacityAssignmentJpaEntity`
+        matching V7 exactly, restoring test/production schema parity.
+      - A redelivered outbox event now re-attempts `assignAll`, trips the
+        (now-real) unique constraint, and calls `markException` on an
+        already-`ASSIGNED` purchase; `MarkPurchaseExceptionUseCase`'s
+        ADR-0028 guard correctly refuses that transition, but the refusal's
+        `RuntimeException` poisoned the ambient `OutboxReconciliationWorker`
+        transaction even when the handler caught it, causing
+        `UnexpectedRollbackException` on commit. Fixed with
+        `noRollbackFor = IllegalPurchaseStateTransitionException.class` on
+        `MarkPurchaseExceptionUseCase.markException` (Spring's standard
+        mechanism for "this exception is an expected, correct outcome, not a
+        failure") plus a local catch in the handler treating the refusal as
+        the safe no-op it is.
+      - Added `TransactionalCreatePhysicalPurchaseCheckoutUseCaseTest` and
+        extended `PhysicalCapacityAssignmentOutboxEventHandlerTest` (new
+        `RedeliveryAfterAssigned` nested class) to cover both fixes at the
+        unit level too, not just end-to-end.
+- [x] 8.5 Ran `./gradlew test check` (full monorepo build): **BUILD
+      SUCCESSFUL**, 1976 tests total across all 6 modules (`shared` 9,
+      `auth` 112, `billing` 101, `physical` 55, `virtual` 77, `app` 61 XML
+      suites), **0 failures, 0 errors, 0 skipped** — counted from the real
+      JUnit XML (`tests`/`failures`/`errors` attributes), not the Gradle
+      console summary. All 5 ArchUnit suites green (`app` 5, `auth` 14,
+      `billing` 7, `physical` 7, `virtual` 7 — 40 architecture assertions,
+      0 failures). `billing` and `physical` JaCoCo layered floors
+      (100%/85%, 95%/90%) hold — `check` includes
+      `jacocoTestCoverageVerification` per module and the build would have
+      failed otherwise. Checkstyle reported only pre-existing warning-level
+      import-order violations in `BillingConfiguration.java` (non-blocking,
+      `ignoreFailures`), consistent with the same rule already being
+      violated there for `TransactionalCreateSubscriptionCheckoutUseCase`/
+      `TransactionalCancelSubscriptionUseCase` before this PR.
 
 ## Out of Scope (confirmed in proposal.md)
 

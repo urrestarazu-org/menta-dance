@@ -43,6 +43,8 @@ tags:
     description: >-
       Cancelación administrativa y asignación de suscripciones de prueba para un alumno
       (ADMIN).
+  - name: Compras presenciales
+    description: Compra de cursos presenciales (#41, US-PHYSICAL-004).
   - name: Webhooks
     description: Notificaciones asíncronas de proveedores de pago.
 
@@ -445,6 +447,107 @@ paths:
                     detail: El plan no está disponible para suscribirse.
                     code: PLAN_NOT_AVAILABLE
 
+  /api/v1/billing/physical/purchases:
+    post:
+      tags: [Compras presenciales]
+      summary: Iniciar Checkout Pro para la compra de un curso presencial
+      description: |
+        Toma un `quoteId` vigente (`POST /api/v1/billing/physical/quotes`),
+        lo asocia al usuario autenticado y crea localmente un `Payment`
+        `PENDING` antes de pedir la preferencia a Mercado Pago. El usuario
+        siempre se obtiene del access token, nunca del body. Repetir la
+        misma `idempotencyKey` para ese usuario devuelve el checkout
+        original y no crea un segundo cobro.
+
+        No reserva capacidad: la asignación de sesiones ocurre recién en la
+        confirmación por webhook (#41, US-PHYSICAL-004, design A6). El `409`
+        de esta ruta es una cortesía de lectura ("best-effort"), no una
+        garantía — un checkout que pasa este chequeo puede terminar en
+        `EXCEPTION` si otro comprador toma el último cupo antes de la
+        confirmación. La garantía real llega con los holds de capacidad
+        (#208).
+
+        `checkoutUrl` sólo sirve para navegar al Checkout Pro. La
+        confirmación financiera llega exclusivamente por el webhook firmado.
+      operationId: createPhysicalPurchaseCheckout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePhysicalPurchaseRequest'
+      responses:
+        '201':
+          description: Pago pendiente y preferencia de Checkout Pro creados.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalPurchaseCheckoutResponse'
+        '400':
+          description: Body inválido, `quoteId` ausente o `idempotencyKey` ausente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                solicitud_invalida:
+                  value:
+                    type: https://menta.dance/problems/invalid_request
+                    title: Bad Request
+                    status: 400
+                    detail: La solicitud contiene datos inválidos.
+                    code: INVALID_REQUEST
+        '401':
+          description: Falta un access token válido.
+        '409':
+          description: >-
+            Las sesiones elegibles de la cotización ya están llenas al momento del
+            request (D5) — cortesía de lectura, no una garantía de cupo. No se crea
+            ningún `Payment`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                capacity_unavailable:
+                  value:
+                    type: https://menta.dance/problems/capacity_unavailable
+                    title: Conflict
+                    status: 409
+                    detail: No hay cupo disponible para los horarios elegibles de esta cotización.
+                    code: CAPACITY_UNAVAILABLE
+        '410':
+          description: >-
+            La cotización no existe o su vigencia de 1 hora ya expiró. Deliberadamente
+            no distingue ambos casos (anti-enumeración). El remedio es solicitar una
+            cotización nueva.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                cotizacion_expirada:
+                  value:
+                    type: https://menta.dance/problems/physical_course_quote_expired
+                    title: Gone
+                    status: 410
+                    detail: La cotización expiró o no existe. Solicitá una nueva.
+                    code: PHYSICAL_COURSE_QUOTE_EXPIRED
+        '503':
+          description: No fue posible crear la preferencia; no se creó un cobro.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                payment_preference_unavailable:
+                  value:
+                    type: https://menta.dance/problems/payment_preference_unavailable
+                    title: Service Unavailable
+                    status: 503
+                    detail: No pudimos iniciar el pago en este momento. Intentá de nuevo en unos minutos.
+                    code: PAYMENT_PREFERENCE_UNAVAILABLE
+
   /api/v1/billing/payments/mercadopago/webhook:
     post:
       tags: [Webhooks]
@@ -727,6 +830,46 @@ components:
         days:
           type: integer
           description: Igual al `days` solicitado por el admin — nunca `Plan.durationDays`.
+
+    CreatePhysicalPurchaseRequest:
+      type: object
+      required: [quoteId, paymentMethod, idempotencyKey]
+      properties:
+        quoteId:
+          type: string
+          description: Id de una `PhysicalCourseQuote` vigente (no vencida).
+        paymentMethod:
+          type: string
+          enum: [MERCADO_PAGO]
+          description: Este endpoint implementa exclusivamente Checkout Pro.
+        idempotencyKey:
+          type: string
+          minLength: 1
+          maxLength: 128
+
+    PhysicalPurchaseCheckoutResponse:
+      type: object
+      required: [paymentId, quoteId, status, providerPreferenceId, checkoutUrl, externalReference]
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        quoteId:
+          type: string
+          description: Referencia de `PaymentTarget.Physical` — la cotización comprada, no una sesión (design A5).
+        status:
+          type: string
+          enum: [PENDING]
+        providerPreferenceId:
+          type: string
+          description: Identificador de la preferencia de Checkout Pro, no del pago.
+        checkoutUrl:
+          type: string
+          format: uri
+          description: URL de redirección al Checkout Pro.
+        externalReference:
+          type: string
+          description: Referencia local usada para correlacionar el webhook verificado.
 
     PlanCourseResponse:
       type: object

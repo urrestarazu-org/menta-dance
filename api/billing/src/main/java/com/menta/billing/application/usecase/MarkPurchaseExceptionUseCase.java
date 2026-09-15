@@ -42,8 +42,20 @@ public class MarkPurchaseExceptionUseCase implements MarkPurchaseExceptionPort {
         this.purchaseRepository = purchaseRepository;
     }
 
+    /**
+     * {@code noRollbackFor} (#41 PR8): a refused {@code ASSIGNED -> EXCEPTION}
+     * transition is the documented, correct terminal outcome of a redelivered
+     * outbox event (ADR-0028 §Decisión) — not a failure that should poison
+     * the ambient transaction. Without this, {@link IllegalPurchaseStateTransitionException}
+     * propagating out of this {@code REQUIRED}-participating method marks the
+     * caller's transaction rollback-only even when the caller catches and
+     * swallows it, so a later commit throws {@code UnexpectedRollbackException}
+     * for a case that was already handled. This changes only Spring's
+     * transactional bookkeeping — the exception itself is still thrown
+     * unchanged for every caller.
+     */
     @Override
-    @Transactional(propagation = Propagation.REQUIRED)
+    @Transactional(propagation = Propagation.REQUIRED, noRollbackFor = IllegalPurchaseStateTransitionException.class)
     public void markException(PaymentId paymentId, Reason reason) {
         Optional<Purchase> maybe = purchaseRepository.findByPaymentId(paymentId);
         if (maybe.isEmpty()) {

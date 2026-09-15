@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.menta.app.billing.MarkPurchaseAssignedAdapter;
 import com.menta.app.billing.MarkPurchaseExceptionAdapter;
 import com.menta.app.billing.PhysicalCapacityAssignmentAdapter;
 import com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity;
@@ -22,6 +23,8 @@ import com.menta.billing.application.port.out.PaymentRepository;
 import com.menta.billing.application.port.out.PhysicalCourseAvailabilityPort;
 import com.menta.billing.application.port.out.PhysicalCourseQuoteRepository;
 import com.menta.billing.application.usecase.CoveragePlanner;
+import com.menta.billing.domain.exception.IllegalPurchaseStateTransitionException;
+import com.menta.billing.domain.model.FulfillmentStatus;
 import com.menta.billing.domain.model.Money;
 import com.menta.billing.domain.model.Payment;
 import com.menta.billing.domain.model.PaymentId;
@@ -78,6 +81,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
     private PhysicalCapacityAssignmentPort physicalCapacityAssignmentPort;
     private PurchaseCreationFromEventPort purchaseCreationFromEventPort;
     private MarkPurchaseExceptionAdapter markExceptionAdapter;
+    private MarkPurchaseAssignedAdapter markAssignedAdapter;
     private PaymentRepository paymentRepository;
     private PhysicalCourseQuoteRepository quoteRepository;
     private PhysicalCourseAvailabilityPort courseAvailabilityPort;
@@ -90,6 +94,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
         capacityAdapter = new PhysicalCapacityAssignmentAdapter(physicalCapacityAssignmentPort);
         purchaseCreationFromEventPort = mock(PurchaseCreationFromEventPort.class);
         markExceptionAdapter = mock(MarkPurchaseExceptionAdapter.class);
+        markAssignedAdapter = mock(MarkPurchaseAssignedAdapter.class);
         paymentRepository = mock(PaymentRepository.class);
         quoteRepository = mock(PhysicalCourseQuoteRepository.class);
         courseAvailabilityPort = mock(PhysicalCourseAvailabilityPort.class);
@@ -98,8 +103,8 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
             .registerModule(new com.fasterxml.jackson.module.paramnames.ParameterNamesModule())
             .configure(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
         handler = new PhysicalCapacityAssignmentOutboxEventHandler(
-            capacityAdapter, markExceptionAdapter, purchaseCreationFromEventPort, paymentRepository,
-            quoteRepository, courseAvailabilityPort, objectMapper
+            capacityAdapter, markExceptionAdapter, markAssignedAdapter, purchaseCreationFromEventPort,
+            paymentRepository, quoteRepository, courseAvailabilityPort, objectMapper
         );
     }
 
@@ -222,6 +227,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
                 List.of(new SessionClaim(SESSION_UUID, NOW.plusSeconds(3600))), STUDENT_UUID, PAYMENT_UUID
             ));
             verify(markExceptionAdapter, never()).markException(any(), any());
+            verify(markAssignedAdapter, times(1)).markAssigned(PAYMENT_ID);
         }
     }
 
@@ -255,6 +261,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
                 STUDENT_UUID, PAYMENT_UUID
             ));
             verify(markExceptionAdapter, never()).markException(any(), any());
+            verify(markAssignedAdapter, times(1)).markAssigned(PAYMENT_ID);
         }
     }
 
@@ -276,6 +283,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
             verify(markExceptionAdapter, times(1)).markException(eq(PAYMENT_ID), eq(Reason.TARGET_NOT_SCHEDULED));
             verify(purchaseCreationFromEventPort, never()).createPurchaseFromPaymentEvent(any(), any());
             verify(physicalCapacityAssignmentPort, never()).assignAll(any());
+            verify(markAssignedAdapter, never()).markAssigned(any());
         }
     }
 
@@ -297,6 +305,27 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
             verify(markExceptionAdapter, times(1)).markException(
                 eq(PAYMENT_ID), eq(Reason.CAPACITY_BELOW_ASSIGNED)
             );
+            verify(markAssignedAdapter, never()).markAssigned(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("Spec scenario: Redelivery on an already-ASSIGNED purchase is a safe no-op")
+    class RedeliveryAfterAssigned {
+
+        @Test
+        void swallows_the_refused_ASSIGNED_to_EXCEPTION_transition_without_propagating() throws Exception {
+            when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
+            when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.of(individualQuote(SESSION_ID_STR)));
+            when(courseAvailabilityPort.findScheduledSessions(eq(COURSE_ID), any(), any()))
+                .thenReturn(List.of(new ScheduledSessionSnapshot(SESSION_ID_STR, NOW.plusSeconds(3600), 5)));
+            doThrow(new CapacityBelowAssignedException())
+                .when(physicalCapacityAssignmentPort).assignAll(any());
+            doThrow(new IllegalPurchaseStateTransitionException(
+                PAYMENT_ID, FulfillmentStatus.ASSIGNED, FulfillmentStatus.EXCEPTION
+            )).when(markExceptionAdapter).markException(eq(PAYMENT_ID), eq(Reason.CAPACITY_BELOW_ASSIGNED));
+
+            assertThatCode(() -> handler.handle(rowWithPayload(payload()))).doesNotThrowAnyException();
         }
     }
 
@@ -318,6 +347,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
 
             verify(purchaseCreationFromEventPort, times(2)).createPurchaseFromPaymentEvent(any(), any());
             verify(physicalCapacityAssignmentPort, times(2)).assignAll(any());
+            verify(markAssignedAdapter, times(2)).markAssigned(PAYMENT_ID);
         }
     }
 
@@ -337,6 +367,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
             verify(purchaseCreationFromEventPort, never()).createPurchaseFromPaymentEvent(any(), any());
             verify(physicalCapacityAssignmentPort, never()).assignAll(any());
             verify(quoteRepository, never()).findById(any());
+            verify(markAssignedAdapter, never()).markAssigned(any());
         }
     }
 
@@ -356,6 +387,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
             );
             verify(purchaseCreationFromEventPort, never()).createPurchaseFromPaymentEvent(any(), any());
             verify(physicalCapacityAssignmentPort, never()).assignAll(any());
+            verify(markAssignedAdapter, never()).markAssigned(any());
         }
     }
 }

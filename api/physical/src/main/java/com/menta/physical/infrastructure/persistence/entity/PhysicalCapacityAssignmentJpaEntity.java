@@ -4,18 +4,33 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.util.UUID;
 
 /**
- * JPA persistence model for the physical_capacity_assignments table. No
- * production adapter writes through this entity yet (the write/reservation
- * path is a separate, future issue) — {@link PhysicalSessionJpaRepository}
- * reads this table directly via a native COUNT subquery instead. This
- * mapping exists so Hibernate manages its schema and tests can seed rows.
+ * JPA persistence model for the physical_capacity_assignments table.
+ * {@code JpaPhysicalCapacityAssignmentAdapter} owns the write path (design
+ * §5.3) via the {@code PhysicalCapacityAssignmentWriter} port; {@link
+ * PhysicalSessionJpaRepository} still reads this table directly via a
+ * native COUNT subquery for availability.
+ *
+ * <p>{@code uniqueConstraints} mirrors V7's real
+ * {@code uq_physical_assignment_session_student} DDL exactly (#41 PR8): the
+ * integration-test profile runs with {@code ddl-auto=create-drop} and
+ * Flyway disabled, so Hibernate derives the schema purely from this
+ * annotation. Without it, the test schema silently drops the one DB-level
+ * guarantee a redelivered outbox event relies on to insert zero additional
+ * rows for an already-claimed (session, student) pair — a schema/production
+ * parity gap this entity mapping must not reintroduce.</p>
  */
 @Entity
-@Table(name = "physical_capacity_assignments")
+@Table(
+    name = "physical_capacity_assignments",
+    uniqueConstraints = @UniqueConstraint(
+        name = "uq_physical_assignment_session_student", columnNames = {"session_id", "student_id"}
+    )
+)
 public class PhysicalCapacityAssignmentJpaEntity {
 
     @Id

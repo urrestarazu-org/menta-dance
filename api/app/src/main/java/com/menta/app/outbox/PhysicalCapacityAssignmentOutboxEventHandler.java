@@ -1,6 +1,7 @@
 package com.menta.app.outbox;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.menta.app.billing.MarkPurchaseAssignedAdapter;
 import com.menta.app.billing.MarkPurchaseExceptionAdapter;
 import com.menta.app.billing.PhysicalCapacityAssignmentAdapter;
 import com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity;
@@ -73,6 +74,7 @@ public class PhysicalCapacityAssignmentOutboxEventHandler implements OutboxEvent
 
     private final PhysicalCapacityAssignmentAdapter capacityAdapter;
     private final MarkPurchaseExceptionAdapter exceptionAdapter;
+    private final MarkPurchaseAssignedAdapter assignedAdapter;
     private final PurchaseCreationFromEventPort purchaseCreationFromEventPort;
     private final PaymentRepository paymentRepository;
     private final PhysicalCourseQuoteRepository quoteRepository;
@@ -82,6 +84,7 @@ public class PhysicalCapacityAssignmentOutboxEventHandler implements OutboxEvent
     public PhysicalCapacityAssignmentOutboxEventHandler(
         PhysicalCapacityAssignmentAdapter capacityAdapter,
         MarkPurchaseExceptionAdapter exceptionAdapter,
+        MarkPurchaseAssignedAdapter assignedAdapter,
         PurchaseCreationFromEventPort purchaseCreationFromEventPort,
         PaymentRepository paymentRepository,
         PhysicalCourseQuoteRepository quoteRepository,
@@ -90,6 +93,7 @@ public class PhysicalCapacityAssignmentOutboxEventHandler implements OutboxEvent
     ) {
         this.capacityAdapter = capacityAdapter;
         this.exceptionAdapter = exceptionAdapter;
+        this.assignedAdapter = assignedAdapter;
         this.purchaseCreationFromEventPort = purchaseCreationFromEventPort;
         this.paymentRepository = paymentRepository;
         this.quoteRepository = quoteRepository;
@@ -187,13 +191,30 @@ public class PhysicalCapacityAssignmentOutboxEventHandler implements OutboxEvent
 
         try {
             capacityAdapter.assignAll(cmd);
+            // design A3 Data Flow: "assignAll(ordered claims) -- ok --> purchase.assigned()".
+            assignedAdapter.markAssigned(paymentId);
         } catch (com.menta.physical.domain.exception.CapacityBelowAssignedException capacityTripped) {
             // Spec scenario: capacity invariant trips — Purchase flips to EXCEPTION.
-            exceptionAdapter.markException(paymentId, Reason.CAPACITY_BELOW_ASSIGNED);
             // V7 UNIQUE race on (session_id, student_id) also rolls up here
             // — the adapter rethrows CapacityBelowAssignedException on a V7
             // UNIQUE collision. All-or-nothing (design A3): every insert in
             // this set is rolled back with it, so zero partial rows survive.
+            try {
+                exceptionAdapter.markException(paymentId, Reason.CAPACITY_BELOW_ASSIGNED);
+            } catch (com.menta.billing.domain.exception.IllegalPurchaseStateTransitionException alreadyAssigned) {
+                // Idempotent redelivery (spec scenario 5): assignAll already
+                // succeeded once and marked the Purchase ASSIGNED; this second
+                // delivery re-attempts the same claims, trips the same V7
+                // UNIQUE collision on the already-owned rows, and lands here.
+                // ADR-0028 refuses ASSIGNED -> EXCEPTION on purpose (once
+                // assigned, the residual path is unreachable) — that refusal
+                // itself IS the correct, terminal outcome for a duplicate
+                // delivery, not a failure to retry. Zero rows changed.
+                log.info(
+                    "Redelivered outbox event for an already-ASSIGNED purchase paymentId={}; no-op",
+                    payload.paymentId()
+                );
+            }
         }
     }
 

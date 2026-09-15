@@ -1,0 +1,484 @@
+package com.menta.app.integration.billing;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
+
+import com.menta.app.outbox.OutboxReconciliationWorker;
+import com.menta.auth.application.port.out.AccessTokenIssuer;
+import com.menta.auth.application.port.out.ActivationRateLimitPort;
+import com.menta.auth.application.port.out.AuthDegradedGuard;
+import com.menta.auth.application.port.out.LoginRateLimitPort;
+import com.menta.auth.application.port.out.PasswordResetAttemptRateLimitPort;
+import com.menta.auth.application.port.out.PasswordResetRequestRateLimitPort;
+import com.menta.auth.application.port.out.TokenBlacklistPort;
+import com.menta.auth.domain.model.Role;
+import com.menta.auth.domain.model.User;
+import com.menta.auth.domain.model.UserId;
+import com.menta.auth.domain.model.UserStatus;
+import com.menta.auth.domain.repository.UserRepository;
+import com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity;
+import com.menta.auth.infrastructure.persistence.repository.OutboxRowJpaRepository;
+import com.menta.billing.application.contract.BillingOutboxEventTypes;
+import com.menta.billing.application.dto.ProviderPaymentResult;
+import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
+import com.menta.billing.application.port.out.CourseCatalogPort;
+import com.menta.billing.application.port.out.PaymentPreferencePort;
+import com.menta.billing.application.port.out.PaymentProviderPort;
+import com.menta.billing.domain.model.Money;
+import com.menta.billing.infrastructure.persistence.entity.PhysicalCourseQuoteJpaEntity;
+import com.menta.billing.infrastructure.persistence.entity.WebhookInboxJpaEntity;
+import com.menta.billing.infrastructure.persistence.repository.PaymentJpaRepository;
+import com.menta.billing.infrastructure.persistence.repository.PhysicalCourseQuoteJpaRepository;
+import com.menta.billing.infrastructure.persistence.repository.PurchaseJpaRepository;
+import com.menta.billing.infrastructure.persistence.repository.PurchaseSessionJpaRepository;
+import com.menta.billing.infrastructure.persistence.repository.WebhookInboxJpaRepository;
+import com.menta.billing.infrastructure.webhook.WebhookInboxStatus;
+import com.menta.billing.infrastructure.webhook.WebhookVerificationWorker;
+import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
+import com.menta.physical.domain.model.CourseStatus;
+import com.menta.physical.infrastructure.persistence.entity.PhysicalCapacityAssignmentJpaEntity;
+import com.menta.physical.infrastructure.persistence.entity.PhysicalCourseJpaEntity;
+import com.menta.physical.infrastructure.persistence.entity.PhysicalSessionJpaEntity;
+import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityAssignmentJpaRepository;
+import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJpaRepository;
+import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
+import com.menta.shared.domain.vo.Email;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.OptionalLong;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.MySQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+
+/**
+ * End-to-end coverage for #41 (US-PHYSICAL-004): real HTTP checkout (through
+ * the real security filter chain) → real signed-webhook verification worker →
+ * real outbox reconciliation worker → real {@code assignAll} against the
+ * physical capacity tables.
+ *
+ * <p>Mirrors {@link SubscriptionCheckoutIntegrationTest}'s harness
+ * ({@code RANDOM_PORT} + {@link TestRestTemplate}, real MySQL via
+ * Testcontainers) and reuses {@link PresentialPurchaseExceptionPathIntegrationTest}'s
+ * direct outbox-worker invocation to drive the confirmation half of the
+ * circuit without waiting on the scheduler (its cadence is pushed far out via
+ * {@code billing.webhook.reconcile-rate-ms}).</p>
+ *
+ * <p>Scenarios 1, 2, 5 and 6 of US-PHYSICAL-004 (proposal.md Scope), plus the
+ * checkout-level D5/A6 best-effort {@code 409} and the {@code 410}/{@code 401}
+ * edges — every one of them exercised through the real controller, the real
+ * webhook worker and the real outbox worker together for the first time in
+ * this Testcontainers context (PR7 only proved the checkout endpoint in
+ * isolation with Mockito).</p>
+ */
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@ActiveProfiles("integration-test")
+@Testcontainers
+class PhysicalPurchaseIntegrationTest {
+
+    private static final String MERCHANT_ACCOUNT_ID = "merchant-integration-physical";
+    private static final BigDecimal MONTHLY_PRICE = new BigDecimal("300.00");
+    private static final BigDecimal INDIVIDUAL_PRICE = new BigDecimal("120.00");
+
+    @Container
+    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
+        .withDatabaseName("menta_test")
+        .withUsername("test")
+        .withPassword("test");
+
+    @DynamicPropertySource
+    static void mysqlProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
+        registry.add("spring.datasource.username", MYSQL::getUsername);
+        registry.add("spring.datasource.password", MYSQL::getPassword);
+        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
+        registry.add("billing.webhook.reconcile-rate-ms", () -> "999999999");
+        registry.add("billing.mercadopago.merchant-account-id", () -> MERCHANT_ACCOUNT_ID);
+    }
+
+    @Autowired private TestRestTemplate http;
+    @Autowired private UserRepository userRepository;
+    @Autowired private AccessTokenIssuer accessTokenIssuer;
+    @Autowired private PaymentJpaRepository paymentRepository;
+    @Autowired private PurchaseJpaRepository purchaseRepository;
+    @Autowired private PurchaseSessionJpaRepository purchaseSessionRepository;
+    @Autowired private WebhookInboxJpaRepository inboxRepository;
+    @Autowired private OutboxRowJpaRepository outboxRepository;
+    @Autowired private PhysicalCapacityAssignmentJpaRepository assignmentRepository;
+    @Autowired private PhysicalCourseJpaRepository courseRepository;
+    @Autowired private PhysicalSessionJpaRepository sessionRepository;
+    @Autowired private PhysicalCourseQuoteJpaRepository quoteRepository;
+    @Autowired private WebhookVerificationWorker webhookWorker;
+    @Autowired private OutboxReconciliationWorker outboxWorker;
+
+    @MockBean private PaymentPreferencePort paymentPreferencePort;
+    @MockBean private PaymentProviderPort paymentProviderPort;
+    @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
+    @MockBean private CourseCatalogPort courseCatalogPort;
+    @MockBean private AuthDegradedGuard authDegradedGuard;
+    @MockBean private TokenBlacklistPort tokenBlacklistPort;
+    @MockBean private LoginRateLimitPort loginRateLimitPort;
+    @MockBean private ActivationRateLimitPort activationRateLimitPort;
+    @MockBean private PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort;
+    @MockBean private PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
+    // ProcessPhysicalCheckInUseCaseImpl needs a RedisTemplate this Redis-less
+    // context would otherwise fail to resolve (same rationale as
+    // SubscriptionCheckoutIntegrationTest).
+    @MockBean private ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
+
+    private final AtomicInteger preferenceSequence = new AtomicInteger();
+
+    @BeforeEach
+    void stubTheProviderPreference() {
+        when(tokenBlacklistPort.isBlacklisted(anyString())).thenReturn(false);
+        when(tokenBlacklistPort.currentTokenVersion(anyString())).thenReturn(OptionalLong.empty());
+        when(paymentPreferencePort.createPreference(any())).thenAnswer(invocation -> {
+            String preferenceId = "pref-physical-" + preferenceSequence.incrementAndGet();
+            return new com.menta.billing.application.dto.PaymentPreferenceResult(
+                preferenceId, "https://mp.example/checkout/" + preferenceId
+            );
+        });
+    }
+
+    @AfterEach
+    void cleanUp() {
+        assignmentRepository.deleteAll();
+        purchaseSessionRepository.deleteAll();
+        purchaseRepository.deleteAll();
+        outboxRepository.deleteAll();
+        inboxRepository.deleteAll();
+        paymentRepository.deleteAll();
+        quoteRepository.deleteAll();
+        sessionRepository.deleteAll();
+        courseRepository.deleteAll();
+    }
+
+    // --- fixtures -----------------------------------------------------------
+
+    private UUID seedStudent() {
+        User user = User.create(
+            Email.of("student-" + UUID.randomUUID() + "@example.com"), "irrelevant-hash", Role.STUDENT
+        );
+        userRepository.save(user);
+        return user.getId().getValue();
+    }
+
+    private HttpHeaders headersFor(UUID userId) {
+        User user = new User(
+            UserId.of(userId), Email.of("token@example.com"), "hash", Role.STUDENT, UserStatus.ACTIVE,
+            java.time.LocalDateTime.now(), java.time.LocalDateTime.now()
+        );
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(accessTokenIssuer.issue(user).token());
+        return headers;
+    }
+
+    private UUID seedCourse() {
+        UUID courseId = UUID.randomUUID();
+        Instant now = Instant.now();
+        courseRepository.save(new PhysicalCourseJpaEntity(
+            courseId, "Integration course", "Test course", UUID.randomUUID(), "Test professor",
+            "MONDAY", LocalTime.NOON, 60, "BEGINNER", 1, CourseStatus.ACTIVE, now, now
+        ));
+        return courseId;
+    }
+
+    /** Ordered, weekly-spaced future sessions — matches design A2's claim order by construction. */
+    private List<UUID> seedScheduledSessions(UUID courseId, int count, int capacity) {
+        Instant base = Instant.now().plus(1, ChronoUnit.DAYS);
+        List<UUID> sessionIds = new java.util.ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            UUID sessionId = UUID.randomUUID();
+            sessionRepository.save(new PhysicalSessionJpaEntity(
+                sessionId, courseId, base.plus(7L * i, ChronoUnit.DAYS), capacity, "SCHEDULED", null
+            ));
+            sessionIds.add(sessionId);
+        }
+        return sessionIds;
+    }
+
+    private String seedMonthlyQuote(UUID courseId, int scheduledSessionCount, BigDecimal amount) {
+        UUID quoteId = UUID.randomUUID();
+        Instant now = Instant.now();
+        quoteRepository.save(new PhysicalCourseQuoteJpaEntity(
+            quoteId.toString(), courseId.toString(), "MONTHLY", amount, "ARS", BigDecimal.ZERO, 1,
+            scheduledSessionCount, null, amount, "ARS", "AVAILABLE", now, now.plusSeconds(3600)
+        ));
+        return quoteId.toString();
+    }
+
+    private String seedIndividualQuote(UUID courseId, UUID selectedSessionId, BigDecimal amount) {
+        UUID quoteId = UUID.randomUUID();
+        Instant now = Instant.now();
+        quoteRepository.save(new PhysicalCourseQuoteJpaEntity(
+            quoteId.toString(), courseId.toString(), "INDIVIDUAL", amount, "ARS", BigDecimal.ZERO, 1, 1,
+            selectedSessionId.toString(), amount, "ARS", "AVAILABLE", now, now.plusSeconds(3600)
+        ));
+        return quoteId.toString();
+    }
+
+    private static Map<String, Object> checkoutBody(String quoteId, String idempotencyKey) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("quoteId", quoteId);
+        body.put("paymentMethod", "MERCADO_PAGO");
+        body.put("idempotencyKey", idempotencyKey);
+        return body;
+    }
+
+    @SuppressWarnings("rawtypes")
+    private ResponseEntity<Map> checkout(UUID userId, String quoteId, String idempotencyKey) {
+        return http.exchange(
+            "/api/v1/billing/physical/purchases", HttpMethod.POST,
+            new HttpEntity<>(checkoutBody(quoteId, idempotencyKey), headersFor(userId)), Map.class
+        );
+    }
+
+    /** Drives the confirmation half: real webhook verification, then returns the resulting outbox row. */
+    private OutboxRowJpaEntity confirmPayment(String providerPaymentId, String externalReference, BigDecimal amount) {
+        when(paymentProviderPort.fetchPayment(providerPaymentId)).thenReturn(
+            new ProviderPaymentResult("approved", Money.of(amount, "ARS"), externalReference, MERCHANT_ACCOUNT_ID)
+        );
+        WebhookInboxJpaEntity row = new WebhookInboxJpaEntity(
+            providerPaymentId + ":req-1", providerPaymentId, "req-1", WebhookInboxStatus.RECEIVED,
+            0, null, null, Instant.now(), null
+        );
+        inboxRepository.save(row);
+        webhookWorker.process(row);
+        return outboxRepository.findAll().stream()
+            .filter(candidate -> candidate.getEventType().equals(BillingOutboxEventTypes.PHYSICAL_PAYMENT_COMPLETED))
+            .reduce((first, second) -> second) // most recent, in case a prior scenario in the same test left rows
+            .orElseThrow(() -> new IllegalStateException("No billing.PhysicalPaymentCompleted outbox row was produced"));
+    }
+
+    // --- Scenario 1: MONTHLY --------------------------------------------------
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void monthly_purchase_confirmed_assigns_every_covered_session_end_to_end() {
+        UUID userId = seedStudent();
+        UUID courseId = seedCourse();
+        List<UUID> sessionIds = seedScheduledSessions(courseId, 3, 5);
+        String quoteId = seedMonthlyQuote(courseId, 3, MONTHLY_PRICE);
+
+        ResponseEntity<Map> checkout = checkout(userId, quoteId, "idem-monthly-1");
+        assertThat(checkout.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(checkout.getBody().get("status")).isEqualTo("PENDING");
+        assertThat(checkout.getBody().get("quoteId")).isEqualTo(quoteId);
+        String externalReference = (String) checkout.getBody().get("externalReference");
+        UUID paymentId = UUID.fromString((String) checkout.getBody().get("paymentId"));
+
+        OutboxRowJpaEntity event = confirmPayment("mp-monthly-1", externalReference, MONTHLY_PRICE);
+        assertThat(outboxWorker.process(event)).isFalse();
+
+        assertThat(paymentRepository.findById(paymentId).orElseThrow().getStatusType()).isEqualTo("COMPLETED");
+        var purchase = purchaseRepository.findByPaymentId(paymentId).orElseThrow();
+        assertThat(purchase.getStatus()).isEqualTo("ASSIGNED");
+
+        var sessions = purchaseSessionRepository.findByPurchaseIdOrderByPositionAsc(purchase.getId());
+        assertThat(sessions).hasSize(3);
+        assertThat(sessions).extracting(s -> UUID.fromString(s.getPhysicalSessionId()))
+            .containsExactlyElementsOf(sessionIds);
+
+        for (UUID sessionId : sessionIds) {
+            assertThat(assignmentRepository.countBySessionId(sessionId)).isEqualTo(1);
+            assertThat(assignmentRepository.existsBySessionIdAndStudentId(sessionId, userId)).isTrue();
+        }
+    }
+
+    // --- Scenario 2: INDIVIDUAL (N=1) -----------------------------------------
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void individual_purchase_confirmed_assigns_exactly_one_session_end_to_end() {
+        UUID userId = seedStudent();
+        UUID courseId = seedCourse();
+        List<UUID> sessionIds = seedScheduledSessions(courseId, 1, 5);
+        UUID selectedSessionId = sessionIds.get(0);
+        String quoteId = seedIndividualQuote(courseId, selectedSessionId, INDIVIDUAL_PRICE);
+
+        ResponseEntity<Map> checkout = checkout(userId, quoteId, "idem-individual-1");
+        assertThat(checkout.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        String externalReference = (String) checkout.getBody().get("externalReference");
+        UUID paymentId = UUID.fromString((String) checkout.getBody().get("paymentId"));
+
+        OutboxRowJpaEntity event = confirmPayment("mp-individual-1", externalReference, INDIVIDUAL_PRICE);
+        assertThat(outboxWorker.process(event)).isFalse();
+
+        var purchase = purchaseRepository.findByPaymentId(paymentId).orElseThrow();
+        assertThat(purchase.getStatus()).isEqualTo("ASSIGNED");
+        assertThat(purchaseSessionRepository.findByPurchaseIdOrderByPositionAsc(purchase.getId())).hasSize(1);
+        assertThat(assignmentRepository.countBySessionId(selectedSessionId)).isEqualTo(1);
+        assertThat(assignmentRepository.existsBySessionIdAndStudentId(selectedSessionId, userId)).isTrue();
+    }
+
+    // --- Scenario 5: duplicate webhook / outbox redelivery --------------------
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void a_duplicate_outbox_redelivery_consumes_no_additional_spots() {
+        UUID userId = seedStudent();
+        UUID courseId = seedCourse();
+        List<UUID> sessionIds = seedScheduledSessions(courseId, 2, 5);
+        String quoteId = seedMonthlyQuote(courseId, 2, MONTHLY_PRICE);
+
+        ResponseEntity<Map> checkout = checkout(userId, quoteId, "idem-duplicate-1");
+        String externalReference = (String) checkout.getBody().get("externalReference");
+        UUID paymentId = UUID.fromString((String) checkout.getBody().get("paymentId"));
+
+        OutboxRowJpaEntity event = confirmPayment("mp-duplicate-1", externalReference, MONTHLY_PRICE);
+        assertThat(outboxWorker.process(event)).isFalse();
+        assertThat(purchaseRepository.findByPaymentId(paymentId).orElseThrow().getStatus()).isEqualTo("ASSIGNED");
+        for (UUID sessionId : sessionIds) {
+            assertThat(assignmentRepository.countBySessionId(sessionId)).isEqualTo(1);
+        }
+
+        // Real redelivery of the very same event — the handler must not
+        // mint a second assignment per session, and the already-ASSIGNED
+        // Purchase must not regress (design's state-machine guard refuses
+        // ASSIGNED -> EXCEPTION, so the second run fails closed instead of
+        // corrupting the settled result).
+        outboxWorker.process(event);
+
+        assertThat(purchaseRepository.findByPaymentId(paymentId).orElseThrow().getStatus()).isEqualTo("ASSIGNED");
+        for (UUID sessionId : sessionIds) {
+            assertThat(assignmentRepository.countBySessionId(sessionId)).isEqualTo(1);
+        }
+        assertThat(purchaseSessionRepository.findByPurchaseIdOrderByPositionAsc(
+            purchaseRepository.findByPaymentId(paymentId).orElseThrow().getId()
+        )).hasSize(2);
+    }
+
+    // --- Scenario 6: computed sessions cannot all be assigned -----------------
+
+    /**
+     * Proposal scenario 6 is precisely this: "the computed sessions cannot
+     * all be assigned" — {@code CoveragePlanner} DOES resolve the full
+     * eligible set (unlike a coverage shortfall), but the real capacity
+     * claim trips because another purchase took the last spot on one of
+     * those sessions between checkout's best-effort D5 read and this
+     * confirmation. This is the same residual path {@code
+     * PresentialPurchaseExceptionPathIntegrationTest} proves for the old
+     * single-session flow, now exercised through the real checkout endpoint
+     * and the real multi-session {@code assignAll}.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void a_capacity_trip_at_confirmation_leaves_payment_completed_and_purchase_exception_end_to_end() {
+        UUID userId = seedStudent();
+        UUID courseId = seedCourse();
+        List<UUID> sessionIds = seedScheduledSessions(courseId, 2, 1);
+        String quoteId = seedMonthlyQuote(courseId, 2, MONTHLY_PRICE);
+
+        ResponseEntity<Map> checkout = checkout(userId, quoteId, "idem-capacity-trip-1");
+        assertThat(checkout.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        String externalReference = (String) checkout.getBody().get("externalReference");
+        UUID paymentId = UUID.fromString((String) checkout.getBody().get("paymentId"));
+
+        // Between checkout and confirmation, a different buyer takes the
+        // only spot on one of the two sessions this quote covers.
+        UUID contestedSession = sessionIds.get(0);
+        assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
+            UUID.randomUUID(), contestedSession, UUID.randomUUID(), Instant.now()
+        ));
+
+        OutboxRowJpaEntity event = confirmPayment("mp-capacity-trip-1", externalReference, MONTHLY_PRICE);
+        assertThat(outboxWorker.process(event)).isFalse();
+
+        assertThat(paymentRepository.findById(paymentId).orElseThrow().getStatusType()).isEqualTo("COMPLETED");
+        assertThat(purchaseRepository.findByPaymentId(paymentId).orElseThrow().getStatus()).isEqualTo("EXCEPTION");
+        // All-or-nothing (design A3): the non-conflicting session gets zero
+        // new rows too, and the contested one keeps only its pre-existing row.
+        assertThat(assignmentRepository.countBySessionId(contestedSession)).isEqualTo(1);
+        assertThat(assignmentRepository.countBySessionId(sessionIds.get(1))).isEqualTo(0);
+        assertThat(assignmentRepository.existsBySessionIdAndStudentId(sessionIds.get(1), userId)).isFalse();
+    }
+
+    // --- D5/A6: best-effort 409 on a visibly-full quote -----------------------
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void checkout_is_rejected_with_409_when_the_quoted_session_is_visibly_full_and_creates_no_payment() {
+        UUID userId = seedStudent();
+        UUID courseId = seedCourse();
+        List<UUID> sessionIds = seedScheduledSessions(courseId, 1, 1);
+        UUID fullSession = sessionIds.get(0);
+        // Capacity 1, already occupied by someone else — availableSpots reads 0.
+        assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
+            UUID.randomUUID(), fullSession, UUID.randomUUID(), Instant.now()
+        ));
+        String quoteId = seedIndividualQuote(courseId, fullSession, INDIVIDUAL_PRICE);
+
+        ResponseEntity<Map> response = checkout(userId, quoteId, "idem-full-1");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody().get("code")).isEqualTo("CAPACITY_UNAVAILABLE");
+        assertThat(paymentRepository.findAll()).isEmpty();
+    }
+
+    // --- A7: expired quote -----------------------------------------------------
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void checkout_is_rejected_with_410_for_an_expired_quote_and_creates_no_payment() {
+        UUID userId = seedStudent();
+        UUID courseId = seedCourse();
+        List<UUID> sessionIds = seedScheduledSessions(courseId, 1, 5);
+        UUID quoteId = UUID.randomUUID();
+        Instant now = Instant.now();
+        quoteRepository.save(new PhysicalCourseQuoteJpaEntity(
+            quoteId.toString(), courseId.toString(), "INDIVIDUAL", INDIVIDUAL_PRICE, "ARS", BigDecimal.ZERO, 1, 1,
+            sessionIds.get(0).toString(), INDIVIDUAL_PRICE, "ARS", "AVAILABLE",
+            now.minusSeconds(7200), now.minusSeconds(3600)
+        ));
+
+        ResponseEntity<Map> response = checkout(userId, quoteId.toString(), "idem-expired-1");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.GONE);
+        assertThat(response.getBody().get("code")).isEqualTo("PHYSICAL_COURSE_QUOTE_EXPIRED");
+        assertThat(paymentRepository.findAll()).isEmpty();
+    }
+
+    // --- 401 without a token -----------------------------------------------
+
+    @Test
+    void checkout_without_a_token_is_rejected() {
+        UUID courseId = seedCourse();
+        List<UUID> sessionIds = seedScheduledSessions(courseId, 1, 5);
+        String quoteId = seedIndividualQuote(courseId, sessionIds.get(0), INDIVIDUAL_PRICE);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        ResponseEntity<Map> response = http.exchange(
+            "/api/v1/billing/physical/purchases", HttpMethod.POST,
+            new HttpEntity<>(checkoutBody(quoteId, "idem-no-token-1"), headers), Map.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(paymentRepository.findAll()).isEmpty();
+    }
+}
