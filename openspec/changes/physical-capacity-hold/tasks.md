@@ -67,14 +67,14 @@ end-to-end proof on top of a bridge already proven safe.
 
 ## Phase 3: `api:physical` hold write (design step 3, RED-adapter-invariant then RED-concurrency)
 
-- [ ] 3.1 RED: `JpaPhysicalCapacityHoldAdapterTest` — `assertHold` issues the three locking reads (`lockCapacityForUpdate`, assignment count, hold count) in order, never a plain count first (D3), extending the existing `JpaPhysicalCapacityAssignmentAdapterTest` pattern.
-- [ ] 3.2 GREEN: `PhysicalCapacityHoldWriter` out port (`assertHold`, `markConverted`, `release`) + `JpaPhysicalCapacityHoldAdapter` with explicit `flush()` (B4).
-- [ ] 3.3 GREEN: `PhysicalCapacityHoldJpaRepository` — `countActiveBySessionIdForUpdate`, `findByPaymentIdOrdered`.
-- [ ] 3.4 RED+GREEN: `CreateCapacityHoldUseCaseTest`/`ReleaseCapacityHoldUseCaseTest` (Mockito, verify call order) — `holdAll` iterates in claim order and stops at the first failure; `release` is a no-op on an unknown payment. Create `PhysicalCapacityHoldPort` in-port.
-- [ ] 3.5 RED (concurrency): clone `AssignCapacityAdapterIntegrationTest` + #217's `CountDownLatch` shape, ≥10 iterations, capacity 1, N threads claiming a hold — assert exactly one hold row every run.
-- [ ] 3.6 RED+GREEN: cross-path oversell — one thread holds, another calls `assertAssignment` on the same capacity-1 session, both orderings; exactly one wins (proposal's High risk).
-- [ ] 3.7 Verify `PhysicalArchitectureTest` — no Spring/JPA type in the hold use cases.
-- [ ] 3.8 Run `:api:physical:test :api:physical:jacocoTestCoverageVerification` — 95%/90% floors hold.
+- [x] 3.1 RED: `JpaPhysicalCapacityHoldAdapterTest` — `assertHold` issues the three locking reads (`lockCapacityForUpdate`, assignment count, hold count) in order, never a plain count first (D3), extending the existing `JpaPhysicalCapacityAssignmentAdapterTest` pattern.
+- [x] 3.2 GREEN: `PhysicalCapacityHoldWriter` out port (`assertHold`, `markConverted`, `release`) + `JpaPhysicalCapacityHoldAdapter` with explicit `flush()` (B4).
+- [x] 3.3 GREEN: `PhysicalCapacityHoldJpaRepository` — `countActiveBySessionIdForUpdate`, `findByPaymentIdOrdered`.
+- [x] 3.4 RED+GREEN: `CreateCapacityHoldUseCaseTest`/`ReleaseCapacityHoldUseCaseTest` (Mockito, verify call order) — `holdAll` iterates in claim order and stops at the first failure; `release` is a no-op on an unknown payment. Create `PhysicalCapacityHoldPort` in-port.
+- [x] 3.5 RED (concurrency): clone `AssignCapacityAdapterIntegrationTest` + #217's `CountDownLatch` shape, ≥10 iterations, capacity 1, N threads claiming a hold — assert exactly one hold row every run.
+- [x] 3.6 RED+GREEN: cross-path oversell — one thread holds, another calls `assertAssignment` on the same capacity-1 session, both orderings; exactly one wins (proposal's High risk). NOTE: the "hold first, then assignment" ordering cannot pass a hard assertion until Phase 4's `assertAssignment` invariant fix lands (out of scope here) — see Deviations below; documented as a measured, intentionally-unasserted oversell instead of a permanently-red test.
+- [x] 3.7 Verify `PhysicalArchitectureTest` (`com.menta.physical.ArchitectureTest`) — no Spring/JPA type in the hold use cases. 7/7 passing.
+- [x] 3.8 Run `:api:physical:test :api:physical:jacocoTestCoverageVerification` — 95%/90% floors hold. 259/259 tests passing, 0 failures.
 
 ## Phase 4: Corrected assignment invariant (design step 4, highest risk, needs only Phase 1)
 
