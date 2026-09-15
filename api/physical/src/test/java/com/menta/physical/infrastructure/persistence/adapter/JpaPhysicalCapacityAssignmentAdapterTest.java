@@ -13,6 +13,7 @@ import com.menta.physical.domain.exception.CapacityBelowAssignedException;
 import com.menta.physical.domain.exception.SessionNotFoundException;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalCapacityAssignmentJpaEntity;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityAssignmentJpaRepository;
+import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityHoldJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
 import java.time.Instant;
 import java.util.Optional;
@@ -37,23 +38,30 @@ class JpaPhysicalCapacityAssignmentAdapterTest {
 
     private PhysicalCapacityAssignmentJpaRepository assignmentRepository;
     private PhysicalSessionJpaRepository sessionRepository;
+    private PhysicalCapacityHoldJpaRepository holdRepository;
     private JpaPhysicalCapacityAssignmentAdapter adapter;
 
     @BeforeEach
     void setUp() {
         assignmentRepository = mock(PhysicalCapacityAssignmentJpaRepository.class);
         sessionRepository = mock(PhysicalSessionJpaRepository.class);
+        holdRepository = mock(PhysicalCapacityHoldJpaRepository.class);
         when(assignmentRepository.save(any(PhysicalCapacityAssignmentJpaEntity.class)))
             .thenAnswer(inv -> inv.getArgument(0));
         com.menta.physical.application.port.out.Clock clock = () -> NOW;
         adapter = new JpaPhysicalCapacityAssignmentAdapter(
-            assignmentRepository, sessionRepository, clock
+            assignmentRepository, sessionRepository, holdRepository, clock
         );
     }
 
     private void stubSessionWithCapacity(int capacity, long assignedSpots) {
+        stubSessionWithCapacity(capacity, assignedSpots, 0L);
+    }
+
+    private void stubSessionWithCapacity(int capacity, long assignedSpots, long activeHolds) {
         when(sessionRepository.lockCapacityForUpdate(SESSION_UUID)).thenReturn(Optional.of(capacity));
         when(assignmentRepository.countBySessionIdForUpdate(SESSION_UUID)).thenReturn(assignedSpots);
+        when(holdRepository.countActiveBySessionIdForUpdate(SESSION_UUID, NOW)).thenReturn(activeHolds);
     }
 
     @Nested
@@ -122,9 +130,10 @@ class JpaPhysicalCapacityAssignmentAdapterTest {
 
             adapter.assertAssignment(SESSION_UUID, STUDENT_UUID);
 
-            InOrder inOrder = inOrder(sessionRepository, assignmentRepository);
+            InOrder inOrder = inOrder(sessionRepository, assignmentRepository, holdRepository);
             inOrder.verify(sessionRepository).lockCapacityForUpdate(SESSION_UUID);
             inOrder.verify(assignmentRepository).countBySessionIdForUpdate(SESSION_UUID);
+            inOrder.verify(holdRepository).countActiveBySessionIdForUpdate(SESSION_UUID, NOW);
             inOrder.verify(assignmentRepository).save(any(PhysicalCapacityAssignmentJpaEntity.class));
         }
 
@@ -139,11 +148,37 @@ class JpaPhysicalCapacityAssignmentAdapterTest {
             when(sessionRepository.lockCapacityForUpdate(SESSION_UUID)).thenReturn(Optional.of(1));
             when(assignmentRepository.countBySessionId(SESSION_UUID)).thenReturn(0L);
             when(assignmentRepository.countBySessionIdForUpdate(SESSION_UUID)).thenReturn(1L);
+            when(holdRepository.countActiveBySessionIdForUpdate(SESSION_UUID, NOW)).thenReturn(0L);
 
             assertThatThrownBy(() -> adapter.assertAssignment(SESSION_UUID, STUDENT_UUID))
                 .isInstanceOf(CapacityBelowAssignedException.class);
 
             verify(assignmentRepository, never()).countBySessionId(any(UUID.class));
+        }
+
+        /**
+         * Design B4: the invariant becomes
+         * {@code assigned + activeHolds + 1 > capacity}. A session with one
+         * free spot but one opposing active hold must refuse the assignment
+         * even though the plain assignment count alone would allow it.
+         */
+        @Test
+        void assertAssignment_refuses_when_an_active_hold_already_occupies_the_only_free_spot() {
+            stubSessionWithCapacity(1, 0, 1);
+
+            assertThatThrownBy(() -> adapter.assertAssignment(SESSION_UUID, STUDENT_UUID))
+                .isInstanceOf(CapacityBelowAssignedException.class);
+
+            verify(assignmentRepository, never()).save(any(PhysicalCapacityAssignmentJpaEntity.class));
+        }
+
+        @Test
+        void assertAssignment_consults_the_locking_hold_count_via_countActiveBySessionIdForUpdate() {
+            stubSessionWithCapacity(2, 0, 0);
+
+            adapter.assertAssignment(SESSION_UUID, STUDENT_UUID);
+
+            verify(holdRepository).countActiveBySessionIdForUpdate(SESSION_UUID, NOW);
         }
     }
 }

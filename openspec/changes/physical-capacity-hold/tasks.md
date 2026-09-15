@@ -78,11 +78,11 @@ end-to-end proof on top of a bridge already proven safe.
 
 ## Phase 4: Corrected assignment invariant (design step 4, highest risk, needs only Phase 1)
 
-- [ ] 4.1 RED: extend `JpaPhysicalCapacityAssignmentAdapterTest` — `assertAssignment` now also issues `countActiveBySessionIdForUpdate`; `the_plain_non_locking_count_is_never_consulted` extended to the hold count too.
-- [ ] 4.2 GREEN: `assertAssignment` — invariant becomes `assigned + activeHolds + 1 > capacity` (B4).
-- [ ] 4.3 GREEN: `PhysicalSessionJpaRepository` — add `converted_at IS NULL AND expires_at > :now` to `findScheduledWithAvailability`, `findManagedWithAvailability`, `findByIdWithAvailability` (B1).
-- [ ] 4.4 RED+GREEN integration: assignment blocked by an opposing active hold (spec scenario, `physical-capacity-hold/spec.md`).
-- [ ] 4.5 Run `:api:physical:test :api:physical:jacocoTestCoverageVerification`.
+- [x] 4.1 RED: extend `JpaPhysicalCapacityAssignmentAdapterTest` — `assertAssignment` now also issues `countActiveBySessionIdForUpdate`; `the_plain_non_locking_count_is_never_consulted` extended to the hold count too.
+- [x] 4.2 GREEN: `assertAssignment` — invariant becomes `assigned + activeHolds + 1 > capacity` (B4).
+- [x] 4.3 GREEN: `PhysicalSessionJpaRepository` — add `converted_at IS NULL AND expires_at > :now` to `findScheduledWithAvailability`, `findManagedWithAvailability`, `findByIdWithAvailability` (B1).
+- [x] 4.4 RED+GREEN integration: assignment blocked by an opposing active hold (spec scenario, `physical-capacity-hold/spec.md`). Renamed `HoldCapacityAdapterIntegrationTest.hold_first_then_assignment_currently_oversells_until_Phase_4` → `hold_first_then_assignment_is_refused`, flipped to assert `CapacityBelowAssignedException` with zero assignment rows.
+- [x] 4.5 Run `:api:physical:test :api:physical:jacocoTestCoverageVerification` — 261/261 passing, coverage floors hold.
 
 ## Phase 5: Cross-module bridge (design step 5 — natural chain cut, needs Phase 3)
 

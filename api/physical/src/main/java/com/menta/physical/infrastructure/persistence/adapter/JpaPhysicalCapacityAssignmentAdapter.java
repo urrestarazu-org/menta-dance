@@ -29,7 +29,9 @@ import org.springframework.transaction.annotation.Transactional;
  * 11 runs (64%) with a real starting gun.</p>
  *
  * <p>This adapter is the single point where the invariant is decided, and
- * it decides it from TWO locking reads and nothing else:</p>
+ * it decides it from THREE locking reads and nothing else (design B4 — the
+ * sibling of {@link JpaPhysicalCapacityHoldAdapter}, same shape, same
+ * order):</p>
  * <ol>
  *   <li>{@code SELECT capacity ... FOR UPDATE} on {@code physical_sessions}
  *       — the row lock every claimant for this session queues on, plus the
@@ -39,15 +41,21 @@ import org.springframework.transaction.annotation.Transactional;
  *       locking read it reads the latest committed rows rather than the
  *       transaction's MVCC snapshot, and its gap lock keeps a peer from
  *       inserting underneath us before we commit.</li>
+ *   <li>{@code SELECT COUNT(*) ... FOR UPDATE} on
+ *       {@code physical_capacity_holds} — the active-hold count, same
+ *       locking discipline (design B4, the proposal's High risk): without
+ *       this, an assignment could oversell into a spot an in-flight hold
+ *       already reserves.</li>
  * </ol>
  *
- * <p>Neither step may be replaced by a consistent (non-locking) read. The
- * previous implementation decided from the correlated {@code COUNT(*)}
- * subquery of {@code findByIdWithAvailabilityForUpdate}: {@code FOR UPDATE}
- * does not extend to a subquery, so that count came from the snapshot. Any
- * plain read earlier in the transaction — the use case used to do exactly
- * one, before calling in here — fixes that snapshot before the row lock is
- * ever granted, and the lock then arrives too late to matter.</p>
+ * <p>Neither of the first two steps may be replaced by a consistent
+ * (non-locking) read. The previous implementation decided from the
+ * correlated {@code COUNT(*)} subquery of
+ * {@code findByIdWithAvailabilityForUpdate}: {@code FOR UPDATE} does not
+ * extend to a subquery, so that count came from the snapshot. Any plain
+ * read earlier in the transaction — the use case used to do exactly one,
+ * before calling in here — fixes that snapshot before the row lock is ever
+ * granted, and the lock then arrives too late to matter.</p>
  *
  * <p>The decision is taken BEFORE the INSERT, so there is no
  * insert-then-delete compensation any more: a claim that loses the race
@@ -62,15 +70,18 @@ public class JpaPhysicalCapacityAssignmentAdapter implements PhysicalCapacityAss
 
     private final com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityAssignmentJpaRepository jpaRepository;
     private final com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository sessionRepository;
+    private final com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityHoldJpaRepository holdRepository;
     private final Clock clock;
 
     public JpaPhysicalCapacityAssignmentAdapter(
         com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityAssignmentJpaRepository jpaRepository,
         com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository sessionRepository,
+        com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityHoldJpaRepository holdRepository,
         Clock clock
     ) {
         this.jpaRepository = jpaRepository;
         this.sessionRepository = sessionRepository;
+        this.holdRepository = holdRepository;
         this.clock = clock;
     }
 
@@ -92,7 +103,12 @@ public class JpaPhysicalCapacityAssignmentAdapter implements PhysicalCapacityAss
         // no peer can insert before we commit.
         long assigned = jpaRepository.countBySessionIdForUpdate(sessionId);
 
-        if (assigned + 1 > capacity) {
+        // Step 3 — the active-hold count as a LOCKING read (design B4, the
+        // proposal's High risk): without this, an assignment could oversell
+        // into a spot an in-flight hold already reserves.
+        long activeHolds = holdRepository.countActiveBySessionIdForUpdate(sessionId, now);
+
+        if (assigned + activeHolds + 1 > capacity) {
             // Invariant would be violated — refuse before writing anything.
             throw new CapacityBelowAssignedException();
         }
