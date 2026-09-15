@@ -417,8 +417,11 @@ class PhysicalSessionManagementIntegrationTest {
         verifyAndDispatch("mp-capacity-happy");
 
         assertThat(assignmentRepository.countBySessionId(sessionId)).isEqualTo(1);
+        // #41 PR8: assignAll succeeding now flips the Purchase to ASSIGNED
+        // (design A3) — a pre-existing gap where the handler never called
+        // Purchase.assigned() is fixed by this change.
         assertThat(purchaseRepository.findByPaymentId(paymentId).orElseThrow().getStatus())
-            .isEqualTo("PENDING_FULFILLMENT");
+            .isEqualTo("ASSIGNED");
         ResponseEntity<Map> qrResponse = issueAccessQr(sessionId, studentId);
         assertThat(qrResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(qrResponse.getBody().get("qrCredentials")).isNotNull();
@@ -513,12 +516,15 @@ class PhysicalSessionManagementIntegrationTest {
         dispatchConcurrently(race.events());
 
         assertThat(assignmentRepository.countBySessionId(race.sessionId())).isEqualTo(1);
+        // #41 PR8: the winner now settles at ASSIGNED (design A3's
+        // assignAll -- ok --> purchase.assigned(), previously a pre-existing
+        // gap left every winner at PENDING_FULFILLMENT).
         assertThat(purchaseRepository.findByPaymentId(race.firstPaymentId()).orElseThrow().getStatus())
-            .isIn("PENDING_FULFILLMENT", "EXCEPTION");
+            .isIn("ASSIGNED", "EXCEPTION");
         assertThat(purchaseRepository.findByPaymentId(race.secondPaymentId()).orElseThrow().getStatus())
-            .isIn("PENDING_FULFILLMENT", "EXCEPTION");
+            .isIn("ASSIGNED", "EXCEPTION");
         assertThat(purchaseRepository.findAll()).extracting(purchase -> purchase.getStatus())
-            .containsExactlyInAnyOrder("PENDING_FULFILLMENT", "EXCEPTION");
+            .containsExactlyInAnyOrder("ASSIGNED", "EXCEPTION");
     }
 
     /**
@@ -552,7 +558,7 @@ class PhysicalSessionManagementIntegrationTest {
                 .isEqualTo(1);
             assertThat(List.of(first, second))
                 .as("iteration %d: exactly one claim wins, the other is the residual", iteration)
-                .containsExactlyInAnyOrder("PENDING_FULFILLMENT", "EXCEPTION");
+                .containsExactlyInAnyOrder("ASSIGNED", "EXCEPTION");
         }
     }
 
@@ -652,19 +658,16 @@ class PhysicalSessionManagementIntegrationTest {
         assertThat(assignments).extracting(PhysicalCapacityAssignmentJpaEntity::getStudentId)
             .containsOnly(assignments.get(0).getStudentId());
 
-        // NOTE: the handler never calls Purchase.assigned() anywhere in this
-        // codebase today (confirmed: no production call site exists) — a
-        // successful assignAll leaves the row at PENDING_FULFILLMENT, exactly
-        // like the pre-existing single-session concurrency test above
-        // asserts. That gap is pre-existing and out of PR6's scope (not in
-        // tasks.md 6.1-6.9); this assertion matches actual current behavior,
-        // not the aspirational "ASSIGNED" wording in the fulfillment spec.
+        // #41 PR8: the handler now calls Purchase.assigned() on a successful
+        // assignAll (design A3's "assignAll -- ok --> purchase.assigned()"),
+        // closing a pre-existing gap where every winner settled at
+        // PENDING_FULFILLMENT instead. The winner here settles ASSIGNED.
         assertThat(purchaseRepository.findAll()).extracting(purchase -> purchase.getStatus())
-            .containsExactlyInAnyOrder("PENDING_FULFILLMENT", "EXCEPTION");
+            .containsExactlyInAnyOrder("ASSIGNED", "EXCEPTION");
         assertThat(purchaseRepository.findByPaymentId(firstPaymentId).orElseThrow().getStatus())
-            .isIn("PENDING_FULFILLMENT", "EXCEPTION");
+            .isIn("ASSIGNED", "EXCEPTION");
         assertThat(purchaseRepository.findByPaymentId(secondPaymentId).orElseThrow().getStatus())
-            .isIn("PENDING_FULFILLMENT", "EXCEPTION");
+            .isIn("ASSIGNED", "EXCEPTION");
     }
 
 }

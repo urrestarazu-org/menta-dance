@@ -27,6 +27,7 @@ import com.menta.billing.application.port.out.PlanRepository;
 import com.menta.billing.application.port.out.PurchaseRepository;
 import com.menta.billing.application.port.out.SubscriptionRepository;
 import com.menta.billing.application.usecase.CreatePurchaseFromPaymentEventUseCase;
+import com.menta.billing.application.usecase.MarkPurchaseAssignedUseCase;
 import com.menta.billing.application.usecase.MarkPurchaseExceptionUseCase;
 import com.menta.billing.application.port.out.WebhookInboxAppender;
 import com.menta.billing.application.port.out.WebhookSignatureVerifier;
@@ -49,6 +50,7 @@ import com.menta.shared.billing.VirtualCourseEntitlementPort;
 import com.menta.billing.infrastructure.security.RedisBillingPlansRateLimitPort;
 import com.menta.billing.infrastructure.transaction.TransactionalAssignTrialSubscriptionUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalCancelSubscriptionUseCase;
+import com.menta.billing.infrastructure.transaction.TransactionalCreatePhysicalPurchaseCheckoutUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalCreateSubscriptionCheckoutUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalReceiveWebhookUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalUpdatePhysicalCoursePricingUseCase;
@@ -301,10 +303,10 @@ public class BillingConfiguration {
         PhysicalCourseAvailabilityPort physicalCourseAvailabilityPort, PaymentPreferencePort paymentPreferencePort,
         Clock clock, @Value("${billing.mercadopago.merchant-account-id:}") String merchantAccountId
     ) {
-        return new CreatePhysicalPurchaseCheckoutUseCaseImpl(
+        return new TransactionalCreatePhysicalPurchaseCheckoutUseCase(new CreatePhysicalPurchaseCheckoutUseCaseImpl(
             quoteRepository, paymentRepository, physicalCourseAvailabilityPort, paymentPreferencePort, clock,
             merchantAccountId
-        );
+        ));
     }
 
     /** Task TASK-004: idempotently upserts a {@code Purchase(PENDING_FULFILLMENT)}
@@ -323,5 +325,13 @@ public class BillingConfiguration {
         PurchaseRepository purchaseRepository
     ) {
         return new MarkPurchaseExceptionUseCase(purchaseRepository);
+    }
+
+    /** #41 PR8: the mirror image of {@code markPurchaseExceptionUseCase} for the success branch (design A3). */
+    @Bean
+    public MarkPurchaseAssignedUseCase markPurchaseAssignedUseCase(
+        PurchaseRepository purchaseRepository
+    ) {
+        return new MarkPurchaseAssignedUseCase(purchaseRepository);
     }
 }

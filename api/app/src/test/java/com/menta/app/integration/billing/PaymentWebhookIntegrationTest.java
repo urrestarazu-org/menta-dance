@@ -302,8 +302,12 @@ class PaymentWebhookIntegrationTest {
 
         assertThat(paymentRepository.findById(paymentId).orElseThrow().getStatusType()).isEqualTo("COMPLETED");
         assertThat(purchaseRepository.findAll()).hasSize(1);
+        // #41 PR8: assignAll succeeding now flips the Purchase to ASSIGNED
+        // (design A3's "assignAll -- ok --> purchase.assigned()") — a
+        // pre-existing gap where the handler never called Purchase.assigned()
+        // is fixed by this change.
         assertThat(purchaseRepository.findByPaymentId(paymentId).orElseThrow().getStatus())
-            .isEqualTo("PENDING_FULFILLMENT");
+            .isEqualTo("ASSIGNED");
     }
 
     @Test
@@ -371,8 +375,9 @@ class PaymentWebhookIntegrationTest {
         dispatchPendingOutboxEvent();
 
         assertThat(purchaseRepository.findAll()).hasSize(1);
+        // #41 PR8: same fix as above — a successful assignAll now settles at ASSIGNED.
         assertThat(purchaseRepository.findByPaymentId(paymentId).orElseThrow().getStatus())
-            .isEqualTo("PENDING_FULFILLMENT");
+            .isEqualTo("ASSIGNED");
         assertThat(physicalCapacityAssignmentRepository.findAll()).hasSize(1);
         assertThat(inboxRepository.findAll()).allSatisfy(
             inbox -> assertThat(inbox.getStatus())
