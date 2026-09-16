@@ -1,6 +1,7 @@
 package com.menta.physical.application.port.out;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -43,4 +44,14 @@ public interface PhysicalCapacityHoldWriter {
      * A no-op when no row exists for the payment.
      */
     void release(UUID paymentId);
+
+    /**
+     * Every hold row for {@code paymentId}, in the same total order the
+     * claims were made — {@code (scheduledAt ASC, sessionId ASC)}, the same
+     * order {@link com.menta.shared.physical.SessionClaimOrdering} enforces
+     * (design step 8). {@code ConvertCapacityHoldUseCase} uses this to
+     * decide {@code HoldNotFound} (empty), {@code AlreadyConverted} (every
+     * row already has {@code converted_at}), or the ordered conversion loop.
+     */
+    List<HeldSessionRow> findByPaymentIdOrdered(UUID paymentId);
 }

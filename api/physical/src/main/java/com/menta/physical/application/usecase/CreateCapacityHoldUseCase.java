@@ -1,11 +1,13 @@
 package com.menta.physical.application.usecase;
 
 import com.menta.physical.application.port.in.PhysicalCapacityHoldPort;
+import com.menta.physical.application.port.out.HeldSessionRow;
 import com.menta.physical.application.port.out.PhysicalCapacityHoldWriter;
 import com.menta.physical.domain.exception.CapacityBelowAssignedException;
 import com.menta.shared.physical.MultiSessionCapacityHoldCommand;
 import com.menta.shared.physical.SessionClaim;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
@@ -27,22 +29,27 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>{@link #holdAll} is the one real implementation of the invariant: one
  * {@code REQUIRES_NEW} transaction wraps the whole ordered loop, so a
  * failure on any claim rolls back every earlier insert in the same set.
- * {@code release} is delegated to {@link ReleaseCapacityHoldUseCase} so
- * both entry points of {@link PhysicalCapacityHoldPort} are backed by an
- * independently unit-testable class, while the port itself has one
- * implementing bean.</p>
+ * {@code release} and {@code convertAll} are delegated to
+ * {@link ReleaseCapacityHoldUseCase} and {@link ConvertCapacityHoldUseCase}
+ * respectively, so every entry point of {@link PhysicalCapacityHoldPort} is
+ * backed by an independently unit-testable class, while the port itself has
+ * one implementing bean.</p>
  */
 @Component
 public class CreateCapacityHoldUseCase implements PhysicalCapacityHoldPort {
 
     private final PhysicalCapacityHoldWriter holdWriter;
     private final ReleaseCapacityHoldUseCase releaseCapacityHoldUseCase;
+    private final ConvertCapacityHoldUseCase convertCapacityHoldUseCase;
 
     public CreateCapacityHoldUseCase(
-        PhysicalCapacityHoldWriter holdWriter, ReleaseCapacityHoldUseCase releaseCapacityHoldUseCase
+        PhysicalCapacityHoldWriter holdWriter,
+        ReleaseCapacityHoldUseCase releaseCapacityHoldUseCase,
+        ConvertCapacityHoldUseCase convertCapacityHoldUseCase
     ) {
         this.holdWriter = holdWriter;
         this.releaseCapacityHoldUseCase = releaseCapacityHoldUseCase;
+        this.convertCapacityHoldUseCase = convertCapacityHoldUseCase;
     }
 
     @Override
@@ -57,6 +64,16 @@ public class CreateCapacityHoldUseCase implements PhysicalCapacityHoldPort {
     @Override
     public void release(UUID paymentId) {
         releaseCapacityHoldUseCase.release(paymentId);
+    }
+
+    @Override
+    public ConvertOutcome convertAll(UUID paymentId, UUID studentId) {
+        return convertCapacityHoldUseCase.convertAll(paymentId, studentId);
+    }
+
+    @Override
+    public List<UUID> heldSessionIds(UUID paymentId) {
+        return holdWriter.findByPaymentIdOrdered(paymentId).stream().map(HeldSessionRow::sessionId).toList();
     }
 
     /**

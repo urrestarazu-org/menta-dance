@@ -79,6 +79,7 @@ public class PhysicalCapacityAssignmentOutboxEventHandler implements OutboxEvent
     private final PaymentRepository paymentRepository;
     private final PhysicalCourseQuoteRepository quoteRepository;
     private final PhysicalCourseAvailabilityPort courseAvailabilityPort;
+    private final com.menta.physical.application.port.in.PhysicalCapacityHoldPort physicalCapacityHoldPort;
     private final ObjectMapper objectMapper;
 
     public PhysicalCapacityAssignmentOutboxEventHandler(
@@ -89,6 +90,7 @@ public class PhysicalCapacityAssignmentOutboxEventHandler implements OutboxEvent
         PaymentRepository paymentRepository,
         PhysicalCourseQuoteRepository quoteRepository,
         PhysicalCourseAvailabilityPort courseAvailabilityPort,
+        com.menta.physical.application.port.in.PhysicalCapacityHoldPort physicalCapacityHoldPort,
         ObjectMapper objectMapper
     ) {
         this.capacityAdapter = capacityAdapter;
@@ -98,6 +100,7 @@ public class PhysicalCapacityAssignmentOutboxEventHandler implements OutboxEvent
         this.paymentRepository = paymentRepository;
         this.quoteRepository = quoteRepository;
         this.courseAvailabilityPort = courseAvailabilityPort;
+        this.physicalCapacityHoldPort = physicalCapacityHoldPort;
         this.objectMapper = objectMapper;
     }
 
@@ -127,6 +130,67 @@ public class PhysicalCapacityAssignmentOutboxEventHandler implements OutboxEvent
             exceptionAdapter.markException(paymentId, Reason.TARGET_NOT_SCHEDULED);
             return;
         }
+
+        // Design B3/step 8: try converting an existing hold first. A held
+        // purchase never recomputes via CoveragePlanner (D7) — the hold's
+        // own session set, fixed atomically at checkout time, is the source
+        // of truth for what gets assigned. Only HoldNotFound (the
+        // rollback/legacy path — no hold ever existed for this payment)
+        // falls through to today's unchanged CoveragePlanner + assignAll.
+        com.menta.physical.application.usecase.ConvertOutcome convertOutcome;
+        try {
+            convertOutcome = physicalCapacityHoldPort.convertAll(payload.paymentId(), payment.getUserId());
+        } catch (com.menta.physical.domain.exception.CapacityBelowAssignedException capacityTripped) {
+            // Spec scenario (8.7): a held session vanished/oversold before
+            // conversion — all-or-nothing, zero assignment rows survive the
+            // rolled-back REQUIRES_NEW transaction. Same EXCEPTION routing,
+            // same idempotent-redelivery discipline, as the legacy path.
+            //
+            // Unlike the legacy path, createPurchaseFromPaymentEvent has not
+            // run yet for a held purchase (it only runs after a successful
+            // conversion) — markException needs a PENDING_FULFILLMENT row to
+            // transition, so build it here from the hold's own (still
+            // unconverted, since the transaction above rolled back) session
+            // set. This also keeps the pattern that already exists in
+            // MarkPurchaseExceptionUseCase honest: without a Purchase row,
+            // markException throws PaymentNotFoundException, which is not
+            // covered by that method's noRollbackFor and would otherwise
+            // mark the ambient outbox-worker transaction rollback-only.
+            List<String> heldSessionIds = physicalCapacityHoldPort.heldSessionIds(payload.paymentId()).stream()
+                .map(UUID::toString)
+                .toList();
+            purchaseCreationFromEventPort.createPurchaseFromPaymentEvent(payload, heldSessionIds);
+            try {
+                exceptionAdapter.markException(paymentId, Reason.CAPACITY_BELOW_ASSIGNED);
+            } catch (com.menta.billing.domain.exception.IllegalPurchaseStateTransitionException alreadyAssigned) {
+                log.info(
+                    "Redelivered outbox event for an already-ASSIGNED purchase paymentId={}; no-op",
+                    payload.paymentId()
+                );
+            }
+            return;
+        }
+
+        if (convertOutcome instanceof com.menta.physical.application.usecase.ConvertOutcome.Converted converted) {
+            // design D7: the hold's own session set is authoritative, never
+            // recomputed — no CoveragePlanner, no assignAll for this path.
+            List<String> heldSessionIds = converted.sessionIds().stream().map(UUID::toString).toList();
+            purchaseCreationFromEventPort.createPurchaseFromPaymentEvent(payload, heldSessionIds);
+            assignedAdapter.markAssigned(paymentId);
+            return;
+        }
+        if (convertOutcome instanceof com.menta.physical.application.usecase.ConvertOutcome.AlreadyConverted) {
+            // Idempotent redelivery: the hold was already converted by an
+            // earlier delivery. No-op, same discipline as the ASSIGNED ->
+            // EXCEPTION refusal below.
+            log.info(
+                "Redelivered outbox event for an already-converted hold paymentId={}; no-op",
+                payload.paymentId()
+            );
+            return;
+        }
+        // ConvertOutcome.HoldNotFound falls through to the legacy path
+        // below, byte-identical to before this change (rollback layer 1).
 
         String quoteId = physical.quoteId();
         PhysicalCourseQuote quote = quoteRepository.findById(quoteId).orElse(null);

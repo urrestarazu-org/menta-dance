@@ -108,14 +108,14 @@ end-to-end proof on top of a bridge already proven safe.
 
 ## Phase 8: Conversion (design step 8, RED-conversion-idempotency, needs Phases 3 and 4)
 
-- [ ] 8.1 RED: `ConvertCapacityHoldUseCaseTest` (Mockito) — `HoldNotFound` / `AlreadyConverted` / `Converted(sessionIds)` outcomes.
-- [ ] 8.2 GREEN: `ConvertCapacityHoldUseCase.convertAll(paymentId, studentId)` — one `REQUIRES_NEW`, per session in order: mark `converted_at`, then unchanged `assertAssignment` (B3).
-- [ ] 8.3 RED: extend `PhysicalCapacityAssignmentOutboxEventHandlerTest` — held payment converts without `CoveragePlanner` recomputation; `HoldNotFound` falls to the legacy plan+`assignAll` path unchanged.
-- [ ] 8.4 GREEN: modify the handler — convert first; legacy path only on `HoldNotFound`.
-- [ ] 8.5 RED+GREEN integration: deliver the webhook 2x and 5x — identical assignment count, `converted_at` unchanged after the first, `Purchase ASSIGNED` once (extend `PhysicalPurchaseIntegrationTest`).
-- [ ] 8.6 RED+GREEN integration: conversion never dips — a reader polling `findByIdWithAvailability` during `convertAll` never observes `availableSpots` above the held value.
-- [ ] 8.7 RED+GREEN: a held session vanishes before conversion ⇒ zero assignment rows, `EXCEPTION`, never partial (spec scenario).
-- [ ] 8.8 Run `:api:app:test` targeted classes.
+- [x] 8.1 RED: `ConvertCapacityHoldUseCaseTest` (Mockito) — `HoldNotFound` / `AlreadyConverted` / `Converted(sessionIds)` outcomes.
+- [x] 8.2 GREEN: `ConvertCapacityHoldUseCase.convertAll(paymentId, studentId)` — one `REQUIRES_NEW`, per session in order: mark `converted_at`, then unchanged `assertAssignment` (B3).
+- [x] 8.3 RED: extend `PhysicalCapacityAssignmentOutboxEventHandlerTest` — held payment converts without `CoveragePlanner` recomputation; `HoldNotFound` falls to the legacy plan+`assignAll` path unchanged.
+- [x] 8.4 GREEN: modify the handler — convert first; legacy path only on `HoldNotFound`. Also added `PhysicalCapacityHoldPort.heldSessionIds` (a small, necessary addition beyond the literal port shape): a capacity trip during conversion must still create the `Purchase` row before `markException`, or `MarkPurchaseExceptionUseCase` throws `PaymentNotFoundException` — uncovered by its existing `noRollbackFor` — and the ambient outbox-worker transaction fails with `UnexpectedRollbackException` on commit. Confirmed via a real Testcontainers run (see 8.5's suite).
+- [x] 8.5 RED+GREEN integration: added `redelivering_the_webhook_five_times_converts_the_hold_exactly_once` to `PhysicalPurchaseIntegrationTest` — delivers the webhook 5x, asserts identical assignment counts, `converted_at` unchanged after the first delivery, `Purchase ASSIGNED` once. The pre-existing `a_duplicate_outbox_redelivery_consumes_no_additional_spots` (2x) now also exercises conversion end-to-end (real checkout-created hold → conversion → redelivery) and still passes unchanged.
+- [ ] 8.6 DEFERRED: a dedicated concurrent-reader-never-dips-during-convertAll integration test (`findByIdWithAvailability` polled while `convertAll` runs) was not added — the invariant is the same B3/B4 mark-then-assert mechanism already proven by Phase 3/4's concurrency suites, but no new test isolates conversion's own transaction window specifically.
+- [x] 8.7 GREEN: `PhysicalPurchaseIntegrationTest.a_capacity_trip_at_confirmation_leaves_payment_completed_and_purchase_exception_end_to_end` (pre-existing, now exercising the real conversion path) proves a held session that lost its spot before conversion resolves to `EXCEPTION` with zero new assignment rows, all-or-nothing.
+- [x] 8.8 Run `:api:physical:test`, `:api:app:test` (targeted classes), `:api:physical:jacocoTestCoverageVerification` — all green, no regressions. See apply report for full counts.
 
 ## Phase 9: Expiry sweep (design step 9, needs only Phase 1)
 

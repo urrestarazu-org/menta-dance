@@ -1,6 +1,7 @@
 package com.menta.physical.infrastructure.persistence.adapter;
 
 import com.menta.physical.application.port.out.Clock;
+import com.menta.physical.application.port.out.HeldSessionRow;
 import com.menta.physical.application.port.out.PhysicalCapacityHoldWriter;
 import com.menta.physical.domain.exception.CapacityBelowAssignedException;
 import com.menta.physical.domain.exception.SessionNotFoundException;
@@ -9,6 +10,7 @@ import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacity
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityHoldJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -127,5 +129,13 @@ public class JpaPhysicalCapacityHoldAdapter implements PhysicalCapacityHoldWrite
     public void release(UUID paymentId) {
         holdRepository.deleteAll(holdRepository.findByPaymentIdOrdered(paymentId));
         holdRepository.flush();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED)
+    public List<HeldSessionRow> findByPaymentIdOrdered(UUID paymentId) {
+        return holdRepository.findByPaymentIdOrdered(paymentId).stream()
+            .map(row -> new HeldSessionRow(row.getSessionId(), row.getConvertedAt() != null))
+            .toList();
     }
 }
