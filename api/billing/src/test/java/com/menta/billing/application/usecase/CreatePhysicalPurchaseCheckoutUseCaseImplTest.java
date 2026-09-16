@@ -348,6 +348,45 @@ class CreatePhysicalPurchaseCheckoutUseCaseImplTest {
         assertThat(request.getValue().externalReference()).isEqualTo(result.externalReference());
     }
 
+    // --- #208 Phase 7/B6: the preference's deadline never outlives the hold's ---
+
+    @Test
+    void the_preference_expiresAt_equals_the_holds_expiresAt_and_never_exceeds_it() {
+        PhysicalCourseQuote quote = monthlyQuote(2, NOW.minusSeconds(60));
+        when(quoteRepository.findById(quote.getId().toString())).thenReturn(Optional.of(quote));
+        when(availabilityPort.findScheduledSessions(any(), any(), any()))
+            .thenReturn(sessionsFrom(NOW, 2, 5));
+
+        useCase.create(command(quote.getId().toString(), "idem-1"));
+
+        ArgumentCaptor<Instant> holdExpiresAt = ArgumentCaptor.forClass(Instant.class);
+        verify(physicalCapacityHoldPort).hold(any(), holdExpiresAt.capture());
+        ArgumentCaptor<PaymentPreferenceRequest> request = ArgumentCaptor.forClass(PaymentPreferenceRequest.class);
+        verify(paymentPreferencePort).createPreference(request.capture());
+
+        assertThat(request.getValue().expiresAt()).isEqualTo(holdExpiresAt.getValue());
+        assertThat(request.getValue().expiresAt()).isEqualTo(NOW.plus(HOLD_TTL));
+        assertThat(request.getValue().expiresAt()).isBeforeOrEqualTo(holdExpiresAt.getValue());
+    }
+
+    /** B6 fallback discipline: a replay recomputes no hold, so no fresh deadline is forwarded. */
+    @Test
+    void a_replayed_idempotency_key_sends_no_preference_expiry() {
+        PhysicalCourseQuote quote = monthlyQuote(4, NOW.minusSeconds(60));
+        PaymentId existingPaymentId = PaymentId.generate();
+        Payment existing = Payment.awaitingProvider(
+            existingPaymentId, USER_ID, quote.getAmount(), "does-not-matter-before-lookup", MERCHANT_ACCOUNT_ID,
+            new PaymentTarget.Physical(quote.getId().toString()), NOW.minusSeconds(120)
+        );
+        when(paymentRepository.findByExternalReference(any())).thenReturn(Optional.of(existing));
+
+        useCase.create(command(quote.getId().toString(), "idem-1"));
+
+        ArgumentCaptor<PaymentPreferenceRequest> request = ArgumentCaptor.forClass(PaymentPreferenceRequest.class);
+        verify(paymentPreferencePort).createPreference(request.capture());
+        assertThat(request.getValue().expiresAt()).isNull();
+    }
+
     @Test
     void the_command_refuses_a_request_that_does_not_identify_a_user_quote_or_key() {
         assertThatThrownBy(() -> new CreatePhysicalPurchaseCheckoutCommand(

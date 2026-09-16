@@ -107,7 +107,7 @@ public class CreatePhysicalPurchaseCheckoutUseCaseImpl implements CreatePhysical
             // Same key, same answer, no second Payment — the deterministic external
             // reference above is what makes this replay findable without a persisted
             // idempotency key column.
-            return toResult(replay.get());
+            return toResult(replay.get(), null);
         }
 
         Instant now = clock.now();
@@ -123,14 +123,18 @@ public class CreatePhysicalPurchaseCheckoutUseCaseImpl implements CreatePhysical
         // payment_id correlation column is NOT NULL — even though the Payment
         // row itself is only persisted once the hold actually succeeds.
         PaymentId paymentId = PaymentId.generate();
-        holdCapacity(plan, paymentId, now);
+        // #208 Phase 7/B6: the same instant threaded into the hold call is what
+        // the provider preference's deadline is built from, so it can never
+        // outlive the hold it is meant to bound.
+        Instant holdExpiresAt = now.plus(holdTtl);
+        holdCapacity(plan, paymentId, holdExpiresAt);
 
         Payment payment = paymentRepository.save(Payment.awaitingProvider(
             paymentId, command.userId(), quote.getAmount(), externalReference, merchantAccountId,
             new PaymentTarget.Physical(quote.getId().toString()), now
         ));
 
-        return toResult(payment);
+        return toResult(payment, holdExpiresAt);
     }
 
     /**
@@ -168,16 +172,22 @@ public class CreatePhysicalPurchaseCheckoutUseCaseImpl implements CreatePhysical
      * invariant, before any {@code Payment} row exists, so the {@code 409}
      * guarantee is now truthful instead of best-effort.
      */
-    private void holdCapacity(CoveragePlanner.Plan.Complete plan, PaymentId paymentId, Instant now) {
+    private void holdCapacity(CoveragePlanner.Plan.Complete plan, PaymentId paymentId, Instant expiresAt) {
         List<SessionClaim> claims = plan.sessions().stream()
             .map(session -> new SessionClaim(UUID.fromString(session.sessionId()), session.scheduledAt()))
             .toList();
         MultiSessionCapacityHoldCommand holdCommand = new MultiSessionCapacityHoldCommand(claims, paymentId.getValue());
-        physicalCapacityHoldPort.hold(holdCommand, now.plus(holdTtl));
+        physicalCapacityHoldPort.hold(holdCommand, expiresAt);
     }
 
-    private PhysicalPurchaseCheckoutResult toResult(Payment payment) {
-        return PhysicalPurchaseCheckoutResult.from(payment, createPreference(payment));
+    /**
+     * #208 Phase 7: {@code preferenceExpiresAt} is {@code null} on the replay
+     * branch — a replay recomputes no hold, so there is no fresh deadline to
+     * forward, and {@link PaymentPreferenceRequest}'s null case already means
+     * "send no expiration" (B6's fallback discipline).
+     */
+    private PhysicalPurchaseCheckoutResult toResult(Payment payment, Instant preferenceExpiresAt) {
+        return PhysicalPurchaseCheckoutResult.from(payment, createPreference(payment, preferenceExpiresAt));
     }
 
     /**
@@ -188,10 +198,10 @@ public class CreatePhysicalPurchaseCheckoutUseCaseImpl implements CreatePhysical
      * expired; {@code release} is a documented no-op on an unknown {@code
      * paymentId}).
      */
-    private PaymentPreferenceResult createPreference(Payment payment) {
+    private PaymentPreferenceResult createPreference(Payment payment, Instant expiresAt) {
         try {
             return paymentPreferencePort.createPreference(new PaymentPreferenceRequest(
-                payment.getExpectedExternalReference(), CHECKOUT_TITLE, payment.getExpectedAmount()
+                payment.getExpectedExternalReference(), CHECKOUT_TITLE, payment.getExpectedAmount(), expiresAt
             ));
         } catch (RuntimeException providerFailed) {
             physicalCapacityHoldPort.release(payment.getId().getValue());

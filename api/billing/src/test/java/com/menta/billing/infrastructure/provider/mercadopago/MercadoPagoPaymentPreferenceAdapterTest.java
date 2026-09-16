@@ -12,6 +12,7 @@ import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -105,6 +106,40 @@ class MercadoPagoPaymentPreferenceAdapterTest {
 
         assertThat(captured.get()).contains("\"back_urls\":null");
         assertThat(captured.get()).contains("\"notification_url\":null");
+    }
+
+    // --- #208 Phase 7/B6: provider deadline wire format ---
+
+    @Test
+    void createPreference_sends_the_three_expiry_fields_when_expiresAt_is_present() throws IOException {
+        AtomicReference<String> captured = new AtomicReference<>();
+        String baseUrl = startServer(
+            "{\"id\":\"pref-123\",\"init_point\":\"https://mp.example/checkout/pref-123\"}", 200, captured
+        );
+        Instant expiresAt = Instant.parse("2026-09-16T12:30:00.000Z");
+
+        adapter(baseUrl, "", "")
+            .createPreference(new PaymentPreferenceRequest("SUB-1", "Plan Mensual", AMOUNT, expiresAt));
+
+        assertThat(captured.get()).contains("\"expires\":true");
+        assertThat(captured.get()).contains("\"expiration_date_to\":\"2026-09-16T12:30:00.000+00:00\"");
+        assertThat(captured.get()).contains("\"expiration_date_from\":");
+    }
+
+    /** B6 fallback discipline: absent, never `expires: false` with placeholder dates. */
+    @Test
+    void createPreference_sends_no_expiry_fields_at_all_when_expiresAt_is_null() throws IOException {
+        AtomicReference<String> captured = new AtomicReference<>();
+        String baseUrl = startServer(
+            "{\"id\":\"pref-123\",\"init_point\":\"https://mp.example/checkout/pref-123\"}", 200, captured
+        );
+
+        adapter(baseUrl, "", "")
+            .createPreference(new PaymentPreferenceRequest("SUB-1", "Plan Mensual", AMOUNT));
+
+        assertThat(captured.get()).doesNotContain("\"expires\"");
+        assertThat(captured.get()).doesNotContain("\"expiration_date_from\"");
+        assertThat(captured.get()).doesNotContain("\"expiration_date_to\"");
     }
 
     @Test
