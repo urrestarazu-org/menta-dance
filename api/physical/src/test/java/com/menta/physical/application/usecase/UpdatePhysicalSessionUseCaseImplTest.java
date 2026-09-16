@@ -179,20 +179,25 @@ class UpdatePhysicalSessionUseCaseImplTest {
         SessionId sessionId = SessionId.generate();
         CourseId courseId = CourseId.generate();
         UUID ownerId = UUID.randomUUID();
-        Instant future = Instant.parse("2026-09-15T22:00:00Z");
+        // Relative to now, not a hardcoded calendar date (#227): a literal date
+        // stops being "future" the moment real time catches up to it.
+        Instant future = Instant.now().plusSeconds(400L * 86400);
+        java.time.LocalDate originalDate = future.atZone(java.time.ZoneOffset.UTC).toLocalDate();
+        java.time.LocalDate rescheduledDate = originalDate.plusDays(5);
         when(sessionRepository.findById(sessionId))
             .thenReturn(Optional.of(session(sessionId, courseId, future, 20, 0)));
         when(courseRepository.findById(courseId)).thenReturn(Optional.of(course(courseId, ownerId)));
         when(sessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         UpdatePhysicalSessionCommand patch = new UpdatePhysicalSessionCommand(
-            Optional.of(java.time.LocalDate.of(2026, 9, 20)), Optional.of(java.time.LocalTime.of(18, 0)),
+            Optional.of(rescheduledDate), Optional.of(java.time.LocalTime.of(18, 0)),
             Optional.empty(), Optional.empty(), Optional.empty()
         );
 
         PhysicalSessionManagementResult result = useCase.update(sessionId.toString(), patch, ownerId, false);
 
-        assertThat(result.scheduledAt()).isEqualTo("2026-09-20T18:00:00Z");
+        Instant expected = rescheduledDate.atTime(18, 0).atZone(java.time.ZoneOffset.UTC).toInstant();
+        assertThat(result.scheduledAt()).isEqualTo(expected.toString());
     }
 
     @Test
@@ -200,7 +205,10 @@ class UpdatePhysicalSessionUseCaseImplTest {
         SessionId sessionId = SessionId.generate();
         CourseId courseId = CourseId.generate();
         UUID ownerId = UUID.randomUUID();
-        Instant future = Instant.parse("2026-09-15T22:00:00Z");
+        // Relative to now, not a hardcoded calendar date (#227): a literal date
+        // stops being "future" the moment real time catches up to it.
+        Instant future = Instant.now().plusSeconds(400L * 86400);
+        java.time.LocalDate originalDate = future.atZone(java.time.ZoneOffset.UTC).toLocalDate();
         when(sessionRepository.findById(sessionId))
             .thenReturn(Optional.of(session(sessionId, courseId, future, 20, 0)));
         when(courseRepository.findById(courseId)).thenReturn(Optional.of(course(courseId, ownerId)));
@@ -213,7 +221,8 @@ class UpdatePhysicalSessionUseCaseImplTest {
 
         PhysicalSessionManagementResult result = useCase.update(sessionId.toString(), patch, ownerId, false);
 
-        assertThat(result.scheduledAt()).isEqualTo("2026-09-15T18:00:00Z");
+        Instant expected = originalDate.atTime(18, 0).atZone(java.time.ZoneOffset.UTC).toInstant();
+        assertThat(result.scheduledAt()).isEqualTo(expected.toString());
     }
 
     @Test
