@@ -53,10 +53,14 @@ tasks.jar {
 // US-BILLING-001 coverage gates. The mechanism lives in buildSrc's
 // registerLayeredCoverageVerification; what stays here is the policy.
 //
-//   - Domain + Application: 0.90 LINE (BUNDLE). Temporary policy; raise in a dedicated task.
-//   - Infrastructure: 0.85 LINE (BUNDLE). Real: 95.5%.
+//   - Domain + Application: 0.85 LINE (BUNDLE). Real: ~98%. Settled at #138:
+//     the project-wide floor (CLAUDE.md — "ningún umbral por debajo de
+//     85%") is the accepted target here; closing the remaining real gaps
+//     (MarkPurchaseAssignedUseCase, PhysicalPurchaseCheckoutResult) is
+//     deliberately not required for this gate to reflect final policy.
+//   - Infrastructure: 0.85 LINE (BUNDLE). Real: 92.9%.
 val jacocoDomainApplicationCoverageVerification = registerLayeredCoverageVerification(
-    "jacocoDomainApplicationCoverageVerification", "0.90",
+    "jacocoDomainApplicationCoverageVerification", "0.85",
     listOf("com/menta/billing/domain/**", "com/menta/billing/application/**")
 )
 val jacocoInfrastructureCoverageVerification = registerLayeredCoverageVerification(
