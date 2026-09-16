@@ -8,6 +8,7 @@ import com.menta.billing.application.dto.ScheduledSessionSnapshot;
 import com.menta.billing.application.port.out.Clock;
 import com.menta.billing.application.port.out.PaymentPreferencePort;
 import com.menta.billing.application.port.out.PaymentRepository;
+import com.menta.billing.application.port.out.PhysicalCapacityHoldPort;
 import com.menta.billing.application.port.out.PhysicalCourseAvailabilityPort;
 import com.menta.billing.application.port.in.CreatePhysicalPurchaseCheckoutUseCase;
 import com.menta.billing.application.port.out.PhysicalCourseQuoteRepository;
@@ -20,7 +21,10 @@ import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.domain.model.PaymentTarget;
 import com.menta.billing.domain.model.PhysicalCourseQuote;
 import com.menta.billing.domain.model.PurchaseType;
+import com.menta.shared.physical.MultiSessionCapacityHoldCommand;
+import com.menta.shared.physical.SessionClaim;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -68,21 +72,25 @@ public class CreatePhysicalPurchaseCheckoutUseCaseImpl implements CreatePhysical
     private final PhysicalCourseQuoteRepository quoteRepository;
     private final PaymentRepository paymentRepository;
     private final PhysicalCourseAvailabilityPort availabilityPort;
+    private final PhysicalCapacityHoldPort physicalCapacityHoldPort;
     private final PaymentPreferencePort paymentPreferencePort;
     private final Clock clock;
     private final String merchantAccountId;
+    private final Duration holdTtl;
 
     public CreatePhysicalPurchaseCheckoutUseCaseImpl(
         PhysicalCourseQuoteRepository quoteRepository, PaymentRepository paymentRepository,
-        PhysicalCourseAvailabilityPort availabilityPort, PaymentPreferencePort paymentPreferencePort, Clock clock,
-        String merchantAccountId
+        PhysicalCourseAvailabilityPort availabilityPort, PhysicalCapacityHoldPort physicalCapacityHoldPort,
+        PaymentPreferencePort paymentPreferencePort, Clock clock, String merchantAccountId, Duration holdTtl
     ) {
         this.quoteRepository = quoteRepository;
         this.paymentRepository = paymentRepository;
         this.availabilityPort = availabilityPort;
+        this.physicalCapacityHoldPort = physicalCapacityHoldPort;
         this.paymentPreferencePort = paymentPreferencePort;
         this.clock = clock;
         this.merchantAccountId = merchantAccountId;
+        this.holdTtl = holdTtl;
     }
 
     @Override
@@ -109,9 +117,14 @@ public class CreatePhysicalPurchaseCheckoutUseCaseImpl implements CreatePhysical
 
         // A7: validity is checked before availability, and 410 for an expired
         // quote is thrown before this planner call ever runs.
-        ensureCoverageIsAvailable(quote, now);
+        CoveragePlanner.Plan.Complete plan = resolveCoveragePlan(quote, now);
 
+        // #208 D2/B1: paymentId must exist before the hold call — the hold's
+        // payment_id correlation column is NOT NULL — even though the Payment
+        // row itself is only persisted once the hold actually succeeds.
         PaymentId paymentId = PaymentId.generate();
+        holdCapacity(plan, paymentId, now);
+
         Payment payment = paymentRepository.save(Payment.awaitingProvider(
             paymentId, command.userId(), quote.getAmount(), externalReference, merchantAccountId,
             new PaymentTarget.Physical(quote.getId().toString()), now
@@ -121,14 +134,13 @@ public class CreatePhysicalPurchaseCheckoutUseCaseImpl implements CreatePhysical
     }
 
     /**
-     * A6/D5: best-effort, read-time-only check — reuses the same {@link
-     * CoveragePlanner} the confirmation-time outbox handler runs, but with
-     * {@code clock.now()} instead of {@code confirmedAt} and {@code
-     * requireAvailable = true}. Never reserves anything; see {@link
-     * PhysicalCapacityUnavailableException}'s javadoc for what this
-     * deliberately does not promise.
+     * A6/D5: resolves the same eligible-session set the confirmation-time
+     * outbox handler resolves, but with {@code clock.now()} instead of
+     * {@code confirmedAt} and {@code requireAvailable = true} — a session
+     * with zero visible spots is treated as not found here, ahead of the
+     * real reserving hold call.
      */
-    private void ensureCoverageIsAvailable(PhysicalCourseQuote quote, Instant now) {
+    private CoveragePlanner.Plan.Complete resolveCoveragePlan(PhysicalCourseQuote quote, Instant now) {
         // INDIVIDUAL's selectedSessionId was picked at quote time and may sit
         // before `now` for a same-day class — same periodStart reasoning the
         // outbox handler already applies for the identical purchaseType split.
@@ -142,21 +154,47 @@ public class CreatePhysicalPurchaseCheckoutUseCaseImpl implements CreatePhysical
             case INDIVIDUAL -> CoveragePlanner.planIndividual(scheduledSessions, quote.getSelectedSessionId(), true);
         };
 
-        if (!(plan instanceof CoveragePlanner.Plan.Complete)) {
+        if (!(plan instanceof CoveragePlanner.Plan.Complete complete)) {
             throw new PhysicalCapacityUnavailableException();
         }
+        return complete;
+    }
+
+    /**
+     * #208 design D2: the real, reserving hold call — {@code
+     * PhysicalCapacityHoldPort#hold} throws {@link
+     * PhysicalCapacityUnavailableException} itself (same type as the
+     * previous best-effort check) on the first claim that trips the
+     * invariant, before any {@code Payment} row exists, so the {@code 409}
+     * guarantee is now truthful instead of best-effort.
+     */
+    private void holdCapacity(CoveragePlanner.Plan.Complete plan, PaymentId paymentId, Instant now) {
+        List<SessionClaim> claims = plan.sessions().stream()
+            .map(session -> new SessionClaim(UUID.fromString(session.sessionId()), session.scheduledAt()))
+            .toList();
+        MultiSessionCapacityHoldCommand holdCommand = new MultiSessionCapacityHoldCommand(claims, paymentId.getValue());
+        physicalCapacityHoldPort.hold(holdCommand, now.plus(holdTtl));
     }
 
     private PhysicalPurchaseCheckoutResult toResult(Payment payment) {
         return PhysicalPurchaseCheckoutResult.from(payment, createPreference(payment));
     }
 
+    /**
+     * #208 task 6.3: a provider failure after the hold already succeeded
+     * must not let the hold linger until TTL expiry — released here, before
+     * rethrowing, on every path through this method (including a replay of
+     * an idempotency key whose original hold has since converted or
+     * expired; {@code release} is a documented no-op on an unknown {@code
+     * paymentId}).
+     */
     private PaymentPreferenceResult createPreference(Payment payment) {
         try {
             return paymentPreferencePort.createPreference(new PaymentPreferenceRequest(
                 payment.getExpectedExternalReference(), CHECKOUT_TITLE, payment.getExpectedAmount()
             ));
         } catch (RuntimeException providerFailed) {
+            physicalCapacityHoldPort.release(payment.getId().getValue());
             throw new PaymentPreferenceUnavailableException(providerFailed);
         }
     }

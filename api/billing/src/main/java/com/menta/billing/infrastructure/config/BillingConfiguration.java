@@ -18,6 +18,7 @@ import com.menta.billing.application.port.out.CourseCatalogPort;
 import com.menta.billing.application.port.out.PaymentPreferencePort;
 import com.menta.billing.application.port.out.PaymentProviderPort;
 import com.menta.billing.application.port.out.PaymentRepository;
+import com.menta.billing.application.port.out.PhysicalCapacityHoldPort;
 import com.menta.billing.application.port.out.PhysicalCourseAvailabilityPort;
 import com.menta.billing.application.port.out.PhysicalCourseOwnershipPort;
 import com.menta.billing.application.port.out.PhysicalCoursePricingRepository;
@@ -296,16 +297,29 @@ public class BillingConfiguration {
      * that must commit atomically — unlike {@code createSubscriptionCheckoutUseCase}, this
      * checkout creates no second local aggregate (the {@code Purchase} is created later, from the
      * confirmed webhook).
+     *
+     * <p>#208 (design B5): the hold TTL is read here as {@code
+     * billing.physical.capacity.hold.ttl-ms}, deliberately NOT the {@code
+     * physical.capacity.hold.ttl-ms} key design.md names — that key belongs
+     * to Physical's own module config (its expiry sweep, Phase 9, not yet
+     * wired) and this checkout use case cannot depend on {@code api:physical}
+     * to read it (ArchUnit boundary, D4). The port's {@code hold} contract
+     * already requires the caller to compute {@code expiresAt} itself, so
+     * billing owns its own copy of the same 30-minute default (B5) until
+     * Phase 9 lands; the two keys are expected to converge onto one value in
+     * practice, never to drift, since both express the same design decision.</p>
      */
     @Bean
     public CreatePhysicalPurchaseCheckoutUseCase createPhysicalPurchaseCheckoutUseCase(
         PhysicalCourseQuoteRepository quoteRepository, PaymentRepository paymentRepository,
-        PhysicalCourseAvailabilityPort physicalCourseAvailabilityPort, PaymentPreferencePort paymentPreferencePort,
-        Clock clock, @Value("${billing.mercadopago.merchant-account-id:}") String merchantAccountId
+        PhysicalCourseAvailabilityPort physicalCourseAvailabilityPort, PhysicalCapacityHoldPort physicalCapacityHoldPort,
+        PaymentPreferencePort paymentPreferencePort, Clock clock,
+        @Value("${billing.mercadopago.merchant-account-id:}") String merchantAccountId,
+        @Value("${billing.physical.capacity.hold.ttl-ms:1800000}") long holdTtlMs
     ) {
         return new TransactionalCreatePhysicalPurchaseCheckoutUseCase(new CreatePhysicalPurchaseCheckoutUseCaseImpl(
-            quoteRepository, paymentRepository, physicalCourseAvailabilityPort, paymentPreferencePort, clock,
-            merchantAccountId
+            quoteRepository, paymentRepository, physicalCourseAvailabilityPort, physicalCapacityHoldPort,
+            paymentPreferencePort, clock, merchantAccountId, Duration.ofMillis(holdTtlMs)
         ));
     }
 
