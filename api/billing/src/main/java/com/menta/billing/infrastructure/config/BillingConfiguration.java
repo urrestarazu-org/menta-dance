@@ -12,6 +12,7 @@ import com.menta.billing.application.port.in.GetSubscriptionHistoryUseCase;
 import com.menta.billing.application.port.in.ListPlansUseCase;
 import com.menta.billing.application.port.in.ReceiveWebhookUseCase;
 import com.menta.billing.application.port.in.UpdatePhysicalCoursePricingUseCase;
+import com.menta.billing.application.port.out.BillingOutboxAppenderPort;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.port.out.Clock;
 import com.menta.billing.application.port.out.CourseCatalogPort;
@@ -336,9 +337,10 @@ public class BillingConfiguration {
      *  residual (refuses {@code ASSIGNED → EXCEPTION}). */
     @Bean
     public MarkPurchaseExceptionUseCase markPurchaseExceptionUseCase(
-        PurchaseRepository purchaseRepository
+        PurchaseRepository purchaseRepository, PaymentRepository paymentRepository,
+        BillingOutboxAppenderPort outboxAppender, Clock clock
     ) {
-        return new MarkPurchaseExceptionUseCase(purchaseRepository);
+        return new MarkPurchaseExceptionUseCase(purchaseRepository, paymentRepository, outboxAppender, clock);
     }
 
     /** #41 PR8: the mirror image of {@code markPurchaseExceptionUseCase} for the success branch (design A3). */

@@ -28,6 +28,14 @@ public final class BillingOutboxEventTypes {
      */
     public static final String PHYSICAL_PAYMENT_COMPLETED = "billing.PhysicalPaymentCompleted";
 
+    /**
+     * Emitted after {@code MarkPurchaseExceptionUseCase} flips a {@code
+     * Purchase} from {@code PENDING_FULFILLMENT} to {@code EXCEPTION}
+     * (proposal D1). The outbox row carries {@code
+     * com.menta.shared.billing.PurchaseExceptionedOutboxPayload} as JSON.
+     */
+    public static final String PURCHASE_EXCEPTIONED = "billing.PurchaseExceptioned";
+
     private BillingOutboxEventTypes() {
         // Constant holder.
     }
