@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -50,4 +51,42 @@ public interface PhysicalCapacityHoldJpaRepository extends JpaRepository<Physica
         nativeQuery = true
     )
     List<PhysicalCapacityHoldJpaEntity> findByPaymentIdOrdered(@Param("paymentId") UUID paymentId);
+
+    /**
+     * Housekeeping GC (#208, design B5, tasks Phase 9) — rows that expired
+     * and were never converted. The invariant already ignores these at read
+     * time ({@code countActiveBySessionIdForUpdate} above and
+     * {@code PhysicalSessionJpaRepository}'s availability queries both filter
+     * {@code expires_at > :now}), so this delete has no correctness effect;
+     * it only stops the table growing forever. Bounded with {@code LIMIT} so
+     * one sweep tick never holds row locks on an unbounded batch — sized by
+     * {@code physical.capacity.hold.expiry.batch-size}, the sibling of
+     * {@code billing.subscription.expiry.batch-size}.
+     */
+    @Modifying
+    @Query(
+        value = "DELETE FROM physical_capacity_holds "
+            + "WHERE converted_at IS NULL AND expires_at <= :now "
+            + "LIMIT :batchSize",
+        nativeQuery = true
+    )
+    int deleteExpiredUnconverted(@Param("now") Instant now, @Param("batchSize") int batchSize);
+
+    /**
+     * Housekeeping GC (#208, design B5, tasks Phase 9) — rows already
+     * converted (their {@code converted_at} set by the adapter's
+     * {@code markConverted}) long enough ago ({@code
+     * physical.capacity.hold.ttl-ms}, the same TTL that bounds a live hold's
+     * lifetime) that they are pure history nobody reads:
+     * {@link #findByPaymentIdOrdered} is only ever consulted during
+     * conversion itself, never afterward.
+     */
+    @Modifying
+    @Query(
+        value = "DELETE FROM physical_capacity_holds "
+            + "WHERE converted_at IS NOT NULL AND converted_at <= :cutoff "
+            + "LIMIT :batchSize",
+        nativeQuery = true
+    )
+    int deleteConvertedBefore(@Param("cutoff") Instant cutoff, @Param("batchSize") int batchSize);
 }

@@ -31,6 +31,7 @@ import com.menta.physical.infrastructure.qr.FormatQrCredentialSignatureService;
 import com.menta.physical.infrastructure.qr.QrProperties;
 import com.menta.physical.infrastructure.redis.RedisCheckInLockPort;
 import jakarta.annotation.PostConstruct;
+import java.time.Duration;
 import java.util.Locale;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
@@ -119,6 +120,30 @@ public class PhysicalConfiguration {
     @Bean
     public Clock physicalClock() {
         return () -> java.time.Clock.systemUTC().instant();
+    }
+
+    /**
+     * Physical's own copy of the hold TTL (#208, design B5), read as {@code
+     * physical.capacity.hold.ttl-ms} — deliberately a DIFFERENT key from
+     * billing's interim {@code billing.physical.capacity.hold.ttl-ms}
+     * (see {@code BillingConfiguration.createPhysicalPurchaseCheckoutUseCase}),
+     * since the checkout use case cannot depend on {@code api:physical} to
+     * read it (ArchUnit boundary, D4). Both keys are expected to carry the
+     * same value in practice; this one is consumed only by
+     * {@code HoldExpiryWorker}, to decide how long a converted hold row is
+     * kept as history before the sweep prunes it — the hold's own creation
+     * path never needs it, since the caller (billing) already computes and
+     * passes {@code expiresAt} explicitly.
+     *
+     * <p>Exposed as a {@link Duration} bean, not a raw {@code @Value} on the
+     * consuming class, so the millisecond-to-{@code Duration} conversion
+     * lives in one place (design B5).</p>
+     */
+    @Bean
+    public Duration physicalCapacityHoldTtl(
+        @Value("${physical.capacity.hold.ttl-ms:1800000}") long ttlMs
+    ) {
+        return Duration.ofMillis(ttlMs);
     }
 
     @Bean
