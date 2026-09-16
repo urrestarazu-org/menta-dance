@@ -42,6 +42,7 @@ import com.menta.physical.infrastructure.persistence.entity.PhysicalCapacityAssi
 import com.menta.physical.infrastructure.persistence.entity.PhysicalCourseJpaEntity;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalSessionJpaEntity;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityAssignmentJpaRepository;
+import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityHoldJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
 import com.menta.shared.domain.vo.Email;
@@ -129,6 +130,7 @@ class PhysicalPurchaseIntegrationTest {
     @Autowired private WebhookInboxJpaRepository inboxRepository;
     @Autowired private OutboxRowJpaRepository outboxRepository;
     @Autowired private PhysicalCapacityAssignmentJpaRepository assignmentRepository;
+    @Autowired private PhysicalCapacityHoldJpaRepository holdRepository;
     @Autowired private PhysicalCourseJpaRepository courseRepository;
     @Autowired private PhysicalSessionJpaRepository sessionRepository;
     @Autowired private PhysicalCourseQuoteJpaRepository quoteRepository;
@@ -166,6 +168,7 @@ class PhysicalPurchaseIntegrationTest {
 
     @AfterEach
     void cleanUp() {
+        holdRepository.deleteAll();
         assignmentRepository.deleteAll();
         purchaseSessionRepository.deleteAll();
         purchaseRepository.deleteAll();
@@ -371,6 +374,57 @@ class PhysicalPurchaseIntegrationTest {
         assertThat(purchaseSessionRepository.findByPurchaseIdOrderByPositionAsc(
             purchaseRepository.findByPaymentId(paymentId).orElseThrow().getId()
         )).hasSize(2);
+    }
+
+    // --- Design step 8: conversion is idempotent under repeated redelivery ----
+
+    /**
+     * design B3/step 8: the hold is converted exactly once — every row for
+     * this payment gets its {@code converted_at} set on the first delivery,
+     * and every later delivery finds every row already converted
+     * ({@code ConvertOutcome.AlreadyConverted}) and writes nothing further,
+     * however many times it is redelivered.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void redelivering_the_webhook_five_times_converts_the_hold_exactly_once() {
+        UUID userId = seedStudent();
+        UUID courseId = seedCourse();
+        List<UUID> sessionIds = seedScheduledSessions(courseId, 2, 5);
+        String quoteId = seedMonthlyQuote(courseId, 2, MONTHLY_PRICE);
+
+        ResponseEntity<Map> checkout = checkout(userId, quoteId, "idem-five-1");
+        String externalReference = (String) checkout.getBody().get("externalReference");
+        UUID paymentId = UUID.fromString((String) checkout.getBody().get("paymentId"));
+
+        OutboxRowJpaEntity event = confirmPayment("mp-five-1", externalReference, MONTHLY_PRICE);
+        assertThat(outboxWorker.process(event)).isFalse();
+        assertThat(purchaseRepository.findByPaymentId(paymentId).orElseThrow().getStatus()).isEqualTo("ASSIGNED");
+        for (UUID sessionId : sessionIds) {
+            assertThat(assignmentRepository.countBySessionId(sessionId)).isEqualTo(1);
+        }
+        var convertedAtAfterFirstDelivery = holdRepository.findByPaymentIdOrdered(paymentId).stream()
+            .map(row -> row.getConvertedAt())
+            .toList();
+        assertThat(convertedAtAfterFirstDelivery).hasSize(2).allSatisfy(
+            convertedAt -> assertThat(convertedAt).isNotNull()
+        );
+
+        for (int redelivery = 0; redelivery < 4; redelivery++) {
+            outboxWorker.process(event);
+        }
+
+        assertThat(purchaseRepository.findByPaymentId(paymentId).orElseThrow().getStatus()).isEqualTo("ASSIGNED");
+        for (UUID sessionId : sessionIds) {
+            assertThat(assignmentRepository.countBySessionId(sessionId)).isEqualTo(1);
+        }
+        assertThat(purchaseSessionRepository.findByPurchaseIdOrderByPositionAsc(
+            purchaseRepository.findByPaymentId(paymentId).orElseThrow().getId()
+        )).hasSize(2);
+        var convertedAtAfterFiveDeliveries = holdRepository.findByPaymentIdOrdered(paymentId).stream()
+            .map(row -> row.getConvertedAt())
+            .toList();
+        assertThat(convertedAtAfterFiveDeliveries).isEqualTo(convertedAtAfterFirstDelivery);
     }
 
     // --- Scenario 6: computed sessions cannot all be assigned -----------------

@@ -41,7 +41,8 @@ class CreateCapacityHoldUseCaseTest {
     void holdAll_claims_every_session_in_order_and_returns_them_in_claim_order() {
         PhysicalCapacityHoldWriter writer = mock(PhysicalCapacityHoldWriter.class);
         ReleaseCapacityHoldUseCase releaseUseCase = new ReleaseCapacityHoldUseCase(writer);
-        CreateCapacityHoldUseCase useCase = new CreateCapacityHoldUseCase(writer, releaseUseCase);
+        ConvertCapacityHoldUseCase convertUseCase = mock(ConvertCapacityHoldUseCase.class);
+        CreateCapacityHoldUseCase useCase = new CreateCapacityHoldUseCase(writer, releaseUseCase, convertUseCase);
 
         UUID session1 = UUID.randomUUID();
         UUID session2 = UUID.randomUUID();
@@ -63,7 +64,8 @@ class CreateCapacityHoldUseCaseTest {
     void holdAll_stops_at_the_first_failure_and_never_claims_later_sessions() {
         PhysicalCapacityHoldWriter writer = mock(PhysicalCapacityHoldWriter.class);
         ReleaseCapacityHoldUseCase releaseUseCase = new ReleaseCapacityHoldUseCase(writer);
-        CreateCapacityHoldUseCase useCase = new CreateCapacityHoldUseCase(writer, releaseUseCase);
+        ConvertCapacityHoldUseCase convertUseCase = mock(ConvertCapacityHoldUseCase.class);
+        CreateCapacityHoldUseCase useCase = new CreateCapacityHoldUseCase(writer, releaseUseCase, convertUseCase);
 
         UUID session1 = UUID.randomUUID();
         UUID session2 = UUID.randomUUID();
@@ -88,7 +90,8 @@ class CreateCapacityHoldUseCaseTest {
     void holdAll_maps_a_unique_row_collision_to_CapacityBelowAssigned() {
         PhysicalCapacityHoldWriter writer = mock(PhysicalCapacityHoldWriter.class);
         ReleaseCapacityHoldUseCase releaseUseCase = new ReleaseCapacityHoldUseCase(writer);
-        CreateCapacityHoldUseCase useCase = new CreateCapacityHoldUseCase(writer, releaseUseCase);
+        ConvertCapacityHoldUseCase convertUseCase = mock(ConvertCapacityHoldUseCase.class);
+        CreateCapacityHoldUseCase useCase = new CreateCapacityHoldUseCase(writer, releaseUseCase, convertUseCase);
 
         UUID session1 = UUID.randomUUID();
         UUID paymentId = UUID.randomUUID();
@@ -107,11 +110,44 @@ class CreateCapacityHoldUseCaseTest {
     void release_delegates_to_the_release_use_case() {
         PhysicalCapacityHoldWriter writer = mock(PhysicalCapacityHoldWriter.class);
         ReleaseCapacityHoldUseCase releaseUseCase = mock(ReleaseCapacityHoldUseCase.class);
-        CreateCapacityHoldUseCase useCase = new CreateCapacityHoldUseCase(writer, releaseUseCase);
+        ConvertCapacityHoldUseCase convertUseCase = mock(ConvertCapacityHoldUseCase.class);
+        CreateCapacityHoldUseCase useCase = new CreateCapacityHoldUseCase(writer, releaseUseCase, convertUseCase);
         UUID paymentId = UUID.randomUUID();
 
         useCase.release(paymentId);
 
         verify(releaseUseCase).release(paymentId);
+    }
+
+    @Test
+    void convertAll_delegates_to_the_convert_use_case() {
+        PhysicalCapacityHoldWriter writer = mock(PhysicalCapacityHoldWriter.class);
+        ReleaseCapacityHoldUseCase releaseUseCase = mock(ReleaseCapacityHoldUseCase.class);
+        ConvertCapacityHoldUseCase convertUseCase = mock(ConvertCapacityHoldUseCase.class);
+        CreateCapacityHoldUseCase useCase = new CreateCapacityHoldUseCase(writer, releaseUseCase, convertUseCase);
+        UUID paymentId = UUID.randomUUID();
+        UUID studentId = UUID.randomUUID();
+        ConvertOutcome outcome = new ConvertOutcome.Converted(List.of(UUID.randomUUID()));
+        when(convertUseCase.convertAll(paymentId, studentId)).thenReturn(outcome);
+
+        ConvertOutcome result = useCase.convertAll(paymentId, studentId);
+
+        assertThat(result).isEqualTo(outcome);
+        verify(convertUseCase).convertAll(paymentId, studentId);
+    }
+
+    @Test
+    void heldSessionIds_delegates_to_the_writer_query() {
+        PhysicalCapacityHoldWriter writer = mock(PhysicalCapacityHoldWriter.class);
+        ReleaseCapacityHoldUseCase releaseUseCase = mock(ReleaseCapacityHoldUseCase.class);
+        ConvertCapacityHoldUseCase convertUseCase = mock(ConvertCapacityHoldUseCase.class);
+        CreateCapacityHoldUseCase useCase = new CreateCapacityHoldUseCase(writer, releaseUseCase, convertUseCase);
+        UUID paymentId = UUID.randomUUID();
+        UUID session1 = UUID.randomUUID();
+        when(writer.findByPaymentIdOrdered(paymentId)).thenReturn(
+            List.of(new com.menta.physical.application.port.out.HeldSessionRow(session1, false))
+        );
+
+        assertThat(useCase.heldSessionIds(paymentId)).containsExactly(session1);
     }
 }
