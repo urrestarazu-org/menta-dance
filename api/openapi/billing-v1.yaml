@@ -459,13 +459,12 @@ paths:
         misma `idempotencyKey` para ese usuario devuelve el checkout
         original y no crea un segundo cobro.
 
-        No reserva capacidad: la asignación de sesiones ocurre recién en la
-        confirmación por webhook (#41, US-PHYSICAL-004, design A6). El `409`
-        de esta ruta es una cortesía de lectura ("best-effort"), no una
-        garantía — un checkout que pasa este chequeo puede terminar en
-        `EXCEPTION` si otro comprador toma el último cupo antes de la
-        confirmación. La garantía real llega con los holds de capacidad
-        (#208).
+        Reserva capacidad de forma atómica antes de crear el `Payment`
+        (#208, design B2/B4/D2): un request que responde `201` ya tiene un
+        hold que cubre cada sesión elegible del plan, de modo que ningún
+        otro comprador puede tomar ese cupo antes de la confirmación. El
+        `409` de esta ruta ya no es una cortesía de lectura best-effort —
+        es una garantía real respaldada por el hold.
 
         `checkoutUrl` sólo sirve para navegar al Checkout Pro. La
         confirmación financiera llega exclusivamente por el webhook firmado.
@@ -501,9 +500,14 @@ paths:
           description: Falta un access token válido.
         '409':
           description: >-
-            Las sesiones elegibles de la cotización ya están llenas al momento del
-            request (D5) — cortesía de lectura, no una garantía de cupo. No se crea
-            ningún `Payment`.
+            No se pudo reservar capacidad para todas las sesiones elegibles de la
+            cotización (#208, design B2/B4/D2) — ya sea porque una o más sesiones
+            ya están llenas, o porque el curso no tiene suficientes sesiones
+            elegibles para cubrir el plan completo. Esta es una garantía real: el
+            hold atómico se intenta antes de crear cualquier `Payment`, así que no
+            se crea ningún `Payment` para este request. Ningún otro comprador puede
+            tomar un cupo ya reservado por un hold vigente entre este request y la
+            confirmación.
           content:
             application/problem+json:
               schema:

@@ -3,19 +3,20 @@ package com.menta.billing.domain.exception;
 import com.menta.shared.domain.exceptions.BusinessException;
 
 /**
- * At checkout time, {@code CoveragePlanner} could not fill the quote's
- * {@code scheduledSessionCount} with sessions that currently read {@code
- * availableSpots > 0} (design A6, D5, #41 US-PHYSICAL-004).
+ * Thrown either when {@code CoveragePlanner} cannot fill the quote's
+ * {@code scheduledSessionCount} with eligible sessions (design A6, D5, #41
+ * US-PHYSICAL-004), or when the real atomic capacity hold itself refuses a
+ * claim (#208, design B2/B4/D2).
  *
- * <p>This is a <strong>best-effort, read-time courtesy rejection, not a
- * capacity guarantee</strong>: nothing is held or reserved by this check,
- * so a request that passes it may still resolve to {@code EXCEPTION} at
- * confirmation if another buyer takes the last spot first. It exists only
- * to avoid charging for something the system can already see is sold out.
- * A real, hold-backed {@code 409 CAPACITY_UNAVAILABLE} guarantee is future
- * work (#208) — this exception intentionally shares its error code with
- * that future capability so the response shape does not change when the
- * guarantee arrives, only its truthfulness does.</p>
+ * <p>Since #208, a {@code 409} answer from this exception is a
+ * <strong>real capacity guarantee, not a best-effort courtesy</strong>: the
+ * hold is attempted — and, on success, reserves every eligible session for
+ * this payment — before any {@code Payment} row is ever created. A request
+ * that instead receives {@code 201} is guaranteed to have reserved every
+ * session its plan covers, so no other buyer can take that spot before
+ * confirmation. This exception kept its original #41 error code across that
+ * change (design D2), so the response shape never changed — only its
+ * truthfulness did.</p>
  */
 public class PhysicalCapacityUnavailableException extends BusinessException {
 

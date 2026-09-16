@@ -55,6 +55,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalLong;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -515,6 +520,108 @@ class PhysicalPurchaseIntegrationTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.GONE);
         assertThat(response.getBody().get("code")).isEqualTo("PHYSICAL_COURSE_QUOTE_EXPIRED");
         assertThat(paymentRepository.findAll()).isEmpty();
+    }
+
+    // --- #208 task 10.2: guaranteed 409 under real concurrency ----------------
+
+    /**
+     * Task 10.2 (design D2): unlike the pre-#208 best-effort check — which
+     * still created a {@code Payment} row for the loser, later resolving to
+     * {@code EXCEPTION} at confirmation (the path proven by {@link
+     * #a_capacity_trip_at_confirmation_leaves_payment_completed_and_purchase_exception_end_to_end})
+     * — the real atomic hold now guarantees that a request answered with
+     * {@code 201} has already reserved every eligible session, so no other
+     * buyer can take that spot before confirmation. Two concurrent checkouts
+     * racing for the last remaining spot on the same session must resolve to
+     * exactly one {@code 201} and one {@code 409 CAPACITY_UNAVAILABLE}, with
+     * the loser creating ZERO {@code billing_payments} rows — not merely
+     * zero assignment rows.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void two_concurrent_checkouts_for_the_last_spot_guarantee_one_201_and_zero_payment_rows_for_the_loser()
+        throws InterruptedException {
+        UUID courseId = seedCourse();
+        List<UUID> sessionIds = seedScheduledSessions(courseId, 1, 1);
+        UUID contestedSession = sessionIds.get(0);
+
+        UUID userA = seedStudent();
+        UUID userB = seedStudent();
+        String quoteA = seedIndividualQuote(courseId, contestedSession, INDIVIDUAL_PRICE);
+        String quoteB = seedIndividualQuote(courseId, contestedSession, INDIVIDUAL_PRICE);
+
+        CountDownLatch start = new CountDownLatch(1);
+        CountDownLatch done = new CountDownLatch(2);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        List<ResponseEntity<Map>> responses = new CopyOnWriteArrayList<>();
+
+        pool.submit(() -> {
+            try {
+                start.await();
+                responses.add(checkout(userA, quoteA, "idem-concurrent-a"));
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            } finally {
+                done.countDown();
+            }
+        });
+        pool.submit(() -> {
+            try {
+                start.await();
+                responses.add(checkout(userB, quoteB, "idem-concurrent-b"));
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            } finally {
+                done.countDown();
+            }
+        });
+
+        start.countDown();
+        assertThat(done.await(30, TimeUnit.SECONDS)).isTrue();
+        pool.shutdownNow();
+
+        assertThat(responses).hasSize(2);
+        long created = responses.stream().filter(response -> response.getStatusCode() == HttpStatus.CREATED).count();
+        long conflicts = responses.stream().filter(response -> response.getStatusCode() == HttpStatus.CONFLICT).count();
+        assertThat(created).isEqualTo(1);
+        assertThat(conflicts).isEqualTo(1);
+        ResponseEntity<Map> conflictResponse = responses.stream()
+            .filter(response -> response.getStatusCode() == HttpStatus.CONFLICT).findFirst().orElseThrow();
+        assertThat(conflictResponse.getBody().get("code")).isEqualTo("CAPACITY_UNAVAILABLE");
+
+        // The whole point of #208: the loser never creates a Payment row at
+        // all — unlike #41's best-effort check, which still inserted one
+        // that later resolved to EXCEPTION at confirmation.
+        assertThat(paymentRepository.findAll()).hasSize(1);
+    }
+
+    // --- #208 task 10.3: partial coverage never even attempts a hold ----------
+
+    /**
+     * Task 10.3: when {@code CoveragePlanner} cannot fill the quote's full
+     * {@code scheduledSessionCount} — the course simply has fewer eligible
+     * sessions than requested — it returns a non-{@code Complete} plan and
+     * {@code resolveCoveragePlan} throws {@code PhysicalCapacityUnavailableException}
+     * BEFORE {@code holdCapacity} is ever called (PR6). Confirmed here
+     * end-to-end through the real HTTP endpoint: this must create zero hold
+     * rows, not merely zero assignment rows — the hold call is all-or-nothing
+     * even one level up, at the coverage-planning step itself.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void a_partially_satisfiable_monthly_quote_creates_zero_hold_rows_and_zero_payment_rows() {
+        UUID userId = seedStudent();
+        UUID courseId = seedCourse();
+        // Only 1 scheduled session exists, but the quote asks for 3.
+        seedScheduledSessions(courseId, 1, 5);
+        String quoteId = seedMonthlyQuote(courseId, 3, MONTHLY_PRICE);
+
+        ResponseEntity<Map> response = checkout(userId, quoteId, "idem-partial-1");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody().get("code")).isEqualTo("CAPACITY_UNAVAILABLE");
+        assertThat(paymentRepository.findAll()).isEmpty();
+        assertThat(holdRepository.findAll()).isEmpty();
     }
 
     // --- 401 without a token -----------------------------------------------
