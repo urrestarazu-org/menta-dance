@@ -16,6 +16,7 @@ import com.menta.billing.application.dto.ScheduledSessionSnapshot;
 import com.menta.billing.application.port.out.Clock;
 import com.menta.billing.application.port.out.PaymentPreferencePort;
 import com.menta.billing.application.port.out.PaymentRepository;
+import com.menta.billing.application.port.out.PhysicalCapacityHoldPort;
 import com.menta.billing.application.port.out.PhysicalCourseAvailabilityPort;
 import com.menta.billing.application.port.out.PhysicalCourseQuoteRepository;
 import com.menta.billing.domain.exception.PaymentPreferenceUnavailableException;
@@ -30,7 +31,9 @@ import com.menta.billing.domain.model.PaymentTarget;
 import com.menta.billing.domain.model.PhysicalCourseQuote;
 import com.menta.billing.domain.model.PhysicalCoursePricing;
 import com.menta.billing.domain.model.QuoteAvailability;
+import com.menta.shared.physical.MultiSessionCapacityHoldCommand;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -45,10 +48,12 @@ class CreatePhysicalPurchaseCheckoutUseCaseImplTest {
     private static final UUID USER_ID = UUID.randomUUID();
     private static final String COURSE_ID = "course-1";
     private static final String MERCHANT_ACCOUNT_ID = "merchant-1";
+    private static final Duration HOLD_TTL = Duration.ofMinutes(30);
 
     private PhysicalCourseQuoteRepository quoteRepository;
     private PaymentRepository paymentRepository;
     private PhysicalCourseAvailabilityPort availabilityPort;
+    private PhysicalCapacityHoldPort physicalCapacityHoldPort;
     private PaymentPreferencePort paymentPreferencePort;
     private Clock clock;
     private CreatePhysicalPurchaseCheckoutUseCaseImpl useCase;
@@ -58,15 +63,18 @@ class CreatePhysicalPurchaseCheckoutUseCaseImplTest {
         quoteRepository = mock(PhysicalCourseQuoteRepository.class);
         paymentRepository = mock(PaymentRepository.class);
         availabilityPort = mock(PhysicalCourseAvailabilityPort.class);
+        physicalCapacityHoldPort = mock(PhysicalCapacityHoldPort.class);
         paymentPreferencePort = mock(PaymentPreferencePort.class);
         clock = mock(Clock.class);
         when(clock.now()).thenReturn(NOW);
         when(paymentRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(paymentRepository.findByExternalReference(any())).thenReturn(Optional.empty());
+        when(physicalCapacityHoldPort.hold(any(), any())).thenReturn(List.of());
         when(paymentPreferencePort.createPreference(any()))
             .thenReturn(new PaymentPreferenceResult("pref-1", "https://mp.example/checkout/pref-1"));
         useCase = new CreatePhysicalPurchaseCheckoutUseCaseImpl(
-            quoteRepository, paymentRepository, availabilityPort, paymentPreferencePort, clock, MERCHANT_ACCOUNT_ID
+            quoteRepository, paymentRepository, availabilityPort, physicalCapacityHoldPort, paymentPreferencePort,
+            clock, MERCHANT_ACCOUNT_ID, HOLD_TTL
         );
     }
 
@@ -87,9 +95,11 @@ class CreatePhysicalPurchaseCheckoutUseCaseImplTest {
     }
 
     private static List<ScheduledSessionSnapshot> sessionsFrom(Instant start, int count, int availableSpots) {
+        // #208: sessionId must be a real UUID string — the hold path parses it via
+        // UUID.fromString the same way the outbox handler already does.
         return java.util.stream.IntStream.range(0, count)
             .mapToObj(i -> new ScheduledSessionSnapshot(
-                "session-" + i, start.plus(java.time.Duration.ofDays(i)), availableSpots
+                UUID.randomUUID().toString(), start.plus(java.time.Duration.ofDays(i)), availableSpots
             ))
             .toList();
     }
@@ -209,6 +219,58 @@ class CreatePhysicalPurchaseCheckoutUseCaseImplTest {
             periodStart.capture(), periodEnd.capture());
         assertThat(periodStart.getValue()).isEqualTo(NOW);
         assertThat(periodEnd.getValue()).isEqualTo(NOW.plus(CoveragePlanner.COVERAGE_LOOKAHEAD));
+    }
+
+    // --- Hold (design D2, #208 task 6.1/6.3): the hold call is the real 409 guarantee ---
+
+    @Test
+    void a_hold_failure_is_rejected_without_any_write_or_provider_call() {
+        PhysicalCourseQuote quote = monthlyQuote(4, NOW.minusSeconds(60));
+        when(quoteRepository.findById(quote.getId().toString())).thenReturn(Optional.of(quote));
+        when(availabilityPort.findScheduledSessions(any(), any(), any()))
+            .thenReturn(sessionsFrom(NOW, 4, 5));
+        when(physicalCapacityHoldPort.hold(any(), any())).thenThrow(new PhysicalCapacityUnavailableException());
+
+        assertThatThrownBy(() -> useCase.create(command(quote.getId().toString(), "idem-1")))
+            .isInstanceOf(PhysicalCapacityUnavailableException.class)
+            .satisfies(thrown -> assertThat(((PhysicalCapacityUnavailableException) thrown).getErrorCode())
+                .isEqualTo("CAPACITY_UNAVAILABLE"));
+
+        verify(paymentRepository, never()).save(any());
+        verify(paymentPreferencePort, never()).createPreference(any());
+    }
+
+    @Test
+    void the_hold_is_claimed_with_the_quotes_ordered_sessions_and_a_ttl_bound_expiry() {
+        PhysicalCourseQuote quote = monthlyQuote(2, NOW.minusSeconds(60));
+        when(quoteRepository.findById(quote.getId().toString())).thenReturn(Optional.of(quote));
+        when(availabilityPort.findScheduledSessions(any(), any(), any()))
+            .thenReturn(sessionsFrom(NOW, 2, 5));
+
+        useCase.create(command(quote.getId().toString(), "idem-1"));
+
+        ArgumentCaptor<MultiSessionCapacityHoldCommand> holdCommand =
+            ArgumentCaptor.forClass(MultiSessionCapacityHoldCommand.class);
+        ArgumentCaptor<Instant> expiresAt = ArgumentCaptor.forClass(Instant.class);
+        verify(physicalCapacityHoldPort).hold(holdCommand.capture(), expiresAt.capture());
+        assertThat(holdCommand.getValue().claims()).hasSize(2);
+        assertThat(expiresAt.getValue()).isEqualTo(NOW.plus(HOLD_TTL));
+    }
+
+    @Test
+    void a_provider_failure_after_a_successful_hold_releases_it_before_rethrowing() {
+        PhysicalCourseQuote quote = monthlyQuote(4, NOW.minusSeconds(60));
+        when(quoteRepository.findById(quote.getId().toString())).thenReturn(Optional.of(quote));
+        when(availabilityPort.findScheduledSessions(any(), any(), any()))
+            .thenReturn(sessionsFrom(NOW, 4, 5));
+        when(paymentPreferencePort.createPreference(any())).thenThrow(new IllegalStateException("provider down"));
+
+        assertThatThrownBy(() -> useCase.create(command(quote.getId().toString(), "idem-1")))
+            .isInstanceOf(PaymentPreferenceUnavailableException.class);
+
+        ArgumentCaptor<Payment> payment = ArgumentCaptor.forClass(Payment.class);
+        verify(paymentRepository).save(payment.capture());
+        verify(physicalCapacityHoldPort).release(payment.getValue().getId().getValue());
     }
 
     // --- Idempotency ---

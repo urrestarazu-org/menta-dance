@@ -92,11 +92,11 @@ end-to-end proof on top of a bridge already proven safe.
 
 ## Phase 6: Checkout wiring (design step 6, needs Phase 5)
 
-- [ ] 6.1 RED: extend `CreatePhysicalPurchaseCheckoutUseCaseImplTest` — hold failure ⇒ `PhysicalCapacityUnavailableException`, zero `paymentRepository.save`, zero `preferencePort.createPreference`.
-- [ ] 6.2 GREEN: move `PaymentId.generate()` above the hold call; call `PhysicalCapacityHoldPort.hold(cmd, ttl)`; throw `409` before any `Payment` row.
-- [ ] 6.3 RED+GREEN: preference/provider failure after a successful hold ⇒ `release(paymentId)` called, then rethrow.
-- [ ] 6.4 Modify `BillingConfiguration` — wire the new port into the checkout bean.
-- [ ] 6.5 Run `:api:billing:test :api:billing:jacocoTestCoverageVerification` — 100%/85% floors hold.
+- [x] 6.1 RED: extend `CreatePhysicalPurchaseCheckoutUseCaseImplTest` — hold failure ⇒ `PhysicalCapacityUnavailableException`, zero `paymentRepository.save`, zero `preferencePort.createPreference`.
+- [x] 6.2 GREEN: move `PaymentId.generate()` above the hold call; call `PhysicalCapacityHoldPort.hold(cmd, ttl)`; throw `409` before any `Payment` row.
+- [x] 6.3 RED+GREEN: preference/provider failure after a successful hold ⇒ `release(paymentId)` called, then rethrow.
+- [x] 6.4 Modify `BillingConfiguration` — wire the new port into the checkout bean.
+- [x] 6.5 Run `:api:billing:test :api:billing:jacocoTestCoverageVerification` — 100%/85% floors hold.
 
 ## Phase 7: Provider deadline field (design step 7 — **BLOCKED on B6**, needs Phase 6)
 
