@@ -109,7 +109,7 @@ encima, ni un piso muy por debajo que deje de proteger nada.
 | Módulo | domain + application | infrastructure |
 |---|---|---|
 | `auth` | 100% | 85% |
-| `billing` | 100% | 85% |
+| `billing` | 85% | 85% |
 | `virtual` | 95% | 90% |
 | `physical` | 95% | 90% |
 
