@@ -1,5 +1,6 @@
 package com.menta.billing.infrastructure.provider.mercadopago;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.menta.billing.application.dto.PaymentPreferenceRequest;
 import com.menta.billing.application.dto.PaymentPreferenceResult;
@@ -8,6 +9,10 @@ import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Value;
@@ -36,6 +41,16 @@ import org.springframework.web.client.RestClient;
 @Component
 @Profile("!e2e-mercadopago")
 public class MercadoPagoPaymentPreferenceAdapter implements PaymentPreferencePort {
+
+    /**
+     * Mercado Pago's confirmed Checkout Pro preference-expiry wire format
+     * (#208 B6): {@code yyyy-MM-dd'T'HH:mm:ss.SSSZ}, e.g.
+     * {@code "2017-02-01T12:00:00.000-04:00"}. {@code xxx} (lowercase),
+     * not {@code XXX}, so a zero UTC offset renders as {@code "+00:00"}
+     * rather than Java's default {@code "Z"} substitution.
+     */
+    private static final DateTimeFormatter MP_EXPIRY_FORMAT =
+        DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSxxx");
 
     private final RestClient restClient;
     private final CircuitBreaker circuitBreaker;
@@ -90,14 +105,35 @@ public class MercadoPagoPaymentPreferenceAdapter implements PaymentPreferencePor
     }
 
     private MercadoPagoPreferenceRequest toBody(PaymentPreferenceRequest request) {
+        Instant expiresAt = request.expiresAt();
+        // #208 B6: "now" is the moment the preference is built, captured only
+        // when there is an expiry to bound — never on the no-expiration path.
+        Instant expiresFrom = expiresAt == null ? null : Instant.now();
         return new MercadoPagoPreferenceRequest(
             List.of(new MercadoPagoPreferenceItem(
                 request.title(), 1, request.amount().getAmount(), request.amount().getCurrency()
             )),
             request.externalReference(),
             toBackUrls(),
-            emptyToNull(notificationUrl)
+            emptyToNull(notificationUrl),
+            expiresAt == null ? null : Boolean.TRUE,
+            formatExpiry(expiresFrom),
+            formatExpiry(expiresAt)
         );
+    }
+
+    /**
+     * #208 Phase 7/B6: Checkout Pro's confirmed wire contract is three
+     * fields — {@code expires: true}, {@code expiration_date_from} (the
+     * instant the preference is created), {@code expiration_date_to} (the
+     * hold's own deadline, never later). {@code expiresAt} absent/null means
+     * <strong>no</strong> expiration field is sent at all — never {@code
+     * expires: false} with placeholder dates — because a preference that
+     * simply outlives its (already-guaranteeing) hold is today's behaviour,
+     * not a regression (B6 fallback discipline).
+     */
+    private static String formatExpiry(Instant instant) {
+        return instant == null ? null : MP_EXPIRY_FORMAT.format(OffsetDateTime.ofInstant(instant, ZoneOffset.UTC));
     }
 
     /**
@@ -119,7 +155,12 @@ public class MercadoPagoPaymentPreferenceAdapter implements PaymentPreferencePor
         List<MercadoPagoPreferenceItem> items,
         @JsonProperty("external_reference") String externalReference,
         @JsonProperty("back_urls") MercadoPagoBackUrls backUrls,
-        @JsonProperty("notification_url") String notificationUrl
+        @JsonProperty("notification_url") String notificationUrl,
+        // #208 B6 fallback discipline: omitted entirely (not `expires: false`
+        // + garbage dates) whenever there is no hold deadline to bound.
+        @JsonInclude(JsonInclude.Include.NON_NULL) Boolean expires,
+        @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("expiration_date_from") String expirationDateFrom,
+        @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("expiration_date_to") String expirationDateTo
     ) {
     }
 
