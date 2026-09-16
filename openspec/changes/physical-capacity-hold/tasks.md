@@ -127,11 +127,11 @@ end-to-end proof on top of a bridge already proven safe.
 
 ## Phase 10: OpenAPI + end-to-end proof (design step 10, needs everything)
 
-- [ ] 10.1 Modify `api/openapi/billing-v1.yaml` — `409` description becomes a guarantee, same code/shape.
-- [ ] 10.2 RED+GREEN integration: guaranteed `409` — two concurrent checkouts for the last spot ⇒ one `201`, one `409 CAPACITY_UNAVAILABLE`, zero `billing_payments` rows for the loser.
-- [ ] 10.3 RED+GREEN integration: partially-satisfiable `MONTHLY` ⇒ zero hold rows created.
-- [ ] 10.4 Verify `BillingArchitectureTest` (checkout still references no `com.menta.physical.*`) and `PhysicalArchitectureTest` full suite.
-- [ ] 10.5 Run `./gradlew test check` — all coverage floors hold, 0 failures/errors.
+- [x] 10.1 Modify `api/openapi/billing-v1.yaml` — `409` description becomes a guarantee, same code/shape. Also refreshed the stale `PhysicalCapacityUnavailableException` javadoc (still described the pre-#208 best-effort behavior as current).
+- [x] 10.2 RED+GREEN integration: guaranteed `409` — two concurrent checkouts for the last spot ⇒ one `201`, one `409 CAPACITY_UNAVAILABLE`, zero `billing_payments` rows for the loser. Added `two_concurrent_checkouts_for_the_last_spot_guarantee_one_201_and_zero_payment_rows_for_the_loser` to the existing `PhysicalPurchaseIntegrationTest` (real HTTP, real `CountDownLatch` starting gun, 2 threads) rather than a new file — that class already owns full end-to-end checkout coverage.
+- [x] 10.3 RED+GREEN integration: partially-satisfiable `MONTHLY` ⇒ zero hold rows created. Added `a_partially_satisfiable_monthly_quote_creates_zero_hold_rows_and_zero_payment_rows` to the same class, confirming `resolveCoveragePlan` throws before `holdCapacity` ever runs, end-to-end through the real HTTP endpoint.
+- [x] 10.4 Verify `BillingArchitectureTest` (checkout still references no `com.menta.physical.*`) and `PhysicalArchitectureTest` full suite. Both 7/7 passing, 0 failures/errors.
+- [x] 10.5 Run `./gradlew test check` — all coverage floors hold, 0 failures/errors. Whole-repo run: 2048 tests across `shared`(63)/`auth`(489)/`virtual`(344)/`physical`(271)/`billing`(579)/`app`(302), 0 failures, 0 errors, counted from each module's aggregated JUnit XML `<testsuite>` header, not from the `BUILD SUCCESSFUL` line alone.
 
 ## Out of Scope (confirmed in proposal.md)
 
