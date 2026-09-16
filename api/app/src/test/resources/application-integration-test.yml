@@ -50,6 +50,15 @@ billing:
     expiry:
       enabled: false
 
+# Same defect, same reasoning, different table (#172, #208 Phase 9). Default HoldExpiryReconciler
+# off for every integration test; HoldExpiryWorkerIntegrationTest re-enables it explicitly, since
+# proving the real sweep is its whole point.
+physical:
+  capacity:
+    hold:
+      expiry:
+        enabled: false
+
 # Same defect, same reasoning, different job (#172). The reconciler's first tick calls the VOID
 # tokenBlacklistPort.writeHeartbeat(), and TokenBlacklistPort is a @MockBean in nearly every
 # integration context here. Mockito's ongoing-stubbing state is per-mock, not per-thread, so a

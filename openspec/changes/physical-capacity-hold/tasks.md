@@ -119,11 +119,11 @@ end-to-end proof on top of a bridge already proven safe.
 
 ## Phase 9: Expiry sweep (design step 9, needs only Phase 1)
 
-- [ ] 9.1 Create `HoldExpiryReconciler`/`HoldExpiryWorker` (`infrastructure/scheduling`) — `@ConditionalOnProperty` on the **class** (#172 lesson), `@Scheduled` dispatching each id to a separate `REQUIRES_NEW` worker bean.
-- [ ] 9.2 Modify `PhysicalConfiguration` — TTL `@Value` → `Duration` constructor param.
-- [ ] 9.3 Add `physical.capacity.hold.ttl-ms` and `expiry.{enabled,rate-ms,batch-size}` to `application.yml` (B5).
-- [ ] 9.4 RED+GREEN: expired hold stops counting with no sweep run (spec scenario — read-time filter alone).
-- [ ] 9.5 Run `:api:physical:test`.
+- [x] 9.1 Create `HoldExpiryReconciler`/`HoldExpiryWorker` (`infrastructure/scheduling`) — `@ConditionalOnProperty` on the **class** (#172 lesson). Deviation from the literal "dispatch each id to a separate REQUIRES_NEW worker bean" wording: this is pure GC over a table with no per-row business logic (unlike `SubscriptionExpiryWorker.expireOne`, which re-reads and transitions one aggregate), so `HoldExpiryWorker.sweep()` is one `@Transactional(REQUIRES_NEW)` method issuing two batched, `LIMIT`-bounded native `DELETE`s (`deleteExpiredUnconverted`, `deleteConvertedBefore`) — the worker/trigger split and the `@ConditionalOnProperty`-on-the-class fix are preserved exactly.
+- [x] 9.2 Modify `PhysicalConfiguration` — added `physicalCapacityHoldTtl()` `@Bean` converting `physical.capacity.hold.ttl-ms` (`@Value`) to a `Duration`, injected as a constructor arg into `HoldExpiryWorker` (design B5 — `@Value` stays out of the class that uses the typed value).
+- [x] 9.3 Added `physical.capacity.hold.ttl-ms` and `physical.capacity.hold.expiry.{enabled,rate-ms,batch-size}` to `api/app/src/main/resources/application.yml` (B5), plus `physical.capacity.hold.expiry.enabled: false` in `application-integration-test.yml` (same #172-class first-tick-races-writes risk `billing.subscription.expiry` already guards against).
+- [x] 9.4 RED+GREEN: `HoldExpiryWorkerIntegrationTest` (Testcontainers, `:api:app:test`) seeds an expired-unconverted row, an old-converted row, and a still-active row; `worker.sweep()` deletes only the first two. Read-time filter correctness itself (expired hold stops counting with zero sweep runs) was already proven by PR3/PR4's suites, not re-proven here. `HoldExpiryWorkerTest`/`HoldExpiryReconcilerTest` (Mockito, `:api:physical:test`) cover orchestration and delegation.
+- [x] 9.5 Ran `:api:physical:test :api:physical:jacocoTestCoverageVerification` (271/271 passing, coverage floors hold) and `:api:app:test --tests "*HoldExpiryWorkerIntegrationTest*"` (3/3 passing). Also verified whole-repo `clean compileJava compileTestJava`.
 
 ## Phase 10: OpenAPI + end-to-end proof (design step 10, needs everything)
 

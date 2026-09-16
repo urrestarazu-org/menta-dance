@@ -124,6 +124,20 @@ billing:
       rate-ms: ${BILLING_SUBSCRIPTION_EXPIRY_RATE_MS:60000}
       batch-size: ${BILLING_SUBSCRIPTION_EXPIRY_BATCH_SIZE:100}
 
+# Physical module configuration (#208, US-PHYSICAL-004b, design B5)
+physical:
+  capacity:
+    hold:
+      # The hold's own lifetime — see PhysicalConfiguration.physicalCapacityHoldTtl. Consumed only
+      # by the expiry sweep below, to decide when a converted row is old enough to prune; the hold
+      # creation path never reads it, since billing computes and passes expiresAt explicitly.
+      ttl-ms: ${PHYSICAL_CAPACITY_HOLD_TTL_MS:1800000}
+      expiry:
+        # Real off switch (#172's lesson) — rate-ms alone cannot disable a @Scheduled job.
+        enabled: ${PHYSICAL_CAPACITY_HOLD_EXPIRY_ENABLED:true}
+        rate-ms: ${PHYSICAL_CAPACITY_HOLD_EXPIRY_RATE_MS:60000}
+        batch-size: ${PHYSICAL_CAPACITY_HOLD_EXPIRY_BATCH_SIZE:100}
+
 server:
   port: 8081
   servlet:
