@@ -86,9 +86,9 @@ end-to-end proof on top of a bridge already proven safe.
 
 ## Phase 5: Cross-module bridge (design step 5 — natural chain cut, needs Phase 3)
 
-- [ ] 5.1 Create `billing/.../application/port/out/PhysicalCapacityHoldPort.java` (D4).
-- [ ] 5.2 Create `api:app` `com.menta.app.billing.PhysicalCapacityHoldAdapter` implementing it via the physical in-port — mirrors `PhysicalCourseAvailabilityAdapter` exactly, plain Java call, never HTTP.
-- [ ] 5.3 Verify `BillingArchitectureTest` still passes with the new port declared (no `com.menta.physical.*` import in `billing`).
+- [x] 5.1 Create `billing/.../application/port/out/PhysicalCapacityHoldPort.java` (D4). `hold(MultiSessionCapacityHoldCommand, Instant expiresAt): List<UUID>` + `release(UUID paymentId)`; reuses `com.menta.shared.physical.MultiSessionCapacityHoldCommand` directly (billing already depends on `api:shared`), no billing-local DTO needed.
+- [x] 5.2 Create `api:app` `com.menta.app.billing.PhysicalCapacityHoldAdapter` implementing it via the physical in-port — mirrors `PhysicalCourseAvailabilityAdapter` exactly, plain Java call, never HTTP. Translates `CapacityBelowAssignedException` (physical) into `PhysicalCapacityUnavailableException` (billing) here, since the checkout use case cannot import `com.menta.physical..`.
+- [x] 5.3 Verify `BillingArchitectureTest` still passes with the new port declared (no `com.menta.physical.*` import in `billing`). Also verified whole-repo `clean compileJava compileTestJava`.
 
 ## Phase 6: Checkout wiring (design step 6, needs Phase 5)
 
