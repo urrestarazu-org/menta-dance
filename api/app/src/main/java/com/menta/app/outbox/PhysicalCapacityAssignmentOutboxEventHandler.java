@@ -50,6 +50,30 @@ import org.springframework.stereotype.Component;
  * Reason#TARGET_NOT_SCHEDULED} — a conservative terminal classification
  * rather than a silent dead-letter.</p>
  *
+ * <h2>Purchase row built directly at EXCEPTION (#238)</h2>
+ * <p>Each of the three sites where no {@code Purchase} row can ever exist yet
+ * (this branch, the quote-not-found branch, and the coverage-shortfall
+ * branch) calls {@link PurchaseCreationFromEventPort#createPurchaseFromPaymentEvent}
+ * with an EMPTY session list and never calls {@code markException} afterward.
+ * {@code createPurchaseFromPaymentEvent} only needs {@code payload} — never
+ * {@code payment} or a resolved {@code userId} — so this runs unconditionally,
+ * even when {@code payment} itself is {@code null}.</p>
+ *
+ * <p>An earlier attempt at this fix called {@code createPurchaseFromPaymentEvent}
+ * and then {@code markException} — mirroring the {@code CapacityBelowAssignedException}
+ * catch blocks below. That does NOT work here: {@code createPurchaseFromPaymentEvent}
+ * builds via {@code Purchase.pendingFulfillment}, whose constructor rejects an
+ * empty session list for every status except {@code EXCEPTION}, so the same
+ * {@code IllegalArgumentException} fires before {@code markException} ever
+ * runs. There is no legitimate intermediate {@code PENDING_FULFILLMENT} state
+ * for a payment that never resolved to any schedulable session in the first
+ * place, so {@code createPurchaseFromPaymentEvent} now builds these three
+ * cases directly via {@link com.menta.billing.domain.model.Purchase#exception}
+ * when {@code eligibleSessionIds} is empty — the row is already at {@code
+ * FulfillmentStatus.EXCEPTION} once created, so {@code markException} would
+ * only be a documented no-op (see its own {@code EXCEPTION -> EXCEPTION}
+ * branch) and is skipped entirely at these three sites.</p>
+ *
  * <h2>Quote resolution and coverage (#41 PR6)</h2>
  * <p>{@link com.menta.billing.domain.model.PaymentTarget.Physical}'s
  * reference is the {@code quoteId}, not a session id (design A5). This
@@ -134,7 +158,12 @@ public class PhysicalCapacityAssignmentOutboxEventHandler implements OutboxEvent
             );
             UUID userId = payment != null ? payment.getUserId() : null;
             publishPaymentFulfillmentFailed(paymentId, userId, Reason.TARGET_NOT_SCHEDULED);
-            exceptionAdapter.markException(paymentId, Reason.TARGET_NOT_SCHEDULED);
+            // #238: createPurchaseFromPaymentEvent only needs payload (already
+            // parsed above), never payment/userId — so this runs even when
+            // payment itself is null. An empty eligibleSessionIds list builds
+            // the row directly at FulfillmentStatus.EXCEPTION (see the class
+            // javadoc) — no markException call is needed or made here.
+            purchaseCreationFromEventPort.createPurchaseFromPaymentEvent(payload, List.of());
             return;
         }
 
@@ -207,7 +236,9 @@ public class PhysicalCapacityAssignmentOutboxEventHandler implements OutboxEvent
                 quoteId, payload.paymentId()
             );
             publishPaymentFulfillmentFailed(paymentId, payment.getUserId(), Reason.TARGET_NOT_SCHEDULED);
-            exceptionAdapter.markException(paymentId, Reason.TARGET_NOT_SCHEDULED);
+            // #238: see the class javadoc on the payment==null branch above —
+            // same direct-to-EXCEPTION construction, no markException call.
+            purchaseCreationFromEventPort.createPurchaseFromPaymentEvent(payload, List.of());
             return;
         }
 
@@ -245,7 +276,9 @@ public class PhysicalCapacityAssignmentOutboxEventHandler implements OutboxEvent
                 quoteId, payload.paymentId()
             );
             publishPaymentFulfillmentFailed(paymentId, payment.getUserId(), Reason.TARGET_NOT_SCHEDULED);
-            exceptionAdapter.markException(paymentId, Reason.TARGET_NOT_SCHEDULED);
+            // #238: see the class javadoc on the payment==null branch above —
+            // same direct-to-EXCEPTION construction, no markException call.
+            purchaseCreationFromEventPort.createPurchaseFromPaymentEvent(payload, List.of());
             return;
         }
 

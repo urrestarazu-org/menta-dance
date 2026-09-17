@@ -26,7 +26,7 @@ public final class Purchase {
         this.id = Objects.requireNonNull(id, "id cannot be null");
         this.paymentId = Objects.requireNonNull(paymentId, "paymentId cannot be null");
         Objects.requireNonNull(physicalSessionIds, "physicalSessionIds cannot be null");
-        if (physicalSessionIds.isEmpty()) {
+        if (physicalSessionIds.isEmpty() && status != FulfillmentStatus.EXCEPTION) {
             throw new IllegalArgumentException("physicalSessionIds cannot be empty");
         }
         this.physicalSessionIds = List.copyOf(physicalSessionIds);
@@ -35,6 +35,19 @@ public final class Purchase {
 
     public static Purchase pendingFulfillment(PaymentId paymentId, List<String> physicalSessionIds) {
         return new Purchase(UUID.randomUUID(), paymentId, physicalSessionIds, FulfillmentStatus.PENDING_FULFILLMENT);
+    }
+
+    /**
+     * Builds a {@code Purchase} directly at {@link FulfillmentStatus#EXCEPTION}
+     * (#238), never passing through {@code PENDING_FULFILLMENT} first. This is
+     * the correct shape for a payment that never resolved to any schedulable
+     * session in the first place (missing payment/target, unresolvable quote,
+     * coverage shortfall) — there is no legitimate intermediate pending state
+     * to record, so {@code physicalSessionIds} is typically empty here (legal
+     * only for {@code EXCEPTION} per the constructor's relaxed invariant).
+     */
+    public static Purchase exception(PaymentId paymentId, List<String> physicalSessionIds) {
+        return new Purchase(UUID.randomUUID(), paymentId, physicalSessionIds, FulfillmentStatus.EXCEPTION);
     }
 
     public Purchase assigned() {
