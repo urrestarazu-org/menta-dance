@@ -235,7 +235,11 @@ conflict, `CapacityBelowAssignedException`, or a target session no longer
 MUST insert ZERO `physical_capacity_assignments` rows (no partial subset
 persisted), flip `billing_purchases` to `EXCEPTION`, leave
 `billing_payments.status_type = COMPLETED` (ADR-0039), and NOT schedule a
-retry. No automatic refund or notification is triggered by this state.
+retry. No automatic refund is triggered by this state. Reaching
+`EXCEPTION` through this path additionally emits a durable
+`billing.PurchaseExceptioned` notification event, atomically with the
+state transition — see the "Reaching EXCEPTION emits a durable
+notification event" requirement below.
 
 #### Scenario: One of N sessions fails — zero partial rows, Purchase is EXCEPTION
 
@@ -288,3 +292,39 @@ Removing (or failing to register) the `PhysicalCapacityAssignmentOutboxEventHand
 - THEN it throws `IllegalStateException("No handler registered for event type: billing.PhysicalPaymentCompleted")`
 - AND the row stays `FAILED` with a future `next_retry_at`
 - AND zero `billing_purchases` or `physical_capacity_assignments` rows are created from that event
+
+### Requirement: Reaching EXCEPTION emits a durable notification event
+
+`MarkPurchaseExceptionUseCase` MUST append exactly one `app_outbox` row
+with `event_type = billing.PurchaseExceptioned` in the same transaction
+as `purchaseRepository.save(purchase.exception())`, for every real
+`PENDING_FULFILLMENT → EXCEPTION` transition. The `EXCEPTION → EXCEPTION`
+no-op MUST short-circuit before any append, so a redelivered triggering
+event produces no duplicate row. A rolled-back transition MUST leave no
+`billing.PurchaseExceptioned` row. The state-machine transition rules
+themselves (which edges are legal) are unchanged by this requirement.
+
+#### Scenario: Real EXCEPTION transition appends exactly one event
+
+- GIVEN a `Purchase` in `PENDING_FULFILLMENT`
+- WHEN `MarkPurchaseExceptionUseCase` transitions it to `EXCEPTION`
+- THEN exactly one `app_outbox` row exists with
+  `event_type = billing.PurchaseExceptioned` for that purchase
+- AND it commits atomically with the `billing_purchases` status change
+
+#### Scenario: Redelivered no-op transition appends no event
+
+- GIVEN a `Purchase` already `EXCEPTION`
+- WHEN `MarkPurchaseExceptionUseCase` is invoked again for the same
+  purchase (redelivered triggering event)
+- THEN no additional `app_outbox` row is appended
+- AND the existing `billing_purchases` row is unchanged
+
+#### Scenario: Rolled-back transition leaves no outbox row
+
+- GIVEN a `MarkPurchaseExceptionUseCase` call whose transaction is rolled
+  back after the state change but before commit
+- WHEN the rollback completes
+- THEN no `app_outbox` row with `event_type = billing.PurchaseExceptioned`
+  exists for that purchase
+- AND the `billing_purchases` row retains its pre-call status
