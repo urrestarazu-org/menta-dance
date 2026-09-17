@@ -22,6 +22,10 @@ dependencies {
     // Redis (plans rate limiter)
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
 
+    // Mail (purchase-exception notification, #209 Phase C) -- same starter
+    // api:auth already declares for account activation.
+    implementation("org.springframework.boot:spring-boot-starter-mail")
+
     // Resilience4j (ADR-0023): timeout + circuit breaker for the Mercado Pago
     // payment-provider read. No retry module — the inbox's own backoff cycle
     // is the retry mechanism (ADR-0038), never stacked with Resilience4j's.

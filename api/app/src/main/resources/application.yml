@@ -123,6 +123,11 @@ billing:
       enabled: ${BILLING_SUBSCRIPTION_EXPIRY_ENABLED:true}
       rate-ms: ${BILLING_SUBSCRIPTION_EXPIRY_RATE_MS:60000}
       batch-size: ${BILLING_SUBSCRIPTION_EXPIRY_BATCH_SIZE:100}
+  # Purchase-exception notification (#209 Phase C) — two recipients per
+  # EXCEPTION: the buyer (best-effort) and a configured ops distribution list.
+  purchase-exception:
+    ops-address: ${BILLING_PURCHASE_EXCEPTION_OPS_ADDRESS:ops@menta.local}
+    from-address: ${BILLING_PURCHASE_EXCEPTION_FROM_ADDRESS:no-reply@menta.local}
 
 # Physical module configuration (#208, US-PHYSICAL-004b, design B5)
 physical:
