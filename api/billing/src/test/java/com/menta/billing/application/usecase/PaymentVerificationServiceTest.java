@@ -285,6 +285,16 @@ class PaymentVerificationServiceTest {
         verify(subscriptionRepository).save(captor.capture());
         assertThat(captor.getValue().getFulfillmentStatus()).isEqualTo(FulfillmentStatus.EXCEPTION);
         assertThat(captor.getValue().getStatus()).isEqualTo(SubscriptionStatus.PENDING);
+        // #209 D.4 regression lock (the #236 boundary): PaymentVerificationService
+        // has no BillingOutboxAppenderPort, MarkPurchaseExceptionUseCase, or
+        // PurchaseExceptionNotificationPort dependency at all — structurally it
+        // cannot append billing.PurchaseExceptioned / billing.PaymentFulfillmentFailed
+        // or send a notification. publishPhysicalPaymentCompletedUseCase is the
+        // only side-effecting collaborator this service holds besides the repos
+        // already verified above; asserting it is never touched on the virtual
+        // EXCEPTION path is the maximal proof available at this unit's boundary
+        // that the #236 virtual path stays fully decoupled from #209.
+        verify(publishPhysicalPaymentCompletedUseCase, never()).handle(any());
     }
 
     @Test
