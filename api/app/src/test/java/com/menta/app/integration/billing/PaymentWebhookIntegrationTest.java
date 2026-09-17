@@ -10,6 +10,7 @@ import com.menta.auth.application.port.out.LoginRateLimitPort;
 import com.menta.auth.application.port.out.PasswordResetAttemptRateLimitPort;
 import com.menta.auth.application.port.out.PasswordResetRequestRateLimitPort;
 import com.menta.auth.application.port.out.TokenBlacklistPort;
+import com.menta.billing.application.contract.BillingOutboxEventTypes;
 import com.menta.billing.application.dto.CreateSubscriptionCheckoutCommand;
 import com.menta.billing.application.dto.PaymentPreferenceResult;
 import com.menta.billing.application.dto.ProviderPaymentResult;
@@ -249,6 +250,14 @@ class PaymentWebhookIntegrationTest {
         assertThat(outboxWorker.process(event)).isFalse();
     }
 
+    /** Counts {@code common_outbox_events} rows for a given (aggregateId, eventType) pair. */
+    private long countOutboxRows(UUID paymentId, String eventType) {
+        return outboxRepository.findAll().stream()
+            .filter(row -> row.getAggregateId().equals(paymentId.toString()))
+            .filter(row -> row.getEventType().equals(eventType))
+            .count();
+    }
+
     @Test
     void an_invalid_signature_returns_401_and_never_touches_the_inbox() {
         ResponseEntity<String> response = postWebhook("mp-1", "req-1", "ts=1700000000,v1=deadbeef");
@@ -371,6 +380,10 @@ class PaymentWebhookIntegrationTest {
         WebhookInboxJpaEntity row = receivedWebhookRow("mp-idempotent", "req-1");
 
         worker.process(row);
+        // #242: the redelivery must not append a second
+        // billing.PhysicalPaymentCompleted row — the second call hits
+        // PaymentVerificationService's early-Completed short-circuit, which
+        // unconditionally re-runs ensureFulfillment/handle().
         worker.process(row);
         dispatchPendingOutboxEvent();
 
@@ -383,6 +396,9 @@ class PaymentWebhookIntegrationTest {
             inbox -> assertThat(inbox.getStatus())
                 .isEqualTo(com.menta.billing.infrastructure.webhook.WebhookInboxStatus.PROCESSED)
         );
+        // #242: exactly one outbox row for this (paymentId, PHYSICAL_PAYMENT_COMPLETED)
+        // pair, not two — this is the assertion this test never made before.
+        assertThat(countOutboxRows(paymentId, BillingOutboxEventTypes.PHYSICAL_PAYMENT_COMPLETED)).isEqualTo(1);
     }
 
     @Test

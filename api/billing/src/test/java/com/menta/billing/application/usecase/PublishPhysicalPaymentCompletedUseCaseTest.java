@@ -182,18 +182,35 @@ class PublishPhysicalPaymentCompletedUseCaseTest {
     }
 
     @Nested
-    @DisplayName("Idempotent re-delivery surfacing existing completion")
+    @DisplayName("Idempotent re-delivery surfacing existing completion (#242)")
     class IdempotentSurface {
 
         @Test
-        void delegates_each_re_delivery_to_the_appender_so_the_database_unique_constraint_decides() {
+        void skips_the_append_when_the_pre_check_finds_an_already_published_row() {
             Payment payment = physicalPayment(new PaymentStatus.Completed(NOW));
+            when(outboxAppender.existsForAggregateAndEventType(
+                BillingOutboxEventTypes.PHYSICAL_PAYMENT_COMPLETED, PAYMENT_ID.getValue().toString()
+            )).thenReturn(false, true);
+
             useCase.handle(payment);
             useCase.handle(payment);
 
-            verify(outboxAppender, times(2))
+            verify(outboxAppender, times(1))
                 .append(eq(BillingOutboxEventTypes.PHYSICAL_PAYMENT_COMPLETED),
                     eq(PAYMENT_ID.getValue().toString()), any());
+        }
+
+        @Test
+        void absorbs_a_data_integrity_violation_as_a_last_resort_race_backstop() {
+            Payment payment = physicalPayment(new PaymentStatus.Completed(NOW));
+            when(outboxAppender.existsForAggregateAndEventType(any(), any())).thenReturn(false);
+            org.mockito.Mockito.doThrow(new org.springframework.dao.DataIntegrityViolationException("dup"))
+                .when(outboxAppender)
+                .append(any(), any(), any());
+
+            useCase.handle(payment);
+
+            verify(outboxAppender, times(1)).append(any(), any(), any());
         }
     }
 }

@@ -182,40 +182,7 @@ class PhysicalPurchaseIntegrationTest {
      */
     @MockBean private JavaMailSender mailSender;
 
-    @Autowired private javax.sql.DataSource dataSource;
-
-    private static boolean outboxAggregateEventTypeUniqueConstraintEnsured = false;
-
     private final AtomicInteger preferenceSequence = new AtomicInteger();
-
-    /**
-     * #209 Phase D finding: {@code spring.jpa.hibernate.ddl-auto=create-drop}
-     * with Flyway disabled generates {@code common_outbox_events} from {@code
-     * OutboxRowJpaEntity}'s JPA mapping alone, which never declares the
-     * composite {@code aggregate_id + event_type} unique key {@code
-     * V2__auth_tokens_and_outbox.sql} creates in every real environment. The
-     * whole outbox redelivery-safety discipline this feature's C2/D5 proofs
-     * depend on ("let the database unique constraint decide") is therefore
-     * unenforced by default under this class's own Testcontainers schema.
-     * Widening the shared entity mapping to fix this for every Testcontainers
-     * suite at once is out of scope and too invasive for this change; this
-     * adds the SAME constraint the real migration already provides, once,
-     * scoped to this class's own container only.
-     */
-    @BeforeEach
-    void ensureOutboxAggregateEventTypeUniqueConstraint() throws java.sql.SQLException {
-        if (outboxAggregateEventTypeUniqueConstraintEnsured) {
-            return;
-        }
-        try (java.sql.Connection connection = dataSource.getConnection();
-             java.sql.Statement statement = connection.createStatement()) {
-            statement.execute(
-                "ALTER TABLE common_outbox_events ADD CONSTRAINT uk_common_outbox_aggregate_event_type "
-                    + "UNIQUE (aggregate_id, event_type)"
-            );
-        }
-        outboxAggregateEventTypeUniqueConstraintEnsured = true;
-    }
 
     @BeforeEach
     void stubTheProviderPreference() {

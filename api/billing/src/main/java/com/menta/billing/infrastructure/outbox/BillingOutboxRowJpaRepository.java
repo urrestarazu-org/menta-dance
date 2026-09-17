@@ -13,4 +13,7 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public interface BillingOutboxRowJpaRepository extends JpaRepository<BillingOutboxRowJpaEntity, Long> {
+
+    /** Backs {@link BillingOutboxAppender}'s pre-append idempotency check (#242). */
+    boolean existsByEventTypeAndAggregateId(String eventType, String aggregateId);
 }

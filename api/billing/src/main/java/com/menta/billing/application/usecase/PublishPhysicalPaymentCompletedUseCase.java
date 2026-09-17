@@ -12,6 +12,9 @@ import com.menta.billing.domain.model.Payment;
 import com.menta.billing.domain.model.PaymentStatus;
 import com.menta.billing.domain.model.PaymentTarget;
 import com.menta.shared.billing.PaymentCompletedOutboxPayload;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 
 /**
@@ -33,18 +36,41 @@ import org.springframework.stereotype.Component;
  * path). A non-Completed or non-Physical payment is a silent no-op at this
  * layer.</p>
  *
- * <h2>Idempotency</h2>
- * <p>Two layers, both DB-enforced (design §5.1, R6):
+ * <h2>Idempotency (#242)</h2>
+ * <p>Two complementary layers:
  * <ul>
- *   <li>V8 {@code uq_billing_purchases_payment_id} — same payment row rejected on second handler delivery.</li>
- *   <li>V2 {@code idx_common_outbox_aggregate_event_type} — second publisher call for the same
- *       ({@code paymentId}, {@code BillingOutboxEventTypes.PHYSICAL_PAYMENT_COMPLETED}) pair
- *       raises {@code DataIntegrityViolationException} which propagates unchanged so the
- *       caller / reconciler decides what to do.</li>
+ *   <li><b>App-level pre-check (the normal redelivery path)</b> — {@code
+ *       BillingOutboxAppenderPort#existsForAggregateAndEventType} runs BEFORE
+ *       {@code append}. An ordinary sequential redelivery (the webhook worker
+ *       retrying the same {@code providerPaymentId}) finds the prior call's
+ *       row already committed and skips the insert entirely, so it never
+ *       touches the DB constraint. This matters because {@code append} joins
+ *       the caller's ambient transaction (REQUIRED, for the atomicity this
+ *       class's Lifecycle section describes) — a {@code
+ *       DataIntegrityViolationException} thrown from inside that call marks
+ *       the WHOLE ambient transaction rollback-only at the framework level
+ *       the instant it escapes {@code append}'s own proxy, regardless of
+ *       whether a caller further up subsequently catches it (confirmed via
+ *       {@code UnexpectedRollbackException} at the worker's commit boundary
+ *       under a real Testcontainers redelivery before this pre-check
+ *       existed) — so relying on the exception alone here would silently
+ *       revert the caller's successful work on every ordinary retry.</li>
+ *   <li><b>V2 {@code uk_common_outbox_aggregate_event_type} (the race backstop)</b>
+ *       — if two redeliveries race past the pre-check concurrently, the
+ *       loser's {@code append} still raises {@code DataIntegrityViolationException}.
+ *       It is caught here and logged as a no-op (same discipline as {@code
+ *       PhysicalCapacityAssignmentOutboxEventHandler#publishPaymentFulfillmentFailed}),
+ *       purely so nothing propagates an unhandled exception out of this
+ *       method for that rare case — the loser's own ambient transaction
+ *       still rolls back at commit (same framework mechanics as above), and
+ *       the next redelivery attempt finds the winner's row via the pre-check
+ *       and skips cleanly.</li>
  * </ul></p>
  */
 @Component
 public final class PublishPhysicalPaymentCompletedUseCase {
+
+    private static final Logger log = LoggerFactory.getLogger(PublishPhysicalPaymentCompletedUseCase.class);
 
     private final BillingOutboxAppenderPort outboxAppender;
     private final ObjectWriter writer;
@@ -76,11 +102,32 @@ public final class PublishPhysicalPaymentCompletedUseCase {
         if (!(payment.getStatus() instanceof PaymentStatus.Completed)) {
             return;
         }
-        outboxAppender.append(
-            BillingOutboxEventTypes.PHYSICAL_PAYMENT_COMPLETED,
-            payment.getId().getValue().toString(),
-            writeJson(toPayload(payment))
-        );
+        String aggregateId = payment.getId().getValue().toString();
+        if (outboxAppender.existsForAggregateAndEventType(
+            BillingOutboxEventTypes.PHYSICAL_PAYMENT_COMPLETED, aggregateId
+        )) {
+            log.info(
+                "Redelivered billing.PhysicalPaymentCompleted for paymentId={}; already published, no-op",
+                payment.getId().getValue()
+            );
+            return;
+        }
+        try {
+            outboxAppender.append(
+                BillingOutboxEventTypes.PHYSICAL_PAYMENT_COMPLETED,
+                aggregateId,
+                writeJson(toPayload(payment))
+            );
+        } catch (DataIntegrityViolationException alreadyPublished) {
+            // Race backstop: two redeliveries slipped past the check above
+            // concurrently. See this class's Idempotency Javadoc — the
+            // ambient transaction still rolls back regardless of this catch;
+            // it exists only so nothing propagates unhandled from here.
+            log.info(
+                "Redelivered billing.PhysicalPaymentCompleted for paymentId={}; lost a concurrent race, no-op",
+                payment.getId().getValue()
+            );
+        }
     }
 
     private static PaymentCompletedOutboxPayload toPayload(Payment payment) {

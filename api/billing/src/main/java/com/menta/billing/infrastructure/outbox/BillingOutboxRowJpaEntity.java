@@ -9,6 +9,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 
 /**
@@ -31,7 +32,13 @@ import java.time.Instant;
  * @see com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity
  */
 @Entity
-@Table(name = "common_outbox_events")
+@Table(
+    name = "common_outbox_events",
+    uniqueConstraints = @UniqueConstraint(
+        name = "uk_common_outbox_aggregate_event_type",
+        columnNames = {"aggregate_id", "event_type"}
+    )
+)
 public class BillingOutboxRowJpaEntity {
 
     @Id
