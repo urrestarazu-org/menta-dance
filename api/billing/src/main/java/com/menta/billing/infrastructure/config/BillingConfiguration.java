@@ -44,6 +44,7 @@ import com.menta.billing.application.usecase.GetPlanUseCaseImpl;
 import com.menta.billing.application.usecase.GetSubscriptionHistoryUseCaseImpl;
 import com.menta.billing.application.usecase.ListPlansUseCaseImpl;
 import com.menta.billing.application.usecase.PaymentVerificationService;
+import com.menta.billing.application.usecase.PublishPaymentFulfillmentFailedUseCase;
 import com.menta.billing.application.usecase.PublishPhysicalPaymentCompletedUseCase;
 import com.menta.billing.application.usecase.ReceiveWebhookUseCaseImpl;
 import com.menta.billing.application.usecase.UpdatePhysicalCoursePricingUseCaseImpl;
@@ -349,5 +350,18 @@ public class BillingConfiguration {
         PurchaseRepository purchaseRepository
     ) {
         return new MarkPurchaseAssignedUseCase(purchaseRepository);
+    }
+
+    /**
+     * #209 Phase B (design C1/C2, D10): the payment-level fallback for the
+     * three pre-{@code Purchase} sites in {@code
+     * PhysicalCapacityAssignmentOutboxEventHandler}. {@code REQUIRES_NEW}
+     * is declared on the use case itself, not this bean wiring.
+     */
+    @Bean
+    public PublishPaymentFulfillmentFailedUseCase publishPaymentFulfillmentFailedUseCase(
+        BillingOutboxAppenderPort outboxAppender, Clock clock
+    ) {
+        return new PublishPaymentFulfillmentFailedUseCase(outboxAppender, clock);
     }
 }

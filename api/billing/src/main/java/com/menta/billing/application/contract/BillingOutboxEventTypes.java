@@ -36,6 +36,19 @@ public final class BillingOutboxEventTypes {
      */
     public static final String PURCHASE_EXCEPTIONED = "billing.PurchaseExceptioned";
 
+    /**
+     * Emitted from {@code api:app}'s {@code
+     * PhysicalCapacityAssignmentOutboxEventHandler} at the three
+     * pre-{@code Purchase} sites where {@code markException} cannot record
+     * an EXCEPTION transition because no {@code Purchase} row exists yet
+     * (proposal D10; design C1/C2). Appended in its own {@code
+     * REQUIRES_NEW} transaction so it survives the caller's doomed
+     * transaction. The outbox row carries {@code
+     * com.menta.shared.billing.PaymentFulfillmentFailedOutboxPayload} as
+     * JSON.
+     */
+    public static final String PAYMENT_FULFILLMENT_FAILED = "billing.PaymentFulfillmentFailed";
+
     private BillingOutboxEventTypes() {
         // Constant holder.
     }

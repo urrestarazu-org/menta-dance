@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.menta.app.billing.MarkPurchaseAssignedAdapter;
 import com.menta.app.billing.MarkPurchaseExceptionAdapter;
 import com.menta.app.billing.PhysicalCapacityAssignmentAdapter;
+import com.menta.app.billing.PublishPaymentFulfillmentFailedAdapter;
 import com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity;
 import com.menta.billing.application.contract.BillingOutboxEventTypes;
 import com.menta.billing.application.dto.ScheduledSessionSnapshot;
@@ -25,6 +26,7 @@ import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 
 /**
@@ -80,6 +82,7 @@ public class PhysicalCapacityAssignmentOutboxEventHandler implements OutboxEvent
     private final PhysicalCourseQuoteRepository quoteRepository;
     private final PhysicalCourseAvailabilityPort courseAvailabilityPort;
     private final com.menta.physical.application.port.in.PhysicalCapacityHoldPort physicalCapacityHoldPort;
+    private final PublishPaymentFulfillmentFailedAdapter publishPaymentFulfillmentFailedAdapter;
     private final ObjectMapper objectMapper;
 
     public PhysicalCapacityAssignmentOutboxEventHandler(
@@ -91,6 +94,7 @@ public class PhysicalCapacityAssignmentOutboxEventHandler implements OutboxEvent
         PhysicalCourseQuoteRepository quoteRepository,
         PhysicalCourseAvailabilityPort courseAvailabilityPort,
         com.menta.physical.application.port.in.PhysicalCapacityHoldPort physicalCapacityHoldPort,
+        PublishPaymentFulfillmentFailedAdapter publishPaymentFulfillmentFailedAdapter,
         ObjectMapper objectMapper
     ) {
         this.capacityAdapter = capacityAdapter;
@@ -101,6 +105,7 @@ public class PhysicalCapacityAssignmentOutboxEventHandler implements OutboxEvent
         this.quoteRepository = quoteRepository;
         this.courseAvailabilityPort = courseAvailabilityPort;
         this.physicalCapacityHoldPort = physicalCapacityHoldPort;
+        this.publishPaymentFulfillmentFailedAdapter = publishPaymentFulfillmentFailedAdapter;
         this.objectMapper = objectMapper;
     }
 
@@ -127,6 +132,8 @@ public class PhysicalCapacityAssignmentOutboxEventHandler implements OutboxEvent
                 "Payment row absent or non-Physical for outbox event paymentId={}; routing to EXCEPTION",
                 payload.paymentId()
             );
+            UUID userId = payment != null ? payment.getUserId() : null;
+            publishPaymentFulfillmentFailed(paymentId, userId, Reason.TARGET_NOT_SCHEDULED);
             exceptionAdapter.markException(paymentId, Reason.TARGET_NOT_SCHEDULED);
             return;
         }
@@ -199,6 +206,7 @@ public class PhysicalCapacityAssignmentOutboxEventHandler implements OutboxEvent
                 "PhysicalCourseQuote {} not found for outbox event paymentId={}; routing to EXCEPTION",
                 quoteId, payload.paymentId()
             );
+            publishPaymentFulfillmentFailed(paymentId, payment.getUserId(), Reason.TARGET_NOT_SCHEDULED);
             exceptionAdapter.markException(paymentId, Reason.TARGET_NOT_SCHEDULED);
             return;
         }
@@ -236,6 +244,7 @@ public class PhysicalCapacityAssignmentOutboxEventHandler implements OutboxEvent
                 "Coverage shortfall resolving quote {} for outbox event paymentId={}; routing to EXCEPTION",
                 quoteId, payload.paymentId()
             );
+            publishPaymentFulfillmentFailed(paymentId, payment.getUserId(), Reason.TARGET_NOT_SCHEDULED);
             exceptionAdapter.markException(paymentId, Reason.TARGET_NOT_SCHEDULED);
             return;
         }
@@ -279,6 +288,34 @@ public class PhysicalCapacityAssignmentOutboxEventHandler implements OutboxEvent
                     payload.paymentId()
                 );
             }
+        }
+    }
+
+    /**
+     * Publishes {@code billing.PaymentFulfillmentFailed} (design C1/C2,
+     * proposal D10) immediately before each of the three pre-{@code
+     * Purchase} {@code markException} call sites, in its own {@code
+     * REQUIRES_NEW} transaction so it survives when {@code markException}
+     * throws {@code PaymentNotFoundException} and marks this method's
+     * ambient (worker) transaction rollback-only — the still-unfixed C1
+     * defect this change deliberately does not repair.
+     *
+     * <p>A {@link DataIntegrityViolationException} on redelivery (the
+     * unique-index backstop, D5-style) is caught and logged as "already
+     * notified" rather than rethrown: {@code markException} below is
+     * always attempted afterward regardless of whether this publish
+     * succeeded, was a duplicate, or is itself doomed to fail again.</p>
+     */
+    private void publishPaymentFulfillmentFailed(
+        com.menta.billing.domain.model.PaymentId paymentId, UUID userId, Reason reason
+    ) {
+        try {
+            publishPaymentFulfillmentFailedAdapter.publish(paymentId, userId, reason);
+        } catch (DataIntegrityViolationException alreadyNotified) {
+            log.info(
+                "Redelivered billing.PaymentFulfillmentFailed for paymentId={}; already notified, no-op",
+                paymentId.getValue()
+            );
         }
     }
 

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -15,6 +16,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.menta.app.billing.MarkPurchaseAssignedAdapter;
 import com.menta.app.billing.MarkPurchaseExceptionAdapter;
 import com.menta.app.billing.PhysicalCapacityAssignmentAdapter;
+import com.menta.app.billing.PublishPaymentFulfillmentFailedAdapter;
 import com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity;
 import com.menta.billing.application.contract.BillingOutboxEventTypes;
 import com.menta.billing.application.dto.ScheduledSessionSnapshot;
@@ -84,6 +86,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
     private PurchaseCreationFromEventPort purchaseCreationFromEventPort;
     private MarkPurchaseExceptionAdapter markExceptionAdapter;
     private MarkPurchaseAssignedAdapter markAssignedAdapter;
+    private PublishPaymentFulfillmentFailedAdapter publishPaymentFulfillmentFailedAdapter;
     private PaymentRepository paymentRepository;
     private PhysicalCourseQuoteRepository quoteRepository;
     private PhysicalCourseAvailabilityPort courseAvailabilityPort;
@@ -98,6 +101,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
         purchaseCreationFromEventPort = mock(PurchaseCreationFromEventPort.class);
         markExceptionAdapter = mock(MarkPurchaseExceptionAdapter.class);
         markAssignedAdapter = mock(MarkPurchaseAssignedAdapter.class);
+        publishPaymentFulfillmentFailedAdapter = mock(PublishPaymentFulfillmentFailedAdapter.class);
         paymentRepository = mock(PaymentRepository.class);
         quoteRepository = mock(PhysicalCourseQuoteRepository.class);
         courseAvailabilityPort = mock(PhysicalCourseAvailabilityPort.class);
@@ -113,7 +117,8 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
             .configure(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
         handler = new PhysicalCapacityAssignmentOutboxEventHandler(
             capacityAdapter, markExceptionAdapter, markAssignedAdapter, purchaseCreationFromEventPort,
-            paymentRepository, quoteRepository, courseAvailabilityPort, physicalCapacityHoldPort, objectMapper
+            paymentRepository, quoteRepository, courseAvailabilityPort, physicalCapacityHoldPort,
+            publishPaymentFulfillmentFailedAdapter, objectMapper
         );
     }
 
@@ -237,6 +242,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
             ));
             verify(markExceptionAdapter, never()).markException(any(), any());
             verify(markAssignedAdapter, times(1)).markAssigned(PAYMENT_ID);
+            verify(publishPaymentFulfillmentFailedAdapter, never()).publish(any(), any(), any());
         }
     }
 
@@ -271,6 +277,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
             ));
             verify(markExceptionAdapter, never()).markException(any(), any());
             verify(markAssignedAdapter, times(1)).markAssigned(PAYMENT_ID);
+            verify(publishPaymentFulfillmentFailedAdapter, never()).publish(any(), any(), any());
         }
     }
 
@@ -289,6 +296,9 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
 
             handler.handle(rowWithPayload(payload()));
 
+            verify(publishPaymentFulfillmentFailedAdapter, times(1)).publish(
+                eq(PAYMENT_ID), eq(STUDENT_UUID), eq(Reason.TARGET_NOT_SCHEDULED)
+            );
             verify(markExceptionAdapter, times(1)).markException(eq(PAYMENT_ID), eq(Reason.TARGET_NOT_SCHEDULED));
             verify(purchaseCreationFromEventPort, never()).createPurchaseFromPaymentEvent(any(), any());
             verify(physicalCapacityAssignmentPort, never()).assignAll(any());
@@ -315,6 +325,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
                 eq(PAYMENT_ID), eq(Reason.CAPACITY_BELOW_ASSIGNED)
             );
             verify(markAssignedAdapter, never()).markAssigned(any());
+            verify(publishPaymentFulfillmentFailedAdapter, never()).publish(any(), any(), any());
         }
     }
 
@@ -370,6 +381,9 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
 
             handler.handle(rowWithPayload(payload()));
 
+            verify(publishPaymentFulfillmentFailedAdapter, times(1)).publish(
+                eq(PAYMENT_ID), isNull(), eq(Reason.TARGET_NOT_SCHEDULED)
+            );
             verify(markExceptionAdapter, times(1)).markException(
                 eq(PAYMENT_ID), eq(Reason.TARGET_NOT_SCHEDULED)
             );
@@ -391,6 +405,9 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
 
             handler.handle(rowWithPayload(payload()));
 
+            verify(publishPaymentFulfillmentFailedAdapter, times(1)).publish(
+                eq(PAYMENT_ID), eq(STUDENT_UUID), eq(Reason.TARGET_NOT_SCHEDULED)
+            );
             verify(markExceptionAdapter, times(1)).markException(
                 eq(PAYMENT_ID), eq(Reason.TARGET_NOT_SCHEDULED)
             );
@@ -500,6 +517,60 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
             ));
             verify(markExceptionAdapter, never()).markException(any(), any());
             verify(markAssignedAdapter, times(1)).markAssigned(PAYMENT_ID);
+            verify(publishPaymentFulfillmentFailedAdapter, never()).publish(any(), any(), any());
+        }
+    }
+
+    @Nested
+    @DisplayName("Spec scenario (design C1/C2, D10): the payment-level fallback fires at the three "
+        + "pre-Purchase sites and swallows a duplicate-on-redelivery")
+    class PaymentFulfillmentFailedFallback {
+
+        @Test
+        @DisplayName("DataIntegrityViolationException from the publish call is caught and logged, "
+            + "never rethrown, and markException is still attempted afterward")
+        void duplicate_publish_on_redelivery_is_swallowed_and_markException_still_runs() throws Exception {
+            when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.empty());
+            doThrow(new org.springframework.dao.DataIntegrityViolationException("duplicate"))
+                .when(publishPaymentFulfillmentFailedAdapter).publish(any(), any(), any());
+
+            assertThatCode(() -> handler.handle(rowWithPayload(payload()))).doesNotThrowAnyException();
+
+            verify(publishPaymentFulfillmentFailedAdapter, times(1)).publish(
+                eq(PAYMENT_ID), isNull(), eq(Reason.TARGET_NOT_SCHEDULED)
+            );
+            verify(markExceptionAdapter, times(1)).markException(
+                eq(PAYMENT_ID), eq(Reason.TARGET_NOT_SCHEDULED)
+            );
+        }
+
+        @Test
+        @DisplayName("publish fires at site 202 (quote not found) with the resolved userId")
+        void publish_fires_when_quote_not_found() throws Exception {
+            when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
+            when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.empty());
+
+            handler.handle(rowWithPayload(payload()));
+
+            verify(publishPaymentFulfillmentFailedAdapter, times(1)).publish(
+                eq(PAYMENT_ID), eq(STUDENT_UUID), eq(Reason.TARGET_NOT_SCHEDULED)
+            );
+        }
+
+        @Test
+        @DisplayName("publish fires at site 239 (coverage shortfall) with the resolved userId")
+        void publish_fires_when_coverage_shortfall() throws Exception {
+            when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
+            when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.of(monthlyQuote(4)));
+            when(courseAvailabilityPort.findScheduledSessions(eq(COURSE_ID), any(), any())).thenReturn(List.of(
+                new ScheduledSessionSnapshot(SESSION_ID_STR, NOW.plusSeconds(3600), 5)
+            ));
+
+            handler.handle(rowWithPayload(payload()));
+
+            verify(publishPaymentFulfillmentFailedAdapter, times(1)).publish(
+                eq(PAYMENT_ID), eq(STUDENT_UUID), eq(Reason.TARGET_NOT_SCHEDULED)
+            );
         }
     }
 }
