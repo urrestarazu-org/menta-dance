@@ -42,7 +42,7 @@ import org.springframework.transaction.annotation.Transactional;
  * {@link PublishPhysicalPaymentCompletedUseCase}.</p>
  */
 @Component
-public final class PublishPaymentFulfillmentFailedUseCase implements PublishPaymentFulfillmentFailedPort {
+public class PublishPaymentFulfillmentFailedUseCase implements PublishPaymentFulfillmentFailedPort {
 
     private final BillingOutboxAppenderPort outboxAppender;
     private final Clock clock;
