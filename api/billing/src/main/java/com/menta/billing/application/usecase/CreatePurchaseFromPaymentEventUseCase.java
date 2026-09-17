@@ -31,7 +31,17 @@ import org.springframework.transaction.annotation.Transactional;
  *       a single reference cannot represent a {@code MONTHLY} purchase's N
  *       sessions. The caller resolves the concrete eligible-session list
  *       (Billing's {@code CoveragePlanner}, wired from {@code api:app}) and
- *       passes it explicitly.</p></li>
+ *       passes it explicitly.</p>
+ *
+ *       <p>#238: an empty {@code eligibleSessionIds} means the payment never
+ *       resolved to any schedulable session in the first place (missing
+ *       payment/target, unresolvable quote, coverage shortfall) — there is
+ *       no legitimate {@code PENDING_FULFILLMENT} to record for it. Building
+ *       via {@link Purchase#pendingFulfillment} in that case would hit the
+ *       domain invariant that forbids an empty session list for any status
+ *       other than {@code EXCEPTION}. So an empty list builds directly via
+ *       {@link Purchase#exception(PaymentId, java.util.List)} instead —
+ *       skipping the intermediate state entirely.</p></li>
  *   <li>If save raises {@link DataIntegrityViolationException} against V8
  *       line 31 {@code uq_billing_purchases_payment_id} (UNIQUE collision
  *       with a concurrent handler) → re-fetch and return whatever is there.</li>
@@ -60,9 +70,11 @@ public class CreatePurchaseFromPaymentEventUseCase implements PurchaseCreationFr
         if (existing.isPresent() && existing.get().getStatus() != FulfillmentStatus.EXCEPTION) {
             return existing.get();
         }
-        Purchase pending = Purchase.pendingFulfillment(paymentId, eligibleSessionIds);
+        Purchase toSave = eligibleSessionIds.isEmpty()
+            ? Purchase.exception(paymentId, eligibleSessionIds)
+            : Purchase.pendingFulfillment(paymentId, eligibleSessionIds);
         try {
-            return purchaseRepository.save(pending);
+            return purchaseRepository.save(toSave);
         } catch (DataIntegrityViolationException concurrentInsert) {
             // A peer handler inserted between our read and our save; whatever is
             // there now is the authoritative row, return it.

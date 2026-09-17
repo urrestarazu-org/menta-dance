@@ -80,6 +80,22 @@ class CreatePurchaseFromPaymentEventUseCaseTest {
             verify(purchaseRepository, times(1)).save(any(Purchase.class));
         }
 
+        // #238: an empty eligibleSessionIds list means the payment never
+        // resolved to any schedulable session — the resulting row must land
+        // directly at EXCEPTION, never at PENDING_FULFILLMENT (which the
+        // domain invariant forbids from ever being empty).
+        @Test
+        void builds_exception_purchase_directly_when_eligibleSessionIds_is_empty() {
+            when(purchaseRepository.findByPaymentId(PAYMENT_ID)).thenReturn(Optional.empty());
+
+            Purchase result = useCase.createPurchaseFromPaymentEvent(payload(), List.of());
+
+            assertThat(result.getStatus()).isEqualTo(FulfillmentStatus.EXCEPTION);
+            assertThat(result.getPaymentId()).isEqualTo(PAYMENT_ID);
+            assertThat(result.getPhysicalSessionIds()).isEmpty();
+            verify(purchaseRepository, times(1)).save(any(Purchase.class));
+        }
+
         @Test
         void covers_every_session_in_the_resolved_eligible_set_for_a_monthly_purchase() {
             List<String> monthlyEligibleSessions = List.of("s1", "s2", "s3");

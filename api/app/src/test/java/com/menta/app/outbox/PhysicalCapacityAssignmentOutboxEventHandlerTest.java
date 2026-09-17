@@ -299,8 +299,12 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
             verify(publishPaymentFulfillmentFailedAdapter, times(1)).publish(
                 eq(PAYMENT_ID), eq(STUDENT_UUID), eq(Reason.TARGET_NOT_SCHEDULED)
             );
-            verify(markExceptionAdapter, times(1)).markException(eq(PAYMENT_ID), eq(Reason.TARGET_NOT_SCHEDULED));
-            verify(purchaseCreationFromEventPort, never()).createPurchaseFromPaymentEvent(any(), any());
+            // #238: the Purchase row is now built directly at EXCEPTION (empty
+            // session list is legal only for that status) — markException is
+            // never called, since there is no PENDING_FULFILLMENT row to flip.
+            verify(purchaseCreationFromEventPort, times(1))
+                .createPurchaseFromPaymentEvent(any(), eq(List.<String>of()));
+            verify(markExceptionAdapter, never()).markException(any(), any());
             verify(physicalCapacityAssignmentPort, never()).assignAll(any());
             verify(markAssignedAdapter, never()).markAssigned(any());
         }
@@ -376,7 +380,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
     class TargetMissing {
 
         @Test
-        void markException_called_when_payment_row_cannot_be_loaded() throws Exception {
+        void purchase_built_directly_at_exception_when_payment_row_cannot_be_loaded() throws Exception {
             when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.empty());
 
             handler.handle(rowWithPayload(payload()));
@@ -384,10 +388,13 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
             verify(publishPaymentFulfillmentFailedAdapter, times(1)).publish(
                 eq(PAYMENT_ID), isNull(), eq(Reason.TARGET_NOT_SCHEDULED)
             );
-            verify(markExceptionAdapter, times(1)).markException(
-                eq(PAYMENT_ID), eq(Reason.TARGET_NOT_SCHEDULED)
-            );
-            verify(purchaseCreationFromEventPort, never()).createPurchaseFromPaymentEvent(any(), any());
+            // #238: the Purchase row is built directly at EXCEPTION (an empty
+            // session list is legal only for that status) — markException is
+            // never called, since there is no PENDING_FULFILLMENT row to flip
+            // and the row already reflects the terminal state.
+            verify(purchaseCreationFromEventPort, times(1))
+                .createPurchaseFromPaymentEvent(any(), eq(List.<String>of()));
+            verify(markExceptionAdapter, never()).markException(any(), any());
             verify(physicalCapacityAssignmentPort, never()).assignAll(any());
             verify(quoteRepository, never()).findById(any());
             verify(markAssignedAdapter, never()).markAssigned(any());
@@ -399,7 +406,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
     class QuoteMissing {
 
         @Test
-        void markException_called_when_quote_cannot_be_resolved() throws Exception {
+        void purchase_built_directly_at_exception_when_quote_cannot_be_resolved() throws Exception {
             when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
             when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.empty());
 
@@ -408,10 +415,11 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
             verify(publishPaymentFulfillmentFailedAdapter, times(1)).publish(
                 eq(PAYMENT_ID), eq(STUDENT_UUID), eq(Reason.TARGET_NOT_SCHEDULED)
             );
-            verify(markExceptionAdapter, times(1)).markException(
-                eq(PAYMENT_ID), eq(Reason.TARGET_NOT_SCHEDULED)
-            );
-            verify(purchaseCreationFromEventPort, never()).createPurchaseFromPaymentEvent(any(), any());
+            // #238: Purchase row built directly at EXCEPTION; markException
+            // is never called for this site.
+            verify(purchaseCreationFromEventPort, times(1))
+                .createPurchaseFromPaymentEvent(any(), eq(List.<String>of()));
+            verify(markExceptionAdapter, never()).markException(any(), any());
             verify(physicalCapacityAssignmentPort, never()).assignAll(any());
             verify(markAssignedAdapter, never()).markAssigned(any());
         }
@@ -528,8 +536,8 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
 
         @Test
         @DisplayName("DataIntegrityViolationException from the publish call is caught and logged, "
-            + "never rethrown, and markException is still attempted afterward")
-        void duplicate_publish_on_redelivery_is_swallowed_and_markException_still_runs() throws Exception {
+            + "never rethrown, and the Purchase row is still built directly at EXCEPTION afterward")
+        void duplicate_publish_on_redelivery_is_swallowed_and_purchase_creation_still_runs() throws Exception {
             when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.empty());
             doThrow(new org.springframework.dao.DataIntegrityViolationException("duplicate"))
                 .when(publishPaymentFulfillmentFailedAdapter).publish(any(), any(), any());
@@ -539,9 +547,11 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
             verify(publishPaymentFulfillmentFailedAdapter, times(1)).publish(
                 eq(PAYMENT_ID), isNull(), eq(Reason.TARGET_NOT_SCHEDULED)
             );
-            verify(markExceptionAdapter, times(1)).markException(
-                eq(PAYMENT_ID), eq(Reason.TARGET_NOT_SCHEDULED)
-            );
+            // #238: no markException call at this site — the row is built
+            // directly at EXCEPTION by createPurchaseFromPaymentEvent.
+            verify(purchaseCreationFromEventPort, times(1))
+                .createPurchaseFromPaymentEvent(any(), eq(List.<String>of()));
+            verify(markExceptionAdapter, never()).markException(any(), any());
         }
 
         @Test
