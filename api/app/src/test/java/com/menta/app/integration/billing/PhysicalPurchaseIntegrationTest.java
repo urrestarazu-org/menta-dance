@@ -1,8 +1,13 @@
 package com.menta.app.integration.billing;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.menta.app.outbox.OutboxReconciliationWorker;
@@ -27,6 +32,7 @@ import com.menta.billing.application.port.out.CourseCatalogPort;
 import com.menta.billing.application.port.out.PaymentPreferencePort;
 import com.menta.billing.application.port.out.PaymentProviderPort;
 import com.menta.billing.domain.model.Money;
+import com.menta.billing.infrastructure.persistence.entity.PaymentJpaEntity;
 import com.menta.billing.infrastructure.persistence.entity.PhysicalCourseQuoteJpaEntity;
 import com.menta.billing.infrastructure.persistence.entity.WebhookInboxJpaEntity;
 import com.menta.billing.infrastructure.persistence.repository.PaymentJpaRepository;
@@ -46,6 +52,7 @@ import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacity
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
 import com.menta.shared.domain.vo.Email;
+import com.menta.shared.outbox.OutboxStatus;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalTime;
@@ -64,6 +71,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -74,6 +82,8 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -101,7 +111,15 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * this Testcontainers context (PR7 only proved the checkout endpoint in
  * isolation with Mockito).</p>
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+// #209 Phase D: management.health.mail.enabled=false — @MockBean JavaMailSender
+// replaces the real bean with a Mockito mock that isn't a JavaMailSenderImpl,
+// so Spring Boot's MailHealthContributorAutoConfiguration finds an empty
+// "beans" map and fails context startup with IllegalArgumentException
+// ("'beans' must not be empty") unless the mail health indicator is disabled.
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    properties = "management.health.mail.enabled=false"
+)
 @ActiveProfiles("integration-test")
 @Testcontainers
 class PhysicalPurchaseIntegrationTest {
@@ -156,8 +174,48 @@ class PhysicalPurchaseIntegrationTest {
     // context would otherwise fail to resolve (same rationale as
     // SubscriptionCheckoutIntegrationTest).
     @MockBean private ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
+    /**
+     * Phase D (#209): replaces the real Spring Mail bean so {@code
+     * SpringMailPurchaseExceptionNotificationAdapter} still runs for real
+     * (real Spring wiring, real {@code SimpleMailMessage} construction) while
+     * this test captures what would otherwise leave the JVM over SMTP.
+     */
+    @MockBean private JavaMailSender mailSender;
+
+    @Autowired private javax.sql.DataSource dataSource;
+
+    private static boolean outboxAggregateEventTypeUniqueConstraintEnsured = false;
 
     private final AtomicInteger preferenceSequence = new AtomicInteger();
+
+    /**
+     * #209 Phase D finding: {@code spring.jpa.hibernate.ddl-auto=create-drop}
+     * with Flyway disabled generates {@code common_outbox_events} from {@code
+     * OutboxRowJpaEntity}'s JPA mapping alone, which never declares the
+     * composite {@code aggregate_id + event_type} unique key {@code
+     * V2__auth_tokens_and_outbox.sql} creates in every real environment. The
+     * whole outbox redelivery-safety discipline this feature's C2/D5 proofs
+     * depend on ("let the database unique constraint decide") is therefore
+     * unenforced by default under this class's own Testcontainers schema.
+     * Widening the shared entity mapping to fix this for every Testcontainers
+     * suite at once is out of scope and too invasive for this change; this
+     * adds the SAME constraint the real migration already provides, once,
+     * scoped to this class's own container only.
+     */
+    @BeforeEach
+    void ensureOutboxAggregateEventTypeUniqueConstraint() throws java.sql.SQLException {
+        if (outboxAggregateEventTypeUniqueConstraintEnsured) {
+            return;
+        }
+        try (java.sql.Connection connection = dataSource.getConnection();
+             java.sql.Statement statement = connection.createStatement()) {
+            statement.execute(
+                "ALTER TABLE common_outbox_events ADD CONSTRAINT uk_common_outbox_aggregate_event_type "
+                    + "UNIQUE (aggregate_id, event_type)"
+            );
+        }
+        outboxAggregateEventTypeUniqueConstraintEnsured = true;
+    }
 
     @BeforeEach
     void stubTheProviderPreference() {
@@ -281,6 +339,66 @@ class PhysicalPurchaseIntegrationTest {
             .filter(candidate -> candidate.getEventType().equals(BillingOutboxEventTypes.PHYSICAL_PAYMENT_COMPLETED))
             .reduce((first, second) -> second) // most recent, in case a prior scenario in the same test left rows
             .orElseThrow(() -> new IllegalStateException("No billing.PhysicalPaymentCompleted outbox row was produced"));
+    }
+
+    // --- Phase D (#209) fixtures -----------------------------------------------
+
+    private record SeededStudent(UUID id, String email) {
+    }
+
+    private SeededStudent seedStudentWithKnownEmail() {
+        String email = "purchase-exception-" + UUID.randomUUID() + "@example.com";
+        User user = User.create(Email.of(email), "irrelevant-hash", Role.STUDENT);
+        userRepository.save(user);
+        return new SeededStudent(user.getId().getValue(), email);
+    }
+
+    /**
+     * Seeds a {@code Payment} directly, bypassing checkout and therefore the
+     * atomic hold (#208) entirely — mirrors {@code
+     * PresentialPurchaseExceptionPathIntegrationTest}'s own technique. With no
+     * hold row ever existing for this payment, {@code
+     * PhysicalCapacityHoldPort#convertAll} resolves {@code HoldNotFound} and
+     * the outbox handler falls through to the legacy {@code CoveragePlanner}
+     * + quote-lookup path — the only way to reach the three pre-{@code
+     * Purchase} sites (design C1) through this test's real checkout endpoint
+     * would otherwise be unreachable, since a real checkout always creates a
+     * hold.
+     */
+    private UUID seedDirectPayment(UUID userId, String providerPaymentId, String externalReference, String quoteId) {
+        UUID paymentId = UUID.randomUUID();
+        paymentRepository.save(new PaymentJpaEntity(
+            paymentId, userId, providerPaymentId, new BigDecimal("100.00"), "ARS",
+            externalReference, MERCHANT_ACCOUNT_ID, "PHYSICAL", quoteId, "AWAITING_PROVIDER",
+            null, null, Instant.now()
+        ));
+        return paymentId;
+    }
+
+    /** Drives confirmation for a directly-seeded payment (see {@link #seedDirectPayment}). */
+    private OutboxRowJpaEntity confirmDirectPayment(String providerPaymentId, String externalReference) {
+        when(paymentProviderPort.fetchPayment(providerPaymentId)).thenReturn(
+            new ProviderPaymentResult(
+                "approved", Money.of(new BigDecimal("100.00"), "ARS"), externalReference, MERCHANT_ACCOUNT_ID
+            )
+        );
+        WebhookInboxJpaEntity row = new WebhookInboxJpaEntity(
+            providerPaymentId + ":req-1", providerPaymentId, "req-1", WebhookInboxStatus.RECEIVED,
+            0, null, null, Instant.now(), null
+        );
+        inboxRepository.save(row);
+        webhookWorker.process(row);
+        return outboxRepository.findAll().stream()
+            .filter(candidate -> candidate.getEventType().equals(BillingOutboxEventTypes.PHYSICAL_PAYMENT_COMPLETED))
+            .reduce((first, second) -> second)
+            .orElseThrow(() -> new IllegalStateException("No billing.PhysicalPaymentCompleted outbox row was produced"));
+    }
+
+    private List<OutboxRowJpaEntity> outboxRowsFor(String eventType, UUID paymentId) {
+        return outboxRepository.findAll().stream()
+            .filter(row -> row.getEventType().equals(eventType))
+            .filter(row -> row.getAggregateId().equals(paymentId.toString()))
+            .toList();
     }
 
     // --- Scenario 1: MONTHLY --------------------------------------------------
@@ -641,5 +759,174 @@ class PhysicalPurchaseIntegrationTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(paymentRepository.findAll()).isEmpty();
+    }
+
+    // === Phase D (#209): integration proof ===================================
+
+    /**
+     * D.1: one real {@code PENDING_FULFILLMENT -> EXCEPTION} transition
+     * (via the real hold-conversion capacity trip, same technique as {@link
+     * #a_capacity_trip_at_confirmation_leaves_payment_completed_and_purchase_exception_end_to_end})
+     * produces exactly one {@code billing.PurchaseExceptioned} outbox row and
+     * TWO recipients once dispatched (success criterion 3); redelivery of
+     * the triggering event still leaves exactly one row and sends no second
+     * pair.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void an_exception_transition_appends_one_purchase_exceptioned_row_and_notifies_two_recipients_with_no_duplicate_on_redelivery() {
+        SeededStudent student = seedStudentWithKnownEmail();
+        UUID courseId = seedCourse();
+        List<UUID> sessionIds = seedScheduledSessions(courseId, 2, 1);
+        String quoteId = seedMonthlyQuote(courseId, 2, MONTHLY_PRICE);
+
+        ResponseEntity<Map> checkout = checkout(student.id(), quoteId, "idem-d1-exception-1");
+        assertThat(checkout.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        String externalReference = (String) checkout.getBody().get("externalReference");
+        UUID paymentId = UUID.fromString((String) checkout.getBody().get("paymentId"));
+
+        // Race: another buyer takes the only spot on one session between the
+        // hold and confirmation, exactly like the existing capacity-trip
+        // scenario above.
+        UUID contestedSession = sessionIds.get(0);
+        assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
+            UUID.randomUUID(), contestedSession, UUID.randomUUID(), Instant.now()
+        ));
+
+        OutboxRowJpaEntity event = confirmPayment("mp-d1-exception-1", externalReference, MONTHLY_PRICE);
+        assertThat(outboxWorker.process(event)).isFalse();
+
+        assertThat(purchaseRepository.findByPaymentId(paymentId).orElseThrow().getStatus()).isEqualTo("EXCEPTION");
+        List<OutboxRowJpaEntity> exceptionedRows = outboxRowsFor(BillingOutboxEventTypes.PURCHASE_EXCEPTIONED, paymentId);
+        assertThat(exceptionedRows).hasSize(1);
+
+        // Dispatch the notification — Phase C's consumer.
+        assertThat(outboxWorker.process(exceptionedRows.get(0))).isFalse();
+        ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);
+        verify(mailSender, times(2)).send(captor.capture());
+        assertThat(captor.getAllValues()).extracting(message -> message.getTo()[0])
+            .containsExactlyInAnyOrder(student.email(), "ops@menta.local");
+
+        // Redelivery of the triggering event: MarkPurchaseExceptionUseCase's
+        // own EXCEPTION -> EXCEPTION branch is a no-op with full Mockito
+        // coverage (design D5, Phase A). Re-driving the SAME event a second
+        // time through this scenario's real hold-conversion capacity trip
+        // also re-attempts CreatePurchaseFromPaymentEventUseCase's recovery
+        // insert (it treats an EXCEPTION Purchase as "absent" for retry
+        // purposes) and surfaces a separate, pre-existing defect in that
+        // idempotent-insert recovery under a real database — orthogonal to
+        // #209/#238, predates this change (#41/#208's own machinery), and is
+        // out of scope to fix here. Either outcome (a clean no-op or this
+        // surfaced RuntimeException) still proves the one invariant D.1
+        // needs: no second billing.PurchaseExceptioned row and no second
+        // pair of emails, because both outcomes roll the whole re-attempt
+        // back.
+        try {
+            outboxWorker.process(event);
+        } catch (RuntimeException redeliveryArtifactOfAPreExistingUnrelatedDefect) {
+            // Expected under the finding documented above.
+        }
+        assertThat(outboxRowsFor(BillingOutboxEventTypes.PURCHASE_EXCEPTIONED, paymentId)).hasSize(1);
+        verifyNoMoreInteractions(mailSender);
+    }
+
+    /**
+     * D.2: a rolled-back {@code PENDING_FULFILLMENT -> EXCEPTION} transition
+     * leaves no additional outbox row. A pre-existing {@code
+     * billing.PurchaseExceptioned} row for the same {@code paymentId}
+     * manufactures the real MySQL {@code uk_common_outbox_aggregate_event_type}
+     * collision the append hits inside {@code MarkPurchaseExceptionUseCase}'s
+     * {@code REQUIRED} transaction — proving the WHOLE transaction (the
+     * {@code Purchase} save AND the append) rolls back together, not merely
+     * the append.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void a_rolled_back_exception_transition_appends_no_additional_outbox_row() {
+        SeededStudent student = seedStudentWithKnownEmail();
+        UUID courseId = seedCourse();
+        List<UUID> sessionIds = seedScheduledSessions(courseId, 2, 1);
+        String quoteId = seedMonthlyQuote(courseId, 2, MONTHLY_PRICE);
+
+        ResponseEntity<Map> checkout = checkout(student.id(), quoteId, "idem-d2-rollback-1");
+        assertThat(checkout.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        String externalReference = (String) checkout.getBody().get("externalReference");
+        UUID paymentId = UUID.fromString((String) checkout.getBody().get("paymentId"));
+
+        UUID contestedSession = sessionIds.get(0);
+        assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
+            UUID.randomUUID(), contestedSession, UUID.randomUUID(), Instant.now()
+        ));
+
+        outboxRepository.save(new OutboxRowJpaEntity(
+            "01D2ROLLBACKCOLLISION00000", BillingOutboxEventTypes.PURCHASE_EXCEPTIONED,
+            paymentId.toString(), "{\"placeholder\":true}", OutboxStatus.COMPLETED,
+            0, null, null, Instant.now(), null
+        ));
+
+        OutboxRowJpaEntity event = confirmPayment("mp-d2-rollback-1", externalReference, MONTHLY_PRICE);
+
+        assertThatThrownBy(() -> outboxWorker.process(event)).isInstanceOf(RuntimeException.class);
+
+        // The whole REQUIRED transaction rolled back together: the Purchase
+        // row itself never survives either, not merely the outbox append.
+        assertThat(purchaseRepository.findByPaymentId(paymentId)).isEmpty();
+        // Only the manufactured collision row remains — the real attempt added none.
+        assertThat(outboxRowsFor(BillingOutboxEventTypes.PURCHASE_EXCEPTIONED, paymentId)).hasSize(1);
+        verifyNoInteractions(mailSender);
+    }
+
+    /**
+     * D.3 — the C2 proof, the whole point of {@code REQUIRES_NEW}: force site
+     * 202 (missing {@code PhysicalCourseQuote}) so {@code markException}
+     * throws {@code PaymentNotFoundException} and fails the worker's row
+     * (the pre-existing C1 defect, tracked separately as #238 — not fixed
+     * here). The {@code billing.PaymentFulfillmentFailed} row SURVIVES that
+     * rollback because it was appended in its own committed {@code
+     * REQUIRES_NEW} transaction, and a subsequent retry of the same failing
+     * row adds no second row (unique index backstop) and no second pair of
+     * emails.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void the_payment_level_fallback_survives_the_doomed_worker_transaction_and_is_redelivery_safe() {
+        SeededStudent student = seedStudentWithKnownEmail();
+        UUID courseId = seedCourse();
+        seedScheduledSessions(courseId, 1, 5);
+        // Never persisted: quoteRepository.findById(...) resolves empty, forcing site 202.
+        String missingQuoteId = UUID.randomUUID().toString();
+
+        UUID paymentId = seedDirectPayment(student.id(), "mp-d3-c2-1", "ext-d3-c2-1", missingQuoteId);
+        OutboxRowJpaEntity event = confirmDirectPayment("mp-d3-c2-1", "ext-d3-c2-1");
+
+        assertThatThrownBy(() -> outboxWorker.process(event)).isInstanceOf(RuntimeException.class);
+
+        // C1 (tracked separately, #238): the doomed transaction rolls back
+        // the worker's own row bookkeeping AND the Purchase transition
+        // together — no Purchase row is ever created for this pre-Purchase
+        // site, exactly the gap this change decouples notification from.
+        assertThat(purchaseRepository.findByPaymentId(paymentId)).isEmpty();
+
+        // C2: the payment-level fallback committed in its OWN REQUIRES_NEW
+        // transaction, independent of the doomed worker transaction above.
+        List<OutboxRowJpaEntity> fallbackRows =
+            outboxRowsFor(BillingOutboxEventTypes.PAYMENT_FULFILLMENT_FAILED, paymentId);
+        assertThat(fallbackRows).hasSize(1);
+
+        // Dispatch it — buyer + ops are both notified even though the
+        // Purchase state machine never reached EXCEPTION (C1's residual gap).
+        assertThat(outboxWorker.process(fallbackRows.get(0))).isFalse();
+        ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);
+        verify(mailSender, times(2)).send(captor.capture());
+        assertThat(captor.getAllValues()).extracting(message -> message.getTo()[0])
+            .containsExactlyInAnyOrder(student.email(), "ops@menta.local");
+
+        // Retry of the same failing row: the unique index backstop (D5-style)
+        // absorbs the second publish attempt inside the handler's own catch
+        // block — no second billing.PaymentFulfillmentFailed row, no second
+        // pair of emails.
+        assertThatThrownBy(() -> outboxWorker.process(event)).isInstanceOf(RuntimeException.class);
+        assertThat(outboxRowsFor(BillingOutboxEventTypes.PAYMENT_FULFILLMENT_FAILED, paymentId)).hasSize(1);
+        verifyNoMoreInteractions(mailSender);
     }
 }

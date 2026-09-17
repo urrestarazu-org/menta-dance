@@ -33,6 +33,12 @@ dependencies {
     // Testing
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
+    // #209 Phase D: JavaMailSender.send is overloaded on SimpleMailMessage AND
+    // jakarta.mail.internet.MimeMessage — resolving that overload at compile
+    // time (even when only the SimpleMailMessage variant is ever called) needs
+    // jakarta.mail on this module's own test classpath, which "implementation"
+    // deps on :api:auth/:api:billing do not expose transitively.
+    testImplementation("org.springframework.boot:spring-boot-starter-mail")
     testImplementation("org.testcontainers:testcontainers")
     testImplementation("org.testcontainers:junit-jupiter")
     testImplementation("org.testcontainers:mysql")
