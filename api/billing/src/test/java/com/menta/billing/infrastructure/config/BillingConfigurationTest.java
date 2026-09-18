@@ -27,6 +27,7 @@ import com.menta.billing.application.usecase.GetCurrentSubscriptionUseCaseImpl;
 import com.menta.billing.application.usecase.GetPlanUseCaseImpl;
 import com.menta.billing.application.usecase.GetSubscriptionHistoryUseCaseImpl;
 import com.menta.billing.application.usecase.ListPlansUseCaseImpl;
+import com.menta.billing.application.usecase.PaymentFulfillmentService;
 import com.menta.billing.application.usecase.PaymentVerificationService;
 import com.menta.billing.application.usecase.VirtualCourseEntitlementService;
 import com.menta.shared.billing.VirtualCourseEntitlementPort;
@@ -55,11 +56,20 @@ class BillingConfigurationTest {
     }
 
     @Test
+    void wires_the_payment_fulfillment_service_bean() {
+        PaymentFulfillmentService service = configuration.paymentFulfillmentService(
+            mock(SubscriptionRepository.class), mock(PlanRepository.class), mock(Clock.class),
+            mock(com.menta.billing.application.usecase.PublishPhysicalPaymentCompletedUseCase.class)
+        );
+
+        assertThat(service).isInstanceOf(PaymentFulfillmentService.class);
+    }
+
+    @Test
     void wires_the_payment_verification_service_bean() {
         PaymentVerificationService service = configuration.paymentVerificationService(
-            mock(PaymentRepository.class), mock(PaymentProviderPort.class), mock(SubscriptionRepository.class),
-            mock(PlanRepository.class), mock(Clock.class),
-            mock(com.menta.billing.application.usecase.PublishPhysicalPaymentCompletedUseCase.class)
+            mock(PaymentRepository.class), mock(PaymentProviderPort.class), mock(Clock.class),
+            mock(PaymentFulfillmentService.class)
         );
 
         assertThat(service).isInstanceOf(PaymentVerificationService.class);

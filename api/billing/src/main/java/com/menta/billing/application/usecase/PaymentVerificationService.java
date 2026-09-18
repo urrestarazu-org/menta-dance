@@ -9,11 +9,7 @@ import com.menta.billing.application.port.out.SubscriptionRepository;
 import com.menta.billing.domain.exception.ProviderPaymentIdConflictException;
 import com.menta.billing.domain.model.Payment;
 import com.menta.billing.domain.model.PaymentStatus;
-import com.menta.billing.domain.model.PaymentTarget;
-import com.menta.billing.domain.model.Plan;
-import com.menta.billing.domain.model.PlanId;
 import com.menta.billing.domain.model.ProviderOutcome;
-import com.menta.billing.domain.model.Subscription;
 import java.util.Optional;
 
 /**
@@ -50,22 +46,38 @@ public final class PaymentVerificationService {
 
     private final PaymentRepository paymentRepository;
     private final PaymentProviderPort paymentProviderPort;
-    private final SubscriptionRepository subscriptionRepository;
-    private final PlanRepository planRepository;
     private final Clock clock;
-    private final PublishPhysicalPaymentCompletedUseCase publishPhysicalPaymentCompletedUseCase;
+    private final PaymentFulfillmentService paymentFulfillmentService;
 
+    /**
+     * Kept for backward compatibility with existing callers and tests: builds its own {@link
+     * PaymentFulfillmentService} from the raw collaborators (design C10). Production wiring
+     * should prefer {@link #PaymentVerificationService(PaymentRepository, PaymentProviderPort,
+     * Clock, PaymentFulfillmentService)} so the exact same Spring-managed fulfillment
+     * collaborator is shared with {@code ResolvePaymentProofUseCaseImpl} (P4) and {@code
+     * PaymentExpiryWorker} (P5).
+     */
     public PaymentVerificationService(
         PaymentRepository paymentRepository, PaymentProviderPort paymentProviderPort,
         SubscriptionRepository subscriptionRepository, PlanRepository planRepository, Clock clock,
         PublishPhysicalPaymentCompletedUseCase publishPhysicalPaymentCompletedUseCase
     ) {
+        this(
+            paymentRepository, paymentProviderPort, clock,
+            new PaymentFulfillmentService(
+                subscriptionRepository, planRepository, clock, publishPhysicalPaymentCompletedUseCase
+            )
+        );
+    }
+
+    public PaymentVerificationService(
+        PaymentRepository paymentRepository, PaymentProviderPort paymentProviderPort, Clock clock,
+        PaymentFulfillmentService paymentFulfillmentService
+    ) {
         this.paymentRepository = paymentRepository;
         this.paymentProviderPort = paymentProviderPort;
-        this.subscriptionRepository = subscriptionRepository;
-        this.planRepository = planRepository;
         this.clock = clock;
-        this.publishPhysicalPaymentCompletedUseCase = publishPhysicalPaymentCompletedUseCase;
+        this.paymentFulfillmentService = paymentFulfillmentService;
     }
 
     public VerificationOutcome verify(String providerPaymentId) {
@@ -128,7 +140,7 @@ public final class PaymentVerificationService {
     /**
      * Returns early when the payment already has a final financial outcome.
      *
-     * <p>A completed payment still calls {@link #ensureFulfillment(Payment)}:
+     * <p>A completed payment still calls {@link PaymentFulfillmentService#ensure(Payment)}:
      * a duplicate or late webhook may arrive after the financial state was
      * persisted but before the virtual subscription snapshot was activated.
      * That operation is idempotent, so retrying it repairs this partial
@@ -143,7 +155,7 @@ public final class PaymentVerificationService {
         if (payment.getStatus() instanceof PaymentStatus.Completed) {
             // Idempotent under worker retry: a duplicate/late webhook for an
             // already-completed payment must not re-run or duplicate fulfillment.
-            ensureFulfillment(payment);
+            paymentFulfillmentService.ensure(payment);
             return Optional.of(new VerificationOutcome.Applied(payment));
         }
         if (payment.isTerminal()) {
@@ -156,11 +168,11 @@ public final class PaymentVerificationService {
     private VerificationOutcome applyOutcome(Payment payment, ProviderOutcome outcome) {
         Payment updated = paymentRepository.save(payment.applyProviderOutcome(outcome, clock.now()));
         if (updated.getStatus() instanceof PaymentStatus.Completed) {
-            ensureFulfillment(updated);
+            paymentFulfillmentService.ensure(updated);
         } else if (updated.isTerminal()) {
             // Escenario 6: rejected/cancelled/expired never activates the
             // subscription, and releases the user's slot so they can retry.
-            releaseFulfillment(updated);
+            paymentFulfillmentService.release(updated);
         }
         return new VerificationOutcome.Applied(updated);
     }
@@ -169,57 +181,5 @@ public final class PaymentVerificationService {
         return new ProviderOutcome(
             result.providerStatus(), result.amount(), result.externalReference(), result.merchantAccountId()
         );
-    }
-
-    private void ensureFulfillment(Payment payment) {
-        switch (payment.getTarget()) {
-            case PaymentTarget.Physical ignored -> publishPhysicalPaymentCompletedUseCase.handle(payment);
-            case PaymentTarget.Virtual virtual -> ensureSubscription(payment, virtual);
-        }
-    }
-
-    private void releaseFulfillment(Payment payment) {
-        if (payment.getTarget() instanceof PaymentTarget.Virtual) {
-            subscriptionRepository.findByPaymentId(payment.getId())
-                .filter(Subscription::occupiesUserSlot)
-                .ifPresent(subscription -> subscriptionRepository.save(subscription.cancelled()));
-        }
-    }
-
-    /**
-     * Escenario 2: activate the subscription the checkout already created,
-     * freezing the plan's courses as they stand at this instant. Escenario 2b
-     * follows from that snapshot: later administrative edits to the plan
-     * cannot reach a subscription that already stored its own list.
-     *
-     * <p>Reads the plan by id regardless of its status — the buyer paid while
-     * it was {@code ACTIVE}, and a deactivation in the meantime must not
-     * quietly leave them with an empty snapshot.</p>
-     */
-    private void ensureSubscription(Payment payment, PaymentTarget.Virtual virtual) {
-        Optional<Subscription> existing = subscriptionRepository.findByPaymentId(payment.getId());
-        if (existing.isEmpty()) {
-            // Only the checkout creates virtual payments and writes both rows
-            // in one transaction, so there is nothing to activate or invent.
-            return;
-        }
-
-        if (existing.get().isActivated()) {
-            if (!existing.get().grantsAccess()) {
-                subscriptionRepository.save(existing.get().assigned());
-            }
-            return;
-        }
-
-        Optional<Plan> plan = planRepository.findById(PlanId.of(virtual.planId()));
-        if (plan.isEmpty()) {
-            subscriptionRepository.save(existing.get().exception());
-            return;
-        }
-
-        Subscription activated = existing.get().activate(
-            payment.confirmedAt().orElseGet(clock::now), plan.get().getDurationDays(), plan.get().courseIds()
-        );
-        subscriptionRepository.save(activated.assigned());
     }
 }

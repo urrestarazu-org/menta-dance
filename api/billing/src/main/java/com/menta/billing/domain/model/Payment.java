@@ -1,5 +1,6 @@
 package com.menta.billing.domain.model;
 
+import com.menta.billing.domain.exception.IllegalPaymentStateTransitionException;
 import com.menta.billing.domain.exception.ProviderPaymentIdConflictException;
 import java.time.Instant;
 import java.util.Objects;
@@ -148,6 +149,34 @@ public final class Payment {
             case PaymentStatus.Cancelled cancelled -> this;
             case PaymentStatus.Expired expired -> this;
         };
+    }
+
+    /**
+     * Manual admin decision (D1). Loud on any status other than {@link
+     * PaymentStatus.AwaitingManualVerification} — a second decision on an already-resolved
+     * payment is a human acting on stale information and must never resurrect or re-terminate a
+     * subscription (C4). Never fabricates a {@link ProviderOutcome}: {@link
+     * PaymentStatus.Pending#resolve} is deliberately not reused here.
+     *
+     * @throws IllegalPaymentStateTransitionException if this payment is not currently {@link
+     *     PaymentStatus.AwaitingManualVerification}
+     */
+    public Payment resolveManually(ManualVerificationDecision decision, Instant at) {
+        if (!(status instanceof PaymentStatus.AwaitingManualVerification)) {
+            throw new IllegalPaymentStateTransitionException(id, status, decision);
+        }
+        return withStatus(decision == ManualVerificationDecision.APPROVED
+            ? new PaymentStatus.Completed(at) : new PaymentStatus.Rejected(at));
+    }
+
+    /**
+     * 72h automatic expiry sweep (C4, C6). Silent no-op on every other status — a concurrent
+     * sweep tick, or one that arrives after an admin already resolved this payment, must not
+     * throw.
+     */
+    public Payment expireAwaitingManualVerification(Instant at) {
+        return status instanceof PaymentStatus.AwaitingManualVerification
+            ? withStatus(new PaymentStatus.Expired(at)) : this;
     }
 
     public boolean isTerminal() {

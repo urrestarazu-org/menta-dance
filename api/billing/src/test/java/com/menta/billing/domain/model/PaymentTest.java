@@ -3,6 +3,7 @@ package com.menta.billing.domain.model;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.menta.billing.domain.exception.IllegalPaymentStateTransitionException;
 import com.menta.billing.domain.exception.ProviderPaymentIdConflictException;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -35,6 +36,14 @@ class PaymentTest {
         return Payment.awaitingProvider(
             PaymentId.generate(), USER_ID, EXPECTED_AMOUNT, "ext-1", "merchant-1",
             new PaymentTarget.Virtual(UUID.randomUUID().toString()), CREATED_AT
+        );
+    }
+
+    private static Payment awaitingManualVerificationPayment() {
+        return new Payment(
+            PaymentId.generate(), USER_ID, null, EXPECTED_AMOUNT, "ext-1", "merchant-1",
+            new PaymentTarget.Virtual(UUID.randomUUID().toString()),
+            new PaymentStatus.AwaitingManualVerification(), CREATED_AT
         );
     }
 
@@ -225,5 +234,65 @@ class PaymentTest {
             PaymentId.generate(), null, "mp-1", EXPECTED_AMOUNT, "ext-1", "merchant-1",
             new PaymentTarget.Physical("session-1"), new PaymentStatus.AwaitingProvider(), CREATED_AT
         )).isInstanceOf(NullPointerException.class);
+    }
+
+    // --- resolveManually (D1, C4) ---
+
+    @Test
+    void resolveManually_approves_from_awaiting_manual_verification() {
+        Payment payment = awaitingManualVerificationPayment();
+
+        Payment approved = payment.resolveManually(ManualVerificationDecision.APPROVED, NOW);
+
+        assertThat(approved.getStatus()).isEqualTo(new PaymentStatus.Completed(NOW));
+    }
+
+    @Test
+    void resolveManually_rejects_from_awaiting_manual_verification() {
+        Payment payment = awaitingManualVerificationPayment();
+
+        Payment rejected = payment.resolveManually(ManualVerificationDecision.REJECTED, NOW);
+
+        assertThat(rejected.getStatus()).isEqualTo(new PaymentStatus.Rejected(NOW));
+    }
+
+    @Test
+    void resolveManually_throws_from_every_status_other_than_awaiting_manual_verification() {
+        for (PaymentStatus other : new PaymentStatus[] {
+            new PaymentStatus.AwaitingProvider(), new PaymentStatus.ReconciliationRequired("x"),
+            new PaymentStatus.Completed(CREATED_AT), new PaymentStatus.Rejected(CREATED_AT),
+            new PaymentStatus.Cancelled(CREATED_AT), new PaymentStatus.Expired(CREATED_AT)
+        }) {
+            Payment payment = terminalPayment(other);
+
+            assertThatThrownBy(() -> payment.resolveManually(ManualVerificationDecision.APPROVED, NOW))
+                .isInstanceOf(IllegalPaymentStateTransitionException.class);
+            assertThatThrownBy(() -> payment.resolveManually(ManualVerificationDecision.REJECTED, NOW))
+                .isInstanceOf(IllegalPaymentStateTransitionException.class);
+        }
+    }
+
+    // --- expireAwaitingManualVerification (72h sweep — C4, C6) ---
+
+    @Test
+    void expireAwaitingManualVerification_transitions_from_awaiting_manual_verification() {
+        Payment payment = awaitingManualVerificationPayment();
+
+        Payment expired = payment.expireAwaitingManualVerification(NOW);
+
+        assertThat(expired.getStatus()).isEqualTo(new PaymentStatus.Expired(NOW));
+    }
+
+    @Test
+    void expireAwaitingManualVerification_is_a_silent_no_op_on_every_other_status() {
+        for (PaymentStatus other : new PaymentStatus[] {
+            new PaymentStatus.AwaitingProvider(), new PaymentStatus.ReconciliationRequired("x"),
+            new PaymentStatus.Completed(CREATED_AT), new PaymentStatus.Rejected(CREATED_AT),
+            new PaymentStatus.Cancelled(CREATED_AT), new PaymentStatus.Expired(CREATED_AT)
+        }) {
+            Payment payment = terminalPayment(other);
+
+            assertThat(payment.expireAwaitingManualVerification(NOW)).isSameAs(payment);
+        }
     }
 }

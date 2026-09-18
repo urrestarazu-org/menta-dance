@@ -113,6 +113,22 @@ class SubscriptionTest {
         assertThat(cancelled.cancelled()).isSameAs(cancelled);
     }
 
+    /**
+     * Characterization (design C3, R3 — carried forward from the
+     * {@code billing-subscriptions} delta's inaccurate parenthetical): {@code cancelled()} already
+     * performs {@code PENDING → CANCELLED} and already records no actor. {@code Cancellation(at,
+     * by, reason)} types {@code by} as a real user id with no system sentinel, so the absence of a
+     * {@code Cancellation} is itself the signal that no human decided — locks existing behavior,
+     * not new production code.
+     */
+    @Test
+    void cancelled_from_pending_yields_cancelled_with_no_cancellation_recorded() {
+        Subscription cancelled = pending().cancelled();
+
+        assertThat(cancelled.getStatus()).isEqualTo(SubscriptionStatus.CANCELLED);
+        assertThat(cancelled.getCancellation()).isEmpty();
+    }
+
     @Test
     void assigned_grants_access_only_together_with_an_active_status() {
         Subscription pendingAssigned = pending().assigned();
