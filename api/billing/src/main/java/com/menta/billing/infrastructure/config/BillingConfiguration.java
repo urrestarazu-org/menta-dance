@@ -43,6 +43,7 @@ import com.menta.billing.application.usecase.GetPhysicalCoursePricingUseCaseImpl
 import com.menta.billing.application.usecase.GetPlanUseCaseImpl;
 import com.menta.billing.application.usecase.GetSubscriptionHistoryUseCaseImpl;
 import com.menta.billing.application.usecase.ListPlansUseCaseImpl;
+import com.menta.billing.application.usecase.PaymentFulfillmentService;
 import com.menta.billing.application.usecase.PaymentVerificationService;
 import com.menta.billing.application.usecase.PublishPaymentFulfillmentFailedUseCase;
 import com.menta.billing.application.usecase.PublishPhysicalPaymentCompletedUseCase;
@@ -137,15 +138,28 @@ public class BillingConfiguration {
         );
     }
 
+    /**
+     * Design C10: the collaborator an approved bank-transfer payment (P4) and the 72h expiry
+     * sweep (P5) will share with {@code PaymentVerificationService}, so all three settle a
+     * subscription through exactly the same code an approved Mercado Pago payment already does.
+     */
     @Bean
-    public PaymentVerificationService paymentVerificationService(
-        PaymentRepository paymentRepository, PaymentProviderPort paymentProviderPort,
+    public PaymentFulfillmentService paymentFulfillmentService(
         SubscriptionRepository subscriptionRepository, PlanRepository planRepository, Clock clock,
         PublishPhysicalPaymentCompletedUseCase publishPhysicalPaymentCompletedUseCase
     ) {
+        return new PaymentFulfillmentService(
+            subscriptionRepository, planRepository, clock, publishPhysicalPaymentCompletedUseCase
+        );
+    }
+
+    @Bean
+    public PaymentVerificationService paymentVerificationService(
+        PaymentRepository paymentRepository, PaymentProviderPort paymentProviderPort, Clock clock,
+        PaymentFulfillmentService paymentFulfillmentService
+    ) {
         return new PaymentVerificationService(
-            paymentRepository, paymentProviderPort, subscriptionRepository, planRepository, clock,
-            publishPhysicalPaymentCompletedUseCase
+            paymentRepository, paymentProviderPort, clock, paymentFulfillmentService
         );
     }
 
