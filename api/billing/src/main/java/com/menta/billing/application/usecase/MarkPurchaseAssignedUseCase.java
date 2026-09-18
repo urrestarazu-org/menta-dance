@@ -37,7 +37,7 @@ public class MarkPurchaseAssignedUseCase implements MarkPurchaseAssignedPort {
     @Override
     @Transactional(propagation = Propagation.REQUIRED)
     public void markAssigned(PaymentId paymentId) {
-        Optional<Purchase> maybe = purchaseRepository.findByPaymentId(paymentId);
+        Optional<Purchase> maybe = purchaseRepository.findByPaymentIdForUpdate(paymentId);
         if (maybe.isEmpty()) {
             throw new PaymentNotFoundException(paymentId);
         }

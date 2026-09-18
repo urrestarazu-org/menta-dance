@@ -88,7 +88,7 @@ class MarkPurchaseExceptionUseCaseTest {
         @Test
         void flips_PENDING_FULFILLMENT_to_EXCEPTION_and_persists() {
             Purchase pending = Purchase.pendingFulfillment(PAYMENT_ID, java.util.List.of(SESSION_ID));
-            when(purchaseRepository.findByPaymentId(PAYMENT_ID)).thenReturn(Optional.of(pending));
+            when(purchaseRepository.findByPaymentIdForUpdate(PAYMENT_ID)).thenReturn(Optional.of(pending));
             when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
 
             useCase.markException(PAYMENT_ID, Reason.CAPACITY_BELOW_ASSIGNED);
@@ -102,7 +102,7 @@ class MarkPurchaseExceptionUseCaseTest {
         @Test
         void appends_exactly_one_purchase_exceptioned_outbox_event_after_saving() {
             Purchase pending = Purchase.pendingFulfillment(PAYMENT_ID, java.util.List.of(SESSION_ID));
-            when(purchaseRepository.findByPaymentId(PAYMENT_ID)).thenReturn(Optional.of(pending));
+            when(purchaseRepository.findByPaymentIdForUpdate(PAYMENT_ID)).thenReturn(Optional.of(pending));
             when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
 
             useCase.markException(PAYMENT_ID, Reason.CAPACITY_BELOW_ASSIGNED);
@@ -131,7 +131,7 @@ class MarkPurchaseExceptionUseCaseTest {
         @Test
         void assigned_purchase_refuses_to_move_to_EXCEPTION() {
             Purchase assigned = Purchase.pendingFulfillment(PAYMENT_ID, java.util.List.of(SESSION_ID)).assigned();
-            when(purchaseRepository.findByPaymentId(PAYMENT_ID)).thenReturn(Optional.of(assigned));
+            when(purchaseRepository.findByPaymentIdForUpdate(PAYMENT_ID)).thenReturn(Optional.of(assigned));
 
             assertThatThrownBy(() ->
                 useCase.markException(PAYMENT_ID, Reason.CAPACITY_BELOW_ASSIGNED)
@@ -149,7 +149,7 @@ class MarkPurchaseExceptionUseCaseTest {
         @Test
         void re_marking_an_EXCEPTION_purchase_does_not_save_a_row() {
             Purchase exception = Purchase.pendingFulfillment(PAYMENT_ID, java.util.List.of(SESSION_ID)).exception();
-            when(purchaseRepository.findByPaymentId(PAYMENT_ID)).thenReturn(Optional.of(exception));
+            when(purchaseRepository.findByPaymentIdForUpdate(PAYMENT_ID)).thenReturn(Optional.of(exception));
 
             useCase.markException(PAYMENT_ID, Reason.UNIQUE_COLLISION);
 
@@ -164,7 +164,7 @@ class MarkPurchaseExceptionUseCaseTest {
 
         @Test
         void throws_PaymentNotFoundException_when_no_row_resolves() {
-            when(purchaseRepository.findByPaymentId(PAYMENT_ID)).thenReturn(Optional.empty());
+            when(purchaseRepository.findByPaymentIdForUpdate(PAYMENT_ID)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() ->
                 useCase.markException(PAYMENT_ID, Reason.HOLD_EXPIRED)

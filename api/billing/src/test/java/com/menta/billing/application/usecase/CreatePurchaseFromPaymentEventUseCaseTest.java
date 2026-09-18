@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -28,7 +27,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.dao.DataIntegrityViolationException;
 
 /**
  * RED-GREEN: every assertion references the new
@@ -53,7 +51,8 @@ class CreatePurchaseFromPaymentEventUseCaseTest {
     @BeforeEach
     void setUp() {
         purchaseRepository = mock(PurchaseRepository.class);
-        when(purchaseRepository.save(any(Purchase.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(purchaseRepository.saveIsolated(any(Purchase.class)))
+            .thenAnswer(inv -> Optional.of(inv.getArgument(0)));
         useCase = new CreatePurchaseFromPaymentEventUseCase(purchaseRepository);
     }
 
@@ -77,7 +76,7 @@ class CreatePurchaseFromPaymentEventUseCaseTest {
             assertThat(result.getStatus()).isEqualTo(FulfillmentStatus.PENDING_FULFILLMENT);
             assertThat(result.getPaymentId()).isEqualTo(PAYMENT_ID);
             assertThat(result.getPhysicalSessionIds()).containsExactly(SESSION_REF);
-            verify(purchaseRepository, times(1)).save(any(Purchase.class));
+            verify(purchaseRepository, times(1)).saveIsolated(any(Purchase.class));
         }
 
         // #238: an empty eligibleSessionIds list means the payment never
@@ -93,7 +92,7 @@ class CreatePurchaseFromPaymentEventUseCaseTest {
             assertThat(result.getStatus()).isEqualTo(FulfillmentStatus.EXCEPTION);
             assertThat(result.getPaymentId()).isEqualTo(PAYMENT_ID);
             assertThat(result.getPhysicalSessionIds()).isEmpty();
-            verify(purchaseRepository, times(1)).save(any(Purchase.class));
+            verify(purchaseRepository, times(1)).saveIsolated(any(Purchase.class));
         }
 
         @Test
@@ -105,7 +104,7 @@ class CreatePurchaseFromPaymentEventUseCaseTest {
 
             assertThat(result.getPhysicalSessionIds()).containsExactly("s1", "s2", "s3");
             assertThat(result.getStatus()).isEqualTo(FulfillmentStatus.PENDING_FULFILLMENT);
-            verify(purchaseRepository, times(1)).save(any(Purchase.class));
+            verify(purchaseRepository, times(1)).saveIsolated(any(Purchase.class));
         }
     }
 
@@ -121,7 +120,7 @@ class CreatePurchaseFromPaymentEventUseCaseTest {
             Purchase result = useCase.createPurchaseFromPaymentEvent(payload(), ONE_ELIGIBLE_SESSION);
 
             assertThat(result).isSameAs(existing);
-            verify(purchaseRepository, never()).save(any(Purchase.class));
+            verify(purchaseRepository, never()).saveIsolated(any(Purchase.class));
         }
 
         @Test
@@ -132,7 +131,7 @@ class CreatePurchaseFromPaymentEventUseCaseTest {
             Purchase result = useCase.createPurchaseFromPaymentEvent(payload(), ONE_ELIGIBLE_SESSION);
 
             assertThat(result).isSameAs(existing);
-            verify(purchaseRepository, never()).save(any(Purchase.class));
+            verify(purchaseRepository, never()).saveIsolated(any(Purchase.class));
         }
 
         @Test
@@ -144,7 +143,7 @@ class CreatePurchaseFromPaymentEventUseCaseTest {
             Purchase result = useCase.createPurchaseFromPaymentEvent(payload(), ONE_ELIGIBLE_SESSION);
 
             assertThat(result.getStatus()).isEqualTo(FulfillmentStatus.PENDING_FULFILLMENT);
-            verify(purchaseRepository, times(1)).save(any(Purchase.class));
+            verify(purchaseRepository, times(1)).saveIsolated(any(Purchase.class));
         }
 
         @Test
@@ -157,31 +156,36 @@ class CreatePurchaseFromPaymentEventUseCaseTest {
             Purchase result = useCase.createPurchaseFromPaymentEvent(payload(), List.of("s1", "s2", "s3"));
 
             assertThat(result.getPhysicalSessionIds()).containsExactly("s1", "s2", "s3");
-            verify(purchaseRepository, never()).save(any(Purchase.class));
+            verify(purchaseRepository, never()).saveIsolated(any(Purchase.class));
         }
     }
 
     @Nested
-    @DisplayName("V8 UNIQUE race on save() — second handler delivery within the same frame")
+    @DisplayName("V8 UNIQUE race on saveIsolated() — second handler delivery within the same frame (#245)")
     class UniqueRace {
 
+        // #245: saveIsolated never propagates DataIntegrityViolationException to
+        // this use case — it isolates the risky insert in its own REQUIRES_NEW
+        // transaction (see PurchaseRepositoryAdapter's javadoc) and reports a
+        // lost race as Optional.empty() instead. The fallback re-fetch uses
+        // findByPaymentIdForUpdate (a LOCKING read), never the plain
+        // findByPaymentId — see the use case's own javadoc for why a plain
+        // read here could miss the race winner's just-committed row.
         @Test
-        void recovers_by_re_fetching_when_save_throws_DataIntegrityViolationException() {
+        void recovers_by_re_fetching_when_saveIsolated_reports_a_lost_race() {
             Purchase existing = Purchase.pendingFulfillment(PAYMENT_ID, ONE_ELIGIBLE_SESSION);
             // First findByPaymentId() returns empty (handler-A inserted first
-            // but not committed yet). Then save() raises DIV. Then the second
-            // findByPaymentId() returns the now-committed row.
-            when(purchaseRepository.findByPaymentId(PAYMENT_ID))
-                .thenReturn(Optional.empty())
-                .thenReturn(Optional.of(existing));
-            doThrow(new DataIntegrityViolationException(
-                "Duplicate entry for key 'uq_billing_purchases_payment_id'"))
-                .when(purchaseRepository).save(any(Purchase.class));
+            // but not committed yet). Then saveIsolated() loses the race. Then
+            // the locking findByPaymentIdForUpdate() returns the now-committed row.
+            when(purchaseRepository.findByPaymentId(PAYMENT_ID)).thenReturn(Optional.empty());
+            when(purchaseRepository.saveIsolated(any(Purchase.class))).thenReturn(Optional.empty());
+            when(purchaseRepository.findByPaymentIdForUpdate(PAYMENT_ID)).thenReturn(Optional.of(existing));
 
             Purchase result = useCase.createPurchaseFromPaymentEvent(payload(), ONE_ELIGIBLE_SESSION);
 
             assertThat(result).isSameAs(existing);
-            verify(purchaseRepository, times(2)).findByPaymentId(PAYMENT_ID);
+            verify(purchaseRepository, times(1)).findByPaymentId(PAYMENT_ID);
+            verify(purchaseRepository, times(1)).findByPaymentIdForUpdate(PAYMENT_ID);
         }
     }
 

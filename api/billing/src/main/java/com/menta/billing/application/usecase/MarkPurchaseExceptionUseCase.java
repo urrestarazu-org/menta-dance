@@ -96,7 +96,7 @@ public class MarkPurchaseExceptionUseCase implements MarkPurchaseExceptionPort {
     @Override
     @Transactional(propagation = Propagation.REQUIRED, noRollbackFor = IllegalPurchaseStateTransitionException.class)
     public void markException(PaymentId paymentId, Reason reason) {
-        Optional<Purchase> maybe = purchaseRepository.findByPaymentId(paymentId);
+        Optional<Purchase> maybe = purchaseRepository.findByPaymentIdForUpdate(paymentId);
         if (maybe.isEmpty()) {
             throw new PaymentNotFoundException(paymentId);
         }
