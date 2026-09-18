@@ -27,11 +27,13 @@ import com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity;
 import com.menta.auth.infrastructure.persistence.repository.OutboxRowJpaRepository;
 import com.menta.billing.application.contract.BillingOutboxEventTypes;
 import com.menta.billing.application.dto.ProviderPaymentResult;
+import com.menta.billing.application.port.in.PurchaseCreationFromEventPort;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.port.out.CourseCatalogPort;
 import com.menta.billing.application.port.out.PaymentPreferencePort;
 import com.menta.billing.application.port.out.PaymentProviderPort;
 import com.menta.billing.domain.model.Money;
+import com.menta.billing.domain.model.Purchase;
 import com.menta.billing.infrastructure.persistence.entity.PaymentJpaEntity;
 import com.menta.billing.infrastructure.persistence.entity.PhysicalCourseQuoteJpaEntity;
 import com.menta.billing.infrastructure.persistence.entity.WebhookInboxJpaEntity;
@@ -51,6 +53,7 @@ import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacity
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityHoldJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
+import com.menta.shared.billing.PaymentCompletedOutboxPayload;
 import com.menta.shared.domain.vo.Email;
 import com.menta.shared.outbox.OutboxStatus;
 import java.math.BigDecimal;
@@ -159,6 +162,7 @@ class PhysicalPurchaseIntegrationTest {
     @Autowired private PhysicalCourseQuoteJpaRepository quoteRepository;
     @Autowired private WebhookVerificationWorker webhookWorker;
     @Autowired private OutboxReconciliationWorker outboxWorker;
+    @Autowired private PurchaseCreationFromEventPort purchaseCreationFromEventPort;
 
     @MockBean private PaymentPreferencePort paymentPreferencePort;
     @MockBean private PaymentProviderPort paymentProviderPort;
@@ -780,21 +784,74 @@ class PhysicalPurchaseIntegrationTest {
         // time through this scenario's real hold-conversion capacity trip
         // also re-attempts CreatePurchaseFromPaymentEventUseCase's recovery
         // insert (it treats an EXCEPTION Purchase as "absent" for retry
-        // purposes) and surfaces a separate, pre-existing defect in that
-        // idempotent-insert recovery under a real database — orthogonal to
-        // #209/#238, predates this change (#41/#208's own machinery), and is
-        // out of scope to fix here. Either outcome (a clean no-op or this
-        // surfaced RuntimeException) still proves the one invariant D.1
-        // needs: no second billing.PurchaseExceptioned row and no second
-        // pair of emails, because both outcomes roll the whole re-attempt
-        // back.
-        try {
-            outboxWorker.process(event);
-        } catch (RuntimeException redeliveryArtifactOfAPreExistingUnrelatedDefect) {
-            // Expected under the finding documented above.
-        }
+        // purposes) — #245 fixed the proxy-boundary mechanic that used to
+        // surface an unhandled UnexpectedRollbackException here (same root
+        // cause as #242). The retry must now no-op cleanly.
+        assertThat(outboxWorker.process(event)).isFalse();
+        assertThat(purchaseRepository.findByPaymentId(paymentId).orElseThrow().getStatus()).isEqualTo("EXCEPTION");
         assertThat(outboxRowsFor(BillingOutboxEventTypes.PURCHASE_EXCEPTIONED, paymentId)).hasSize(1);
         verifyNoMoreInteractions(mailSender);
+    }
+
+    /**
+     * #245: reproduces the real concurrent-insert race two peer outbox
+     * handlers can hit for the SAME {@code paymentId} — both read an empty
+     * {@link com.menta.billing.application.port.out.PurchaseRepository#findByPaymentId}
+     * before either commits, both attempt the insert, and the loser hits
+     * {@code uq_billing_purchases_payment_id}. Each call to {@code
+     * createPurchaseFromPaymentEvent} runs in its OWN transaction here (no
+     * ambient transaction at the call site, same as {@code REQUIRED} joining
+     * nothing), which is exactly the shape the pre-fix
+     * {@code try/catch(DataIntegrityViolationException)} inside the use case
+     * could never reliably recover from — see #242's identical proxy-boundary
+     * mechanic on {@code PublishPhysicalPaymentCompletedUseCase} and {@code
+     * WebhookInboxAppenderAdapter}. Before the fix, the losing thread surfaces
+     * an unhandled {@code UnexpectedRollbackException} (or an equivalent
+     * uncaught exception) instead of the idempotent re-fetch the use case's
+     * own javadoc promises. After the fix ({@code
+     * PurchaseRepository#saveIsolated} isolates the risky insert in its own
+     * {@code REQUIRES_NEW} transaction), both invocations must return
+     * normally and resolve to the SAME persisted row.
+     */
+    @Test
+    void two_concurrent_purchase_creations_for_the_same_payment_id_resolve_to_exactly_one_row()
+        throws InterruptedException {
+        UUID paymentId = UUID.randomUUID();
+        PaymentCompletedOutboxPayload payload = new PaymentCompletedOutboxPayload(
+            paymentId, "mp-race-245-1", "ext-race-245-1", MERCHANT_ACCOUNT_ID, UUID.randomUUID().toString(),
+            INDIVIDUAL_PRICE, "ARS", Instant.now()
+        );
+        List<String> eligibleSessionIds = List.of(UUID.randomUUID().toString());
+
+        CountDownLatch start = new CountDownLatch(1);
+        CountDownLatch done = new CountDownLatch(2);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        List<Purchase> results = new CopyOnWriteArrayList<>();
+        List<Throwable> failures = new CopyOnWriteArrayList<>();
+
+        for (int i = 0; i < 2; i++) {
+            pool.submit(() -> {
+                try {
+                    start.await();
+                    results.add(purchaseCreationFromEventPort.createPurchaseFromPaymentEvent(payload, eligibleSessionIds));
+                } catch (Throwable raceOutcome) {
+                    failures.add(raceOutcome);
+                } finally {
+                    done.countDown();
+                }
+            });
+        }
+
+        start.countDown();
+        assertThat(done.await(30, TimeUnit.SECONDS)).isTrue();
+        pool.shutdownNow();
+
+        assertThat(failures).isEmpty();
+        assertThat(results).hasSize(2);
+        assertThat(results.get(0).getId()).isEqualTo(results.get(1).getId());
+        assertThat(purchaseRepository.findAll().stream()
+            .filter(row -> row.getPaymentId().equals(paymentId))
+            .toList()).hasSize(1);
     }
 
     /**
@@ -803,9 +860,18 @@ class PhysicalPurchaseIntegrationTest {
      * billing.PurchaseExceptioned} row for the same {@code paymentId}
      * manufactures the real MySQL {@code uk_common_outbox_aggregate_event_type}
      * collision the append hits inside {@code MarkPurchaseExceptionUseCase}'s
-     * {@code REQUIRED} transaction — proving the WHOLE transaction (the
-     * {@code Purchase} save AND the append) rolls back together, not merely
-     * the append.
+     * {@code REQUIRED} transaction — proving the {@code EXCEPTION} status
+     * save and the append roll back together, not merely the append.
+     *
+     * <p>#245 changed one thing here on purpose: {@code
+     * createPurchaseFromPaymentEvent} now persists the {@code Purchase} row
+     * via {@code saveIsolated}'s OWN {@code REQUIRES_NEW} sub-transaction,
+     * independently committed BEFORE {@code markException} ever runs — so
+     * unlike before #245, that row now survives this rollback too. What
+     * still rolls back together is the STATUS TRANSITION itself: {@code
+     * markException}'s {@code save(purchase.exception())} is still {@code
+     * MANDATORY} (ambient), so the row survives at its ORIGINAL {@code
+     * PENDING_FULFILLMENT}, never reaching {@code EXCEPTION}.</p>
      */
     @Test
     @SuppressWarnings("unchecked")
@@ -835,9 +901,11 @@ class PhysicalPurchaseIntegrationTest {
 
         assertThatThrownBy(() -> outboxWorker.process(event)).isInstanceOf(RuntimeException.class);
 
-        // The whole REQUIRED transaction rolled back together: the Purchase
-        // row itself never survives either, not merely the outbox append.
-        assertThat(purchaseRepository.findByPaymentId(paymentId)).isEmpty();
+        // #245: the Purchase row itself now survives — saveIsolated committed
+        // it independently, before markException's own (still-ambient, still
+        // rolled-back-together-with-the-append) status save ever ran.
+        assertThat(purchaseRepository.findByPaymentId(paymentId).orElseThrow().getStatus())
+            .isEqualTo("PENDING_FULFILLMENT");
         // Only the manufactured collision row remains — the real attempt added none.
         assertThat(outboxRowsFor(BillingOutboxEventTypes.PURCHASE_EXCEPTIONED, paymentId)).hasSize(1);
         verifyNoInteractions(mailSender);
@@ -895,18 +963,12 @@ class PhysicalPurchaseIntegrationTest {
             .containsExactlyInAnyOrder(student.email(), "ops@menta.local");
 
         // Retry of the same event re-attempts createPurchaseFromPaymentEvent's
-        // EXCEPTION-treated-as-absent recovery insert, which — same
-        // pre-existing, unrelated defect documented on D.1 above (#41/#208's
-        // own idempotent-insert-recovery machinery under a real database,
-        // orthogonal to #238) — may either no-op cleanly or surface here.
-        // Either outcome still proves the one invariant this retry needs: no
-        // second Purchase row, no second fallback row, no second pair of
-        // emails.
-        try {
-            outboxWorker.process(event);
-        } catch (RuntimeException redeliveryArtifactOfAPreExistingUnrelatedDefect) {
-            // Expected under the finding documented above.
-        }
+        // EXCEPTION-treated-as-absent recovery insert — #245 fixed the
+        // proxy-boundary mechanic that used to surface an unhandled
+        // UnexpectedRollbackException here (same root cause as #242). The
+        // retry must now no-op cleanly: no second Purchase row, no second
+        // fallback row, no second pair of emails.
+        assertThat(outboxWorker.process(event)).isFalse();
         assertThat(purchaseRepository.findByPaymentId(paymentId).orElseThrow().getStatus())
             .isEqualTo("EXCEPTION");
         assertThat(outboxRowsFor(BillingOutboxEventTypes.PAYMENT_FULFILLMENT_FAILED, paymentId)).hasSize(1);

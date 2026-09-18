@@ -9,7 +9,6 @@ import com.menta.billing.domain.model.Purchase;
 import com.menta.shared.billing.PaymentCompletedOutboxPayload;
 import java.util.List;
 import java.util.Optional;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,13 +41,35 @@ import org.springframework.transaction.annotation.Transactional;
  *       other than {@code EXCEPTION}. So an empty list builds directly via
  *       {@link Purchase#exception(PaymentId, java.util.List)} instead —
  *       skipping the intermediate state entirely.</p></li>
- *   <li>If save raises {@link DataIntegrityViolationException} against V8
- *       line 31 {@code uq_billing_purchases_payment_id} (UNIQUE collision
- *       with a concurrent handler) → re-fetch and return whatever is there.</li>
+ *   <li>Save via {@link PurchaseRepository#saveIsolated(Purchase)} (#245),
+ *       never {@link PurchaseRepository#save(Purchase)} directly. This
+ *       method's own {@code @Transactional(REQUIRED)} always joins an
+ *       already-open ambient transaction in production (the outbox worker's
+ *       {@code REQUIRES_NEW}); a save-then-catch here against the V8 line 31
+ *       {@code uq_billing_purchases_payment_id} UNIQUE collision cannot
+ *       reliably recover, because Spring's AOP advice marks that ambient
+ *       transaction rollback-only the instant the constraint violation
+ *       escapes {@code save(Purchase)}'s own {@code MANDATORY} proxy —
+ *       regardless of a caller catching it afterward — so the whole method
+ *       fails at commit with {@code UnexpectedRollbackException} even though
+ *       the exception was "handled". This is the exact proxy-boundary
+ *       mechanic already fixed once in this package for {@code
+ *       PublishPhysicalPaymentCompletedUseCase} (#242) and in {@code
+ *       WebhookInboxAppenderAdapter}. {@code saveIsolated} isolates the risky
+ *       insert in its own {@code REQUIRES_NEW} transaction, so a lost race
+ *       there rolls back and closes before this method ever sees it.</li>
+ *   <li>If {@code saveIsolated} returns empty (lost the race) → re-fetch via
+ *       {@link PurchaseRepository#findByPaymentIdForUpdate(PaymentId)}, a
+ *       LOCKING read, and return whatever is there. A plain {@code
+ *       findByPaymentId} here would risk missing the winner's row: under
+ *       REPEATABLE READ, this method's own step 1 read may already have
+ *       fixed this transaction's MVCC snapshot before the winner's {@code
+ *       saveIsolated} committed on its own connection.</li>
  * </ol>
  *
- * <p>"Read then conditional write" eliminates the classic TOCTOU window
- * by accepting the rare duplicate-insert race and re-reading on violation.</p>
+ * <p>"Read then conditional write" eliminates the classic TOCTOU window by
+ * accepting the rare duplicate-insert race and re-reading when {@code
+ * saveIsolated} reports it lost.</p>
  */
 @Component
 public class CreatePurchaseFromPaymentEventUseCase implements PurchaseCreationFromEventPort {
@@ -73,12 +94,9 @@ public class CreatePurchaseFromPaymentEventUseCase implements PurchaseCreationFr
         Purchase toSave = eligibleSessionIds.isEmpty()
             ? Purchase.exception(paymentId, eligibleSessionIds)
             : Purchase.pendingFulfillment(paymentId, eligibleSessionIds);
-        try {
-            return purchaseRepository.save(toSave);
-        } catch (DataIntegrityViolationException concurrentInsert) {
-            // A peer handler inserted between our read and our save; whatever is
-            // there now is the authoritative row, return it.
-            return purchaseRepository.findByPaymentId(paymentId).orElseThrow(PurchaseNotFoundException::new);
-        }
+        return purchaseRepository.saveIsolated(toSave)
+            .orElseGet(() ->
+                purchaseRepository.findByPaymentIdForUpdate(paymentId).orElseThrow(PurchaseNotFoundException::new)
+            );
     }
 }
