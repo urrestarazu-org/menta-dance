@@ -48,4 +48,10 @@ public class BillingOutboxAppender implements BillingOutboxAppenderPort {
             null
         ));
     }
+
+    @Override
+    @Transactional(propagation = Propagation.SUPPORTS, readOnly = true)
+    public boolean existsForAggregateAndEventType(String eventType, String aggregateId) {
+        return repository.existsByEventTypeAndAggregateId(eventType, aggregateId);
+    }
 }

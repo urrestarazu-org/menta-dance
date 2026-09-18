@@ -24,4 +24,18 @@ public interface BillingOutboxAppenderPort {
      * @param payload     never null (JSON-encoded body).
      */
     void append(String eventType, String aggregateId, String payload);
+
+    /**
+     * Whether a row already exists for this ({@code aggregateId}, {@code
+     * eventType}) pair — the app-level idempotency check a producer runs
+     * BEFORE calling {@link #append} on a redelivery, so an ordinary
+     * sequential retry never even attempts a second insert (#242). V2's
+     * {@code uk_common_outbox_aggregate_event_type} constraint remains the
+     * backstop for a genuine concurrent race between two redeliveries; this
+     * check exists so that race is the exception, not the normal path.
+     *
+     * @param eventType   never null.
+     * @param aggregateId never null.
+     */
+    boolean existsForAggregateAndEventType(String eventType, String aggregateId);
 }

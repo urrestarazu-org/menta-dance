@@ -12,6 +12,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 /**
  * JPA entity for the {@code common_outbox_events} table (ADR-0030).
@@ -52,7 +53,13 @@ import jakarta.persistence.Table;
  * @see com.menta.shared.outbox.OutboxStatus
  */
 @Entity
-@Table(name = "common_outbox_events")
+@Table(
+    name = "common_outbox_events",
+    uniqueConstraints = @UniqueConstraint(
+        name = "uk_common_outbox_aggregate_event_type",
+        columnNames = {"aggregate_id", "event_type"}
+    )
+)
 public class OutboxRowJpaEntity {
 
     @Id
