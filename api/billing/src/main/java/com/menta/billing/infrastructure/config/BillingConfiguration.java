@@ -13,6 +13,7 @@ import com.menta.billing.application.port.in.GetPlanUseCase;
 import com.menta.billing.application.port.in.GetSubscriptionHistoryUseCase;
 import com.menta.billing.application.port.in.ListPlansUseCase;
 import com.menta.billing.application.port.in.ReceiveWebhookUseCase;
+import com.menta.billing.application.port.in.SubmitPaymentProofUseCase;
 import com.menta.billing.application.port.in.UpdatePhysicalCoursePricingUseCase;
 import com.menta.billing.application.port.out.BankTransferRateLimitPort;
 import com.menta.billing.application.port.out.BillingOutboxAppenderPort;
@@ -20,6 +21,9 @@ import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.port.out.Clock;
 import com.menta.billing.application.port.out.CourseCatalogPort;
 import com.menta.billing.application.port.out.PaymentPreferencePort;
+import com.menta.billing.application.port.out.PaymentProofNotificationPort;
+import com.menta.billing.application.port.out.PaymentProofRepository;
+import com.menta.billing.application.port.out.PaymentProofStoragePort;
 import com.menta.billing.application.port.out.PaymentProviderPort;
 import com.menta.billing.application.port.out.PaymentRepository;
 import com.menta.billing.application.port.out.PhysicalCapacityHoldPort;
@@ -53,8 +57,10 @@ import com.menta.billing.application.usecase.PublishPaymentFulfillmentFailedUseC
 import com.menta.billing.application.usecase.PublishPhysicalPaymentCompletedUseCase;
 import com.menta.billing.application.usecase.ReceiveWebhookUseCaseImpl;
 import com.menta.billing.application.usecase.RoutingCreateSubscriptionCheckoutUseCase;
+import com.menta.billing.application.usecase.SubmitPaymentProofUseCaseImpl;
 import com.menta.billing.application.usecase.UpdatePhysicalCoursePricingUseCaseImpl;
 import com.menta.billing.application.usecase.VirtualCourseEntitlementService;
+import com.menta.billing.domain.service.PaymentProofContentValidator;
 import com.menta.billing.infrastructure.security.RedisBankTransferRateLimitPort;
 import com.menta.billing.infrastructure.security.RedisBillingPlansRateLimitPort;
 import com.menta.billing.infrastructure.transaction.TransactionalAssignTrialSubscriptionUseCase;
@@ -62,6 +68,7 @@ import com.menta.billing.infrastructure.transaction.TransactionalCancelSubscript
 import com.menta.billing.infrastructure.transaction.TransactionalCreatePhysicalPurchaseCheckoutUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalCreateSubscriptionCheckoutUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalReceiveWebhookUseCase;
+import com.menta.billing.infrastructure.transaction.TransactionalSubmitPaymentProofUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalUpdatePhysicalCoursePricingUseCase;
 import com.menta.shared.auth.UserExistencePort;
 import com.menta.shared.billing.VirtualCourseEntitlementPort;
@@ -265,6 +272,26 @@ public class BillingConfiguration {
             redisTemplate, clock, subscriptionCreationMaxRequests, Duration.ofHours(subscriptionCreationWindowHours),
             proofUploadMaxRequests, Duration.ofHours(proofUploadWindowHours)
         );
+    }
+
+    /**
+     * US-BILLING-003 escenario 2 (design C12). Wrapped transactionally: the previous blob's key is
+     * read, the new proof row is saved and the notification is sent all inside one transaction, so
+     * a failed notification (design C12 step 6) rolls back the row instead of leaving a proof
+     * persisted that nobody was told about. {@code PaymentProofRepositoryAdapter} and {@code
+     * LocalFilesystemPaymentProofStorageAdapter} self-register as {@code @Component}s (P3a/P3b),
+     * resolved here by type like every other adapter in this configuration.
+     */
+    @Bean
+    public SubmitPaymentProofUseCase submitPaymentProofUseCase(
+        PaymentRepository paymentRepository, PaymentProofRepository paymentProofRepository,
+        PaymentProofStoragePort paymentProofStoragePort, PaymentProofNotificationPort paymentProofNotificationPort,
+        BankTransferRateLimitPort bankTransferRateLimitPort, Clock clock
+    ) {
+        return new TransactionalSubmitPaymentProofUseCase(new SubmitPaymentProofUseCaseImpl(
+            paymentRepository, paymentProofRepository, paymentProofStoragePort, paymentProofNotificationPort,
+            bankTransferRateLimitPort, new PaymentProofContentValidator(), clock
+        ));
     }
 
     /**

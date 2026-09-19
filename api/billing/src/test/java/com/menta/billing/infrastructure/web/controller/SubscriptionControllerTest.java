@@ -163,16 +163,26 @@ class SubscriptionControllerTest {
             .andExpect(jsonPath("$.code", is("PLAN_NOT_AVAILABLE")));
     }
 
+    /**
+     * #252: {@code paymentMethod} is no longer restricted to {@code MERCADO_PAGO} at the DTO
+     * level — {@code RoutingCreateSubscriptionCheckoutUseCase} (#31, P2) is the one that dispatches
+     * on this field in production, so the controller must let {@code BANK_TRANSFER} through to it
+     * rather than rejecting it before the router is ever reached.
+     */
     @Test
-    void bank_transfer_is_invalid_for_the_checkout_pro_endpoint() throws Exception {
+    void bank_transfer_reaches_the_use_case_instead_of_being_rejected_by_the_dto() throws Exception {
+        when(useCase.create(any())).thenReturn(result());
+
         mockMvc.perform(post("/api/v1/billing/subscriptions")
                 .with(authenticatedAs(USER_ID))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body(PLAN_ID, "BANK_TRANSFER", "idem-1")))
-            .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.code", is("INVALID_REQUEST")));
+            .andExpect(status().isCreated());
 
-        verify(useCase, never()).create(any());
+        ArgumentCaptor<CreateSubscriptionCheckoutCommand> command =
+            ArgumentCaptor.forClass(CreateSubscriptionCheckoutCommand.class);
+        verify(useCase).create(command.capture());
+        Assertions.assertThat(command.getValue().paymentMethod()).isEqualTo(PaymentMethod.BANK_TRANSFER);
     }
 
     @Test

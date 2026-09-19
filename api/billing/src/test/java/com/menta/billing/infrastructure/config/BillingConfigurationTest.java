@@ -13,11 +13,15 @@ import com.menta.billing.application.port.in.GetPlanUseCase;
 import com.menta.billing.application.port.in.GetSubscriptionHistoryUseCase;
 import com.menta.billing.application.port.in.ListPlansUseCase;
 import com.menta.billing.application.port.in.ReceiveWebhookUseCase;
+import com.menta.billing.application.port.in.SubmitPaymentProofUseCase;
 import com.menta.billing.application.port.out.BankTransferRateLimitPort;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.port.out.Clock;
 import com.menta.billing.application.port.out.CourseCatalogPort;
 import com.menta.billing.application.port.out.PaymentPreferencePort;
+import com.menta.billing.application.port.out.PaymentProofNotificationPort;
+import com.menta.billing.application.port.out.PaymentProofRepository;
+import com.menta.billing.application.port.out.PaymentProofStoragePort;
 import com.menta.billing.application.port.out.PaymentProviderPort;
 import com.menta.billing.application.port.out.PaymentRepository;
 import com.menta.billing.application.port.out.PlanRepository;
@@ -39,6 +43,7 @@ import com.menta.billing.infrastructure.security.RedisBillingPlansRateLimitPort;
 import com.menta.billing.infrastructure.transaction.TransactionalAssignTrialSubscriptionUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalCreateSubscriptionCheckoutUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalReceiveWebhookUseCase;
+import com.menta.billing.infrastructure.transaction.TransactionalSubmitPaymentProofUseCase;
 import com.menta.shared.auth.UserExistencePort;
 import java.lang.reflect.Field;
 import org.junit.jupiter.api.Test;
@@ -119,6 +124,18 @@ class BillingConfigurationTest {
             configuration.bankTransferRateLimitPort(redisTemplate, mock(Clock.class), 10, 26, 3, 72);
 
         assertThat(port).isInstanceOf(RedisBankTransferRateLimitPort.class);
+    }
+
+    /** #31, P3c, design C12: wrapped transactionally — see the bean's Javadoc. */
+    @Test
+    void wires_the_submit_payment_proof_use_case_bean_transactionally() {
+        SubmitPaymentProofUseCase useCase = configuration.submitPaymentProofUseCase(
+            mock(PaymentRepository.class), mock(PaymentProofRepository.class),
+            mock(PaymentProofStoragePort.class), mock(PaymentProofNotificationPort.class),
+            mock(BankTransferRateLimitPort.class), mock(Clock.class)
+        );
+
+        assertThat(useCase).isInstanceOf(TransactionalSubmitPaymentProofUseCase.class);
     }
 
     @Test
