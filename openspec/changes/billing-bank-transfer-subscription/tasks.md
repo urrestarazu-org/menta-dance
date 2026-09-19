@@ -133,15 +133,15 @@ stays green and **unmodified** as the refactor's own proof.
 
 Self-contained, inert until P3c wires it — no use case, no controller yet.
 
-- [ ] 3a.1 GREEN: create `PaymentProof.java`, `PaymentProofId.java` (`api/billing/src/main/java/com/menta/billing/domain/model/`) — `id, paymentId, storageKey, originalFilename, contentType, sizeBytes, uploadedAt` (C5).
-- [ ] 3a.2 RED: new `PaymentProofContentValidatorTest` — table-driven: each accepted type (PNG/JPG/JPEG/PDF), oversized (>5MB), declared≠sniffed magic bytes, empty file, PDF renamed `.png` (C11).
-- [ ] 3a.3 GREEN: create `PaymentProofContentValidator.java` (`api/billing/src/main/java/com/menta/billing/domain/service/PaymentProofContentValidator.java`) — pure, I/O-free, Spring-free.
-- [ ] 3a.4 GREEN: create `PaymentProofRejectedException.java` (`.../domain/exception/`) — maps to `400`.
-- [ ] 3a.5 RED: new storage-key factory test — `../../etc/passwd.png`, `a\0.png`, a 300-char name, a non-ASCII name all reduce to `{paymentId}/{proofId}.{ext}` with only UUIDs + whitelisted extension.
-- [ ] 3a.6 RED: new `LocalFilesystemPaymentProofStorageAdapterTest` (JUnit `@TempDir`) — writes land under the volume root; a hand-crafted `../` key is refused; `delete` of a missing key is silent.
-- [ ] 3a.7 GREEN: create `PaymentProofStoragePort.java` (out-port) + `LocalFilesystemPaymentProofStorageAdapter.java` (`api/billing/src/main/java/com/menta/billing/{application/port/out,infrastructure/storage}/`) — `root.resolve(key).normalize().startsWith(root)` assertion (C5).
-- [ ] 3a.8 Update `PaymentExceptionHandler.java` — add `PaymentProofRejectedException → 400`.
-- [ ] 3a.9 Verify: `:api:billing:test :api:billing:jacocoTestCoverageVerification` + `:api:app:test` **no filter**, `contextLoads()` green (nothing new is Spring-managed as `@Transactional` here, but the guard still runs).
+- [x] 3a.1 GREEN: create `PaymentProof.java`, `PaymentProofId.java` (`api/billing/src/main/java/com/menta/billing/domain/model/`) — `id, paymentId, storageKey, originalFilename, contentType, sizeBytes, uploadedAt` (C5).
+- [x] 3a.2 RED: new `PaymentProofContentValidatorTest` — table-driven: each accepted type (PNG/JPG/JPEG/PDF), oversized (>5MB), declared≠sniffed magic bytes, empty file, PDF renamed `.png` (C11).
+- [x] 3a.3 GREEN: create `PaymentProofContentValidator.java` (`api/billing/src/main/java/com/menta/billing/domain/service/PaymentProofContentValidator.java`) — pure, I/O-free, Spring-free.
+- [x] 3a.4 GREEN: create `PaymentProofRejectedException.java` (`.../domain/exception/`) — maps to `400`.
+- [x] 3a.5 RED: new storage-key factory test — `../../etc/passwd.png`, `a\0.png`, a 300-char name, a non-ASCII name all reduce to `{paymentId}/{proofId}.{ext}` with only UUIDs + whitelisted extension.
+- [x] 3a.6 RED: new `LocalFilesystemPaymentProofStorageAdapterTest` (JUnit `@TempDir`) — writes land under the volume root; a hand-crafted `../` key is refused; `delete` of a missing key is silent.
+- [x] 3a.7 GREEN: create `PaymentProofStoragePort.java` (out-port) + `LocalFilesystemPaymentProofStorageAdapter.java` (`api/billing/src/main/java/com/menta/billing/{application/port/out,infrastructure/storage}/`) — `root.resolve(key).normalize().startsWith(root)` assertion (C5).
+- [x] 3a.8 Update `PaymentExceptionHandler.java` — add `PaymentProofRejectedException → 400`.
+- [x] 3a.9 Verify: `:api:billing:test :api:billing:jacocoTestCoverageVerification` + `:api:app:test` **no filter**, `contextLoads()` green (nothing new is Spring-managed as `@Transactional` here, but the guard still runs).
 
 ## Phase P3b: Proof persistence + notification + migration (R5, D2)
 

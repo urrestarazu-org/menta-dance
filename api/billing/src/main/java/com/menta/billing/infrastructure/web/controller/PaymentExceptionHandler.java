@@ -1,6 +1,7 @@
 package com.menta.billing.infrastructure.web.controller;
 
 import com.menta.billing.domain.exception.IllegalPaymentStateTransitionException;
+import com.menta.billing.domain.exception.PaymentProofRejectedException;
 import com.menta.billing.infrastructure.web.ProblemDetails;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -10,7 +11,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
  * RFC 9457 Problem Details mapping for bank-transfer payment endpoints (#31, US-BILLING-003).
- * Sibling of {@link SubscriptionExceptionHandler}. This phase (P1) maps only {@link
+ * Sibling of {@link SubscriptionExceptionHandler}. P1 mapped {@link
  * IllegalPaymentStateTransitionException}; P3a adds {@code 400} for a rejected proof.
  */
 @RestControllerAdvice(annotations = PaymentEndpoint.class)
@@ -25,6 +26,20 @@ public class PaymentExceptionHandler {
         return ProblemDetails.response(
             HttpStatus.CONFLICT,
             "El pago ya no está a la espera de verificación manual.",
+            exception.getErrorCode()
+        );
+    }
+
+    /**
+     * {@link com.menta.billing.domain.service.PaymentProofContentValidator} rejected the uploaded
+     * proof — unsupported type, oversized, empty, or the sniffed magic bytes disagree with the
+     * declared type (design C11).
+     */
+    @ExceptionHandler(PaymentProofRejectedException.class)
+    ResponseEntity<ProblemDetail> paymentProofRejected(PaymentProofRejectedException exception) {
+        return ProblemDetails.response(
+            HttpStatus.BAD_REQUEST,
+            "El comprobante no cumple los requisitos: debe ser PNG, JPG/JPEG o PDF de hasta 5MB.",
             exception.getErrorCode()
         );
     }
