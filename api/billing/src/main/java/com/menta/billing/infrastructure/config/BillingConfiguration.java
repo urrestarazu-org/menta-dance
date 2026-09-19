@@ -1,7 +1,9 @@
 package com.menta.billing.infrastructure.config;
 
+import com.menta.billing.application.dto.BankAccountDetails;
 import com.menta.billing.application.port.in.AssignTrialSubscriptionUseCase;
 import com.menta.billing.application.port.in.CancelSubscriptionUseCase;
+import com.menta.billing.application.port.in.CreateBankTransferSubscriptionUseCase;
 import com.menta.billing.application.port.in.CreatePhysicalCourseQuoteUseCase;
 import com.menta.billing.application.port.in.CreatePhysicalPurchaseCheckoutUseCase;
 import com.menta.billing.application.port.in.CreateSubscriptionCheckoutUseCase;
@@ -12,6 +14,7 @@ import com.menta.billing.application.port.in.GetSubscriptionHistoryUseCase;
 import com.menta.billing.application.port.in.ListPlansUseCase;
 import com.menta.billing.application.port.in.ReceiveWebhookUseCase;
 import com.menta.billing.application.port.in.UpdatePhysicalCoursePricingUseCase;
+import com.menta.billing.application.port.out.BankTransferRateLimitPort;
 import com.menta.billing.application.port.out.BillingOutboxAppenderPort;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.port.out.Clock;
@@ -28,29 +31,31 @@ import com.menta.billing.application.port.out.PhysicalCourseQuoteRepository;
 import com.menta.billing.application.port.out.PlanRepository;
 import com.menta.billing.application.port.out.PurchaseRepository;
 import com.menta.billing.application.port.out.SubscriptionRepository;
-import com.menta.billing.application.usecase.CreatePurchaseFromPaymentEventUseCase;
-import com.menta.billing.application.usecase.MarkPurchaseAssignedUseCase;
-import com.menta.billing.application.usecase.MarkPurchaseExceptionUseCase;
 import com.menta.billing.application.port.out.WebhookInboxAppender;
 import com.menta.billing.application.port.out.WebhookSignatureVerifier;
 import com.menta.billing.application.usecase.AssignTrialSubscriptionUseCaseImpl;
 import com.menta.billing.application.usecase.CancelSubscriptionUseCaseImpl;
+import com.menta.billing.application.usecase.CreateBankTransferSubscriptionUseCaseImpl;
 import com.menta.billing.application.usecase.CreatePhysicalCourseQuoteUseCaseImpl;
 import com.menta.billing.application.usecase.CreatePhysicalPurchaseCheckoutUseCaseImpl;
+import com.menta.billing.application.usecase.CreatePurchaseFromPaymentEventUseCase;
 import com.menta.billing.application.usecase.CreateSubscriptionCheckoutUseCaseImpl;
 import com.menta.billing.application.usecase.GetCurrentSubscriptionUseCaseImpl;
 import com.menta.billing.application.usecase.GetPhysicalCoursePricingUseCaseImpl;
 import com.menta.billing.application.usecase.GetPlanUseCaseImpl;
 import com.menta.billing.application.usecase.GetSubscriptionHistoryUseCaseImpl;
 import com.menta.billing.application.usecase.ListPlansUseCaseImpl;
+import com.menta.billing.application.usecase.MarkPurchaseAssignedUseCase;
+import com.menta.billing.application.usecase.MarkPurchaseExceptionUseCase;
 import com.menta.billing.application.usecase.PaymentFulfillmentService;
 import com.menta.billing.application.usecase.PaymentVerificationService;
 import com.menta.billing.application.usecase.PublishPaymentFulfillmentFailedUseCase;
 import com.menta.billing.application.usecase.PublishPhysicalPaymentCompletedUseCase;
 import com.menta.billing.application.usecase.ReceiveWebhookUseCaseImpl;
+import com.menta.billing.application.usecase.RoutingCreateSubscriptionCheckoutUseCase;
 import com.menta.billing.application.usecase.UpdatePhysicalCoursePricingUseCaseImpl;
 import com.menta.billing.application.usecase.VirtualCourseEntitlementService;
-import com.menta.shared.billing.VirtualCourseEntitlementPort;
+import com.menta.billing.infrastructure.security.RedisBankTransferRateLimitPort;
 import com.menta.billing.infrastructure.security.RedisBillingPlansRateLimitPort;
 import com.menta.billing.infrastructure.transaction.TransactionalAssignTrialSubscriptionUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalCancelSubscriptionUseCase;
@@ -59,6 +64,7 @@ import com.menta.billing.infrastructure.transaction.TransactionalCreateSubscript
 import com.menta.billing.infrastructure.transaction.TransactionalReceiveWebhookUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalUpdatePhysicalCoursePricingUseCase;
 import com.menta.shared.auth.UserExistencePort;
+import com.menta.shared.billing.VirtualCourseEntitlementPort;
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.util.Set;
@@ -189,17 +195,76 @@ public class BillingConfiguration {
      * <p>{@code merchantAccountId} is configuration, never client input — it
      * is the value {@code Payment.matchesExpected} will later demand from the
      * provider's response.</p>
+     *
+     * <p>Design D3: the transactional decorator now wraps {@link RoutingCreateSubscriptionCheckoutUseCase},
+     * not {@link CreateSubscriptionCheckoutUseCaseImpl} directly, so {@code
+     * CreateSubscriptionCheckoutUseCaseImpl} is reached byte-identically for {@code MERCADO_PAGO}
+     * and {@code BANK_TRANSFER} routes to {@code createBankTransferSubscriptionUseCase} — one
+     * all-or-nothing write boundary regardless of which delegate the router picks.</p>
      */
     @Bean
     public CreateSubscriptionCheckoutUseCase createSubscriptionCheckoutUseCase(
         PlanRepository planRepository, PaymentRepository paymentRepository,
         SubscriptionRepository subscriptionRepository, PaymentPreferencePort paymentPreferencePort, Clock clock,
-        @Value("${billing.mercadopago.merchant-account-id:}") String merchantAccountId
+        @Value("${billing.mercadopago.merchant-account-id:}") String merchantAccountId,
+        CreateBankTransferSubscriptionUseCase createBankTransferSubscriptionUseCase
     ) {
-        return new TransactionalCreateSubscriptionCheckoutUseCase(new CreateSubscriptionCheckoutUseCaseImpl(
+        CreateSubscriptionCheckoutUseCase mercadoPagoUseCase = new CreateSubscriptionCheckoutUseCaseImpl(
             planRepository, paymentRepository, subscriptionRepository, paymentPreferencePort, clock,
             merchantAccountId
+        );
+        return new TransactionalCreateSubscriptionCheckoutUseCase(new RoutingCreateSubscriptionCheckoutUseCase(
+            mercadoPagoUseCase, createBankTransferSubscriptionUseCase
         ));
+    }
+
+    /**
+     * US-BILLING-003 escenario 1 (design D3). Not wrapped in its own transactional decorator —
+     * only ever reached through {@code createSubscriptionCheckoutUseCase}'s router, which already
+     * wraps the whole dispatch transactionally, mirroring how {@code
+     * createPhysicalCourseQuoteUseCase} skips its own decorator for the same reason: a second,
+     * inner boundary here would be redundant, not safer.
+     *
+     * <p>{@code bankAccountDetails} carries the academy's one configured CBU (design C2) — the
+     * value {@link com.menta.billing.domain.model.Payment#awaitingManualVerification} sets as
+     * {@code expectedMerchantAccountId}.</p>
+     */
+    @Bean
+    public CreateBankTransferSubscriptionUseCase createBankTransferSubscriptionUseCase(
+        PlanRepository planRepository, PaymentRepository paymentRepository,
+        SubscriptionRepository subscriptionRepository, BankTransferRateLimitPort bankTransferRateLimitPort,
+        Clock clock,
+        @Value("${billing.bank-transfer.account.cbu:}") String cbu,
+        @Value("${billing.bank-transfer.account.alias:}") String alias,
+        @Value("${billing.bank-transfer.account.holder:}") String holder,
+        @Value("${billing.bank-transfer.account.cuit:}") String cuit
+    ) {
+        return new CreateBankTransferSubscriptionUseCaseImpl(
+            planRepository, paymentRepository, subscriptionRepository, bankTransferRateLimitPort, clock,
+            new BankAccountDetails(cbu, alias, holder, cuit)
+        );
+    }
+
+    /**
+     * Design C7: two independent Redis-backed budgets — 10 bank-transfer subscription
+     * creations/user/day (consumed by {@code createBankTransferSubscriptionUseCase} above) and 3
+     * proof uploads/payment/72h (consumed by {@code SubmitPaymentProofUseCaseImpl}, wired in a
+     * later phase). Declared as one bean now so the port is complete from this phase.
+     */
+    @Bean
+    public BankTransferRateLimitPort bankTransferRateLimitPort(
+        RedisTemplate<String, String> redisTemplate, Clock clock,
+        @Value("${billing.bank-transfer.rate-limit.subscription-creation.max-requests:10}")
+            long subscriptionCreationMaxRequests,
+        @Value("${billing.bank-transfer.rate-limit.subscription-creation.window-hours:26}")
+            long subscriptionCreationWindowHours,
+        @Value("${billing.bank-transfer.rate-limit.proof-upload.max-requests:3}") long proofUploadMaxRequests,
+        @Value("${billing.bank-transfer.rate-limit.proof-upload.window-hours:72}") long proofUploadWindowHours
+    ) {
+        return new RedisBankTransferRateLimitPort(
+            redisTemplate, clock, subscriptionCreationMaxRequests, Duration.ofHours(subscriptionCreationWindowHours),
+            proofUploadMaxRequests, Duration.ofHours(proofUploadWindowHours)
+        );
     }
 
     /**

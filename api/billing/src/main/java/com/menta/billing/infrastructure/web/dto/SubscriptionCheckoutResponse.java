@@ -1,5 +1,6 @@
 package com.menta.billing.infrastructure.web.dto;
 
+import com.menta.billing.application.dto.BankTransferInstructions;
 import com.menta.billing.application.dto.OverlapNotice;
 import com.menta.billing.application.dto.SubscriptionCheckoutResult;
 
@@ -16,16 +17,21 @@ import com.menta.billing.application.dto.SubscriptionCheckoutResult;
  * still-in-force cancellation for the same plan (US-BILLING-011 D3) — unlike {@code
  * CancelSubscriptionResponse}'s structurally absent {@code cancellationReason}, this field is an
  * ordinary nullable value the buyer is meant to see either way.</p>
+ *
+ * <p>{@code bankTransferInstructions} follows the same nullable convention (US-BILLING-003
+ * escenario 1, design D3): present only for a {@code BANK_TRANSFER} checkout, {@code null} for a
+ * Mercado Pago one.</p>
  */
 public record SubscriptionCheckoutResponse(
     String subscriptionId, String paymentId, String planId, String status,
-    String providerPreferenceId, String externalReference, String checkoutUrl, OverlapNotice overlapNotice
+    String providerPreferenceId, String externalReference, String checkoutUrl, OverlapNotice overlapNotice,
+    BankTransferInstructions bankTransferInstructions
 ) {
     public static SubscriptionCheckoutResponse from(SubscriptionCheckoutResult result) {
         return new SubscriptionCheckoutResponse(
             result.subscriptionId(), result.paymentId(), result.planId(), result.status().name(),
             result.providerPreferenceId(), result.externalReference(), result.checkoutUrl(),
-            result.overlapNotice()
+            result.overlapNotice(), result.bankTransferInstructions()
         );
     }
 }

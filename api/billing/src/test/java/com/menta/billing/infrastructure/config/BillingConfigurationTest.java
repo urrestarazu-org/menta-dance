@@ -6,12 +6,14 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.menta.billing.application.port.in.AssignTrialSubscriptionUseCase;
+import com.menta.billing.application.port.in.CreateBankTransferSubscriptionUseCase;
 import com.menta.billing.application.port.in.CreateSubscriptionCheckoutUseCase;
 import com.menta.billing.application.port.in.GetCurrentSubscriptionUseCase;
 import com.menta.billing.application.port.in.GetPlanUseCase;
 import com.menta.billing.application.port.in.GetSubscriptionHistoryUseCase;
 import com.menta.billing.application.port.in.ListPlansUseCase;
 import com.menta.billing.application.port.in.ReceiveWebhookUseCase;
+import com.menta.billing.application.port.out.BankTransferRateLimitPort;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.port.out.Clock;
 import com.menta.billing.application.port.out.CourseCatalogPort;
@@ -23,6 +25,7 @@ import com.menta.billing.application.port.out.PurchaseRepository;
 import com.menta.billing.application.port.out.SubscriptionRepository;
 import com.menta.billing.application.port.out.WebhookInboxAppender;
 import com.menta.billing.application.port.out.WebhookSignatureVerifier;
+import com.menta.billing.application.usecase.CreateBankTransferSubscriptionUseCaseImpl;
 import com.menta.billing.application.usecase.GetCurrentSubscriptionUseCaseImpl;
 import com.menta.billing.application.usecase.GetPlanUseCaseImpl;
 import com.menta.billing.application.usecase.GetSubscriptionHistoryUseCaseImpl;
@@ -31,6 +34,7 @@ import com.menta.billing.application.usecase.PaymentFulfillmentService;
 import com.menta.billing.application.usecase.PaymentVerificationService;
 import com.menta.billing.application.usecase.VirtualCourseEntitlementService;
 import com.menta.shared.billing.VirtualCourseEntitlementPort;
+import com.menta.billing.infrastructure.security.RedisBankTransferRateLimitPort;
 import com.menta.billing.infrastructure.security.RedisBillingPlansRateLimitPort;
 import com.menta.billing.infrastructure.transaction.TransactionalAssignTrialSubscriptionUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalCreateSubscriptionCheckoutUseCase;
@@ -88,10 +92,33 @@ class BillingConfigurationTest {
     void wires_the_subscription_checkout_use_case_bean_transactionally() {
         CreateSubscriptionCheckoutUseCase useCase = configuration.createSubscriptionCheckoutUseCase(
             mock(PlanRepository.class), mock(PaymentRepository.class), mock(SubscriptionRepository.class),
-            mock(PaymentPreferencePort.class), mock(Clock.class), "merchant-1"
+            mock(PaymentPreferencePort.class), mock(Clock.class), "merchant-1",
+            mock(CreateBankTransferSubscriptionUseCase.class)
         );
 
         assertThat(useCase).isInstanceOf(TransactionalCreateSubscriptionCheckoutUseCase.class);
+    }
+
+    /** Design D3: not wrapped in its own transactional decorator — see the bean's Javadoc. */
+    @Test
+    void wires_the_bank_transfer_subscription_use_case_bean() {
+        CreateBankTransferSubscriptionUseCase useCase = configuration.createBankTransferSubscriptionUseCase(
+            mock(PlanRepository.class), mock(PaymentRepository.class), mock(SubscriptionRepository.class),
+            mock(BankTransferRateLimitPort.class), mock(Clock.class), "cbu-1", "alias-1", "holder-1", "cuit-1"
+        );
+
+        assertThat(useCase).isInstanceOf(CreateBankTransferSubscriptionUseCaseImpl.class);
+    }
+
+    @Test
+    void wires_the_bank_transfer_rate_limit_port_bean() {
+        @SuppressWarnings("unchecked")
+        RedisTemplate<String, String> redisTemplate = mock(RedisTemplate.class);
+
+        BankTransferRateLimitPort port =
+            configuration.bankTransferRateLimitPort(redisTemplate, mock(Clock.class), 10, 26, 3, 72);
+
+        assertThat(port).isInstanceOf(RedisBankTransferRateLimitPort.class);
     }
 
     @Test

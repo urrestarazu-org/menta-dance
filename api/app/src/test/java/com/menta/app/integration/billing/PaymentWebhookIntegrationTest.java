@@ -15,6 +15,7 @@ import com.menta.billing.application.dto.CreateSubscriptionCheckoutCommand;
 import com.menta.billing.application.dto.PaymentPreferenceResult;
 import com.menta.billing.application.dto.ProviderPaymentResult;
 import com.menta.billing.application.port.in.CreateSubscriptionCheckoutUseCase;
+import com.menta.billing.application.port.out.BankTransferRateLimitPort;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.port.out.CourseCatalogPort;
 import com.menta.billing.application.port.out.PaymentPreferencePort;
@@ -129,6 +130,7 @@ class PaymentWebhookIntegrationTest {
     @MockBean private PaymentProviderPort paymentProviderPort;
     @MockBean private PaymentPreferencePort paymentPreferencePort;
     @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
+    @MockBean private BankTransferRateLimitPort bankTransferRateLimitPort;
     @MockBean private CourseCatalogPort courseCatalogPort;
     // US-PHYSICAL-001: ProcessPhysicalCheckInUseCaseImpl needs a RedisTemplate
     // its bean factory would otherwise fail to resolve in this Redis-less context.

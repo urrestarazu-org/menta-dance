@@ -112,22 +112,22 @@ stays green and **unmodified** as the refactor's own proof.
 
 ## Phase P2: Routing + bank-transfer creation (R1, R2, R4)
 
-- [ ] 2.1 RED: new `RoutingCreateSubscriptionCheckoutUseCaseTest` — `MERCADO_PAGO` dispatches to `CreateSubscriptionCheckoutUseCaseImpl`, `BANK_TRANSFER` to `CreateBankTransferSubscriptionUseCaseImpl`, nothing else routed.
-- [ ] 2.2 GREEN: create `RoutingCreateSubscriptionCheckoutUseCase.java` (`api/billing/src/main/java/com/menta/billing/application/usecase/RoutingCreateSubscriptionCheckoutUseCase.java`) — implements `CreateSubscriptionCheckoutUseCase`, dispatches on `paymentMethod` (D3).
-- [ ] 2.3 RED: update **only the test** — `CreateSubscriptionCheckoutUseCaseImplTest.bank_transfer_is_rejected_before_it_can_be_sent_to_checkout_pro` now asserts the routing boundary, not a flat rejection. `CreateSubscriptionCheckoutUseCaseImpl.java` itself stays **untouched** (design: its own guard is now an internal invariant).
-- [ ] 2.4 GREEN: modify `Payment.java` — add `awaitingManualVerification(...)` static factory (birth, mirrors `awaitingProvider`), CBU as `expectedMerchantAccountId` (C2).
-- [ ] 2.5 GREEN: create `BankAccountDetails.java`, `BankTransferInstructions.java` (`api/billing/src/main/java/com/menta/billing/application/dto/`).
-- [ ] 2.6 GREEN: modify `SubscriptionCheckoutResult.java` — `+BankTransferInstructions` nullable field, mirrors the existing `OverlapNotice`.
-- [ ] 2.7 GREEN: create `CreateBankTransferSubscriptionUseCase.java` (in-port) + `CreateBankTransferSubscriptionUseCaseImpl.java` (`api/billing/src/main/java/com/menta/billing/application/{port/in,usecase}/`).
-- [ ] 2.8 RED: new `CreateBankTransferSubscriptionUseCaseImplTest` — Mockito `InOrder`: limiter consulted **before** any repository write; `429` creates neither `Payment` nor `Subscription`; `reference = SUB-{paymentId}`; `expectedMerchantAccountId == configured CBU`.
-- [ ] 2.9 GREEN: create `BankTransferRateLimitPort.java` (out-port) — `consumeSubscriptionCreation(UUID)`, `consumeProofUpload(PaymentId)` (both declared now; the upload key is consumed by `SubmitPaymentProofUseCaseImpl` in P3c).
-- [ ] 2.10 RED: new `RedisBankTransferRateLimitPortTest` — mirrors `RedisBillingPlansRateLimitPortTest`: two distinct keys/TTLs (10/day, 3/72h), fail-closed `BillingDegradedException` on Redis unavailability, for **both** methods.
-- [ ] 2.11 GREEN: create `RedisBankTransferRateLimitPort.java` (`api/billing/src/main/java/com/menta/billing/infrastructure/security/RedisBankTransferRateLimitPort.java`) — reuses `RedisBillingPlansRateLimitPort`'s `CONSUME_SCRIPT` verbatim (C7).
-- [ ] 2.12 GREEN: modify `TransactionalCreateSubscriptionCheckoutUseCase.java` — now wraps the router, not the MP impl directly.
-- [ ] 2.13 GREEN: modify `BillingConfiguration.java` — wire router, `CreateBankTransferSubscriptionUseCaseImpl`, `RedisBankTransferRateLimitPort`, bank-account `@Value`s.
-- [ ] 2.14 GREEN: modify `api/app/src/main/resources/application*.yml` — `billing.bank-transfer.account.{cbu,alias,holder,cuit}`, `billing.bank-transfer.enabled`, rate-limit properties.
-- [ ] 2.15 Regression: run `SubscriptionCheckoutIntegrationTest` MP scenarios unmodified/green; run `CreatePhysicalPurchaseCheckoutUseCaseImplTest` unmodified (its own `BANK_TRANSFER` rejection for physical purchases, #36, stays untouched).
-- [ ] 2.16 Verify: `:api:billing:test :api:billing:jacocoTestCoverageVerification` + `:api:app:test` **no filter**, `contextLoads()` green. Confirm no new class is `final`.
+- [x] 2.1 RED: new `RoutingCreateSubscriptionCheckoutUseCaseTest` — `MERCADO_PAGO` dispatches to `CreateSubscriptionCheckoutUseCaseImpl`, `BANK_TRANSFER` to `CreateBankTransferSubscriptionUseCaseImpl`, nothing else routed.
+- [x] 2.2 GREEN: create `RoutingCreateSubscriptionCheckoutUseCase.java` (`api/billing/src/main/java/com/menta/billing/application/usecase/RoutingCreateSubscriptionCheckoutUseCase.java`) — implements `CreateSubscriptionCheckoutUseCase`, dispatches on `paymentMethod` (D3).
+- [x] 2.3 RED: update **only the test** — `CreateSubscriptionCheckoutUseCaseImplTest.bank_transfer_is_rejected_before_it_can_be_sent_to_checkout_pro` now asserts the routing boundary, not a flat rejection. `CreateSubscriptionCheckoutUseCaseImpl.java` itself stays **untouched** (design: its own guard is now an internal invariant).
+- [x] 2.4 GREEN: modify `Payment.java` — add `awaitingManualVerification(...)` static factory (birth, mirrors `awaitingProvider`), CBU as `expectedMerchantAccountId` (C2).
+- [x] 2.5 GREEN: create `BankAccountDetails.java`, `BankTransferInstructions.java` (`api/billing/src/main/java/com/menta/billing/application/dto/`).
+- [x] 2.6 GREEN: modify `SubscriptionCheckoutResult.java` — `+BankTransferInstructions` nullable field, mirrors the existing `OverlapNotice`.
+- [x] 2.7 GREEN: create `CreateBankTransferSubscriptionUseCase.java` (in-port) + `CreateBankTransferSubscriptionUseCaseImpl.java` (`api/billing/src/main/java/com/menta/billing/application/{port/in,usecase}/`).
+- [x] 2.8 RED: new `CreateBankTransferSubscriptionUseCaseImplTest` — Mockito `InOrder`: limiter consulted **before** any repository write; `429` creates neither `Payment` nor `Subscription`; `reference = SUB-{paymentId}`; `expectedMerchantAccountId == configured CBU`.
+- [x] 2.9 GREEN: create `BankTransferRateLimitPort.java` (out-port) — `consumeSubscriptionCreation(UUID)`, `consumeProofUpload(PaymentId)` (both declared now; the upload key is consumed by `SubmitPaymentProofUseCaseImpl` in P3c).
+- [x] 2.10 RED: new `RedisBankTransferRateLimitPortTest` — mirrors `RedisBillingPlansRateLimitPortTest`: two distinct keys/TTLs (10/day, 3/72h), fail-closed `BillingDegradedException` on Redis unavailability, for **both** methods.
+- [x] 2.11 GREEN: create `RedisBankTransferRateLimitPort.java` (`api/billing/src/main/java/com/menta/billing/infrastructure/security/RedisBankTransferRateLimitPort.java`) — reuses `RedisBillingPlansRateLimitPort`'s `CONSUME_SCRIPT` verbatim (C7).
+- [x] 2.12 GREEN: modify `TransactionalCreateSubscriptionCheckoutUseCase.java` — now wraps the router, not the MP impl directly.
+- [x] 2.13 GREEN: modify `BillingConfiguration.java` — wire router, `CreateBankTransferSubscriptionUseCaseImpl`, `RedisBankTransferRateLimitPort`, bank-account `@Value`s.
+- [x] 2.14 GREEN: modify `api/app/src/main/resources/application*.yml` — `billing.bank-transfer.account.{cbu,alias,holder,cuit}`, `billing.bank-transfer.enabled`, rate-limit properties.
+- [x] 2.15 Regression: run `SubscriptionCheckoutIntegrationTest` MP scenarios unmodified/green; run `CreatePhysicalPurchaseCheckoutUseCaseImplTest` unmodified (its own `BANK_TRANSFER` rejection for physical purchases, #36, stays untouched).
+- [x] 2.16 Verify: `:api:billing:test :api:billing:jacocoTestCoverageVerification` + `:api:app:test` **no filter**, `contextLoads()` green. Confirm no new class is `final`.
 
 ## Phase P3a: Proof domain + validation + storage adapter (R5, R9 — C5/C11)
 

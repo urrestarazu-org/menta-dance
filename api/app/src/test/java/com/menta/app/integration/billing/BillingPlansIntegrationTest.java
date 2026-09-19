@@ -11,6 +11,7 @@ import com.menta.auth.application.port.out.PasswordResetAttemptRateLimitPort;
 import com.menta.auth.application.port.out.PasswordResetRequestRateLimitPort;
 import com.menta.auth.application.port.out.TokenBlacklistPort;
 import com.menta.billing.application.dto.RateLimitDecision;
+import com.menta.billing.application.port.out.BankTransferRateLimitPort;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.port.out.CourseCatalogPort;
 import com.menta.billing.domain.model.PlanStatus;
@@ -72,6 +73,7 @@ class BillingPlansIntegrationTest {
     @Autowired private PlanCourseJpaRepository planCourseJpaRepository;
 
     @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
+    @MockBean private BankTransferRateLimitPort bankTransferRateLimitPort;
     @MockBean private CourseCatalogPort courseCatalogPort;
     // US-PHYSICAL-001: ProcessPhysicalCheckInUseCaseImpl needs a RedisTemplate
     // its bean factory would otherwise fail to resolve in this Redis-less context.

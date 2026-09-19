@@ -128,6 +128,27 @@ billing:
   purchase-exception:
     ops-address: ${BILLING_PURCHASE_EXCEPTION_OPS_ADDRESS:ops@menta.local}
     from-address: ${BILLING_PURCHASE_EXCEPTION_FROM_ADDRESS:no-reply@menta.local}
+  # Bank-transfer subscriptions (#31, US-BILLING-003, design C2/C7). The account fields default to
+  # empty — same convention as billing.mercadopago.merchant-account-id — so the context can start
+  # without real values configured (dev/test); production sets them via environment variables.
+  bank-transfer:
+    # Rollout switch (design "Migration / Rollout"). Declared here for P2; not yet consulted by
+    # any bean — wiring a conditional route is deferred to the phase that needs it.
+    enabled: ${BILLING_BANK_TRANSFER_ENABLED:true}
+    account:
+      cbu: ${BILLING_BANK_TRANSFER_CBU:}
+      alias: ${BILLING_BANK_TRANSFER_ALIAS:}
+      holder: ${BILLING_BANK_TRANSFER_HOLDER:}
+      cuit: ${BILLING_BANK_TRANSFER_CUIT:}
+    rate-limit:
+      # 10 bank-transfer subscription creations/user/day (design C7).
+      subscription-creation:
+        max-requests: ${BILLING_BANK_TRANSFER_SUBSCRIPTION_RATE_LIMIT_MAX_REQUESTS:10}
+        window-hours: ${BILLING_BANK_TRANSFER_SUBSCRIPTION_RATE_LIMIT_WINDOW_HOURS:26}
+      # 3 proof uploads/payment/72h (design C7) — consumed starting in a later phase (P3c).
+      proof-upload:
+        max-requests: ${BILLING_BANK_TRANSFER_PROOF_UPLOAD_RATE_LIMIT_MAX_REQUESTS:3}
+        window-hours: ${BILLING_BANK_TRANSFER_PROOF_UPLOAD_RATE_LIMIT_WINDOW_HOURS:72}
 
 # Physical module configuration (#208, US-PHYSICAL-004b, design B5)
 physical:

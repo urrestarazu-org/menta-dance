@@ -190,8 +190,15 @@ class CreateSubscriptionCheckoutUseCaseImplTest {
         verify(paymentPreferencePort, never()).createPreference(any());
     }
 
+    /**
+     * Design D3: {@code RoutingCreateSubscriptionCheckoutUseCase} is what actually keeps a
+     * {@code BANK_TRANSFER} request away from this class in production — see {@code
+     * RoutingCreateSubscriptionCheckoutUseCaseTest} for that boundary. This guard is what is left
+     * once routing owns the decision: an internal invariant / defense-in-depth safety net, never
+     * reachable through the router, but still correct if this impl were ever invoked directly.
+     */
     @Test
-    void bank_transfer_is_rejected_before_it_can_be_sent_to_checkout_pro() {
+    void bank_transfer_never_reaches_this_impl_the_guard_is_a_routing_safety_net() {
         CreateSubscriptionCheckoutCommand transferCommand = new CreateSubscriptionCheckoutCommand(
             USER_ID, PLAN_ID.toString(), PaymentMethod.BANK_TRANSFER, "idem-transfer"
         );

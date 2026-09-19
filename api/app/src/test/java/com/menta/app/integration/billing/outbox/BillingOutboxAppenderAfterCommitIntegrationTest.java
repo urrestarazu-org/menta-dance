@@ -10,6 +10,7 @@ import com.menta.auth.application.port.out.PasswordResetAttemptRateLimitPort;
 import com.menta.auth.application.port.out.PasswordResetRequestRateLimitPort;
 import com.menta.auth.application.port.out.TokenBlacklistPort;
 import com.menta.billing.application.dto.ProviderPaymentResult;
+import com.menta.billing.application.port.out.BankTransferRateLimitPort;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.usecase.PaymentVerificationService;
 import com.menta.billing.application.port.out.CourseCatalogPort;
@@ -83,6 +84,7 @@ class BillingOutboxAppenderAfterCommitIntegrationTest {
 
     @MockBean private PaymentProviderPort paymentProviderPort;
     @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
+    @MockBean private BankTransferRateLimitPort bankTransferRateLimitPort;
     @MockBean private CourseCatalogPort courseCatalogPort;
     @MockBean private ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
     @MockBean private AuthDegradedGuard authDegradedGuard;

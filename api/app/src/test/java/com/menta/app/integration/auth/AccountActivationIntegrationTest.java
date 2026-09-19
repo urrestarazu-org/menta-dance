@@ -103,6 +103,8 @@ class AccountActivationIntegrationTest {
      */
     @MockBean
     private com.menta.billing.application.port.out.BillingPlansRateLimitPort billingPlansRateLimitPort;
+    @MockBean
+    private com.menta.billing.application.port.out.BankTransferRateLimitPort bankTransferRateLimitPort;
     /**
      * US-PHYSICAL-001: ProcessPhysicalCheckInUseCaseImpl needs a RedisTemplate
      * its bean factory would otherwise fail to resolve in this Redis-less slice.

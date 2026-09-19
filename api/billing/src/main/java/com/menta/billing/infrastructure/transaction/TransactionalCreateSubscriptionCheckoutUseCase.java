@@ -15,6 +15,11 @@ import org.springframework.transaction.annotation.Transactional;
  * <em>no</em> local payment behind. The rollback is also what makes the
  * losing side of a concurrent race free of side effects, with no compensating
  * delete to get wrong.</p>
+ *
+ * <p>Design D3: {@code delegate} is {@code RoutingCreateSubscriptionCheckoutUseCase}, not {@code
+ * CreateSubscriptionCheckoutUseCaseImpl} directly, so this same all-or-nothing guarantee covers
+ * both the Mercado Pago path and the bank-transfer path's {@code Payment}+{@code Subscription}
+ * write pair (US-BILLING-003) — one boundary, regardless of which delegate the router picks.</p>
  */
 public class TransactionalCreateSubscriptionCheckoutUseCase implements CreateSubscriptionCheckoutUseCase {
 

@@ -1,5 +1,7 @@
 package com.menta.billing.infrastructure.web.controller;
 
+import com.menta.billing.domain.exception.BankTransferRateLimitedException;
+import com.menta.billing.domain.exception.BillingDegradedException;
 import com.menta.billing.domain.exception.NoSubscriptionException;
 import com.menta.billing.domain.exception.PaymentMethodNotAcceptedException;
 import com.menta.billing.domain.exception.PaymentPreferenceUnavailableException;
@@ -11,7 +13,9 @@ import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.infrastructure.web.ProblemDetails;
 import com.menta.billing.infrastructure.web.dto.CurrentSubscriptionResponse;
 import java.util.List;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
@@ -22,6 +26,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 /** RFC 9457 Problem Details mapping for the subscription checkout endpoint (US-BILLING-010). */
 @RestControllerAdvice(annotations = SubscriptionEndpoint.class)
 public class SubscriptionExceptionHandler {
+
+    private static final String RETRY_AFTER_DEGRADED_SECONDS = "30";
 
     /**
      * Escenario 4. One status for "does not exist" and "is INACTIVE" alike:
@@ -127,6 +133,36 @@ public class SubscriptionExceptionHandler {
             "No pudimos iniciar el pago en este momento. Intentá de nuevo en unos minutos.",
             exception.getErrorCode()
         );
+    }
+
+    /** US-BILLING-003, design C7: the 10 bank-transfer subscription creations/user/day budget is spent. */
+    @ExceptionHandler(BankTransferRateLimitedException.class)
+    ResponseEntity<ProblemDetail> bankTransferRateLimited(BankTransferRateLimitedException exception) {
+        long seconds = Math.max(1, exception.getRetryAfter().toSeconds());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+            .header(HttpHeaders.RETRY_AFTER, Long.toString(seconds))
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(ProblemDetails.body(
+                HttpStatus.TOO_MANY_REQUESTS,
+                "Demasiadas solicitudes de suscripción por transferencia; reintentá más tarde.",
+                exception.getErrorCode()
+            ));
+    }
+
+    /**
+     * US-BILLING-003, design C7: the bank-transfer rate limiter could not reach Redis. Fail
+     * closed — never let an unbounded number of checkouts through while the budget is unreachable.
+     */
+    @ExceptionHandler(BillingDegradedException.class)
+    ResponseEntity<ProblemDetail> degraded(BillingDegradedException exception) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+            .header(HttpHeaders.RETRY_AFTER, RETRY_AFTER_DEGRADED_SECONDS)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(ProblemDetails.body(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "El servicio de facturación no está disponible temporalmente.",
+                exception.getErrorCode()
+            ));
     }
 
     /** A malformed body field — for instance a {@code planId} that is not a UUID. Never a 500. */
