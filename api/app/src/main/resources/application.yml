@@ -149,6 +149,13 @@ billing:
       proof-upload:
         max-requests: ${BILLING_BANK_TRANSFER_PROOF_UPLOAD_RATE_LIMIT_MAX_REQUESTS:3}
         window-hours: ${BILLING_BANK_TRANSFER_PROOF_UPLOAD_RATE_LIMIT_WINDOW_HOURS:72}
+    # Proof-submitted notification (design D2) — one fixed operations mailbox, no buyer message.
+    # Deliberately its own key, not a reuse of billing.purchase-exception.*: this is not an
+    # exception path, and the two notification reasons must be able to route to different
+    # mailboxes/senders later without one config change accidentally affecting the other.
+    proof:
+      ops-address: ${BILLING_BANK_TRANSFER_PROOF_OPS_ADDRESS:ops@menta.local}
+      from-address: ${BILLING_BANK_TRANSFER_PROOF_FROM_ADDRESS:no-reply@menta.local}
 
 # Physical module configuration (#208, US-PHYSICAL-004b, design B5)
 physical:
