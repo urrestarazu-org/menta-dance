@@ -16,6 +16,7 @@ import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.model.UserId;
 import com.menta.auth.domain.model.UserStatus;
 import com.menta.auth.domain.repository.UserRepository;
+import com.menta.billing.application.port.out.BankTransferRateLimitPort;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.port.out.CourseCatalogPort;
 import com.menta.billing.infrastructure.persistence.repository.PhysicalCoursePricingJpaRepository;
@@ -70,6 +71,7 @@ class PhysicalCoursePricingIntegrationTest {
     @MockBean private PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort;
     @MockBean private PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
     @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
+    @MockBean private BankTransferRateLimitPort bankTransferRateLimitPort;
     @MockBean private CourseCatalogPort courseCatalogPort;
 
     @SuppressWarnings("rawtypes")

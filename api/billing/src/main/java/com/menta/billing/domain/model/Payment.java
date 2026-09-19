@@ -73,6 +73,24 @@ public final class Payment {
     }
 
     /**
+     * The bank-transfer flow's entry point (US-BILLING-003 escenario 1, design C2, C4). Unlike
+     * {@link #awaitingProvider}, no provider is ever consulted: the buyer transfers manually, and
+     * {@code expectedMerchantAccountId} carries the configured bank account's CBU, never a
+     * Mercado Pago merchant id. That is a safety property, not filler — a stray MP webhook can
+     * never match a CBU, so {@link #applyProviderOutcome} would route it to {@code
+     * ReconciliationRequired} instead of silently completing this payment on the wrong rail.
+     */
+    public static Payment awaitingManualVerification(
+        PaymentId id, UUID userId, Money expectedAmount, String expectedExternalReference,
+        String expectedMerchantAccountId, PaymentTarget target, Instant createdAt
+    ) {
+        return new Payment(
+            id, userId, null, expectedAmount, expectedExternalReference, expectedMerchantAccountId,
+            target, new PaymentStatus.AwaitingManualVerification(), createdAt
+        );
+    }
+
+    /**
      * US-BILLING-002: "para todo estado del proveedor, exigir coincidencia
      * exacta... referencia externa, cuenta/merchant, importe y moneda". Not
      * just for {@code approved} — every provider status is checked the same

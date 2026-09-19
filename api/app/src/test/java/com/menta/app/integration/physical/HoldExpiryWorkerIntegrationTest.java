@@ -8,6 +8,7 @@ import com.menta.auth.application.port.out.LoginRateLimitPort;
 import com.menta.auth.application.port.out.PasswordResetAttemptRateLimitPort;
 import com.menta.auth.application.port.out.PasswordResetRequestRateLimitPort;
 import com.menta.auth.application.port.out.TokenBlacklistPort;
+import com.menta.billing.application.port.out.BankTransferRateLimitPort;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.port.out.CourseCatalogPort;
 import com.menta.billing.application.port.out.PaymentProviderPort;
@@ -90,6 +91,7 @@ class HoldExpiryWorkerIntegrationTest {
     @MockBean private PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort;
     @MockBean private PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
     @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
+    @MockBean private BankTransferRateLimitPort bankTransferRateLimitPort;
     @MockBean private CourseCatalogPort courseCatalogPort;
     @MockBean private PaymentProviderPort paymentProviderPort;
 

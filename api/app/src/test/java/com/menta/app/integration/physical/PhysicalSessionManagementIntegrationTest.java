@@ -21,6 +21,7 @@ import com.menta.auth.domain.repository.UserRepository;
 import com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity;
 import com.menta.auth.infrastructure.persistence.repository.OutboxRowJpaRepository;
 import com.menta.billing.application.dto.ProviderPaymentResult;
+import com.menta.billing.application.port.out.BankTransferRateLimitPort;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.port.out.CourseCatalogPort;
 import com.menta.billing.application.port.out.PaymentProviderPort;
@@ -135,6 +136,7 @@ class PhysicalSessionManagementIntegrationTest {
     @MockBean private PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort;
     @MockBean private PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
     @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
+    @MockBean private BankTransferRateLimitPort bankTransferRateLimitPort;
     @MockBean private CourseCatalogPort courseCatalogPort;
     @MockBean private PaymentProviderPort paymentProviderPort;
 

@@ -103,7 +103,7 @@ class SubscriptionControllerTest {
     private static SubscriptionCheckoutResult result() {
         return new SubscriptionCheckoutResult(
             "sub-1", "pay-1", PLAN_ID, SubscriptionStatus.PENDING, "pref-1",
-            "https://mp.example/checkout/pref-1", "SUB-pay-1", null
+            "https://mp.example/checkout/pref-1", "SUB-pay-1", null, null
         );
     }
 

@@ -142,6 +142,8 @@ class AuthRevocationIntegrationTest {
      */
     @MockBean
     private com.menta.billing.application.port.out.BillingPlansRateLimitPort billingPlansRateLimitPort;
+    @MockBean
+    private com.menta.billing.application.port.out.BankTransferRateLimitPort bankTransferRateLimitPort;
 
     /**
      * US-PHYSICAL-001: ProcessPhysicalCheckInUseCaseImpl needs a RedisTemplate
