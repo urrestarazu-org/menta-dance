@@ -48,6 +48,13 @@ dependencies {
     // Embedded DB for @DataJpaTest repository tests against a real derived query
     // (same convention as api/auth's ActivationTokenJpaRepositoryTest).
     testRuntimeOnly("com.h2database:h2")
+    // Real MySQL 8 for PaymentProofRepositoryAdapterTest (#31, US-BILLING-003, design C5): the
+    // "second save for the same paymentId overwrites the row" replacement semantics rest on a real
+    // UNIQUE KEY constraint, which H2's create-drop schema does not reliably reproduce — same
+    // rationale as api/virtual's and api/auth's module-level Testcontainers dependency.
+    testImplementation("org.testcontainers:testcontainers")
+    testImplementation("org.testcontainers:junit-jupiter")
+    testImplementation("org.testcontainers:mysql")
 }
 
 tasks.jar {
