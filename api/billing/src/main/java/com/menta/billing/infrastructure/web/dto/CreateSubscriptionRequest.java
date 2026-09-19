@@ -1,32 +1,25 @@
 package com.menta.billing.infrastructure.web.dto;
 
 import com.menta.billing.domain.model.PaymentMethod;
-import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 /**
- * Body of {@code POST /api/v1/billing/subscriptions} (US-BILLING-010).
+ * Body of {@code POST /api/v1/billing/subscriptions} (US-BILLING-010, US-BILLING-003).
  *
  * <p>No user field, by design: the subscription is always the token's owner's
  * (US-BILLING-010 security NFR). A client cannot subscribe anyone else because
  * there is nowhere to say so.</p>
+ *
+ * <p>{@code paymentMethod} accepts both {@link PaymentMethod#MERCADO_PAGO} and {@link
+ * PaymentMethod#BANK_TRANSFER} (#252): {@code RoutingCreateSubscriptionCheckoutUseCase} (#31, P2)
+ * dispatches on this same field, so a DTO-level restriction to Checkout Pro only would make the
+ * bank-transfer route unreachable over HTTP regardless of the router underneath.</p>
  */
 public record CreateSubscriptionRequest(
     @NotBlank String planId,
     @NotNull PaymentMethod paymentMethod,
     @NotBlank @Size(max = 128) String idempotencyKey
 ) {
-
-    /**
-     * US-BILLING-010 implements the hosted Mercado Pago route only. A bank
-     * transfer has a different response and verification lifecycle, and is
-     * deliberately deferred to US-BILLING-003 rather than being sent to
-     * Checkout Pro by mistake.
-     */
-    @AssertTrue(message = "paymentMethod must be MERCADO_PAGO for Checkout Pro")
-    public boolean isCheckoutProPaymentMethod() {
-        return paymentMethod == PaymentMethod.MERCADO_PAGO;
-    }
 }

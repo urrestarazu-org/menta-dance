@@ -217,6 +217,32 @@ class SecurityConfigTest {
             .andExpect(status().isUnauthorized());
     }
 
+    /**
+     * #31, US-BILLING-003 (design C8). Before this matcher existed, this path had no matcher at
+     * all and fell through to {@code anyRequest().access(roleAuthorizationManager)}, whose own
+     * fall-through semantics grant unmapped paths regardless of authentication.
+     */
+    @Test
+    void an_unauthenticated_post_of_the_proof_upload_route_is_rejected() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(post("/api/v1/billing/payments/00000000-0000-0000-0000-000000000001/proof"))
+            .andExpect(status().isUnauthorized());
+    }
+
+    /**
+     * Regression (design C8): the new method-scoped {@code .../*\/proof} matcher must never
+     * shadow the pre-existing {@code permitAll} webhook path. A 404 (unmapped dispatcher reached)
+     * proves the request passed the security layer, unlike the 401 above.
+     */
+    @Test
+    void the_mercadopago_webhook_route_stays_permit_all() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(post("/api/v1/billing/payments/mercadopago/webhook"))
+            .andExpect(status().isNotFound());
+    }
+
     @Test
     void constructs_the_configuration_instance() {
         assertThat(new SecurityConfig()).isNotNull();

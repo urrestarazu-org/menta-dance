@@ -163,17 +163,32 @@ This is the first phase where the proof-upload flow becomes reachable — the
 R9 "unreachable without authentication" integration test belongs here, now
 that a real HTTP path exists.
 
-- [ ] 3c.1 RED: new `SubmitPaymentProofUseCaseImplTest` — Mockito `InOrder` proving the exact C12 order: `consumeProofUpload` after validation, before any write; non-owner → `PaymentNotFoundException`, zero writes; replacement deletes the old storage key **after** the new row is saved; invalid content never touches the limiter or storage.
-- [ ] 3c.2 GREEN: create `PaymentProofUpload.java`, `SubmitPaymentProofCommand.java` (dto) + `SubmitPaymentProofUseCase.java` (in-port) + `SubmitPaymentProofUseCaseImpl.java` (`api/billing/src/main/java/com/menta/billing/application/{dto,port/in,usecase}/`).
-- [ ] 3c.3 GREEN: create `TransactionalSubmitPaymentProofUseCase.java` (`api/billing/src/main/java/com/menta/billing/infrastructure/transaction/`) — `REQUIRED` decorator; not `final`.
-- [ ] 3c.4 RED: new `PaymentControllerTest` (MockMvc) — `POST /{id}/proof`: owner from `Authentication`, never the body (C8); every error is `application/problem+json`.
-- [ ] 3c.5 GREEN: create `PaymentController.java` (`api/billing/src/main/java/com/menta/billing/infrastructure/web/controller/PaymentController.java`) — `POST /api/v1/billing/payments/{id}/proof` only (GET added in P3d).
-- [ ] 3c.6 GREEN: modify `SecurityConfig.java` (`api/auth/src/main/java/com/menta/auth/infrastructure/security/SecurityConfig.java`) — `.requestMatchers(HttpMethod.POST, "/api/v1/billing/payments/*/proof").authenticated()`, declared so it never shadows `/mercadopago/webhook` (`permitAll`).
-- [ ] 3c.7 GREEN: modify `docker-compose.yml` / `infra/docker/**` — proof volume mounted outside any static-resource root; modify `application*.yml` — `spring.servlet.multipart.max-file-size: 6MB` (container backstop above the 5MB business rule, C11).
-- [ ] 3c.8 GREEN: modify `BillingConfiguration.java` — wire `SubmitPaymentProofUseCaseImpl` + `TransactionalSubmitPaymentProofUseCase`.
-- [ ] 3c.9 RED+GREEN: extend `SecurityConfigTest` — new matcher gates correctly; `/api/v1/billing/payments/mercadopago/webhook` stays `permitAll` (regression, C8).
-- [ ] 3c.10 Integration (Testcontainers + real filter chain): stored proof unreachable by an unauthenticated request and by a non-owner (R9); a valid submission → `200` + ops notified; a 2nd submission replaces the 1st and re-notifies; a 4th upload → `429`.
-- [ ] 3c.11 Verify: `:api:billing:test :api:billing:jacocoTestCoverageVerification` + `:api:app:test` **no filter**, `contextLoads()` green. Confirm `TransactionalSubmitPaymentProofUseCase` is not `final`.
+**Pre-existing gap found while implementing 3c.10, out of this phase's scope:**
+`CreateSubscriptionRequest.isCheckoutProPaymentMethod()` (`@AssertTrue`, web
+DTO) still rejects `paymentMethod: BANK_TRANSFER` with `400 INVALID_REQUEST`
+before the request ever reaches `RoutingCreateSubscriptionCheckoutUseCase` —
+`SubscriptionControllerTest.bank_transfer_is_invalid_for_the_checkout_pro_endpoint`
+(unmodified since before P2) still asserts exactly this. So `POST
+/billing/subscriptions {paymentMethod: BANK_TRANSFER}` is **not actually
+reachable over HTTP today**, despite P2's router existing underneath — this
+DTO-level guard was never relaxed when the router was added. `3c.10`'s
+integration test seeds its `Payment(AwaitingManualVerification)` fixture
+directly through `PaymentJpaMapper`/`PaymentJpaRepository` rather than via
+that checkout endpoint, to stay inside 3c's own scope. A future phase (or a
+dedicated fix) must remove/relax this `@AssertTrue` guard for the
+bank-transfer creation endpoint to be genuinely reachable end to end.
+
+- [x] 3c.1 RED: new `SubmitPaymentProofUseCaseImplTest` — Mockito `InOrder` proving the exact C12 order: `consumeProofUpload` after validation, before any write; non-owner → `PaymentNotFoundException`, zero writes; replacement deletes the old storage key **after** the new row is saved; invalid content never touches the limiter or storage.
+- [x] 3c.2 GREEN: create `PaymentProofUpload.java`, `SubmitPaymentProofCommand.java` (dto) + `SubmitPaymentProofUseCase.java` (in-port) + `SubmitPaymentProofUseCaseImpl.java` (`api/billing/src/main/java/com/menta/billing/application/{dto,port/in,usecase}/`).
+- [x] 3c.3 GREEN: create `TransactionalSubmitPaymentProofUseCase.java` (`api/billing/src/main/java/com/menta/billing/infrastructure/transaction/`) — `REQUIRED` decorator; not `final`.
+- [x] 3c.4 RED: new `PaymentControllerTest` (MockMvc) — `POST /{id}/proof`: owner from `Authentication`, never the body (C8); every error is `application/problem+json`.
+- [x] 3c.5 GREEN: create `PaymentController.java` (`api/billing/src/main/java/com/menta/billing/infrastructure/web/controller/PaymentController.java`) — `POST /api/v1/billing/payments/{id}/proof` only (GET added in P3d).
+- [x] 3c.6 GREEN: modify `SecurityConfig.java` (`api/auth/src/main/java/com/menta/auth/infrastructure/security/SecurityConfig.java`) — `.requestMatchers(HttpMethod.POST, "/api/v1/billing/payments/*/proof").authenticated()`, declared so it never shadows `/mercadopago/webhook` (`permitAll`).
+- [x] 3c.7 GREEN: modify `docker-compose.yml` / `infra/docker/**` — proof volume mounted outside any static-resource root; modify `application*.yml` — `spring.servlet.multipart.max-file-size: 6MB` (container backstop above the 5MB business rule, C11).
+- [x] 3c.8 GREEN: modify `BillingConfiguration.java` — wire `SubmitPaymentProofUseCaseImpl` + `TransactionalSubmitPaymentProofUseCase`.
+- [x] 3c.9 RED+GREEN: extend `SecurityConfigTest` — new matcher gates correctly; `/api/v1/billing/payments/mercadopago/webhook` stays `permitAll` (regression, C8).
+- [x] 3c.10 Integration (Testcontainers + real filter chain): stored proof unreachable by an unauthenticated request and by a non-owner (R9); a valid submission → `200` + ops notified; a 2nd submission replaces the 1st and re-notifies; a 4th upload → `429`.
+- [x] 3c.11 Verify: `:api:billing:test :api:billing:jacocoTestCoverageVerification` + `:api:app:test` **no filter**, `contextLoads()` green. Confirm `TransactionalSubmitPaymentProofUseCase` is not `final`.
 
 ## Phase P3d: Read payment status (R6 — C9)
 

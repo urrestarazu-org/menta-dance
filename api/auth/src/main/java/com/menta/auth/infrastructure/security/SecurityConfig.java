@@ -97,6 +97,14 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *   - /api/v1/billing/payments/mercadopago/webhook → permitAll
  *     (US-BILLING-002; Mercado Pago has no Bearer token — the controller's
  *     own HMAC signature verification is the authorization mechanism).
+ *   - POST /api/v1/billing/payments/{paymentId}/proof → authenticated
+ *     (any role) (#31, US-BILLING-003, design C8; the payment's owner
+ *     submits their own bank-transfer proof, resolved from the token, never
+ *     a body field. Otherwise unmapped, so it would fall through to
+ *     anyRequest()'s permissive default grant. This matcher's path shape —
+ *     a wildcard segment followed by a fixed /proof suffix — can never
+ *     match the webhook path above, which has no /proof suffix, so the two
+ *     rules never shadow each other regardless of declaration order).
  *   - /actuator/health                          → permitAll
  *   - /api/v1/users/register                    → permitAll (public registration; PR2 contract)
  *   - /api/v1/admin/physical/courses/**         → ADMIN or INSTRUCTOR
@@ -215,6 +223,14 @@ public class SecurityConfig {
                 // checkout. Otherwise unmapped, so it would fall through to anyRequest()'s
                 // permissive default grant without this explicit matcher.
                 .requestMatchers(HttpMethod.POST, "/api/v1/billing/physical/purchases").authenticated()
+                // #31, US-BILLING-003 (design C8): the payment's owner submits a bank-transfer
+                // proof against their own Payment, resolved from the token in PaymentController,
+                // never a body field. Method-and-path scoped rather than a broad payments/**
+                // matcher so it can never shadow /api/v1/billing/payments/mercadopago/webhook
+                // (permitAll above): that path has no /proof suffix, so the two matchers can
+                // never overlap regardless of declaration order — verified end-to-end by
+                // SecurityConfigTest.
+                .requestMatchers(HttpMethod.POST, "/api/v1/billing/payments/*/proof").authenticated()
                 // US-BILLING-011, #130: self-service cancellation is DELETE, a different HTTP
                 // method than the POST rule immediately above — Spring Security matches per
                 // method, so it needs its own explicit entry or it falls through to a grant via

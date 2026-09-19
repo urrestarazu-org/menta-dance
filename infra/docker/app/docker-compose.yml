@@ -34,6 +34,12 @@ services:
 
       # JVM Opts
       JAVA_OPTS: ${JAVA_OPTS:--XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC}
+    volumes:
+      # #31, US-BILLING-003, design C5/C11: bank-transfer payment proofs. Mounted outside any
+      # static-resource root (Spring Boot's are all classpath-based) so no
+      # ResourceHttpRequestHandler can ever serve it — SecurityConfig's matcher is the actual
+      # gate, this placement is defense in depth (design "Threat Matrix").
+      - payment_proofs_data:/var/menta-dance/payment-proofs
     networks:
       - menta-network
     depends_on:
@@ -211,4 +217,6 @@ volumes:
   loki_data:
     driver: local
   grafana_data:
+    driver: local
+  payment_proofs_data:
     driver: local

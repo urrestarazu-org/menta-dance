@@ -42,6 +42,15 @@ spring:
       mail.smtp.timeout: ${SMTP_TIMEOUT_MS:5000}
       mail.smtp.writetimeout: ${SMTP_WRITE_TIMEOUT_MS:5000}
 
+  servlet:
+    multipart:
+      # #31, US-BILLING-003, design C11: a container-level backstop, deliberately above the 5MB
+      # business rule PaymentProofContentValidator enforces — so the domain rule (400,
+      # application/problem+json) fires first for the ordinary oversized case, and this cap only
+      # catches a genuinely abusive upload before it reaches application code.
+      max-file-size: 6MB
+      max-request-size: 6MB
+
 # Auth module configuration (ADR-0025, ADR-0026)
 auth:
   # Base64-encoded HMAC-SHA256 secret. MUST be at least 32 bytes raw (256-bit).
@@ -156,6 +165,10 @@ billing:
     proof:
       ops-address: ${BILLING_BANK_TRANSFER_PROOF_OPS_ADDRESS:ops@menta.local}
       from-address: ${BILLING_BANK_TRANSFER_PROOF_FROM_ADDRESS:no-reply@menta.local}
+      # #31, P3c, design C5/C11: the Docker volume backing LocalFilesystemPaymentProofStorageAdapter,
+      # mounted outside any static-resource root (see docker-compose) so no ResourceHttpRequestHandler
+      # can ever serve it — SecurityConfig's matcher is the actual gate, this is defense in depth.
+      storage-root: ${BILLING_BANK_TRANSFER_PROOF_STORAGE_ROOT:/var/menta-dance/payment-proofs}
 
 # Physical module configuration (#208, US-PHYSICAL-004b, design B5)
 physical:
