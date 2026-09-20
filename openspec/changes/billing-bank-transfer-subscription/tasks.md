@@ -209,15 +209,15 @@ Smallest remaining slice; adds a second method to the controller created in P3c.
 `Payment.resolveManually` and `IllegalPaymentStateTransitionException` already
 exist from P1; this phase only wires a consumer for them.
 
-- [ ] 4.1 RED: new `ResolvePaymentProofUseCaseImplTest` — approve → `Completed` + `PaymentFulfillmentService.ensure` (activate+assigned); reject → `Rejected` + `PaymentFulfillmentService.release` (cancelled); an already-`Expired` payment → throws `IllegalPaymentStateTransitionException`, zero writes (`409`, spec: "Resolving an already-expired payment fails" — reachable here by persisting a payment already in `Expired`, no dependency on P5's sweep running).
-- [ ] 4.2 GREEN: create `ResolvePaymentProofCommand.java` (dto) + `ResolvePaymentProofUseCase.java` (in-port) + `ResolvePaymentProofUseCaseImpl.java`.
-- [ ] 4.3 GREEN: create `TransactionalResolvePaymentProofUseCase.java` — `REQUIRED`; not `final`.
-- [ ] 4.4 RED: new `PaymentAdminControllerTest` (MockMvc) — blank `reject` reason → `400` **before** any use-case call (`@NotBlank`); non-admin → `403`, nothing changes.
-- [ ] 4.5 GREEN: create `PaymentAdminController.java` (`api/billing/src/main/java/com/menta/billing/infrastructure/web/controller/`) — `POST /api/v1/admin/billing/payments/{id}/approve` (no body), `POST /{id}/reject` (`{"reason": "..."}`, `@NotBlank`); `isAdmin(Authentication)` defense-in-depth boundary check mirrors `SubscriptionAdminController:85-89` (C1/C8).
-- [ ] 4.6 GREEN: create `RejectPaymentRequest.java` (web dto).
-- [ ] 4.7 GREEN: modify `BillingConfiguration.java` — wire `ResolvePaymentProofUseCaseImpl` + decorator. **No `SecurityConfig` change** — `/api/v1/admin/billing/payments/**` already falls under the generic `/api/v1/admin/**` → `hasRole("ADMIN")` rule; confirm via test only, do not add a redundant matcher.
-- [ ] 4.8 Integration (Testcontainers): approve activates with a course snapshot identical to the MP path (frozen at approval time); reject cancels; a second resolve after expiry returns `409` and mutates nothing.
-- [ ] 4.9 Verify: `:api:billing:test :api:billing:jacocoTestCoverageVerification` + `:api:app:test` **no filter**, `contextLoads()` green.
+- [x] 4.1 RED: new `ResolvePaymentProofUseCaseImplTest` — approve → `Completed` + `PaymentFulfillmentService.ensure` (activate+assigned); reject → `Rejected` + `PaymentFulfillmentService.release` (cancelled); an already-`Expired` payment → throws `IllegalPaymentStateTransitionException`, zero writes (`409`, spec: "Resolving an already-expired payment fails" — reachable here by persisting a payment already in `Expired`, no dependency on P5's sweep running).
+- [x] 4.2 GREEN: create `ResolvePaymentProofCommand.java` (dto) + `ResolvePaymentProofUseCase.java` (in-port) + `ResolvePaymentProofUseCaseImpl.java`.
+- [x] 4.3 GREEN: create `TransactionalResolvePaymentProofUseCase.java` — `REQUIRED`; not `final`.
+- [x] 4.4 RED: new `PaymentAdminControllerTest` (MockMvc) — blank `reject` reason → `400` **before** any use-case call (`@NotBlank`); non-admin → `403`, nothing changes.
+- [x] 4.5 GREEN: create `PaymentAdminController.java` (`api/billing/src/main/java/com/menta/billing/infrastructure/web/controller/`) — `POST /api/v1/admin/billing/payments/{id}/approve` (no body), `POST /{id}/reject` (`{"reason": "..."}`, `@NotBlank`); `isAdmin(Authentication)` defense-in-depth boundary check mirrors `SubscriptionAdminController:85-89` (C1/C8).
+- [x] 4.6 GREEN: create `RejectPaymentRequest.java` (web dto).
+- [x] 4.7 GREEN: modify `BillingConfiguration.java` — wire `ResolvePaymentProofUseCaseImpl` + decorator. **No `SecurityConfig` change** — `/api/v1/admin/billing/payments/**` already falls under the generic `/api/v1/admin/**` → `hasRole("ADMIN")` rule; confirm via test only, do not add a redundant matcher.
+- [x] 4.8 Integration (Testcontainers): approve activates with a course snapshot identical to the MP path (frozen at approval time); reject cancels; a second resolve after expiry returns `409` and mutates nothing.
+- [x] 4.9 Verify: `:api:billing:test :api:billing:jacocoTestCoverageVerification` + `:api:app:test` **no filter**, `contextLoads()` green.
 
 ## Phase P5: Automatic 72h expiry sweep (R7 — C6, closes the flow)
 

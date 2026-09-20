@@ -14,6 +14,7 @@ import com.menta.billing.application.port.in.GetPlanUseCase;
 import com.menta.billing.application.port.in.GetSubscriptionHistoryUseCase;
 import com.menta.billing.application.port.in.ListPlansUseCase;
 import com.menta.billing.application.port.in.ReceiveWebhookUseCase;
+import com.menta.billing.application.port.in.ResolvePaymentProofUseCase;
 import com.menta.billing.application.port.in.SubmitPaymentProofUseCase;
 import com.menta.billing.application.port.in.UpdatePhysicalCoursePricingUseCase;
 import com.menta.billing.application.port.out.BankTransferRateLimitPort;
@@ -58,6 +59,7 @@ import com.menta.billing.application.usecase.PaymentVerificationService;
 import com.menta.billing.application.usecase.PublishPaymentFulfillmentFailedUseCase;
 import com.menta.billing.application.usecase.PublishPhysicalPaymentCompletedUseCase;
 import com.menta.billing.application.usecase.ReceiveWebhookUseCaseImpl;
+import com.menta.billing.application.usecase.ResolvePaymentProofUseCaseImpl;
 import com.menta.billing.application.usecase.RoutingCreateSubscriptionCheckoutUseCase;
 import com.menta.billing.application.usecase.SubmitPaymentProofUseCaseImpl;
 import com.menta.billing.application.usecase.UpdatePhysicalCoursePricingUseCaseImpl;
@@ -71,6 +73,7 @@ import com.menta.billing.infrastructure.transaction.TransactionalCreatePhysicalP
 import com.menta.billing.infrastructure.transaction.TransactionalCreateSubscriptionCheckoutUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalGetPaymentUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalReceiveWebhookUseCase;
+import com.menta.billing.infrastructure.transaction.TransactionalResolvePaymentProofUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalSubmitPaymentProofUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalUpdatePhysicalCoursePricingUseCase;
 import com.menta.shared.auth.UserExistencePort;
@@ -306,6 +309,21 @@ public class BillingConfiguration {
     @Bean
     public GetPaymentUseCase getPaymentUseCase(PaymentRepository paymentRepository) {
         return new TransactionalGetPaymentUseCase(new GetPaymentUseCaseImpl(paymentRepository));
+    }
+
+    /**
+     * Design D1/C4/C10. Approve settles through {@code paymentFulfillmentService.ensure}, reject
+     * through {@code .release} — the same collaborator an approved Mercado Pago payment and the
+     * P5 sweep use, so a manually-resolved bank transfer activates/cancels a subscription through
+     * exactly the same code.
+     */
+    @Bean
+    public ResolvePaymentProofUseCase resolvePaymentProofUseCase(
+        PaymentRepository paymentRepository, PaymentFulfillmentService paymentFulfillmentService, Clock clock
+    ) {
+        return new TransactionalResolvePaymentProofUseCase(
+            new ResolvePaymentProofUseCaseImpl(paymentRepository, paymentFulfillmentService, clock)
+        );
     }
 
     /**
