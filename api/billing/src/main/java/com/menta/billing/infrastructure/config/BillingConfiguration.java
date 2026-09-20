@@ -8,6 +8,7 @@ import com.menta.billing.application.port.in.CreatePhysicalCourseQuoteUseCase;
 import com.menta.billing.application.port.in.CreatePhysicalPurchaseCheckoutUseCase;
 import com.menta.billing.application.port.in.CreateSubscriptionCheckoutUseCase;
 import com.menta.billing.application.port.in.GetCurrentSubscriptionUseCase;
+import com.menta.billing.application.port.in.GetPaymentUseCase;
 import com.menta.billing.application.port.in.GetPhysicalCoursePricingUseCase;
 import com.menta.billing.application.port.in.GetPlanUseCase;
 import com.menta.billing.application.port.in.GetSubscriptionHistoryUseCase;
@@ -45,6 +46,7 @@ import com.menta.billing.application.usecase.CreatePhysicalPurchaseCheckoutUseCa
 import com.menta.billing.application.usecase.CreatePurchaseFromPaymentEventUseCase;
 import com.menta.billing.application.usecase.CreateSubscriptionCheckoutUseCaseImpl;
 import com.menta.billing.application.usecase.GetCurrentSubscriptionUseCaseImpl;
+import com.menta.billing.application.usecase.GetPaymentUseCaseImpl;
 import com.menta.billing.application.usecase.GetPhysicalCoursePricingUseCaseImpl;
 import com.menta.billing.application.usecase.GetPlanUseCaseImpl;
 import com.menta.billing.application.usecase.GetSubscriptionHistoryUseCaseImpl;
@@ -67,6 +69,7 @@ import com.menta.billing.infrastructure.transaction.TransactionalAssignTrialSubs
 import com.menta.billing.infrastructure.transaction.TransactionalCancelSubscriptionUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalCreatePhysicalPurchaseCheckoutUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalCreateSubscriptionCheckoutUseCase;
+import com.menta.billing.infrastructure.transaction.TransactionalGetPaymentUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalReceiveWebhookUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalSubmitPaymentProofUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalUpdatePhysicalCoursePricingUseCase;
@@ -292,6 +295,17 @@ public class BillingConfiguration {
             paymentRepository, paymentProofRepository, paymentProofStoragePort, paymentProofNotificationPort,
             bankTransferRateLimitPort, new PaymentProofContentValidator(), clock
         ));
+    }
+
+    /**
+     * US-BILLING-003 escenario 3 (design C9). Wrapped transactionally with {@code readOnly =
+     * true}, unlike {@code getCurrentSubscriptionUseCase} / {@code getSubscriptionHistoryUseCase}
+     * above: this read still opens its own transaction (not left to the adapter's per-method
+     * setting), matching {@code TransactionalGetPaymentUseCase}'s own rationale.
+     */
+    @Bean
+    public GetPaymentUseCase getPaymentUseCase(PaymentRepository paymentRepository) {
+        return new TransactionalGetPaymentUseCase(new GetPaymentUseCaseImpl(paymentRepository));
     }
 
     /**

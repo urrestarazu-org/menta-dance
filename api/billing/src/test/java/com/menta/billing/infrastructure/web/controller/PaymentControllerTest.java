@@ -3,26 +3,34 @@ package com.menta.billing.infrastructure.web.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.menta.billing.application.dto.PaymentStatusResult;
 import com.menta.billing.application.dto.SubmitPaymentProofCommand;
+import com.menta.billing.application.port.in.GetPaymentUseCase;
 import com.menta.billing.application.port.in.SubmitPaymentProofUseCase;
 import com.menta.billing.domain.exception.BankTransferRateLimitedException;
 import com.menta.billing.domain.exception.PaymentNotFoundException;
 import com.menta.billing.domain.exception.PaymentProofRejectedException;
 import com.menta.billing.domain.model.PaymentId;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.MediaType;
+import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.web.servlet.MockMvc;
@@ -42,15 +50,23 @@ class PaymentControllerTest {
     private static final PaymentId PAYMENT_ID = PaymentId.generate();
 
     private SubmitPaymentProofUseCase submitPaymentProofUseCase;
+    private GetPaymentUseCase getPaymentUseCase;
     private PaymentController controller;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         submitPaymentProofUseCase = mock(SubmitPaymentProofUseCase.class);
-        controller = new PaymentController(submitPaymentProofUseCase);
+        getPaymentUseCase = mock(GetPaymentUseCase.class);
+        controller = new PaymentController(submitPaymentProofUseCase, getPaymentUseCase);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
             .setControllerAdvice(new PaymentExceptionHandler())
+            // Matches production's Spring Boot auto-configured ObjectMapper — registers the
+            // JavaTimeModule (ISO-8601 Instants, not epoch seconds), which a bare
+            // `new ObjectMapper()` does not provide (see SubscriptionControllerTest's own setUp).
+            .setMessageConverters(new MappingJackson2HttpMessageConverter(Jackson2ObjectMapperBuilder.json()
+                .featuresToDisable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+                .build()))
             .build();
     }
 
@@ -135,5 +151,47 @@ class PaymentControllerTest {
             .andExpect(status().isBadRequest())
             .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
             .andExpect(jsonPath("$.code", is("INVALID_REQUEST")));
+    }
+
+    /** #31, US-BILLING-003, design C9. */
+    @Test
+    void a_valid_read_returns_200_with_status_createdAt_and_updatedAt() throws Exception {
+        Instant createdAt = Instant.parse("2026-09-19T10:00:00Z");
+        Instant updatedAt = Instant.parse("2026-09-19T12:00:00Z");
+        when(getPaymentUseCase.getPayment(eq(PAYMENT_ID.toString()), eq(USER_ID)))
+            .thenReturn(new PaymentStatusResult("COMPLETED", createdAt, updatedAt));
+
+        mockMvc.perform(get("/api/v1/billing/payments/" + PAYMENT_ID)
+                .with(authenticatedAs(USER_ID)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status", is("COMPLETED")))
+            .andExpect(jsonPath("$.createdAt", is("2026-09-19T10:00:00Z")))
+            .andExpect(jsonPath("$.updatedAt", is("2026-09-19T12:00:00Z")));
+    }
+
+    /** C8: owner comes from the token, never from a query/body parameter — same pattern as the proof upload. */
+    @Test
+    void the_read_owner_comes_from_the_token() throws Exception {
+        when(getPaymentUseCase.getPayment(any(), any()))
+            .thenReturn(new PaymentStatusResult("AWAITING_MANUAL_VERIFICATION", Instant.now(), Instant.now()));
+
+        mockMvc.perform(get("/api/v1/billing/payments/" + PAYMENT_ID)
+                .with(authenticatedAs(USER_ID)))
+            .andExpect(status().isOk());
+
+        ArgumentCaptor<UUID> actingUserId = ArgumentCaptor.forClass(UUID.class);
+        verify(getPaymentUseCase).getPayment(eq(PAYMENT_ID.toString()), actingUserId.capture());
+        assertThat(actingUserId.getValue()).isEqualTo(USER_ID);
+    }
+
+    @Test
+    void a_non_owner_or_missing_payment_read_maps_to_404_problem_json() throws Exception {
+        doThrow(new PaymentNotFoundException(PAYMENT_ID)).when(getPaymentUseCase).getPayment(any(), any());
+
+        mockMvc.perform(get("/api/v1/billing/payments/" + PAYMENT_ID)
+                .with(authenticatedAs(USER_ID)))
+            .andExpect(status().isNotFound())
+            .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.code", is("PAYMENT_NOT_FOUND")));
     }
 }

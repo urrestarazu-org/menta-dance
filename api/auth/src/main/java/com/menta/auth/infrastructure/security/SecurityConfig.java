@@ -105,6 +105,11 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *     a wildcard segment followed by a fixed /proof suffix — can never
  *     match the webhook path above, which has no /proof suffix, so the two
  *     rules never shadow each other regardless of declaration order).
+ *   - GET /api/v1/billing/payments/{paymentId} → authenticated (any role)
+ *     (#31, US-BILLING-003, design C9; the payment's owner reads their own
+ *     status, resolved from the token. A single-segment wildcard can never
+ *     match the two-segment webhook path above, so both rules stay mutually
+ *     exclusive regardless of declaration order).
  *   - /actuator/health                          → permitAll
  *   - /api/v1/users/register                    → permitAll (public registration; PR2 contract)
  *   - /api/v1/admin/physical/courses/**         → ADMIN or INSTRUCTOR
@@ -231,6 +236,14 @@ public class SecurityConfig {
                 // never overlap regardless of declaration order — verified end-to-end by
                 // SecurityConfigTest.
                 .requestMatchers(HttpMethod.POST, "/api/v1/billing/payments/*/proof").authenticated()
+                // #31, US-BILLING-003 (design C9): the payment's owner reads their own status,
+                // resolved from the token in PaymentController, never a path or query parameter.
+                // This wildcard-segment matcher can never match the webhook path above (it has an
+                // extra /mercadopago/webhook suffix) nor the /proof matcher immediately above
+                // (different HTTP method — Spring Security matches per method), so all three rules
+                // stay mutually exclusive regardless of declaration order — verified end-to-end by
+                // SecurityConfigTest.
+                .requestMatchers(HttpMethod.GET, "/api/v1/billing/payments/*").authenticated()
                 // US-BILLING-011, #130: self-service cancellation is DELETE, a different HTTP
                 // method than the POST rule immediately above — Spring Security matches per
                 // method, so it needs its own explicit entry or it falls through to a grant via

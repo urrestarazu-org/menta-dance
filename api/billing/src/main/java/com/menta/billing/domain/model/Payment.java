@@ -207,6 +207,22 @@ public final class Payment {
             : Optional.empty();
     }
 
+    /**
+     * When this payment's status last changed (#31, US-BILLING-003, design C9). Empty for every
+     * non-terminal status — {@code billing_payments} has no {@code updated_at} column, and none is
+     * added: that would be a second source of truth for the same fact this accessor already
+     * derives from the terminal status' own instant field.
+     */
+    public Optional<Instant> statusChangedAt() {
+        return switch (status) {
+            case PaymentStatus.Pending pending -> Optional.empty();
+            case PaymentStatus.Completed completed -> Optional.of(completed.confirmedAt());
+            case PaymentStatus.Rejected rejected -> Optional.of(rejected.rejectedAt());
+            case PaymentStatus.Cancelled cancelled -> Optional.of(cancelled.cancelledAt());
+            case PaymentStatus.Expired expired -> Optional.of(expired.expiredAt());
+        };
+    }
+
     private Payment withStatus(PaymentStatus newStatus) {
         return copyWith(providerPaymentId, newStatus);
     }

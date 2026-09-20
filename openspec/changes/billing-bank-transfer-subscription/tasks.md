@@ -194,15 +194,15 @@ bank-transfer creation endpoint to be genuinely reachable end to end.
 
 Smallest remaining slice; adds a second method to the controller created in P3c.
 
-- [ ] 3d.1 GREEN: modify `Payment.java` — add `statusChangedAt()` derived accessor (switches on the sealed status, C9).
-- [ ] 3d.2 RED: new `GetPaymentUseCaseImplTest` — `status`, `createdAt`, `updatedAt = statusChangedAt().orElse(createdAt)`; non-owner → `PaymentNotFoundException`.
-- [ ] 3d.3 GREEN: create `PaymentStatusResult.java` (dto) + `GetPaymentUseCase.java` (in-port) + `GetPaymentUseCaseImpl.java`.
-- [ ] 3d.4 GREEN: create `TransactionalGetPaymentUseCase.java` — `REQUIRED`, `readOnly = true`; not `final`.
-- [ ] 3d.5 RED+GREEN: extend `PaymentControllerTest` + `PaymentController.java` — `GET /api/v1/billing/payments/{id}` → `200` with `status/createdAt/updatedAt`, owner-only.
-- [ ] 3d.6 GREEN: create `PaymentStatusResponse.java` (web dto, `api/billing/src/main/java/com/menta/billing/infrastructure/web/dto/`).
-- [ ] 3d.7 GREEN: modify `SecurityConfig.java` — `.requestMatchers(HttpMethod.GET, "/api/v1/billing/payments/*").authenticated()`.
-- [ ] 3d.8 GREEN: modify `BillingConfiguration.java` — wire `GetPaymentUseCaseImpl` + decorator.
-- [ ] 3d.9 Verify: `:api:billing:test :api:billing:jacocoTestCoverageVerification` + `:api:app:test` **no filter**, `contextLoads()` green.
+- [x] 3d.1 GREEN: modify `Payment.java` — add `statusChangedAt()` derived accessor (switches on the sealed status, C9).
+- [x] 3d.2 RED: new `GetPaymentUseCaseImplTest` — `status`, `createdAt`, `updatedAt = statusChangedAt().orElse(createdAt)`; non-owner → `PaymentNotFoundException`.
+- [x] 3d.3 GREEN: create `PaymentStatusResult.java` (dto) + `GetPaymentUseCase.java` (in-port) + `GetPaymentUseCaseImpl.java`.
+- [x] 3d.4 GREEN: create `TransactionalGetPaymentUseCase.java` — `REQUIRED`, `readOnly = true`; not `final`.
+- [x] 3d.5 RED+GREEN: extend `PaymentControllerTest` + `PaymentController.java` — `GET /api/v1/billing/payments/{id}` → `200` with `status/createdAt/updatedAt`, owner-only.
+- [x] 3d.6 GREEN: create `PaymentStatusResponse.java` (web dto, `api/billing/src/main/java/com/menta/billing/infrastructure/web/dto/`).
+- [x] 3d.7 GREEN: modify `SecurityConfig.java` — `.requestMatchers(HttpMethod.GET, "/api/v1/billing/payments/*").authenticated()`.
+- [x] 3d.8 GREEN: modify `BillingConfiguration.java` — wire `GetPaymentUseCaseImpl` + decorator.
+- [x] 3d.9 Verify: `:api:billing:test :api:billing:jacocoTestCoverageVerification` + `:api:app:test` **no filter**, `contextLoads()` green.
 
 ## Phase P4: Admin resolution (R8, D1 — consumes P1's `resolveManually`)
 
