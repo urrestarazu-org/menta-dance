@@ -2,7 +2,10 @@ package com.menta.billing.application.port.out;
 
 import com.menta.billing.domain.model.Payment;
 import com.menta.billing.domain.model.PaymentId;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 public interface PaymentRepository {
 
@@ -21,4 +24,11 @@ public interface PaymentRepository {
      * bound yet. Never resolved from an unsigned webhook payload.
      */
     Optional<Payment> findByExternalReference(String externalReference);
+
+    /**
+     * The 72h automatic expiry sweep's candidate set (#31, US-BILLING-003, design C6): a
+     * bank-transfer payment still {@code AwaitingManualVerification}, created before {@code
+     * createdBefore}, with no submitted proof — a submitted proof withholds automatic expiry.
+     */
+    List<UUID> findExpirableBankTransferIds(Instant createdBefore, int limit);
 }
