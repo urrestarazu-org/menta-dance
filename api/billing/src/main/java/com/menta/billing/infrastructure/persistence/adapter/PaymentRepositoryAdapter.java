@@ -6,7 +6,11 @@ import com.menta.billing.domain.model.PaymentId;
 import com.menta.billing.infrastructure.persistence.entity.PaymentJpaEntity;
 import com.menta.billing.infrastructure.persistence.mapper.PaymentJpaMapper;
 import com.menta.billing.infrastructure.persistence.repository.PaymentJpaRepository;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,5 +47,11 @@ public class PaymentRepositoryAdapter implements PaymentRepository {
     @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
     public Optional<Payment> findByExternalReference(String externalReference) {
         return jpaRepository.findByExpectedExternalReference(externalReference).map(PaymentJpaMapper::toDomain);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public List<UUID> findExpirableBankTransferIds(Instant createdBefore, int limit) {
+        return jpaRepository.findExpirableBankTransferIds(createdBefore, PageRequest.of(0, limit));
     }
 }

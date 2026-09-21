@@ -49,6 +49,9 @@ billing:
   subscription:
     expiry:
       enabled: false
+  bank-transfer:
+    expiry:
+      enabled: false
 
 # Same defect, same reasoning, different table (#172, #208 Phase 9). Default HoldExpiryReconciler
 # off for every integration test; HoldExpiryWorkerIntegrationTest re-enables it explicitly, since

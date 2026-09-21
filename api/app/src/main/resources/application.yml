@@ -169,6 +169,15 @@ billing:
       # mounted outside any static-resource root (see docker-compose) so no ResourceHttpRequestHandler
       # can ever serve it — SecurityConfig's matcher is the actual gate, this is defense in depth.
       storage-root: ${BILLING_BANK_TRANSFER_PROOF_STORAGE_ROOT:/var/menta-dance/payment-proofs}
+    expiry:
+      # Real off switch (design A16, mirrors billing.subscription.expiry) — rate-ms alone cannot
+      # disable a @Scheduled job.
+      enabled: ${BILLING_BANK_TRANSFER_EXPIRY_ENABLED:true}
+      rate-ms: ${BILLING_BANK_TRANSFER_EXPIRY_RATE_MS:60000}
+      batch-size: ${BILLING_BANK_TRANSFER_EXPIRY_BATCH_SIZE:100}
+      # A submitted proof withholds automatic expiry (design C6) — this is the age cutoff, not a
+      # rate-limit window, though it defaults to the same 72h as proof-upload.window-hours above.
+      window-hours: ${BILLING_BANK_TRANSFER_EXPIRY_WINDOW_HOURS:72}
 
 # Physical module configuration (#208, US-PHYSICAL-004b, design B5)
 physical:
