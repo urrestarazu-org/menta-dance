@@ -242,6 +242,44 @@ class PaymentProofSubmissionIntegrationTest {
         assertThat(paymentProofRepository.findAll()).isEmpty();
     }
 
+    /**
+     * Design's own Testing Strategy table (R9): "the volume path is served by no handler" —
+     * {@code storageKey} is never a URL {@code PaymentController} exposes, and the storage root
+     * is mounted outside any static-resource root (see {@code SecurityConfig}'s Javadoc and
+     * {@code application.yml}'s {@code billing.bank-transfer.proof.storage-root} comment), so no
+     * {@code ResourceHttpRequestHandler} maps it. A direct fetch at the blob's own location must
+     * therefore 404 regardless of who asks — proven here for both an unauthenticated caller and
+     * an authenticated non-owner, rather than relying on code inspection alone.
+     */
+    @Test
+    void the_stored_proof_is_unreachable_by_a_direct_unauthenticated_fetch() {
+        UUID owner = seedStudent();
+        String paymentId = seedAwaitingManualVerificationPayment(owner);
+        submitProof(paymentId, owner, PNG_CONTENT, "comprobante.png");
+        String storageKey = paymentProofRepository.findAll().get(0).getStorageKey();
+
+        ResponseEntity<String> response = http.getForEntity("/" + storageKey, String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void the_stored_proof_is_unreachable_by_a_non_owner_non_admin_direct_fetch() {
+        UUID owner = seedStudent();
+        UUID intruder = seedStudent();
+        String paymentId = seedAwaitingManualVerificationPayment(owner);
+        submitProof(paymentId, owner, PNG_CONTENT, "comprobante.png");
+        String storageKey = paymentProofRepository.findAll().get(0).getStorageKey();
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(accessTokenIssuer.issue(principal(intruder)).token());
+        ResponseEntity<String> response = http.exchange(
+            "/" + storageKey, HttpMethod.GET, new HttpEntity<>(headers), String.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
     // --- valid submission, replacement, budget exhaustion --------------------
 
     @Test
