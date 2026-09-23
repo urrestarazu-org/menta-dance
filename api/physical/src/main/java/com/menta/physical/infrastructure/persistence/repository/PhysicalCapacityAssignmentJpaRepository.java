@@ -1,6 +1,8 @@
 package com.menta.physical.infrastructure.persistence.repository;
 
 import com.menta.physical.infrastructure.persistence.entity.PhysicalCapacityAssignmentJpaEntity;
+import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -79,4 +81,38 @@ public interface PhysicalCapacityAssignmentJpaRepository
         nativeQuery = true
     )
     long countBySessionIdForUpdate(@Param("sessionId") UUID sessionId);
+
+    /**
+     * Monthly attendance history (#39, US-PHYSICAL-002, design C1). Drives from this table (the
+     * denominator, D1), joins {@code physical_sessions} for the date filter and
+     * {@code physical_courses} for display fields AND the instructor-ownership predicate, and
+     * {@code LEFT JOIN}s {@code physical_attendances} for the live {@code ATTENDED}/{@code
+     * ABSENT} derivation (D5). Because the list and the aggregate come from the same row set,
+     * they cannot disagree.
+     *
+     * <p>{@code :professorId IS NULL OR c.professorId = :professorId} is the same nullable-
+     * parameter idiom {@link PhysicalCourseJpaRepository#findByStatusAfterCursor} already uses —
+     * the adapter is the only caller and it never lets the unrestricted value cross the
+     * application boundary as a literal {@code null} on the out-port itself (two port methods,
+     * design C1).</p>
+     *
+     * <p>Explicit entity joins, not association navigation: these entities carry plain
+     * {@code UUID} columns and no {@code @ManyToOne} (see each entity's Javadoc).</p>
+     */
+    @Query(
+        "SELECT s.id AS sessionId, s.scheduledAt AS scheduledAt, c.title AS courseName, "
+            + "c.professorName AS instructorName, a.recordedAt AS recordedAt "
+            + "FROM PhysicalCapacityAssignmentJpaEntity asg "
+            + "JOIN PhysicalSessionJpaEntity s ON s.id = asg.sessionId "
+            + "JOIN PhysicalCourseJpaEntity c ON c.id = s.courseId "
+            + "LEFT JOIN AttendanceJpaEntity a ON a.sessionId = s.id AND a.userId = asg.studentId "
+            + "WHERE asg.studentId = :studentId "
+            + "AND s.scheduledAt >= :monthStart AND s.scheduledAt < :monthNext "
+            + "AND (:professorId IS NULL OR c.professorId = :professorId) "
+            + "ORDER BY s.scheduledAt ASC, s.id ASC"
+    )
+    List<MonthlyAttendanceRowProjection> findMonthlyAttendance(
+        @Param("studentId") UUID studentId, @Param("monthStart") Instant monthStart,
+        @Param("monthNext") Instant monthNext, @Param("professorId") UUID professorId
+    );
 }

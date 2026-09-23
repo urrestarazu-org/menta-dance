@@ -181,6 +181,11 @@ billing:
 
 # Physical module configuration (#208, US-PHYSICAL-004b, design B5)
 physical:
+  # #39, US-PHYSICAL-002, design C3: the academy's configured local zone, used to resolve
+  # calendar-month boundaries for the attendance history endpoints. Working default, so no
+  # deployment-time configuration is required.
+  attendance:
+    zone-id: ${PHYSICAL_ATTENDANCE_ZONE_ID:America/Argentina/Buenos_Aires}
   capacity:
     hold:
       # The hold's own lifetime — see PhysicalConfiguration.physicalCapacityHoldTtl. Consumed only
