@@ -83,10 +83,22 @@ class PurchaseSessionsMigrationIntegrationTest {
             .migrate();
     }
 
+    /**
+     * Targets {@code 20.1.5} — the highest real {@code classpath:db/migration} version below the
+     * first {@code classpath:db/rollback}-reserved slot (V20.2, V21) — rather than a true
+     * unbounded "latest". Any later real migration (V22, #39, and beyond) landing above that
+     * reserved slot would otherwise make Flyway see an unapplied V21 sitting below an already
+     * applied higher version once {@link #migrateIncludingRollbackTo} adds {@code
+     * classpath:db/rollback} and targets 21, which Flyway rejects as an out-of-order validation
+     * failure — exactly the "migrations have moved since the design doc was written" case {@link
+     * PhysicalCapacityHoldMigrationIntegrationTest}'s javadoc already warned about for its own
+     * V20.1/V20.2 pair.
+     */
     private static void migrateToLatest() {
         Flyway.configure()
             .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
             .locations("classpath:db/migration")
+            .target(MigrationVersion.fromVersion("20.1.5"))
             .load()
             .migrate();
     }
