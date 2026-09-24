@@ -113,4 +113,50 @@ class GetPhysicalAttendanceHistoryUseCaseImplTest {
         );
         assertThat(view).isEqualTo(expectedEmptyShape);
     }
+
+    /**
+     * #39, US-PHYSICAL-002 P2, design C2/R7 — completes the exhaustive-dispatch coverage 1.9
+     * started: {@code InstructorOwnCourses} MUST call the scoped method with the caller's own
+     * id, never {@code null}, and MUST NOT reach the unrestricted method at all.
+     */
+    @Test
+    void instructor_own_courses_viewer_dispatches_to_the_scoped_method_with_the_callers_own_id() {
+        PhysicalCapacityAssignmentRepository repository = mock(PhysicalCapacityAssignmentRepository.class);
+        when(repository.findMonthlyAttendanceInCoursesOwnedBy(any(), any(), any(), any())).thenReturn(List.of());
+        GetPhysicalAttendanceHistoryUseCaseImpl useCase =
+            new GetPhysicalAttendanceHistoryUseCaseImpl(repository, BUENOS_AIRES);
+        UUID studentId = UUID.randomUUID();
+        UUID professorId = UUID.randomUUID();
+
+        useCase.history(AttendanceViewer.elevated(studentId, professorId, false), YearMonth.of(2026, 9), true);
+
+        verify(repository).findMonthlyAttendanceInCoursesOwnedBy(
+            studentId, Instant.parse("2026-09-01T03:00:00Z"), Instant.parse("2026-10-01T03:00:00Z"), professorId
+        );
+        verifyNoMoreInteractions(repository);
+    }
+
+    /**
+     * #39, US-PHYSICAL-002 P2, design C4/R9 — anti-enumeration equality, instructor case: an
+     * {@code InstructorOwnCourses} viewer for a student with zero overlapping courses yields a
+     * view equal to the same empty-month shape as 1.10. No existence port exists to distinguish
+     * "student not found" from "student exists but no course overlap" from "student exists, zero
+     * sessions that month" — all three collapse to the same object.
+     */
+    @Test
+    void an_instructor_viewer_with_zero_overlapping_courses_yields_the_same_empty_month_shape() {
+        PhysicalCapacityAssignmentRepository repository = mock(PhysicalCapacityAssignmentRepository.class);
+        when(repository.findMonthlyAttendanceInCoursesOwnedBy(any(), any(), any(), any())).thenReturn(List.of());
+        GetPhysicalAttendanceHistoryUseCaseImpl useCase =
+            new GetPhysicalAttendanceHistoryUseCaseImpl(repository, BUENOS_AIRES);
+
+        AttendanceHistoryView view = useCase.history(
+            AttendanceViewer.elevated(UUID.randomUUID(), UUID.randomUUID(), false), YearMonth.of(2026, 11), true
+        );
+
+        AttendanceHistoryView expectedEmptyShape = new AttendanceHistoryView(
+            "2026-11", 0, 0, 0, new java.math.BigDecimal("0.00"), List.of()
+        );
+        assertThat(view).isEqualTo(expectedEmptyShape);
+    }
 }

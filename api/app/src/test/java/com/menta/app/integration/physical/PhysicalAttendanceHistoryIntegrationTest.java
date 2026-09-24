@@ -129,10 +129,14 @@ class PhysicalAttendanceHistoryIntegrationTest {
     }
 
     private UUID seedCourse() {
+        return seedCourse(UUID.randomUUID());
+    }
+
+    private UUID seedCourse(UUID professorId) {
         UUID id = UUID.randomUUID();
         Instant now = Instant.now();
         courseRepository.save(new PhysicalCourseJpaEntity(
-            id, "Salsa Intermedio", "desc", UUID.randomUUID(), "Ana Perez", "WEDNESDAY",
+            id, "Salsa Intermedio", "desc", professorId, "Ana Perez", "WEDNESDAY",
             LocalTime.of(20, 0), 60, "INTERMEDIATE", 20, CourseStatus.ACTIVE, now, now
         ));
         return id;
@@ -268,6 +272,145 @@ class PhysicalAttendanceHistoryIntegrationTest {
     void an_anonymous_request_is_rejected_with_401() {
         ResponseEntity<Map> response = http.exchange(
             "/api/v1/physical/attendance/me?month=2026-09", HttpMethod.GET, HttpEntity.EMPTY, Map.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    private ResponseEntity<Map> readElevatedMonth(
+        UUID callerId, Role callerRole, UUID studentId, String month
+    ) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(tokenFor(callerId, callerRole));
+        return http.exchange(
+            "/api/v1/admin/physical/attendance/" + studentId + "?month=" + month + "&includeAbsent=true",
+            HttpMethod.GET, new HttpEntity<>(headers), Map.class
+        );
+    }
+
+    /** R6 — ADMIN reads any student's month unrestricted, across multiple courses. */
+    @Test
+    void admin_reads_any_students_month_unrestricted_across_courses() {
+        UUID adminId = issueUser(Role.ADMIN);
+        UUID studentId = issueUser(Role.STUDENT);
+        UUID courseA = seedCourse();
+        UUID courseB = seedCourse();
+        UUID courseC = seedCourse();
+        for (UUID courseId : List.of(courseA, courseB, courseC)) {
+            UUID sessionId = seedSession(courseId, Instant.parse("2026-09-05T22:00:00Z"));
+            seedAssignment(sessionId, studentId);
+        }
+        // two more sessions to reach five total assignments across the three courses.
+        UUID sessionD = seedSession(courseA, Instant.parse("2026-09-12T22:00:00Z"));
+        seedAssignment(sessionD, studentId);
+        UUID sessionE = seedSession(courseB, Instant.parse("2026-09-19T22:00:00Z"));
+        seedAssignment(sessionE, studentId);
+
+        ResponseEntity<Map> response = readElevatedMonth(adminId, Role.ADMIN, studentId, "2026-09");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().get("scheduledSessionCount")).isEqualTo(5);
+        assertThat((List) response.getBody().get("sessions")).hasSize(5);
+    }
+
+    /**
+     * R7 — the High-risk row's own proof: an INSTRUCTOR teaching course A reads a student with 3
+     * assignments in course A and 2 in course B (taught by someone else). {@code sessions[]}
+     * MUST contain only the 3 course-A sessions, and every aggregate number MUST reflect only
+     * those 3, never the full 5.
+     */
+    @Test
+    void instructor_sees_only_their_own_courses_sessions_and_aggregates() {
+        UUID instructorId = issueUser(Role.INSTRUCTOR);
+        UUID otherProfessorId = UUID.randomUUID();
+        UUID studentId = issueUser(Role.STUDENT);
+        UUID ownCourse = seedCourse(instructorId);
+        UUID otherCourse = seedCourse(otherProfessorId);
+        for (Instant scheduledAt : List.of(
+            Instant.parse("2026-09-03T22:00:00Z"), Instant.parse("2026-09-10T22:00:00Z"),
+            Instant.parse("2026-09-17T22:00:00Z")
+        )) {
+            UUID sessionId = seedSession(ownCourse, scheduledAt);
+            seedAssignment(sessionId, studentId);
+            seedAttendance(sessionId, studentId, scheduledAt.plusSeconds(120));
+        }
+        for (Instant scheduledAt : List.of(
+            Instant.parse("2026-09-05T22:00:00Z"), Instant.parse("2026-09-12T22:00:00Z")
+        )) {
+            UUID sessionId = seedSession(otherCourse, scheduledAt);
+            seedAssignment(sessionId, studentId);
+        }
+
+        ResponseEntity<Map> response = readElevatedMonth(instructorId, Role.INSTRUCTOR, studentId, "2026-09");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat((List) response.getBody().get("sessions")).hasSize(3);
+        assertThat(response.getBody().get("scheduledSessionCount")).isEqualTo(3);
+        assertThat(response.getBody().get("attended")).isEqualTo(3);
+        assertThat(response.getBody().get("absent")).isEqualTo(0);
+    }
+
+    /** R8 — a STUDENT caller cannot reach the elevated endpoint at all. */
+    @Test
+    void a_student_caller_cannot_reach_the_elevated_endpoint() {
+        UUID studentCallerId = issueUser(Role.STUDENT);
+        UUID targetStudentId = issueUser(Role.STUDENT);
+
+        ResponseEntity<Map> response = readElevatedMonth(studentCallerId, Role.STUDENT, targetStudentId, "2026-09");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    /**
+     * R9 — anti-enumeration: student X (not enrolled in any course the instructor teaches) and
+     * student Y (a real student with zero physical assignments that month) both return
+     * byte-identical 200 bodies via the elevated endpoint, asserted by full-body equality.
+     */
+    @Test
+    void non_overlapping_student_and_genuinely_empty_student_are_indistinguishable() {
+        UUID instructorId = issueUser(Role.INSTRUCTOR);
+        UUID otherProfessorId = UUID.randomUUID();
+        UUID studentX = issueUser(Role.STUDENT); // not enrolled in the instructor's course
+        UUID studentY = issueUser(Role.STUDENT); // zero physical assignments at all
+        UUID otherCourse = seedCourse(otherProfessorId);
+        UUID sessionId = seedSession(otherCourse, Instant.parse("2026-09-05T22:00:00Z"));
+        seedAssignment(sessionId, studentX);
+
+        ResponseEntity<Map> responseForX = readElevatedMonth(instructorId, Role.INSTRUCTOR, studentX, "2026-09");
+        ResponseEntity<Map> responseForY = readElevatedMonth(instructorId, Role.INSTRUCTOR, studentY, "2026-09");
+
+        assertThat(responseForX.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(responseForY.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(responseForX.getBody()).isEqualTo(responseForY.getBody());
+        assertThat(responseForX.getBody().get("scheduledSessionCount")).isEqualTo(0);
+        assertThat((List) responseForX.getBody().get("sessions")).isEmpty();
+        assertThat(responseForX.getBody().get("attendanceRate")).isEqualTo(0.00);
+    }
+
+    /** D3/R10 (bounded-result test, elevated path): a full month is returned untruncated. */
+    @Test
+    void a_full_month_returns_every_assignment_untruncated_via_the_elevated_endpoint() {
+        UUID adminId = issueUser(Role.ADMIN);
+        UUID studentId = issueUser(Role.STUDENT);
+        UUID courseId = seedCourse();
+        int totalSessions = 8;
+        for (int day = 1; day <= totalSessions; day++) {
+            UUID sessionId = seedSession(courseId, Instant.parse("2026-09-0" + day + "T22:00:00Z"));
+            seedAssignment(sessionId, studentId);
+        }
+
+        ResponseEntity<Map> response = readElevatedMonth(adminId, Role.ADMIN, studentId, "2026-09");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().get("scheduledSessionCount")).isEqualTo(totalSessions);
+        assertThat((List) response.getBody().get("sessions")).hasSize(totalSessions);
+    }
+
+    @Test
+    void an_anonymous_request_to_the_elevated_endpoint_is_rejected_with_401() {
+        ResponseEntity<Map> response = http.exchange(
+            "/api/v1/admin/physical/attendance/" + UUID.randomUUID() + "?month=2026-09",
+            HttpMethod.GET, HttpEntity.EMPTY, Map.class
         );
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);

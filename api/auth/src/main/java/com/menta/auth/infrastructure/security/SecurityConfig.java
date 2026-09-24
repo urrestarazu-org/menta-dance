@@ -110,6 +110,17 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *     status, resolved from the token. A single-segment wildcard can never
  *     match the two-segment webhook path above, so both rules stay mutually
  *     exclusive regardless of declaration order).
+ *   - GET /api/v1/physical/attendance/me        → authenticated (any role)
+ *     (#39, US-PHYSICAL-002 P1; the acting student reads their OWN month —
+ *     the student id comes from the JWT principal, this endpoint has no
+ *     studentId parameter to abuse).
+ *   - GET /api/v1/admin/physical/attendance/{studentId} → ADMIN or INSTRUCTOR
+ *     (#39, US-PHYSICAL-002 P2; elevated read of ANOTHER student's month.
+ *     Must be declared before the generic /api/v1/admin/** rule below — that
+ *     rule is a prefix match that WOULD otherwise catch this path and
+ *     incorrectly 403 an INSTRUCTOR, who is a legitimate caller here.
+ *     INSTRUCTOR is narrowed to their own courses inside the query, design
+ *     C1, never by this matcher).
  *   - /actuator/health                          → permitAll
  *   - /api/v1/users/register                    → permitAll (public registration; PR2 contract)
  *   - /api/v1/admin/physical/courses/**         → ADMIN or INSTRUCTOR
@@ -269,6 +280,16 @@ public class SecurityConfig {
                 // student id comes from the JWT principal; this endpoint has no studentId
                 // parameter to abuse.
                 .requestMatchers(HttpMethod.GET, "/api/v1/physical/attendance/me").authenticated()
+                // #39, US-PHYSICAL-002 P2: elevated read of ANOTHER student's month. Must be
+                // declared before the generic /api/v1/admin/** rule below (hasRole("ADMIN")
+                // only) — that rule WOULD match this path (it's a prefix match) and would
+                // incorrectly 403 an INSTRUCTOR, who is a legitimate caller here. This is the
+                // opposite failure mode from an unmapped path falling through to a permissive
+                // grant, but the same root cause: first-match-wins means the more specific rule
+                // must come first. INSTRUCTOR is admitted by this matcher and narrowed to their
+                // own courses inside the query (design C1), never by the matcher itself.
+                .requestMatchers(HttpMethod.GET, "/api/v1/admin/physical/attendance/*")
+                    .hasAnyRole("ADMIN", "INSTRUCTOR")
                 .requestMatchers("/actuator/health").permitAll()
                 .requestMatchers("/api/v1/users/register").permitAll()
                 // #42: ADMIN and INSTRUCTOR share this prefix; ownership of a specific

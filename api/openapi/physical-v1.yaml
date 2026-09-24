@@ -59,6 +59,12 @@ tags:
       cubre los escenarios 1, 2, 3, 4 y 5 del issue #38; la compensación
       Redis compare-and-delete del escenario 6 queda fuera de alcance — el
       lock simplemente expira por TTL.
+  - name: Historial de asistencia
+    description: |
+      Lectura del historial de asistencia mensual (#39, US-PHYSICAL-002).
+      Un endpoint self-service para el alumno y uno elevado para
+      ADMIN/PROFESOR, ambos de sólo lectura — sin paginación, acotados a un
+      mes calendario.
 
 paths:
   /api/v1/admin/physical/courses:
@@ -500,6 +506,108 @@ paths:
                     detail: "Check-in is temporarily unavailable; retry after 30s."
                     code: CHECK_IN_DEGRADED
 
+  /api/v1/physical/attendance/me:
+    get:
+      tags: [Historial de asistencia]
+      summary: Leer el propio historial de asistencia mensual
+      description: |
+        Historial del propio alumno autenticado para un mes calendario
+        (#39, US-PHYSICAL-002 P1). `scheduledSessionCount` es el conteo de
+        asignaciones (`physical_capacity_assignments`) cuya sesión cae en
+        `[monthStart, monthNext)` del mes solicitado, resuelto en la zona
+        horaria configurada (`physical.attendance.zone-id`, por defecto
+        `America/Argentina/Buenos_Aires`) — nunca en la ventana de
+        cobertura de la compra. `includeAbsent=false` (default) omite las
+        asignaciones sin check-in de `sessions[]`; los cuatro agregados
+        (`scheduledSessionCount`, `attended`, `absent`, `attendanceRate`)
+        se calculan siempre sobre el conjunto completo, sin importar el
+        flag. Un mes sin asignaciones responde `200` con todo en cero,
+        nunca `404`. No hay paginación: el mes completo viene en una sola
+        respuesta. El id del alumno sale siempre del token — este endpoint
+        no tiene parámetro `studentId` que se pueda abusar.
+      operationId: getOwnAttendanceHistory
+      parameters:
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{2}$'
+            example: "2026-09"
+        - name: includeAbsent
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Historial del mes solicitado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttendanceHistoryResponse'
+        '400':
+          description: '`month` malformado, no `YYYY-MM` (`INVALID_REQUEST`).'
+        '401':
+          description: Sin credencial de autenticación.
+
+  /api/v1/admin/physical/attendance/{studentId}:
+    get:
+      tags: [Historial de asistencia]
+      summary: Leer el historial de asistencia mensual de otro alumno (elevado)
+      description: |
+        Lectura elevada del historial de OTRO alumno (#39, US-PHYSICAL-002
+        P2). `ADMIN` ve el mes del alumno sin restricción, idéntico en
+        forma al endpoint self-service. `INSTRUCTOR` (rol interno de
+        PROFESOR) ve el mismo mes filtrado server-side a las sesiones de
+        cursos que ese profesor dicta — tanto `sessions[]` como los cuatro
+        agregados reflejan sólo ese subconjunto, nunca el historial
+        completo del alumno; el filtro se aplica en la consulta (join
+        contra `professorId` del curso), nunca post-filtrado. Un alumno sin
+        ninguna sesión en cursos del profesor responde el mismo `200`
+        vacío que un alumno sin asignaciones ese mes — el endpoint nunca
+        distingue ambos casos por código de estado ni forma de la
+        respuesta (anti-enumeración). `STUDENT` no puede alcanzar este
+        endpoint en absoluto.
+      operationId: getElevatedAttendanceHistory
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{2}$'
+            example: "2026-09"
+        - name: includeAbsent
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: |
+            Historial del mes solicitado — sin restricción para ADMIN,
+            filtrado a cursos propios para INSTRUCTOR. Idéntico en forma al
+            endpoint self-service.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttendanceHistoryResponse'
+        '400':
+          description: '`studentId` o `month` malformado (`INVALID_REQUEST`).'
+        '401':
+          description: Sin credencial de autenticación.
+        '403':
+          description: Rol sin acceso a este endpoint (ni ADMIN ni INSTRUCTOR).
+
 components:
   responses:
     InvalidRequest:
@@ -758,3 +866,52 @@ components:
         kind:
           type: string
           enum: [QR, MANUAL]
+
+    AttendanceHistoryResponse:
+      type: object
+      description: |
+        Forma compartida por ambos endpoints de historial de asistencia
+        (self y elevado) — deliberadamente idéntica: difieren en QUIÉN
+        puede llamar, nunca en lo que se devuelve.
+      required: [period, scheduledSessionCount, attended, absent, attendanceRate, sessions]
+      properties:
+        period:
+          type: string
+          example: "2026-09"
+        scheduledSessionCount:
+          type: integer
+          description: Conteo de asignaciones cuya sesión cae en el mes solicitado.
+        attended:
+          type: integer
+        absent:
+          type: integer
+        attendanceRate:
+          type: number
+          format: double
+          description: attended / scheduledSessionCount, escala 2, HALF_UP; 0.00 si el denominador es 0.
+        sessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttendanceSessionResponse'
+
+    AttendanceSessionResponse:
+      type: object
+      required: [sessionId, scheduledAt, courseName, instructorName, status]
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        scheduledAt:
+          type: string
+          format: date-time
+        courseName:
+          type: string
+        instructorName:
+          type: string
+        status:
+          type: string
+          enum: [ATTENDED, ABSENT]
+        recordedAt:
+          type: [string, "null"]
+          format: date-time
+          description: Null cuando status es ABSENT.

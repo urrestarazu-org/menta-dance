@@ -113,6 +113,66 @@ class SecurityConfigTest {
     }
 
     /**
+     * #39, US-PHYSICAL-002 P2, design C7. Before this matcher existed, this path fell through to
+     * {@code anyRequest().access(roleAuthorizationManager)}, which grants unmapped paths by
+     * default (see the class Javadoc) — an anonymous caller would NOT have been rejected here.
+     */
+    @Test
+    void an_unauthenticated_get_of_the_elevated_attendance_history_route_is_rejected() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get(
+            "/api/v1/admin/physical/attendance/00000000-0000-0000-0000-000000000001"
+        ).param("month", "2026-09"))
+            .andExpect(status().isUnauthorized());
+    }
+
+    /**
+     * #39, US-PHYSICAL-002 P2, design C7/R8. Confirms the elevated matcher's role set does NOT
+     * include STUDENT — a {@code hasAnyRole("ADMIN","INSTRUCTOR")} rule rejects it with
+     * {@code 403}, never a {@code 401} (the caller IS authenticated) nor a silent pass-through.
+     */
+    @Test
+    void an_authenticated_student_get_of_the_elevated_attendance_history_route_is_forbidden() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get(
+            "/api/v1/admin/physical/attendance/00000000-0000-0000-0000-000000000001"
+        ).param("month", "2026-09").with(user("student").roles("STUDENT")))
+            .andExpect(status().isForbidden());
+    }
+
+    /**
+     * #39, US-PHYSICAL-002 P2, design C7 — the ordering regression this matcher exists to
+     * prevent: pins that {@code INSTRUCTOR} reaches the (unmapped) dispatcher, NOT {@code 403}.
+     * A future reorder that drops back to the generic {@code /api/v1/admin/**} →
+     * {@code hasRole("ADMIN")} rule (which would 403 every instructor) fails THIS test instead
+     * of silently locking out every instructor in production.
+     */
+    @Test
+    void an_authenticated_instructor_get_of_the_elevated_attendance_history_route_passes_the_security_layer()
+        throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get(
+            "/api/v1/admin/physical/attendance/00000000-0000-0000-0000-000000000001"
+        ).param("month", "2026-09").with(user("instructor").roles("INSTRUCTOR")))
+            .andExpect(status().isNotFound());
+    }
+
+    /** Same ordering guarantee, confirmed from the other admitted role: ADMIN also passes through. */
+    @Test
+    void an_authenticated_admin_get_of_the_elevated_attendance_history_route_passes_the_security_layer()
+        throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get(
+            "/api/v1/admin/physical/attendance/00000000-0000-0000-0000-000000000001"
+        ).param("month", "2026-09").with(user("admin").roles("ADMIN")))
+            .andExpect(status().isNotFound());
+    }
+
+    /**
      * Confirms the admin cancellation route needs no new matcher: the existing generic
      * {@code /api/v1/admin/**} → {@code hasRole("ADMIN")} rule already rejects a non-admin.
      */
