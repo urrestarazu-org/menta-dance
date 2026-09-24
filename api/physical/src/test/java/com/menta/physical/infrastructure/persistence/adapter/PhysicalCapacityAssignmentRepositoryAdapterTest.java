@@ -170,4 +170,35 @@ class PhysicalCapacityAssignmentRepositoryAdapterTest {
         assertThat(rows).anyMatch(AttendanceHistoryRow::attended);
         assertThat(rows).anyMatch(row -> !row.attended());
     }
+
+    /**
+     * #39, US-PHYSICAL-002 P2, design C1/R7 — the High-risk row's own proof: a course owned by
+     * another professor MUST contribute ZERO rows to the scoped query, not a filtered subset
+     * that happens to be empty by coincidence. Seeds rows from two different professors' courses
+     * for the SAME student and month, then asserts the scoped method returns only the owning
+     * professor's row while the unrestricted method (same fixture) returns both.
+     */
+    @Test
+    void scoped_query_returns_zero_rows_for_a_course_owned_by_another_professor() {
+        UUID studentId = UUID.randomUUID();
+        UUID owningProfessor = UUID.randomUUID();
+        UUID otherProfessor = UUID.randomUUID();
+        UUID ownedCourse = seedCourse(owningProfessor);
+        UUID otherCourse = seedCourse(otherProfessor);
+        UUID ownedSession = seedSession(ownedCourse, Instant.parse("2026-09-05T22:00:00Z"));
+        UUID otherSession = seedSession(otherCourse, Instant.parse("2026-09-12T22:00:00Z"));
+        seedAssignment(ownedSession, studentId);
+        seedAssignment(otherSession, studentId);
+
+        List<AttendanceHistoryRow> scopedToOtherProfessor = adapter().findMonthlyAttendanceInCoursesOwnedBy(
+            studentId, Instant.parse("2026-09-01T00:00:00Z"), Instant.parse("2026-10-01T00:00:00Z"), otherProfessor
+        );
+        List<AttendanceHistoryRow> unrestricted = adapter().findMonthlyAttendance(
+            studentId, Instant.parse("2026-09-01T00:00:00Z"), Instant.parse("2026-10-01T00:00:00Z")
+        );
+
+        assertThat(scopedToOtherProfessor).hasSize(1);
+        assertThat(scopedToOtherProfessor.get(0).sessionId()).isEqualTo(otherSession);
+        assertThat(unrestricted).hasSize(2);
+    }
 }

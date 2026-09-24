@@ -1,0 +1,36 @@
+meta {
+  name: Attendance History (Me)
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/physical/attendance/me?month=2026-09&includeAbsent=false
+  auth: bearer
+}
+
+params:query {
+  month: 2026-09
+  includeAbsent: false
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  #39, US-PHYSICAL-002. The acting student's own attendance for one calendar
+  month. `month` is required (`YYYY-MM`); `includeAbsent` defaults to
+  `false` and hides unattended assignments from `sessions[]` without moving
+  any aggregate. The student id always comes from the Bearer token — there
+  is no studentId parameter to abuse.
+
+  Success contract: 200 with { period, scheduledSessionCount, attended,
+  absent, attendanceRate, sessions[] }.
+  Error contract: 400 (`INVALID_REQUEST`) on a malformed month; 401 when
+  unauthenticated.
+}
+
+assert {
+  res.status: eq 200
+}
