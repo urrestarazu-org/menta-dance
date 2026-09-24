@@ -149,6 +149,21 @@ two-slice "Migration / Rollout" split; nothing in P1 needs to change.
 - BFF or Android surfaces.
 - A denormalized monthly snapshot table (exploration approach 2, rejected).
 
+## Remediation: sdd-verify FAIL (2 CRITICAL, scenario coverage gaps)
+
+`sdd-verify` returned FAIL: 45/45 tasks complete, full `./gradlew check` and
+`./gradlew test --rerun-tasks` green, but 2 of 21 spec scenarios had zero
+runtime test coverage (implementation confirmed structurally correct by
+source read + `ArchitectureTest`, but untested per this project's compliance
+bar). See `verify-report.md` for the full FAIL report.
+
+- [x] R.1 RED/GREEN: `PhysicalAttendanceHistoryIntegrationTest.a_mid_month_monthly_purchase_splits_assignments_across_two_monthly_views` — drives a real `MONTHLY` purchase checkout + webhook confirmation through the full Billing stack (mirrors `PhysicalPurchaseIntegrationTest`), 3 sessions split 2 September / 1 October. Confirmed RED first (flipped the September expectation to 3, watched it fail), then reverted to GREEN. Proves the spec scenario "A mid-month MONTHLY purchase splits across two monthly views" (Requirement: Denominator counts assignments, not purchase coverage windows).
+- [x] R.2 RED/GREEN: `PhysicalAttendanceHistoryIntegrationTest.a_pre_quote_cancellation_never_produced_an_assignment` — seeds a session with status `CANCELLED` and no assignment row ever created (mirrors `PhysicalSessionManagementIntegrationTest`'s direct-CANCELLED-seeding idiom), alongside one real attended session. Confirmed RED first, then reverted to GREEN. Proves the spec scenario "A pre-quote cancellation never produced an assignment" (Requirement: Sessions cancelled before quoting are naturally absent).
+- [x] R.3 Verify: `:api:app:test --tests "*PhysicalAttendanceHistoryIntegrationTest*" --rerun-tasks` — 14/14 green (12 prior + 2 new), against real Testcontainers MySQL. Full `./gradlew check` — `BUILD SUCCESSFUL`, no regressions, no new checkstyle violations (only pre-existing-style warnings, same as before).
+
+No production code changed — both CRITICAL findings were coverage gaps only,
+not implementation defects, confirmed by this remediation.
+
 ## Next Steps
 
 After **P2** merges and its integration tests are green: run `sdd-verify`

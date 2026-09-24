@@ -1,9 +1,11 @@
 package com.menta.app.integration.physical;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
+import com.menta.app.outbox.OutboxReconciliationWorker;
 import com.menta.auth.application.port.out.AccessTokenIssuer;
 import com.menta.auth.application.port.out.ActivationRateLimitPort;
 import com.menta.auth.application.port.out.AuthDegradedGuard;
@@ -16,9 +18,26 @@ import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.model.UserId;
 import com.menta.auth.domain.model.UserStatus;
 import com.menta.auth.domain.repository.UserRepository;
+import com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity;
+import com.menta.auth.infrastructure.persistence.repository.OutboxRowJpaRepository;
+import com.menta.billing.application.contract.BillingOutboxEventTypes;
+import com.menta.billing.application.dto.PaymentPreferenceResult;
+import com.menta.billing.application.dto.ProviderPaymentResult;
 import com.menta.billing.application.port.out.BankTransferRateLimitPort;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.port.out.CourseCatalogPort;
+import com.menta.billing.application.port.out.PaymentPreferencePort;
+import com.menta.billing.application.port.out.PaymentProviderPort;
+import com.menta.billing.domain.model.Money;
+import com.menta.billing.infrastructure.persistence.entity.PhysicalCourseQuoteJpaEntity;
+import com.menta.billing.infrastructure.persistence.entity.WebhookInboxJpaEntity;
+import com.menta.billing.infrastructure.persistence.repository.PaymentJpaRepository;
+import com.menta.billing.infrastructure.persistence.repository.PhysicalCourseQuoteJpaRepository;
+import com.menta.billing.infrastructure.persistence.repository.PurchaseJpaRepository;
+import com.menta.billing.infrastructure.persistence.repository.PurchaseSessionJpaRepository;
+import com.menta.billing.infrastructure.persistence.repository.WebhookInboxJpaRepository;
+import com.menta.billing.infrastructure.webhook.WebhookInboxStatus;
+import com.menta.billing.infrastructure.webhook.WebhookVerificationWorker;
 import com.menta.physical.domain.model.CourseStatus;
 import com.menta.physical.infrastructure.persistence.entity.AttendanceJpaEntity;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalCapacityAssignmentJpaEntity;
@@ -29,8 +48,10 @@ import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacity
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
 import com.menta.shared.domain.vo.Email;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -45,6 +66,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -64,6 +86,10 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Testcontainers
 class PhysicalAttendanceHistoryIntegrationTest {
 
+    /** R2 remediation fixture (#39 verify-report FAIL finding 1) — mirrors {@code PhysicalPurchaseIntegrationTest}. */
+    private static final String MERCHANT_ACCOUNT_ID = "merchant-integration-attendance-history";
+    private static final BigDecimal MONTHLY_PRICE = new BigDecimal("300.00");
+
     @Container
     private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
         .withDatabaseName("menta_test")
@@ -76,6 +102,8 @@ class PhysicalAttendanceHistoryIntegrationTest {
         registry.add("spring.datasource.username", MYSQL::getUsername);
         registry.add("spring.datasource.password", MYSQL::getPassword);
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
+        registry.add("billing.webhook.reconcile-rate-ms", () -> "999999999");
+        registry.add("billing.mercadopago.merchant-account-id", () -> MERCHANT_ACCOUNT_ID);
     }
 
     @Autowired private TestRestTemplate http;
@@ -86,6 +114,16 @@ class PhysicalAttendanceHistoryIntegrationTest {
     @Autowired private PhysicalCapacityAssignmentJpaRepository assignmentRepository;
     @Autowired private AttendanceJpaRepository attendanceRepository;
 
+    // R2 remediation fixture: real MONTHLY purchase checkout + confirmation flow.
+    @Autowired private PaymentJpaRepository paymentRepository;
+    @Autowired private PurchaseJpaRepository purchaseRepository;
+    @Autowired private PurchaseSessionJpaRepository purchaseSessionRepository;
+    @Autowired private WebhookInboxJpaRepository inboxRepository;
+    @Autowired private OutboxRowJpaRepository outboxRepository;
+    @Autowired private PhysicalCourseQuoteJpaRepository quoteRepository;
+    @Autowired private WebhookVerificationWorker webhookWorker;
+    @Autowired private OutboxReconciliationWorker outboxWorker;
+
     @MockBean private AuthDegradedGuard authDegradedGuard;
     @MockBean private TokenBlacklistPort tokenBlacklistPort;
     @MockBean private LoginRateLimitPort loginRateLimitPort;
@@ -95,6 +133,8 @@ class PhysicalAttendanceHistoryIntegrationTest {
     @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
     @MockBean private BankTransferRateLimitPort bankTransferRateLimitPort;
     @MockBean private CourseCatalogPort courseCatalogPort;
+    @MockBean private PaymentPreferencePort paymentPreferencePort;
+    @MockBean private PaymentProviderPort paymentProviderPort;
 
     @SuppressWarnings("rawtypes")
     @MockBean
@@ -102,6 +142,12 @@ class PhysicalAttendanceHistoryIntegrationTest {
 
     @AfterEach
     void cleanUp() {
+        purchaseSessionRepository.deleteAll();
+        purchaseRepository.deleteAll();
+        outboxRepository.deleteAll();
+        inboxRepository.deleteAll();
+        paymentRepository.deleteAll();
+        quoteRepository.deleteAll();
         attendanceRepository.deleteAll();
         assignmentRepository.deleteAll();
         sessionRepository.deleteAll();
@@ -158,6 +204,62 @@ class PhysicalAttendanceHistoryIntegrationTest {
         attendanceRepository.save(
             new AttendanceJpaEntity(UUID.randomUUID(), sessionId, studentId, recordedAt, "reader-1", "QR")
         );
+    }
+
+    /** R2 remediation fixture: cancelled BEFORE ever being quoted — no assignment row exists. */
+    private UUID seedCancelledSession(UUID courseId, Instant scheduledAt) {
+        UUID id = UUID.randomUUID();
+        sessionRepository.save(new PhysicalSessionJpaEntity(id, courseId, scheduledAt, 20, "CANCELLED", null));
+        return id;
+    }
+
+    // --- R2 remediation fixture: real MONTHLY purchase checkout + confirmation (mirrors
+    // PhysicalPurchaseIntegrationTest.monthly_purchase_confirmed_assigns_every_covered_session_end_to_end) ---
+
+    private HttpHeaders checkoutHeadersFor(UUID studentId) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(tokenFor(studentId, Role.STUDENT));
+        return headers;
+    }
+
+    private String seedMonthlyQuote(UUID courseId, int scheduledSessionCount, BigDecimal amount) {
+        UUID quoteId = UUID.randomUUID();
+        Instant now = Instant.now();
+        quoteRepository.save(new PhysicalCourseQuoteJpaEntity(
+            quoteId.toString(), courseId.toString(), "MONTHLY", amount, "ARS", BigDecimal.ZERO, 1,
+            scheduledSessionCount, null, amount, "ARS", "AVAILABLE", now, now.plusSeconds(3600)
+        ));
+        return quoteId.toString();
+    }
+
+    @SuppressWarnings("unchecked")
+    private ResponseEntity<Map> checkout(UUID studentId, String quoteId, String idempotencyKey) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("quoteId", quoteId);
+        body.put("paymentMethod", "MERCADO_PAGO");
+        body.put("idempotencyKey", idempotencyKey);
+        return http.exchange(
+            "/api/v1/billing/physical/purchases", HttpMethod.POST,
+            new HttpEntity<>(body, checkoutHeadersFor(studentId)), Map.class
+        );
+    }
+
+    /** Drives the confirmation half through the real webhook worker, mirroring PhysicalPurchaseIntegrationTest. */
+    private OutboxRowJpaEntity confirmPayment(String providerPaymentId, String externalReference, BigDecimal amount) {
+        when(paymentProviderPort.fetchPayment(providerPaymentId)).thenReturn(
+            new ProviderPaymentResult("approved", Money.of(amount, "ARS"), externalReference, MERCHANT_ACCOUNT_ID)
+        );
+        WebhookInboxJpaEntity row = new WebhookInboxJpaEntity(
+            providerPaymentId + ":req-1", providerPaymentId, "req-1", WebhookInboxStatus.RECEIVED,
+            0, null, null, Instant.now(), null
+        );
+        inboxRepository.save(row);
+        webhookWorker.process(row);
+        return outboxRepository.findAll().stream()
+            .filter(candidate -> candidate.getEventType().equals(BillingOutboxEventTypes.PHYSICAL_PAYMENT_COMPLETED))
+            .reduce((first, second) -> second)
+            .orElseThrow(() -> new IllegalStateException("No billing.PhysicalPaymentCompleted outbox row was produced"));
     }
 
     private ResponseEntity<Map> readOwnMonth(UUID studentId, String month, Boolean includeAbsent) {
@@ -248,6 +350,87 @@ class PhysicalAttendanceHistoryIntegrationTest {
             .isEqualTo(withAbsent.getBody().get("scheduledSessionCount"));
         assertThat(withoutAbsent.getBody().get("attended")).isEqualTo(withAbsent.getBody().get("attended"));
         assertThat(withoutAbsent.getBody().get("absent")).isEqualTo(withAbsent.getBody().get("absent"));
+    }
+
+    /**
+     * Verify-report remediation, CRITICAL finding 1 (spec "Denominator counts assignments, not
+     * purchase coverage windows" — scenario "A mid-month MONTHLY purchase splits across two
+     * monthly views"). Drives a real checkout + webhook confirmation through the full Billing
+     * stack (mirrors {@code PhysicalPurchaseIntegrationTest.monthly_purchase_confirmed_assigns_every_covered_session_end_to_end}),
+     * covering 3 sessions split across September and October. Asserts each month's
+     * {@code scheduledSessionCount} reflects only that month's assigned sessions, and that
+     * neither month's count equals the purchase's own coverage-window session count (3).
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void a_mid_month_monthly_purchase_splits_assignments_across_two_monthly_views() {
+        UUID studentId = issueUser(Role.STUDENT);
+        UUID courseId = seedCourse();
+        // 2 sessions in September, 1 in October — all after "now" so CoveragePlanner claims them.
+        UUID septemberFirst = seedSession(courseId, Instant.parse("2026-09-28T22:00:00Z"));
+        UUID septemberSecond = seedSession(courseId, Instant.parse("2026-09-29T22:00:00Z"));
+        UUID octoberFirst = seedSession(courseId, Instant.parse("2026-10-05T22:00:00Z"));
+        String quoteId = seedMonthlyQuote(courseId, 3, MONTHLY_PRICE);
+
+        when(paymentPreferencePort.createPreference(any())).thenReturn(
+            new PaymentPreferenceResult("pref-attendance-r2", "https://mp.example/checkout/pref-attendance-r2")
+        );
+        ResponseEntity<Map> checkoutResponse = checkout(studentId, quoteId, "idem-attendance-r2-1");
+        assertThat(checkoutResponse.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        String externalReference = (String) checkoutResponse.getBody().get("externalReference");
+        UUID paymentId = UUID.fromString((String) checkoutResponse.getBody().get("paymentId"));
+
+        OutboxRowJpaEntity event = confirmPayment("mp-attendance-r2-1", externalReference, MONTHLY_PRICE);
+        outboxWorker.process(event);
+
+        var purchase = purchaseRepository.findByPaymentId(paymentId).orElseThrow();
+        int purchaseCoverageWindowCount =
+            purchaseSessionRepository.findByPurchaseIdOrderByPositionAsc(purchase.getId()).size();
+        assertThat(purchaseCoverageWindowCount).isEqualTo(3);
+        assertThat(assignmentRepository.countBySessionId(septemberFirst)).isEqualTo(1);
+        assertThat(assignmentRepository.countBySessionId(septemberSecond)).isEqualTo(1);
+        assertThat(assignmentRepository.countBySessionId(octoberFirst)).isEqualTo(1);
+
+        ResponseEntity<Map> september = readOwnMonth(studentId, "2026-09", true);
+        ResponseEntity<Map> october = readOwnMonth(studentId, "2026-10", true);
+
+        assertThat(september.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(september.getBody().get("scheduledSessionCount")).isEqualTo(2);
+        assertThat((List) september.getBody().get("sessions")).hasSize(2);
+        assertThat(october.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(october.getBody().get("scheduledSessionCount")).isEqualTo(1);
+        assertThat((List) october.getBody().get("sessions")).hasSize(1);
+        assertThat(september.getBody().get("scheduledSessionCount")).isNotEqualTo(purchaseCoverageWindowCount);
+        assertThat(october.getBody().get("scheduledSessionCount")).isNotEqualTo(purchaseCoverageWindowCount);
+    }
+
+    /**
+     * Verify-report remediation, CRITICAL finding 2 (spec "Sessions cancelled before quoting are
+     * naturally absent" — scenario "A pre-quote cancellation never produced an assignment").
+     * Seeds a session cancelled BEFORE any student ever quoted/booked it, so no
+     * {@code physical_capacity_assignments} row was ever created for it (mirrors the
+     * direct-CANCELLED-seeding idiom already used by
+     * {@code PhysicalSessionManagementIntegrationTest.management_listing_includes_cancelled_sessions}).
+     * Asserts the cancelled session is absent from both {@code sessions[]} and
+     * {@code scheduledSessionCount} for that month.
+     */
+    @Test
+    void a_pre_quote_cancellation_never_produced_an_assignment() {
+        UUID studentId = issueUser(Role.STUDENT);
+        UUID courseId = seedCourse();
+        UUID realSession = seedSession(courseId, Instant.parse("2026-09-14T22:00:00Z"));
+        seedAssignment(realSession, studentId);
+        seedAttendance(realSession, studentId, Instant.parse("2026-09-14T22:05:00Z"));
+        // Cancelled before any student ever quoted it — no assignment row was ever created.
+        seedCancelledSession(courseId, Instant.parse("2026-09-21T22:00:00Z"));
+
+        ResponseEntity<Map> response = readOwnMonth(studentId, "2026-09", true);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().get("scheduledSessionCount")).isEqualTo(1);
+        assertThat((List) response.getBody().get("sessions")).hasSize(1);
+        Map onlySession = (Map) ((List) response.getBody().get("sessions")).get(0);
+        assertThat(onlySession.get("sessionId")).isEqualTo(realSession.toString());
     }
 
     /** D3/R10 (bounded-result test): every session in a full month is returned untruncated. */
