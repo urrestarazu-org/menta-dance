@@ -8,6 +8,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -49,6 +50,24 @@ class PhysicalCapacityHoldMigrationIntegrationTest {
 
     private static Connection connect() throws java.sql.SQLException {
         return DriverManager.getConnection(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
+    }
+
+    /**
+     * The MySQL container is {@code static} (shared across every test method, to avoid paying
+     * its startup cost per test) so each test resets the schema before migrating — otherwise
+     * {@code v20_1_adds_payment_id_not_null_with_its_unique_key_and_index}'s migrate-to-latest
+     * would leak a schema already at v22 into {@code v20_2_reverts_cleanly_on_the_zero_row_table},
+     * defeating its own {@code target(20.1.5)} bound (mirrors {@code
+     * PurchaseSessionsMigrationIntegrationTest}).
+     */
+    @BeforeEach
+    void resetSchema() {
+        Flyway.configure()
+            .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
+            .locations("classpath:db/migration", "classpath:db/rollback")
+            .cleanDisabled(false)
+            .load()
+            .clean();
     }
 
     private static boolean columnExists(Connection connection, String column) throws java.sql.SQLException {
@@ -111,9 +130,15 @@ class PhysicalCapacityHoldMigrationIntegrationTest {
 
     @Test
     void v20_2_reverts_cleanly_on_the_zero_row_table() throws java.sql.SQLException {
+        // Targets 20.1.5 (the highest real classpath:db/migration version below the reserved
+        // V20.2/V21 rollback slots), not an unbounded "migrate to latest": any later real
+        // migration (V22, #39, and beyond) applied here would sit above V20.2/V21, and the
+        // combined-location target(20.2) below would then be an out-of-order downgrade — the
+        // exact failure mode this class's own javadoc warned about.
         Flyway.configure()
             .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
             .locations("classpath:db/migration")
+            .target(MigrationVersion.fromVersion("20.1.5"))
             .load()
             .migrate();
 

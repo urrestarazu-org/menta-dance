@@ -265,6 +265,10 @@ public class SecurityConfig {
                 // US-PHYSICAL-001 escenario 1: any authenticated student may request their
                 // own ephemeral check-in QR — no specific role required.
                 .requestMatchers(HttpMethod.POST, "/api/v1/physical/sessions/*/access-qr").authenticated()
+                // #39, US-PHYSICAL-002: any authenticated student reads their OWN month. The
+                // student id comes from the JWT principal; this endpoint has no studentId
+                // parameter to abuse.
+                .requestMatchers(HttpMethod.GET, "/api/v1/physical/attendance/me").authenticated()
                 .requestMatchers("/actuator/health").permitAll()
                 .requestMatchers("/api/v1/users/register").permitAll()
                 // #42: ADMIN and INSTRUCTOR share this prefix; ownership of a specific

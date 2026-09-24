@@ -100,6 +100,19 @@ class SecurityConfigTest {
     }
 
     /**
+     * #39, US-PHYSICAL-002, design C7. Before this matcher existed, this path fell through to
+     * {@code anyRequest().access(roleAuthorizationManager)}, which grants unmapped paths by
+     * default (see the class Javadoc) — an anonymous caller would NOT have been rejected here.
+     */
+    @Test
+    void an_unauthenticated_get_of_the_self_attendance_history_route_is_rejected() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get("/api/v1/physical/attendance/me").param("month", "2026-09"))
+            .andExpect(status().isUnauthorized());
+    }
+
+    /**
      * Confirms the admin cancellation route needs no new matcher: the existing generic
      * {@code /api/v1/admin/**} → {@code hasRole("ADMIN")} rule already rejects a non-admin.
      */

@@ -37,6 +37,13 @@ dependencies {
     // Testing
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("com.tngtech.archunit:archunit-junit5:1.3.0")
+    // #39, US-PHYSICAL-002: PhysicalCapacityAssignmentRepositoryAdapterTest is this module's
+    // first @DataJpaTest against real MySQL 8.0 (mirrors :api:virtual's
+    // LessonProgressRepositoryAdapterProjectionTest — same rationale: half-open Instant bounds
+    // and explicit entity joins need real MySQL semantics, not H2).
+    testImplementation("org.testcontainers:testcontainers")
+    testImplementation("org.testcontainers:junit-jupiter")
+    testImplementation("org.testcontainers:mysql")
 }
 
 tasks.jar {

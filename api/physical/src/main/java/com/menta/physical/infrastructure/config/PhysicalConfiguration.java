@@ -8,6 +8,7 @@ import com.menta.physical.application.port.in.ListManagedPhysicalCoursesUseCase;
 import com.menta.physical.application.port.in.ListManagedPhysicalSessionsUseCase;
 import com.menta.physical.application.port.in.PhysicalCourseAvailabilityPort;
 import com.menta.physical.application.port.in.PhysicalCourseOwnershipPort;
+import com.menta.physical.application.port.in.GetPhysicalAttendanceHistoryUseCase;
 import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
 import com.menta.physical.application.port.in.UpdatePhysicalCourseUseCase;
 import com.menta.physical.application.port.in.UpdatePhysicalSessionUseCase;
@@ -19,6 +20,7 @@ import com.menta.physical.application.port.out.PhysicalSessionRepository;
 import com.menta.physical.application.usecase.BatchCreatePhysicalSessionsUseCaseImpl;
 import com.menta.physical.application.usecase.CreatePhysicalCourseUseCaseImpl;
 import com.menta.physical.application.usecase.CreatePhysicalSessionUseCaseImpl;
+import com.menta.physical.application.usecase.GetPhysicalAttendanceHistoryUseCaseImpl;
 import com.menta.physical.application.usecase.IssuePhysicalAccessQrUseCaseImpl;
 import com.menta.physical.application.usecase.ListManagedPhysicalCoursesUseCaseImpl;
 import com.menta.physical.application.usecase.ListManagedPhysicalSessionsUseCaseImpl;
@@ -32,6 +34,7 @@ import com.menta.physical.infrastructure.qr.QrProperties;
 import com.menta.physical.infrastructure.redis.RedisCheckInLockPort;
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
+import java.time.ZoneId;
 import java.util.Locale;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
@@ -231,5 +234,18 @@ public class PhysicalConfiguration {
         PhysicalCourseRepository courseRepository, PhysicalSessionRepository sessionRepository
     ) {
         return new UpdatePhysicalSessionUseCaseImpl(courseRepository, sessionRepository);
+    }
+
+    /**
+     * #39, US-PHYSICAL-002, design C3 — {@code ZoneId.of} throws at context startup on a bad
+     * configured id, not at request time. Both the self and elevated (P2) controllers share this
+     * one bean.
+     */
+    @Bean
+    public GetPhysicalAttendanceHistoryUseCase getPhysicalAttendanceHistoryUseCase(
+        PhysicalCapacityAssignmentRepository assignmentRepository,
+        @Value("${physical.attendance.zone-id:America/Argentina/Buenos_Aires}") String zoneId
+    ) {
+        return new GetPhysicalAttendanceHistoryUseCaseImpl(assignmentRepository, ZoneId.of(zoneId));
     }
 }

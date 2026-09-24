@@ -1,6 +1,9 @@
 package com.menta.physical.application.port.out;
 
+import com.menta.physical.application.dto.AttendanceHistoryRow;
 import com.menta.physical.domain.model.SessionId;
+import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -20,4 +23,20 @@ import java.util.UUID;
 public interface PhysicalCapacityAssignmentRepository {
 
     boolean existsConfirmedAssignment(SessionId sessionId, UUID studentId);
+
+    /**
+     * Unrestricted monthly attendance (#39, US-PHYSICAL-002, design C1): self and {@code ADMIN}
+     * readers. One row per assignment whose session's {@code scheduled_at} falls in the
+     * half-open {@code [monthStart, monthNext)} range, {@code LEFT JOIN}ed with
+     * {@code physical_attendances} for the live {@code ATTENDED}/{@code ABSENT} derivation.
+     */
+    List<AttendanceHistoryRow> findMonthlyAttendance(UUID studentId, Instant monthStart, Instant monthNext);
+
+    /**
+     * Narrowed to sessions of courses whose {@code physical_courses.professor_id == professorId}
+     * (#39, design C1) — the filter is applied at the query layer, never post-filtered.
+     */
+    List<AttendanceHistoryRow> findMonthlyAttendanceInCoursesOwnedBy(
+        UUID studentId, Instant monthStart, Instant monthNext, UUID professorId
+    );
 }

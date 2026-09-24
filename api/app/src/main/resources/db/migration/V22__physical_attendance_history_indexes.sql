@@ -1,0 +1,21 @@
+-- V22: index physical_capacity_assignments.student_id for the monthly attendance-history
+-- query (#39, US-PHYSICAL-002, design C5). The month query drives from this table filtered
+-- on student_id; V7 indexes only session_id, so a per-student scan across a growing table is
+-- currently a full table scan.
+--
+-- No index on physical_attendances.user_id (design C5 — a verified correction to the
+-- proposal): the LEFT JOIN predicate is "a.session_id = s.id AND a.user_id = :studentId", two
+-- equality conditions fully covered by the existing
+-- uq_physical_attendances_session_user (session_id, user_id) from V15. A standalone
+-- user_id index would serve no query this change introduces.
+--
+-- Numbered V22, not the V21 design.md/tasks.md sketch: classpath:db/rollback already owns
+-- version 21 (V21__revert_billing_purchase_sessions.sql, #41), and
+-- PurchaseSessionsMigrationIntegrationTest combines classpath:db/migration and
+-- classpath:db/rollback in the same Flyway configuration to exercise that revert. A second
+-- V21 living under classpath:db/migration would collide the moment both locations are
+-- scanned together in that test — exactly the failure mode V20.1's own javadoc already
+-- documents avoiding. V22 is free in both classpath:db/migration (highest applied:
+-- V20_1_5__billing_payment_proofs.sql) and classpath:db/rollback (highest: V21).
+ALTER TABLE physical_capacity_assignments
+    ADD KEY idx_physical_assignments_student (student_id);
