@@ -4,6 +4,18 @@ plugins {
 
 description = "Main Spring Boot application module"
 
+tasks.withType<Test> {
+    // Default Spring TestContext cache size is 32. This module has 40+ distinct
+    // @SpringBootTest configurations (each unique profile + @MockBean combination is its own
+    // cache key); once the LRU cache fills, evicting a "test"-profile context closes its
+    // EntityManagerFactory, which issues DROP TABLE (ddl-auto: create-drop) against the shared,
+    // persistent jdbc:h2:mem:testdb instance (DB_CLOSE_DELAY=-1 keeps it alive across contexts)
+    // — wiping tables out from under any other still-active "test"-profile context sharing it.
+    // Must be a JVM system property: the TestContext cache is sized before any individual
+    // ApplicationContext (and therefore application-test.yml) is loaded.
+    systemProperty("spring.test.context.cache.maxSize", "64")
+}
+
 dependencies {
     // All API modules
     implementation(project(":api:shared"))

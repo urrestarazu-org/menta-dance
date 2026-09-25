@@ -1,0 +1,31 @@
+meta {
+  name: Get Physical Device
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admin/physical/devices/{{physicalDeviceId}}
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  #44, US-PHYSICAL-007 escenario 2. Run "Register Physical Device" first to
+  populate {{physicalDeviceId}}.
+
+  Success contract: 200 with device metadata — no `secret` and no hash field
+  under any name.
+  Error contract:
+    400 INVALID_REQUEST → malformed deviceId
+    401                 → no bearer token
+    403                 → authenticated role other than ADMIN
+    404 DEVICE_NOT_FOUND → unknown deviceId
+}
+
+assert {
+  res.status: eq 200
+}

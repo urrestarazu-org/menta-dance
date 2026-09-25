@@ -65,6 +65,14 @@ tags:
       Un endpoint self-service para el alumno y uno elevado para
       ADMIN/PROFESOR, ambos de sólo lectura — sin paginación, acotados a un
       mes calendario.
+  - name: Gestión de dispositivos
+    description: |
+      Registro, rotación y revocación de lectores QR de puerta, más el
+      listado de la flota (#44, US-PHYSICAL-007). Sólo ADMIN — a diferencia
+      de `/courses/**` y `/sessions/**`, INSTRUCTOR no tiene acceso: un
+      dispositivo no tiene concepto de dueño por curso. El secreto crudo
+      sólo aparece una vez, en la respuesta de registro o rotación; ningún
+      otro endpoint puede volver a exponerlo.
 
 paths:
   /api/v1/admin/physical/courses:
@@ -608,6 +616,194 @@ paths:
         '403':
           description: Rol sin acceso a este endpoint (ni ADMIN ni INSTRUCTOR).
 
+  /api/v1/admin/physical/devices:
+    post:
+      tags: [Gestión de dispositivos]
+      summary: Registrar un dispositivo
+      description: |
+        Crea el dispositivo en estado `ACTIVE` y persiste únicamente el hash
+        SHA-256 de un secreto generado. El secreto crudo viene en la
+        respuesta y NUNCA vuelve a estar disponible por ningún endpoint
+        (#44, US-PHYSICAL-007 escenario 1). `expiresAt` es opcional y en
+        este cambio es metadata inerte — no se aplica ninguna expiración.
+      operationId: registerPhysicalDevice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterPhysicalDeviceRequest'
+      responses:
+        '201':
+          description: Dispositivo registrado; incluye el secreto crudo exactamente una vez.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalDeviceSecretResponse'
+        '400':
+          description: Body inválido (bean validation).
+        '401':
+          description: Sin credencial de autenticación.
+        '403':
+          description: Rol autenticado distinto de ADMIN.
+
+    get:
+      tags: [Gestión de dispositivos]
+      summary: Listar la flota de dispositivos
+      description: |
+        Devuelve todos los dispositivos, en cualquier estado, sin
+        paginación. Ningún elemento incluye secreto ni hash bajo ningún
+        nombre de campo (#44, US-PHYSICAL-007 escenario 6).
+      operationId: listPhysicalDevices
+      responses:
+        '200':
+          description: Flota completa de dispositivos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalDeviceListResponse'
+        '401':
+          description: Sin credencial de autenticación.
+        '403':
+          description: Rol autenticado distinto de ADMIN.
+
+  /api/v1/admin/physical/devices/{deviceId}:
+    get:
+      tags: [Gestión de dispositivos]
+      summary: Leer metadata de un dispositivo
+      description: |
+        Nunca incluye el secreto crudo ni su hash bajo ningún nombre de
+        campo (#44, US-PHYSICAL-007 escenario 2).
+      operationId: getPhysicalDevice
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Metadata del dispositivo, sin secreto ni hash.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalDeviceResponse'
+        '400':
+          description: '`deviceId` malformado (`INVALID_REQUEST`).'
+        '401':
+          description: Sin credencial de autenticación.
+        '403':
+          description: Rol autenticado distinto de ADMIN.
+        '404':
+          description: Dispositivo inexistente (`DEVICE_NOT_FOUND`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                no_encontrado:
+                  value:
+                    type: https://menta.dance/problems/device_not_found
+                    title: Not Found
+                    status: 404
+                    detail: Device not found.
+                    code: DEVICE_NOT_FOUND
+
+  /api/v1/admin/physical/devices/{deviceId}/rotate-secret:
+    post:
+      tags: [Gestión de dispositivos]
+      summary: Rotar el secreto de un dispositivo
+      description: |
+        Genera un secreto nuevo, invalida el hash anterior (deja de
+        validar) y devuelve el nuevo secreto crudo exactamente una vez
+        (#44, US-PHYSICAL-007 escenario 3). Rechazado con `409` sobre un
+        dispositivo `REVOKED` — es un estado absorbente, nunca un no-op
+        silencioso ni una rotación exitosa.
+      operationId: rotatePhysicalDeviceSecret
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Secreto rotado; incluye el nuevo secreto crudo exactamente una vez.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalDeviceSecretResponse'
+        '400':
+          description: '`deviceId` malformado (`INVALID_REQUEST`).'
+        '401':
+          description: Sin credencial de autenticación.
+        '403':
+          description: Rol autenticado distinto de ADMIN.
+        '404':
+          description: Dispositivo inexistente (`DEVICE_NOT_FOUND`).
+        '409':
+          description: Dispositivo `REVOKED` — la rotación está terminantemente rechazada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                dispositivo_revocado:
+                  value:
+                    type: https://menta.dance/problems/device_revoked
+                    title: Conflict
+                    status: 409
+                    detail: Device is revoked and cannot be rotated.
+                    code: DEVICE_REVOKED
+
+  /api/v1/admin/physical/devices/{deviceId}/revoke:
+    post:
+      tags: [Gestión de dispositivos]
+      summary: Revocar un dispositivo
+      description: |
+        Transición terminal a `REVOKED` (#44, US-PHYSICAL-007 escenario 4).
+        Una segunda revocación sobre un dispositivo ya `REVOKED` responde
+        `409` — nunca `200`, nunca un no-op silencioso.
+      operationId: revokePhysicalDevice
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Dispositivo revocado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalDeviceResponse'
+        '400':
+          description: '`deviceId` malformado (`INVALID_REQUEST`).'
+        '401':
+          description: Sin credencial de autenticación.
+        '403':
+          description: Rol autenticado distinto de ADMIN.
+        '404':
+          description: Dispositivo inexistente (`DEVICE_NOT_FOUND`).
+        '409':
+          description: Dispositivo ya `REVOKED` — rechazado, no un no-op.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                ya_revocado:
+                  value:
+                    type: https://menta.dance/problems/device_already_revoked
+                    title: Conflict
+                    status: 409
+                    detail: Device is already revoked.
+                    code: DEVICE_ALREADY_REVOKED
+
 components:
   responses:
     InvalidRequest:
@@ -915,3 +1111,65 @@ components:
           type: [string, "null"]
           format: date-time
           description: Null cuando status es ABSENT.
+
+    RegisterPhysicalDeviceRequest:
+      type: object
+      required: [name, location]
+      properties:
+        name:
+          type: string
+          maxLength: 120
+        location:
+          type: string
+          maxLength: 160
+        expiresAt:
+          type: [string, "null"]
+          format: date-time
+          description: Opcional; metadata inerte en este cambio — no se aplica ninguna expiración.
+
+    PhysicalDeviceResponse:
+      type: object
+      description: Nunca incluye secreto ni hash bajo ningún nombre de campo (#44, design C2).
+      required: [id, name, location, status, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        location:
+          type: string
+        status:
+          type: string
+          enum: [ACTIVE, REVOKED]
+        expiresAt:
+          type: [string, "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PhysicalDeviceSecretResponse:
+      type: object
+      description: |
+        Devuelto únicamente por register y rotate-secret. `secret` es el
+        valor crudo, expuesto exactamente una vez — ningún otro endpoint
+        puede volver a devolverlo (D4).
+      required: [device, secret]
+      properties:
+        device:
+          $ref: '#/components/schemas/PhysicalDeviceResponse'
+        secret:
+          type: string
+
+    PhysicalDeviceListResponse:
+      type: object
+      required: [devices]
+      properties:
+        devices:
+          type: array
+          items:
+            $ref: '#/components/schemas/PhysicalDeviceResponse'

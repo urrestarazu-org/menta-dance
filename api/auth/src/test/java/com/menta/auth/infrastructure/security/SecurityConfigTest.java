@@ -14,12 +14,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletRequest;
 import jakarta.servlet.ServletResponse;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentMatchers;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.mock.web.MockServletContext;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
@@ -313,6 +318,88 @@ class SecurityConfigTest {
         MockMvc mockMvc = buildSecurityFilterChainMockMvc();
 
         mockMvc.perform(post("/api/v1/billing/payments/mercadopago/webhook"))
+            .andExpect(status().isNotFound());
+    }
+
+    /**
+     * #44, US-PHYSICAL-007, design C7. The five device-registry paths, matching the controller's
+     * table exactly. {@code {deviceId}} is a fixed placeholder UUID — these are security-layer
+     * cases, so the value never needs to resolve to a real device (the request never reaches the
+     * dispatcher for a denied caller, and reaches an unmapped one for an admitted caller since no
+     * controller bean is registered in this minimal context).
+     */
+    private static Stream<Arguments> deviceEndpoints() {
+        String deviceId = "00000000-0000-0000-0000-000000000001";
+        return Stream.of(
+            Arguments.of(HttpMethod.POST, "/api/v1/admin/physical/devices"),
+            Arguments.of(HttpMethod.GET, "/api/v1/admin/physical/devices/" + deviceId),
+            Arguments.of(HttpMethod.POST, "/api/v1/admin/physical/devices/" + deviceId + "/rotate-secret"),
+            Arguments.of(HttpMethod.POST, "/api/v1/admin/physical/devices/" + deviceId + "/revoke"),
+            Arguments.of(HttpMethod.GET, "/api/v1/admin/physical/devices")
+        );
+    }
+
+    private static org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder requestFor(
+        HttpMethod method, String path
+    ) {
+        return method == HttpMethod.GET ? get(path) : post(path);
+    }
+
+    /**
+     * #44, US-PHYSICAL-007, design C7/R6. Before this matcher existed, every one of these paths
+     * fell through to {@code anyRequest().access(roleAuthorizationManager)}, whose fall-through
+     * semantics grant unmapped paths regardless of authentication.
+     */
+    @ParameterizedTest(name = "an anonymous caller on {0} {1} is rejected with 401")
+    @MethodSource("deviceEndpoints")
+    void an_anonymous_caller_on_a_device_route_is_rejected_with_401(HttpMethod method, String path)
+        throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(requestFor(method, path)).andExpect(status().isUnauthorized());
+    }
+
+    /**
+     * #44, US-PHYSICAL-007, design C7/R6. Unlike {@code /courses/**}/{@code /sessions/**}, the
+     * device matcher is {@code hasRole("ADMIN")} only — no {@code hasAnyRole("ADMIN",
+     * "INSTRUCTOR")} — because a device fleet has no per-course ownership concept.
+     */
+    @ParameterizedTest(name = "an authenticated STUDENT on {0} {1} is forbidden")
+    @MethodSource("deviceEndpoints")
+    void an_authenticated_student_on_a_device_route_is_forbidden(HttpMethod method, String path) throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(requestFor(method, path).with(user("student").roles("STUDENT")))
+            .andExpect(status().isForbidden());
+    }
+
+    /**
+     * #44, US-PHYSICAL-007, design C7/R6 — the same rejection extends to INSTRUCTOR, deliberately:
+     * this is the one regression this matcher exists to pin, since {@code hasAnyRole("ADMIN",
+     * "INSTRUCTOR")} is the mistake #42/#43's matchers would invite by analogy.
+     */
+    @ParameterizedTest(name = "an authenticated INSTRUCTOR on {0} {1} is forbidden")
+    @MethodSource("deviceEndpoints")
+    void an_authenticated_instructor_on_a_device_route_is_forbidden(HttpMethod method, String path)
+        throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(requestFor(method, path).with(user("instructor").roles("INSTRUCTOR")))
+            .andExpect(status().isForbidden());
+    }
+
+    /**
+     * The other side of the same ordering guarantee: an ADMIN passes the security layer (reaches
+     * the unmapped dispatcher, {@code 404}, since no controller bean exists in this minimal
+     * context) rather than being rejected.
+     */
+    @ParameterizedTest(name = "an authenticated ADMIN on {0} {1} passes the security layer")
+    @MethodSource("deviceEndpoints")
+    void an_authenticated_admin_on_a_device_route_passes_the_security_layer(HttpMethod method, String path)
+        throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(requestFor(method, path).with(user("admin").roles("ADMIN")))
             .andExpect(status().isNotFound());
     }
 

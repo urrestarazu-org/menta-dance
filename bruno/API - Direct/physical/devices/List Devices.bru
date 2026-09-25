@@ -1,0 +1,29 @@
+meta {
+  name: List Physical Devices
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admin/physical/devices
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  #44, US-PHYSICAL-007 escenario 6. Unpaginated — a device fleet is a
+  handful of door readers.
+
+  Success contract: 200 with `devices[]`, every status included, no `secret`
+  or hash field anywhere in any element.
+  Error contract:
+    401 → no bearer token
+    403 → authenticated role other than ADMIN
+}
+
+assert {
+  res.status: eq 200
+}
