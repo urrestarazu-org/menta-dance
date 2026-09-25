@@ -97,26 +97,26 @@ throw a `FlywayValidateException` on a real collision.
 
 ## Phase P2: Use cases + audit (R1, R2, R3, R5, R7)
 
-- [ ] 2.1 GREEN: `physical/application/dto/PhysicalDeviceView.java`, `PhysicalDeviceSecretResult.java`, `RegisterPhysicalDeviceCommand.java` (C2).
-- [ ] 2.2 GREEN: `physical/application/port/out/PhysicalDeviceRepository.java`, `PhysicalDeviceAuditRepository.java`, `DeviceSecretGenerator.java`, `DeviceSecretHasher.java` (C3).
-- [ ] 2.3 GREEN: `physical/application/port/in/{Register,Get,RotateSecret,Revoke,List}PhysicalDeviceUseCase.java` — five in-ports, signatures from design C4.
-- [ ] 2.4 RED: `RegisterPhysicalDeviceUseCaseImplTest` — hashes before persisting, never persists the raw value; returned `rawSecret` equals the generator's output; exactly one audit row with action `DEVICE_REGISTERED`, `previousValue == null`, `newValue` containing `secretHashPrefix` of 8 hex chars; `verifyNoMoreInteractions(auditRepository)`.
-- [ ] 2.5 GREEN: `physical/application/usecase/RegisterPhysicalDeviceUseCaseImpl.java`.
-- [ ] 2.6 RED: `GetPhysicalDeviceUseCaseImplTest` — returns `PhysicalDeviceView` for a known id; unknown id → `DeviceNotFoundException`.
-- [ ] 2.7 GREEN: `physical/application/usecase/GetPhysicalDeviceUseCaseImpl.java`.
-- [ ] 2.8 RED: `RotatePhysicalDeviceSecretUseCaseImplTest` — replaces the stored hash with a *different* value on an `ACTIVE` device; new `rawSecret` returned; one audit row `DEVICE_SECRET_ROTATED` with old/new `secretHashPrefix` (both 8 hex chars, different); unknown id → `DeviceNotFoundException`; `REVOKED` device → `DeviceRevokedException`, no hash changed, no audit row appended.
-- [ ] 2.9 GREEN: `physical/application/usecase/RotatePhysicalDeviceSecretUseCaseImpl.java`.
-- [ ] 2.10 RED: `RevokePhysicalDeviceUseCaseImplTest` — `ACTIVE` → `REVOKED`, one audit row `DEVICE_REVOKED`; unknown id → `DeviceNotFoundException`; already-`REVOKED` → `DeviceAlreadyRevokedException`, no audit row appended.
-- [ ] 2.11 GREEN: `physical/application/usecase/RevokePhysicalDeviceUseCaseImpl.java`.
-- [ ] 2.12 RED: `ListPhysicalDevicesUseCaseImplTest` — returns all devices as `PhysicalDeviceView`, `ACTIVE` and `REVOKED` both included, no filtering.
-- [ ] 2.13 GREEN: `physical/application/usecase/ListPhysicalDevicesUseCaseImpl.java`.
-- [ ] 2.14 RED: **Leak guard** — extend the register/rotate impl tests with `ArgumentCaptor` assertions that no captured audit `previousValue`/`newValue` contains the raw secret or any 64-char hex string; add a reflective test asserting `PhysicalDeviceView` declares no component whose name contains `secret` or `hash` (C2, C10).
-- [ ] 2.15 GREEN: confirm audit encoding helper (private method or small class) building `status=...;secretHashPrefix=<8 hex>;expiresAt=<iso-8601 or null>` strings per design C4's table; no production change needed beyond what 2.5/2.9/2.11 already require if the leak guard is red.
-- [ ] 2.16 RED: `TransactionalRegisterPhysicalDeviceUseCaseTest`, `TransactionalRotatePhysicalDeviceSecretUseCaseTest`, `TransactionalRevokePhysicalDeviceUseCaseTest` — each decorator delegates to the wrapped `*Impl` and carries `@Transactional(propagation = REQUIRED)` (mirrors `TransactionalCreateVirtualCourseUseCaseTest`).
-- [ ] 2.17 GREEN: `physical/infrastructure/transaction/Transactional{Register,RotateSecret,Revoke}PhysicalDeviceUseCase.java` (C5).
-- [ ] 2.18 RED: extend `PhysicalConfigurationTest` — new beans wired (generator, hasher, five use cases, three decorated); existing device-token assertions unchanged (D2, C9).
-- [ ] 2.19 GREEN: `physical/infrastructure/config/PhysicalConfiguration.java` — additive beans only (C9).
-- [ ] 2.20 Verify: `:api:physical:test --tests "*PhysicalDevice*UseCase*" --tests "*Transactional*Device*" --tests "*PhysicalConfigurationTest*"` green; coverage gates green. P2 ready for PR.
+- [x] 2.1 GREEN: `physical/application/dto/PhysicalDeviceView.java`, `PhysicalDeviceSecretResult.java`, `RegisterPhysicalDeviceCommand.java` (C2).
+- [x] 2.2 GREEN: `physical/application/port/out/PhysicalDeviceRepository.java`, `PhysicalDeviceAuditRepository.java`, `DeviceSecretGenerator.java`, `DeviceSecretHasher.java` (C3). P1's `PhysicalDeviceRepositoryAdapter`/`PhysicalDeviceAuditRepositoryAdapter`/`SecureRandomDeviceSecretGenerator`/`Sha256DeviceSecretHasher` now `implements` these ports, as P1's own deviation notes anticipated; `PhysicalDeviceAuditRepositoryAdapterTest` updated to pass `DeviceId.of(deviceId)` instead of a raw `UUID` for `append(...)`'s first argument.
+- [x] 2.3 GREEN: `physical/application/port/in/{Register,Get,RotateSecret,Revoke,List}PhysicalDeviceUseCase.java` — five in-ports, signatures from design C4. Deviation: the list in-port is `ListPhysicalDevicesUseCase` (plural "Devices"), matching design C4's table and the `ListPhysicalDevicesUseCaseImpl`/`ListPhysicalDevicesUseCaseImplTest` names this same task list uses in 2.12/2.13 — the literal brace expansion in this task's own filename pattern would have produced the inconsistent singular `ListPhysicalDeviceUseCase`.
+- [x] 2.4 RED: `RegisterPhysicalDeviceUseCaseImplTest` — hashes before persisting, never persists the raw value; returned `rawSecret` equals the generator's output; exactly one audit row with action `DEVICE_REGISTERED`, `previousValue == null`, `newValue` containing `secretHashPrefix` of 8 hex chars; `verifyNoMoreInteractions(auditRepository)`.
+- [x] 2.5 GREEN: `physical/application/usecase/RegisterPhysicalDeviceUseCaseImpl.java`.
+- [x] 2.6 RED: `GetPhysicalDeviceUseCaseImplTest` — returns `PhysicalDeviceView` for a known id; unknown id → `DeviceNotFoundException`.
+- [x] 2.7 GREEN: `physical/application/usecase/GetPhysicalDeviceUseCaseImpl.java`.
+- [x] 2.8 RED: `RotatePhysicalDeviceSecretUseCaseImplTest` — replaces the stored hash with a *different* value on an `ACTIVE` device; new `rawSecret` returned; one audit row `DEVICE_SECRET_ROTATED` with old/new `secretHashPrefix` (both 8 hex chars, different); unknown id → `DeviceNotFoundException`; `REVOKED` device → `DeviceRevokedException`, no hash changed, no audit row appended.
+- [x] 2.9 GREEN: `physical/application/usecase/RotatePhysicalDeviceSecretUseCaseImpl.java`.
+- [x] 2.10 RED: `RevokePhysicalDeviceUseCaseImplTest` — `ACTIVE` → `REVOKED`, one audit row `DEVICE_REVOKED`; unknown id → `DeviceNotFoundException`; already-`REVOKED` → `DeviceAlreadyRevokedException`, no audit row appended.
+- [x] 2.11 GREEN: `physical/application/usecase/RevokePhysicalDeviceUseCaseImpl.java`.
+- [x] 2.12 RED: `ListPhysicalDevicesUseCaseImplTest` — returns all devices as `PhysicalDeviceView`, `ACTIVE` and `REVOKED` both included, no filtering.
+- [x] 2.13 GREEN: `physical/application/usecase/ListPhysicalDevicesUseCaseImpl.java`.
+- [x] 2.14 RED: **Leak guard** — extended the register/rotate impl tests with `ArgumentCaptor` assertions that no captured audit `previousValue`/`newValue` contains the raw secret or any 64-char hex string; added `PhysicalDeviceViewLeakGuardTest`, a reflective test asserting `PhysicalDeviceView` declares no component whose name contains `secret` or `hash` (C2, C10).
+- [x] 2.15 GREEN: audit encoding lives in `PhysicalDeviceAuditSnapshot` (`registered(...)`/`statusAndHashPrefix(...)`), a package-private helper class in `application/usecase/`, building `status=...;secretHashPrefix=<8 hex>;expiresAt=<iso-8601 or null>` strings per design C4's table. Written alongside 2.5 so the leak-guard tests were green on first run — no separate red/green cycle needed beyond what 2.4/2.8 already exercised.
+- [x] 2.16 RED: `TransactionalRegisterPhysicalDeviceUseCaseTest`, `TransactionalRotatePhysicalDeviceSecretUseCaseTest`, `TransactionalRevokePhysicalDeviceUseCaseTest` — each decorator delegates to the wrapped `*Impl` and carries `@Transactional` on its interface method (mirrors `TransactionalCreateVirtualCourseUseCaseTest`; class-level `@Transactional(propagation = REQUIRED)` is Physical's adapter convention, not the decorator's — the decorator itself uses plain `@Transactional`, exactly like `TransactionalCreateVirtualCourseUseCase`).
+- [x] 2.17 GREEN: `physical/infrastructure/transaction/Transactional{Register,Rotate,Revoke}PhysicalDeviceUseCase.java` (C5). File names use `TransactionalRotatePhysicalDeviceSecretUseCase`/`TransactionalRevokePhysicalDeviceUseCase`, matching the in-port names (`RotatePhysicalDeviceSecretUseCase`/`RevokePhysicalDeviceUseCase`) rather than this task's abbreviated `RotateSecret`/`Revoke` placeholders.
+- [x] 2.18 RED: extended `PhysicalConfigurationTest` — new beans wired (generator, hasher, five use cases, three decorated); existing device-token assertions unchanged (D2, C9).
+- [x] 2.19 GREEN: `physical/infrastructure/config/PhysicalConfiguration.java` — additive beans only (C9).
+- [x] 2.20 Verify: `:api:physical:test --tests "*PhysicalDevice*UseCase*" --tests "*Transactional*Device*" --tests "*PhysicalConfigurationTest*"` green (45 tests, 0 failures/errors); `:api:physical:jacocoDomainApplicationCoverageVerification`/`jacocoInfrastructureCoverageVerification` green; `:api:physical:test --tests "*ArchitectureTest*"` green (7 tests) confirming no `com.menta.auth.*` import was introduced. P2 ready for PR.
 
 ## Phase P3: Web + security (R1, R2, R5, R6)
 
