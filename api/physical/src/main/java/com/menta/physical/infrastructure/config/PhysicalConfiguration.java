@@ -3,35 +3,54 @@ package com.menta.physical.infrastructure.config;
 import com.menta.physical.application.port.in.BatchCreatePhysicalSessionsUseCase;
 import com.menta.physical.application.port.in.CreatePhysicalCourseUseCase;
 import com.menta.physical.application.port.in.CreatePhysicalSessionUseCase;
+import com.menta.physical.application.port.in.GetPhysicalDeviceUseCase;
 import com.menta.physical.application.port.in.IssuePhysicalAccessQrUseCase;
 import com.menta.physical.application.port.in.ListManagedPhysicalCoursesUseCase;
 import com.menta.physical.application.port.in.ListManagedPhysicalSessionsUseCase;
+import com.menta.physical.application.port.in.ListPhysicalDevicesUseCase;
 import com.menta.physical.application.port.in.PhysicalCourseAvailabilityPort;
 import com.menta.physical.application.port.in.PhysicalCourseOwnershipPort;
 import com.menta.physical.application.port.in.GetPhysicalAttendanceHistoryUseCase;
 import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
+import com.menta.physical.application.port.in.RegisterPhysicalDeviceUseCase;
+import com.menta.physical.application.port.in.RevokePhysicalDeviceUseCase;
+import com.menta.physical.application.port.in.RotatePhysicalDeviceSecretUseCase;
 import com.menta.physical.application.port.in.UpdatePhysicalCourseUseCase;
 import com.menta.physical.application.port.in.UpdatePhysicalSessionUseCase;
 import com.menta.physical.application.port.out.AttendanceRepository;
 import com.menta.physical.application.port.out.Clock;
+import com.menta.physical.application.port.out.DeviceSecretGenerator;
+import com.menta.physical.application.port.out.DeviceSecretHasher;
 import com.menta.physical.application.port.out.PhysicalCapacityAssignmentRepository;
 import com.menta.physical.application.port.out.PhysicalCourseRepository;
+import com.menta.physical.application.port.out.PhysicalDeviceAuditRepository;
+import com.menta.physical.application.port.out.PhysicalDeviceRepository;
 import com.menta.physical.application.port.out.PhysicalSessionRepository;
 import com.menta.physical.application.usecase.BatchCreatePhysicalSessionsUseCaseImpl;
 import com.menta.physical.application.usecase.CreatePhysicalCourseUseCaseImpl;
 import com.menta.physical.application.usecase.CreatePhysicalSessionUseCaseImpl;
 import com.menta.physical.application.usecase.GetPhysicalAttendanceHistoryUseCaseImpl;
+import com.menta.physical.application.usecase.GetPhysicalDeviceUseCaseImpl;
 import com.menta.physical.application.usecase.IssuePhysicalAccessQrUseCaseImpl;
 import com.menta.physical.application.usecase.ListManagedPhysicalCoursesUseCaseImpl;
 import com.menta.physical.application.usecase.ListManagedPhysicalSessionsUseCaseImpl;
+import com.menta.physical.application.usecase.ListPhysicalDevicesUseCaseImpl;
 import com.menta.physical.application.usecase.PhysicalCourseAvailabilityPortImpl;
 import com.menta.physical.application.usecase.PhysicalCourseOwnershipPortImpl;
 import com.menta.physical.application.usecase.ProcessPhysicalCheckInUseCaseImpl;
+import com.menta.physical.application.usecase.RegisterPhysicalDeviceUseCaseImpl;
+import com.menta.physical.application.usecase.RevokePhysicalDeviceUseCaseImpl;
+import com.menta.physical.application.usecase.RotatePhysicalDeviceSecretUseCaseImpl;
 import com.menta.physical.application.usecase.UpdatePhysicalCourseUseCaseImpl;
 import com.menta.physical.application.usecase.UpdatePhysicalSessionUseCaseImpl;
+import com.menta.physical.infrastructure.device.SecureRandomDeviceSecretGenerator;
+import com.menta.physical.infrastructure.device.Sha256DeviceSecretHasher;
 import com.menta.physical.infrastructure.qr.FormatQrCredentialSignatureService;
 import com.menta.physical.infrastructure.qr.QrProperties;
 import com.menta.physical.infrastructure.redis.RedisCheckInLockPort;
+import com.menta.physical.infrastructure.transaction.TransactionalRegisterPhysicalDeviceUseCase;
+import com.menta.physical.infrastructure.transaction.TransactionalRevokePhysicalDeviceUseCase;
+import com.menta.physical.infrastructure.transaction.TransactionalRotatePhysicalDeviceSecretUseCase;
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.time.ZoneId;
@@ -247,5 +266,76 @@ public class PhysicalConfiguration {
         @Value("${physical.attendance.zone-id:America/Argentina/Buenos_Aires}") String zoneId
     ) {
         return new GetPhysicalAttendanceHistoryUseCaseImpl(assignmentRepository, ZoneId.of(zoneId));
+    }
+
+    /**
+     * #44, US-PHYSICAL-007, design C2/D3 -- JDK {@code SecureRandom} only, no {@code :api:auth}
+     * import.
+     */
+    @Bean
+    public DeviceSecretGenerator deviceSecretGenerator() {
+        return new SecureRandomDeviceSecretGenerator();
+    }
+
+    /**
+     * #44, US-PHYSICAL-007, design C2/D3 -- JDK {@code MessageDigest}/{@code HexFormat} only, no
+     * {@code :api:auth} import.
+     */
+    @Bean
+    public DeviceSecretHasher deviceSecretHasher() {
+        return new Sha256DeviceSecretHasher();
+    }
+
+    /**
+     * #44, US-PHYSICAL-007, design C5/C9 -- wrapped in its transactional decorator so the device
+     * insert and its audit row share one commit.
+     */
+    @Bean
+    public RegisterPhysicalDeviceUseCase registerPhysicalDeviceUseCase(
+        PhysicalDeviceRepository deviceRepository, PhysicalDeviceAuditRepository auditRepository,
+        DeviceSecretGenerator secretGenerator, DeviceSecretHasher secretHasher, Clock clock
+    ) {
+        return new TransactionalRegisterPhysicalDeviceUseCase(new RegisterPhysicalDeviceUseCaseImpl(
+            deviceRepository, auditRepository, secretGenerator, secretHasher, clock
+        ));
+    }
+
+    /** #44, US-PHYSICAL-007, design C5/C9 -- read-only, no decorator (mirrors the attendance-history precedent). */
+    @Bean
+    public GetPhysicalDeviceUseCase getPhysicalDeviceUseCase(PhysicalDeviceRepository deviceRepository) {
+        return new GetPhysicalDeviceUseCaseImpl(deviceRepository);
+    }
+
+    /**
+     * #44, US-PHYSICAL-007, design C5/C9 -- wrapped in its transactional decorator so the secret
+     * rotation and its audit row share one commit.
+     */
+    @Bean
+    public RotatePhysicalDeviceSecretUseCase rotatePhysicalDeviceSecretUseCase(
+        PhysicalDeviceRepository deviceRepository, PhysicalDeviceAuditRepository auditRepository,
+        DeviceSecretGenerator secretGenerator, DeviceSecretHasher secretHasher, Clock clock
+    ) {
+        return new TransactionalRotatePhysicalDeviceSecretUseCase(new RotatePhysicalDeviceSecretUseCaseImpl(
+            deviceRepository, auditRepository, secretGenerator, secretHasher, clock
+        ));
+    }
+
+    /**
+     * #44, US-PHYSICAL-007, design C5/C9 -- wrapped in its transactional decorator so the
+     * revocation and its audit row share one commit.
+     */
+    @Bean
+    public RevokePhysicalDeviceUseCase revokePhysicalDeviceUseCase(
+        PhysicalDeviceRepository deviceRepository, PhysicalDeviceAuditRepository auditRepository, Clock clock
+    ) {
+        return new TransactionalRevokePhysicalDeviceUseCase(
+            new RevokePhysicalDeviceUseCaseImpl(deviceRepository, auditRepository, clock)
+        );
+    }
+
+    /** #44, US-PHYSICAL-007, design C5/C9 -- read-only, no decorator (mirrors the attendance-history precedent). */
+    @Bean
+    public ListPhysicalDevicesUseCase listPhysicalDevicesUseCase(PhysicalDeviceRepository deviceRepository) {
+        return new ListPhysicalDevicesUseCaseImpl(deviceRepository);
     }
 }

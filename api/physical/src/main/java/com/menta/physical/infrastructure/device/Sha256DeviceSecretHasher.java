@@ -1,5 +1,6 @@
 package com.menta.physical.infrastructure.device;
 
+import com.menta.physical.application.port.out.DeviceSecretHasher;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -10,13 +11,13 @@ import java.util.HexFormat;
  *
  * <p>Replicates {@code :api:auth}'s {@code Sha256Hex.hash}/{@code Sha256ActivationTokenHasher}
  * body (JDK {@link MessageDigest} + {@link HexFormat} only) -- deliberately NOT imported from
- * {@code com.menta.auth.*} (D3), so the existing module-boundary ArchUnit rule holds unchanged.
- * Wired to the {@code DeviceSecretHasher} out-port in P2.</p>
+ * {@code com.menta.auth.*} (D3), so the existing module-boundary ArchUnit rule holds unchanged.</p>
  */
-public final class Sha256DeviceSecretHasher {
+public final class Sha256DeviceSecretHasher implements DeviceSecretHasher {
 
     private static final String SHA_256 = "SHA-256";
 
+    @Override
     public String hash(String rawSecret) {
         if (rawSecret == null) {
             throw new IllegalArgumentException("rawSecret cannot be null");

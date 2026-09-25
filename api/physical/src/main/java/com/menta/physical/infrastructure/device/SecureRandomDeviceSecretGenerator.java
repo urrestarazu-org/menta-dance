@@ -1,5 +1,6 @@
 package com.menta.physical.infrastructure.device;
 
+import com.menta.physical.application.port.out.DeviceSecretGenerator;
 import java.security.SecureRandom;
 import java.util.Base64;
 
@@ -8,10 +9,9 @@ import java.util.Base64;
  *
  * <p>Replicates {@code :api:auth}'s {@code SecureRandomActivationTokenGenerator} shape using
  * JDK {@link SecureRandom} only -- deliberately NOT imported from {@code com.menta.auth.*} (D3),
- * so the existing module-boundary ArchUnit rule holds unchanged. Wired to the {@code
- * DeviceSecretGenerator} out-port in P2.</p>
+ * so the existing module-boundary ArchUnit rule holds unchanged.</p>
  */
-public final class SecureRandomDeviceSecretGenerator {
+public final class SecureRandomDeviceSecretGenerator implements DeviceSecretGenerator {
 
     private static final int SECRET_BYTES = 32;
     private final SecureRandom secureRandom;
@@ -27,6 +27,7 @@ public final class SecureRandomDeviceSecretGenerator {
         this.secureRandom = secureRandom;
     }
 
+    @Override
     public String generate() {
         byte[] bytes = new byte[SECRET_BYTES];
         secureRandom.nextBytes(bytes);

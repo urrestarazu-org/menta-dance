@@ -8,29 +8,45 @@ import static org.mockito.Mockito.when;
 import com.menta.physical.application.port.in.BatchCreatePhysicalSessionsUseCase;
 import com.menta.physical.application.port.in.CreatePhysicalCourseUseCase;
 import com.menta.physical.application.port.in.CreatePhysicalSessionUseCase;
+import com.menta.physical.application.port.in.GetPhysicalDeviceUseCase;
 import com.menta.physical.application.port.in.IssuePhysicalAccessQrUseCase;
 import com.menta.physical.application.port.in.ListManagedPhysicalCoursesUseCase;
 import com.menta.physical.application.port.in.ListManagedPhysicalSessionsUseCase;
+import com.menta.physical.application.port.in.ListPhysicalDevicesUseCase;
 import com.menta.physical.application.port.in.PhysicalCourseAvailabilityPort;
 import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
+import com.menta.physical.application.port.in.RegisterPhysicalDeviceUseCase;
+import com.menta.physical.application.port.in.RevokePhysicalDeviceUseCase;
+import com.menta.physical.application.port.in.RotatePhysicalDeviceSecretUseCase;
 import com.menta.physical.application.port.in.UpdatePhysicalCourseUseCase;
 import com.menta.physical.application.port.in.UpdatePhysicalSessionUseCase;
 import com.menta.physical.application.port.out.AttendanceRepository;
 import com.menta.physical.application.port.out.Clock;
+import com.menta.physical.application.port.out.DeviceSecretGenerator;
+import com.menta.physical.application.port.out.DeviceSecretHasher;
 import com.menta.physical.application.port.out.PhysicalCapacityAssignmentRepository;
 import com.menta.physical.application.port.out.PhysicalCourseRepository;
+import com.menta.physical.application.port.out.PhysicalDeviceAuditRepository;
+import com.menta.physical.application.port.out.PhysicalDeviceRepository;
 import com.menta.physical.application.port.out.PhysicalSessionRepository;
 import com.menta.physical.application.usecase.BatchCreatePhysicalSessionsUseCaseImpl;
 import com.menta.physical.application.usecase.CreatePhysicalCourseUseCaseImpl;
 import com.menta.physical.application.usecase.CreatePhysicalSessionUseCaseImpl;
+import com.menta.physical.application.usecase.GetPhysicalDeviceUseCaseImpl;
 import com.menta.physical.application.usecase.IssuePhysicalAccessQrUseCaseImpl;
 import com.menta.physical.application.usecase.ListManagedPhysicalCoursesUseCaseImpl;
 import com.menta.physical.application.usecase.ListManagedPhysicalSessionsUseCaseImpl;
+import com.menta.physical.application.usecase.ListPhysicalDevicesUseCaseImpl;
 import com.menta.physical.application.usecase.PhysicalCourseAvailabilityPortImpl;
 import com.menta.physical.application.usecase.ProcessPhysicalCheckInUseCaseImpl;
 import com.menta.physical.application.usecase.UpdatePhysicalCourseUseCaseImpl;
 import com.menta.physical.application.usecase.UpdatePhysicalSessionUseCaseImpl;
+import com.menta.physical.infrastructure.device.SecureRandomDeviceSecretGenerator;
+import com.menta.physical.infrastructure.device.Sha256DeviceSecretHasher;
 import com.menta.physical.infrastructure.qr.QrProperties;
+import com.menta.physical.infrastructure.transaction.TransactionalRegisterPhysicalDeviceUseCase;
+import com.menta.physical.infrastructure.transaction.TransactionalRevokePhysicalDeviceUseCase;
+import com.menta.physical.infrastructure.transaction.TransactionalRotatePhysicalDeviceSecretUseCase;
 import java.lang.reflect.Field;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.env.Environment;
@@ -169,6 +185,65 @@ class PhysicalConfigurationTest {
         assertThatThrownBy(configuration::validateDeviceTokenNotDefaultInProduction)
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("SECURITY");
+    }
+
+    @Test
+    void wires_the_device_secret_generator_bean() {
+        DeviceSecretGenerator generator = configuration.deviceSecretGenerator();
+
+        assertThat(generator).isInstanceOf(SecureRandomDeviceSecretGenerator.class);
+    }
+
+    @Test
+    void wires_the_device_secret_hasher_bean() {
+        DeviceSecretHasher hasher = configuration.deviceSecretHasher();
+
+        assertThat(hasher).isInstanceOf(Sha256DeviceSecretHasher.class);
+    }
+
+    @Test
+    void wires_the_register_physical_device_use_case_bean_decorated_transactionally() {
+        RegisterPhysicalDeviceUseCase useCase = configuration.registerPhysicalDeviceUseCase(
+            mock(PhysicalDeviceRepository.class), mock(PhysicalDeviceAuditRepository.class),
+            mock(DeviceSecretGenerator.class), mock(DeviceSecretHasher.class), mock(Clock.class)
+        );
+
+        assertThat(useCase).isInstanceOf(TransactionalRegisterPhysicalDeviceUseCase.class);
+    }
+
+    @Test
+    void wires_the_get_physical_device_use_case_bean() {
+        GetPhysicalDeviceUseCase useCase =
+            configuration.getPhysicalDeviceUseCase(mock(PhysicalDeviceRepository.class));
+
+        assertThat(useCase).isInstanceOf(GetPhysicalDeviceUseCaseImpl.class);
+    }
+
+    @Test
+    void wires_the_rotate_physical_device_secret_use_case_bean_decorated_transactionally() {
+        RotatePhysicalDeviceSecretUseCase useCase = configuration.rotatePhysicalDeviceSecretUseCase(
+            mock(PhysicalDeviceRepository.class), mock(PhysicalDeviceAuditRepository.class),
+            mock(DeviceSecretGenerator.class), mock(DeviceSecretHasher.class), mock(Clock.class)
+        );
+
+        assertThat(useCase).isInstanceOf(TransactionalRotatePhysicalDeviceSecretUseCase.class);
+    }
+
+    @Test
+    void wires_the_revoke_physical_device_use_case_bean_decorated_transactionally() {
+        RevokePhysicalDeviceUseCase useCase = configuration.revokePhysicalDeviceUseCase(
+            mock(PhysicalDeviceRepository.class), mock(PhysicalDeviceAuditRepository.class), mock(Clock.class)
+        );
+
+        assertThat(useCase).isInstanceOf(TransactionalRevokePhysicalDeviceUseCase.class);
+    }
+
+    @Test
+    void wires_the_list_physical_devices_use_case_bean() {
+        ListPhysicalDevicesUseCase useCase =
+            configuration.listPhysicalDevicesUseCase(mock(PhysicalDeviceRepository.class));
+
+        assertThat(useCase).isInstanceOf(ListPhysicalDevicesUseCaseImpl.class);
     }
 
     private static String devDefaultDeviceToken()
