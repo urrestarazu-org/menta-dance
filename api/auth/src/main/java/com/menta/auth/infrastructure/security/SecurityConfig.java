@@ -299,6 +299,11 @@ public class SecurityConfig {
                 // #43: different top-level prefix than /courses/** above — needs its own
                 // matcher, same first-match-wins ordering rationale.
                 .requestMatchers("/api/v1/admin/physical/sessions/**").hasAnyRole("ADMIN", "INSTRUCTOR")
+                // #44, US-PHYSICAL-007: device-registry administration is ADMIN-only. Unlike the
+                // /courses/** and /sessions/** matchers above, an INSTRUCTOR may NOT mint, rotate or
+                // revoke a reader credential. Declared before the generic /api/v1/admin/** rule below —
+                // first-match-wins means a matcher placed after it would be unreachable dead code.
+                .requestMatchers("/api/v1/admin/physical/devices/**").hasRole("ADMIN")
                 // #54: course/module/lesson management, each its own top-level prefix.
                 .requestMatchers("/api/v1/admin/virtual/courses/**").hasAnyRole("ADMIN", "INSTRUCTOR")
                 .requestMatchers("/api/v1/admin/virtual/modules/**").hasAnyRole("ADMIN", "INSTRUCTOR")

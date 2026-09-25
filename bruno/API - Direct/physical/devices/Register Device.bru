@@ -1,0 +1,48 @@
+meta {
+  name: Register Physical Device
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/admin/physical/devices
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "name": "Puerta principal",
+    "location": "Sede Centro"
+  }
+}
+
+script:post-response {
+  if (res.getStatus() === 201) {
+    bru.setVar("physicalDeviceId", res.getBody().device.id);
+    bru.setVar("physicalDeviceSecret", res.getBody().secret);
+  }
+}
+
+docs {
+  #44, US-PHYSICAL-007 escenario 1. Requires an ADMIN bearer token — unlike
+  /courses/** and /sessions/**, INSTRUCTOR has no access to this prefix.
+
+  `expiresAt` is optional and omitted here; it is inert metadata in this
+  change (no enforcement occurs anywhere yet).
+
+  Success contract: 201 with the raw secret exactly once, under `secret`.
+  That value is never retrievable again through any endpoint.
+  Error contract:
+    400 INVALID_REQUEST → blank/oversized name or location
+    401                 → no bearer token
+    403                 → authenticated role other than ADMIN
+}
+
+assert {
+  res.status: eq 201
+}
