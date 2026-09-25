@@ -14,6 +14,13 @@ tasks.withType<Test> {
     // Must be a JVM system property: the TestContext cache is sized before any individual
     // ApplicationContext (and therefore application-test.yml) is loaded.
     systemProperty("spring.test.context.cache.maxSize", "64")
+
+    // Holding up to 64 live Spring contexts (each with its own JPA metamodel, connection
+    // pool, and security filter chain) needs more heap than this worker's JVM-default max
+    // (a fraction of host memory) provides on a constrained CI runner — observed as an
+    // OutOfMemoryError while building a context's Hibernate metamodel in GitHub Actions'
+    // 2-vCPU/7GB runner. Scoped to this module's Test tasks only.
+    maxHeapSize = "2g"
 }
 
 dependencies {
