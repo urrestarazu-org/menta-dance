@@ -147,16 +147,16 @@ appends one audit row in the same transaction as the state change.
 
 ## Success Criteria
 
-- [ ] An `ADMIN` registers a device and the response contains the raw secret exactly once,
+- [x] An `ADMIN` registers a device and the response contains the raw secret exactly once,
       plus the device id, name, location, status `ACTIVE`, and `expiresAt`.
-- [ ] A subsequent `GET` of that device returns its metadata with **no** secret field; an
+- [x] A subsequent `GET` of that device returns its metadata with **no** secret field; an
       unknown device id returns `404`.
-- [ ] Rotation returns a new raw secret, and the previously issued secret's hash is no longer
+- [x] Rotation returns a new raw secret, and the previously issued secret's hash is no longer
       the stored hash.
-- [ ] Revocation is irreversible: a second revoke, and any rotation after revoke, are rejected.
-- [ ] Listing returns the fleet with no secret or hash in any element.
-- [ ] Every create/rotate/revoke appends exactly one audit row carrying actor and timestamp.
-- [ ] `STUDENT` and `INSTRUCTOR` receive `403` on every device endpoint; anonymous receives `401`.
-- [ ] `ProcessPhysicalCheckInUseCaseImpl` and its tests are byte-unchanged by this change.
-- [ ] OpenAPI contract updated; `./gradlew check` passes, including ArchUnit and the physical
+- [x] Revocation is irreversible: a second revoke, and any rotation after revoke, are rejected.
+- [x] Listing returns the fleet with no secret or hash in any element.
+- [x] Every create/rotate/revoke appends exactly one audit row carrying actor and timestamp.
+- [x] `STUDENT` and `INSTRUCTOR` receive `403` on every device endpoint; anonymous receives `401`.
+- [x] `ProcessPhysicalCheckInUseCaseImpl` and its tests are byte-unchanged by this change.
+- [x] OpenAPI contract updated; `./gradlew check` passes, including ArchUnit and the physical
       coverage gate.
