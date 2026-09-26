@@ -229,6 +229,9 @@ Asegurate de tener instalado:
   ```bash
   java -version  # Debe mostrar versión 21.x
   ```
+  Si usás SDKMAN, `./scripts/dev.sh start` carga `.sdkmanrc` y selecciona
+  automáticamente la versión definida para el proyecto. Instalála una vez si
+  todavía no está disponible: `sdk install java 21.0.6-tem`.
 - **Docker** y **Docker Compose**
   ```bash
   docker --version
@@ -336,7 +339,8 @@ Esto ejecutará:
 4. Levanta el BFF en puerto 8080
 5. Verifica health checks de API y BFF
 
-El output es visible en la terminal y también se guarda en `.dev-logs/api.log` y `.dev-logs/bff.log`.
+La terminal muestra sólo el progreso, warnings y errores de arranque. Los logs
+completos de Gradle y Spring quedan en `.dev-logs/api.log` y `.dev-logs/bff.log`.
 
 **Verificar estado:**
 ```bash
