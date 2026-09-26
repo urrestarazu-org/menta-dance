@@ -2,8 +2,10 @@ package com.menta.physical.infrastructure.web.controller;
 
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -14,6 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.jayway.jsonpath.JsonPath;
 import com.menta.physical.application.dto.PhysicalDeviceSecretResult;
 import com.menta.physical.application.dto.PhysicalDeviceView;
 import com.menta.physical.application.port.in.GetPhysicalDeviceUseCase;
@@ -35,6 +38,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
@@ -94,6 +98,41 @@ class PhysicalDeviceAdminControllerTest {
             .andExpect(jsonPath("$.device.status", is("ACTIVE")));
 
         verify(registerUseCase).register(any(), eq(adminId));
+    }
+
+    @Test
+    void register_echoes_the_optional_expiresAt_as_inert_metadata() throws Exception {
+        UUID adminId = UUID.randomUUID();
+        UUID deviceId = UUID.randomUUID();
+        Instant expiresAt = Instant.parse("2027-01-15T00:00:00Z");
+        PhysicalDeviceView view = new PhysicalDeviceView(
+            deviceId, "Puerta principal", "Sede Centro", DeviceStatus.ACTIVE, expiresAt,
+            Instant.parse("2026-09-25T10:00:00Z"), Instant.parse("2026-09-25T10:00:00Z")
+        );
+        PhysicalDeviceSecretResult result =
+            new PhysicalDeviceSecretResult(view, "raw-secret-value");
+        when(registerUseCase.register(any(), eq(adminId))).thenReturn(result);
+
+        MvcResult mvcResult = mockMvc.perform(post("/api/v1/admin/physical/devices")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"name\":\"Puerta principal\",\"location\":\"Sede Centro\","
+                        + "\"expiresAt\":\"" + expiresAt + "\"}"
+                )
+                .principal(authOf(adminId, "ADMIN")))
+            .andExpect(status().isCreated())
+            .andReturn();
+
+        // This standalone MockMvc slice uses Jackson's default WRITE_DATES_AS_TIMESTAMPS (no
+        // Spring Boot JacksonAutoConfiguration here), so Instant serializes as epoch seconds
+        // rather than ISO-8601 — read it back as a number instead of asserting a literal string.
+        Number expiresAtInResponse =
+            JsonPath.read(mvcResult.getResponse().getContentAsString(), "$.device.expiresAt");
+        assertEquals(expiresAt.getEpochSecond(), expiresAtInResponse.longValue());
+
+        verify(registerUseCase).register(
+            argThat(command -> expiresAt.equals(command.expiresAt())), eq(adminId)
+        );
     }
 
     @Test
