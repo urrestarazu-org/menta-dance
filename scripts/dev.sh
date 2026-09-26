@@ -10,7 +10,10 @@ readonly PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 readonly SCRIPT_PATH="${SCRIPT_DIR}/$(basename "${BASH_SOURCE[0]}")"
 readonly ENV_FILE="${PROJECT_ROOT}/.env"
 readonly INFRA_COMPOSE_FILE="${PROJECT_ROOT}/infra/docker/database/docker-compose.yml"
+readonly INFRA_COMPOSE_PROJECT="menta-dance"
 readonly GRADLEW="${PROJECT_ROOT}/gradlew"
+readonly SDKMAN_ENV_FILE="${PROJECT_ROOT}/.sdkmanrc"
+readonly SDKMAN_INIT_SCRIPT="${SDKMAN_DIR:-${HOME}/.sdkman}/bin/sdkman-init.sh"
 
 readonly STATE_DIR="${PROJECT_ROOT}/.dev-pids"
 readonly LOG_DIR="${PROJECT_ROOT}/.dev-logs"
@@ -79,10 +82,51 @@ require_command() {
     fi
 }
 
+activate_sdkman_java() {
+    [[ -f "$SDKMAN_ENV_FILE" && -f "$SDKMAN_INIT_SCRIPT" ]] || return 0
+
+    # SDKMAN references unset shell-version variables during initialization.
+    set +u
+    local sdkman_init_status=0
+    source "$SDKMAN_INIT_SCRIPT" || sdkman_init_status=$?
+    set -u
+    if [[ $sdkman_init_status -ne 0 ]]; then
+        log_error "Unable to initialize SDKMAN from ${SDKMAN_INIT_SCRIPT}."
+        return "$sdkman_init_status"
+    fi
+
+    local java_candidate
+    java_candidate=$(sed -nE 's/^java=(.+)$/\1/p' "$SDKMAN_ENV_FILE" | head -n 1)
+    [[ -n "$java_candidate" ]] || return 0
+
+    set +u
+    local sdk_use_status=0
+    sdk use java "$java_candidate" >/dev/null || sdk_use_status=$?
+    set -u
+    if [[ $sdk_use_status -ne 0 ]]; then
+        log_error "SDKMAN JDK '${java_candidate}' is required. Install it with: sdk install java ${java_candidate}"
+        return "$sdk_use_status"
+    fi
+
+    log_info "Using SDKMAN JDK ${java_candidate}"
+}
+
 check_java_21() {
+    local java_bin
     local version_output
-    version_output=$(java -version 2>&1) || {
-        log_error "Java is installed but 'java -version' failed."
+
+    if [[ -n "${JAVA_HOME:-}" && -x "${JAVA_HOME}/bin/java" ]]; then
+        java_bin="${JAVA_HOME}/bin/java"
+        export PATH="${JAVA_HOME}/bin:${PATH}"
+    else
+        java_bin=$(command -v java) || {
+            log_error "Java is not available on PATH. Install a JDK 21 distribution."
+            return 1
+        }
+    fi
+
+    version_output=$("$java_bin" -version 2>&1) || {
+        log_error "Java is installed but '${java_bin} -version' failed."
         return 1
     }
 
@@ -117,7 +161,6 @@ preflight_start() {
 
     require_command docker "Install Docker Desktop and start it." || failed=1
     require_command curl "Install curl and make it available on PATH." || failed=1
-    require_command java "Install a JDK 21 distribution." || failed=1
     require_command ps "Install the standard process utilities for your OS." || failed=1
     require_command tee "Install the standard core utilities for your OS." || failed=1
 
@@ -135,6 +178,8 @@ preflight_start() {
         return 1
     fi
 
+    activate_sdkman_java
+    require_command java "Install a JDK 21 distribution." || return 1
     check_java_21
 
     if ! docker compose version >/dev/null 2>&1; then
@@ -152,7 +197,11 @@ preflight_start() {
 }
 
 compose_infra() {
-    docker compose --env-file "$ENV_FILE" -f "$INFRA_COMPOSE_FILE" "$@"
+    docker compose \
+        --project-name "$INFRA_COMPOSE_PROJECT" \
+        --env-file "$ENV_FILE" \
+        -f "$INFRA_COMPOSE_FILE" \
+        "$@"
 }
 
 health_is_up() {
@@ -278,16 +327,15 @@ launch_service() {
     log_step "Starting ${display_name} (${task})..."
     : > "$log_file"
 
-    # Job control gives the supervisor a dedicated process group. The inner
-    # pipeline deliberately runs with job control disabled so Gradle and tee
-    # remain in that group. We persist both PID and PGID and stop the whole
-    # group, rather than accidentally treating tee's PID as the application.
+    # Job control gives the Gradle supervisor a dedicated process group. Keep
+    # its output in the service log so the startup terminal remains concise;
+    # failures still print the final log lines below.
     set -m
     (
         set +m
         set -o pipefail
         cd "$PROJECT_ROOT"
-        "$GRADLEW" --no-daemon "$task" 2>&1 | tee -a "$log_file"
+        "$GRADLEW" --no-daemon "$task" >> "$log_file" 2>&1
     ) &
     job_pid=$!
     set +m
@@ -382,14 +430,19 @@ stop_service() {
 
 start_infrastructure() {
     log_step "Starting MySQL, Redis, and observability infrastructure..."
-    # Bruno requires MySQL and Redis. Compose may still start the optional
-    # observability services, but a failure in those services is not decisive:
-    # the required container health checks below remain the source of truth.
+    # Keep the Compose project stable even though its file lives below infra/.
+    # Otherwise Compose derives the project name as `database`, which conflicts
+    # with the fixed menta-* container names used by local development.
     if ! compose_infra up -d --remove-orphans; then
-        log_warning "Docker Compose reported a startup error; verifying required MySQL and Redis independently."
+        log_error "Infrastructure startup failed. Resolve the Docker Compose error before starting API or BFF."
+        return 1
     fi
     wait_for_container menta-mysql MySQL 45 || return 1
     wait_for_container menta-redis Redis 20 || return 1
+    wait_for_container menta-mailpit Mailpit 20 || return 1
+    wait_for_container menta-otel-collector "OTEL Collector" 20 || return 1
+    wait_for_container menta-loki Loki 20 || return 1
+    wait_for_container menta-grafana Grafana 20 || return 1
 }
 
 infrastructure_is_running() {
@@ -398,6 +451,7 @@ infrastructure_is_running() {
     local containers=(
         menta-mysql
         menta-redis
+        menta-mailpit
         menta-otel-collector
         menta-loki
         menta-grafana
@@ -594,6 +648,7 @@ cmd_status() {
     if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
         print_container_status menta-mysql MySQL
         print_container_status menta-redis Redis
+        print_container_status menta-mailpit Mailpit
         print_container_status menta-otel-collector "OTEL Collector"
         print_container_status menta-loki Loki
         print_container_status menta-grafana Grafana
