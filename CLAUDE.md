@@ -76,6 +76,22 @@ module/
 
 **Justificación**: Esta es una best practice universal que facilita colaboración internacional, reutilización de código, y onboarding de nuevos desarrolladores.
 
+### Boilerplate (Lombok)
+
+**Regla** (vigente desde 2026-09-27): preferir anotaciones de Lombok (`@Getter`,
+`@Setter`, `@RequiredArgsConstructor`, `@AllArgsConstructor`, `@NoArgsConstructor`,
+etc.) sobre getters/setters/constructores escritos a mano en código **nuevo**.
+
+- Lombok ya está declarado (`compileOnly` + `annotationProcessor`) en todos los
+  módulos `api/*`, pero el código existente lo dejó sin adoptar — todo getter
+  está escrito a mano. Esta regla aplica hacia adelante, no es un mandato de
+  retrofit sobre clases existentes.
+- Los value objects/DTOs naturalmente inmutables siguen prefiriendo `record` de
+  Java (ya es el patrón establecido para ese caso); Lombok resuelve el
+  boilerplate de getters/setters/constructores en clases mutables (ej.
+  entidades JPA) o con inyección de dependencias (`@RequiredArgsConstructor`
+  en casos de uso), no reemplaza a `record` donde `record` ya encaja.
+
 ## Comandos de Build
 
 ```bash
