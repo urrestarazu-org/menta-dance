@@ -51,6 +51,7 @@ import com.menta.physical.infrastructure.redis.RedisCheckInLockPort;
 import com.menta.physical.infrastructure.transaction.TransactionalRegisterPhysicalDeviceUseCase;
 import com.menta.physical.infrastructure.transaction.TransactionalRevokePhysicalDeviceUseCase;
 import com.menta.physical.infrastructure.transaction.TransactionalRotatePhysicalDeviceSecretUseCase;
+import com.menta.shared.auth.UserExistencePort;
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.time.ZoneId;
@@ -181,18 +182,25 @@ public class PhysicalConfiguration {
         );
     }
 
+    /**
+     * #45, US-PHYSICAL-008, design C10 -- {@code UserExistencePort} is the same {@code
+     * :api:shared} port {@code BillingConfiguration} already consumes for {@code
+     * AssignTrialSubscriptionUseCaseImpl}; {@code :api:auth}'s {@code UserExistenceAdapter}
+     * resolves it via component scan alone. No {@code build.gradle.kts} change: {@code
+     * :api:physical} already declares {@code :api:shared}.
+     */
     @Bean
     public ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase(
         PhysicalSessionRepository sessionRepository,
         PhysicalCapacityAssignmentRepository assignmentRepository,
         AttendanceRepository attendanceRepository, RedisTemplate<String, String> redisTemplate,
-        Clock clock, QrProperties qrProperties
+        Clock clock, QrProperties qrProperties, UserExistencePort userExistencePort
     ) {
         return new ProcessPhysicalCheckInUseCaseImpl(
             sessionRepository, assignmentRepository, attendanceRepository,
             new FormatQrCredentialSignatureService(), new RedisCheckInLockPort(redisTemplate),
             clock, checkInDeviceToken, qrProperties.getSessionWindowBefore(),
-            qrProperties.getSessionWindowAfter(), qrProperties.getLockTtl()
+            qrProperties.getSessionWindowAfter(), qrProperties.getLockTtl(), userExistencePort
         );
     }
 

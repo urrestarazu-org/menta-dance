@@ -13,5 +13,9 @@ import com.menta.physical.application.dto.CheckInResult;
  */
 public interface ProcessPhysicalCheckInUseCase {
 
+    /** QR door flow (US-PHYSICAL-001 escenario 2) — unchanged. */
     CheckInResult checkIn(CheckInCommand command);
+
+    /** #45, US-PHYSICAL-008: receptionist-initiated MANUAL variant. */
+    CheckInResult checkInManually(CheckInCommand command);
 }
