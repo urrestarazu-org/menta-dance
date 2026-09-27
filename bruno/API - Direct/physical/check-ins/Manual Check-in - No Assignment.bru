@@ -1,0 +1,41 @@
+meta {
+  name: Manual Check-in - No Assignment
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/physical/sessions/{{physicalSessionId}}/check-ins
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "type": "MANUAL",
+    "studentId": "{{physicalUnassignedStudentId}}"
+  }
+}
+
+docs {
+  #45, US-PHYSICAL-008 escenario 2. `authToken` must belong to a
+  RECEPTIONIST or ADMIN user, and `physicalUnassignedStudentId` an existing
+  student with NO confirmed capacity assignment for `physicalSessionId`.
+
+  This request also demonstrates the deliberate contract quirk documented
+  in the OpenAPI spec: an unknown `{sessionId}` answers this SAME code
+  (403 CAPACITY_ASSIGNMENT_REQUIRED), not 404 — a confirmed assignment can
+  never exist for a session that does not exist (foreign-key constraint),
+  so this check fails first regardless of which condition is true.
+
+  Success contract: 403 with code CAPACITY_ASSIGNMENT_REQUIRED.
+}
+
+assert {
+  res.status: eq 403
+  res.body.code: eq CAPACITY_ASSIGNMENT_REQUIRED
+}

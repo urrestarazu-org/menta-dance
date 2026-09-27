@@ -17,7 +17,9 @@ info:
   description: |
     Gestión de cursos y sesiones presenciales (US-PHYSICAL-005,
     US-PHYSICAL-006) para ADMIN/PROFESOR, más el check-in con QR
-    (US-PHYSICAL-001) para el alumno confirmado y el lector de puerta.
+    (US-PHYSICAL-001) para el alumno confirmado y el lector de puerta, y el
+    check-in MANUAL (#45, US-PHYSICAL-008) para el recepcionista/ADMIN
+    cuando el flujo QR no es viable.
 
     ## Errores
 
@@ -38,9 +40,14 @@ info:
     Bearer token válido (sin rol específico) — el alumno autenticado es su
     propia autorización. `POST
     /api/v1/physical/sessions/{sessionId}/check-ins` es público a nivel de
-    filtro (`permitAll`): el lector de puerta se autentica con un
-    `deviceToken` compartido que el caso de uso verifica internamente, nunca
-    con un Bearer token de usuario.
+    filtro (`permitAll`) para AMBAS variantes de su body: el lector de
+    puerta (variante QR) se autentica con un `deviceToken` compartido que el
+    caso de uso verifica internamente, nunca con un Bearer token de usuario;
+    el recepcionista/ADMIN (variante MANUAL, #45) sí envía un Bearer token
+    de usuario, pero su rol se verifica DENTRO del caso de uso, no en el
+    filtro de seguridad — `RoleAuthorizationManager` sólo discrimina por
+    prefijo de URL y no puede leer el body para elegir entre variantes
+    (`SecurityConfig` no se modifica por este endpoint).
 
 servers:
   - url: http://localhost:8081
@@ -58,7 +65,10 @@ tags:
       Emisión de QR efímero y redención en la puerta (US-PHYSICAL-001). MVP:
       cubre los escenarios 1, 2, 3, 4 y 5 del issue #38; la compensación
       Redis compare-and-delete del escenario 6 queda fuera de alcance — el
-      lock simplemente expira por TTL.
+      lock simplemente expira por TTL. Desde #45 (US-PHYSICAL-008), el mismo
+      endpoint también acepta un check-in MANUAL iniciado por un
+      RECEPTIONIST/ADMIN, con su propio orden de validación y su propia regla
+      de "sesión vigente" (sólo `CANCELLED` bloquea, a diferencia de QR).
   - name: Historial de asistencia
     description: |
       Lectura del historial de asistencia mensual (#39, US-PHYSICAL-002).
@@ -400,19 +410,55 @@ paths:
   /api/v1/physical/sessions/{sessionId}/check-ins:
     post:
       tags: [Check-in]
-      summary: Redimir un QR escaneado en la puerta
+      summary: Redimir un QR escaneado en la puerta, o registrar un check-in manual
       description: |
-        Público a nivel de filtro (`permitAll`) — el lector se autentica con
-        `deviceToken`, un secreto compartido verificado dentro del caso de
-        uso (US-PHYSICAL-001 escenario 2). Responde `201 Created` en el
-        primer escaneo válido y `200 OK` en cualquier replay idempotente del
-        mismo QR (escenario 5, `count()` nunca crece en el replay). El orden
-        de validación es deliberado: `deviceToken`, forma del QR,
-        coincidencia de `sessionId`, firma, expiración, existencia/ventana de
-        la sesión y asignación de cupo se resuelven TODOS antes de tocar
-        Redis (escenario 4) — sólo un request que pasó todas esas puertas
-        llega a los locks que producen `409 ALREADY_PROCESSING` o
+        Público a nivel de filtro (`permitAll`) para ambas variantes — el
+        lector QR se autentica con `deviceToken` (US-PHYSICAL-001 escenario
+        2), y la variante MANUAL (#45, US-PHYSICAL-008) resuelve su propia
+        autorización de rol DENTRO del caso de uso, no en el filtro de
+        seguridad, porque `RoleAuthorizationManager` discrimina sólo por
+        prefijo de URL y no puede leer el body para decidir entre variantes.
+        El body es una unión discriminada por `type` (`QR` | `MANUAL`); un
+        body mixto (campos de la otra variante presentes) responde
+        `400 INVALID_REQUEST` antes de cualquier paso del caso de uso.
+
+        **Variante QR** — Responde `201 Created` en el primer escaneo válido
+        y `200 OK` en cualquier replay idempotente del mismo QR (escenario
+        5, `count()` nunca crece en el replay). El orden de validación es
+        deliberado: `deviceToken`, forma del QR, coincidencia de
+        `sessionId`, firma, expiración, existencia/ventana de la sesión y
+        asignación de cupo se resuelven TODOS antes de tocar Redis
+        (escenario 4) — sólo un request que pasó todas esas puertas llega a
+        los locks que producen `409 ALREADY_PROCESSING` o
         `503 CHECK_IN_DEGRADED`.
+
+        **Variante MANUAL** — Requiere un Bearer token autenticado con rol
+        `RECEPTIONIST` o `ADMIN`; cualquier otro rol, o ausencia de
+        autenticación, responde `403 INSUFFICIENT_ROLE`. Reutiliza el mismo
+        lock de Redis que la variante QR sobre la misma clave
+        (`checkin:attendance:{sessionId}:{studentId}`), de modo que un
+        escaneo QR y una entrada MANUAL para el mismo alumno y sesión
+        compiten por la misma fila — nunca producen filas duplicadas. El
+        orden de validación es asertado por test: rol → existencia del
+        `studentId` → asignación de cupo confirmada → sesión no `CANCELLED`
+        → lectura idempotente → lock único → INSERT. Sólo el estado
+        `CANCELLED` bloquea MANUAL (`409 SESSION_NOT_ACTIVE`); una sesión ya
+        transcurrida pero no cancelada SÍ se acepta — MANUAL permite cargar
+        asistencia retroactiva sin límite de tiempo, a diferencia de la
+        variante QR (divergencia deliberada, ver más abajo).
+
+        **Advertencia de contrato — `{sessionId}` desconocido en una
+        solicitud MANUAL responde `403 CAPACITY_ASSIGNMENT_REQUIRED`, NO
+        `404`.** Esto NO es un error: es una consecuencia directa del orden
+        de validación anterior, que resuelve la asignación de cupo ANTES
+        que la existencia de la sesión. Una asignación de cupo confirmada
+        no puede existir para una sesión inexistente (restricción de clave
+        foránea), así que la comprobación de asignación falla primero y
+        determina la respuesta. La variante QR, en cambio, sí responde
+        `404 SESSION_NOT_FOUND` para una sesión inexistente, porque su
+        propio orden de validación resuelve la existencia de la sesión
+        antes que la asignación. Un consumidor de esta API no debe asumir
+        que ambas variantes responden igual ante un `sessionId` inválido.
       operationId: processPhysicalCheckIn
       parameters:
         - name: sessionId
@@ -429,22 +475,25 @@ paths:
               $ref: '#/components/schemas/CheckInRequest'
       responses:
         '201':
-          description: Asistencia registrada por primera vez.
+          description: Asistencia registrada por primera vez (cualquier variante).
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CheckInResponse'
         '200':
-          description: Replay idempotente de un check-in ya registrado (escenario 5).
+          description: |
+            Replay idempotente de un check-in ya registrado — escenario 5
+            para QR, o un reintento MANUAL para el mismo alumno y sesión.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CheckInResponse'
         '400':
           description: |
-            Body inválido (`INVALID_REQUEST`, incluye `type` distinto de
-            `QR`), o `qrCredentials` malformado o de otra sesión
-            (`INVALID_QR_CREDENTIAL`).
+            Body inválido (`INVALID_REQUEST`) — `type` distinto de `QR`
+            o `MANUAL`, un body mixto que mezcla campos de ambas variantes,
+            o un `studentId` mal formado; o, sólo para QR, `qrCredentials`
+            malformado o de otra sesión (`INVALID_QR_CREDENTIAL`).
           content:
             application/problem+json:
               schema:
@@ -458,7 +507,7 @@ paths:
                     detail: The QR credential is malformed or does not match the target session.
                     code: INVALID_QR_CREDENTIAL
         '401':
-          description: '`deviceToken` inválido (`INVALID_DEVICE_TOKEN`).'
+          description: '`deviceToken` inválido (`INVALID_DEVICE_TOKEN`) — sólo variante QR.'
           content:
             application/problem+json:
               schema:
@@ -473,15 +522,66 @@ paths:
                     code: INVALID_DEVICE_TOKEN
         '403':
           description: |
-            Sesión cancelada (`SESSION_CANCELLED`), fuera de la ventana de
-            check-in (`OUTSIDE_CHECK_IN_WINDOW`), o sin asignación de cupo
-            confirmada (`CAPACITY_ASSIGNMENT_REQUIRED`).
+            QR: sesión cancelada (`SESSION_CANCELLED`), fuera de la ventana
+            de check-in (`OUTSIDE_CHECK_IN_WINDOW`), o sin asignación de
+            cupo confirmada (`CAPACITY_ASSIGNMENT_REQUIRED`).
+
+            MANUAL: el llamador autenticado no tiene rol `RECEPTIONIST` ni
+            `ADMIN`, o la solicitud es anónima (`INSUFFICIENT_ROLE`); o no
+            existe asignación de cupo confirmada para el alumno
+            (`CAPACITY_ASSIGNMENT_REQUIRED`) — **incluyendo el caso de un
+            `{sessionId}` inexistente, ver advertencia de contrato arriba**.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                rol_insuficiente:
+                  value:
+                    type: https://menta.dance/problems/insufficient_role
+                    title: Forbidden
+                    status: 403
+                    detail: Manual check-in requires the RECEPTIONIST or ADMIN role.
+                    code: INSUFFICIENT_ROLE
         '404':
-          description: Sesión inexistente (`SESSION_NOT_FOUND`).
+          description: |
+            Sesión inexistente (`SESSION_NOT_FOUND`) — sólo variante QR
+            (para MANUAL ver la advertencia de contrato arriba); o, sólo
+            variante MANUAL, `studentId` inexistente (`STUDENT_NOT_FOUND`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                alumno_inexistente:
+                  value:
+                    type: https://menta.dance/problems/student_not_found
+                    title: Not Found
+                    status: 404
+                    detail: Student not found.
+                    code: STUDENT_NOT_FOUND
         '409':
-          description: Otro lector procesando el mismo check-in (`ALREADY_PROCESSING`).
+          description: |
+            QR: otro lector procesando el mismo check-in
+            (`ALREADY_PROCESSING`). MANUAL: la sesión está cancelada
+            (`SESSION_NOT_ACTIVE`) — una sesión ya transcurrida pero NO
+            cancelada no cae en este código (backfill retroactivo, ver
+            descripción arriba); o `ALREADY_PROCESSING` si otra solicitud
+            (QR o MANUAL) sostiene el mismo lock.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                sesion_no_vigente:
+                  value:
+                    type: https://menta.dance/problems/session_not_active
+                    title: Conflict
+                    status: 409
+                    detail: This session is cancelled and no longer accepts check-ins.
+                    code: SESSION_NOT_ACTIVE
         '410':
-          description: QR bien formado pero expirado (`EXPIRED_QR_CREDENTIAL`).
+          description: QR bien formado pero expirado (`EXPIRED_QR_CREDENTIAL`) — sólo variante QR.
           content:
             application/problem+json:
               schema:
@@ -1034,13 +1134,27 @@ components:
           description: Hint para que la app del alumno reemita el QR cada N segundos.
 
     CheckInRequest:
+      description: |
+        Unión discriminada por `type` (#45, US-PHYSICAL-008). Un valor de
+        `type` distinto de `QR`/`MANUAL`, o un body que mezcla campos de
+        ambas variantes, responde `400 INVALID_REQUEST` antes de cualquier
+        paso del caso de uso.
+      oneOf:
+        - $ref: '#/components/schemas/CheckInQrRequest'
+        - $ref: '#/components/schemas/CheckInManualRequest'
+      discriminator:
+        propertyName: type
+        mapping:
+          QR: '#/components/schemas/CheckInQrRequest'
+          MANUAL: '#/components/schemas/CheckInManualRequest'
+
+    CheckInQrRequest:
       type: object
       required: [type, qrCredentials, deviceId, deviceToken]
       properties:
         type:
           type: string
           enum: [QR]
-          description: Único valor válido en este MVP; cualquier otro responde 400.
         qrCredentials:
           type: string
         deviceId:
@@ -1048,6 +1162,25 @@ components:
         deviceToken:
           type: string
           description: Secreto compartido del lector, verificado dentro del caso de uso.
+
+    CheckInManualRequest:
+      description: |
+        #45, US-PHYSICAL-008. Requiere un Bearer token autenticado con rol
+        `RECEPTIONIST` o `ADMIN` — no documentado vía `securitySchemes`
+        (este contrato no declara ese bloque; ver la descripción del
+        endpoint), verificado dentro del caso de uso, no en el filtro de
+        seguridad (D5). NO debe incluir ningún campo de la variante QR
+        (`qrCredentials`, `deviceId`, `deviceToken`).
+      type: object
+      required: [type, studentId]
+      properties:
+        type:
+          type: string
+          enum: [MANUAL]
+        studentId:
+          type: string
+          format: uuid
+          description: Alumno cuya asistencia registra el recepcionista/admin.
 
     CheckInResponse:
       type: object

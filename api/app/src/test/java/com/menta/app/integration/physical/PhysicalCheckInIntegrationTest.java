@@ -37,6 +37,7 @@ import com.menta.shared.domain.vo.Email;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -76,6 +77,13 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * timing mid-request, which this MySQL+mocked-Redis harness cannot do
  * without inventing fictitious coverage; it is intentionally not attempted
  * here.</p>
+ *
+ * <p>Also covers #45, US-PHYSICAL-008 (P4): the MANUAL variant end to end,
+ * through the same real filter chain and MySQL instance — RECEPTIONIST/ADMIN
+ * authorization, student existence, confirmed-assignment requirement, the
+ * cancelled-only "session active" rule (D8), idempotent replay, and the
+ * shared-lock-key proof that a QR scan and a MANUAL entry for the same
+ * (session, student) contend on the same row (D1/C6).</p>
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("integration-test")
@@ -214,6 +222,203 @@ class PhysicalCheckInIntegrationTest {
             "/api/v1/physical/sessions/" + sessionId + "/check-ins", HttpMethod.POST,
             new HttpEntity<>(body, headers), Map.class
         );
+    }
+
+    // --- #45, US-PHYSICAL-008 (P4): MANUAL variant, full HTTP stack -----
+
+    private ResponseEntity<Map> checkInManually(UUID sessionId, UUID studentId, String bearerToken) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        if (bearerToken != null) {
+            headers.setBearerAuth(bearerToken);
+        }
+        Map<String, Object> body = Map.of("type", "MANUAL", "studentId", studentId.toString());
+        return http.exchange(
+            "/api/v1/physical/sessions/" + sessionId + "/check-ins", HttpMethod.POST,
+            new HttpEntity<>(body, headers), Map.class
+        );
+    }
+
+    @Test
+    void a_receptionist_records_a_manual_check_in_for_an_assigned_student() {
+        UUID receptionistId = issueUser(Role.RECEPTIONIST);
+        UUID studentId = issueUser(Role.STUDENT);
+        UUID courseId = seedCourse();
+        UUID sessionId = seedSession(courseId, Instant.now());
+        seedAssignment(sessionId, studentId);
+
+        stubRedisLockAcquired();
+        ResponseEntity<Map> response =
+            checkInManually(sessionId, studentId, tokenFor(receptionistId, Role.RECEPTIONIST));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(attendanceRepository.count()).isEqualTo(1);
+        AttendanceJpaEntity stored =
+            attendanceRepository.findBySessionIdAndUserId(sessionId, studentId).orElseThrow();
+        assertThat(stored.getDeviceId()).isEqualTo(receptionistId.toString());
+        assertThat(stored.getKind()).isEqualTo("MANUAL");
+    }
+
+    @Test
+    void repeating_a_manual_check_in_returns_200_and_never_duplicates_the_row() {
+        UUID receptionistId = issueUser(Role.RECEPTIONIST);
+        UUID studentId = issueUser(Role.STUDENT);
+        UUID courseId = seedCourse();
+        UUID sessionId = seedSession(courseId, Instant.now());
+        seedAssignment(sessionId, studentId);
+        String receptionistToken = tokenFor(receptionistId, Role.RECEPTIONIST);
+
+        stubRedisLockAcquired();
+        ResponseEntity<Map> first = checkInManually(sessionId, studentId, receptionistToken);
+        assertThat(first.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+
+        ResponseEntity<Map> replay = checkInManually(sessionId, studentId, receptionistToken);
+
+        assertThat(replay.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(attendanceRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void an_admin_also_succeeds_on_a_manual_check_in() {
+        UUID adminId = issueUser(Role.ADMIN);
+        UUID studentId = issueUser(Role.STUDENT);
+        UUID courseId = seedCourse();
+        UUID sessionId = seedSession(courseId, Instant.now());
+        seedAssignment(sessionId, studentId);
+
+        stubRedisLockAcquired();
+        ResponseEntity<Map> response = checkInManually(sessionId, studentId, tokenFor(adminId, Role.ADMIN));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    }
+
+    @Test
+    void a_student_caller_is_rejected_on_a_manual_check_in() {
+        UUID callerId = issueUser(Role.STUDENT);
+        UUID studentId = issueUser(Role.STUDENT);
+        UUID courseId = seedCourse();
+        UUID sessionId = seedSession(courseId, Instant.now());
+        seedAssignment(sessionId, studentId);
+
+        ResponseEntity<Map> response = checkInManually(sessionId, studentId, tokenFor(callerId, Role.STUDENT));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(response.getBody().get("code")).isEqualTo("INSUFFICIENT_ROLE");
+    }
+
+    @Test
+    void an_instructor_caller_is_rejected_on_a_manual_check_in() {
+        UUID callerId = issueUser(Role.INSTRUCTOR);
+        UUID studentId = issueUser(Role.STUDENT);
+        UUID courseId = seedCourse();
+        UUID sessionId = seedSession(courseId, Instant.now());
+        seedAssignment(sessionId, studentId);
+
+        ResponseEntity<Map> response = checkInManually(sessionId, studentId, tokenFor(callerId, Role.INSTRUCTOR));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(response.getBody().get("code")).isEqualTo("INSUFFICIENT_ROLE");
+    }
+
+    @Test
+    void an_anonymous_caller_is_rejected_on_a_manual_check_in() {
+        UUID studentId = issueUser(Role.STUDENT);
+        UUID courseId = seedCourse();
+        UUID sessionId = seedSession(courseId, Instant.now());
+        seedAssignment(sessionId, studentId);
+
+        ResponseEntity<Map> response = checkInManually(sessionId, studentId, null);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(response.getBody().get("code")).isEqualTo("INSUFFICIENT_ROLE");
+    }
+
+    @Test
+    void a_manual_check_in_for_a_cancelled_session_is_rejected() {
+        UUID receptionistId = issueUser(Role.RECEPTIONIST);
+        UUID studentId = issueUser(Role.STUDENT);
+        UUID courseId = seedCourse();
+        UUID sessionId = seedCancelledSession(courseId, Instant.now());
+        seedAssignment(sessionId, studentId);
+
+        ResponseEntity<Map> response =
+            checkInManually(sessionId, studentId, tokenFor(receptionistId, Role.RECEPTIONIST));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody().get("code")).isEqualTo("SESSION_NOT_ACTIVE");
+    }
+
+    /** D8: an already-elapsed, non-cancelled session is NOT rejected — retroactive backfill. */
+    @Test
+    void a_manual_check_in_for_an_elapsed_non_cancelled_session_is_accepted() {
+        UUID receptionistId = issueUser(Role.RECEPTIONIST);
+        UUID studentId = issueUser(Role.STUDENT);
+        UUID courseId = seedCourse();
+        UUID sessionId = seedSession(courseId, Instant.now().minusSeconds(90 * 24 * 3600));
+        seedAssignment(sessionId, studentId);
+
+        stubRedisLockAcquired();
+        ResponseEntity<Map> response =
+            checkInManually(sessionId, studentId, tokenFor(receptionistId, Role.RECEPTIONIST));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    }
+
+    @Test
+    void a_manual_check_in_for_an_unknown_student_is_rejected() {
+        UUID receptionistId = issueUser(Role.RECEPTIONIST);
+        UUID studentId = UUID.randomUUID();
+        UUID courseId = seedCourse();
+        UUID sessionId = seedSession(courseId, Instant.now());
+
+        ResponseEntity<Map> response =
+            checkInManually(sessionId, studentId, tokenFor(receptionistId, Role.RECEPTIONIST));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getBody().get("code")).isEqualTo("STUDENT_NOT_FOUND");
+    }
+
+    @Test
+    void a_manual_check_in_without_a_confirmed_assignment_is_rejected() {
+        UUID receptionistId = issueUser(Role.RECEPTIONIST);
+        UUID studentId = issueUser(Role.STUDENT);
+        UUID courseId = seedCourse();
+        UUID sessionId = seedSession(courseId, Instant.now());
+
+        ResponseEntity<Map> response =
+            checkInManually(sessionId, studentId, tokenFor(receptionistId, Role.RECEPTIONIST));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(response.getBody().get("code")).isEqualTo("CAPACITY_ASSIGNMENT_REQUIRED");
+    }
+
+    /**
+     * D1/C6 — shared-key/shared-row proof: a QR scan for a student already recorded MANUAL for
+     * the same (session, student) is the same idempotent row, not a competing one.
+     */
+    @Test
+    void a_qr_scan_for_an_already_manually_checked_in_student_replays_the_same_row() {
+        UUID studentId = issueUser(Role.STUDENT);
+        UUID receptionistId = issueUser(Role.RECEPTIONIST);
+        UUID courseId = seedCourse();
+        UUID sessionId = seedSession(courseId, Instant.now());
+        seedAssignment(sessionId, studentId);
+        stubRedisLockAcquired();
+        ResponseEntity<Map> manual =
+            checkInManually(sessionId, studentId, tokenFor(receptionistId, Role.RECEPTIONIST));
+        assertThat(manual.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+
+        ResponseEntity<Map> qrResponse = issueAccessQr(sessionId, studentId);
+        String qrCredentials = (String) qrResponse.getBody().get("qrCredentials");
+
+        ResponseEntity<Map> qrCheckIn = checkIn(sessionId, qrCredentials, DEVICE_TOKEN);
+
+        assertThat(qrCheckIn.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(attendanceRepository.count()).isEqualTo(1);
+        Optional<AttendanceJpaEntity> stored =
+            attendanceRepository.findBySessionIdAndUserId(sessionId, studentId);
+        assertThat(stored).isPresent();
+        assertThat(stored.get().getKind()).isEqualTo("MANUAL");
     }
 
     // --- Escenarios 1 + 2: happy path ---------------------------------
