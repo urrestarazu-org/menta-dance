@@ -47,6 +47,7 @@ import com.menta.physical.infrastructure.qr.QrProperties;
 import com.menta.physical.infrastructure.transaction.TransactionalRegisterPhysicalDeviceUseCase;
 import com.menta.physical.infrastructure.transaction.TransactionalRevokePhysicalDeviceUseCase;
 import com.menta.physical.infrastructure.transaction.TransactionalRotatePhysicalDeviceSecretUseCase;
+import com.menta.shared.auth.UserExistencePort;
 import java.lang.reflect.Field;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.env.Environment;
@@ -154,7 +155,8 @@ class PhysicalConfigurationTest {
 
         ProcessPhysicalCheckInUseCase useCase = configuration.processPhysicalCheckInUseCase(
             mock(PhysicalSessionRepository.class), mock(PhysicalCapacityAssignmentRepository.class),
-            mock(AttendanceRepository.class), redisTemplate, mock(Clock.class), new QrProperties()
+            mock(AttendanceRepository.class), redisTemplate, mock(Clock.class), new QrProperties(),
+            mock(UserExistencePort.class)
         );
 
         assertThat(useCase).isInstanceOf(ProcessPhysicalCheckInUseCaseImpl.class);

@@ -13,21 +13,26 @@ import com.menta.physical.application.usecase.QrCredentialParser.ParsedQrCredent
 import com.menta.physical.domain.exception.CapacityAssignmentRequiredException;
 import com.menta.physical.domain.exception.CheckInAlreadyProcessingException;
 import com.menta.physical.domain.exception.ExpiredQrCredentialException;
+import com.menta.physical.domain.exception.InsufficientRoleException;
 import com.menta.physical.domain.exception.InvalidDeviceTokenException;
 import com.menta.physical.domain.exception.InvalidQrCredentialException;
 import com.menta.physical.domain.exception.OutsideCheckInWindowException;
 import com.menta.physical.domain.exception.SessionCancelledException;
+import com.menta.physical.domain.exception.SessionNotActiveException;
 import com.menta.physical.domain.exception.SessionNotFoundException;
+import com.menta.physical.domain.exception.StudentNotFoundException;
 import com.menta.physical.domain.model.Attendance;
 import com.menta.physical.domain.model.AttendanceKind;
 import com.menta.physical.domain.model.PhysicalSession;
 import com.menta.physical.domain.model.SessionId;
 import com.menta.physical.domain.model.SessionStatus;
+import com.menta.shared.auth.UserExistencePort;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -45,6 +50,9 @@ public class ProcessPhysicalCheckInUseCaseImpl implements ProcessPhysicalCheckIn
     private static final String QR_LOCK_PREFIX = "checkin:qr:";
     private static final String ATTENDANCE_LOCK_PREFIX = "checkin:attendance:";
 
+    /** #45, US-PHYSICAL-008: only these roles may record a MANUAL check-in (D7 step M1). */
+    private static final Set<String> MANUAL_CHECK_IN_ROLES = Set.of("RECEPTIONIST", "ADMIN");
+
     private final PhysicalSessionRepository sessionRepository;
     private final PhysicalCapacityAssignmentRepository assignmentRepository;
     private final AttendanceRepository attendanceRepository;
@@ -55,6 +63,7 @@ public class ProcessPhysicalCheckInUseCaseImpl implements ProcessPhysicalCheckIn
     private final Duration sessionWindowBefore;
     private final Duration sessionWindowAfter;
     private final Duration lockTtl;
+    private final UserExistencePort userExistencePort;
 
     public ProcessPhysicalCheckInUseCaseImpl(
         PhysicalSessionRepository sessionRepository,
@@ -66,7 +75,8 @@ public class ProcessPhysicalCheckInUseCaseImpl implements ProcessPhysicalCheckIn
         String deviceToken,
         Duration sessionWindowBefore,
         Duration sessionWindowAfter,
-        Duration lockTtl
+        Duration lockTtl,
+        UserExistencePort userExistencePort
     ) {
         this.sessionRepository = sessionRepository;
         this.assignmentRepository = assignmentRepository;
@@ -78,6 +88,7 @@ public class ProcessPhysicalCheckInUseCaseImpl implements ProcessPhysicalCheckIn
         this.sessionWindowBefore = sessionWindowBefore;
         this.sessionWindowAfter = sessionWindowAfter;
         this.lockTtl = lockTtl;
+        this.userExistencePort = userExistencePort;
     }
 
     @Override
@@ -140,6 +151,59 @@ public class ProcessPhysicalCheckInUseCaseImpl implements ProcessPhysicalCheckIn
         );
         Attendance saved = attendanceRepository.save(attendance);
         return new CheckInResult(AttendanceViewMapper.toView(saved), true);
+    }
+
+    /**
+     * #45, US-PHYSICAL-008: receptionist-initiated MANUAL check-in. D7's asserted order — role ->
+     * student existence -> confirmed capacity assignment -> not-cancelled -> idempotent read ->
+     * single lock -> INSERT. Deliberately shorter and separate from {@link #checkIn}: no device
+     * token, no QR credential, no check-in window, and (D8) {@code hasOccurred} is never
+     * consulted — only cancellation gates this path, enabling unlimited retroactive backfill.
+     */
+    @Override
+    public CheckInResult checkInManually(CheckInCommand command) {
+        // M1: only the front desk (or an admin) may record on another person's behalf.
+        if (!command.actor().hasAnyRoleOf(MANUAL_CHECK_IN_ROLES)) {
+            throw new InsufficientRoleException();
+        }
+
+        // M2: an unknown subject is rejected before any Physical state is read (D7).
+        if (!userExistencePort.existsById(command.studentId())) {
+            throw new StudentNotFoundException();
+        }
+
+        // M3: a confirmed capacity assignment is a product precondition. Deliberately BEFORE the
+        // cancellation check — the inverse of the QR flow's step 6/7 order (D7): for MANUAL both
+        // are rejections, and D7 fixes which one a multi-violation request receives.
+        if (!assignmentRepository.existsConfirmedAssignment(command.sessionId(), command.studentId())) {
+            throw new CapacityAssignmentRequiredException();
+        }
+
+        // M4: D8 — ONLY cancellation gates MANUAL. hasOccurred(now) is never consulted:
+        // retroactive backfill of an elapsed, non-cancelled session is the point of this variant,
+        // with no time limit.
+        PhysicalSession session = sessionRepository.findById(command.sessionId())
+            .orElseThrow(SessionNotFoundException::new);
+        if (session.getStatus() == SessionStatus.CANCELLED) {
+            throw new SessionNotActiveException();
+        }
+
+        // M5: idempotent replay short-circuits before touching Redis at all.
+        Optional<Attendance> existing =
+            attendanceRepository.findBySessionIdAndUserId(command.sessionId(), command.studentId());
+        if (existing.isPresent()) {
+            return new CheckInResult(AttendanceViewMapper.toView(existing.get()), false);
+        }
+
+        // M6: ONE lock, the same key shape and TTL the QR flow uses (D1, C6).
+        acquireLockOrThrow(ATTENDANCE_LOCK_PREFIX + command.sessionId() + ":" + command.studentId());
+
+        // M7: device_id carries the acting person's own userId (D2).
+        Attendance attendance = Attendance.record(
+            command.sessionId(), command.studentId(), clock.now(),
+            command.actor().userId().toString(), AttendanceKind.MANUAL
+        );
+        return new CheckInResult(AttendanceViewMapper.toView(attendanceRepository.save(attendance)), true);
     }
 
     private void acquireLockOrThrow(String key) {
