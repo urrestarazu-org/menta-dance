@@ -4,11 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.menta.physical.application.dto.AccessQrView;
 import com.menta.physical.application.dto.AttendanceView;
+import com.menta.physical.application.dto.CheckInActor;
 import com.menta.physical.application.dto.CheckInCommand;
 import com.menta.physical.application.dto.CheckInResult;
 import com.menta.physical.application.port.in.IssuePhysicalAccessQrUseCase;
@@ -21,11 +23,13 @@ import com.menta.physical.infrastructure.web.dto.CheckInRequest;
 import com.menta.physical.infrastructure.web.dto.CheckInResponse;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -49,10 +53,22 @@ class PhysicalCheckInControllerTest {
         );
     }
 
+    private static Authentication receptionistAuthOf(UUID userId) {
+        return new UsernamePasswordAuthenticationToken(
+            userId.toString(), null, List.of(new SimpleGrantedAuthority("ROLE_RECEPTIONIST"))
+        );
+    }
+
     private static AttendanceView attendanceView(SessionId sessionId, UUID studentId) {
+        return attendanceView(sessionId, studentId, AttendanceKind.QR);
+    }
+
+    private static AttendanceView attendanceView(
+        SessionId sessionId, UUID studentId, AttendanceKind kind
+    ) {
         return new AttendanceView(
             AttendanceId.generate(), sessionId, studentId, Instant.parse("2026-09-15T22:00:00Z"),
-            "reader-1", AttendanceKind.QR
+            "reader-1", kind
         );
     }
 
@@ -72,34 +88,91 @@ class PhysicalCheckInControllerTest {
     }
 
     @Test
-    void check_in_never_reads_authentication_and_builds_a_command_with_a_null_student_id_from_qr() {
+    void a_qr_request_dispatches_to_check_in_and_never_reads_authentication() {
         SessionId sessionId = SessionId.generate();
         CheckInRequest request =
-            new CheckInRequest("QR", "qr:payload", "reader-1", "device-secret");
+            new CheckInRequest("QR", "qr:payload", "reader-1", "device-secret", null);
         AttendanceView view = attendanceView(sessionId, UUID.randomUUID());
         when(checkInUseCase.checkIn(any())).thenReturn(new CheckInResult(view, true));
 
         ResponseEntity<CheckInResponse> response =
-            controller.checkIn(sessionId.toString(), request);
+            controller.checkIn(sessionId.toString(), request, authOf(UUID.randomUUID()));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(response.getBody().attendanceId()).isEqualTo(view.attendanceId().toString());
         verify(checkInUseCase).checkIn(eq(CheckInCommand.qr(
             sessionId, "qr:payload", "reader-1", "device-secret"
         )));
+        verify(checkInUseCase, never()).checkInManually(any());
     }
 
     @Test
     void check_in_returns_200_when_the_use_case_reports_an_idempotent_replay() {
         SessionId sessionId = SessionId.generate();
         CheckInRequest request =
-            new CheckInRequest("QR", "qr:payload", "reader-1", "device-secret");
+            new CheckInRequest("QR", "qr:payload", "reader-1", "device-secret", null);
         AttendanceView view = attendanceView(sessionId, UUID.randomUUID());
         when(checkInUseCase.checkIn(any())).thenReturn(new CheckInResult(view, false));
 
         ResponseEntity<CheckInResponse> response =
-            controller.checkIn(sessionId.toString(), request);
+            controller.checkIn(sessionId.toString(), request, null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    void a_manual_request_dispatches_to_check_in_manually_with_the_authenticated_actor() {
+        SessionId sessionId = SessionId.generate();
+        UUID studentId = UUID.randomUUID();
+        UUID receptionistId = UUID.randomUUID();
+        CheckInRequest request =
+            new CheckInRequest("MANUAL", null, null, null, studentId.toString());
+        AttendanceView view = attendanceView(sessionId, studentId, AttendanceKind.MANUAL);
+        when(checkInUseCase.checkInManually(any())).thenReturn(new CheckInResult(view, true));
+
+        ResponseEntity<CheckInResponse> response = controller.checkIn(
+            sessionId.toString(), request, receptionistAuthOf(receptionistId)
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        verify(checkInUseCase).checkInManually(eq(CheckInCommand.manual(
+            sessionId, studentId, new CheckInActor(receptionistId, Set.of("RECEPTIONIST"))
+        )));
+        verify(checkInUseCase, never()).checkIn(any());
+    }
+
+    @Test
+    void a_manual_request_with_a_null_authentication_builds_an_anonymous_actor() {
+        SessionId sessionId = SessionId.generate();
+        UUID studentId = UUID.randomUUID();
+        CheckInRequest request =
+            new CheckInRequest("MANUAL", null, null, null, studentId.toString());
+        AttendanceView view = attendanceView(sessionId, studentId, AttendanceKind.MANUAL);
+        when(checkInUseCase.checkInManually(any())).thenReturn(new CheckInResult(view, true));
+
+        controller.checkIn(sessionId.toString(), request, null);
+
+        verify(checkInUseCase).checkInManually(
+            eq(CheckInCommand.manual(sessionId, studentId, CheckInActor.anonymous()))
+        );
+    }
+
+    @Test
+    void a_manual_request_with_an_anonymous_authentication_token_builds_an_anonymous_actor() {
+        SessionId sessionId = SessionId.generate();
+        UUID studentId = UUID.randomUUID();
+        CheckInRequest request =
+            new CheckInRequest("MANUAL", null, null, null, studentId.toString());
+        AttendanceView view = attendanceView(sessionId, studentId, AttendanceKind.MANUAL);
+        when(checkInUseCase.checkInManually(any())).thenReturn(new CheckInResult(view, true));
+        Authentication anonymous = new AnonymousAuthenticationToken(
+            "key", "anonymousUser", List.of(new SimpleGrantedAuthority("ROLE_ANONYMOUS"))
+        );
+
+        controller.checkIn(sessionId.toString(), request, anonymous);
+
+        verify(checkInUseCase).checkInManually(
+            eq(CheckInCommand.manual(sessionId, studentId, CheckInActor.anonymous()))
+        );
     }
 }

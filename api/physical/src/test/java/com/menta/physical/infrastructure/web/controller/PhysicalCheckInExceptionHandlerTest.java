@@ -7,11 +7,14 @@ import com.menta.physical.domain.exception.CapacityAssignmentRequiredException;
 import com.menta.physical.domain.exception.CheckInAlreadyProcessingException;
 import com.menta.physical.domain.exception.CheckInDegradedException;
 import com.menta.physical.domain.exception.ExpiredQrCredentialException;
+import com.menta.physical.domain.exception.InsufficientRoleException;
 import com.menta.physical.domain.exception.InvalidDeviceTokenException;
 import com.menta.physical.domain.exception.InvalidQrCredentialException;
 import com.menta.physical.domain.exception.OutsideCheckInWindowException;
 import com.menta.physical.domain.exception.SessionCancelledException;
+import com.menta.physical.domain.exception.SessionNotActiveException;
 import com.menta.physical.domain.exception.SessionNotFoundException;
+import com.menta.physical.domain.exception.StudentNotFoundException;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -103,6 +106,33 @@ class PhysicalCheckInExceptionHandlerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
         assertThat(response.getHeaders().getFirst(HttpHeaders.RETRY_AFTER)).isEqualTo("30");
         assertThat(codeOf(response)).isEqualTo("CHECK_IN_DEGRADED");
+    }
+
+    @Test
+    void maps_insufficient_role_to_403() {
+        ResponseEntity<ProblemDetail> response =
+            handler.insufficientRole(new InsufficientRoleException());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(codeOf(response)).isEqualTo("INSUFFICIENT_ROLE");
+    }
+
+    @Test
+    void maps_student_not_found_to_404() {
+        ResponseEntity<ProblemDetail> response =
+            handler.studentNotFound(new StudentNotFoundException());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(codeOf(response)).isEqualTo("STUDENT_NOT_FOUND");
+    }
+
+    @Test
+    void maps_session_not_active_to_409() {
+        ResponseEntity<ProblemDetail> response =
+            handler.sessionNotActive(new SessionNotActiveException());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(codeOf(response)).isEqualTo("SESSION_NOT_ACTIVE");
     }
 
     @Test
