@@ -99,7 +99,7 @@ class ProcessPhysicalCheckInUseCaseImplTest {
     }
 
     private CheckInCommand command(String qrCredentials) {
-        return new CheckInCommand(sessionId, null, qrCredentials, DEVICE_ID, DEVICE_TOKEN);
+        return CheckInCommand.qr(sessionId, qrCredentials, DEVICE_ID, DEVICE_TOKEN);
     }
 
     private void allowHappyPathUpToLocks() {
@@ -155,7 +155,7 @@ class ProcessPhysicalCheckInUseCaseImplTest {
     @Test
     void rejects_before_any_other_check_when_the_device_token_is_wrong() {
         CheckInCommand command =
-            new CheckInCommand(sessionId, null, "irrelevant", DEVICE_ID, "wrong-secret");
+            CheckInCommand.qr(sessionId, "irrelevant", DEVICE_ID, "wrong-secret");
 
         assertThatThrownBy(() -> useCase.checkIn(command))
             .isInstanceOf(InvalidDeviceTokenException.class);
@@ -166,7 +166,7 @@ class ProcessPhysicalCheckInUseCaseImplTest {
 
     @Test
     void rejects_a_null_device_token() {
-        CheckInCommand command = new CheckInCommand(sessionId, null, "irrelevant", DEVICE_ID, null);
+        CheckInCommand command = CheckInCommand.qr(sessionId, "irrelevant", DEVICE_ID, null);
 
         assertThatThrownBy(() -> useCase.checkIn(command))
             .isInstanceOf(InvalidDeviceTokenException.class);

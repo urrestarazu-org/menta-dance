@@ -21,10 +21,14 @@ import java.util.Objects;
  *   <li>{@code sessionId} — where this check-in counts.</li>
  *   <li>{@code userId} — who did the check-in.</li>
  *   <li>{@code recordedAt} — when the door accepted it.</li>
- *   <li>{@code deviceId} — which reader saw it (caller-supplied, not
- *       validated against a registry in the MVP).</li>
- *   <li>{@code kind} — how it got there ({@link AttendanceKind}; QR is the
- *       only wired variant today, MANUAL is reserved for #45).</li>
+ *   <li>{@code deviceId} — who or what recorded this check-in: the reader id for
+ *       a QR scan, or the acting RECEPTIONIST/ADMIN's own {@code userId} for a
+ *       MANUAL front-desk entry (#45, D2). Caller-supplied, never validated
+ *       against the device registry. Readers MUST NOT assume it identifies a
+ *       device.</li>
+ *   <li>{@code kind} — how it got there ({@link AttendanceKind}); both variants
+ *       are wired as of #45, and {@code kind} is the only reliable way to
+ *       interpret {@code deviceId}.</li>
  * </ul>
  */
 public final class Attendance {

@@ -7,5 +7,7 @@ package com.menta.auth.domain.model;
 public enum Role {
     ADMIN,
     INSTRUCTOR,
-    STUDENT
+    STUDENT,
+    /** #45, US-PHYSICAL-008: front desk. May record MANUAL physical check-ins. */
+    RECEPTIONIST
 }

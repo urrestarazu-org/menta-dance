@@ -84,8 +84,8 @@ class PhysicalCheckInControllerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(response.getBody().attendanceId()).isEqualTo(view.attendanceId().toString());
-        verify(checkInUseCase).checkIn(eq(new CheckInCommand(
-            sessionId, null, "qr:payload", "reader-1", "device-secret"
+        verify(checkInUseCase).checkIn(eq(CheckInCommand.qr(
+            sessionId, "qr:payload", "reader-1", "device-secret"
         )));
     }
 

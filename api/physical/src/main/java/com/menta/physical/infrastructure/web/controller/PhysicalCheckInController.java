@@ -65,8 +65,8 @@ public class PhysicalCheckInController {
     public ResponseEntity<CheckInResponse> checkIn(
         @PathVariable String sessionId, @Valid @RequestBody CheckInRequest request
     ) {
-        CheckInCommand command = new CheckInCommand(
-            SessionId.of(sessionId), null, request.qrCredentials(),
+        CheckInCommand command = CheckInCommand.qr(
+            SessionId.of(sessionId), request.qrCredentials(),
             request.deviceId(), request.deviceToken()
         );
         CheckInResult result = processPhysicalCheckInUseCase.checkIn(command);
