@@ -4,11 +4,14 @@ import com.menta.physical.domain.exception.CapacityAssignmentRequiredException;
 import com.menta.physical.domain.exception.CheckInAlreadyProcessingException;
 import com.menta.physical.domain.exception.CheckInDegradedException;
 import com.menta.physical.domain.exception.ExpiredQrCredentialException;
+import com.menta.physical.domain.exception.InsufficientRoleException;
 import com.menta.physical.domain.exception.InvalidDeviceTokenException;
 import com.menta.physical.domain.exception.InvalidQrCredentialException;
 import com.menta.physical.domain.exception.OutsideCheckInWindowException;
 import com.menta.physical.domain.exception.SessionCancelledException;
+import com.menta.physical.domain.exception.SessionNotActiveException;
 import com.menta.physical.domain.exception.SessionNotFoundException;
+import com.menta.physical.domain.exception.StudentNotFoundException;
 import com.menta.physical.infrastructure.web.ProblemDetails;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -103,6 +106,31 @@ public class PhysicalCheckInExceptionHandler {
                 "Check-in is temporarily unavailable; retry after 30s.",
                 exception.getErrorCode()
             ));
+    }
+
+    @ExceptionHandler(InsufficientRoleException.class)
+    ResponseEntity<ProblemDetail> insufficientRole(InsufficientRoleException exception) {
+        return ProblemDetails.response(
+            HttpStatus.FORBIDDEN,
+            "Manual check-in requires the RECEPTIONIST or ADMIN role.",
+            exception.getErrorCode()
+        );
+    }
+
+    @ExceptionHandler(StudentNotFoundException.class)
+    ResponseEntity<ProblemDetail> studentNotFound(StudentNotFoundException exception) {
+        return ProblemDetails.response(
+            HttpStatus.NOT_FOUND, "Student not found.", exception.getErrorCode()
+        );
+    }
+
+    @ExceptionHandler(SessionNotActiveException.class)
+    ResponseEntity<ProblemDetail> sessionNotActive(SessionNotActiveException exception) {
+        return ProblemDetails.response(
+            HttpStatus.CONFLICT,
+            "This session is cancelled and no longer accepts check-ins.",
+            exception.getErrorCode()
+        );
     }
 
     /**
