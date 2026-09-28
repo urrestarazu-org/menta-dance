@@ -295,4 +295,52 @@ class PaymentTest {
             assertThat(payment.expireAwaitingManualVerification(NOW)).isSameAs(payment);
         }
     }
+
+    // --- correctManually (#33, US-BILLING-005, D9/C1) ---
+
+    @Test
+    void correctManually_approves_from_reconciliation_required() {
+        Payment payment = terminalPayment(new PaymentStatus.ReconciliationRequired("mismatch"));
+
+        Payment corrected = payment.correctManually(ManualVerificationDecision.APPROVED, NOW);
+
+        assertThat(corrected.getStatus()).isEqualTo(new PaymentStatus.Completed(NOW));
+    }
+
+    @Test
+    void correctManually_rejects_from_reconciliation_required() {
+        Payment payment = terminalPayment(new PaymentStatus.ReconciliationRequired("mismatch"));
+
+        Payment corrected = payment.correctManually(ManualVerificationDecision.REJECTED, NOW);
+
+        assertThat(corrected.getStatus()).isEqualTo(new PaymentStatus.Rejected(NOW));
+    }
+
+    @Test
+    void correctManually_throws_from_every_status_other_than_reconciliation_required() {
+        for (PaymentStatus other : new PaymentStatus[] {
+            new PaymentStatus.AwaitingProvider(), new PaymentStatus.AwaitingManualVerification(),
+            new PaymentStatus.Completed(CREATED_AT), new PaymentStatus.Rejected(CREATED_AT),
+            new PaymentStatus.Cancelled(CREATED_AT), new PaymentStatus.Expired(CREATED_AT)
+        }) {
+            Payment payment = terminalPayment(other);
+
+            assertThatThrownBy(() -> payment.correctManually(ManualVerificationDecision.APPROVED, NOW))
+                .isInstanceOf(IllegalPaymentStateTransitionException.class)
+                .hasMessageContaining("expected ReconciliationRequired");
+            assertThatThrownBy(() -> payment.correctManually(ManualVerificationDecision.REJECTED, NOW))
+                .isInstanceOf(IllegalPaymentStateTransitionException.class)
+                .hasMessageContaining("expected ReconciliationRequired");
+        }
+    }
+
+    /** D9: resolveManually's own assertions stay untouched by the new transition. */
+    @Test
+    void resolveManually_still_works_exactly_as_before() {
+        Payment payment = awaitingManualVerificationPayment();
+
+        Payment approved = payment.resolveManually(ManualVerificationDecision.APPROVED, NOW);
+
+        assertThat(approved.getStatus()).isEqualTo(new PaymentStatus.Completed(NOW));
+    }
 }

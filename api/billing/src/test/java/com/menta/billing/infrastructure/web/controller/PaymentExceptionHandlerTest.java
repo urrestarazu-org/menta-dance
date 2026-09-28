@@ -39,6 +39,10 @@ class PaymentExceptionHandlerTest {
         assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
         assertThat(response.getBody().getProperties().get("code"))
             .isEqualTo("ILLEGAL_PAYMENT_STATE_TRANSITION");
+        // #33, US-BILLING-005, design C1: generalized so a correction on a payment not requiring
+        // reconciliation reads correctly too — no longer AwaitingManualVerification-specific.
+        assertThat(response.getBody().getDetail())
+            .isEqualTo("El pago no está en un estado que admita esta operación.");
     }
 
     @Test
