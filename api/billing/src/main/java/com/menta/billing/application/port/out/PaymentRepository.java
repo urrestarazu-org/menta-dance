@@ -1,5 +1,6 @@
 package com.menta.billing.application.port.out;
 
+import com.menta.billing.application.dto.PendingVerificationPage;
 import com.menta.billing.domain.model.Payment;
 import com.menta.billing.domain.model.PaymentId;
 import java.time.Instant;
@@ -31,4 +32,13 @@ public interface PaymentRepository {
      * createdBefore}, with no submitted proof — a submitted proof withholds automatic expiry.
      */
     List<UUID> findExpirableBankTransferIds(Instant createdBefore, int limit);
+
+    /**
+     * The admin inbox (#33, US-BILLING-005, design C10): payments {@code
+     * AwaitingManualVerification}, oldest-first. Takes primitives, not a Spring {@code Pageable} —
+     * same precedent as {@link #findExpirableBankTransferIds}, so no Spring type crosses into
+     * {@code application}. The caller is responsible for rejecting {@code size > 50}; this port
+     * does not clamp.
+     */
+    PendingVerificationPage findAwaitingManualVerification(int page, int size);
 }

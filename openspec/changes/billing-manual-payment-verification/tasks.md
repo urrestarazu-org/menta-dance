@@ -107,11 +107,11 @@ Chain strategy: stacked-to-main
 
 ## Phase P3: Pending-verification list
 
-- [ ] 3.1 RED: `PaymentJpaRepositoryTest` (extend) — `findAwaitingManualVerification` returns oldest-first results with `hasProof` correctly correlated, via the explicit `countQuery` (Scenario "Admin lists pending-verification payments").
-- [ ] 3.2 GREEN: `PendingVerificationPage`/`PendingVerificationItem` (new records, `billing/application/dto/`, D7), `PaymentRepository.java` (modify: +`findAwaitingManualVerification(int page, int size)`), `PendingVerificationRow` projection (new), `PaymentJpaRepository` (modify: +query with explicit `countQuery`, C10), `PaymentRepositoryAdapter` (modify: builds `PageRequest`, maps to `PendingVerificationPage`).
-- [ ] 3.3 RED: extend `PaymentAdminControllerTest` — `pageSize=51` → `400`, no results (Scenario "Page size above 50 is rejected" — explicit reject, not clamp, per Deviations #1); default `size=20`; non-admin → `403`; anonymous → `401`/`403` (Scenarios "Non-admin is rejected", "Anonymous caller is rejected").
-- [ ] 3.4 GREEN: `PaymentAdminController.java` (modify: +`GET /api/v1/admin/billing/payments` list endpoint; `pageSize > 50` throws a validation exception mapped to `400` via the existing handler — no clamping).
-- [ ] 3.5 Verify: `./gradlew :api:billing:test --tests "*PaymentJpaRepositoryTest*" --tests "*PaymentAdminControllerTest*"` green; coverage gates green. P3 ready for PR.
+- [x] 3.1 RED: `PaymentJpaRepositoryTest` (extend) — `findAwaitingManualVerification` returns oldest-first results with `hasProof` correctly correlated, via the explicit `countQuery` (Scenario "Admin lists pending-verification payments").
+- [x] 3.2 GREEN: `PendingVerificationPage`/`PendingVerificationItem` (new records, `billing/application/dto/`, D7), `PaymentRepository.java` (modify: +`findAwaitingManualVerification(int page, int size)`), `PendingVerificationRow` projection (new), `PaymentJpaRepository` (modify: +query with explicit `countQuery`, C10), `PaymentRepositoryAdapter` (modify: builds `PageRequest`, maps to `PendingVerificationPage`).
+- [x] 3.3 RED: extend `PaymentAdminControllerTest` — `pageSize=51` → `400`, no results (Scenario "Page size above 50 is rejected" — explicit reject, not clamp, per Deviations #1); default `size=20`; non-admin → `403`; anonymous → `401`/`403` (Scenarios "Non-admin is rejected", "Anonymous caller is rejected").
+- [x] 3.4 GREEN: `PaymentAdminController.java` (modify: +`GET /api/v1/admin/billing/payments` list endpoint; `pageSize > 50` throws a validation exception mapped to `400` via the existing handler — no clamping).
+- [x] 3.5 Verify: `./gradlew :api:billing:test --tests "*PaymentJpaRepositoryTest*" --tests "*PaymentAdminControllerTest*"` green; coverage gates green. P3 ready for PR.
 
 ## Phase P4: Signed proof access — solo review (design's #1 risk, `SecurityConfig` matcher)
 

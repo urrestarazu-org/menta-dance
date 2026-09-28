@@ -1,17 +1,26 @@
 package com.menta.billing.infrastructure.web.controller;
 
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.menta.billing.application.dto.CorrectPaymentCommand;
+import com.menta.billing.application.dto.PendingVerificationItem;
+import com.menta.billing.application.dto.PendingVerificationPage;
 import com.menta.billing.application.dto.ResolvePaymentProofCommand;
 import com.menta.billing.application.port.in.CorrectPaymentUseCase;
 import com.menta.billing.application.port.in.ResolvePaymentProofUseCase;
+import com.menta.billing.application.port.out.PaymentRepository;
 import com.menta.billing.domain.model.ManualVerificationDecision;
 import com.menta.billing.domain.model.PaymentId;
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,14 +47,18 @@ class PaymentAdminControllerTest {
 
     private ResolvePaymentProofUseCase resolvePaymentProofUseCase;
     private CorrectPaymentUseCase correctPaymentUseCase;
+    private PaymentRepository paymentRepository;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         resolvePaymentProofUseCase = mock(ResolvePaymentProofUseCase.class);
         correctPaymentUseCase = mock(CorrectPaymentUseCase.class);
+        paymentRepository = mock(PaymentRepository.class);
         mockMvc = MockMvcBuilders
-            .standaloneSetup(new PaymentAdminController(resolvePaymentProofUseCase, correctPaymentUseCase))
+            .standaloneSetup(new PaymentAdminController(
+                resolvePaymentProofUseCase, correctPaymentUseCase, paymentRepository
+            ))
             .setControllerAdvice(new PaymentExceptionHandler())
             .build();
     }
@@ -181,5 +194,68 @@ class PaymentAdminControllerTest {
             .andExpect(status().isForbidden());
 
         verifyNoInteractions(correctPaymentUseCase);
+    }
+
+    // --- pending-verification list (#33, US-BILLING-005, design C10) ---
+
+    private static PendingVerificationItem pendingItem() {
+        return new PendingVerificationItem(
+            UUID.randomUUID(), UUID.randomUUID(), "SUBSCRIPTION", "plan-basic", BigDecimal.TEN, "ARS",
+            "AWAITING_MANUAL_VERIFICATION", true, Instant.parse("2026-09-01T10:00:00Z")
+        );
+    }
+
+    @Test
+    void list_returns_the_page_from_the_repository_ordered_oldest_first() throws Exception {
+        PendingVerificationPage page = new PendingVerificationPage(List.of(pendingItem()), 0, 20, 1, 1);
+        when(paymentRepository.findAwaitingManualVerification(0, 20)).thenReturn(page);
+
+        mockMvc.perform(get("/api/v1/admin/billing/payments")
+            .param("status", "PENDING")
+            .param("substatus", "AWAITING_MANUAL_VERIFICATION")
+            .principal(authOf("ADMIN")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.items[0].hasProof").value(true))
+            .andExpect(jsonPath("$.totalElements").value(1));
+
+        verify(paymentRepository).findAwaitingManualVerification(0, 20);
+    }
+
+    @Test
+    void list_defaults_to_page_zero_size_twenty() throws Exception {
+        when(paymentRepository.findAwaitingManualVerification(eq(0), eq(20)))
+            .thenReturn(new PendingVerificationPage(List.of(), 0, 20, 0, 0));
+
+        mockMvc.perform(get("/api/v1/admin/billing/payments")
+            .param("status", "PENDING")
+            .param("substatus", "AWAITING_MANUAL_VERIFICATION")
+            .principal(authOf("ADMIN")))
+            .andExpect(status().isOk());
+
+        verify(paymentRepository).findAwaitingManualVerification(0, 20);
+    }
+
+    /** Deviations #1: the spec requires an explicit 400, not a clamp to 50. */
+    @Test
+    void list_with_page_size_above_50_returns_400_and_no_results() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/billing/payments")
+            .param("status", "PENDING")
+            .param("substatus", "AWAITING_MANUAL_VERIFICATION")
+            .param("size", "51")
+            .principal(authOf("ADMIN")))
+            .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(paymentRepository);
+    }
+
+    @Test
+    void list_from_a_non_admin_returns_403() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/billing/payments")
+            .param("status", "PENDING")
+            .param("substatus", "AWAITING_MANUAL_VERIFICATION")
+            .principal(authOf("STUDENT")))
+            .andExpect(status().isForbidden());
+
+        verifyNoInteractions(paymentRepository);
     }
 }
