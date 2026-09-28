@@ -35,6 +35,23 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew clean build
 
+      - name: Upload api/app test reports
+        # if: always() -- sube el reporte tanto si "Build with Gradle" falla como si
+        # pasa; sin esto, los reportes HTML/XML solo existen en el runner efímero y se
+        # pierden al terminar el job. Diagnóstico temporal para la investigación en
+        # docs/TESTCONTAINERS-CONNECTION-REFUSED-INVESTIGATION.md — sacar este paso
+        # una vez que se encuentre la causa raíz (o quedará subiendo reportes de forma
+        # permanente sin haber sido una decisión deliberada).
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: api-app-test-reports
+          path: |
+            api/app/build/reports/tests/test/
+            api/app/build/test-results/test/
+          retention-days: 7
+          if-no-files-found: warn
+
       - name: Run unit tests
         # -x :android:testDebugUnitTest: excluye tests Android (más lentos)
         run: ./gradlew test -x :android:testDebugUnitTest

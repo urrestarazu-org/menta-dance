@@ -222,6 +222,12 @@ conseguirla en CI hace falta una de estas dos cosas, ninguna aplicada todavía:
 Cualquiera de las dos implica otra corrida completa de CI (~57 min) para obtener el
 dato.
 
+**Decisión**: se aplicó la opción 2 — paso `actions/upload-artifact` agregado a
+`quick-build-and-test` en `.github/workflows/pr-develop.yml`, con `if: always()` para
+que suba `api/app/build/reports/tests/test/` y `api/app/build/test-results/test/` tanto
+si el build falla como si pasa. Mismo TODO que `logback-test.xml`: sacar este paso una
+vez cerrada la causa raíz, no es infraestructura de CI permanente.
+
 ## Callejones sin salida ya explorados (para no repetirlos)
 
 - **`Slf4jLogConsumer` en los 4 containers de dominio**: no produjo ninguna salida
