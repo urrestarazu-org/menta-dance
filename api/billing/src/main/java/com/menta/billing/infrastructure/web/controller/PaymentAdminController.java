@@ -5,12 +5,19 @@ import com.menta.billing.application.dto.PendingVerificationPage;
 import com.menta.billing.application.dto.ResolvePaymentProofCommand;
 import com.menta.billing.application.port.in.CorrectPaymentUseCase;
 import com.menta.billing.application.port.in.ResolvePaymentProofUseCase;
+import com.menta.billing.application.port.out.PaymentProofRepository;
 import com.menta.billing.application.port.out.PaymentRepository;
+import com.menta.billing.domain.exception.PaymentNotFoundException;
 import com.menta.billing.domain.model.ManualVerificationDecision;
+import com.menta.billing.domain.model.Payment;
+import com.menta.billing.domain.model.PaymentId;
+import com.menta.billing.infrastructure.proof.ProofAccessTokenSigner;
 import com.menta.billing.infrastructure.web.dto.CorrectPaymentRequest;
+import com.menta.billing.infrastructure.web.dto.PaymentDetailResponse;
 import com.menta.billing.infrastructure.web.dto.PendingVerificationPageResponse;
 import com.menta.billing.infrastructure.web.dto.RejectPaymentRequest;
 import jakarta.validation.Valid;
+import java.time.Instant;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -48,14 +55,19 @@ public class PaymentAdminController {
     private final ResolvePaymentProofUseCase resolvePaymentProofUseCase;
     private final CorrectPaymentUseCase correctPaymentUseCase;
     private final PaymentRepository paymentRepository;
+    private final PaymentProofRepository paymentProofRepository;
+    private final ProofAccessTokenSigner proofAccessTokenSigner;
 
     public PaymentAdminController(
         ResolvePaymentProofUseCase resolvePaymentProofUseCase, CorrectPaymentUseCase correctPaymentUseCase,
-        PaymentRepository paymentRepository
+        PaymentRepository paymentRepository, PaymentProofRepository paymentProofRepository,
+        ProofAccessTokenSigner proofAccessTokenSigner
     ) {
         this.resolvePaymentProofUseCase = resolvePaymentProofUseCase;
         this.correctPaymentUseCase = correctPaymentUseCase;
         this.paymentRepository = paymentRepository;
+        this.paymentProofRepository = paymentProofRepository;
+        this.proofAccessTokenSigner = proofAccessTokenSigner;
     }
 
     /**
@@ -78,6 +90,28 @@ public class PaymentAdminController {
         }
         PendingVerificationPage result = paymentRepository.findAwaitingManualVerification(page, size);
         return ResponseEntity.ok(PendingVerificationPageResponse.from(result));
+    }
+
+    /**
+     * Payment detail with a 15-minute signed proof URL (#33, US-BILLING-005, design C5/C6). {@code
+     * proofUrl} is {@code null} when no proof was ever submitted — the URL embeds a freshly minted
+     * token every call, never a stored/cached one, so its 15-minute window always starts from
+     * "now".
+     */
+    @GetMapping("/{paymentId}")
+    public ResponseEntity<PaymentDetailResponse> detail(
+        @PathVariable String paymentId, Authentication authentication
+    ) {
+        requireAdmin(authentication);
+        PaymentId id = PaymentId.of(paymentId);
+        Payment payment = paymentRepository.findById(id).orElseThrow(() -> new PaymentNotFoundException(id));
+        String proofUrl = paymentProofRepository.findByPaymentId(id).isPresent() ? signedProofUrl(id) : null;
+        return ResponseEntity.ok(PaymentDetailResponse.from(payment, proofUrl));
+    }
+
+    private String signedProofUrl(PaymentId paymentId) {
+        String token = proofAccessTokenSigner.sign(paymentId, Instant.now());
+        return "/api/v1/billing/payments/" + paymentId.getValue() + "/proof?token=" + token;
     }
 
     @PostMapping("/{paymentId}/approve")

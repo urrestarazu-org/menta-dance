@@ -169,6 +169,14 @@ billing:
       # mounted outside any static-resource root (see docker-compose) so no ResourceHttpRequestHandler
       # can ever serve it — SecurityConfig's matcher is the actual gate, this is defense in depth.
       storage-root: ${BILLING_BANK_TRANSFER_PROOF_STORAGE_ROOT:/var/menta-dance/payment-proofs}
+      # #33, US-BILLING-005, design D1/D6/C3: signs/verifies the token-authenticated proof-viewer
+      # URL. Deliberately NO fallback value — same convention as spring.datasource.password above —
+      # so an absent env var is an unresolvable Spring placeholder that fails startup before
+      # ProofAccessTokenSigner's own blank guard ever runs. Never reuse billing.webhook.mercadopago.hmac-secret
+      # or any other secret: a leaked proof-token secret must not also forge webhook signatures.
+      token-secret: ${BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET}
+      # 15 minutes (D1's own fixed window).
+      token-ttl-seconds: ${BILLING_BANK_TRANSFER_PROOF_TOKEN_TTL_SECONDS:900}
     expiry:
       # Real off switch (design A16, mirrors billing.subscription.expiry) — rate-ms alone cannot
       # disable a @Scheduled job.

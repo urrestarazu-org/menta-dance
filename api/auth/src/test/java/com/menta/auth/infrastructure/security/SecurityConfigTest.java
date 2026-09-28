@@ -321,6 +321,81 @@ class SecurityConfigTest {
             .andExpect(status().isNotFound());
     }
 
+    // --- #33, US-BILLING-005 (design C6): the signed-token proof-viewer matcher ---
+
+    /**
+     * Before this matcher existed, {@code GET .../{paymentId}/proof} had no matcher at all and fell
+     * through to {@code anyRequest().access(roleAuthorizationManager)}'s permissive default grant —
+     * the proposal's #1 risk. An anonymous caller now passes the security layer entirely (reaches
+     * the unmapped dispatcher, {@code 404}, since no controller bean is registered in this minimal
+     * context) rather than 401/403, proving the new rule is a real {@code permitAll}, not an
+     * accidental fallthrough.
+     */
+    @Test
+    void an_anonymous_get_of_the_proof_viewer_route_passes_the_security_layer() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get(
+            "/api/v1/billing/payments/00000000-0000-0000-0000-000000000001/proof"
+        )).andExpect(status().isNotFound());
+    }
+
+    /**
+     * Regression for design C6's non-overlap table: the new two-segment matcher must never widen
+     * the existing single-segment {@code GET .../{paymentId}} rule, which stays {@code
+     * authenticated()}. An anonymous caller on the payment-detail path (no {@code /proof} suffix)
+     * is still rejected with {@code 401}.
+     */
+    @Test
+    void an_anonymous_get_of_the_payment_detail_route_is_still_rejected() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get(
+            "/api/v1/billing/payments/00000000-0000-0000-0000-000000000001"
+        )).andExpect(status().isUnauthorized());
+    }
+
+    /**
+     * Regression for design C6's non-overlap table: the new {@code GET .../proof} matcher must
+     * never shadow the existing {@code POST .../proof} rule, which stays {@code authenticated()} —
+     * Spring Security matches per {@link HttpMethod}, so the two coexist on the same path.
+     */
+    @Test
+    void an_anonymous_post_of_the_proof_upload_route_is_still_rejected() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(post(
+            "/api/v1/billing/payments/00000000-0000-0000-0000-000000000001/proof"
+        )).andExpect(status().isUnauthorized());
+    }
+
+    /**
+     * Regression for design C6's non-overlap table: the new matcher must never shadow the
+     * pre-existing {@code permitAll} webhook path — different final path segment ({@code webhook}
+     * vs. {@code proof}), so a caller can never mistake one for the other regardless of
+     * declaration order.
+     */
+    @Test
+    void the_mercadopago_webhook_route_stays_permit_all_alongside_the_proof_viewer_matcher() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(post("/api/v1/billing/payments/mercadopago/webhook"))
+            .andExpect(status().isNotFound());
+    }
+
+    /**
+     * Regression for design C6's non-overlap table: the new matcher's prefix is {@code
+     * /api/v1/billing/payments/**}, never {@code /api/v1/admin/**} — an anonymous caller on the
+     * admin surface is still rejected the same way it always was.
+     */
+    @Test
+    void an_anonymous_get_of_the_admin_payments_route_is_still_rejected() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get("/api/v1/admin/billing/payments"))
+            .andExpect(status().isUnauthorized());
+    }
+
     /**
      * #44, US-PHYSICAL-007, design C7. The five device-registry paths, matching the controller's
      * table exactly. {@code {deviceId}} is a fixed placeholder UUID — these are security-layer

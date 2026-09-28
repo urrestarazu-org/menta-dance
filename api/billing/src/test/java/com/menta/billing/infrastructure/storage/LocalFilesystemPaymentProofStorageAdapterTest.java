@@ -75,4 +75,37 @@ class LocalFilesystemPaymentProofStorageAdapterTest {
 
         assertThat(volumeRoot.resolve(key)).doesNotExist();
     }
+
+    // --- read (#33, US-BILLING-005, design C4) ---
+
+    @Test
+    void read_returns_the_previously_stored_bytes() {
+        LocalFilesystemPaymentProofStorageAdapter adapter =
+            new LocalFilesystemPaymentProofStorageAdapter(volumeRoot.toString());
+        String key = "55555555-5555-5555-5555-555555555555/66666666-6666-6666-6666-666666666666.png";
+        byte[] content = "comprobante-de-lectura".getBytes(StandardCharsets.UTF_8);
+        adapter.store(key, content);
+
+        byte[] read = adapter.read(key);
+
+        assertThat(read).isEqualTo(content);
+    }
+
+    @Test
+    void read_refuses_a_hand_crafted_key_that_escapes_the_root() {
+        LocalFilesystemPaymentProofStorageAdapter adapter =
+            new LocalFilesystemPaymentProofStorageAdapter(volumeRoot.toString());
+
+        assertThatThrownBy(() -> adapter.read("../escaped.png"))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void read_of_a_missing_key_throws_and_never_returns_an_empty_array() {
+        LocalFilesystemPaymentProofStorageAdapter adapter =
+            new LocalFilesystemPaymentProofStorageAdapter(volumeRoot.toString());
+
+        assertThatThrownBy(() -> adapter.read("no-such-payment/no-such-proof.pdf"))
+            .isInstanceOf(java.io.UncheckedIOException.class);
+    }
 }
