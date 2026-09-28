@@ -66,6 +66,11 @@ billing:
       # with other contexts' tests. No test here exercises this reconciler's schedule, so there's
       # nothing to re-enable it.
       enabled: false
+    # #33, US-BILLING-005, design D6/C3: base application.yml deliberately sets no fallback for
+    # this secret, so every profile that boots BillingConfiguration's context must supply its own
+    # test-only value here (mirrors the main-resources copy of this file).
+    proof:
+      token-secret: "test-only-proof-token-secret-not-for-production-use"
 
 # Same defect, same reasoning, different table (#172, #208 Phase 9). Default HoldExpiryReconciler
 # off for every integration test; HoldExpiryWorkerIntegrationTest re-enables it explicitly, since

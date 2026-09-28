@@ -27,3 +27,11 @@ auth:
   jwt:
     base64-secret: "dGVzdC1zZWNyZXQtZm9yLWludGVncmF0aW9uLXRlc3RzLW11c3QtYmUtNjQtYnl0ZXMtbG9uZy1mb3ItSFMyNTY="
     access-token-ttl-seconds: 900
+
+# #33, US-BILLING-005, design D6/C3: base application.yml deliberately sets no fallback for this
+# secret, so every profile that boots BillingConfiguration's context must supply its own test-only
+# value here (mirrors auth.jwt.base64-secret above).
+billing:
+  bank-transfer:
+    proof:
+      token-secret: "test-only-proof-token-secret-not-for-production-use"

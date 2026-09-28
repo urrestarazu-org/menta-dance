@@ -13,4 +13,13 @@ public interface PaymentProofStoragePort {
 
     /** Silent no-op when {@code storageKey} does not exist — mirrors delete-if-present semantics. */
     void delete(String storageKey);
+
+    /**
+     * Reads the stored blob back (#33, US-BILLING-005, design C4), backing the token-authenticated
+     * proof-serving endpoint.
+     *
+     * @throws RuntimeException if {@code storageKey} has no backing blob — never returns an empty
+     *     array in that case.
+     */
+    byte[] read(String storageKey);
 }
