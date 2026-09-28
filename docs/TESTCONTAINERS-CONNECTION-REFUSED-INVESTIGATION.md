@@ -228,6 +228,32 @@ que suba `api/app/build/reports/tests/test/` y `api/app/build/test-results/test/
 si el build falla como si pasa. Mismo TODO que `logback-test.xml`: sacar este paso una
 vez cerrada la causa raíz, no es infraestructura de CI permanente.
 
+## Confirmado también en CI: mismo patrón, no es Docker Desktop
+
+Run `36485656168`, job `109141810833` (57m44s, 369 tests, 32 fallos — patrón normal).
+Se bajó el artifact `api-app-test-reports` (`gh run download <run> -n
+api-app-test-reports`) y se buscó `Creating container for image: mysql` en los XML de
+`test-results/test/`:
+
+**37 clases, cada una con exactamente 1 evento de creación de container — mismo 1:1
+que localmente, cero reutilización.** Ejemplo, dos clases de billing que corrieron
+50 segundos aparte, cada una con su propio container recién creado:
+
+```
+SubscriptionCheckoutIntegrationTest:  21:28:36 Creating container ... started in PT8.27s
+SubscriptionTrialIntegrationTest:     21:29:26 Creating container ... started in PT8.27s
+```
+
+Esto cierra una pregunta abierta importante: el runner de CI es Linux nativo (GitHub
+Actions `ubuntu-latest`), sin la capa de red de Docker Desktop que sí existe en la
+máquina local (macOS). Ver el mismo patrón exacto en ambos entornos **descarta Docker
+Desktop como causa** — lo que está matando el container entre clases es algo que ocurre
+igual en ambos sistemas operativos, no una particularidad de la máquina de desarrollo.
+
+Los candidatos que quedan (worker de Gradle reiniciándose, o algo en cómo Ryuk gestiona
+la sesión) siguen sin descartarse — este hallazgo solo reduce el espacio de búsqueda,
+no lo cierra.
+
 ## Callejones sin salida ya explorados (para no repetirlos)
 
 - **`Slf4jLogConsumer` en los 4 containers de dominio**: no produjo ninguna salida
