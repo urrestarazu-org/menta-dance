@@ -56,6 +56,16 @@ billing:
   bank-transfer:
     expiry:
       enabled: false
+  webhook:
+    reconcile:
+      # Same defect, same reasoning (#172), but this one had never been given the off switch its
+      # 3 siblings above already have. WebhookInboxReconciler.tick() fires every 5s with no
+      # initial delay, unconditionally, for as long as its context stays alive — and under the
+      # shared-container design (see support/Abstract*MySqlIntegrationTest) contexts stay cached
+      # for the rest of the build, so every one of them keeps ticking against a container shared
+      # with other contexts' tests. No test here exercises this reconciler's schedule, so there's
+      # nothing to re-enable it.
+      enabled: false
 
 # Same defect, same reasoning, different table (#172, #208 Phase 9). Default HoldExpiryReconciler
 # off for every integration test; HoldExpiryWorkerIntegrationTest re-enables it explicitly, since
