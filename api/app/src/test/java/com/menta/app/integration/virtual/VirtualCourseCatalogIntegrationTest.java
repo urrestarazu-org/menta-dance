@@ -2,16 +2,6 @@ package com.menta.app.integration.virtual;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.menta.auth.application.port.out.ActivationRateLimitPort;
-import com.menta.auth.application.port.out.AuthDegradedGuard;
-import com.menta.auth.application.port.out.LoginRateLimitPort;
-import com.menta.auth.application.port.out.PasswordResetAttemptRateLimitPort;
-import com.menta.auth.application.port.out.PasswordResetRequestRateLimitPort;
-import com.menta.auth.application.port.out.TokenBlacklistPort;
-import com.menta.billing.application.port.out.BankTransferRateLimitPort;
-import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
-import com.menta.billing.application.port.out.CourseCatalogPort;
-import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
 import com.menta.virtual.application.dto.VirtualCourseSummary;
 import com.menta.virtual.application.port.in.VirtualCourseCatalogPort;
 import com.menta.virtual.domain.model.CourseStatus;
@@ -21,16 +11,13 @@ import com.menta.virtual.infrastructure.persistence.entity.VirtualModuleJpaEntit
 import com.menta.virtual.infrastructure.persistence.repository.VirtualCourseJpaRepository;
 import com.menta.virtual.infrastructure.persistence.repository.VirtualLessonJpaRepository;
 import com.menta.virtual.infrastructure.persistence.repository.VirtualModuleJpaRepository;
-import com.menta.app.integration.support.AbstractVirtualMySqlIntegrationTest;
+import com.menta.app.integration.support.PhysicalVirtualCatalogPortMocksIntegrationTestBase;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.test.context.ActiveProfiles;
 
 /**
  * MySQL-backed coverage for {@link VirtualCourseCatalogPort} (US-VIRTUAL-001).
@@ -39,30 +26,12 @@ import org.springframework.test.context.ActiveProfiles;
  * proving the JPA layer, cursor pagination and count/duration aggregation
  * actually work against real MySQL.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
-@ActiveProfiles("integration-test")
-class VirtualCourseCatalogIntegrationTest extends AbstractVirtualMySqlIntegrationTest {
+class VirtualCourseCatalogIntegrationTest extends PhysicalVirtualCatalogPortMocksIntegrationTestBase {
 
     @Autowired private VirtualCourseCatalogPort virtualCourseCatalogPort;
     @Autowired private VirtualCourseJpaRepository courseRepository;
     @Autowired private VirtualModuleJpaRepository moduleRepository;
     @Autowired private VirtualLessonJpaRepository lessonRepository;
-
-    // Every Redis-backed port needs a mock: integration-test excludes
-    // RedisAutoConfiguration and this is one shared Spring context. Mirrors
-    // BillingPlansIntegrationTest's exact mock set.
-    @MockBean private AuthDegradedGuard authDegradedGuard;
-    @MockBean private TokenBlacklistPort tokenBlacklistPort;
-    @MockBean private LoginRateLimitPort loginRateLimitPort;
-    @MockBean private ActivationRateLimitPort activationRateLimitPort;
-    @MockBean private PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort;
-    @MockBean private PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
-    @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
-    @MockBean private BankTransferRateLimitPort bankTransferRateLimitPort;
-    @MockBean private CourseCatalogPort courseCatalogPort;
-    // US-PHYSICAL-001: ProcessPhysicalCheckInUseCaseImpl needs a RedisTemplate
-    // its bean factory would otherwise fail to resolve in this Redis-less context.
-    @MockBean private ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
 
     @AfterEach
     void cleanUp() {

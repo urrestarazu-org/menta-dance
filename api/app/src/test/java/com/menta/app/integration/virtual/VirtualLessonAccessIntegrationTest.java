@@ -3,20 +3,11 @@ package com.menta.app.integration.virtual;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.menta.auth.application.port.out.AccessTokenIssuer;
-import com.menta.auth.application.port.out.ActivationRateLimitPort;
-import com.menta.auth.application.port.out.AuthDegradedGuard;
-import com.menta.auth.application.port.out.LoginRateLimitPort;
-import com.menta.auth.application.port.out.PasswordResetAttemptRateLimitPort;
-import com.menta.auth.application.port.out.PasswordResetRequestRateLimitPort;
-import com.menta.auth.application.port.out.TokenBlacklistPort;
 import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.model.UserId;
 import com.menta.auth.domain.model.UserStatus;
 import com.menta.auth.domain.repository.UserRepository;
-import com.menta.billing.application.port.out.BankTransferRateLimitPort;
-import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
-import com.menta.billing.application.port.out.CourseCatalogPort;
 import com.menta.billing.domain.model.PlanStatus;
 import com.menta.billing.infrastructure.persistence.entity.PaymentJpaEntity;
 import com.menta.billing.infrastructure.persistence.entity.PlanCourseJpaEntity;
@@ -28,7 +19,6 @@ import com.menta.billing.infrastructure.persistence.repository.PlanCourseJpaRepo
 import com.menta.billing.infrastructure.persistence.repository.PlanJpaRepository;
 import com.menta.billing.infrastructure.persistence.repository.SubscriptionCourseJpaRepository;
 import com.menta.billing.infrastructure.persistence.repository.SubscriptionJpaRepository;
-import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
 import com.menta.shared.domain.vo.Email;
 import com.menta.virtual.domain.model.CourseStatus;
 import com.menta.virtual.infrastructure.persistence.entity.VirtualCourseJpaEntity;
@@ -37,7 +27,7 @@ import com.menta.virtual.infrastructure.persistence.entity.VirtualModuleJpaEntit
 import com.menta.virtual.infrastructure.persistence.repository.VirtualCourseJpaRepository;
 import com.menta.virtual.infrastructure.persistence.repository.VirtualLessonJpaRepository;
 import com.menta.virtual.infrastructure.persistence.repository.VirtualModuleJpaRepository;
-import com.menta.app.integration.support.AbstractVirtualMySqlIntegrationTest;
+import com.menta.app.integration.support.CatalogAccessMocksIntegrationTestBase;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -46,8 +36,6 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -55,7 +43,6 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.test.context.ActiveProfiles;
 
 /**
  * Cross-module, real-Spring-context coverage for issue #56 (TASK-006):
@@ -71,9 +58,7 @@ import org.springframework.test.context.ActiveProfiles;
  * boundary at the class-dependency level; this class supplies the
  * behavioral regression TASK-006 additionally requires.</p>
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("integration-test")
-class VirtualLessonAccessIntegrationTest extends AbstractVirtualMySqlIntegrationTest {
+class VirtualLessonAccessIntegrationTest extends CatalogAccessMocksIntegrationTestBase {
 
     @Autowired private TestRestTemplate http;
     @Autowired private UserRepository userRepository;
@@ -86,22 +71,6 @@ class VirtualLessonAccessIntegrationTest extends AbstractVirtualMySqlIntegration
     @Autowired private PaymentJpaRepository paymentRepository;
     @Autowired private SubscriptionJpaRepository subscriptionRepository;
     @Autowired private SubscriptionCourseJpaRepository subscriptionCourseRepository;
-
-    // Every Redis-backed port needs a mock: integration-test excludes
-    // RedisAutoConfiguration and this is one shared Spring context. Mirrors
-    // VirtualCourseCatalogIntegrationTest's / SubscriptionCheckoutIntegrationTest's exact mock set.
-    @MockBean private AuthDegradedGuard authDegradedGuard;
-    @MockBean private TokenBlacklistPort tokenBlacklistPort;
-    @MockBean private LoginRateLimitPort loginRateLimitPort;
-    @MockBean private ActivationRateLimitPort activationRateLimitPort;
-    @MockBean private PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort;
-    @MockBean private PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
-    @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
-    @MockBean private BankTransferRateLimitPort bankTransferRateLimitPort;
-    @MockBean private CourseCatalogPort courseCatalogPort;
-    // US-PHYSICAL-001: ProcessPhysicalCheckInUseCaseImpl needs a RedisTemplate
-    // its bean factory would otherwise fail to resolve in this Redis-less context.
-    @MockBean private ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
 
     @AfterEach
     void cleanUp() {

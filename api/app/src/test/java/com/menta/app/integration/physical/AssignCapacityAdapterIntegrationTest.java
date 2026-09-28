@@ -3,16 +3,6 @@ package com.menta.app.integration.physical;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.menta.auth.application.port.out.ActivationRateLimitPort;
-import com.menta.auth.application.port.out.AuthDegradedGuard;
-import com.menta.auth.application.port.out.LoginRateLimitPort;
-import com.menta.auth.application.port.out.PasswordResetAttemptRateLimitPort;
-import com.menta.auth.application.port.out.PasswordResetRequestRateLimitPort;
-import com.menta.auth.application.port.out.TokenBlacklistPort;
-import com.menta.billing.application.port.out.BankTransferRateLimitPort;
-import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
-import com.menta.billing.application.port.out.CourseCatalogPort;
-import com.menta.billing.application.port.out.PaymentProviderPort;
 import com.menta.physical.application.port.in.PhysicalCapacityAssignmentPort;
 import com.menta.physical.application.usecase.AssignmentOutcome;
 import com.menta.physical.domain.exception.CapacityBelowAssignedException;
@@ -27,7 +17,6 @@ import com.menta.physical.application.usecase.CapacityAssignments;
 import com.menta.shared.physical.CapacityAssignmentCommand;
 import com.menta.shared.physical.MultiSessionCapacityAssignmentCommand;
 import com.menta.shared.physical.SessionClaim;
-import com.menta.app.integration.support.AbstractPhysicalMySqlIntegrationTest;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
@@ -35,10 +24,6 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.test.context.ActiveProfiles;
 
 /**
  * RED-GREEN: end-to-end MySQL-backed coverage of the capacity invariant
@@ -53,29 +38,12 @@ import org.springframework.test.context.ActiveProfiles;
  * strategy (issue #41 owner), so this file keeps scope tight to the
  * path the change actually wires.</p>
  */
-@SpringBootTest
-@ActiveProfiles("integration-test")
-class AssignCapacityAdapterIntegrationTest extends AbstractPhysicalMySqlIntegrationTest {
+class AssignCapacityAdapterIntegrationTest extends CapacityAdapterMocksIntegrationTestBase {
 
     @Autowired private PhysicalCapacityAssignmentPort capacityPort;
     @Autowired private PhysicalCourseJpaRepository courseRepository;
     @Autowired private PhysicalSessionJpaRepository sessionRepository;
     @Autowired private PhysicalCapacityAssignmentJpaRepository assignmentRepository;
-
-    @MockBean private AuthDegradedGuard authDegradedGuard;
-    @MockBean private TokenBlacklistPort tokenBlacklistPort;
-    @MockBean private LoginRateLimitPort loginRateLimitPort;
-    @MockBean private ActivationRateLimitPort activationRateLimitPort;
-    @MockBean private PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort;
-    @MockBean private PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
-    @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
-    @MockBean private BankTransferRateLimitPort bankTransferRateLimitPort;
-    @MockBean private CourseCatalogPort courseCatalogPort;
-    @MockBean private PaymentProviderPort paymentProviderPort;
-
-    @SuppressWarnings("rawtypes")
-    @MockBean
-    private RedisTemplate redisTemplate;
 
     @AfterEach
     void cleanUp() {

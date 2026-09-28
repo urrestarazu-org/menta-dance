@@ -3,16 +3,6 @@ package com.menta.app.integration.physical;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.menta.auth.application.port.out.ActivationRateLimitPort;
-import com.menta.auth.application.port.out.AuthDegradedGuard;
-import com.menta.auth.application.port.out.LoginRateLimitPort;
-import com.menta.auth.application.port.out.PasswordResetAttemptRateLimitPort;
-import com.menta.auth.application.port.out.PasswordResetRequestRateLimitPort;
-import com.menta.auth.application.port.out.TokenBlacklistPort;
-import com.menta.billing.application.port.out.BankTransferRateLimitPort;
-import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
-import com.menta.billing.application.port.out.CourseCatalogPort;
-import com.menta.billing.application.port.out.PaymentProviderPort;
 import com.menta.physical.application.port.in.PhysicalCapacityAssignmentPort;
 import com.menta.physical.application.port.in.PhysicalCapacityHoldPort;
 import com.menta.physical.domain.exception.CapacityBelowAssignedException;
@@ -27,7 +17,6 @@ import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJ
 import com.menta.shared.physical.CapacityAssignmentCommand;
 import com.menta.shared.physical.MultiSessionCapacityHoldCommand;
 import com.menta.shared.physical.SessionClaim;
-import com.menta.app.integration.support.AbstractPhysicalMySqlIntegrationTest;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
@@ -41,10 +30,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.test.context.ActiveProfiles;
 
 /**
  * Real-MySQL concurrency coverage of the hold write path (#208,
@@ -58,9 +43,7 @@ import org.springframework.test.context.ActiveProfiles;
  * &ge;10 times so a race this test only catches "sometimes" still fails the
  * suite.</p>
  */
-@SpringBootTest
-@ActiveProfiles("integration-test")
-class HoldCapacityAdapterIntegrationTest extends AbstractPhysicalMySqlIntegrationTest {
+class HoldCapacityAdapterIntegrationTest extends CapacityAdapterMocksIntegrationTestBase {
 
     @Autowired private PhysicalCapacityHoldPort holdPort;
     @Autowired private PhysicalCapacityAssignmentPort assignmentPort;
@@ -68,21 +51,6 @@ class HoldCapacityAdapterIntegrationTest extends AbstractPhysicalMySqlIntegratio
     @Autowired private PhysicalSessionJpaRepository sessionRepository;
     @Autowired private PhysicalCapacityHoldJpaRepository holdRepository;
     @Autowired private PhysicalCapacityAssignmentJpaRepository assignmentRepository;
-
-    @MockBean private AuthDegradedGuard authDegradedGuard;
-    @MockBean private TokenBlacklistPort tokenBlacklistPort;
-    @MockBean private LoginRateLimitPort loginRateLimitPort;
-    @MockBean private ActivationRateLimitPort activationRateLimitPort;
-    @MockBean private PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort;
-    @MockBean private PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
-    @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
-    @MockBean private BankTransferRateLimitPort bankTransferRateLimitPort;
-    @MockBean private CourseCatalogPort courseCatalogPort;
-    @MockBean private PaymentProviderPort paymentProviderPort;
-
-    @SuppressWarnings("rawtypes")
-    @MockBean
-    private RedisTemplate redisTemplate;
 
     @AfterEach
     void cleanUp() {

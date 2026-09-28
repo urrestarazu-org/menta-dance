@@ -2,16 +2,6 @@ package com.menta.app.integration.catalog;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.menta.auth.application.port.out.ActivationRateLimitPort;
-import com.menta.auth.application.port.out.AuthDegradedGuard;
-import com.menta.auth.application.port.out.LoginRateLimitPort;
-import com.menta.auth.application.port.out.PasswordResetAttemptRateLimitPort;
-import com.menta.auth.application.port.out.PasswordResetRequestRateLimitPort;
-import com.menta.auth.application.port.out.TokenBlacklistPort;
-import com.menta.billing.application.port.out.BankTransferRateLimitPort;
-import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
-import com.menta.billing.application.port.out.CourseCatalogPort;
-import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
 import com.menta.physical.domain.model.CourseStatus;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalCourseJpaEntity;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJpaRepository;
@@ -21,7 +11,7 @@ import com.menta.virtual.infrastructure.persistence.entity.VirtualModuleJpaEntit
 import com.menta.virtual.infrastructure.persistence.repository.VirtualCourseJpaRepository;
 import com.menta.virtual.infrastructure.persistence.repository.VirtualLessonJpaRepository;
 import com.menta.virtual.infrastructure.persistence.repository.VirtualModuleJpaRepository;
-import com.menta.app.integration.support.AbstractVirtualMySqlIntegrationTest;
+import com.menta.app.integration.support.CatalogAccessMocksIntegrationTestBase;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
@@ -30,13 +20,10 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.test.context.ActiveProfiles;
 
 /**
  * MySQL-backed HTTP integration coverage for the composed public catalog
@@ -48,31 +35,13 @@ import org.springframework.test.context.ActiveProfiles;
  * which buys nothing over a fast, deterministic unit test of the same
  * branch.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("integration-test")
-class CatalogIntegrationTest extends AbstractVirtualMySqlIntegrationTest {
+class CatalogIntegrationTest extends CatalogAccessMocksIntegrationTestBase {
 
     @Autowired private TestRestTemplate http;
     @Autowired private PhysicalCourseJpaRepository physicalCourseRepository;
     @Autowired private VirtualCourseJpaRepository virtualCourseRepository;
     @Autowired private VirtualModuleJpaRepository virtualModuleRepository;
     @Autowired private VirtualLessonJpaRepository virtualLessonRepository;
-
-    // Every Redis-backed port needs a mock: integration-test excludes
-    // RedisAutoConfiguration and this is one shared Spring context. Mirrors
-    // BillingPlansIntegrationTest's exact mock set.
-    @MockBean private AuthDegradedGuard authDegradedGuard;
-    @MockBean private TokenBlacklistPort tokenBlacklistPort;
-    @MockBean private LoginRateLimitPort loginRateLimitPort;
-    @MockBean private ActivationRateLimitPort activationRateLimitPort;
-    @MockBean private PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort;
-    @MockBean private PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
-    @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
-    @MockBean private BankTransferRateLimitPort bankTransferRateLimitPort;
-    @MockBean private CourseCatalogPort courseCatalogPort;
-    // US-PHYSICAL-001: ProcessPhysicalCheckInUseCaseImpl needs a RedisTemplate
-    // its bean factory would otherwise fail to resolve in this Redis-less context.
-    @MockBean private ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
 
     @AfterEach
     void cleanUp() {
