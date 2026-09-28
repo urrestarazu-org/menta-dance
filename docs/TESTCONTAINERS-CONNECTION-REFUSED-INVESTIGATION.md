@@ -184,11 +184,43 @@ silenciosamente levanta uno nuevo. Esto explica todo el patrón observado a la v
 todavía — candidatos sin descartar: el daemon de Docker Desktop (macOS, solo aplica
 localmente) matando containers bajo el patrón de creación/destrucción rápida que este
 mismo comportamiento genera; algún límite de recursos del runner/máquina; o algo
-específico de cómo Ryuk gestiona la sesión. Como CI (Linux nativo, sin la capa de Docker
-Desktop) reprodujo el mismo síntoma (`Connection refused`), Docker Desktop no puede ser
-la única causa — pero no se corrió todavía la misma corrida con logging DEBUG *en CI*
-para confirmar si ahí también aparece "Creating container" repetido por clase o si CI sí
-logra reusar el container y el fallo ahí es por otra vía. Ese es el próximo paso lógico.
+específico de cómo Ryuk gestiona la sesión.
+
+## Intento de confirmar en CI: mismo fallo, sin la evidencia extra
+
+Se pusheó `logback-test.xml` (commit `13fa4e2`) y corrió en CI (run `36473723127`,
+job `109102096582`, 56m40s). Resultado: **364 tests, 32 fallos — idéntico al patrón
+sin el logging de diagnóstico**, confirmando que el archivo en sí no cambia nada del
+comportamiento (como se esperaba, solo agrega visibilidad).
+
+Pero el log de consola de CI (`gh api repos/.../actions/jobs/<id>/logs`) **no muestra
+ninguna línea de `Creating container for image: mysql` ni de los WARN de Hikari** que sí
+aparecieron en la consola local. Cero coincidencias de ambos patrones en 27.500 líneas
+de log. Esto no significa que CI se comporte distinto — significa que **no tenemos
+forma de verlo con el setup actual**:
+
+- El workflow (`.github/workflows/pr-develop.yml`) no tiene ningún paso
+  `actions/upload-artifact` — los reportes HTML/XML de test (donde localmente sí
+  estaba toda la evidencia) se generan en el runner efímero y se pierden apenas
+  termina el job, sin forma de descargarlos después.
+- El fallback de Gradle que volcó las líneas WARN/ERROR "huérfanas" directo a la
+  consola local (ver sección de arriba) aparentemente no se activa igual bajo el modo
+  de consola no interactivo que Gradle usa en CI (`--console=plain`, automático sin
+  TTY) — o se activa pero no llega al log que captura `gh api`.
+
+**Conclusión de este intento**: confirma que el fallo en CI es el mismo (mismo conteo,
+mismo tiempo, mismo patrón), pero no aporta evidencia nueva sobre el mecanismo. Para
+conseguirla en CI hace falta una de estas dos cosas, ninguna aplicada todavía:
+
+1. `testLogging.showStandardStreams = true` en `api/app/build.gradle.kts` (temporal),
+   que fuerza a Gradle a volcar TODO el stdout capturado a consola sin depender del
+   fallback de "huérfanos".
+2. Un paso `actions/upload-artifact` en el workflow que suba
+   `api/app/build/reports/tests/test/` y `api/app/build/test-results/test/` al
+   terminar el job, para poder bajarlos y leerlos como se hizo localmente.
+
+Cualquiera de las dos implica otra corrida completa de CI (~57 min) para obtener el
+dato.
 
 ## Callejones sin salida ya explorados (para no repetirlos)
 
