@@ -3,6 +3,7 @@ package com.menta.billing.infrastructure.web.controller;
 import com.menta.billing.domain.exception.BankTransferRateLimitedException;
 import com.menta.billing.domain.exception.BillingDegradedException;
 import com.menta.billing.domain.exception.IllegalPaymentStateTransitionException;
+import com.menta.billing.domain.exception.InvalidProofAccessTokenException;
 import com.menta.billing.domain.exception.PaymentNotFoundException;
 import com.menta.billing.domain.exception.PaymentProofRejectedException;
 import com.menta.billing.infrastructure.web.ProblemDetails;
@@ -97,6 +98,20 @@ public class PaymentExceptionHandler {
                 "El servicio de facturación no está disponible temporalmente.",
                 exception.getErrorCode()
             ));
+    }
+
+    /**
+     * #33, US-BILLING-005, design C2/C5/C6: absent, malformed, tampered, expired, or
+     * wrong-payment tokens all collapse into this same {@code 403} — the anti-oracle property
+     * {@link InvalidProofAccessTokenException}'s Javadoc documents. An <em>absent</em> token is
+     * handled separately by {@code PaymentProofController} with an explicit {@code 401} before
+     * this handler is ever reached (spec's "Absent token is rejected" scenario).
+     */
+    @ExceptionHandler(InvalidProofAccessTokenException.class)
+    ResponseEntity<ProblemDetail> invalidProofAccessToken(InvalidProofAccessTokenException exception) {
+        return ProblemDetails.response(
+            HttpStatus.FORBIDDEN, "El enlace de comprobante no es válido o expiró.", exception.getErrorCode()
+        );
     }
 
     /** A malformed path/body field — for instance a {@code paymentId} that is not a UUID. Never a 500. */

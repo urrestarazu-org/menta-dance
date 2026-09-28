@@ -1,5 +1,6 @@
 package com.menta.billing.infrastructure.web.controller;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -16,12 +17,20 @@ import com.menta.billing.application.dto.PendingVerificationPage;
 import com.menta.billing.application.dto.ResolvePaymentProofCommand;
 import com.menta.billing.application.port.in.CorrectPaymentUseCase;
 import com.menta.billing.application.port.in.ResolvePaymentProofUseCase;
+import com.menta.billing.application.port.out.PaymentProofRepository;
 import com.menta.billing.application.port.out.PaymentRepository;
 import com.menta.billing.domain.model.ManualVerificationDecision;
+import com.menta.billing.domain.model.Money;
+import com.menta.billing.domain.model.Payment;
 import com.menta.billing.domain.model.PaymentId;
+import com.menta.billing.domain.model.PaymentProof;
+import com.menta.billing.domain.model.PaymentProofId;
+import com.menta.billing.domain.model.PaymentTarget;
+import com.menta.billing.infrastructure.proof.ProofAccessTokenSigner;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,6 +57,8 @@ class PaymentAdminControllerTest {
     private ResolvePaymentProofUseCase resolvePaymentProofUseCase;
     private CorrectPaymentUseCase correctPaymentUseCase;
     private PaymentRepository paymentRepository;
+    private PaymentProofRepository paymentProofRepository;
+    private ProofAccessTokenSigner proofAccessTokenSigner;
     private MockMvc mockMvc;
 
     @BeforeEach
@@ -55,9 +66,12 @@ class PaymentAdminControllerTest {
         resolvePaymentProofUseCase = mock(ResolvePaymentProofUseCase.class);
         correctPaymentUseCase = mock(CorrectPaymentUseCase.class);
         paymentRepository = mock(PaymentRepository.class);
+        paymentProofRepository = mock(PaymentProofRepository.class);
+        proofAccessTokenSigner = mock(ProofAccessTokenSigner.class);
         mockMvc = MockMvcBuilders
             .standaloneSetup(new PaymentAdminController(
-                resolvePaymentProofUseCase, correctPaymentUseCase, paymentRepository
+                resolvePaymentProofUseCase, correctPaymentUseCase, paymentRepository, paymentProofRepository,
+                proofAccessTokenSigner
             ))
             .setControllerAdvice(new PaymentExceptionHandler())
             .build();
@@ -254,6 +268,64 @@ class PaymentAdminControllerTest {
             .param("status", "PENDING")
             .param("substatus", "AWAITING_MANUAL_VERIFICATION")
             .principal(authOf("STUDENT")))
+            .andExpect(status().isForbidden());
+
+        verifyNoInteractions(paymentRepository);
+    }
+
+    // --- payment detail with signed proof URL (#33, US-BILLING-005, design C5/C6) ---
+
+    private static Payment paymentFixture() {
+        return Payment.awaitingManualVerification(
+            PAYMENT_ID, UUID.randomUUID(), Money.of(new BigDecimal("15000.00"), "ARS"), "SUB-" + PAYMENT_ID,
+            "0000003100000000000000", new PaymentTarget.Virtual("plan-basic"), Instant.parse("2026-09-01T10:00:00Z")
+        );
+    }
+
+    /** Scenario "Admin views payment detail with a proof link": a proof exists, so a signed URL is returned. */
+    @Test
+    void detail_includes_a_signed_proof_url_when_a_proof_exists() throws Exception {
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(paymentFixture()));
+        when(paymentProofRepository.findByPaymentId(PAYMENT_ID)).thenReturn(Optional.of(new PaymentProof(
+            PaymentProofId.generate(), PAYMENT_ID, PAYMENT_ID + "/proof.png", "comprobante.png", "image/png",
+            1024L, Instant.parse("2026-09-01T10:05:00Z")
+        )));
+        when(proofAccessTokenSigner.sign(eq(PAYMENT_ID), any())).thenReturn("signed-token");
+
+        mockMvc.perform(get("/api/v1/admin/billing/payments/{id}", PAYMENT_ID).principal(authOf("ADMIN")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.paymentId").value(PAYMENT_ID.toString()))
+            .andExpect(jsonPath("$.statusType").value("AWAITING_MANUAL_VERIFICATION"))
+            .andExpect(jsonPath("$.proofUrl").value(
+                "/api/v1/billing/payments/" + PAYMENT_ID + "/proof?token=signed-token"
+            ));
+    }
+
+    /** Absent when no proof was ever submitted — no token is minted. */
+    @Test
+    void detail_omits_the_proof_url_when_no_proof_exists() throws Exception {
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(paymentFixture()));
+        when(paymentProofRepository.findByPaymentId(PAYMENT_ID)).thenReturn(Optional.empty());
+
+        mockMvc.perform(get("/api/v1/admin/billing/payments/{id}", PAYMENT_ID).principal(authOf("ADMIN")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.proofUrl").doesNotExist());
+
+        verifyNoInteractions(proofAccessTokenSigner);
+    }
+
+    @Test
+    void detail_for_a_missing_payment_returns_404() throws Exception {
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.empty());
+
+        mockMvc.perform(get("/api/v1/admin/billing/payments/{id}", PAYMENT_ID).principal(authOf("ADMIN")))
+            .andExpect(status().isNotFound());
+    }
+
+    /** Scenario "Non-admin is rejected". */
+    @Test
+    void detail_from_a_non_admin_returns_403() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/billing/payments/{id}", PAYMENT_ID).principal(authOf("STUDENT")))
             .andExpect(status().isForbidden());
 
         verifyNoInteractions(paymentRepository);

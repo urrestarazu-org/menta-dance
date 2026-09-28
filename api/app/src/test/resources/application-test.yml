@@ -26,6 +26,14 @@ spring:
     exclude:
       - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
 
+# #33, US-BILLING-005, design D6/C3: base application.yml deliberately sets no fallback for this
+# secret, so every profile that boots BillingConfiguration's context must supply its own test-only
+# value here.
+billing:
+  bank-transfer:
+    proof:
+      token-secret: "test-only-proof-token-secret-not-for-production-use"
+
 # Logging for tests
 logging:
   level:

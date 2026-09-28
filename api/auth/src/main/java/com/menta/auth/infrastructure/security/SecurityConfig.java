@@ -255,6 +255,20 @@ public class SecurityConfig {
                 // stay mutually exclusive regardless of declaration order — verified end-to-end by
                 // SecurityConfigTest.
                 .requestMatchers(HttpMethod.GET, "/api/v1/billing/payments/*").authenticated()
+                // #33, US-BILLING-005 (design C5/C6): the signed-token proof viewer. permitAll is the
+                // credential decision, not an absence of one — the HMAC token in ?token= IS the credential
+                // and PaymentProofController rejects an absent/tampered/expired one with 403. The browser
+                // follows a signed URL with no Authorization header, so an authenticated() rule would break
+                // the flow, and this path is NOT under /api/v1/admin/**. Without this explicit matcher it
+                // falls through to anyRequest()'s permissive grant — which is the same outcome by accident
+                // instead of by decision, and untestable as intent. Non-overlap (design C6's table): the
+                // POST proof rule above is a different HTTP method; the GET .../payments/* rule immediately
+                // above matches only ONE path segment after payments, while this path has TWO
+                // (.../{paymentId}/proof); the mercadopago/webhook permitAll rule has a different fixed
+                // final segment (webhook, never proof); and /api/v1/admin/** is a different prefix
+                // entirely. Declaration order is therefore immaterial for correctness — pinned by
+                // SecurityConfigTest.
+                .requestMatchers(HttpMethod.GET, "/api/v1/billing/payments/*/proof").permitAll()
                 // US-BILLING-011, #130: self-service cancellation is DELETE, a different HTTP
                 // method than the POST rule immediately above — Spring Security matches per
                 // method, so it needs its own explicit entry or it falls through to a grant via

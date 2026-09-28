@@ -53,6 +53,23 @@ public class LocalFilesystemPaymentProofStorageAdapter implements PaymentProofSt
         }
     }
 
+    /**
+     * #33, US-BILLING-005, design C4: reuses {@link #resolveWithinRoot} verbatim — the same
+     * traversal guard already protecting {@link #store}/{@link #delete} — then reads the whole
+     * blob. Never returns an empty array for a missing key: {@link Files#readAllBytes} itself
+     * throws {@link java.nio.file.NoSuchFileException} (an {@link IOException}), wrapped the same
+     * way {@link #store}/{@link #delete} already wrap I/O failures.
+     */
+    @Override
+    public byte[] read(String storageKey) {
+        Path target = resolveWithinRoot(storageKey);
+        try {
+            return Files.readAllBytes(target);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to read payment proof at key " + storageKey, e);
+        }
+    }
+
     private Path resolveWithinRoot(String storageKey) {
         Path target = root.resolve(storageKey).normalize();
         if (!target.startsWith(root)) {
