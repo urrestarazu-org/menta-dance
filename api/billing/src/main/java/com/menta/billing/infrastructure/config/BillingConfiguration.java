@@ -22,6 +22,7 @@ import com.menta.billing.application.port.out.BillingOutboxAppenderPort;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.port.out.Clock;
 import com.menta.billing.application.port.out.CourseCatalogPort;
+import com.menta.billing.application.port.out.PaymentAuditRepository;
 import com.menta.billing.application.port.out.PaymentPreferencePort;
 import com.menta.billing.application.port.out.PaymentProofNotificationPort;
 import com.menta.billing.application.port.out.PaymentProofRepository;
@@ -319,11 +320,12 @@ public class BillingConfiguration {
      */
     @Bean
     public ResolvePaymentProofUseCase resolvePaymentProofUseCase(
-        PaymentRepository paymentRepository, PaymentFulfillmentService paymentFulfillmentService, Clock clock
+        PaymentRepository paymentRepository, PaymentFulfillmentService paymentFulfillmentService,
+        PaymentAuditRepository paymentAuditRepository, Clock clock
     ) {
-        return new TransactionalResolvePaymentProofUseCase(
-            new ResolvePaymentProofUseCaseImpl(paymentRepository, paymentFulfillmentService, clock)
-        );
+        return new TransactionalResolvePaymentProofUseCase(new ResolvePaymentProofUseCaseImpl(
+            paymentRepository, paymentFulfillmentService, paymentAuditRepository, clock
+        ));
     }
 
     /**

@@ -46,32 +46,40 @@ class PaymentAdminControllerTest {
     }
 
     private static Authentication authOf(String role) {
+        return authOf(role, UUID.randomUUID());
+    }
+
+    private static Authentication authOf(String role, UUID userId) {
         return new UsernamePasswordAuthenticationToken(
-            UUID.randomUUID().toString(), null, List.of(new SimpleGrantedAuthority("ROLE_" + role))
+            userId.toString(), null, List.of(new SimpleGrantedAuthority("ROLE_" + role))
         );
     }
 
     @Test
     void approve_resolves_the_payment_as_approved() throws Exception {
+        UUID adminId = UUID.randomUUID();
+
         mockMvc.perform(post("/api/v1/admin/billing/payments/{id}/approve", PAYMENT_ID)
-            .principal(authOf("ADMIN")))
+            .principal(authOf("ADMIN", adminId)))
             .andExpect(status().isOk());
 
-        verify(resolvePaymentProofUseCase).resolve(
-            new ResolvePaymentProofCommand(PAYMENT_ID.toString(), ManualVerificationDecision.APPROVED, null)
-        );
+        verify(resolvePaymentProofUseCase).resolve(new ResolvePaymentProofCommand(
+            PAYMENT_ID.toString(), ManualVerificationDecision.APPROVED, null, adminId
+        ));
     }
 
     @Test
     void reject_resolves_the_payment_as_rejected_with_the_given_reason() throws Exception {
+        UUID adminId = UUID.randomUUID();
+
         mockMvc.perform(post("/api/v1/admin/billing/payments/{id}/reject", PAYMENT_ID)
-            .principal(authOf("ADMIN"))
+            .principal(authOf("ADMIN", adminId))
             .contentType(MediaType.APPLICATION_JSON)
             .content("{\"reason\": \"Comprobante ilegible\"}"))
             .andExpect(status().isOk());
 
         verify(resolvePaymentProofUseCase).resolve(new ResolvePaymentProofCommand(
-            PAYMENT_ID.toString(), ManualVerificationDecision.REJECTED, "Comprobante ilegible"
+            PAYMENT_ID.toString(), ManualVerificationDecision.REJECTED, "Comprobante ilegible", adminId
         ));
     }
 
