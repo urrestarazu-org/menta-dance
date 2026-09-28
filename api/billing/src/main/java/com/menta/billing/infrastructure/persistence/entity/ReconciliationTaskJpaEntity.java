@@ -33,6 +33,16 @@ public class ReconciliationTaskJpaEntity {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    /** Additive, D2/C11 (#33, US-BILLING-005): a pre-existing row reads as unresolved. */
+    @Column(name = "resolved", nullable = false)
+    private boolean resolved;
+
+    @Column(name = "resolved_at")
+    private Instant resolvedAt;
+
+    @Column(name = "resolved_by", columnDefinition = "BINARY(16)")
+    private UUID resolvedBy;
+
     protected ReconciliationTaskJpaEntity() {
         // JPA requires a no-arg constructor.
     }
@@ -45,6 +55,7 @@ public class ReconciliationTaskJpaEntity {
         this.providerPaymentId = providerPaymentId;
         this.reason = reason;
         this.createdAt = createdAt;
+        this.resolved = false;
     }
 
     public UUID getId() {
@@ -65,5 +76,17 @@ public class ReconciliationTaskJpaEntity {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public boolean isResolved() {
+        return resolved;
+    }
+
+    public Instant getResolvedAt() {
+        return resolvedAt;
+    }
+
+    public UUID getResolvedBy() {
+        return resolvedBy;
     }
 }

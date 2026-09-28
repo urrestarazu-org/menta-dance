@@ -188,6 +188,24 @@ public final class Payment {
     }
 
     /**
+     * Audited exceptional correction out of {@link PaymentStatus.ReconciliationRequired} (#33,
+     * US-BILLING-005 escenario 7, D9/C1). A status transition, never a data edit: amount,
+     * provider reference and external reference are untouched. Shaped exactly like {@link
+     * #resolveManually}, only starting from a different status; {@code resolveManually} itself is
+     * not edited.
+     *
+     * @throws IllegalPaymentStateTransitionException if this payment is not currently {@link
+     *     PaymentStatus.ReconciliationRequired}
+     */
+    public Payment correctManually(ManualVerificationDecision decision, Instant at) {
+        if (!(status instanceof PaymentStatus.ReconciliationRequired)) {
+            throw new IllegalPaymentStateTransitionException(id, status, decision, "ReconciliationRequired");
+        }
+        return withStatus(decision == ManualVerificationDecision.APPROVED
+            ? new PaymentStatus.Completed(at) : new PaymentStatus.Rejected(at));
+    }
+
+    /**
      * 72h automatic expiry sweep (C4, C6). Silent no-op on every other status — a concurrent
      * sweep tick, or one that arrives after an admin already resolved this payment, must not
      * throw.

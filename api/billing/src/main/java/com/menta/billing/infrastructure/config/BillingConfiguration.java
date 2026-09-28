@@ -3,6 +3,7 @@ package com.menta.billing.infrastructure.config;
 import com.menta.billing.application.dto.BankAccountDetails;
 import com.menta.billing.application.port.in.AssignTrialSubscriptionUseCase;
 import com.menta.billing.application.port.in.CancelSubscriptionUseCase;
+import com.menta.billing.application.port.in.CorrectPaymentUseCase;
 import com.menta.billing.application.port.in.CreateBankTransferSubscriptionUseCase;
 import com.menta.billing.application.port.in.CreatePhysicalCourseQuoteUseCase;
 import com.menta.billing.application.port.in.CreatePhysicalPurchaseCheckoutUseCase;
@@ -22,6 +23,7 @@ import com.menta.billing.application.port.out.BillingOutboxAppenderPort;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.port.out.Clock;
 import com.menta.billing.application.port.out.CourseCatalogPort;
+import com.menta.billing.application.port.out.PaymentAuditRepository;
 import com.menta.billing.application.port.out.PaymentPreferencePort;
 import com.menta.billing.application.port.out.PaymentProofNotificationPort;
 import com.menta.billing.application.port.out.PaymentProofRepository;
@@ -36,11 +38,13 @@ import com.menta.billing.application.port.out.PhysicalCoursePricingRevisionRepos
 import com.menta.billing.application.port.out.PhysicalCourseQuoteRepository;
 import com.menta.billing.application.port.out.PlanRepository;
 import com.menta.billing.application.port.out.PurchaseRepository;
+import com.menta.billing.application.port.out.ReconciliationTaskRepository;
 import com.menta.billing.application.port.out.SubscriptionRepository;
 import com.menta.billing.application.port.out.WebhookInboxAppender;
 import com.menta.billing.application.port.out.WebhookSignatureVerifier;
 import com.menta.billing.application.usecase.AssignTrialSubscriptionUseCaseImpl;
 import com.menta.billing.application.usecase.CancelSubscriptionUseCaseImpl;
+import com.menta.billing.application.usecase.CorrectPaymentUseCaseImpl;
 import com.menta.billing.application.usecase.CreateBankTransferSubscriptionUseCaseImpl;
 import com.menta.billing.application.usecase.CreatePhysicalCourseQuoteUseCaseImpl;
 import com.menta.billing.application.usecase.CreatePhysicalPurchaseCheckoutUseCaseImpl;
@@ -69,6 +73,7 @@ import com.menta.billing.infrastructure.security.RedisBankTransferRateLimitPort;
 import com.menta.billing.infrastructure.security.RedisBillingPlansRateLimitPort;
 import com.menta.billing.infrastructure.transaction.TransactionalAssignTrialSubscriptionUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalCancelSubscriptionUseCase;
+import com.menta.billing.infrastructure.transaction.TransactionalCorrectPaymentUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalCreatePhysicalPurchaseCheckoutUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalCreateSubscriptionCheckoutUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalGetPaymentUseCase;
@@ -319,11 +324,28 @@ public class BillingConfiguration {
      */
     @Bean
     public ResolvePaymentProofUseCase resolvePaymentProofUseCase(
-        PaymentRepository paymentRepository, PaymentFulfillmentService paymentFulfillmentService, Clock clock
+        PaymentRepository paymentRepository, PaymentFulfillmentService paymentFulfillmentService,
+        PaymentAuditRepository paymentAuditRepository, Clock clock
     ) {
-        return new TransactionalResolvePaymentProofUseCase(
-            new ResolvePaymentProofUseCaseImpl(paymentRepository, paymentFulfillmentService, clock)
-        );
+        return new TransactionalResolvePaymentProofUseCase(new ResolvePaymentProofUseCaseImpl(
+            paymentRepository, paymentFulfillmentService, paymentAuditRepository, clock
+        ));
+    }
+
+    /**
+     * Design D9/C1/C7/C11: the corrections use case shares {@code paymentFulfillmentService} and
+     * {@code paymentAuditRepository} with {@code resolvePaymentProofUseCase} above, plus the new
+     * {@link ReconciliationTaskRepository} out-port for D2's task resolution.
+     */
+    @Bean
+    public CorrectPaymentUseCase correctPaymentUseCase(
+        PaymentRepository paymentRepository, PaymentFulfillmentService paymentFulfillmentService,
+        ReconciliationTaskRepository reconciliationTaskRepository, PaymentAuditRepository paymentAuditRepository,
+        Clock clock
+    ) {
+        return new TransactionalCorrectPaymentUseCase(new CorrectPaymentUseCaseImpl(
+            paymentRepository, paymentFulfillmentService, reconciliationTaskRepository, paymentAuditRepository, clock
+        ));
     }
 
     /**
