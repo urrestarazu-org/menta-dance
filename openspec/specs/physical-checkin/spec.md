@@ -103,6 +103,31 @@ Every rejection from either endpoint MUST return an `application/problem+json` b
 - WHEN the endpoint rejects the request
 - THEN the response body is RFC 9457 Problem Details containing the matching `code`
 
+### Requirement: Check-in type is a two-valued discriminator
+
+The check-in request's `type` field MUST accept exactly two literal values, `QR` and `MANUAL`,
+selecting between the two check-in variants. Any other value MUST be rejected with
+`400 INVALID_REQUEST`.
+
+#### Scenario: An unrecognized type value is rejected
+
+- GIVEN a check-in request with `type: "SOMETHING_ELSE"`
+- WHEN the request is submitted
+- THEN the system returns 400 `INVALID_REQUEST`
+
+### Requirement: QR variant rejects MANUAL-only fields
+
+A check-in request with `type: "QR"` MUST reject the presence of `studentId` (a MANUAL-only
+field) with `400 INVALID_REQUEST`, evaluated before any use-case step runs — mirroring the MANUAL
+variant's own rejection of QR-only fields (see the new `physical-manual-checkin` capability in
+this change).
+
+#### Scenario: QR request carrying studentId is rejected
+
+- GIVEN a check-in request with `type: "QR"` and its QR credential fields
+- WHEN the request additionally includes `studentId`
+- THEN the system returns 400 `INVALID_REQUEST` before any use-case validation runs
+
 ## Out of Scope
 
 Redis compare-and-delete lock compensation (issue #38 escenario 6) — TTL expiry only, by product decision. Real HMAC signing — the MVP uses a deterministic placeholder format, tracked as a known follow-up risk, not a defect. The `MANUAL` check-in variant (deferred to issue #45), Android-side QR refresh, device registry, and attendance query/reporting endpoints.
