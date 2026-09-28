@@ -21,6 +21,7 @@ import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJp
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
 import com.menta.physical.infrastructure.scheduling.HoldExpiryReconciler;
 import com.menta.physical.infrastructure.scheduling.HoldExpiryWorker;
+import com.menta.app.integration.support.AbstractPhysicalMySqlIntegrationTest;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
@@ -35,9 +36,6 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * Real {@code sweep()} coverage for {@link HoldExpiryWorker} against a real MySQL (Testcontainers)
@@ -54,21 +52,10 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @ActiveProfiles("integration-test")
-@Testcontainers
-class HoldExpiryWorkerIntegrationTest {
-
-    @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
-        .withDatabaseName("menta_test")
-        .withUsername("test")
-        .withPassword("test");
+class HoldExpiryWorkerIntegrationTest extends AbstractPhysicalMySqlIntegrationTest {
 
     @DynamicPropertySource
     static void mysqlProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
         // The scheduled tick must never fire on its own — every assertion drives sweep() by hand.
         registry.add("physical.capacity.hold.expiry.rate-ms", () -> "999999999");
         // The shared integration-test profile defaults this reconciler off (see

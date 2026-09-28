@@ -27,6 +27,7 @@ import com.menta.physical.application.usecase.CapacityAssignments;
 import com.menta.shared.physical.CapacityAssignmentCommand;
 import com.menta.shared.physical.MultiSessionCapacityAssignmentCommand;
 import com.menta.shared.physical.SessionClaim;
+import com.menta.app.integration.support.AbstractPhysicalMySqlIntegrationTest;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
@@ -38,11 +39,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * RED-GREEN: end-to-end MySQL-backed coverage of the capacity invariant
@@ -59,22 +55,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  */
 @SpringBootTest
 @ActiveProfiles("integration-test")
-@Testcontainers
-class AssignCapacityAdapterIntegrationTest {
-
-    @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
-        .withDatabaseName("menta_test")
-        .withUsername("test")
-        .withPassword("test");
-
-    @DynamicPropertySource
-    static void mysqlProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
-    }
+class AssignCapacityAdapterIntegrationTest extends AbstractPhysicalMySqlIntegrationTest {
 
     @Autowired private PhysicalCapacityAssignmentPort capacityPort;
     @Autowired private PhysicalCourseJpaRepository courseRepository;

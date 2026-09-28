@@ -15,6 +15,7 @@ import com.menta.billing.domain.model.PlanId;
 import com.menta.billing.domain.model.Subscription;
 import com.menta.billing.domain.model.SubscriptionStatus;
 import com.menta.billing.domain.model.SubscriptionType;
+import com.menta.app.integration.support.AbstractBillingMySqlIntegrationTest;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -30,9 +31,6 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * Real optimistic-locking coverage for {@code @Version} (US-BILLING-012, design A14). Two reads
@@ -47,24 +45,13 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @ActiveProfiles("integration-test")
-@Testcontainers
-class SubscriptionOptimisticLockingIntegrationTest {
+class SubscriptionOptimisticLockingIntegrationTest extends AbstractBillingMySqlIntegrationTest {
 
     private static final String HMAC_SECRET = "integration-test-locking-secret";
     private static final String MERCHANT_ACCOUNT_ID = "merchant-locking";
 
-    @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
-        .withDatabaseName("menta_test")
-        .withUsername("test")
-        .withPassword("test");
-
     @DynamicPropertySource
     static void mysqlProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
         registry.add("billing.webhook.mercadopago.hmac-secret", () -> HMAC_SECRET);
         registry.add("billing.webhook.reconcile-rate-ms", () -> "999999999");
         // OutboxBlacklistReconciler's real @Scheduled tick (default 5s) calls

@@ -41,6 +41,7 @@ import com.menta.billing.infrastructure.persistence.repository.SubscriptionCours
 import com.menta.billing.infrastructure.persistence.repository.SubscriptionJpaRepository;
 import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
 import com.menta.shared.domain.vo.Email;
+import com.menta.app.integration.support.AbstractBillingMySqlIntegrationTest;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -61,11 +62,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * End-to-end coverage for admin resolution of a bank-transfer payment (#31, US-BILLING-003,
@@ -81,24 +77,9 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("integration-test")
-@Testcontainers
-class PaymentAdminResolutionIntegrationTest {
+class PaymentAdminResolutionIntegrationTest extends AbstractBillingMySqlIntegrationTest {
 
     private static final BigDecimal PLAN_PRICE = new BigDecimal("15000.00");
-
-    @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
-        .withDatabaseName("menta_test")
-        .withUsername("test")
-        .withPassword("test");
-
-    @DynamicPropertySource
-    static void mysqlProperties(DynamicPropertyRegistry registry) throws IOException {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
-    }
 
     @Autowired private TestRestTemplate http;
     @Autowired private UserRepository userRepository;

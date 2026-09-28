@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import com.menta.auth.application.port.out.AuthDegradedGuard;
 import com.menta.auth.application.port.out.LoginRateLimitPort;
 import com.menta.auth.application.port.out.TokenBlacklistPort;
+import com.menta.app.integration.support.AbstractAuthMySqlIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,9 +18,6 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * The {@code auth.outbox.reconcile.enabled} off switch keeps {@link OutboxBlacklistReconcilerTrigger}
@@ -40,24 +38,13 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @ActiveProfiles("integration-test")
-@Testcontainers
-class OutboxBlacklistReconcilerToggleIntegrationTest {
+class OutboxBlacklistReconcilerToggleIntegrationTest extends AbstractAuthMySqlIntegrationTest {
 
     private static final String HMAC_SECRET = "integration-test-reconciler-toggle-secret";
     private static final String MERCHANT_ACCOUNT_ID = "merchant-reconciler-toggle";
 
-    @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
-        .withDatabaseName("menta_test")
-        .withUsername("test")
-        .withPassword("test");
-
     @DynamicPropertySource
     static void mysqlProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
         registry.add("billing.webhook.mercadopago.hmac-secret", () -> HMAC_SECRET);
         registry.add("billing.webhook.reconcile-rate-ms", () -> "999999999");
         registry.add("billing.mercadopago.merchant-account-id", () -> MERCHANT_ACCOUNT_ID);

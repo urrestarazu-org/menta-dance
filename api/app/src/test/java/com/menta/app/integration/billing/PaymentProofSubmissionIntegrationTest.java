@@ -35,6 +35,7 @@ import com.menta.billing.infrastructure.persistence.repository.PaymentJpaReposit
 import com.menta.billing.infrastructure.persistence.repository.PaymentProofJpaRepository;
 import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
 import com.menta.shared.domain.vo.Email;
+import com.menta.app.integration.support.AbstractBillingMySqlIntegrationTest;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;
@@ -63,9 +64,6 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * End-to-end coverage for the now-reachable proof-upload flow (#31, US-BILLING-003, R5/R9,
@@ -91,25 +89,14 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("integration-test")
-@Testcontainers
-class PaymentProofSubmissionIntegrationTest {
+class PaymentProofSubmissionIntegrationTest extends AbstractBillingMySqlIntegrationTest {
 
     private static final byte[] PNG_CONTENT = {(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A};
-
-    @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
-        .withDatabaseName("menta_test")
-        .withUsername("test")
-        .withPassword("test");
 
     private static Path storageRoot;
 
     @DynamicPropertySource
     static void mysqlProperties(DynamicPropertyRegistry registry) throws IOException {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
         storageRoot = Files.createTempDirectory("payment-proofs-it");
         registry.add("billing.bank-transfer.proof.storage-root", () -> storageRoot.toString());
     }

@@ -34,6 +34,7 @@ import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJp
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
 import com.menta.physical.infrastructure.qr.FormatQrCredentialSignatureService;
 import com.menta.shared.domain.vo.Email;
+import com.menta.app.integration.support.AbstractPhysicalMySqlIntegrationTest;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.Map;
@@ -57,9 +58,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * HTTP-level coverage for US-PHYSICAL-001's check-in flow, through the real
@@ -87,25 +85,14 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("integration-test")
-@Testcontainers
-class PhysicalCheckInIntegrationTest {
+class PhysicalCheckInIntegrationTest extends AbstractPhysicalMySqlIntegrationTest {
 
     private static final String DEVICE_TOKEN = "integration-test-device-token";
     private static final FormatQrCredentialSignatureService SIGNATURE_SERVICE =
         new FormatQrCredentialSignatureService();
 
-    @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
-        .withDatabaseName("menta_test")
-        .withUsername("test")
-        .withPassword("test");
-
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
         // Mirrors PaymentWebhookIntegrationTest's HMAC_SECRET override: a
         // known value for the shared door-reader secret, never touching
         // application.yml / application-test.yml.

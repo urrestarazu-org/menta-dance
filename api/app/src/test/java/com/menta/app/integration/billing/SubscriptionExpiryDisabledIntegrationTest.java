@@ -9,6 +9,7 @@ import com.menta.auth.application.port.out.LoginRateLimitPort;
 import com.menta.auth.application.port.out.TokenBlacklistPort;
 import com.menta.billing.infrastructure.scheduling.SubscriptionExpiryReconciler;
 import com.menta.billing.infrastructure.scheduling.SubscriptionExpiryWorker;
+import com.menta.app.integration.support.AbstractBillingMySqlIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,9 +21,6 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * Proves A16's off switch is real (US-BILLING-012, design A16/A6b): with {@code
@@ -39,24 +37,13 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @ActiveProfiles("integration-test")
 @TestPropertySource(properties = "billing.subscription.expiry.enabled=false")
-@Testcontainers
-class SubscriptionExpiryDisabledIntegrationTest {
+class SubscriptionExpiryDisabledIntegrationTest extends AbstractBillingMySqlIntegrationTest {
 
     private static final String HMAC_SECRET = "integration-test-expiry-disabled-secret";
     private static final String MERCHANT_ACCOUNT_ID = "merchant-expiry-disabled";
 
-    @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
-        .withDatabaseName("menta_test")
-        .withUsername("test")
-        .withPassword("test");
-
     @DynamicPropertySource
     static void mysqlProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
         registry.add("billing.webhook.mercadopago.hmac-secret", () -> HMAC_SECRET);
         registry.add("billing.webhook.reconcile-rate-ms", () -> "999999999");
         registry.add("billing.mercadopago.merchant-account-id", () -> MERCHANT_ACCOUNT_ID);
