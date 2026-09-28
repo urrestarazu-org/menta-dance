@@ -206,6 +206,15 @@ class PhysicalAttendanceHistoryIntegrationTest {
         );
     }
 
+    /** #45, US-PHYSICAL-008 (D2/C9): a MANUAL row carries the receptionist's userId as deviceId. */
+    private void seedManualAttendance(
+        UUID sessionId, UUID studentId, Instant recordedAt, UUID receptionistId
+    ) {
+        attendanceRepository.save(new AttendanceJpaEntity(
+            UUID.randomUUID(), sessionId, studentId, recordedAt, receptionistId.toString(), "MANUAL"
+        ));
+    }
+
     /** R2 remediation fixture: cancelled BEFORE ever being quoted — no assignment row exists. */
     private UUID seedCancelledSession(UUID courseId, Instant scheduledAt) {
         UUID id = UUID.randomUUID();
@@ -317,6 +326,32 @@ class PhysicalAttendanceHistoryIntegrationTest {
         assertThat(response.getBody().get("scheduledSessionCount")).isEqualTo(4);
         assertThat(response.getBody().get("attended")).isEqualTo(4);
         assertThat(response.getBody().get("absent")).isEqualTo(0);
+    }
+
+    /**
+     * #45, US-PHYSICAL-008 (P4, D2 consumer risk): a MANUAL row renders identically to a QR row
+     * in the history view — only {@code kind} differs, and it counts toward {@code attended}
+     * the same way, proving the broadened {@code device_id} "actor" invariant does not leak into
+     * this read model.
+     */
+    @Test
+    void a_manual_attendance_row_renders_correctly_in_the_history_view() {
+        UUID studentId = issueUser(Role.STUDENT);
+        UUID receptionistId = issueUser(Role.RECEPTIONIST);
+        UUID courseId = seedCourse();
+        UUID sessionId = seedSession(courseId, Instant.parse("2026-09-07T22:00:00Z"));
+        seedAssignment(sessionId, studentId);
+        seedManualAttendance(
+            sessionId, studentId, Instant.parse("2026-09-07T22:05:00Z"), receptionistId
+        );
+
+        ResponseEntity<Map> response = readOwnMonth(studentId, "2026-09", true);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().get("scheduledSessionCount")).isEqualTo(1);
+        assertThat(response.getBody().get("attended")).isEqualTo(1);
+        assertThat(response.getBody().get("absent")).isEqualTo(0);
+        assertThat((List) response.getBody().get("sessions")).hasSize(1);
     }
 
     @Test

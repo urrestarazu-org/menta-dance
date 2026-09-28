@@ -1,0 +1,38 @@
+meta {
+  name: Manual Check-in - Wrong Role
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/physical/sessions/{{physicalSessionId}}/check-ins
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "type": "MANUAL",
+    "studentId": "{{physicalStudentId}}"
+  }
+}
+
+docs {
+  #45, US-PHYSICAL-008 escenario 4. `authToken` here must belong to a
+  STUDENT or INSTRUCTOR user — neither is authorized to record a MANUAL
+  check-in. Removing the Bearer token entirely (anonymous) produces the
+  identical 403 INSUFFICIENT_ROLE, because the endpoint is `permitAll` at
+  the filter level and the role gate lives inside the use case (D5).
+
+  Success contract: 403 with code INSUFFICIENT_ROLE. The message never
+  reveals which roles would have been accepted.
+}
+
+assert {
+  res.status: eq 403
+  res.body.code: eq INSUFFICIENT_ROLE
+}
