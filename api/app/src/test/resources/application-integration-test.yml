@@ -4,7 +4,11 @@ spring:
     hikari:
       maximum-pool-size: 5
       minimum-idle: 1
-      connection-timeout: 10000
+      # 30s, not Hikari's 10s default: org.gradle.parallel=true runs every module's
+      # compile/test tasks concurrently against the CI runner's 2 vCPUs, and a shared
+      # domain MySQL container can go transiently unresponsive under that contention —
+      # see AbstractPhysicalMySqlIntegrationTest for why domains share one container.
+      connection-timeout: 30000
       validation-timeout: 5000
       leak-detection-threshold: 60000
       max-lifetime: 580000
