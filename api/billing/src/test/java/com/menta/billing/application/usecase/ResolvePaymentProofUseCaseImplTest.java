@@ -7,15 +7,18 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.menta.billing.application.dto.ResolvePaymentProofCommand;
 import com.menta.billing.application.port.out.Clock;
+import com.menta.billing.application.port.out.PaymentAuditRepository;
 import com.menta.billing.application.port.out.PaymentRepository;
 import com.menta.billing.domain.exception.IllegalPaymentStateTransitionException;
 import com.menta.billing.domain.model.ManualVerificationDecision;
 import com.menta.billing.domain.model.Money;
 import com.menta.billing.domain.model.Payment;
+import com.menta.billing.domain.model.PaymentAuditAction;
 import com.menta.billing.domain.model.PaymentId;
 import com.menta.billing.domain.model.PaymentStatus;
 import com.menta.billing.domain.model.PaymentTarget;
@@ -37,6 +40,7 @@ class ResolvePaymentProofUseCaseImplTest {
     private static final Instant CREATED_AT = Instant.parse("2026-09-19T10:00:00Z");
     private static final Instant NOW = Instant.parse("2026-09-20T10:00:00Z");
     private static final UUID USER_ID = UUID.randomUUID();
+    private static final UUID ADMIN_ID = UUID.randomUUID();
     private static final PaymentId PAYMENT_ID = PaymentId.generate();
     private static final Money AMOUNT = Money.of(BigDecimal.TEN, "ARS");
 
@@ -57,14 +61,16 @@ class ResolvePaymentProofUseCaseImplTest {
     void approving_completes_the_payment_and_ensures_fulfillment() {
         PaymentRepository paymentRepository = mock(PaymentRepository.class);
         PaymentFulfillmentService fulfillmentService = mock(PaymentFulfillmentService.class);
+        PaymentAuditRepository auditRepository = mock(PaymentAuditRepository.class);
         when(paymentRepository.findById(PAYMENT_ID))
             .thenReturn(Optional.of(paymentWith(new PaymentStatus.AwaitingManualVerification())));
         when(paymentRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        ResolvePaymentProofUseCaseImpl useCase =
-            new ResolvePaymentProofUseCaseImpl(paymentRepository, fulfillmentService, fixedClock());
+        ResolvePaymentProofUseCaseImpl useCase = new ResolvePaymentProofUseCaseImpl(
+            paymentRepository, fulfillmentService, auditRepository, fixedClock()
+        );
 
         useCase.resolve(new ResolvePaymentProofCommand(
-            PAYMENT_ID.toString(), ManualVerificationDecision.APPROVED, null
+            PAYMENT_ID.toString(), ManualVerificationDecision.APPROVED, null, ADMIN_ID
         ));
 
         InOrder order = inOrder(paymentRepository, fulfillmentService);
@@ -77,14 +83,16 @@ class ResolvePaymentProofUseCaseImplTest {
     void rejecting_rejects_the_payment_and_releases_fulfillment() {
         PaymentRepository paymentRepository = mock(PaymentRepository.class);
         PaymentFulfillmentService fulfillmentService = mock(PaymentFulfillmentService.class);
+        PaymentAuditRepository auditRepository = mock(PaymentAuditRepository.class);
         when(paymentRepository.findById(PAYMENT_ID))
             .thenReturn(Optional.of(paymentWith(new PaymentStatus.AwaitingManualVerification())));
         when(paymentRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        ResolvePaymentProofUseCaseImpl useCase =
-            new ResolvePaymentProofUseCaseImpl(paymentRepository, fulfillmentService, fixedClock());
+        ResolvePaymentProofUseCaseImpl useCase = new ResolvePaymentProofUseCaseImpl(
+            paymentRepository, fulfillmentService, auditRepository, fixedClock()
+        );
 
         useCase.resolve(new ResolvePaymentProofCommand(
-            PAYMENT_ID.toString(), ManualVerificationDecision.REJECTED, "Comprobante ilegible"
+            PAYMENT_ID.toString(), ManualVerificationDecision.REJECTED, "Comprobante ilegible", ADMIN_ID
         ));
 
         InOrder order = inOrder(paymentRepository, fulfillmentService);
@@ -98,18 +106,62 @@ class ResolvePaymentProofUseCaseImplTest {
     void an_already_resolved_payment_throws_and_writes_nothing() {
         PaymentRepository paymentRepository = mock(PaymentRepository.class);
         PaymentFulfillmentService fulfillmentService = mock(PaymentFulfillmentService.class);
+        PaymentAuditRepository auditRepository = mock(PaymentAuditRepository.class);
         when(paymentRepository.findById(PAYMENT_ID))
             .thenReturn(Optional.of(paymentWith(new PaymentStatus.Expired(CREATED_AT))));
-        ResolvePaymentProofUseCaseImpl useCase =
-            new ResolvePaymentProofUseCaseImpl(paymentRepository, fulfillmentService, fixedClock());
+        ResolvePaymentProofUseCaseImpl useCase = new ResolvePaymentProofUseCaseImpl(
+            paymentRepository, fulfillmentService, auditRepository, fixedClock()
+        );
 
         assertThatThrownBy(() -> useCase.resolve(new ResolvePaymentProofCommand(
-            PAYMENT_ID.toString(), ManualVerificationDecision.APPROVED, null
+            PAYMENT_ID.toString(), ManualVerificationDecision.APPROVED, null, ADMIN_ID
         ))).isInstanceOf(IllegalPaymentStateTransitionException.class);
 
         verify(paymentRepository, never()).save(any());
         verify(fulfillmentService, never()).ensure(any());
         verify(fulfillmentService, never()).release(any());
+        verifyNoInteractions(auditRepository);
+    }
+
+    /** #33, US-BILLING-005, D4/C7: approve writes exactly one audit row, no reason. */
+    @Test
+    void approving_writes_one_audit_row_with_no_reason() {
+        PaymentRepository paymentRepository = mock(PaymentRepository.class);
+        PaymentFulfillmentService fulfillmentService = mock(PaymentFulfillmentService.class);
+        PaymentAuditRepository auditRepository = mock(PaymentAuditRepository.class);
+        when(paymentRepository.findById(PAYMENT_ID))
+            .thenReturn(Optional.of(paymentWith(new PaymentStatus.AwaitingManualVerification())));
+        when(paymentRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        ResolvePaymentProofUseCaseImpl useCase = new ResolvePaymentProofUseCaseImpl(
+            paymentRepository, fulfillmentService, auditRepository, fixedClock()
+        );
+
+        useCase.resolve(new ResolvePaymentProofCommand(
+            PAYMENT_ID.toString(), ManualVerificationDecision.APPROVED, null, ADMIN_ID
+        ));
+
+        verify(auditRepository).append(PAYMENT_ID, ADMIN_ID, PaymentAuditAction.APPROVE, null);
+    }
+
+    /** #33, US-BILLING-005, D4/C7: reject writes exactly one audit row carrying the reason. */
+    @Test
+    void rejecting_writes_one_audit_row_with_the_reason() {
+        PaymentRepository paymentRepository = mock(PaymentRepository.class);
+        PaymentFulfillmentService fulfillmentService = mock(PaymentFulfillmentService.class);
+        PaymentAuditRepository auditRepository = mock(PaymentAuditRepository.class);
+        when(paymentRepository.findById(PAYMENT_ID))
+            .thenReturn(Optional.of(paymentWith(new PaymentStatus.AwaitingManualVerification())));
+        when(paymentRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        ResolvePaymentProofUseCaseImpl useCase = new ResolvePaymentProofUseCaseImpl(
+            paymentRepository, fulfillmentService, auditRepository, fixedClock()
+        );
+
+        useCase.resolve(new ResolvePaymentProofCommand(
+            PAYMENT_ID.toString(), ManualVerificationDecision.REJECTED, "Comprobante ilegible", ADMIN_ID
+        ));
+
+        verify(auditRepository)
+            .append(PAYMENT_ID, ADMIN_ID, PaymentAuditAction.REJECT, "Comprobante ilegible");
     }
 
     private static Payment argThatCompleted() {

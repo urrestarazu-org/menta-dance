@@ -5,6 +5,7 @@ import com.menta.billing.application.port.in.ResolvePaymentProofUseCase;
 import com.menta.billing.domain.model.ManualVerificationDecision;
 import com.menta.billing.infrastructure.web.dto.RejectPaymentRequest;
 import jakarta.validation.Valid;
+import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -41,9 +42,9 @@ public class PaymentAdminController {
     @PostMapping("/{paymentId}/approve")
     public ResponseEntity<Void> approve(@PathVariable String paymentId, Authentication authentication) {
         requireAdmin(authentication);
-        resolvePaymentProofUseCase.resolve(
-            new ResolvePaymentProofCommand(paymentId, ManualVerificationDecision.APPROVED, null)
-        );
+        resolvePaymentProofUseCase.resolve(new ResolvePaymentProofCommand(
+            paymentId, ManualVerificationDecision.APPROVED, null, adminId(authentication)
+        ));
         return ResponseEntity.ok().build();
     }
 
@@ -53,9 +54,9 @@ public class PaymentAdminController {
         Authentication authentication
     ) {
         requireAdmin(authentication);
-        resolvePaymentProofUseCase.resolve(
-            new ResolvePaymentProofCommand(paymentId, ManualVerificationDecision.REJECTED, request.reason())
-        );
+        resolvePaymentProofUseCase.resolve(new ResolvePaymentProofCommand(
+            paymentId, ManualVerificationDecision.REJECTED, request.reason(), adminId(authentication)
+        ));
         return ResponseEntity.ok().build();
     }
 
@@ -69,5 +70,10 @@ public class PaymentAdminController {
         return authentication.getAuthorities().stream()
             .map(GrantedAuthority::getAuthority)
             .anyMatch("ROLE_ADMIN"::equals);
+    }
+
+    /** Same source {@code PhysicalCheckInController} uses: the JWT principal is the user UUID. */
+    private static UUID adminId(Authentication authentication) {
+        return UUID.fromString(authentication.getName());
     }
 }
