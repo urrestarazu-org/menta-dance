@@ -24,6 +24,7 @@ import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.port.out.Clock;
 import com.menta.billing.application.port.out.CourseCatalogPort;
 import com.menta.billing.application.port.out.PaymentAuditRepository;
+import com.menta.billing.application.port.out.PaymentDecisionNotificationPort;
 import com.menta.billing.application.port.out.PaymentPreferencePort;
 import com.menta.billing.application.port.out.PaymentProofNotificationPort;
 import com.menta.billing.application.port.out.PaymentProofRepository;
@@ -320,15 +321,19 @@ public class BillingConfiguration {
      * Design D1/C4/C10. Approve settles through {@code paymentFulfillmentService.ensure}, reject
      * through {@code .release} — the same collaborator an approved Mercado Pago payment and the
      * P5 sweep use, so a manually-resolved bank transfer activates/cancels a subscription through
-     * exactly the same code.
+     * exactly the same code. {@code paymentDecisionNotificationPort} is #33/US-BILLING-005's D5/D8
+     * buyer decision email (design C8) — {@code SpringMailPaymentDecisionNotificationAdapter}
+     * self-registers as a {@code @Component}, resolved here by type.
      */
     @Bean
     public ResolvePaymentProofUseCase resolvePaymentProofUseCase(
         PaymentRepository paymentRepository, PaymentFulfillmentService paymentFulfillmentService,
-        PaymentAuditRepository paymentAuditRepository, Clock clock
+        PaymentAuditRepository paymentAuditRepository, PaymentDecisionNotificationPort paymentDecisionNotificationPort,
+        Clock clock
     ) {
         return new TransactionalResolvePaymentProofUseCase(new ResolvePaymentProofUseCaseImpl(
-            paymentRepository, paymentFulfillmentService, paymentAuditRepository, clock
+            paymentRepository, paymentFulfillmentService, paymentAuditRepository, paymentDecisionNotificationPort,
+            clock
         ));
     }
 

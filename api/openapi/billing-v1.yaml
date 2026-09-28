@@ -47,6 +47,11 @@ tags:
     description: Compra de cursos presenciales (#41, US-PHYSICAL-004).
   - name: Webhooks
     description: Notificaciones asíncronas de proveedores de pago.
+  - name: Verificación manual de pagos
+    description: >-
+      Admin inbox, detalle con comprobante firmado, y corrección auditada de pagos por
+      transferencia bancaria (#33, US-BILLING-005). El servido del comprobante en sí no requiere
+      ADMIN — el token firmado es la credencial.
 
 paths:
   /api/v1/billing/plans:
@@ -552,6 +557,240 @@ paths:
                     detail: No pudimos iniciar el pago en este momento. Intentá de nuevo en unos minutos.
                     code: PAYMENT_PREFERENCE_UNAVAILABLE
 
+  /api/v1/admin/billing/payments:
+    get:
+      tags: [Verificación manual de pagos]
+      summary: Listar pagos pendientes de verificación manual (ADMIN)
+      description: |
+        Devuelve, paginado y ordenado por antigüedad (más antiguos primero), los pagos por
+        transferencia bancaria en `PENDING/AWAITING_MANUAL_VERIFICATION`. `pageSize` mayor a 50
+        se **rechaza** con `400` — nunca se recorta (D3, decisión explícita de `sdd-tasks`,
+        diverge de la propuesta de diseño que proponía recortar).
+      operationId: listPendingVerificationPayments
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [PENDING]
+        - name: substatus
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [AWAITING_MANUAL_VERIFICATION]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          description: Máximo 50. Un valor mayor responde `400`, sin resultados.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        '200':
+          description: Página de pagos pendientes de verificación (posiblemente vacía).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PendingVerificationPageResponse'
+        '400':
+          description: '`size` mayor a 50. No se devuelven resultados.'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                page_size_excedido:
+                  value:
+                    type: https://menta.dance/problems/invalid_request
+                    title: Bad Request
+                    status: 400
+                    detail: La solicitud es inválida.
+                    code: INVALID_REQUEST
+        '401':
+          description: Falta un access token válido.
+        '403':
+          description: El caller autenticado no tiene rol ADMIN.
+
+  /api/v1/admin/billing/payments/{paymentId}:
+    get:
+      tags: [Verificación manual de pagos]
+      summary: Detalle de un pago con comprobante firmado (ADMIN)
+      description: |
+        Devuelve el pago, su comprador y su plan/curso destino. Cuando existe un comprobante
+        subido, incluye `proofUrl`: una URL firmada con expiración embebida de 15 minutos,
+        recién emitida en cada llamada — nunca una URL cacheada o persistida.
+      operationId: getPaymentDetail
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Detalle del pago, con `proofUrl` presente sólo si hay un comprobante subido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentDetailResponse'
+        '401':
+          description: Falta un access token válido.
+        '403':
+          description: El caller autenticado no tiene rol ADMIN.
+        '404':
+          description: El pago indicado no existe.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                pago_no_encontrado:
+                  value:
+                    type: https://menta.dance/problems/payment_not_found
+                    title: Not Found
+                    status: 404
+                    detail: No se encontró el pago indicado.
+                    code: PAYMENT_NOT_FOUND
+
+  /api/v1/admin/billing/payments/{paymentId}/corrections:
+    post:
+      tags: [Verificación manual de pagos]
+      summary: Corregir excepcionalmente un pago en RECONCILIATION_REQUIRED (ADMIN)
+      description: |
+        Resuelve, con motivo y evidencia obligatorios, un pago varado en
+        `PENDING/RECONCILIATION_REQUIRED` hacia un estado terminal (D9: una transición de
+        estado, nunca una edición de datos — misma forma que `resolveManually`, aplicada a este
+        estado de partida distinto). Marca resuelta la tarea de reconciliación ligada al pago
+        (`resolved`/`resolved_at`/`resolved_by`) y escribe una fila en `billing_audit_log` con
+        `reason` compuesto como `"{motivo} | evidencia: {evidencia}"` (D4). A diferencia de
+        aprobar/rechazar, esta operación **no** envía email al comprador — fuera del alcance de
+        este cambio (ni el requerimiento de spec ni los Success Criteria de la propuesta lo
+        piden).
+      operationId: correctPayment
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CorrectPaymentRequest'
+      responses:
+        '200':
+          description: Corrección aplicada; el pago pasó a su estado terminal elegido.
+        '400':
+          description: '`reason` o `evidence` ausentes o en blanco.'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Falta un access token válido.
+        '403':
+          description: El caller autenticado no tiene rol ADMIN. No se modifica nada.
+        '404':
+          description: El pago indicado no existe.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: >-
+            El pago no está en `RECONCILIATION_REQUIRED` (por ejemplo, ya fue aprobado, rechazado
+            o corregido antes). No se modifica ni el pago ni ninguna tarea de reconciliación.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                estado_no_admite_correccion:
+                  value:
+                    type: https://menta.dance/problems/illegal_payment_state_transition
+                    title: Conflict
+                    status: 409
+                    detail: El pago no está en un estado que admita esta operación.
+                    code: ILLEGAL_PAYMENT_STATE_TRANSITION
+
+  /api/v1/billing/payments/{paymentId}/proof:
+    get:
+      tags: [Verificación manual de pagos]
+      summary: Servir el archivo de un comprobante mediante token firmado
+      description: |
+        Sirve el archivo del comprobante cuando el token en `?token=` está presente, vigente
+        (menos de 15 minutos desde su emisión) y su firma HMAC (`Mac` + `MessageDigest.isEqual`,
+        mismo mecanismo que `HmacSha256WebhookSignatureVerifier`) verifica contra el payload.
+
+        Este endpoint **no requiere rol ADMIN** — el token es la credencial (D1). No vive bajo
+        `/api/v1/admin/**`: tiene su propia regla explícita `permitAll` en `SecurityConfig`, no
+        una ausencia de regla.
+
+        Un token **ausente** responde `401`. Un token presente pero alterado, expirado, o
+        firmado para un `paymentId` distinto responde `403` — deliberadamente indistinguible
+        entre sí (propiedad anti-oráculo: la respuesta nunca revela si un token "nunca fue
+        válido" o "ya expiró").
+      operationId: getPaymentProof
+      security: []
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: token
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Token HMAC firmado, emitido por el detalle del pago (ADMIN). Ausente ⇒ `401`.
+      responses:
+        '200':
+          description: "Bytes del comprobante, con `Content-Disposition: inline` y `Cache-Control: no-store`."
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: El parámetro `token` está ausente.
+        '403':
+          description: >-
+            El token está presente pero es inválido — alterado, expirado, o firmado para otro
+            `paymentId`. Respuesta idéntica en los tres casos (anti-oráculo).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                token_invalido:
+                  value:
+                    type: https://menta.dance/problems/invalid_proof_token
+                    title: Forbidden
+                    status: 403
+                    detail: El enlace de comprobante no es válido o expiró.
+                    code: INVALID_PROOF_TOKEN
+
   /api/v1/billing/payments/mercadopago/webhook:
     post:
       tags: [Webhooks]
@@ -951,6 +1190,112 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PlanCourseResponse'
+
+    PendingVerificationItemResponse:
+      type: object
+      description: |
+        Una fila del inbox de admin (#33, US-BILLING-005, design C10). `targetReference`
+        representa "plan": la referencia del destino del pago (plan de suscripción o curso
+        presencial); `targetModality` distingue cuál de los dos.
+      required:
+        [paymentId, userId, targetModality, targetReference, amount, currency, statusType, hasProof, createdAt]
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        targetModality:
+          type: string
+          enum: [PHYSICAL, VIRTUAL]
+        targetReference:
+          type: string
+        amount:
+          type: number
+          format: decimal
+        currency:
+          type: string
+          example: ARS
+        statusType:
+          type: string
+          enum: [AWAITING_MANUAL_VERIFICATION]
+        hasProof:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    PendingVerificationPageResponse:
+      type: object
+      required: [items, page, size, totalElements, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PendingVerificationItemResponse'
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+        totalPages:
+          type: integer
+
+    PaymentDetailResponse:
+      type: object
+      description: |
+        `proofUrl` es `null` cuando nunca se subió un comprobante; en caso contrario embebe un
+        token firmado recién emitido con expiración de 15 minutos, nunca uno cacheado.
+      required:
+        [paymentId, userId, targetModality, targetReference, amount, currency, statusType, createdAt]
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        targetModality:
+          type: string
+          enum: [PHYSICAL, VIRTUAL]
+        targetReference:
+          type: string
+        amount:
+          type: number
+          format: decimal
+        currency:
+          type: string
+        statusType:
+          type: string
+          enum:
+            [AWAITING_PROVIDER, AWAITING_MANUAL_VERIFICATION, RECONCILIATION_REQUIRED, COMPLETED, REJECTED, CANCELLED, EXPIRED]
+        createdAt:
+          type: string
+          format: date-time
+        proofUrl:
+          type: ["string", "null"]
+          description: Presente sólo si el pago tiene un comprobante subido.
+
+    CorrectPaymentRequest:
+      type: object
+      description: |
+        A diferencia de `RejectPaymentRequest`, tanto `reason` como `evidence` son obligatorios
+        sin importar `decision` (D9).
+      required: [decision, reason, evidence]
+      properties:
+        decision:
+          type: string
+          enum: [APPROVED, REJECTED]
+        reason:
+          type: string
+          minLength: 1
+          description: Motivo de la corrección — auditable, compuesto en `billing_audit_log`.
+        evidence:
+          type: string
+          minLength: 1
+          description: Evidencia verificable presentada por el admin — compuesta en `billing_audit_log` (D4).
 
 security:
   - bearerAuth: []
