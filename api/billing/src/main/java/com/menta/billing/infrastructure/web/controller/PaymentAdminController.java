@@ -1,8 +1,11 @@
 package com.menta.billing.infrastructure.web.controller;
 
+import com.menta.billing.application.dto.CorrectPaymentCommand;
 import com.menta.billing.application.dto.ResolvePaymentProofCommand;
+import com.menta.billing.application.port.in.CorrectPaymentUseCase;
 import com.menta.billing.application.port.in.ResolvePaymentProofUseCase;
 import com.menta.billing.domain.model.ManualVerificationDecision;
+import com.menta.billing.infrastructure.web.dto.CorrectPaymentRequest;
 import com.menta.billing.infrastructure.web.dto.RejectPaymentRequest;
 import jakarta.validation.Valid;
 import java.util.UUID;
@@ -34,9 +37,13 @@ import org.springframework.web.server.ResponseStatusException;
 public class PaymentAdminController {
 
     private final ResolvePaymentProofUseCase resolvePaymentProofUseCase;
+    private final CorrectPaymentUseCase correctPaymentUseCase;
 
-    public PaymentAdminController(ResolvePaymentProofUseCase resolvePaymentProofUseCase) {
+    public PaymentAdminController(
+        ResolvePaymentProofUseCase resolvePaymentProofUseCase, CorrectPaymentUseCase correctPaymentUseCase
+    ) {
         this.resolvePaymentProofUseCase = resolvePaymentProofUseCase;
+        this.correctPaymentUseCase = correctPaymentUseCase;
     }
 
     @PostMapping("/{paymentId}/approve")
@@ -56,6 +63,23 @@ public class PaymentAdminController {
         requireAdmin(authentication);
         resolvePaymentProofUseCase.resolve(new ResolvePaymentProofCommand(
             paymentId, ManualVerificationDecision.REJECTED, request.reason(), adminId(authentication)
+        ));
+        return ResponseEntity.ok().build();
+    }
+
+    /**
+     * D3 prefix — no new {@code SecurityConfig} matcher, covered by the existing {@code
+     * /api/v1/admin/**} rule (design C6). D9: a correction out of {@code ReconciliationRequired},
+     * never a data edit.
+     */
+    @PostMapping("/{paymentId}/corrections")
+    public ResponseEntity<Void> correct(
+        @PathVariable String paymentId, @Valid @RequestBody CorrectPaymentRequest request,
+        Authentication authentication
+    ) {
+        requireAdmin(authentication);
+        correctPaymentUseCase.correct(new CorrectPaymentCommand(
+            paymentId, request.decision(), request.reason(), request.evidence(), adminId(authentication)
         ));
         return ResponseEntity.ok().build();
     }
