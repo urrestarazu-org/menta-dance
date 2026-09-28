@@ -25,11 +25,24 @@ public class IllegalPaymentStateTransitionException extends BusinessException {
     public IllegalPaymentStateTransitionException(
         PaymentId paymentId, PaymentStatus status, ManualVerificationDecision decision
     ) {
+        this(paymentId, status, decision, "AwaitingManualVerification");
+    }
+
+    /**
+     * #33, US-BILLING-005, design C1: lets a caller other than {@link
+     * com.menta.billing.domain.model.Payment#resolveManually} name a different expected starting
+     * state — {@link com.menta.billing.domain.model.Payment#correctManually} names {@code
+     * ReconciliationRequired}. The 3-arg constructor delegates here with {@code
+     * "AwaitingManualVerification"}, so its behavior is byte-unchanged.
+     */
+    public IllegalPaymentStateTransitionException(
+        PaymentId paymentId, PaymentStatus status, ManualVerificationDecision decision, String expectedStatus
+    ) {
         super(
             ERROR_CODE,
             "Cannot apply decision " + decision + " to payment " + paymentId
                 + ": current status is " + status.getClass().getSimpleName()
-                + ", expected AwaitingManualVerification"
+                + ", expected " + expectedStatus
         );
         this.paymentId = paymentId;
         this.status = status;

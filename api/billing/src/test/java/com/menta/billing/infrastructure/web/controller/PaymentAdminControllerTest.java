@@ -6,7 +6,9 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.menta.billing.application.dto.CorrectPaymentCommand;
 import com.menta.billing.application.dto.ResolvePaymentProofCommand;
+import com.menta.billing.application.port.in.CorrectPaymentUseCase;
 import com.menta.billing.application.port.in.ResolvePaymentProofUseCase;
 import com.menta.billing.domain.model.ManualVerificationDecision;
 import com.menta.billing.domain.model.PaymentId;
@@ -35,12 +37,15 @@ class PaymentAdminControllerTest {
     private static final PaymentId PAYMENT_ID = PaymentId.generate();
 
     private ResolvePaymentProofUseCase resolvePaymentProofUseCase;
+    private CorrectPaymentUseCase correctPaymentUseCase;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         resolvePaymentProofUseCase = mock(ResolvePaymentProofUseCase.class);
-        mockMvc = MockMvcBuilders.standaloneSetup(new PaymentAdminController(resolvePaymentProofUseCase))
+        correctPaymentUseCase = mock(CorrectPaymentUseCase.class);
+        mockMvc = MockMvcBuilders
+            .standaloneSetup(new PaymentAdminController(resolvePaymentProofUseCase, correctPaymentUseCase))
             .setControllerAdvice(new PaymentExceptionHandler())
             .build();
     }
@@ -114,5 +119,67 @@ class PaymentAdminControllerTest {
             .andExpect(status().isForbidden());
 
         verifyNoInteractions(resolvePaymentProofUseCase);
+    }
+
+    // --- corrections (#33, US-BILLING-005, design D9/C1) ---
+
+    @Test
+    void corrections_applies_the_admin_decision() throws Exception {
+        UUID adminId = UUID.randomUUID();
+
+        mockMvc.perform(post("/api/v1/admin/billing/payments/{id}/corrections", PAYMENT_ID)
+            .principal(authOf("ADMIN", adminId))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"decision": "APPROVED", "reason": "Transferencia confirmada por el banco", \
+                "evidence": "captura-extracto.pdf"}
+                """))
+            .andExpect(status().isOk());
+
+        verify(correctPaymentUseCase).correct(new CorrectPaymentCommand(
+            PAYMENT_ID.toString(), ManualVerificationDecision.APPROVED,
+            "Transferencia confirmada por el banco", "captura-extracto.pdf", adminId
+        ));
+    }
+
+    /** A blank reason is rejected by bean validation before the use case ever runs. */
+    @Test
+    void corrections_with_a_blank_reason_returns_400_before_any_use_case_call() throws Exception {
+        mockMvc.perform(post("/api/v1/admin/billing/payments/{id}/corrections", PAYMENT_ID)
+            .principal(authOf("ADMIN"))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"decision\": \"APPROVED\", \"reason\": \"\", \"evidence\": \"captura-extracto.pdf\"}"))
+            .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(correctPaymentUseCase);
+    }
+
+    /** A blank evidence is rejected by bean validation before the use case ever runs. */
+    @Test
+    void corrections_with_a_blank_evidence_returns_400_before_any_use_case_call() throws Exception {
+        mockMvc.perform(post("/api/v1/admin/billing/payments/{id}/corrections", PAYMENT_ID)
+            .principal(authOf("ADMIN"))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"decision": "APPROVED", "reason": "Transferencia confirmada por el banco", "evidence": ""}
+                """))
+            .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(correctPaymentUseCase);
+    }
+
+    /** Defense-in-depth: a non-admin never reaches the use case, real 403, nothing changes. */
+    @Test
+    void corrections_from_a_non_admin_returns_403_and_changes_nothing() throws Exception {
+        mockMvc.perform(post("/api/v1/admin/billing/payments/{id}/corrections", PAYMENT_ID)
+            .principal(authOf("STUDENT"))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"decision": "APPROVED", "reason": "Transferencia confirmada por el banco", \
+                "evidence": "captura-extracto.pdf"}
+                """))
+            .andExpect(status().isForbidden());
+
+        verifyNoInteractions(correctPaymentUseCase);
     }
 }

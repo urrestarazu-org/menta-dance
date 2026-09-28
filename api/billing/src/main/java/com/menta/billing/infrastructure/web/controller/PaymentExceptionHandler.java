@@ -26,14 +26,17 @@ public class PaymentExceptionHandler {
     private static final String RETRY_AFTER_DEGRADED_SECONDS = "30";
 
     /**
-     * A second admin decision, or a stale sweep race, landing on a payment that is no longer
-     * {@code AwaitingManualVerification} (C4). Never resurrects or re-terminates a subscription.
+     * A second admin decision, a stale sweep race, or a correction attempted on a payment not
+     * currently {@code ReconciliationRequired} (C4, #33 US-BILLING-005 D9/C1). Never resurrects or
+     * re-terminates a subscription. The detail is deliberately state-agnostic — {@link
+     * IllegalPaymentStateTransitionException} is reused by both {@code resolveManually} and {@code
+     * correctManually}, which name different expected starting states.
      */
     @ExceptionHandler(IllegalPaymentStateTransitionException.class)
     ResponseEntity<ProblemDetail> illegalStateTransition(IllegalPaymentStateTransitionException exception) {
         return ProblemDetails.response(
             HttpStatus.CONFLICT,
-            "El pago ya no está a la espera de verificación manual.",
+            "El pago no está en un estado que admita esta operación.",
             exception.getErrorCode()
         );
     }
