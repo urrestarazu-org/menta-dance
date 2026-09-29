@@ -1,9 +1,10 @@
 # Investigación: `Connection refused` intermitente en `:api:app:test`
 
-**Estado:** investigación en curso, sin causa raíz confirmada al 100%. Este documento
-es una bitácora de referencia — no es documentación "vigente" del diseño (no está
-indexado en [README.md](README.md)) — para que el próximo intento no repita pasos ya
-descartados.
+**Estado:** cerrada — causa raíz confirmada y corregida (ver "Causa raíz confirmada" y
+"Confirmado en CI — investigación cerrada" más abajo). Este documento queda como
+bitácora de referencia — no es documentación "vigente" del diseño (no está indexado en
+[README.md](README.md)) — para que quede registro de las teorías descartadas y del
+camino de evidencia hasta la causa real.
 
 **Rama:** `feature/api-app-test-context-consolidation` (PR #275).
 
@@ -353,8 +354,21 @@ preexistentes que el caos de `Connection refused` nunca dejaba correr limpio has
 final para revelar). Quedan fuera de alcance de este documento — abrir seguimiento
 aparte si hace falta.
 
-**Pendiente**: confirmar en CI (runner Linux limpio, sin la carga de otros 8 containers
-de desarrollo local corriendo en simultáneo).
+### Confirmado en CI — investigación cerrada
+
+Run `36571825322`, job `109417461139`: **369 tests, 1 solo fallo, 6m25s** — contra los
+57 minutos y 32-33 fallos de cada corrida anterior con el bug presente. El único fallo
+es exactamente el mismo `AssertionFailedError` en
+`PhysicalAttendanceHistoryIntegrationTest > a_mid_month_monthly_purchase_...` visto en
+la verificación local — mismo bug genuino, reproducible en ambos entornos, sin relación
+con Testcontainers.
+
+**Cierre de la investigación**: la causa raíz (uso incorrecto de `@Testcontainers`/
+`@Container` para lo que debía ser un singleton manual) está confirmada y corregida en
+`AbstractAuthMySqlIntegrationTest`, `AbstractBillingMySqlIntegrationTest`,
+`AbstractPhysicalMySqlIntegrationTest` y `AbstractVirtualMySqlIntegrationTest`. Efecto
+medido: de ~54-57 min y ~32 fallos por corrida a menos de 7 min y 0-1 fallos (el 1
+restante es un bug de test preexistente, no relacionado).
 
 ## Callejones sin salida ya explorados (para no repetirlos)
 
