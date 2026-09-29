@@ -333,8 +333,28 @@ Verificación con la misma corrida acotada a `com.menta.app.integration.physical
   *virtual*, no de physical, por la fusión Tier-2 de PR2 — ambos casos esperados). Corrida
   completa en **1m26s**, contra los ~7 minutos de antes.
 
-Falta correr la suite completa (`:api:app:test`, sin acotar) y confirmar en CI, pero la
-señal es contundente.
+### Verificación a escala completa (local)
+
+`:api:app:test` sin acotar, tras el fix: **369 tests, 3 fallos, BUILD FAILED en 3m51s**
+— contra los 32-33 fallos y 54-57 minutos de cada corrida anterior en esta
+investigación. Los 3 fallos restantes son **fallos de lógica genuinos, ninguno de
+conexión**:
+
+- `PhysicalAttendanceHistoryIntegrationTest > a_mid_month_monthly_purchase_...`:
+  `AssertionFailedError` (201 esperado, otro código recibido).
+- `PaymentProofIntegrationTest > a_tampered_token_is_rejected_with_403()`:
+  `AssertionFailedError` (403 esperado, otro código recibido).
+- `PhysicalSessionManagementIntegrationTest > concurrent_payments_for_same_session...`:
+  `NoSuchElementException: No value present` — probablemente una carrera real en el
+  test de concurrencia, no relacionada con Testcontainers.
+
+Ninguno de los tres estaba en el radar de esta investigación (son bugs de test/producto
+preexistentes que el caos de `Connection refused` nunca dejaba correr limpio hasta el
+final para revelar). Quedan fuera de alcance de este documento — abrir seguimiento
+aparte si hace falta.
+
+**Pendiente**: confirmar en CI (runner Linux limpio, sin la carga de otros 8 containers
+de desarrollo local corriendo en simultáneo).
 
 ## Callejones sin salida ya explorados (para no repetirlos)
 
