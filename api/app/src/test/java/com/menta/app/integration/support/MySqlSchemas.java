@@ -34,11 +34,15 @@ final class MySqlSchemas {
      */
     static String createSchema(MySQLContainer<?> container) {
         String schema = "menta_test_" + UUID.randomUUID().toString().replace("-", "");
-        try (Connection connection = DriverManager.getConnection(container.getJdbcUrl(), container.getUsername(), container.getPassword());
-             Statement statement = connection.createStatement()) {
+        try (
+            Connection connection = DriverManager.getConnection(
+                container.getJdbcUrl(), container.getUsername(), container.getPassword());
+            Statement statement = connection.createStatement()
+        ) {
             statement.execute("CREATE DATABASE IF NOT EXISTS `" + schema + "`");
         } catch (Exception e) {
-            throw new IllegalStateException("Could not create per-context test schema " + schema, e);
+            throw new IllegalStateException(
+                "Could not create per-context test schema " + schema, e);
         }
         return schema;
     }
@@ -52,7 +56,8 @@ final class MySqlSchemas {
      * @return a {@code jdbc:mysql://...} URL pointing at that schema on that container
      */
     static String jdbcUrl(MySQLContainer<?> container, String schema) {
-        return "jdbc:mysql://" + container.getHost() + ":" + container.getMappedPort(MySQLContainer.MYSQL_PORT)
+        return "jdbc:mysql://" + container.getHost() + ":"
+            + container.getMappedPort(MySQLContainer.MYSQL_PORT)
             + "/" + schema + "?useSSL=false&allowPublicKeyRetrieval=true";
     }
 }
