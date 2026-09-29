@@ -254,6 +254,88 @@ Los candidatos que quedan (worker de Gradle reiniciándose, o algo en cómo Ryuk
 la sesión) siguen sin descartarse — este hallazgo solo reduce el espacio de búsqueda,
 no lo cierra.
 
+## Causa raíz confirmada
+
+Se dejó un listener de `docker events --filter type=container --format '{{json .}}'`
+corriendo en background durante otra corrida acotada a `com.menta.app.integration.physical.*`,
+capturando eventos crudos de Docker antes de que Ryuk limpie cualquier rastro (algo
+que `docker stats` no puede darnos).
+
+Filtrando por `Actor.Attributes.image == "mysql:8.0"` con `org.testcontainers=true`,
+11 containers — mismo 1:1 con las 11 clases — muestran exactamente esta secuencia por
+cada uno: `create` → `start` → ... → **`kill` (signal 9)** → `die` → `destroy`. El
+evento `kill` trae la etiqueta `org.testcontainers.sessionId`, y el container
+*siguiente* que se crea inmediatamente después (mismo segundo, en un caso) **tiene el
+mismo `sessionId`** — es la misma sesión de Testcontainers (la misma JVM) matando su
+propio container y levantando uno nuevo acto seguido. No es un crash espontáneo del
+proceso MySQL ni algo externo (Docker Desktop, el kernel) — es Testcontainers mismo.
+
+Confirmado contra la documentación oficial de Testcontainers (`java.testcontainers.org`):
+
+> "Containers declared as static fields will be shared between test methods. They will
+> be started only once before any test method is executed **and stopped after the last
+> test method has executed**."
+
+Esto describe exactamente el comportamiento de `@Container` — para una sola clase. El
+patrón "singleton container" que PR1 se propuso implementar es **un patrón distinto**,
+documentado aparte, que **no usa `@Container` ni `@Testcontainers`**:
+
+```java
+abstract class AbstractContainerBaseTest {
+    static final MySQLContainer MY_SQL_CONTAINER;
+    static {
+        MY_SQL_CONTAINER = new MySQLContainer();
+        MY_SQL_CONTAINER.start();
+    }
+}
+```
+
+El container se arranca en un bloque estático (una sola vez por JVM, nunca por clase) y
+solo Ryuk lo limpia, al final de todo el suite — no hay ningún hook de JUnit 5 de por
+medio que pueda decidir "parar esto después de esta clase".
+
+Nuestro código (`Abstract{Auth,Billing,Physical,Virtual}MySqlIntegrationTest`) usa
+`@Testcontainers` + `@Container` sobre el campo estático — el patrón *por clase*, que
+JUnit 5 aplica literalmente a cada clase concreta que hereda el campo, sin importar que
+esté declarado en la clase base abstracta. Cada clase concreta, al terminar su último
+test, dispara el `afterAll` de la extensión, que mata el container heredado — y la
+clase siguiente, al arrancar, encuentra `isRunning() == false` y crea uno nuevo.
+
+**Esto es la causa raíz completa.** Explica todo lo observado en esta investigación sin
+dejar cabos sueltos: por qué son 41 containers y no 4 en una corrida completa (uno por
+clase, no por dominio); por qué el mismo patrón aparece igual en macOS local y en CI
+Linux (es JUnit 5, no el sistema operativo); por qué el fallo puede aparecer desde el
+primer test de una corrida chica (no depende de acumulación de carga); y por qué el
+código nunca llamó `.stop()` explícitamente (el `kill` lo dispara la propia extensión
+de JUnit 5, no algo escrito a mano en este repo).
+
+### Fix — aplicado y verificado
+
+Se sacó `@Testcontainers`/`@Container` de las 4 clases `Abstract*MySqlIntegrationTest`
+(auth/billing/physical/virtual), reemplazando por el bloque estático del patrón oficial:
+
+```java
+static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")...;
+
+static {
+    MYSQL.start();
+}
+```
+
+Verificación con la misma corrida acotada a `com.menta.app.integration.physical.*`:
+
+- **Antes**: 11 clases, 11 "Creating container" (una por clase), ~7 min, 32 tests
+  fallando con `Connection refused`.
+- **Después**: **97 tests, 1 solo fallo — y es un `AssertionFailedError` genuino, no
+  `ConnectException`.** El "Creating container" del dominio physical aparece **una sola
+  vez** en toda la corrida (el resto de las apariciones son las 3 clases "Migration" con
+  container propio por diseño, más una clase que en realidad usa el container de
+  *virtual*, no de physical, por la fusión Tier-2 de PR2 — ambos casos esperados). Corrida
+  completa en **1m26s**, contra los ~7 minutos de antes.
+
+Falta correr la suite completa (`:api:app:test`, sin acotar) y confirmar en CI, pero la
+señal es contundente.
+
 ## Callejones sin salida ya explorados (para no repetirlos)
 
 - **`Slf4jLogConsumer` en los 4 containers de dominio**: no produjo ninguna salida

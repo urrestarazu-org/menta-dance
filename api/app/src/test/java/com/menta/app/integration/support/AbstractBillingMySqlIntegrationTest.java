@@ -3,8 +3,6 @@ package com.menta.app.integration.support;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.MountableFile;
 
 /**
@@ -17,11 +15,18 @@ import org.testcontainers.utility.MountableFile;
  * which includes the declaring class — subclasses must inherit this exact method rather than
  * redeclare their own, or they will never be cache-equal to a sibling with an
  * otherwise-identical profile/mock signature.</p>
+ *
+ * <p>Deliberately NOT {@code @Testcontainers}/{@code @Container}: that annotation pair stops the
+ * container after the last test method of whichever concrete class currently owns it — per class,
+ * not per JVM — even though the field is declared once on this shared abstract base. Every
+ * subclass's own {@code afterAll} killed the inherited container and the next class recreated it
+ * from scratch, so 30+ integration test classes never shared 4 containers, they paid for ~30+
+ * fresh ones. This is Testcontainers' own documented singleton pattern instead: a plain static
+ * field started once in a static initializer, with no JUnit 5 extension managing its lifecycle at
+ * all — only Ryuk stops it, at JVM shutdown, once for the whole run.</p>
  */
-@Testcontainers
 public abstract class AbstractBillingMySqlIntegrationTest {
 
-    @Container
     static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
         .withDatabaseName("menta_test")
         .withUsername("test")
@@ -30,6 +35,10 @@ public abstract class AbstractBillingMySqlIntegrationTest {
         .withCopyFileToContainer(
             MountableFile.forClasspathResource("testcontainers/grant-all-to-test-user.sql"),
             "/docker-entrypoint-initdb.d/grant-all-to-test-user.sql");
+
+    static {
+        MYSQL.start();
+    }
 
     @DynamicPropertySource
     static void mysqlProperties(DynamicPropertyRegistry registry) {
