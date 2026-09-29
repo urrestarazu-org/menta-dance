@@ -134,19 +134,19 @@ Chain strategy: stacked-to-main
 
 ## Phase P5: Buyer notifications + contract
 
-- [ ] 5.1 RED: `UserContactPortTest` (new, `:api:auth`) — `emailOf(userId)` returns the user's email when found, `Optional.empty()` when not.
-- [ ] 5.2 GREEN: `api/shared/.../auth/UserContactPort.java` (new, `Optional<String> emailOf(UUID)`), `:api:auth` adapter implementing it next to `UserExistenceAdapter` (C8).
-- [ ] 5.3 RED: `SpringMailPaymentDecisionNotificationAdapterTest` (new) — `notifyApproved` sends the Spanish confirmation template; `notifyRejected` sends the rejection template with `notification.reason()` interpolated verbatim; both resolve the address via `UserContactPort`; a missing address is handled without throwing.
-- [ ] 5.4 GREEN: `PaymentDecisionNotificationPort.java` (new), `PaymentDecisionNotification.java` (new record, D7), `SpringMailPaymentDecisionNotificationAdapter.java` (new, `@Value` from-address, Lombok where applicable, C8).
-- [ ] 5.5 RED: extend the adapter test — `afterCommit` fires only after a real commit, never on rollback; outside an active transaction it sends inline; a `RuntimeException` during send is caught and logged, **never rethrown** (Scenario "Email failure does not roll back the decision"; C9/D8).
-- [ ] 5.6 GREEN: `sendAfterCommit`/`guarded` helpers on the adapter (C9 — the `try/catch` is load-bearing: without it, `afterCommit` propagates SMTP failures back to the caller of `commit()`).
-- [ ] 5.7 RED: extend `ResolvePaymentProofUseCaseImplTest` — approve calls `notifyApproved` exactly once and **never** `PaymentProofNotificationPort` (ops adapter); reject calls `notifyRejected` with the reason, same `verifyNoInteractions(opsAdapter)` (Scenarios "Approval sends a confirmation email", "Rejection sends a rejection email with the reason").
-- [ ] 5.8 GREEN: `ResolvePaymentProofUseCaseImpl.java` (modify: one added `notifyApproved`/`notifyRejected` call per branch, after P1's audit call — transition/fulfillment still byte-unchanged).
-- [ ] 5.9 GREEN: `BillingConfiguration.java` (modify) — wire `UserContactPort` and `PaymentDecisionNotificationPort`.
-- [ ] 5.10 GREEN: `api/openapi/billing-v1.yaml` (modify) — the four new/changed endpoints, the `401`/`403` proof-token contract, D3's route-divergence note.
-- [ ] 5.11 GREEN: `bruno/API - Direct/billing/` (new requests) — list, detail, corrections, token-authenticated proof fetch.
-- [ ] 5.12 GREEN: `docs/user-stories/US-BILLING-005.md` (modify) — lift from `Draft`; record D3's divergence from the issue's literal route.
-- [ ] 5.13 Verify: `./gradlew check` (full monorepo regression — `UserContactPort` touches `:api:shared`/`:api:auth`); confirm every Success Criterion in `proposal.md`, including that `PaymentProofNotificationPort` is never invoked by approve/reject. P5 ready for PR — after merge, run `sdd-verify` against the 6 `billing-manual-payment-verification` requirements and the 2 `bank-transfer-subscription` delta requirements, then `sdd-archive`.
+- [x] 5.1 RED: `UserContactPortTest` (new, `:api:auth`) — `emailOf(userId)` returns the user's email when found, `Optional.empty()` when not.
+- [x] 5.2 GREEN: `api/shared/.../auth/UserContactPort.java` (new, `Optional<String> emailOf(UUID)`), `:api:auth` adapter implementing it next to `UserExistenceAdapter` (C8).
+- [x] 5.3 RED: `SpringMailPaymentDecisionNotificationAdapterTest` (new) — `notifyApproved` sends the Spanish confirmation template; `notifyRejected` sends the rejection template with `notification.reason()` interpolated verbatim; both resolve the address via `UserContactPort`; a missing address is handled without throwing.
+- [x] 5.4 GREEN: `PaymentDecisionNotificationPort.java` (new), `PaymentDecisionNotification.java` (new record, D7), `SpringMailPaymentDecisionNotificationAdapter.java` (new, `@Value` from-address, Lombok where applicable, C8).
+- [x] 5.5 RED: extend the adapter test — `afterCommit` fires only after a real commit, never on rollback; outside an active transaction it sends inline; a `RuntimeException` during send is caught and logged, **never rethrown** (Scenario "Email failure does not roll back the decision"; C9/D8).
+- [x] 5.6 GREEN: `sendAfterCommit`/`guarded` helpers on the adapter (C9 — the `try/catch` is load-bearing: without it, `afterCommit` propagates SMTP failures back to the caller of `commit()`).
+- [x] 5.7 RED: extend `ResolvePaymentProofUseCaseImplTest` — approve calls `notifyApproved` exactly once and **never** `PaymentProofNotificationPort` (ops adapter); reject calls `notifyRejected` with the reason, same `verifyNoInteractions(opsAdapter)` (Scenarios "Approval sends a confirmation email", "Rejection sends a rejection email with the reason").
+- [x] 5.8 GREEN: `ResolvePaymentProofUseCaseImpl.java` (modify: one added `notifyApproved`/`notifyRejected` call per branch, after P1's audit call — transition/fulfillment still byte-unchanged).
+- [x] 5.9 GREEN: `BillingConfiguration.java` (modify) — wire `UserContactPort` and `PaymentDecisionNotificationPort`.
+- [x] 5.10 GREEN: `api/openapi/billing-v1.yaml` (modify) — the four new/changed endpoints, the `401`/`403` proof-token contract, D3's route-divergence note.
+- [x] 5.11 GREEN: `bruno/API - Direct/billing/` (new requests) — list, detail, corrections, token-authenticated proof fetch.
+- [x] 5.12 GREEN: `docs/user-stories/US-BILLING-005.md` (modify) — lift from `Draft`; record D3's divergence from the issue's literal route.
+- [x] 5.13 Verify: `./gradlew check` (full monorepo regression — `UserContactPort` touches `:api:shared`/`:api:auth`); confirm every Success Criterion in `proposal.md`, including that `PaymentProofNotificationPort` is never invoked by approve/reject. P5 ready for PR — after merge, run `sdd-verify` against the 6 `billing-manual-payment-verification` requirements and the 2 `bank-transfer-subscription` delta requirements, then `sdd-archive`.
 
 ## Requirement → Task Coverage
 
