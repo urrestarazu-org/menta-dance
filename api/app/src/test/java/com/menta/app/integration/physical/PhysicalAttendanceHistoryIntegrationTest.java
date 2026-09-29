@@ -51,7 +51,10 @@ import com.menta.shared.domain.vo.Email;
 import com.menta.app.integration.support.AbstractPhysicalMySqlIntegrationTest;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.YearMonth;
+import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -86,6 +89,28 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
     /** R2 remediation fixture (#39 verify-report FAIL finding 1) — mirrors {@code PhysicalPurchaseIntegrationTest}. */
     private static final String MERCHANT_ACCOUNT_ID = "merchant-integration-attendance-history";
     private static final BigDecimal MONTHLY_PRICE = new BigDecimal("300.00");
+
+    // Time-bomb fix (#45 follow-up): every seeded session date is computed relative to the
+    // real clock at test-run time instead of a hardcoded absolute calendar date, so the suite
+    // can never flake just because "now" caught up with a literal that used to be safely in
+    // the future. FIRST_MONTH is pinned 3 months out — comfortably beyond normal test runtime
+    // — and SECOND_MONTH/EMPTY_MONTH are derived from it so every month-query string stays in
+    // sync with the dates it describes.
+    private static final YearMonth FIRST_MONTH = YearMonth.from(LocalDate.now(ZoneOffset.UTC).plusMonths(3));
+    private static final YearMonth SECOND_MONTH = FIRST_MONTH.plusMonths(1);
+    private static final YearMonth EMPTY_MONTH = FIRST_MONTH.plusMonths(2);
+
+    private static Instant instantAt(LocalDate date) {
+        return date.atTime(LocalTime.of(22, 0)).atZone(ZoneOffset.UTC).toInstant();
+    }
+
+    private static Instant instantAt(YearMonth month, int dayOfMonth) {
+        return instantAt(month.atDay(dayOfMonth));
+    }
+
+    private static String monthQuery(YearMonth month) {
+        return month.toString();
+    }
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
@@ -272,9 +297,9 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
         UUID studentId = issueUser(Role.STUDENT);
         UUID courseId = seedCourse();
         List<Instant> scheduledAtValues = List.of(
-            Instant.parse("2026-09-03T22:00:00Z"), Instant.parse("2026-09-10T22:00:00Z"),
-            Instant.parse("2026-09-17T22:00:00Z"), Instant.parse("2026-09-24T22:00:00Z"),
-            Instant.parse("2026-09-28T22:00:00Z")
+            instantAt(FIRST_MONTH, 3), instantAt(FIRST_MONTH, 10),
+            instantAt(FIRST_MONTH, 17), instantAt(FIRST_MONTH, 24),
+            instantAt(FIRST_MONTH, 28)
         );
         for (int i = 0; i < scheduledAtValues.size(); i++) {
             UUID sessionId = seedSession(courseId, scheduledAtValues.get(i));
@@ -284,7 +309,7 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
             }
         }
 
-        ResponseEntity<Map> response = readOwnMonth(studentId, "2026-09", true);
+        ResponseEntity<Map> response = readOwnMonth(studentId, monthQuery(FIRST_MONTH), true);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().get("scheduledSessionCount")).isEqualTo(5);
@@ -299,15 +324,15 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
         UUID studentId = issueUser(Role.STUDENT);
         UUID courseId = seedCourse();
         for (Instant scheduledAt : List.of(
-            Instant.parse("2026-10-02T22:00:00Z"), Instant.parse("2026-10-09T22:00:00Z"),
-            Instant.parse("2026-10-16T22:00:00Z"), Instant.parse("2026-10-23T22:00:00Z")
+            instantAt(SECOND_MONTH, 2), instantAt(SECOND_MONTH, 9),
+            instantAt(SECOND_MONTH, 16), instantAt(SECOND_MONTH, 23)
         )) {
             UUID sessionId = seedSession(courseId, scheduledAt);
             seedAssignment(sessionId, studentId);
             seedAttendance(sessionId, studentId, scheduledAt.plusSeconds(120));
         }
 
-        ResponseEntity<Map> response = readOwnMonth(studentId, "2026-10", true);
+        ResponseEntity<Map> response = readOwnMonth(studentId, monthQuery(SECOND_MONTH), true);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().get("scheduledSessionCount")).isEqualTo(4);
@@ -326,13 +351,13 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
         UUID studentId = issueUser(Role.STUDENT);
         UUID receptionistId = issueUser(Role.RECEPTIONIST);
         UUID courseId = seedCourse();
-        UUID sessionId = seedSession(courseId, Instant.parse("2026-09-07T22:00:00Z"));
+        UUID sessionId = seedSession(courseId, instantAt(FIRST_MONTH, 7));
         seedAssignment(sessionId, studentId);
         seedManualAttendance(
-            sessionId, studentId, Instant.parse("2026-09-07T22:05:00Z"), receptionistId
+            sessionId, studentId, instantAt(FIRST_MONTH, 7).plusSeconds(300), receptionistId
         );
 
-        ResponseEntity<Map> response = readOwnMonth(studentId, "2026-09", true);
+        ResponseEntity<Map> response = readOwnMonth(studentId, monthQuery(FIRST_MONTH), true);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().get("scheduledSessionCount")).isEqualTo(1);
@@ -345,7 +370,7 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
     void a_month_with_zero_assignments_returns_200_zeroed_never_404() {
         UUID studentId = issueUser(Role.STUDENT);
 
-        ResponseEntity<Map> response = readOwnMonth(studentId, "2026-11", null);
+        ResponseEntity<Map> response = readOwnMonth(studentId, monthQuery(EMPTY_MONTH), null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().get("scheduledSessionCount")).isEqualTo(0);
@@ -357,14 +382,14 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
     void include_absent_toggles_only_the_list_never_the_aggregates_against_real_rows() {
         UUID studentId = issueUser(Role.STUDENT);
         UUID courseId = seedCourse();
-        UUID attendedSession = seedSession(courseId, Instant.parse("2026-09-03T22:00:00Z"));
-        UUID absentSession = seedSession(courseId, Instant.parse("2026-09-10T22:00:00Z"));
+        UUID attendedSession = seedSession(courseId, instantAt(FIRST_MONTH, 3));
+        UUID absentSession = seedSession(courseId, instantAt(FIRST_MONTH, 10));
         seedAssignment(attendedSession, studentId);
         seedAssignment(absentSession, studentId);
-        seedAttendance(attendedSession, studentId, Instant.parse("2026-09-03T22:05:00Z"));
+        seedAttendance(attendedSession, studentId, instantAt(FIRST_MONTH, 3).plusSeconds(300));
 
-        ResponseEntity<Map> withAbsent = readOwnMonth(studentId, "2026-09", true);
-        ResponseEntity<Map> withoutAbsent = readOwnMonth(studentId, "2026-09", false);
+        ResponseEntity<Map> withAbsent = readOwnMonth(studentId, monthQuery(FIRST_MONTH), true);
+        ResponseEntity<Map> withoutAbsent = readOwnMonth(studentId, monthQuery(FIRST_MONTH), false);
 
         assertThat((List) withAbsent.getBody().get("sessions")).hasSize(2);
         assertThat((List) withoutAbsent.getBody().get("sessions")).hasSize(1);
@@ -388,10 +413,12 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
     void a_mid_month_monthly_purchase_splits_assignments_across_two_monthly_views() {
         UUID studentId = issueUser(Role.STUDENT);
         UUID courseId = seedCourse();
-        // 2 sessions in September, 1 in October — all after "now" so CoveragePlanner claims them.
-        UUID septemberFirst = seedSession(courseId, Instant.parse("2026-09-28T22:00:00Z"));
-        UUID septemberSecond = seedSession(courseId, Instant.parse("2026-09-29T22:00:00Z"));
-        UUID octoberFirst = seedSession(courseId, Instant.parse("2026-10-05T22:00:00Z"));
+        // 2 sessions in FIRST_MONTH, 1 in SECOND_MONTH — all computed relative to "now" so they
+        // stay safely in the future and CoveragePlanner claims them regardless of run date.
+        LocalDate firstMonthLastDay = FIRST_MONTH.atEndOfMonth();
+        UUID septemberFirst = seedSession(courseId, instantAt(firstMonthLastDay.minusDays(1)));
+        UUID septemberSecond = seedSession(courseId, instantAt(firstMonthLastDay));
+        UUID octoberFirst = seedSession(courseId, instantAt(SECOND_MONTH, 5));
         String quoteId = seedMonthlyQuote(courseId, 3, MONTHLY_PRICE);
 
         when(paymentPreferencePort.createPreference(any())).thenReturn(
@@ -413,8 +440,8 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
         assertThat(assignmentRepository.countBySessionId(septemberSecond)).isEqualTo(1);
         assertThat(assignmentRepository.countBySessionId(octoberFirst)).isEqualTo(1);
 
-        ResponseEntity<Map> september = readOwnMonth(studentId, "2026-09", true);
-        ResponseEntity<Map> october = readOwnMonth(studentId, "2026-10", true);
+        ResponseEntity<Map> september = readOwnMonth(studentId, monthQuery(FIRST_MONTH), true);
+        ResponseEntity<Map> october = readOwnMonth(studentId, monthQuery(SECOND_MONTH), true);
 
         assertThat(september.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(september.getBody().get("scheduledSessionCount")).isEqualTo(2);
@@ -440,13 +467,13 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
     void a_pre_quote_cancellation_never_produced_an_assignment() {
         UUID studentId = issueUser(Role.STUDENT);
         UUID courseId = seedCourse();
-        UUID realSession = seedSession(courseId, Instant.parse("2026-09-14T22:00:00Z"));
+        UUID realSession = seedSession(courseId, instantAt(FIRST_MONTH, 14));
         seedAssignment(realSession, studentId);
-        seedAttendance(realSession, studentId, Instant.parse("2026-09-14T22:05:00Z"));
+        seedAttendance(realSession, studentId, instantAt(FIRST_MONTH, 14).plusSeconds(300));
         // Cancelled before any student ever quoted it — no assignment row was ever created.
-        seedCancelledSession(courseId, Instant.parse("2026-09-21T22:00:00Z"));
+        seedCancelledSession(courseId, instantAt(FIRST_MONTH, 21));
 
-        ResponseEntity<Map> response = readOwnMonth(studentId, "2026-09", true);
+        ResponseEntity<Map> response = readOwnMonth(studentId, monthQuery(FIRST_MONTH), true);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().get("scheduledSessionCount")).isEqualTo(1);
@@ -462,11 +489,11 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
         UUID courseId = seedCourse();
         int totalSessions = 8;
         for (int day = 1; day <= totalSessions; day++) {
-            UUID sessionId = seedSession(courseId, Instant.parse("2026-09-0" + day + "T22:00:00Z"));
+            UUID sessionId = seedSession(courseId, instantAt(FIRST_MONTH, day));
             seedAssignment(sessionId, studentId);
         }
 
-        ResponseEntity<Map> response = readOwnMonth(studentId, "2026-09", true);
+        ResponseEntity<Map> response = readOwnMonth(studentId, monthQuery(FIRST_MONTH), true);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().get("scheduledSessionCount")).isEqualTo(totalSessions);
@@ -476,7 +503,8 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
     @Test
     void an_anonymous_request_is_rejected_with_401() {
         ResponseEntity<Map> response = http.exchange(
-            "/api/v1/physical/attendance/me?month=2026-09", HttpMethod.GET, HttpEntity.EMPTY, Map.class
+            "/api/v1/physical/attendance/me?month=" + monthQuery(FIRST_MONTH), HttpMethod.GET, HttpEntity.EMPTY,
+            Map.class
         );
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
@@ -502,16 +530,16 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
         UUID courseB = seedCourse();
         UUID courseC = seedCourse();
         for (UUID courseId : List.of(courseA, courseB, courseC)) {
-            UUID sessionId = seedSession(courseId, Instant.parse("2026-09-05T22:00:00Z"));
+            UUID sessionId = seedSession(courseId, instantAt(FIRST_MONTH, 5));
             seedAssignment(sessionId, studentId);
         }
         // two more sessions to reach five total assignments across the three courses.
-        UUID sessionD = seedSession(courseA, Instant.parse("2026-09-12T22:00:00Z"));
+        UUID sessionD = seedSession(courseA, instantAt(FIRST_MONTH, 12));
         seedAssignment(sessionD, studentId);
-        UUID sessionE = seedSession(courseB, Instant.parse("2026-09-19T22:00:00Z"));
+        UUID sessionE = seedSession(courseB, instantAt(FIRST_MONTH, 19));
         seedAssignment(sessionE, studentId);
 
-        ResponseEntity<Map> response = readElevatedMonth(adminId, Role.ADMIN, studentId, "2026-09");
+        ResponseEntity<Map> response = readElevatedMonth(adminId, Role.ADMIN, studentId, monthQuery(FIRST_MONTH));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().get("scheduledSessionCount")).isEqualTo(5);
@@ -532,21 +560,22 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
         UUID ownCourse = seedCourse(instructorId);
         UUID otherCourse = seedCourse(otherProfessorId);
         for (Instant scheduledAt : List.of(
-            Instant.parse("2026-09-03T22:00:00Z"), Instant.parse("2026-09-10T22:00:00Z"),
-            Instant.parse("2026-09-17T22:00:00Z")
+            instantAt(FIRST_MONTH, 3), instantAt(FIRST_MONTH, 10),
+            instantAt(FIRST_MONTH, 17)
         )) {
             UUID sessionId = seedSession(ownCourse, scheduledAt);
             seedAssignment(sessionId, studentId);
             seedAttendance(sessionId, studentId, scheduledAt.plusSeconds(120));
         }
         for (Instant scheduledAt : List.of(
-            Instant.parse("2026-09-05T22:00:00Z"), Instant.parse("2026-09-12T22:00:00Z")
+            instantAt(FIRST_MONTH, 5), instantAt(FIRST_MONTH, 12)
         )) {
             UUID sessionId = seedSession(otherCourse, scheduledAt);
             seedAssignment(sessionId, studentId);
         }
 
-        ResponseEntity<Map> response = readElevatedMonth(instructorId, Role.INSTRUCTOR, studentId, "2026-09");
+        ResponseEntity<Map> response =
+            readElevatedMonth(instructorId, Role.INSTRUCTOR, studentId, monthQuery(FIRST_MONTH));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat((List) response.getBody().get("sessions")).hasSize(3);
@@ -561,7 +590,8 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
         UUID studentCallerId = issueUser(Role.STUDENT);
         UUID targetStudentId = issueUser(Role.STUDENT);
 
-        ResponseEntity<Map> response = readElevatedMonth(studentCallerId, Role.STUDENT, targetStudentId, "2026-09");
+        ResponseEntity<Map> response =
+            readElevatedMonth(studentCallerId, Role.STUDENT, targetStudentId, monthQuery(FIRST_MONTH));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     }
@@ -578,11 +608,13 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
         UUID studentX = issueUser(Role.STUDENT); // not enrolled in the instructor's course
         UUID studentY = issueUser(Role.STUDENT); // zero physical assignments at all
         UUID otherCourse = seedCourse(otherProfessorId);
-        UUID sessionId = seedSession(otherCourse, Instant.parse("2026-09-05T22:00:00Z"));
+        UUID sessionId = seedSession(otherCourse, instantAt(FIRST_MONTH, 5));
         seedAssignment(sessionId, studentX);
 
-        ResponseEntity<Map> responseForX = readElevatedMonth(instructorId, Role.INSTRUCTOR, studentX, "2026-09");
-        ResponseEntity<Map> responseForY = readElevatedMonth(instructorId, Role.INSTRUCTOR, studentY, "2026-09");
+        ResponseEntity<Map> responseForX =
+            readElevatedMonth(instructorId, Role.INSTRUCTOR, studentX, monthQuery(FIRST_MONTH));
+        ResponseEntity<Map> responseForY =
+            readElevatedMonth(instructorId, Role.INSTRUCTOR, studentY, monthQuery(FIRST_MONTH));
 
         assertThat(responseForX.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(responseForY.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -600,11 +632,12 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
         UUID courseId = seedCourse();
         int totalSessions = 8;
         for (int day = 1; day <= totalSessions; day++) {
-            UUID sessionId = seedSession(courseId, Instant.parse("2026-09-0" + day + "T22:00:00Z"));
+            UUID sessionId = seedSession(courseId, instantAt(FIRST_MONTH, day));
             seedAssignment(sessionId, studentId);
         }
 
-        ResponseEntity<Map> response = readElevatedMonth(adminId, Role.ADMIN, studentId, "2026-09");
+        ResponseEntity<Map> response =
+            readElevatedMonth(adminId, Role.ADMIN, studentId, monthQuery(FIRST_MONTH));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().get("scheduledSessionCount")).isEqualTo(totalSessions);
@@ -614,7 +647,7 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
     @Test
     void an_anonymous_request_to_the_elevated_endpoint_is_rejected_with_401() {
         ResponseEntity<Map> response = http.exchange(
-            "/api/v1/admin/physical/attendance/" + UUID.randomUUID() + "?month=2026-09",
+            "/api/v1/admin/physical/attendance/" + UUID.randomUUID() + "?month=" + monthQuery(FIRST_MONTH),
             HttpMethod.GET, HttpEntity.EMPTY, Map.class
         );
 
