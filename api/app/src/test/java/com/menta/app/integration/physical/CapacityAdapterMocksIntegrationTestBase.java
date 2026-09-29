@@ -17,13 +17,13 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
- * Shared context for {@link AssignCapacityAdapterIntegrationTest} and
- * {@link HoldCapacityAdapterIntegrationTest}: identical profile and mock set, previously
- * duplicated verbatim in each class. Spring's context cache key includes each {@code @MockBean}'s
- * declaring field, not just its type — so two classes with structurally identical mocks are only
- * cache-equal when they inherit the same field declarations from a shared base, as here, rather
- * than redeclaring their own (same root cause as {@code AbstractPhysicalMySqlIntegrationTest}'s
- * {@code @DynamicPropertySource} note).
+ * Base test class providing the {@code @MockBean} set and Spring profile shared by
+ * {@link AssignCapacityAdapterIntegrationTest} and {@link HoldCapacityAdapterIntegrationTest} —
+ * previously duplicated verbatim in each class. Spring's context cache key includes each
+ * {@code @MockBean}'s declaring field, not just its type — so two classes with structurally
+ * identical mocks are only cache-equal when they inherit the same field declarations from a
+ * shared base, as here, rather than redeclaring their own (same root cause as
+ * {@code AbstractPhysicalMySqlIntegrationTest}'s {@code @DynamicPropertySource} note).
  *
  * <p>{@code @SpringBootTest}/{@code @ActiveProfiles} live here only, not on the subclasses:
  * Spring resolves them by "closest wins" up the hierarchy, so a subclass that declares none picks

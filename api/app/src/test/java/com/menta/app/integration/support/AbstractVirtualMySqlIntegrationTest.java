@@ -6,10 +6,11 @@ import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.utility.MountableFile;
 
 /**
- * One MySQLContainer shared by every "integration-test" profile class under
- * {@code integration.virtual} and {@code integration.catalog}. See {@link MySqlSchemas} for
- * why each context gets its own schema on this container, and why this is one container per
- * domain rather than one for the whole module.
+ * Base class for every {@code "integration-test"}-profile test under {@code integration.virtual}
+ * and {@code integration.catalog}, providing one {@link MySQLContainer} shared for the entire
+ * test run. See {@link MySqlSchemas} for why each Spring context gets its own schema on this
+ * container instead of its own container, and why this is one container per domain rather than
+ * one for the whole module.
  *
  * <p>Spring resolves {@code @DynamicPropertySource} customizer equality via {@code Method.equals()},
  * which includes the declaring class — subclasses must inherit this exact method rather than

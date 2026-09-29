@@ -7,13 +7,14 @@ import java.util.UUID;
 import org.testcontainers.containers.MySQLContainer;
 
 /**
- * Shared by the domain-scoped {@code Abstract*MySqlIntegrationTest} base classes: each gives
- * its own package group one dedicated container (splitting the module's integration-test
- * classes across a handful of containers instead of either one-per-class or one shared by all
- * of them — sharing a single server across every context in the module let their HikariCP pools
- * collectively exhaust it under the full suite), and within that container, one schema per
- * distinct Spring context so {@code ddl-auto=create-drop} on one context can't drop tables out
- * from under a sibling context still live in the test context cache.
+ * Creates one isolated MySQL schema per Spring test context on a shared container, so that
+ * {@code ddl-auto=create-drop} on one context can't drop tables out from under a sibling context
+ * still live in the test context cache. Used by the domain-scoped
+ * {@code Abstract*MySqlIntegrationTest} base classes, each of which gives its own package group
+ * one dedicated container (splitting the module's integration-test classes across a handful of
+ * containers instead of either one-per-class or one shared by all of them — sharing a single
+ * server across every context in the module let their HikariCP pools collectively exhaust it
+ * under the full suite).
  */
 final class MySqlSchemas {
 

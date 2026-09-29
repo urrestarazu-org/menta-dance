@@ -15,10 +15,11 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
- * Shared context for {@code BillingPlansIntegrationTest}, {@code VirtualLessonAccessIntegrationTest},
- * and {@code CatalogIntegrationTest}: identical profile and mock set, previously duplicated
- * verbatim in each class. See {@code CapacityAdapterMocksIntegrationTestBase} for why a shared
- * base (not just a matching mock list) is what actually makes Spring treat these as cache-equal.
+ * Base test class providing the {@code @MockBean} set and Spring profile shared by
+ * {@code BillingPlansIntegrationTest}, {@code VirtualLessonAccessIntegrationTest}, and
+ * {@code CatalogIntegrationTest} — previously duplicated verbatim in each class. See
+ * {@code CapacityAdapterMocksIntegrationTestBase} for why a shared base (not just a matching mock
+ * list) is what actually makes Spring treat these as cache-equal.
  *
  * <p>Extends the virtual domain's container, not billing's: 2 of the 3 fused classes already live
  * there, and a fused {@code ApplicationContext} needs exactly one {@code DataSource}. Which
