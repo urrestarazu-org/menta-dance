@@ -121,12 +121,12 @@ Per strict TDD, every rejection branch (expired token, tampered token, wrong pay
 
 ## Success Criteria
 
-- [ ] `GET /api/v1/admin/billing/payments?status=PENDING&substatus=AWAITING_MANUAL_VERIFICATION` returns `200` with oldest-first, paginated results (user, plan, amount, status/substatus, `hasProof`, `createdAt`) and rejects or clamps a page size above 50.
-- [ ] `GET /api/v1/admin/billing/payments/{paymentId}` returns `200` with payment, user, plan, and a signed proof URL that serves the stored file.
-- [ ] That signed URL works within 15 minutes, and is rejected after expiry, when tampered, and when absent — asserted by test on all three.
-- [ ] A non-admin receives `403` on all three new endpoints; an anonymous caller receives `401/403`.
-- [ ] Approving sends the buyer a Spanish confirmation email; rejecting sends a distinct rejection email carrying the motivo; the ops-mailbox adapter is not invoked by either.
-- [ ] Approve, reject, and correction each write one `billing_audit_log` row with `payment_id`, `admin_id`, `action`, timestamp, and `reason` where applicable.
-- [ ] `POST .../{paymentId}/corrections` on a `PENDING/RECONCILIATION_REQUIRED` payment with reason + evidence applies the authorized correction, marks the tied reconciliation task resolved with `resolved_by`/`resolved_at`, and audits it; on any other payment state it returns `409`.
-- [ ] Approve/reject transition, subscription activation/cancellation, the `409` on an already-processed payment, and the `400` on a missing reject reason are unchanged, with their existing test assertions untouched.
-- [ ] OpenAPI contract and Bruno requests updated; `./gradlew check` passes, including ArchUnit and the billing coverage gate (95% domain+application / 90% infrastructure).
+- [x] `GET /api/v1/admin/billing/payments?status=PENDING&substatus=AWAITING_MANUAL_VERIFICATION` returns `200` with oldest-first, paginated results (user, plan, amount, status/substatus, `hasProof`, `createdAt`) and rejects or clamps a page size above 50.
+- [x] `GET /api/v1/admin/billing/payments/{paymentId}` returns `200` with payment, user, plan, and a signed proof URL that serves the stored file.
+- [x] That signed URL works within 15 minutes, and is rejected after expiry, when tampered, and when absent — asserted by test on all three.
+- [x] A non-admin receives `403` on all three new endpoints; an anonymous caller receives `401/403`.
+- [x] Approving sends the buyer a Spanish confirmation email; rejecting sends a distinct rejection email carrying the motivo; the ops-mailbox adapter is not invoked by either.
+- [x] Approve, reject, and correction each write one `billing_audit_log` row with `payment_id`, `admin_id`, `action`, timestamp, and `reason` where applicable.
+- [x] `POST .../{paymentId}/corrections` on a `PENDING/RECONCILIATION_REQUIRED` payment with reason + evidence applies the authorized correction, marks the tied reconciliation task resolved with `resolved_by`/`resolved_at`, and audits it; on any other payment state it returns `409`.
+- [x] Approve/reject transition, subscription activation/cancellation, the `409` on an already-processed payment, and the `400` on a missing reject reason are unchanged, with their existing test assertions untouched.
+- [x] OpenAPI contract and Bruno requests updated; `./gradlew check` passes, including ArchUnit and the billing coverage gate (95% domain+application / 90% infrastructure).
