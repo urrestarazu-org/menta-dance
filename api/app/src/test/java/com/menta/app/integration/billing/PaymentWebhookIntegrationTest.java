@@ -51,6 +51,7 @@ import com.menta.physical.infrastructure.persistence.entity.PhysicalSessionJpaEn
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityAssignmentJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
+import com.menta.app.integration.support.AbstractBillingMySqlIntegrationTest;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -73,9 +74,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * MySQL-backed HTTP + worker integration coverage for the Mercado Pago
@@ -86,23 +84,12 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("integration-test")
-@Testcontainers
-class PaymentWebhookIntegrationTest {
+class PaymentWebhookIntegrationTest extends AbstractBillingMySqlIntegrationTest {
 
     private static final String HMAC_SECRET = "integration-test-webhook-secret";
 
-    @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
-        .withDatabaseName("menta_test")
-        .withUsername("test")
-        .withPassword("test");
-
     @DynamicPropertySource
     static void mysqlProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
         registry.add("billing.webhook.mercadopago.hmac-secret", () -> HMAC_SECRET);
         registry.add("billing.webhook.reconcile-rate-ms", () -> "999999999");
         registry.add("billing.webhook.max-attempts", () -> "2");

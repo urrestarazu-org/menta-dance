@@ -12,6 +12,7 @@ import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.shared.auth.UserExistencePort;
 import com.menta.shared.domain.vo.Email;
+import com.menta.app.integration.support.AbstractBillingMySqlIntegrationTest;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,11 +22,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * Proves the D8 cross-module wiring (US-BILLING-012, design.md A8/A9/A10) for real: {@code
@@ -43,22 +39,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @ActiveProfiles("integration-test")
-@Testcontainers
-class UserExistenceCrossModuleIntegrationTest {
-
-    @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
-        .withDatabaseName("menta_test")
-        .withUsername("test")
-        .withPassword("test");
-
-    @DynamicPropertySource
-    static void mysqlProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
-    }
+class UserExistenceCrossModuleIntegrationTest extends AbstractBillingMySqlIntegrationTest {
 
     @Autowired private UserExistencePort userExistencePort;
     @Autowired private UserRepository userRepository;

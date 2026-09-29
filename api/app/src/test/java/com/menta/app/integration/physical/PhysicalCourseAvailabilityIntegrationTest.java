@@ -2,19 +2,9 @@ package com.menta.app.integration.physical;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.menta.auth.application.port.out.ActivationRateLimitPort;
-import com.menta.auth.application.port.out.AuthDegradedGuard;
-import com.menta.auth.application.port.out.LoginRateLimitPort;
-import com.menta.auth.application.port.out.PasswordResetAttemptRateLimitPort;
-import com.menta.auth.application.port.out.PasswordResetRequestRateLimitPort;
-import com.menta.auth.application.port.out.TokenBlacklistPort;
-import com.menta.billing.application.port.out.BankTransferRateLimitPort;
-import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
-import com.menta.billing.application.port.out.CourseCatalogPort;
 import com.menta.physical.application.dto.PhysicalCourseSummary;
 import com.menta.physical.application.dto.PhysicalSessionAvailability;
 import com.menta.physical.application.port.in.PhysicalCourseAvailabilityPort;
-import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
 import com.menta.physical.domain.model.CourseStatus;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalCapacityAssignmentJpaEntity;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalCapacityHoldJpaEntity;
@@ -24,6 +14,7 @@ import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacity
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityHoldJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
+import com.menta.app.integration.support.PhysicalVirtualCatalogPortMocksIntegrationTestBase;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
@@ -31,14 +22,6 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * MySQL-backed coverage for {@link PhysicalCourseAvailabilityPort} (US-PHYSICAL-003).
@@ -50,46 +33,13 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * PhysicalSessionJpaRepository) — seeded here through their own schema-only
  * entities.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
-@ActiveProfiles("integration-test")
-@Testcontainers
-class PhysicalCourseAvailabilityIntegrationTest {
-
-    @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
-        .withDatabaseName("menta_test")
-        .withUsername("test")
-        .withPassword("test");
-
-    @DynamicPropertySource
-    static void mysqlProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
-    }
+class PhysicalCourseAvailabilityIntegrationTest extends PhysicalVirtualCatalogPortMocksIntegrationTestBase {
 
     @Autowired private PhysicalCourseAvailabilityPort physicalCourseAvailabilityPort;
     @Autowired private PhysicalCourseJpaRepository courseRepository;
     @Autowired private PhysicalSessionJpaRepository sessionRepository;
     @Autowired private PhysicalCapacityAssignmentJpaRepository assignmentRepository;
     @Autowired private PhysicalCapacityHoldJpaRepository holdRepository;
-
-    // Every Redis-backed port needs a mock: integration-test excludes
-    // RedisAutoConfiguration and this is one shared Spring context. Mirrors
-    // VirtualCourseCatalogIntegrationTest's exact mock set.
-    @MockBean private AuthDegradedGuard authDegradedGuard;
-    @MockBean private TokenBlacklistPort tokenBlacklistPort;
-    @MockBean private LoginRateLimitPort loginRateLimitPort;
-    @MockBean private ActivationRateLimitPort activationRateLimitPort;
-    @MockBean private PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort;
-    @MockBean private PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
-    @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
-    @MockBean private BankTransferRateLimitPort bankTransferRateLimitPort;
-    @MockBean private CourseCatalogPort courseCatalogPort;
-    // US-PHYSICAL-001: ProcessPhysicalCheckInUseCaseImpl needs a RedisTemplate
-    // its bean factory would otherwise fail to resolve in this Redis-less context.
-    @MockBean private ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
 
     @AfterEach
     void cleanUp() {

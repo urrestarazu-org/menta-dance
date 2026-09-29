@@ -3,16 +3,6 @@ package com.menta.app.integration.physical;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.menta.auth.application.port.out.ActivationRateLimitPort;
-import com.menta.auth.application.port.out.AuthDegradedGuard;
-import com.menta.auth.application.port.out.LoginRateLimitPort;
-import com.menta.auth.application.port.out.PasswordResetAttemptRateLimitPort;
-import com.menta.auth.application.port.out.PasswordResetRequestRateLimitPort;
-import com.menta.auth.application.port.out.TokenBlacklistPort;
-import com.menta.billing.application.port.out.BankTransferRateLimitPort;
-import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
-import com.menta.billing.application.port.out.CourseCatalogPort;
-import com.menta.billing.application.port.out.PaymentProviderPort;
 import com.menta.physical.application.port.in.PhysicalCapacityAssignmentPort;
 import com.menta.physical.application.port.in.PhysicalCapacityHoldPort;
 import com.menta.physical.domain.exception.CapacityBelowAssignedException;
@@ -40,15 +30,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * Real-MySQL concurrency coverage of the hold write path (#208,
@@ -62,24 +43,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * &ge;10 times so a race this test only catches "sometimes" still fails the
  * suite.</p>
  */
-@SpringBootTest
-@ActiveProfiles("integration-test")
-@Testcontainers
-class HoldCapacityAdapterIntegrationTest {
-
-    @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
-        .withDatabaseName("menta_test")
-        .withUsername("test")
-        .withPassword("test");
-
-    @DynamicPropertySource
-    static void mysqlProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
-    }
+class HoldCapacityAdapterIntegrationTest extends CapacityAdapterMocksIntegrationTestBase {
 
     @Autowired private PhysicalCapacityHoldPort holdPort;
     @Autowired private PhysicalCapacityAssignmentPort assignmentPort;
@@ -87,21 +51,6 @@ class HoldCapacityAdapterIntegrationTest {
     @Autowired private PhysicalSessionJpaRepository sessionRepository;
     @Autowired private PhysicalCapacityHoldJpaRepository holdRepository;
     @Autowired private PhysicalCapacityAssignmentJpaRepository assignmentRepository;
-
-    @MockBean private AuthDegradedGuard authDegradedGuard;
-    @MockBean private TokenBlacklistPort tokenBlacklistPort;
-    @MockBean private LoginRateLimitPort loginRateLimitPort;
-    @MockBean private ActivationRateLimitPort activationRateLimitPort;
-    @MockBean private PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort;
-    @MockBean private PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
-    @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
-    @MockBean private BankTransferRateLimitPort bankTransferRateLimitPort;
-    @MockBean private CourseCatalogPort courseCatalogPort;
-    @MockBean private PaymentProviderPort paymentProviderPort;
-
-    @SuppressWarnings("rawtypes")
-    @MockBean
-    private RedisTemplate redisTemplate;
 
     @AfterEach
     void cleanUp() {

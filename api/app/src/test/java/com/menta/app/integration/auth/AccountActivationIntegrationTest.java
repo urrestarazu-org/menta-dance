@@ -29,6 +29,7 @@ import com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity;
 import com.menta.auth.infrastructure.persistence.repository.ActivationTokenJpaRepository;
 import com.menta.auth.infrastructure.persistence.repository.OutboxRowJpaRepository;
 import com.menta.shared.domain.vo.Email;
+import com.menta.app.integration.support.AbstractAuthMySqlIntegrationTest;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
@@ -41,36 +42,16 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 /** MySQL-backed integration coverage for the public account-activation flow. */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @ActiveProfiles("integration-test")
-@Testcontainers
-class AccountActivationIntegrationTest {
+class AccountActivationIntegrationTest extends AbstractAuthMySqlIntegrationTest {
 
     private static final String EMAIL = "activation.student@example.com";
     private static final String PASSWORD = "SecurePass123!";
     private static final String RAW_TOKEN = "integration-activation-token";
     private static final String CLIENT_FINGERPRINT = "0".repeat(64);
-
-    @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
-        .withDatabaseName("menta_test")
-        .withUsername("test")
-        .withPassword("test");
-
-    @DynamicPropertySource
-    static void mysqlProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
-    }
 
     @Autowired private RegisterUserUseCase registerUserUseCase;
     @Autowired private ActivateAccountUseCase activateAccountUseCase;

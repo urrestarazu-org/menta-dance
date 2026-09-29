@@ -25,6 +25,7 @@ import com.menta.physical.application.port.out.PhysicalDeviceAuditRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalDeviceAuditJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalDeviceJpaRepository;
 import com.menta.shared.domain.vo.Email;
+import com.menta.app.integration.support.AbstractPhysicalMySqlIntegrationTest;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -42,11 +43,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * HTTP-level coverage for the device registry (#44, US-PHYSICAL-007, P3), through the real {@code
@@ -62,22 +58,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("integration-test")
-@Testcontainers
-class PhysicalDeviceManagementIntegrationTest {
-
-    @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
-        .withDatabaseName("menta_test")
-        .withUsername("test")
-        .withPassword("test");
-
-    @DynamicPropertySource
-    static void properties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
-    }
+class PhysicalDeviceManagementIntegrationTest extends AbstractPhysicalMySqlIntegrationTest {
 
     @Autowired private TestRestTemplate http;
     @Autowired private UserRepository userRepository;

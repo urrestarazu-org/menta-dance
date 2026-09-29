@@ -25,6 +25,7 @@ import com.menta.billing.infrastructure.persistence.repository.ReconciliationTas
 import com.menta.billing.infrastructure.persistence.repository.WebhookInboxJpaRepository;
 import com.menta.billing.infrastructure.webhook.WebhookInboxStatus;
 import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
+import com.menta.app.integration.support.AbstractBillingMySqlIntegrationTest;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
@@ -38,9 +39,6 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * MySQL-backed transactional-outbox coverage for a completed physical payment.
@@ -53,21 +51,10 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  */
 @SpringBootTest
 @ActiveProfiles("integration-test")
-@Testcontainers
-class BillingOutboxAppenderAfterCommitIntegrationTest {
-
-    @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
-        .withDatabaseName("menta_test")
-        .withUsername("test")
-        .withPassword("test");
+class BillingOutboxAppenderAfterCommitIntegrationTest extends AbstractBillingMySqlIntegrationTest {
 
     @DynamicPropertySource
     static void mysqlProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
         registry.add("billing.webhook.mercadopago.hmac-secret", () -> "integration-test-webhook-secret");
         registry.add("billing.webhook.reconcile-rate-ms", () -> "999999999");
         registry.add("billing.webhook.max-attempts", () -> "2");

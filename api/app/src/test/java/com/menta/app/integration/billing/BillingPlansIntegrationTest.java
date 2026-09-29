@@ -4,22 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-import com.menta.auth.application.port.out.ActivationRateLimitPort;
-import com.menta.auth.application.port.out.AuthDegradedGuard;
-import com.menta.auth.application.port.out.LoginRateLimitPort;
-import com.menta.auth.application.port.out.PasswordResetAttemptRateLimitPort;
-import com.menta.auth.application.port.out.PasswordResetRequestRateLimitPort;
-import com.menta.auth.application.port.out.TokenBlacklistPort;
 import com.menta.billing.application.dto.RateLimitDecision;
-import com.menta.billing.application.port.out.BankTransferRateLimitPort;
-import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
-import com.menta.billing.application.port.out.CourseCatalogPort;
 import com.menta.billing.domain.model.PlanStatus;
 import com.menta.billing.infrastructure.persistence.entity.PlanCourseJpaEntity;
 import com.menta.billing.infrastructure.persistence.entity.PlanJpaEntity;
 import com.menta.billing.infrastructure.persistence.repository.PlanCourseJpaRepository;
 import com.menta.billing.infrastructure.persistence.repository.PlanJpaRepository;
-import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
+import com.menta.app.integration.support.CatalogAccessMocksIntegrationTestBase;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
@@ -30,18 +21,10 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * MySQL-backed HTTP integration coverage for the public plans endpoints
@@ -49,45 +32,11 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * ordered, featured flag, empty list on 200, full detail, 404 on missing/
  * inactive.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("integration-test")
-@Testcontainers
-class BillingPlansIntegrationTest {
-
-    @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
-        .withDatabaseName("menta_test")
-        .withUsername("test")
-        .withPassword("test");
-
-    @DynamicPropertySource
-    static void mysqlProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
-    }
+class BillingPlansIntegrationTest extends CatalogAccessMocksIntegrationTestBase {
 
     @Autowired private TestRestTemplate http;
     @Autowired private PlanJpaRepository planJpaRepository;
     @Autowired private PlanCourseJpaRepository planCourseJpaRepository;
-
-    @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
-    @MockBean private BankTransferRateLimitPort bankTransferRateLimitPort;
-    @MockBean private CourseCatalogPort courseCatalogPort;
-    // US-PHYSICAL-001: ProcessPhysicalCheckInUseCaseImpl needs a RedisTemplate
-    // its bean factory would otherwise fail to resolve in this Redis-less context.
-    @MockBean private ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
-
-    // Every Redis-backed auth port needs a mock: integration-test excludes
-    // RedisAutoConfiguration and this is one shared Spring context. Mirrors
-    // AccountActivationIntegrationTest's exact mock set.
-    @MockBean private AuthDegradedGuard authDegradedGuard;
-    @MockBean private TokenBlacklistPort tokenBlacklistPort;
-    @MockBean private LoginRateLimitPort loginRateLimitPort;
-    @MockBean private ActivationRateLimitPort activationRateLimitPort;
-    @MockBean private PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort;
-    @MockBean private PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
 
     @AfterEach
     void cleanUp() {

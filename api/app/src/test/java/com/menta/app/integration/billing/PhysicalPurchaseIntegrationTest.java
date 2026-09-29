@@ -57,6 +57,7 @@ import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJ
 import com.menta.shared.billing.PaymentCompletedOutboxPayload;
 import com.menta.shared.domain.vo.Email;
 import com.menta.shared.outbox.OutboxStatus;
+import com.menta.app.integration.support.AbstractBillingMySqlIntegrationTest;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalTime;
@@ -91,9 +92,6 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * End-to-end coverage for #41 (US-PHYSICAL-004): real HTTP checkout (through
@@ -125,25 +123,14 @@ import org.testcontainers.junit.jupiter.Testcontainers;
     properties = "management.health.mail.enabled=false"
 )
 @ActiveProfiles("integration-test")
-@Testcontainers
-class PhysicalPurchaseIntegrationTest {
+class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTest {
 
     private static final String MERCHANT_ACCOUNT_ID = "merchant-integration-physical";
     private static final BigDecimal MONTHLY_PRICE = new BigDecimal("300.00");
     private static final BigDecimal INDIVIDUAL_PRICE = new BigDecimal("120.00");
 
-    @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
-        .withDatabaseName("menta_test")
-        .withUsername("test")
-        .withPassword("test");
-
     @DynamicPropertySource
     static void mysqlProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
         registry.add("billing.webhook.reconcile-rate-ms", () -> "999999999");
         registry.add("billing.mercadopago.merchant-account-id", () -> MERCHANT_ACCOUNT_ID);
     }
