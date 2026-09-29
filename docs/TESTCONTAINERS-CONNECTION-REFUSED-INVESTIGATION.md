@@ -8,6 +8,15 @@ camino de evidencia hasta la causa real.
 
 **Rama:** `feature/api-app-test-context-consolidation` (PR #275).
 
+**Sobre la instrumentación de diagnóstico mencionada en este documento**
+(`api/app/src/test/resources/logback-test.xml` y el paso `actions/upload-artifact` en
+`.github/workflows/pr-develop.yml`): ambas fueron agregadas *ad hoc* durante esta
+investigación para conseguir visibilidad que el logging por defecto no daba (ver las
+secciones "Confirmación directa" e "Intento de confirmar en CI" más abajo), y **ya se
+sacaron del repo** una vez cerrada la causa raíz — cumplieron su función. Quedan
+mencionadas acá tal cual se usaron, como referencia de cómo se armó cada pieza de
+evidencia.
+
 ## Origen
 
 `api/app/build.gradle.kts` subía `spring.test.context.cache.maxSize` a 64 y
