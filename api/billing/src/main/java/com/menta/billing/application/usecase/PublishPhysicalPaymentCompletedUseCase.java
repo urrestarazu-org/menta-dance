@@ -36,6 +36,13 @@ import org.springframework.stereotype.Component;
  * path). A non-Completed or non-Physical payment is a silent no-op at this
  * layer.</p>
  *
+ * <h2>Bank-transfer origin (#36, US-BILLING-008)</h2>
+ * <p>A physical payment approved manually (design D1) reaches {@code Completed} without ever
+ * binding a provider payment id — there is no provider on this rail. {@link #toPayload} passes
+ * that absence through as {@code null} rather than failing the whole publish, so the
+ * already-shipped {@code HoldNotFound} branch downstream still runs for this rail exactly as it
+ * does for Mercado Pago.</p>
+ *
  * <h2>Idempotency (#242)</h2>
  * <p>Two complementary layers:
  * <ul>
@@ -130,14 +137,18 @@ public final class PublishPhysicalPaymentCompletedUseCase {
         }
     }
 
+    /**
+     * {@code providerPaymentId} is absent (#36, US-BILLING-008) for a bank-transfer-origin
+     * physical payment: it reaches {@link PaymentStatus.Completed} via manual admin approval,
+     * never a provider webhook, so no provider id ever exists to bind. {@link
+     * PaymentCompletedOutboxPayload} accepts {@code null} for exactly this reason — the consumer
+     * ({@code PhysicalCapacityAssignmentOutboxEventHandler}) never reads this field.
+     */
     private static PaymentCompletedOutboxPayload toPayload(Payment payment) {
         String quoteId = ((PaymentTarget.Physical) payment.getTarget()).quoteId();
         return new PaymentCompletedOutboxPayload(
             payment.getId().getValue(),
-            payment.getProviderPaymentId()
-                .orElseThrow(() -> new IllegalStateException(
-                    "Completed payment without providerPaymentId cannot be published; paymentId=" + payment.getId()
-                )),
+            payment.getProviderPaymentId().orElse(null),
             payment.getExpectedExternalReference(),
             payment.getExpectedMerchantAccountId(),
             quoteId,

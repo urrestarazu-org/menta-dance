@@ -11,13 +11,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.menta.billing.application.dto.BankTransferInstructions;
 import com.menta.billing.application.dto.CreatePhysicalPurchaseCheckoutCommand;
 import com.menta.billing.application.dto.PhysicalPurchaseCheckoutResult;
 import com.menta.billing.application.port.in.CreatePhysicalPurchaseCheckoutUseCase;
 import com.menta.billing.domain.exception.PaymentPreferenceUnavailableException;
 import com.menta.billing.domain.exception.PhysicalCapacityUnavailableException;
 import com.menta.billing.domain.exception.PhysicalCourseQuoteExpiredException;
+import com.menta.billing.domain.model.Money;
 import com.menta.billing.domain.model.PaymentMethod;
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -73,6 +76,17 @@ class PhysicalPurchaseControllerTest {
     private static PhysicalPurchaseCheckoutResult result() {
         return new PhysicalPurchaseCheckoutResult(
             "pay-1", QUOTE_ID, "PENDING", "pref-1", "https://mp.example/checkout/pref-1", "PHY-pay-1", null
+        );
+    }
+
+    /** #36 P5: what the router builds for the {@code BANK_TRANSFER} arm — no provider fields, instructions set. */
+    private static PhysicalPurchaseCheckoutResult bankTransferResult() {
+        BankTransferInstructions instructions = new BankTransferInstructions(
+            "0000003100000000000000", "menta.dance", "Menta Dance SRL", "30-00000000-0",
+            Money.of(new BigDecimal("10000.00"), "ARS"), "PHY-BT-pay-2"
+        );
+        return new PhysicalPurchaseCheckoutResult(
+            "pay-2", QUOTE_ID, "PENDING", null, null, "PHY-BT-pay-2", instructions
         );
     }
 
@@ -162,16 +176,43 @@ class PhysicalPurchaseControllerTest {
         verify(useCase, never()).create(any());
     }
 
+    /**
+     * #36 P5: {@code BANK_TRANSFER} is a legitimate {@code paymentMethod} for this endpoint since
+     * {@code RoutingCreatePhysicalPurchaseCheckoutUseCase} (#36 P4) dispatches on this same field —
+     * a DTO-level restriction to Checkout Pro only would make the bank-transfer route unreachable
+     * over HTTP regardless of the router underneath, same rationale as {@code
+     * CreateSubscriptionRequest}'s own javadoc (#252).
+     */
     @Test
-    void bank_transfer_is_invalid_for_the_checkout_pro_endpoint() throws Exception {
+    void bank_transfer_is_accepted_and_the_response_surfaces_the_transfer_instructions() throws Exception {
+        when(useCase.create(any())).thenReturn(bankTransferResult());
+
         mockMvc.perform(post("/api/v1/billing/physical/purchases")
                 .with(authenticatedAs(USER_ID))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body(QUOTE_ID, "BANK_TRANSFER", "idem-1")))
-            .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.code", is("INVALID_REQUEST")));
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.paymentId", is("pay-2")))
+            .andExpect(jsonPath("$.providerPreferenceId").value(org.hamcrest.Matchers.nullValue()))
+            .andExpect(jsonPath("$.checkoutUrl").value(org.hamcrest.Matchers.nullValue()))
+            .andExpect(jsonPath("$.bankTransferInstructions.cbu", is("0000003100000000000000")))
+            .andExpect(jsonPath("$.bankTransferInstructions.alias", is("menta.dance")))
+            .andExpect(jsonPath("$.bankTransferInstructions.holder", is("Menta Dance SRL")))
+            .andExpect(jsonPath("$.bankTransferInstructions.cuit", is("30-00000000-0")))
+            .andExpect(jsonPath("$.bankTransferInstructions.reference", is("PHY-BT-pay-2")));
+    }
 
-        verify(useCase, never()).create(any());
+    /** A Mercado Pago result never carries transfer instructions — the field stays absent, not merely null. */
+    @Test
+    void mercado_pago_response_carries_no_bank_transfer_instructions() throws Exception {
+        when(useCase.create(any())).thenReturn(result());
+
+        mockMvc.perform(post("/api/v1/billing/physical/purchases")
+                .with(authenticatedAs(USER_ID))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body(QUOTE_ID, "MERCADO_PAGO", "idem-1")))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.bankTransferInstructions").value(org.hamcrest.Matchers.nullValue()));
     }
 
     // --- A7: expired quote is 410 ---

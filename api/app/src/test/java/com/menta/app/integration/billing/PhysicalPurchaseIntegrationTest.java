@@ -27,6 +27,7 @@ import com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity;
 import com.menta.auth.infrastructure.persistence.repository.OutboxRowJpaRepository;
 import com.menta.billing.application.contract.BillingOutboxEventTypes;
 import com.menta.billing.application.dto.ProviderPaymentResult;
+import com.menta.billing.application.dto.RateLimitDecision;
 import com.menta.billing.application.port.in.PurchaseCreationFromEventPort;
 import com.menta.billing.application.port.out.BankTransferRateLimitPort;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
@@ -34,10 +35,14 @@ import com.menta.billing.application.port.out.CourseCatalogPort;
 import com.menta.billing.application.port.out.PaymentPreferencePort;
 import com.menta.billing.application.port.out.PaymentProviderPort;
 import com.menta.billing.domain.model.Money;
+import com.menta.billing.domain.model.Payment;
+import com.menta.billing.domain.model.PaymentId;
+import com.menta.billing.domain.model.PaymentTarget;
 import com.menta.billing.domain.model.Purchase;
 import com.menta.billing.infrastructure.persistence.entity.PaymentJpaEntity;
 import com.menta.billing.infrastructure.persistence.entity.PhysicalCourseQuoteJpaEntity;
 import com.menta.billing.infrastructure.persistence.entity.WebhookInboxJpaEntity;
+import com.menta.billing.infrastructure.persistence.mapper.PaymentJpaMapper;
 import com.menta.billing.infrastructure.persistence.repository.PaymentJpaRepository;
 import com.menta.billing.infrastructure.persistence.repository.PhysicalCourseQuoteJpaRepository;
 import com.menta.billing.infrastructure.persistence.repository.PurchaseJpaRepository;
@@ -128,11 +133,20 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
     private static final String MERCHANT_ACCOUNT_ID = "merchant-integration-physical";
     private static final BigDecimal MONTHLY_PRICE = new BigDecimal("300.00");
     private static final BigDecimal INDIVIDUAL_PRICE = new BigDecimal("120.00");
+    // #36 P5: the configured bank account for the BANK_TRANSFER physical rail.
+    private static final String BANK_CBU = "0000003100000000000000";
+    private static final String BANK_ALIAS = "menta.dance";
+    private static final String BANK_HOLDER = "Menta Dance SRL";
+    private static final String BANK_CUIT = "30-00000000-0";
 
     @DynamicPropertySource
     static void mysqlProperties(DynamicPropertyRegistry registry) {
         registry.add("billing.webhook.reconcile-rate-ms", () -> "999999999");
         registry.add("billing.mercadopago.merchant-account-id", () -> MERCHANT_ACCOUNT_ID);
+        registry.add("billing.bank-transfer.account.cbu", () -> BANK_CBU);
+        registry.add("billing.bank-transfer.account.alias", () -> BANK_ALIAS);
+        registry.add("billing.bank-transfer.account.holder", () -> BANK_HOLDER);
+        registry.add("billing.bank-transfer.account.cuit", () -> BANK_CUIT);
     }
 
     @Autowired private TestRestTemplate http;
@@ -187,6 +201,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
                 preferenceId, "https://mp.example/checkout/" + preferenceId
             );
         });
+        when(bankTransferRateLimitPort.consumeBankTransferCreation(any())).thenReturn(RateLimitDecision.allowed());
     }
 
     @AfterEach
@@ -268,20 +283,89 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         return quoteId.toString();
     }
 
-    private static Map<String, Object> checkoutBody(String quoteId, String idempotencyKey) {
+    private static Map<String, Object> checkoutBody(String quoteId, String paymentMethod, String idempotencyKey) {
         Map<String, Object> body = new HashMap<>();
         body.put("quoteId", quoteId);
-        body.put("paymentMethod", "MERCADO_PAGO");
+        body.put("paymentMethod", paymentMethod);
         body.put("idempotencyKey", idempotencyKey);
         return body;
     }
 
+    private static Map<String, Object> checkoutBody(String quoteId, String idempotencyKey) {
+        return checkoutBody(quoteId, "MERCADO_PAGO", idempotencyKey);
+    }
+
     @SuppressWarnings("rawtypes")
-    private ResponseEntity<Map> checkout(UUID userId, String quoteId, String idempotencyKey) {
+    private ResponseEntity<Map> checkout(UUID userId, String quoteId, String paymentMethod, String idempotencyKey) {
         return http.exchange(
             "/api/v1/billing/physical/purchases", HttpMethod.POST,
-            new HttpEntity<>(checkoutBody(quoteId, idempotencyKey), headersFor(userId)), Map.class
+            new HttpEntity<>(checkoutBody(quoteId, paymentMethod, idempotencyKey), headersFor(userId)), Map.class
         );
+    }
+
+    @SuppressWarnings("rawtypes")
+    private ResponseEntity<Map> checkout(UUID userId, String quoteId, String idempotencyKey) {
+        return checkout(userId, quoteId, "MERCADO_PAGO", idempotencyKey);
+    }
+
+    // --- #36 P5: admin approve/reject fixtures (mirrors PaymentAdminResolutionIntegrationTest) ---
+
+    private UUID seedAdmin() {
+        User user = User.create(
+            Email.of("admin-" + UUID.randomUUID() + "@example.com"), "irrelevant-hash", Role.ADMIN
+        );
+        userRepository.save(user);
+        return user.getId().getValue();
+    }
+
+    private HttpHeaders headersFor(UUID userId, Role role) {
+        User user = new User(
+            UserId.of(userId), Email.of("token-" + UUID.randomUUID() + "@example.com"), "hash", role,
+            UserStatus.ACTIVE, java.time.LocalDateTime.now(), java.time.LocalDateTime.now()
+        );
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(accessTokenIssuer.issue(user).token());
+        return headers;
+    }
+
+    /**
+     * Seeds a bank-transfer physical {@code Payment} directly in {@code AwaitingManualVerification}
+     * — the same real-persistence shape {@code CreateBankTransferPhysicalPurchaseUseCaseImpl}
+     * produces, bypassing HTTP checkout entirely so no hold row is ever created for it (D1) — the
+     * only way to reach the {@code HoldNotFound} branch through a bank-transfer-shaped payment.
+     */
+    private PaymentId seedAwaitingManualVerificationPhysicalPayment(UUID ownerId, String quoteId, BigDecimal amount) {
+        PaymentId paymentId = PaymentId.generate();
+        Payment payment = Payment.awaitingManualVerification(
+            paymentId, ownerId, Money.of(amount, "ARS"), "PHY-BT-" + paymentId, BANK_CBU,
+            new PaymentTarget.Physical(quoteId), Instant.now()
+        );
+        paymentRepository.save(PaymentJpaMapper.toEntity(payment));
+        return paymentId;
+    }
+
+    @SuppressWarnings("unchecked")
+    private ResponseEntity<Map> approve(UUID adminId, PaymentId paymentId) {
+        return http.exchange(
+            "/api/v1/admin/billing/payments/" + paymentId + "/approve", HttpMethod.POST,
+            new HttpEntity<>(headersFor(adminId, Role.ADMIN)), Map.class
+        );
+    }
+
+    @SuppressWarnings("unchecked")
+    private ResponseEntity<Map> reject(UUID adminId, PaymentId paymentId, String reason) {
+        return http.exchange(
+            "/api/v1/admin/billing/payments/" + paymentId + "/reject", HttpMethod.POST,
+            new HttpEntity<>(Map.of("reason", reason), headersFor(adminId, Role.ADMIN)), Map.class
+        );
+    }
+
+    /** Drives the confirmation half for an admin-approved bank-transfer payment: real outbox processing. */
+    private void processPhysicalPaymentCompletedFor(UUID paymentId) {
+        List<OutboxRowJpaEntity> rows = outboxRowsFor(BillingOutboxEventTypes.PHYSICAL_PAYMENT_COMPLETED, paymentId);
+        assertThat(rows).hasSize(1);
+        assertThat(outboxWorker.process(rows.get(0))).isFalse();
     }
 
     /** Drives the confirmation half: real webhook verification, then returns the resulting outbox row. */
@@ -962,5 +1046,222 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
             .isEqualTo("EXCEPTION");
         assertThat(outboxRowsFor(BillingOutboxEventTypes.PAYMENT_FULFILLMENT_FAILED, paymentId)).hasSize(1);
         verifyNoMoreInteractions(mailSender);
+    }
+
+    // === #36 P5 (US-BILLING-008): bank-transfer physical purchase ============
+
+    /**
+     * Requirement "Creating a bank-transfer physical purchase returns transfer instructions" +
+     * "Creation reserves no capacity and calls no provider" (spec {@code
+     * bank-transfer-physical-purchase}) — 201 with usable CBU/alias/holder/CUIT/amount/reference,
+     * zero hold rows, and zero provider-port calls (D1).
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void bank_transfer_checkout_returns_transfer_instructions_with_no_hold_and_no_provider_call() {
+        UUID userId = seedStudent();
+        UUID courseId = seedCourse();
+        seedScheduledSessions(courseId, 1, 5);
+        String quoteId = seedMonthlyQuote(courseId, 1, MONTHLY_PRICE);
+
+        ResponseEntity<Map> response = checkout(userId, quoteId, "BANK_TRANSFER", "idem-bt-1");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(response.getBody().get("status")).isEqualTo("PENDING");
+        assertThat(response.getBody().get("providerPreferenceId")).isNull();
+        assertThat(response.getBody().get("checkoutUrl")).isNull();
+        Map<String, Object> instructions = (Map<String, Object>) response.getBody().get("bankTransferInstructions");
+        assertThat(instructions.get("cbu")).isEqualTo(BANK_CBU);
+        assertThat(instructions.get("alias")).isEqualTo(BANK_ALIAS);
+        assertThat(instructions.get("holder")).isEqualTo(BANK_HOLDER);
+        assertThat(instructions.get("cuit")).isEqualTo(BANK_CUIT);
+        assertThat(instructions.get("reference")).isEqualTo(response.getBody().get("externalReference"));
+        assertThat(((String) response.getBody().get("externalReference"))).startsWith("PHY-BT-");
+
+        assertThat(paymentRepository.findAll()).hasSize(1);
+        assertThat(paymentRepository.findAll().get(0).getStatusType()).isEqualTo("AWAITING_MANUAL_VERIFICATION");
+        assertThat(holdRepository.findAll()).isEmpty();
+        verifyNoInteractions(paymentPreferencePort);
+    }
+
+    /**
+     * Requirement "Routing preserves the existing Mercado Pago checkout unchanged" (spec {@code
+     * bank-transfer-physical-purchase}) — an explicit {@code MERCADO_PAGO} request through {@code
+     * RoutingCreatePhysicalPurchaseCheckoutUseCase} still creates a real hold, exactly as every
+     * other test in this class already proves for the implicit default.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void mercado_pago_checkout_through_the_router_still_creates_a_hold_exactly_as_before() {
+        UUID userId = seedStudent();
+        UUID courseId = seedCourse();
+        List<UUID> sessionIds = seedScheduledSessions(courseId, 1, 5);
+        String quoteId = seedIndividualQuote(courseId, sessionIds.get(0), INDIVIDUAL_PRICE);
+
+        ResponseEntity<Map> response = checkout(userId, quoteId, "MERCADO_PAGO", "idem-mp-regression-1");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(response.getBody().get("providerPreferenceId")).isNotNull();
+        assertThat(response.getBody().get("bankTransferInstructions")).isNull();
+        UUID paymentId = UUID.fromString((String) response.getBody().get("paymentId"));
+        assertThat(holdRepository.findByPaymentIdOrdered(paymentId)).hasSize(1);
+    }
+
+    /** Requirement "An expired quote is rejected with 410" — no {@code Payment} created. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void bank_transfer_checkout_is_rejected_with_410_for_an_expired_quote_and_creates_no_payment() {
+        UUID userId = seedStudent();
+        UUID courseId = seedCourse();
+        List<UUID> sessionIds = seedScheduledSessions(courseId, 1, 5);
+        UUID quoteId = UUID.randomUUID();
+        Instant now = Instant.now();
+        quoteRepository.save(new PhysicalCourseQuoteJpaEntity(
+            quoteId.toString(), courseId.toString(), "INDIVIDUAL", INDIVIDUAL_PRICE, "ARS", BigDecimal.ZERO, 1, 1,
+            sessionIds.get(0).toString(), INDIVIDUAL_PRICE, "ARS", "AVAILABLE",
+            now.minusSeconds(7200), now.minusSeconds(3600)
+        ));
+
+        ResponseEntity<Map> response = checkout(userId, quoteId.toString(), "BANK_TRANSFER", "idem-bt-expired-1");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.GONE);
+        assertThat(response.getBody().get("code")).isEqualTo("PHYSICAL_COURSE_QUOTE_EXPIRED");
+        assertThat(paymentRepository.findAll()).isEmpty();
+    }
+
+    /**
+     * Requirement "A visibly-full quote is rejected with 409" (BANK_TRANSFER arm, spec {@code
+     * physical-purchase-checkout}) — the D7 read is best-effort and non-binding: zero {@code
+     * Payment} rows AND zero hold rows, since the check never attempts a reservation.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void bank_transfer_checkout_is_rejected_with_409_when_the_quoted_session_is_visibly_full_and_creates_no_payment() {
+        UUID userId = seedStudent();
+        UUID courseId = seedCourse();
+        List<UUID> sessionIds = seedScheduledSessions(courseId, 1, 1);
+        UUID fullSession = sessionIds.get(0);
+        assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
+            UUID.randomUUID(), fullSession, UUID.randomUUID(), Instant.now()
+        ));
+        String quoteId = seedIndividualQuote(courseId, fullSession, INDIVIDUAL_PRICE);
+
+        ResponseEntity<Map> response = checkout(userId, quoteId, "BANK_TRANSFER", "idem-bt-full-1");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody().get("code")).isEqualTo("CAPACITY_UNAVAILABLE");
+        assertThat(paymentRepository.findAll()).isEmpty();
+        assertThat(holdRepository.findAll()).isEmpty();
+    }
+
+    /**
+     * Requirement "Approved bank-transfer purchase with available capacity reaches ASSIGNED" (spec
+     * {@code presential-purchase-fulfillment}) — the admin approve → {@code ensure} →
+     * {@code publishPhysicalPaymentCompletedUseCase} → outbox → already-shipped {@code
+     * HoldNotFound} branch computes coverage from {@code confirmedAt} and assigns one row per
+     * eligible session, with zero new fulfillment code (D1, D6).
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void an_approved_bank_transfer_purchase_with_available_capacity_reaches_assigned() {
+        UUID userId = seedStudent();
+        UUID courseId = seedCourse();
+        List<UUID> sessionIds = seedScheduledSessions(courseId, 2, 5);
+        String quoteId = seedMonthlyQuote(courseId, 2, MONTHLY_PRICE);
+        UUID admin = seedAdmin();
+        PaymentId paymentId = seedAwaitingManualVerificationPhysicalPayment(userId, quoteId, MONTHLY_PRICE);
+
+        ResponseEntity<Map> response = approve(admin, paymentId);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        processPhysicalPaymentCompletedFor(paymentId.getValue());
+
+        assertThat(paymentRepository.findById(paymentId.getValue()).orElseThrow().getStatusType())
+            .isEqualTo("COMPLETED");
+        var purchase = purchaseRepository.findByPaymentId(paymentId.getValue()).orElseThrow();
+        assertThat(purchase.getStatus()).isEqualTo("ASSIGNED");
+        for (UUID sessionId : sessionIds) {
+            assertThat(assignmentRepository.countBySessionId(sessionId)).isEqualTo(1);
+            assertThat(assignmentRepository.existsBySessionIdAndStudentId(sessionId, userId)).isTrue();
+        }
+        // D1: no hold was ever attempted or converted for this payment.
+        assertThat(holdRepository.findByPaymentIdOrdered(paymentId.getValue())).isEmpty();
+    }
+
+    /**
+     * Requirement "...reaches EXCEPTION" (spec {@code presential-purchase-fulfillment}) — capacity
+     * unavailable at approval time: zero partial assignments (all-or-nothing), {@code status_type}
+     * stays {@code COMPLETED} on the {@code Payment} (the settlement already happened; only
+     * delivery failed), and the #209 {@code billing.PurchaseExceptioned} notification event is
+     * emitted — proposal Success Criterion "...the #209 notification event is emitted".
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void an_approved_bank_transfer_purchase_with_unavailable_capacity_reaches_exception() {
+        SeededStudent student = seedStudentWithKnownEmail();
+        UUID userId = student.id();
+        UUID courseId = seedCourse();
+        List<UUID> sessionIds = seedScheduledSessions(courseId, 2, 1);
+        String quoteId = seedMonthlyQuote(courseId, 2, MONTHLY_PRICE);
+        UUID admin = seedAdmin();
+        PaymentId paymentId = seedAwaitingManualVerificationPhysicalPayment(userId, quoteId, MONTHLY_PRICE);
+
+        // Another buyer takes the only spot on one of the two sessions this quote covers,
+        // between checkout (never a hold here, D1) and confirmation.
+        UUID contestedSession = sessionIds.get(0);
+        assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
+            UUID.randomUUID(), contestedSession, UUID.randomUUID(), Instant.now()
+        ));
+
+        ResponseEntity<Map> response = approve(admin, paymentId);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        processPhysicalPaymentCompletedFor(paymentId.getValue());
+
+        assertThat(paymentRepository.findById(paymentId.getValue()).orElseThrow().getStatusType())
+            .isEqualTo("COMPLETED");
+        assertThat(purchaseRepository.findByPaymentId(paymentId.getValue()).orElseThrow().getStatus())
+            .isEqualTo("EXCEPTION");
+        assertThat(assignmentRepository.countBySessionId(contestedSession)).isEqualTo(1);
+        assertThat(assignmentRepository.countBySessionId(sessionIds.get(1))).isEqualTo(0);
+        assertThat(assignmentRepository.existsBySessionIdAndStudentId(sessionIds.get(1), userId)).isFalse();
+
+        // #209: the EXCEPTION transition appends exactly one notification-worthy outbox row,
+        // through the same already-shipped handler code the Mercado Pago rail uses — no new
+        // fulfillment or notification logic for this rail.
+        List<OutboxRowJpaEntity> exceptionedRows =
+            outboxRowsFor(BillingOutboxEventTypes.PURCHASE_EXCEPTIONED, paymentId.getValue());
+        assertThat(exceptionedRows).hasSize(1);
+        assertThat(outboxWorker.process(exceptionedRows.get(0))).isFalse();
+        // 3 total: the admin-approve decision email to the student (ResolvePaymentProofUseCaseImpl,
+        // unmodified) PLUS the #209 EXCEPTION pair (student + ops) this assertion targets.
+        ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);
+        verify(mailSender, times(3)).send(captor.capture());
+        assertThat(captor.getAllValues()).extracting(message -> message.getTo()[0])
+            .contains(student.email(), "ops@menta.local");
+    }
+
+    /**
+     * Requirement "A rejected bank-transfer physical payment releases nothing" (spec {@code
+     * bank-transfer-physical-purchase}) — {@code PaymentFulfillmentService.release} is a no-op for
+     * {@code PaymentTarget.Physical} (D5): no {@code Purchase} row, no assignment, no outbox event
+     * at all for this payment.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void rejecting_a_bank_transfer_physical_payment_creates_no_purchase_and_releases_nothing() {
+        UUID userId = seedStudent();
+        UUID courseId = seedCourse();
+        seedScheduledSessions(courseId, 1, 5);
+        String quoteId = seedMonthlyQuote(courseId, 1, MONTHLY_PRICE);
+        UUID admin = seedAdmin();
+        PaymentId paymentId = seedAwaitingManualVerificationPhysicalPayment(userId, quoteId, MONTHLY_PRICE);
+
+        ResponseEntity<Map> response = reject(admin, paymentId, "Comprobante ilegible");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(paymentRepository.findById(paymentId.getValue()).orElseThrow().getStatusType())
+            .isEqualTo("REJECTED");
+        assertThat(purchaseRepository.findByPaymentId(paymentId.getValue())).isEmpty();
+        assertThat(outboxRowsFor(BillingOutboxEventTypes.PHYSICAL_PAYMENT_COMPLETED, paymentId.getValue())).isEmpty();
+        assertThat(assignmentRepository.findAll()).isEmpty();
     }
 }

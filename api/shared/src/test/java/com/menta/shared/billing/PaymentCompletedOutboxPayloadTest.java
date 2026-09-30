@@ -56,6 +56,23 @@ class PaymentCompletedOutboxPayloadTest {
         assertThat(payload.confirmedAt()).isEqualTo(VALID_CONFIRMED_AT);
     }
 
+    /**
+     * #36, US-BILLING-008: a bank-transfer physical purchase reaches {@code Completed} via manual
+     * admin approval, never through a provider webhook — {@code providerPaymentId} legitimately
+     * does not exist for it. {@code null} means "no provider"; a present-but-blank string remains
+     * rejected below (that is a bug signal, not absence).
+     */
+    @Test
+    void accepts_a_null_provider_payment_id_for_a_bank_transfer_origin_physical_payment() {
+        PaymentCompletedOutboxPayload payload = new PaymentCompletedOutboxPayload(
+            VALID_PAYMENT_ID, null, VALID_EXTERNAL_REFERENCE,
+            VALID_MERCHANT_ACCOUNT_ID, VALID_TARGET_REFERENCE, VALID_AMOUNT, VALID_CURRENCY,
+            VALID_CONFIRMED_AT
+        );
+
+        assertThat(payload.providerPaymentId()).isNull();
+    }
+
     @Test
     void accepts_a_zero_amount_matchining_vo_profile_chk_billing_payments_amount_non_negative() {
         PaymentCompletedOutboxPayload payload = new PaymentCompletedOutboxPayload(

@@ -136,19 +136,25 @@ class PublishPhysicalPaymentCompletedUseCaseTest {
             verify(outboxAppender, never()).append(any(), any(), any());
         }
 
+        /**
+         * #36, US-BILLING-008: a bank-transfer physical purchase reaches {@code Completed} via
+         * manual admin approval (never a provider webhook), so {@code providerPaymentId} is
+         * legitimately absent. This event must still publish — the already-shipped {@code
+         * HoldNotFound} branch is how this rail reaches {@code ASSIGNED}/{@code EXCEPTION} at all.
+         */
         @Test
-        void rejects_a_completed_payment_that_has_no_provider_payment_id() {
-            Payment invalidCompletedPayment = new Payment(
+        void publishes_the_event_for_a_completed_physical_payment_with_no_provider_payment_id() {
+            Payment bankTransferOriginPayment = new Payment(
                 PAYMENT_ID, USER_ID, null, AMOUNT, "ext-1", "merchant-1",
                 new PaymentTarget.Physical(SESSION_ID.toString()),
                 new PaymentStatus.Completed(NOW), NOW
             );
 
-            assertThatThrownBy(() -> useCase.handle(invalidCompletedPayment))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("Completed payment without providerPaymentId");
+            useCase.handle(bankTransferOriginPayment);
 
-            verify(outboxAppender, never()).append(any(), any(), any());
+            ArgumentCaptor<String> payload = ArgumentCaptor.forClass(String.class);
+            verify(outboxAppender, times(1)).append(any(), any(), payload.capture());
+            assertThat(payload.getValue()).contains("\"providerPaymentId\":null");
         }
 
         @Test

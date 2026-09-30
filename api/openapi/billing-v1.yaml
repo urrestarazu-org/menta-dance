@@ -455,7 +455,7 @@ paths:
   /api/v1/billing/physical/purchases:
     post:
       tags: [Compras presenciales]
-      summary: Iniciar Checkout Pro para la compra de un curso presencial
+      summary: Iniciar el checkout de una compra presencial (Checkout Pro o transferencia bancaria)
       description: |
         Toma un `quoteId` vigente (`POST /api/v1/billing/physical/quotes`),
         lo asocia al usuario autenticado y crea localmente un `Payment`
@@ -464,15 +464,27 @@ paths:
         misma `idempotencyKey` para ese usuario devuelve el checkout
         original y no crea un segundo cobro.
 
-        Reserva capacidad de forma atómica antes de crear el `Payment`
-        (#208, design B2/B4/D2): un request que responde `201` ya tiene un
-        hold que cubre cada sesión elegible del plan, de modo que ningún
-        otro comprador puede tomar ese cupo antes de la confirmación. El
-        `409` de esta ruta ya no es una cortesía de lectura best-effort —
-        es una garantía real respaldada por el hold.
+        Con `paymentMethod: MERCADO_PAGO`, reserva capacidad de forma
+        atómica antes de crear el `Payment` (#208, design B2/B4/D2): un
+        request que responde `201` ya tiene un hold que cubre cada sesión
+        elegible del plan, de modo que ningún otro comprador puede tomar
+        ese cupo antes de la confirmación. El `409` de esta ruta ya no es
+        una cortesía de lectura best-effort — es una garantía real
+        respaldada por el hold.
 
         `checkoutUrl` sólo sirve para navegar al Checkout Pro. La
         confirmación financiera llega exclusivamente por el webhook firmado.
+
+        Con `paymentMethod: BANK_TRANSFER` (#36, US-BILLING-008), el
+        `Payment` nace directamente en `AwaitingManualVerification` con los
+        datos de `bankTransferInstructions` — **nunca reserva capacidad ni
+        llama a Mercado Pago** (design D1). El `409` en este camino es una
+        lectura best-effort, no vinculante (design D7): la disponibilidad
+        real se decide recién cuando un admin aprueba el comprobante, a
+        través del mismo camino `HoldNotFound` que ya resuelve el
+        checkout sin hold. Comparte el cupo diario de 10 creaciones de
+        transferencia/usuario con `POST /api/v1/billing/subscriptions`
+        (design D4).
       operationId: createPhysicalPurchaseCheckout
       requestBody:
         required: true
@@ -542,6 +554,24 @@ paths:
                     status: 410
                     detail: La cotización expiró o no existe. Solicitá una nueva.
                     code: PHYSICAL_COURSE_QUOTE_EXPIRED
+        '429':
+          description: >-
+            Sólo para `BANK_TRANSFER` (#36, design D4): se agotó el cupo compartido de 10
+            creaciones por transferencia/usuario/día — el mismo contador que
+            `POST /api/v1/billing/subscriptions` con `BANK_TRANSFER` consume
+            (`consumeBankTransferCreation`), no uno independiente por endpoint.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                bank_transfer_rate_limited:
+                  value:
+                    type: https://menta.dance/problems/bank_transfer_rate_limited
+                    title: Too Many Requests
+                    status: 429
+                    detail: Demasiadas solicitudes de transferencia bancaria; reintentá más tarde.
+                    code: BANK_TRANSFER_RATE_LIMITED
         '503':
           description: No fue posible crear la preferencia; no se creó un cobro.
           content:
@@ -1083,16 +1113,53 @@ components:
           description: Id de una `PhysicalCourseQuote` vigente (no vencida).
         paymentMethod:
           type: string
-          enum: [MERCADO_PAGO]
-          description: Este endpoint implementa exclusivamente Checkout Pro.
+          enum: [MERCADO_PAGO, BANK_TRANSFER]
+          description: >-
+            `MERCADO_PAGO` usa Checkout Pro. `BANK_TRANSFER` (#36, US-BILLING-008) crea el
+            `Payment` directamente en `AwaitingManualVerification`, sin reservar capacidad ni
+            llamar a ningún proveedor (design D1) — la capacidad se decide recién en la
+            aprobación manual, a través del camino `HoldNotFound` ya existente.
         idempotencyKey:
           type: string
           minLength: 1
           maxLength: 128
 
+    BankTransferInstructions:
+      type: object
+      description: >-
+        Datos para completar una transferencia bancaria manual (#31/#36). Presente sólo cuando
+        `paymentMethod` fue `BANK_TRANSFER`; `null` en una respuesta de Checkout Pro.
+      required: [cbu, alias, holder, cuit, amount, reference]
+      properties:
+        cbu:
+          type: string
+        alias:
+          type: string
+        holder:
+          type: string
+        cuit:
+          type: string
+        amount:
+          type: object
+          required: [amount, currency]
+          properties:
+            amount:
+              type: number
+              format: decimal
+            currency:
+              type: string
+              example: ARS
+        reference:
+          type: string
+          description: Igual a `externalReference` — la referencia que el comprador debe citar en la transferencia.
+
     PhysicalPurchaseCheckoutResponse:
       type: object
-      required: [paymentId, quoteId, status, providerPreferenceId, checkoutUrl, externalReference]
+      required:
+        [
+          paymentId, quoteId, status, providerPreferenceId, checkoutUrl, externalReference,
+          bankTransferInstructions,
+        ]
       properties:
         paymentId:
           type: string
@@ -1104,15 +1171,25 @@ components:
           type: string
           enum: [PENDING]
         providerPreferenceId:
-          type: string
-          description: Identificador de la preferencia de Checkout Pro, no del pago.
+          type: [string, "null"]
+          description: >-
+            Identificador de la preferencia de Checkout Pro, no del pago. `null` para un
+            checkout `BANK_TRANSFER` (#36) — esta ruta nunca abre una preferencia.
         checkoutUrl:
-          type: string
+          type: [string, "null"]
           format: uri
-          description: URL de redirección al Checkout Pro.
+          description: URL de redirección al Checkout Pro. `null` para un checkout `BANK_TRANSFER` (#36).
         externalReference:
           type: string
-          description: Referencia local usada para correlacionar el webhook verificado.
+          description: >-
+            Referencia local usada para correlacionar el webhook verificado (`PHY-`) o, para
+            `BANK_TRANSFER` (#36), la referencia que el comprador debe citar (`PHY-BT-`) —
+            prefijos distintos y nunca colisionan entre sí (design C1).
+        bankTransferInstructions:
+          description: Presente sólo para un checkout `BANK_TRANSFER` (#36); `null` para Checkout Pro.
+          oneOf:
+            - $ref: "#/components/schemas/BankTransferInstructions"
+            - type: "null"
 
     PlanCourseResponse:
       type: object
