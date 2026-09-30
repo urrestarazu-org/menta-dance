@@ -70,7 +70,7 @@ public final class RedisBankTransferRateLimitPort implements BankTransferRateLim
     }
 
     @Override
-    public RateLimitDecision consumeSubscriptionCreation(UUID userId) {
+    public RateLimitDecision consumeBankTransferCreation(UUID userId) {
         if (userId == null) {
             throw new IllegalArgumentException("userId cannot be null");
         }

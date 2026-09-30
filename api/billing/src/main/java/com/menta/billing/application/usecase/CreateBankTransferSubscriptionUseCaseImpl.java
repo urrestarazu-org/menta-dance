@@ -65,7 +65,7 @@ public class CreateBankTransferSubscriptionUseCaseImpl implements CreateBankTran
 
     @Override
     public SubscriptionCheckoutResult create(CreateSubscriptionCheckoutCommand command) {
-        RateLimitDecision decision = rateLimitPort.consumeSubscriptionCreation(command.userId());
+        RateLimitDecision decision = rateLimitPort.consumeBankTransferCreation(command.userId());
         if (!decision.isAllowed()) {
             throw new BankTransferRateLimitedException(decision.getRetryAfter());
         }

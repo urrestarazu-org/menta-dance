@@ -70,7 +70,7 @@ class CreateBankTransferSubscriptionUseCaseImplTest {
         rateLimitPort = mock(BankTransferRateLimitPort.class);
         clock = mock(Clock.class);
         when(clock.now()).thenReturn(NOW);
-        when(rateLimitPort.consumeSubscriptionCreation(any())).thenReturn(RateLimitDecision.allowed());
+        when(rateLimitPort.consumeBankTransferCreation(any())).thenReturn(RateLimitDecision.allowed());
         when(paymentRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(subscriptionRepository.saveNewCheckout(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(subscriptionRepository.findCurrentByUserId(any())).thenReturn(Optional.empty());
@@ -154,7 +154,7 @@ class CreateBankTransferSubscriptionUseCaseImplTest {
         useCase.create(command());
 
         InOrder order = inOrder(rateLimitPort, paymentRepository, subscriptionRepository);
-        order.verify(rateLimitPort).consumeSubscriptionCreation(USER_ID);
+        order.verify(rateLimitPort).consumeBankTransferCreation(USER_ID);
         order.verify(paymentRepository).save(any());
         order.verify(subscriptionRepository).saveNewCheckout(any());
     }
@@ -162,7 +162,7 @@ class CreateBankTransferSubscriptionUseCaseImplTest {
     /** Design C7 / task 2.8: a 429 creates neither the Payment nor the Subscription. */
     @Test
     void an_exhausted_daily_budget_creates_neither_payment_nor_subscription() {
-        when(rateLimitPort.consumeSubscriptionCreation(USER_ID)).thenReturn(RateLimitDecision.limited(Duration.ofHours(2)));
+        when(rateLimitPort.consumeBankTransferCreation(USER_ID)).thenReturn(RateLimitDecision.limited(Duration.ofHours(2)));
 
         assertThatThrownBy(() -> useCase.create(command()))
             .isInstanceOf(BankTransferRateLimitedException.class)

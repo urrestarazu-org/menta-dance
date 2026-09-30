@@ -54,7 +54,7 @@ class RedisBankTransferRateLimitPortTest {
         when(redisTemplate.execute(any(RedisScript.class), anyList(), any(Object[].class)))
             .thenReturn(List.of(1L, 0L));
 
-        assertThat(port.consumeSubscriptionCreation(USER_ID).isAllowed()).isTrue();
+        assertThat(port.consumeBankTransferCreation(USER_ID).isAllowed()).isTrue();
 
         verify().execute(any(RedisScript.class), eq(List.of(SUBSCRIPTION_KEY)), eq("93600"), eq("10"));
     }
@@ -64,7 +64,7 @@ class RedisBankTransferRateLimitPortTest {
         when(redisTemplate.execute(any(RedisScript.class), anyList(), any(Object[].class)))
             .thenReturn(List.of(0L, 5400L));
 
-        assertThat(port.consumeSubscriptionCreation(USER_ID).getRetryAfter()).isEqualTo(Duration.ofSeconds(5400));
+        assertThat(port.consumeBankTransferCreation(USER_ID).getRetryAfter()).isEqualTo(Duration.ofSeconds(5400));
     }
 
     @Test
@@ -90,7 +90,7 @@ class RedisBankTransferRateLimitPortTest {
         when(redisTemplate.execute(any(RedisScript.class), anyList(), any(Object[].class)))
             .thenReturn(List.of(0L, 0L));
 
-        assertThat(port.consumeSubscriptionCreation(USER_ID).getRetryAfter()).isEqualTo(Duration.ofSeconds(1));
+        assertThat(port.consumeBankTransferCreation(USER_ID).getRetryAfter()).isEqualTo(Duration.ofSeconds(1));
     }
 
     @Test
@@ -98,7 +98,7 @@ class RedisBankTransferRateLimitPortTest {
         when(redisTemplate.execute(any(RedisScript.class), anyList(), any(Object[].class)))
             .thenThrow(new RuntimeException("connection refused"));
 
-        assertThatThrownBy(() -> port.consumeSubscriptionCreation(USER_ID))
+        assertThatThrownBy(() -> port.consumeBankTransferCreation(USER_ID))
             .isInstanceOf(BillingDegradedException.class);
         assertThatThrownBy(() -> port.consumeProofUpload(PAYMENT_ID))
             .isInstanceOf(BillingDegradedException.class);
@@ -109,13 +109,13 @@ class RedisBankTransferRateLimitPortTest {
         when(redisTemplate.execute(any(RedisScript.class), anyList(), any(Object[].class)))
             .thenReturn(List.of(1L));
 
-        assertThatThrownBy(() -> port.consumeSubscriptionCreation(USER_ID))
+        assertThatThrownBy(() -> port.consumeBankTransferCreation(USER_ID))
             .isInstanceOf(BillingDegradedException.class);
     }
 
     @Test
     void rejects_a_null_user_or_payment_id() {
-        assertThatThrownBy(() -> port.consumeSubscriptionCreation(null)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> port.consumeBankTransferCreation(null)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> port.consumeProofUpload(null)).isInstanceOf(IllegalArgumentException.class);
     }
 
