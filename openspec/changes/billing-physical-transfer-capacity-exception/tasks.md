@@ -64,10 +64,10 @@ Chain strategy: stacked-to-main
 
 ## Phase 2: C4 pure-move extraction (needs Phase 1 merged)
 
-- [ ] 2.1 Baseline: run `./gradlew :api:billing:test --tests "*CreatePhysicalPurchaseCheckoutUseCaseImplTest*"` before touching any file — records the pre-move 409/410 assertions as the safety net (design risk #4).
-- [ ] 2.2 GREEN: create `billing/application/usecase/PhysicalCoverageAvailability.java` — package-private static `requireComplete(PhysicalCourseAvailabilityPort, PhysicalCourseQuote, Instant): CoveragePlanner.Plan.Complete`, verbatim body of `resolveCoveragePlan` (`CreatePhysicalPurchaseCheckoutUseCaseImpl.java:147-165`).
-- [ ] 2.3 GREEN: modify `CreatePhysicalPurchaseCheckoutUseCaseImpl.java` — `resolveCoveragePlan`'s body becomes a one-line delegation to `PhysicalCoverageAvailability.requireComplete(...)`; constructor, guard, and every other line unchanged.
-- [ ] 2.4 Verify: re-run `CreatePhysicalPurchaseCheckoutUseCaseImplTest` unmodified — same 409/410 assertions pass byte-identically, proving the extraction is behavior-preserving. P2 ready for PR.
+- [x] 2.1 Baseline: run `./gradlew :api:billing:test --tests "*CreatePhysicalPurchaseCheckoutUseCaseImplTest*"` before touching any file — records the pre-move 409/410 assertions as the safety net (design risk #4).
+- [x] 2.2 GREEN: create `billing/application/usecase/PhysicalCoverageAvailability.java` — package-private static `requireComplete(PhysicalCourseAvailabilityPort, PhysicalCourseQuote, Instant): CoveragePlanner.Plan.Complete`, verbatim body of `resolveCoveragePlan` (`CreatePhysicalPurchaseCheckoutUseCaseImpl.java:147-165`).
+- [x] 2.3 GREEN: modify `CreatePhysicalPurchaseCheckoutUseCaseImpl.java` — `resolveCoveragePlan`'s body becomes a one-line delegation to `PhysicalCoverageAvailability.requireComplete(...)`; constructor, guard, and every other line unchanged.
+- [x] 2.4 Verify: re-run `CreatePhysicalPurchaseCheckoutUseCaseImplTest` unmodified — same 409/410 assertions pass byte-identically, proving the extraction is behavior-preserving. P2 ready for PR.
 
 ## Phase 3: `CreateBankTransferPhysicalPurchaseUseCase` port + impl (needs Phase 2 merged)
 
