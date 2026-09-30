@@ -1,8 +1,11 @@
 package com.menta.billing.infrastructure.persistence.repository;
 
 import com.menta.billing.infrastructure.persistence.entity.PurchaseJpaEntity;
+import com.menta.billing.infrastructure.persistence.projection.ExceptionPurchaseRow;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -46,4 +49,27 @@ public interface PurchaseJpaRepository extends JpaRepository<PurchaseJpaEntity, 
         nativeQuery = true
     )
     Optional<PurchaseJpaEntity> findByPaymentIdForUpdate(@Param("paymentId") UUID paymentId);
+
+    /**
+     * The admin EXCEPTION-purchases inbox (#237, design C2). {@code PurchaseJpaEntity} has no
+     * {@code @ManyToOne} to {@code PaymentJpaEntity} ({@code payment_id} is a bare {@code UUID}
+     * column), so every admin-useful field is reached through an explicit entity join with {@code
+     * ON} rather than a path expression. An explicit {@code countQuery} is mandatory — Spring Data
+     * cannot derive a count from a constructor-expression projection. No index on {@code
+     * billing_purchases.status} exists (accepted tradeoff, per proposal): revisit if this table
+     * exceeds ~10⁵ rows.
+     */
+    @Query(value = """
+        SELECT new com.menta.billing.infrastructure.persistence.projection.ExceptionPurchaseRow(
+            pu.id, pu.paymentId, pay.userId, pay.targetModality, pay.targetReference,
+            pay.expectedAmount, pay.expectedCurrency, pay.createdAt)
+          FROM PurchaseJpaEntity pu
+          JOIN PaymentJpaEntity pay ON pu.paymentId = pay.id
+         WHERE pu.status = :status
+         ORDER BY pay.createdAt ASC
+        """,
+        countQuery = "SELECT COUNT(pu) FROM PurchaseJpaEntity pu "
+            + "JOIN PaymentJpaEntity pay ON pu.paymentId = pay.id WHERE pu.status = :status")
+    Page<ExceptionPurchaseRow> findByStatusOrderByPaymentCreatedAt(
+        @Param("status") String status, Pageable pageable);
 }

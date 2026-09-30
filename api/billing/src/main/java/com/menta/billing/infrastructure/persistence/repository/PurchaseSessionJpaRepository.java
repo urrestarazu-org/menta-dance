@@ -1,6 +1,7 @@
 package com.menta.billing.infrastructure.persistence.repository;
 
 import com.menta.billing.infrastructure.persistence.entity.PurchaseSessionJpaEntity;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -39,4 +40,16 @@ public interface PurchaseSessionJpaRepository extends JpaRepository<PurchaseSess
         nativeQuery = true
     )
     List<PurchaseSessionJpaEntity> findByPurchaseIdOrderByPositionAsc(@Param("purchaseId") UUID purchaseId);
+
+    /**
+     * A derived, NON-locking batch read for the admin EXCEPTION-purchases list (#237, design C3):
+     * one query per page, grouped by {@code purchaseId} in memory afterward. Do NOT confuse this
+     * with {@link #findByPurchaseIdOrderByPositionAsc(UUID)} above — that one is a NATIVE {@code
+     * FOR UPDATE} locking query for the fulfillment writers. A read-only admin list has no
+     * business taking row locks, and it must not be issued once per purchase (N+1) across a page.
+     * Served by {@code uq_billing_purchase_sessions_purchase_position (purchase_id, position)}
+     * (V20) — no new index.
+     */
+    List<PurchaseSessionJpaEntity> findByPurchaseIdInOrderByPurchaseIdAscPositionAsc(
+        Collection<UUID> purchaseIds);
 }

@@ -1,5 +1,6 @@
 package com.menta.billing.application.port.out;
 
+import com.menta.billing.application.dto.ExceptionPurchasePage;
 import com.menta.billing.domain.model.PaymentId;
 import com.menta.billing.domain.model.Purchase;
 import java.util.Optional;
@@ -38,4 +39,14 @@ public interface PurchaseRepository {
      * index gap would self-block that insert.
      */
     Optional<Purchase> findByPaymentIdForUpdate(PaymentId paymentId);
+
+    /**
+     * The admin EXCEPTION-purchases inbox (#237, design C1): purchases stuck in {@link
+     * com.menta.billing.domain.model.FulfillmentStatus#EXCEPTION}, oldest-first by the joined
+     * {@code Payment.createdAt}. Takes primitives, not a Spring {@code Pageable} — same precedent
+     * as {@link PaymentRepository#findAwaitingManualVerification(int, int)}, so no Spring type
+     * crosses into {@code application}. The caller is responsible for rejecting {@code size > 50};
+     * this port does not clamp.
+     */
+    ExceptionPurchasePage findInException(int page, int size);
 }

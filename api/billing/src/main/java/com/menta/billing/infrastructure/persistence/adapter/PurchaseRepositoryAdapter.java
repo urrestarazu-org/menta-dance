@@ -1,16 +1,24 @@
 package com.menta.billing.infrastructure.persistence.adapter;
 
+import com.menta.billing.application.dto.ExceptionPurchaseItem;
+import com.menta.billing.application.dto.ExceptionPurchasePage;
 import com.menta.billing.application.port.out.PurchaseRepository;
 import com.menta.billing.domain.model.PaymentId;
 import com.menta.billing.domain.model.Purchase;
 import com.menta.billing.infrastructure.persistence.entity.PurchaseJpaEntity;
 import com.menta.billing.infrastructure.persistence.entity.PurchaseSessionJpaEntity;
 import com.menta.billing.infrastructure.persistence.mapper.PurchaseJpaMapper;
+import com.menta.billing.infrastructure.persistence.projection.ExceptionPurchaseRow;
 import com.menta.billing.infrastructure.persistence.repository.PurchaseJpaRepository;
 import com.menta.billing.infrastructure.persistence.repository.PurchaseSessionJpaRepository;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -106,6 +114,34 @@ public class PurchaseRepositoryAdapter implements PurchaseRepository {
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<Purchase> findByPaymentIdForUpdate(PaymentId paymentId) {
         return jpaRepository.findByPaymentIdForUpdate(paymentId.getValue()).map(this::toDomain);
+    }
+
+    /**
+     * The admin EXCEPTION-purchases inbox (#237, design C1/C4). Deliberately {@code REQUIRED},
+     * NOT {@code MANDATORY} like this adapter's other methods above: those all run inside an
+     * ambient fulfillment transaction, but a controller-driven read has none — {@code MANDATORY}
+     * would fail every HTTP call with {@code IllegalTransactionStateException}. {@code readOnly}
+     * lets the projection read and the sessions batch read share one consistent snapshot.
+     */
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public ExceptionPurchasePage findInException(int page, int size) {
+        Page<ExceptionPurchaseRow> jpaPage =
+            jpaRepository.findByStatusOrderByPaymentCreatedAt("EXCEPTION", PageRequest.of(page, size));
+        List<ExceptionPurchaseRow> rows = jpaPage.getContent();
+        Map<UUID, List<String>> sessionsByPurchaseId = rows.isEmpty() ? Map.of() : sessionJpaRepository
+            .findByPurchaseIdInOrderByPurchaseIdAscPositionAsc(rows.stream().map(ExceptionPurchaseRow::purchaseId).toList())
+            .stream()
+            .collect(Collectors.groupingBy(
+                PurchaseSessionJpaEntity::getPurchaseId,
+                Collectors.mapping(PurchaseSessionJpaEntity::getPhysicalSessionId, Collectors.toList())
+            ));
+        List<ExceptionPurchaseItem> items = rows.stream().map(row -> new ExceptionPurchaseItem(
+            row.purchaseId(), row.paymentId(), row.userId(), row.targetModality(), row.targetReference(),
+            row.expectedAmount(), row.expectedCurrency(), row.createdAt(),
+            sessionsByPurchaseId.getOrDefault(row.purchaseId(), List.of())
+        )).toList();
+        return new ExceptionPurchasePage(items, page, size, jpaPage.getTotalElements(), jpaPage.getTotalPages());
     }
 
     private Purchase toDomain(PurchaseJpaEntity entity) {

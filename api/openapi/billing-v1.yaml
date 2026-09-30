@@ -652,6 +652,66 @@ paths:
         '403':
           description: El caller autenticado no tiene rol ADMIN.
 
+  /api/v1/admin/billing/purchases:
+    get:
+      tags: [Excepciones de compras presenciales]
+      summary: Listar compras presenciales en EXCEPTION (ADMIN)
+      description: |
+        Inventario de sólo lectura, paginado y ordenado por antigüedad (más antiguos primero,
+        según `Payment.createdAt`), de compras presenciales varadas en `EXCEPTION` (#237). No
+        ofrece ninguna acción para resolver, transicionar o reasignar una compra — es pura
+        observabilidad sobre la máquina de estados existente. `size` mayor a 50 se **rechaza**
+        con `400` — nunca se recorta (mismo criterio que el inbox de pagos pendientes).
+      operationId: listPurchasesInException
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [EXCEPTION]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          description: Máximo 50. Un valor mayor responde `400`, sin resultados.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        '200':
+          description: Página de compras en EXCEPTION (posiblemente vacía).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExceptionPurchasePageResponse'
+        '400':
+          description: '`size` mayor a 50. No se devuelven resultados.'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                page_size_excedido:
+                  value:
+                    type: https://menta.dance/problems/invalid_request
+                    title: Bad Request
+                    status: 400
+                    detail: La solicitud es inválida.
+                    code: INVALID_REQUEST
+        '401':
+          description: Falta un access token válido.
+        '403':
+          description: El caller autenticado no tiene rol ADMIN.
+
   /api/v1/admin/billing/payments/{paymentId}:
     get:
       tags: [Verificación manual de pagos]
@@ -1311,6 +1371,64 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PendingVerificationItemResponse'
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+        totalPages:
+          type: integer
+
+    ExceptionPurchaseItemResponse:
+      type: object
+      description: |
+        Una fila del inbox de compras en EXCEPTION (#237). No incluye `reason` (no persistido en
+        `billing_purchases`) ni el email del comprador (identificado sólo por `userId`).
+        `physicalSessionIds` es siempre un arreglo — `[]`, nunca `null`, cuando la excepción se
+        originó sin sesiones cubiertas.
+      required:
+        [
+          purchaseId, paymentId, userId, targetModality, targetReference, amount, currency,
+          createdAt, physicalSessionIds
+        ]
+      properties:
+        purchaseId:
+          type: string
+          format: uuid
+        paymentId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        targetModality:
+          type: string
+          enum: [PHYSICAL, VIRTUAL]
+        targetReference:
+          type: string
+        amount:
+          type: number
+          format: decimal
+        currency:
+          type: string
+          example: ARS
+        createdAt:
+          type: string
+          format: date-time
+        physicalSessionIds:
+          type: array
+          items:
+            type: string
+
+    ExceptionPurchasePageResponse:
+      type: object
+      required: [items, page, size, totalElements, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExceptionPurchaseItemResponse'
         page:
           type: integer
         size:

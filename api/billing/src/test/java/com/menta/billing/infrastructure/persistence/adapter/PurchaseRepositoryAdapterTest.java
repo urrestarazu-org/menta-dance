@@ -2,22 +2,32 @@ package com.menta.billing.infrastructure.persistence.adapter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.menta.billing.application.dto.ExceptionPurchaseItem;
+import com.menta.billing.application.dto.ExceptionPurchasePage;
 import com.menta.billing.domain.model.PaymentId;
 import com.menta.billing.domain.model.Purchase;
 import com.menta.billing.infrastructure.persistence.entity.PurchaseJpaEntity;
 import com.menta.billing.infrastructure.persistence.entity.PurchaseSessionJpaEntity;
 import com.menta.billing.infrastructure.persistence.mapper.PurchaseJpaMapper;
+import com.menta.billing.infrastructure.persistence.projection.ExceptionPurchaseRow;
 import com.menta.billing.infrastructure.persistence.repository.PurchaseJpaRepository;
 import com.menta.billing.infrastructure.persistence.repository.PurchaseSessionJpaRepository;
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 
@@ -187,5 +197,104 @@ class PurchaseRepositoryAdapterTest {
                 .saveIsolated(purchase);
 
         assertThat(saved).isEmpty();
+    }
+
+    // --- #237: findInException() (admin EXCEPTION-purchases inbox) -----------
+
+    private static ExceptionPurchaseRow exceptionRow(UUID purchaseId, Instant createdAt) {
+        return new ExceptionPurchaseRow(
+            purchaseId, UUID.randomUUID(), UUID.randomUUID(), "PHYSICAL", "quote-1",
+            new BigDecimal("100.00"), "ARS", createdAt
+        );
+    }
+
+    @Test
+    void findInException_returns_exception_rows_in_the_order_the_query_gives_them() {
+        PurchaseJpaRepository jpaRepository = mock(PurchaseJpaRepository.class);
+        PurchaseSessionJpaRepository sessionJpaRepository = mock(PurchaseSessionJpaRepository.class);
+        UUID olderPurchaseId = UUID.randomUUID();
+        UUID newerPurchaseId = UUID.randomUUID();
+        ExceptionPurchaseRow older = exceptionRow(olderPurchaseId, Instant.parse("2026-01-01T00:00:00Z"));
+        ExceptionPurchaseRow newer = exceptionRow(newerPurchaseId, Instant.parse("2026-02-01T00:00:00Z"));
+        when(jpaRepository.findByStatusOrderByPaymentCreatedAt(eq("EXCEPTION"), any()))
+            .thenReturn(new PageImpl<>(List.of(older, newer)));
+        when(sessionJpaRepository.findByPurchaseIdInOrderByPurchaseIdAscPositionAsc(any())).thenReturn(List.of());
+
+        ExceptionPurchasePage page =
+            new PurchaseRepositoryAdapter(jpaRepository, sessionJpaRepository, transactionManager())
+                .findInException(0, 20);
+
+        assertThat(page.items()).extracting(ExceptionPurchaseItem::purchaseId)
+            .containsExactly(olderPurchaseId, newerPurchaseId);
+    }
+
+    @Test
+    void findInException_queries_only_the_exception_status_never_assigned_or_pending() {
+        PurchaseJpaRepository jpaRepository = mock(PurchaseJpaRepository.class);
+        PurchaseSessionJpaRepository sessionJpaRepository = mock(PurchaseSessionJpaRepository.class);
+        when(jpaRepository.findByStatusOrderByPaymentCreatedAt(any(), any())).thenReturn(new PageImpl<>(List.of()));
+
+        new PurchaseRepositoryAdapter(jpaRepository, sessionJpaRepository, transactionManager())
+            .findInException(0, 20);
+
+        verify(jpaRepository).findByStatusOrderByPaymentCreatedAt(eq("EXCEPTION"), any());
+    }
+
+    @Test
+    void findInException_lists_a_zero_session_row_with_an_empty_array_never_dropped() {
+        PurchaseJpaRepository jpaRepository = mock(PurchaseJpaRepository.class);
+        PurchaseSessionJpaRepository sessionJpaRepository = mock(PurchaseSessionJpaRepository.class);
+        UUID purchaseId = UUID.randomUUID();
+        ExceptionPurchaseRow row = exceptionRow(purchaseId, Instant.parse("2026-01-01T00:00:00Z"));
+        when(jpaRepository.findByStatusOrderByPaymentCreatedAt(eq("EXCEPTION"), any()))
+            .thenReturn(new PageImpl<>(List.of(row)));
+        when(sessionJpaRepository.findByPurchaseIdInOrderByPurchaseIdAscPositionAsc(any())).thenReturn(List.of());
+
+        ExceptionPurchasePage page =
+            new PurchaseRepositoryAdapter(jpaRepository, sessionJpaRepository, transactionManager())
+                .findInException(0, 20);
+
+        assertThat(page.items()).hasSize(1);
+        assertThat(page.items().get(0).physicalSessionIds()).isEmpty();
+    }
+
+    @Test
+    void findInException_returns_an_empty_page_without_error_and_skips_the_sessions_query() {
+        PurchaseJpaRepository jpaRepository = mock(PurchaseJpaRepository.class);
+        PurchaseSessionJpaRepository sessionJpaRepository = mock(PurchaseSessionJpaRepository.class);
+        when(jpaRepository.findByStatusOrderByPaymentCreatedAt(eq("EXCEPTION"), any()))
+            .thenReturn(new PageImpl<>(List.of()));
+
+        ExceptionPurchasePage page =
+            new PurchaseRepositoryAdapter(jpaRepository, sessionJpaRepository, transactionManager())
+                .findInException(0, 20);
+
+        assertThat(page.items()).isEmpty();
+        assertThat(page.totalElements()).isZero();
+        verifyNoInteractions(sessionJpaRepository);
+    }
+
+    @Test
+    void findInException_batches_sessions_in_exactly_one_call_for_a_multi_purchase_page() {
+        PurchaseJpaRepository jpaRepository = mock(PurchaseJpaRepository.class);
+        PurchaseSessionJpaRepository sessionJpaRepository = mock(PurchaseSessionJpaRepository.class);
+        UUID purchaseId1 = UUID.randomUUID();
+        UUID purchaseId2 = UUID.randomUUID();
+        ExceptionPurchaseRow row1 = exceptionRow(purchaseId1, Instant.parse("2026-01-01T00:00:00Z"));
+        ExceptionPurchaseRow row2 = exceptionRow(purchaseId2, Instant.parse("2026-01-02T00:00:00Z"));
+        when(jpaRepository.findByStatusOrderByPaymentCreatedAt(eq("EXCEPTION"), any()))
+            .thenReturn(new PageImpl<>(List.of(row1, row2)));
+        when(sessionJpaRepository.findByPurchaseIdInOrderByPurchaseIdAscPositionAsc(any())).thenReturn(List.of(
+            new PurchaseSessionJpaEntity(purchaseId1, 0, "session-a"),
+            new PurchaseSessionJpaEntity(purchaseId2, 0, "session-b")
+        ));
+
+        ExceptionPurchasePage page =
+            new PurchaseRepositoryAdapter(jpaRepository, sessionJpaRepository, transactionManager())
+                .findInException(0, 20);
+
+        verify(sessionJpaRepository, times(1)).findByPurchaseIdInOrderByPurchaseIdAscPositionAsc(any());
+        assertThat(page.items()).extracting(ExceptionPurchaseItem::physicalSessionIds)
+            .containsExactly(List.of("session-a"), List.of("session-b"));
     }
 }
