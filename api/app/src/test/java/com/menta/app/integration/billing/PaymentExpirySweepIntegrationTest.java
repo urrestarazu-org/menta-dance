@@ -18,6 +18,7 @@ import com.menta.billing.infrastructure.persistence.mapper.PaymentJpaMapper;
 import com.menta.billing.infrastructure.persistence.mapper.SubscriptionJpaMapper;
 import com.menta.billing.infrastructure.persistence.repository.PaymentJpaRepository;
 import com.menta.billing.infrastructure.persistence.repository.PaymentProofJpaRepository;
+import com.menta.billing.infrastructure.persistence.repository.PurchaseJpaRepository;
 import com.menta.billing.infrastructure.persistence.repository.SubscriptionCourseJpaRepository;
 import com.menta.billing.infrastructure.persistence.repository.SubscriptionJpaRepository;
 import com.menta.billing.infrastructure.scheduling.PaymentExpiryReconciler;
@@ -71,6 +72,7 @@ class PaymentExpirySweepIntegrationTest extends AbstractBillingMySqlIntegrationT
     @Autowired private PaymentProofJpaRepository paymentProofRepository;
     @Autowired private SubscriptionJpaRepository subscriptionRepository;
     @Autowired private SubscriptionCourseJpaRepository subscriptionCourseRepository;
+    @Autowired private PurchaseJpaRepository purchaseRepository;
     @Autowired private PaymentExpiryReconciler reconciler;
     @Autowired private ApplicationContext context;
 
@@ -91,6 +93,7 @@ class PaymentExpirySweepIntegrationTest extends AbstractBillingMySqlIntegrationT
         paymentProofRepository.deleteAll();
         subscriptionCourseRepository.deleteAll();
         subscriptionRepository.deleteAll();
+        purchaseRepository.deleteAll();
         paymentRepository.deleteAll();
     }
 
@@ -111,6 +114,22 @@ class PaymentExpirySweepIntegrationTest extends AbstractBillingMySqlIntegrationT
         subscriptionRepository.save(SubscriptionJpaMapper.toEntity(Subscription.pendingCheckout(
             UUID.randomUUID(), paymentId, ownerId, PlanId.generate(), "idem-" + paymentId, createdAt
         )));
+        return paymentId;
+    }
+
+    /**
+     * #36 P5, C7 characterization fixture: a bank-transfer-origin physical payment, same
+     * real-persistence shape {@code CreateBankTransferPhysicalPurchaseUseCaseImpl} produces. No
+     * {@code Purchase} row is ever seeded alongside it — D1 never reserves capacity at creation,
+     * so there is nothing for expiry to release (D5 composes with D1: nothing was held).
+     */
+    private PaymentId seedAwaitingManualVerificationPhysicalPayment(UUID ownerId, Instant createdAt) {
+        PaymentId paymentId = PaymentId.generate();
+        Payment payment = Payment.awaitingManualVerification(
+            paymentId, ownerId, Money.of(new BigDecimal("300.00"), "ARS"), "PHY-BT-" + paymentId,
+            "0000003100000000000000", new PaymentTarget.Physical(UUID.randomUUID().toString()), createdAt
+        );
+        paymentRepository.save(PaymentJpaMapper.toEntity(payment));
         return paymentId;
     }
 
@@ -162,6 +181,29 @@ class PaymentExpirySweepIntegrationTest extends AbstractBillingMySqlIntegrationT
 
         assertThat(paymentRepository.findById(paymentId.getValue()).orElseThrow().getStatusType())
             .isEqualTo("AWAITING_MANUAL_VERIFICATION");
+    }
+
+    // --- #36 P5 (C7): a physical bank-transfer payment expires the same way -----
+
+    /**
+     * C7's characterization proof: {@code findExpirableBankTransferIds} filters only on {@code
+     * status_type}/{@code createdAt}/proof-absence (no {@code targetModality} predicate) and
+     * {@code expireOne} never calls {@code ensure} — so a stale, unproven PHYSICAL payment expires
+     * exactly like a VIRTUAL one, and leaves ZERO {@code billing_purchases} rows (D1: nothing was
+     * ever reserved, so there is nothing to release).
+     */
+    @Test
+    void a_stale_physical_bank_transfer_payment_with_no_proof_expires_and_creates_no_purchase() {
+        Instant createdAt = now().minus(73, ChronoUnit.HOURS);
+        UUID owner = UUID.randomUUID();
+        PaymentId paymentId = seedAwaitingManualVerificationPhysicalPayment(owner, createdAt);
+
+        reconciler.tick();
+
+        assertThat(paymentRepository.findById(paymentId.getValue()).orElseThrow().getStatusType())
+            .isEqualTo("EXPIRED");
+        assertThat(purchaseRepository.findByPaymentId(paymentId.getValue())).isEmpty();
+        assertThat(purchaseRepository.findAll()).isEmpty();
     }
 
     // --- Wiring (scan) -----------------------------------------------------------

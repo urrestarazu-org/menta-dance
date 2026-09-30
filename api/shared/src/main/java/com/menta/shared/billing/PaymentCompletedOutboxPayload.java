@@ -27,6 +27,10 @@ import java.util.UUID;
  *
  * @param paymentId the unique payment id this event announces as {@code COMPLETED}.
  * @param providerPaymentId the Mercado Pago payment id, already bound to this local payment by the webhook flow.
+ *     {@code null} for a bank-transfer-origin physical payment (#36, US-BILLING-008): it reaches
+ *     {@code Completed} via manual admin approval, never a provider webhook, so no provider id
+ *     ever exists to bind. A present-but-blank value is still rejected — that signals a bug, not
+ *     absence.
  * @param externalReference the merchant-side correlation key established by the checkout flow.
  * @param merchantAccountId the merchant account (matches expected merchant from the buyer-facing checkout).
  * @param targetReference the {@link com.menta.billing.domain.model.PaymentTarget.Physical#quoteId()} this
@@ -57,7 +61,7 @@ public record PaymentCompletedOutboxPayload(
         if (paymentId.toString().length() > MAX_STRING_LENGTH) {
             throw new IllegalArgumentException("paymentId decimal form must fit aggregate_id VARCHAR(64)");
         }
-        requireNonBlankAndBounded("providerPaymentId", providerPaymentId);
+        requireBoundedIfPresent("providerPaymentId", providerPaymentId);
         requireNonBlankAndBounded("externalReference", externalReference);
         requireNonBlankAndBounded("merchantAccountId", merchantAccountId);
         requireNonBlankAndBounded("targetReference", targetReference);
@@ -82,6 +86,19 @@ public record PaymentCompletedOutboxPayload(
         Objects.requireNonNull(value, name + " cannot be null");
         if (value.isBlank()) {
             throw new IllegalArgumentException(name + " cannot be blank");
+        }
+        if (value.length() > MAX_STRING_LENGTH) {
+            throw new IllegalArgumentException(name + " must not exceed " + MAX_STRING_LENGTH + " characters");
+        }
+    }
+
+    /** {@code null} is legitimate (#36) — only a present value must still be non-blank and bounded. */
+    private static void requireBoundedIfPresent(String name, String value) {
+        if (value == null) {
+            return;
+        }
+        if (value.isBlank()) {
+            throw new IllegalArgumentException(name + " cannot be blank when present");
         }
         if (value.length() > MAX_STRING_LENGTH) {
             throw new IllegalArgumentException(name + " must not exceed " + MAX_STRING_LENGTH + " characters");

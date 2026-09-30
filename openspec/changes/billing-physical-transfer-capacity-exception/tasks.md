@@ -141,21 +141,51 @@ breaking the MP arm).
 
 - [x] 5.1 RED (done in Phase 4, pulled forward — see Phase 4's C5 deviation note): `PhysicalPurchaseCheckoutResultTest` (new) — `fromBankTransfer` leaves `providerPreferenceId`/`checkoutUrl` null and populates `bankTransferInstructions`; `from` leaves `bankTransferInstructions` null.
 - [x] 5.2 GREEN (done in Phase 4, pulled forward): `PhysicalPurchaseCheckoutResult.java` — added nullable `bankTransferInstructions` field + `fromBankTransfer` factory + private `build`, mirroring `SubscriptionCheckoutResult` (`:22-58`). Phase 5 starts from a confirmation-only pass on this task; no further action needed unless Phase 5 discovers a gap.
-- [ ] 5.3 GREEN: `PhysicalPurchaseCheckoutResponse.java` (web DTO) — same nullable field, passed through, mirroring `SubscriptionCheckoutResponse:28,34`.
-- [ ] 5.4 RED: integration test (Testcontainers MySQL, `:api:app:test`) — `201` with CBU/alias/holder/CUIT/amount/reference; zero `physical_capacity_holds` rows; zero provider-port calls (spec `bank-transfer-physical-purchase`, Scenarios "Response carries usable bank details..." and "No hold row and no provider call").
-- [ ] 5.5 RED: integration test — same request with `paymentMethod: MERCADO_PAGO` through the router is byte-identical to today, hold included (spec `bank-transfer-physical-purchase`, Scenario "Mercado Pago checkout behaves exactly as before"; MP regression).
-- [ ] 5.6 RED: integration test — expired quote on the bank-transfer path → `410`, no `Payment` row (spec `bank-transfer-physical-purchase`, Scenario "Expired quote is rejected, no Payment created").
-- [ ] 5.7 RED: integration test — a visibly-full quote on the bank-transfer path → `409 CAPACITY_UNAVAILABLE`, zero `Payment` rows, zero hold rows — the check is a read, not a reservation (spec `physical-purchase-checkout`, Scenario "A visibly-full quote is rejected but the rejection is not binding (BANK_TRANSFER)").
-- [ ] 5.8 RED: integration test (Testcontainers Redis) — 11th bank-transfer creation in one day → `429`, whether the prior ten were subscriptions, physical purchases, or a mix (spec `bank-transfer-subscription`, Scenario "The budget counts subscriptions and physical purchases together"; D4).
-- [ ] 5.9 RED: integration test — proof upload → admin approve → `ASSIGNED` with one `physical_capacity_assignments` row per eligible session computed from `confirmedAt`, through the unchanged `HoldNotFound` branch (spec `presential-purchase-fulfillment`, Scenario "Approved bank-transfer purchase with available capacity reaches ASSIGNED").
-- [ ] 5.10 RED: integration test — capacity unavailable at approval → `EXCEPTION`, zero partial assignments, all-or-nothing, `status_type` stays `COMPLETED` (spec `presential-purchase-fulfillment`, Scenario "...reaches EXCEPTION").
-- [ ] 5.11 RED: integration test — admin reject → no `Purchase`, no assignment, `PaymentFulfillmentService.release` no-op for `PaymentTarget.Physical` (spec `bank-transfer-physical-purchase`, Scenario "Rejection releases nothing because nothing was held"; D5).
-- [ ] 5.12 RED: extend `PaymentExpirySweepIntegrationTest` — a physical `AwaitingManualVerification` payment older than 72h with no proof expires and leaves zero `billing_purchases` rows (C7 — characterization test confirming the verified-not-assumed finding; no production change expected).
-- [ ] 5.13 GREEN: confirmation-only pass across 5.4–5.12, since everything after creation is verify-only (C9) — fix only if a wiring gap surfaces.
-- [ ] 5.14 GREEN: `api/openapi/billing-v1.yaml` — add `BANK_TRANSFER` + `bankTransferInstructions` on the physical checkout contract.
-- [ ] 5.15 GREEN: `bruno/API - Direct/billing/` — new/updated request(s) for the physical `BANK_TRANSFER` checkout.
-- [ ] 5.16 GREEN: `docs/user-stories/US-BILLING-008.md` — lift from Draft; record D1's and D6's divergences from the issue's literal wording, plus the one-line note that the shared daily budget (D4) now spans both product lines.
-- [ ] 5.17 Verify: `./gradlew :api:billing:test :api:app:test` green; `:api:billing:jacocoTestCoverageVerification` (95%/90%) green; `./gradlew check` full regression; confirm every Success Criterion in `proposal.md`. P5 ready for PR — after merge, run `sdd-verify` against all requirements in `bank-transfer-physical-purchase`, `physical-purchase-checkout` delta, `presential-purchase-fulfillment` delta, and `bank-transfer-subscription` delta, then `sdd-archive`.
+- [x] 5.3 GREEN: `PhysicalPurchaseCheckoutResponse.java` (web DTO) — same nullable field, passed through, mirroring `SubscriptionCheckoutResponse:28,34`. Also fixed a discovered blocking gap in the same task: `CreatePhysicalPurchaseRequest`'s `@AssertTrue isCheckoutProPaymentMethod` still hard-rejected `BANK_TRANSFER` at the DTO layer (pre-dating Phase 4's router), which would have made the whole rail unreachable over HTTP. Removed it, mirroring `CreateSubscriptionRequest`'s own precedent (#252).
+- [x] 5.4 RED→GREEN: integration test (Testcontainers MySQL, `:api:app:test`) — `201` with CBU/alias/holder/CUIT/amount/reference; zero `physical_capacity_holds` rows; zero provider-port calls (spec `bank-transfer-physical-purchase`, Scenarios "Response carries usable bank details..." and "No hold row and no provider call").
+- [x] 5.5 GREEN: integration test — same request with `paymentMethod: MERCADO_PAGO` through the router is byte-identical to today, hold included (spec `bank-transfer-physical-purchase`, Scenario "Mercado Pago checkout behaves exactly as before"; MP regression) — plus every pre-existing MP scenario in the same file stayed green unmodified.
+- [x] 5.6 GREEN: integration test — expired quote on the bank-transfer path → `410`, no `Payment` row (spec `bank-transfer-physical-purchase`, Scenario "Expired quote is rejected, no Payment created").
+- [x] 5.7 GREEN: integration test — a visibly-full quote on the bank-transfer path → `409 CAPACITY_UNAVAILABLE`, zero `Payment` rows, zero hold rows — the check is a read, not a reservation (spec `physical-purchase-checkout`, Scenario "A visibly-full quote is rejected but the rejection is not binding (BANK_TRANSFER)").
+- [x] 5.8 GREEN: real-Redis integration test (Testcontainers) proving D4's shared budget — 10 creations mixing both rails exhaust it, the 11th (either rail) is `429`. **Placement deviation**: written in `api:billing` (new `BankTransferCreationBudgetIntegrationTest`), not `api:app` — every existing `api:app` integration test mocks `BankTransferRateLimitPort` and no Redis Testcontainers harness exists there; adding one would be a disproportionate infra change. `api:billing` already depends on `testcontainers` + `spring-boot-starter-data-redis`, so the real `RedisBankTransferRateLimitPort` + both real use-case classes prove D4 directly, with zero new dependencies.
+- [x] 5.9 GREEN: integration test — proof upload → admin approve → `ASSIGNED` with one `physical_capacity_assignments` row per eligible session computed from `confirmedAt`, through the unchanged `HoldNotFound` branch (spec `presential-purchase-fulfillment`, Scenario "Approved bank-transfer purchase with available capacity reaches ASSIGNED"). **Discovered and fixed a genuine production gap while writing this task's RED** — see the note below the table.
+- [x] 5.10 GREEN: integration test — capacity unavailable at approval → `EXCEPTION`, zero partial assignments, all-or-nothing, `status_type` stays `COMPLETED`, and the #209 `billing.PurchaseExceptioned` notification pair is emitted (spec `presential-purchase-fulfillment`, Scenario "...reaches EXCEPTION"; proposal Success Criterion).
+- [x] 5.11 GREEN: integration test — admin reject → no `Purchase`, no assignment, no `PHYSICAL_PAYMENT_COMPLETED` outbox row at all — `PaymentFulfillmentService.release` confirmed a no-op for `PaymentTarget.Physical` (spec `bank-transfer-physical-purchase`, Scenario "Rejection releases nothing because nothing was held"; D5).
+- [x] 5.12 GREEN: extended `PaymentExpirySweepIntegrationTest` — a physical `AwaitingManualVerification` payment older than 72h with no proof expires and leaves zero `billing_purchases` rows (C7 — characterization test confirming the verified-not-assumed finding). **No production change was needed for this task specifically** — C7 held exactly as design predicted.
+- [x] 5.13 GREEN: confirmation-only pass across 5.4–5.12 — one genuine wiring gap surfaced (not in 5.12, in 5.9/5.10's admin-approve path), fixed test-first, documented below. No other gap.
+- [x] 5.14 GREEN: `api/openapi/billing-v1.yaml` — added `BANK_TRANSFER` to `CreatePhysicalPurchaseRequest.paymentMethod`, a new reusable `BankTransferInstructions` schema, `bankTransferInstructions`/nullable `providerPreferenceId`/`checkoutUrl` on `PhysicalPurchaseCheckoutResponse`, and a `429` response. `npx @redocly/cli lint` → valid, same 2 pre-existing warnings as baseline (`info-license`, `no-server-example.com`), zero new ones.
+- [x] 5.15 GREEN: `bruno/API - Direct/billing/Create Physical Purchase Checkout - Bank Transfer.bru` (new, seq 12) — no prior physical-purchase Bruno request existed (neither rail), so this mirrors `Create Subscription Checkout.bru`'s shape (meta/headers/auth/body/docs/tests) rather than an existing bank-transfer sibling.
+- [x] 5.16 GREEN: `docs/user-stories/US-BILLING-008.md` — lifted to `Implementado (#36)`, rewrote the BDD scenarios to match shipped behavior (no hold, capacity computed at approval), and added a "Decisiones de implementación (#36)" section with D1/D2/D4/D5/D6/D7 plus the discovered `providerPaymentId` gap, matching #33's/#44's/#45's documented style exactly.
+- [x] 5.17 Verify: `./gradlew :api:billing:test` (808/808), `./gradlew :api:shared:test`, `./gradlew :api:app:test` (377/377) all green; `:api:billing:jacocoTestCoverageVerification` (95%/90%) green; `./gradlew check` full regression green (checkstyle violations are pre-existing and non-blocking, confirmed since Phase 4). Every Success Criterion in `proposal.md` checked `[x]`. P5 ready for PR — after merge, run `sdd-verify` against all requirements in `bank-transfer-physical-purchase`, `physical-purchase-checkout` delta, `presential-purchase-fulfillment` delta, and `bank-transfer-subscription` delta, then `sdd-archive`.
+
+### Discovered gap (tasks 5.9/5.10/5.13): `PublishPhysicalPaymentCompletedUseCase` required a `providerPaymentId` that bank-transfer physical payments never have
+
+Writing task 5.9's RED (real admin-approve HTTP call) surfaced a genuine, previously-undetected
+production defect, not a fixture mistake: `PublishPhysicalPaymentCompletedUseCase.toPayload` called
+`payment.getProviderPaymentId().orElseThrow(...)`, and `PaymentCompletedOutboxPayload`'s compact
+constructor independently required `providerPaymentId` non-blank. Both invariants were correct
+**until this change** — a physical `Payment` could previously reach `Completed` only through the
+Mercado Pago webhook flow, which always binds a real `providerPaymentId` first. Bank-transfer
+physical purchases are the first way to reach physical `Completed` via manual admin approval
+(`Payment.resolveManually`), which never binds one — `providerPaymentId` stays `null` for the whole
+lifetime of that `Payment`. Approving ANY bank-transfer physical payment threw `IllegalStateException`
+→ `500`, making the entire admin-approval flow for this rail (the feature's actual core) impossible.
+
+This is not covered by the "non-negotiable constraints" list (proof upload, admin list/detail/
+approve/reject/corrections, the audit log, buyer emails) — it lives one layer below, in the outbox
+producer `PaymentFulfillmentService.ensure` calls. `PhysicalCapacityAssignmentOutboxEventHandler`
+(the consumer) never reads `providerPaymentId` at all, confirmed before changing anything.
+
+**Fix, test-first**: `PaymentCompletedOutboxPayload.providerPaymentId` (api:shared) now accepts
+`null` (blank-if-present is still rejected — a present empty string remains a bug signal, not
+absence); `PublishPhysicalPaymentCompletedUseCase.toPayload` now passes
+`payment.getProviderPaymentId().orElse(null)` instead of throwing. One existing test
+(`PublishPhysicalPaymentCompletedUseCaseTest.rejects_a_completed_payment_that_has_no_provider_payment_id`)
+asserted the OLD, now-incorrect invariant — replaced with
+`publishes_the_event_for_a_completed_physical_payment_with_no_provider_payment_id`, proving the new,
+correct behavior. Added `PaymentCompletedOutboxPayloadTest.accepts_a_null_provider_payment_id_for_a_bank_transfer_origin_physical_payment`.
+Files touched: `api/shared/.../PaymentCompletedOutboxPayload.java` (+test),
+`api/billing/.../PublishPhysicalPaymentCompletedUseCase.java` (+test). Neither file is in the
+non-negotiable constraints list; both are outbox-producer plumbing design's C9/C7 did not examine.
 
 ## Requirement → Task Coverage
 

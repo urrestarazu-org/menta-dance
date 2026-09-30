@@ -1,0 +1,82 @@
+meta {
+  name: Create Physical Purchase Checkout - Bank Transfer
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{baseUrl}}/api/v1/billing/physical/purchases
+  body: json
+  auth: bearer
+}
+
+headers {
+  content-type: application/json
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "quoteId": "{{physicalQuoteId}}",
+    "paymentMethod": "BANK_TRANSFER",
+    "idempotencyKey": "{{physicalPurchaseIdempotencyKey}}"
+  }
+}
+
+docs {
+  #36, US-BILLING-008. Starts the bank-transfer rail for a presential-course
+  purchase for the authenticated user. Run Auth Login first, then set:
+    - physicalQuoteId: a non-expired PhysicalCourseQuote id
+      (POST /api/v1/billing/physical/quotes, not yet in this collection);
+    - physicalPurchaseIdempotencyKey: a unique value for a new checkout.
+
+  Unlike "MERCADO_PAGO" on this same endpoint, this rail never reserves
+  capacity and never calls a payment provider (design D1) — the Payment is
+  created directly in AwaitingManualVerification with the configured bank
+  account's CBU. Capacity is decided later, at admin approval, through the
+  same no-hold path presential-purchase-fulfillment already uses.
+
+  Success contract (201):
+    { paymentId, quoteId, status: "PENDING", providerPreferenceId: null,
+      checkoutUrl: null, externalReference,
+      bankTransferInstructions: { cbu, alias, holder, cuit, amount, reference } }
+
+  externalReference is prefixed "PHY-BT-", distinct from the Mercado Pago
+  arm's "PHY-" prefix on this same endpoint (design C1) — replaying the same
+  idempotencyKey never resolves the other rail's payment.
+
+  Reuse the same idempotencyKey only to retrieve the original checkout (no
+  second Payment, no second charge against the shared daily budget).
+
+  Error responses to expect while exploring:
+    - 410 PHYSICAL_COURSE_QUOTE_EXPIRED: quoteId is unknown or its 1h
+      validity window passed.
+    - 409 CAPACITY_UNAVAILABLE: best-effort, non-binding read (design D7) —
+      unlike the Mercado Pago arm's hold-backed guarantee, this does not
+      reserve anything even when it lets the request through.
+    - 429 BANK_TRANSFER_RATE_LIMITED: the shared 10/user/day bank-transfer
+      creation budget (design D4) is exhausted — the SAME counter
+      "Create Subscription Checkout.bru" with BANK_TRANSFER consumes.
+}
+
+tests {
+  test("Creates a pending bank-transfer checkout with usable instructions", function() {
+    expect(res.getStatus()).to.equal(201);
+    expect(res.getBody().status).to.equal("PENDING");
+    expect(res.getBody().providerPreferenceId).to.equal(null);
+    expect(res.getBody().checkoutUrl).to.equal(null);
+    expect(res.getBody().externalReference).to.be.a("string").and.to.satisfy(
+      (value) => value.startsWith("PHY-BT-")
+    );
+    expect(res.getBody().bankTransferInstructions).to.be.an("object");
+    expect(res.getBody().bankTransferInstructions.cbu).to.be.a("string").and.not.empty;
+    expect(res.getBody().bankTransferInstructions.reference).to.equal(res.getBody().externalReference);
+  });
+}
+
+assert {
+  res.status: eq 201
+}
