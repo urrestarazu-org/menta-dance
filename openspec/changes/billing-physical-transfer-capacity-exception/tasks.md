@@ -71,16 +71,30 @@ Chain strategy: stacked-to-main
 
 ## Phase 3: `CreateBankTransferPhysicalPurchaseUseCase` port + impl (needs Phase 2 merged)
 
-- [ ] 3.1 RED: `CreateBankTransferPhysicalPurchaseUseCaseImplTest` (new) — Mockito `InOrder` asserts `rateLimitPort.consumeBankTransferCreation` → `paymentRepository.findByExternalReference` (replay) → `quoteRepository.findById` → `PhysicalCoverageAvailability.requireComplete` → `paymentRepository.save` (C2).
-- [ ] 3.2 RED: same class — rate-limited user throws `BankTransferRateLimitedException` (429) with zero other port interactions.
-- [ ] 3.3 RED: same class — expired or unknown `quoteId` throws `PhysicalCourseQuoteExpiredException` (410) with zero writes.
-- [ ] 3.4 RED: same class — visibly-full quote throws `PhysicalCapacityUnavailableException` (409) with zero writes; the returned plan is discarded, nothing reserved (D1, D7).
-- [ ] 3.5 RED: same class — replaying `(userId, idempotencyKey)` returns the same result, writes no second `Payment`, but still consumes the budget (C1 idempotency consequence).
-- [ ] 3.6 RED: same class — the created `Payment` is `AwaitingManualVerification` with the CBU as `expectedMerchantAccountId`, `PaymentTarget.Physical(quoteId)`, quote's amount; `verifyNoInteractions(paymentPreferencePort, physicalCapacityHoldPort)` (D1).
-- [ ] 3.7 RED: same class — a `MERCADO_PAGO` reference and a `BANK_TRANSFER` reference for the same `(userId, idempotencyKey)` differ (`PHY-BT-` vs `PHY-`, C1 collision-avoidance).
-- [ ] 3.8 GREEN: `billing/application/port/in/CreateBankTransferPhysicalPurchaseUseCase.java` (new) — `create(CreatePhysicalPurchaseCheckoutCommand): PhysicalPurchaseCheckoutResult`.
-- [ ] 3.9 GREEN: `billing/application/usecase/CreateBankTransferPhysicalPurchaseUseCaseImpl.java` (new) — six collaborators (`PhysicalCourseQuoteRepository`, `PaymentRepository`, `PhysicalCourseAvailabilityPort`, `BankTransferRateLimitPort`, `Clock`, `BankAccountDetails`); `externalReferenceFor` with `EXTERNAL_REFERENCE_PREFIX = "PHY-BT-"` + `UUID.nameUUIDFromBytes`.
-- [ ] 3.10 Verify: `./gradlew :api:billing:test --tests "*CreateBankTransferPhysicalPurchaseUseCaseImplTest*"` green; `:api:billing:jacocoTestCoverageVerification` (95%/90%) green. P3 ready for PR.
+- [x] 3.1 RED: `CreateBankTransferPhysicalPurchaseUseCaseImplTest` (new) — Mockito `InOrder` asserts `rateLimitPort.consumeBankTransferCreation` → `paymentRepository.findByExternalReference` (replay) → `quoteRepository.findById` → `PhysicalCoverageAvailability.requireComplete` → `paymentRepository.save` (C2).
+- [x] 3.2 RED: same class — rate-limited user throws `BankTransferRateLimitedException` (429) with zero other port interactions.
+- [x] 3.3 RED: same class — expired or unknown `quoteId` throws `PhysicalCourseQuoteExpiredException` (410) with zero writes.
+- [x] 3.4 RED: same class — visibly-full quote throws `PhysicalCapacityUnavailableException` (409) with zero writes; the returned plan is discarded, nothing reserved (D1, D7).
+- [x] 3.5 RED: same class — replaying `(userId, idempotencyKey)` returns the same result, writes no second `Payment`, but still consumes the budget (C1 idempotency consequence).
+- [x] 3.6 RED: same class — the created `Payment` is `AwaitingManualVerification` with the CBU as `expectedMerchantAccountId`, `PaymentTarget.Physical(quoteId)`, quote's amount; the impl has no `PaymentPreferencePort`/`PhysicalCapacityHoldPort` collaborator to interact with at all (D1) — structural proof, stronger than a per-test `verifyNoInteractions` on a mock this class cannot reach.
+- [x] 3.7 RED: same class — a `MERCADO_PAGO` reference and a `BANK_TRANSFER` reference for the same `(userId, idempotencyKey)` differ (`PHY-BT-` vs `PHY-`, C1 collision-avoidance), computed through each use case's own production code, not a re-implemented formula.
+- [x] 3.8 GREEN: `billing/application/port/in/CreateBankTransferPhysicalPurchaseUseCase.java` (new) — `create(CreatePhysicalPurchaseCheckoutCommand): PhysicalPurchaseBankTransferCheckoutResult`. Deviation from this task's original sketch: the return type is a new phase-scoped DTO, not `PhysicalPurchaseCheckoutResult` — see Phase 3 apply-progress note below for why.
+- [x] 3.9 GREEN: `billing/application/usecase/CreateBankTransferPhysicalPurchaseUseCaseImpl.java` (new) — six collaborators (`PhysicalCourseQuoteRepository`, `PaymentRepository`, `PhysicalCourseAvailabilityPort`, `BankTransferRateLimitPort`, `Clock`, `BankAccountDetails`); `externalReferenceFor` with `EXTERNAL_REFERENCE_PREFIX = "PHY-BT-"` + `UUID.nameUUIDFromBytes`.
+- [x] 3.10 Verify: `./gradlew :api:billing:test --tests "*CreateBankTransferPhysicalPurchaseUseCaseImplTest*"` green (9/9); `:api:billing:jacocoTestCoverageVerification` (95%/90%) green. P3 ready for PR.
+
+**Deviation note (task 3.8)**: `CreateBankTransferPhysicalPurchaseUseCase.create()` returns the new
+`com.menta.billing.application.dto.PhysicalPurchaseBankTransferCheckoutResult` record
+(`paymentId, quoteId, status, externalReference, bankTransferInstructions`), not
+`PhysicalPurchaseCheckoutResult`. Reason: `PhysicalPurchaseCheckoutResult` has no
+`bankTransferInstructions` field yet — adding it is explicitly Phase 5's job (design C5,
+`fromBankTransfer` factory mirroring `SubscriptionCheckoutResult`). Phase 3's scope is
+`BillingConfiguration`-free and `PhysicalPurchaseCheckoutResult`-free by explicit instruction, so a
+temporary bridge DTO was created instead of reaching into either. Phase 4's
+`RoutingCreatePhysicalPurchaseCheckoutUseCase` will need to reconcile the two return types when it
+wires both arms behind one `CreatePhysicalPurchaseCheckoutUseCase`-shaped router — most likely by
+Phase 5 adding `PhysicalPurchaseCheckoutResult.fromBankTransfer(...)` first and this phase-scoped
+DTO being retired/converted at that point, OR Phase 4 converting inline. Flagged here for Phase 4/5
+to resolve explicitly, not silently.
 
 ## Phase 4: Router + wiring + ArchUnit widening (needs Phase 3 merged)
 
