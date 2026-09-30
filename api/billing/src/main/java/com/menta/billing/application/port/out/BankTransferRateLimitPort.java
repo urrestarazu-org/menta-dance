@@ -10,8 +10,11 @@ import java.util.UUID;
  */
 public interface BankTransferRateLimitPort {
 
-    /** 10 bank-transfer subscription creations/user/day (design C2/C7), consumed before any write. */
-    RateLimitDecision consumeSubscriptionCreation(UUID userId);
+    /**
+     * 10 bank-transfer creations/user/day (design C2/C7/D4), consumed before any write. Shared
+     * budget across bank-transfer subscription and bank-transfer physical-purchase creation.
+     */
+    RateLimitDecision consumeBankTransferCreation(UUID userId);
 
     /**
      * 3 proof uploads/payment/72h (design C7). Declared here so the port is complete from P2, but
