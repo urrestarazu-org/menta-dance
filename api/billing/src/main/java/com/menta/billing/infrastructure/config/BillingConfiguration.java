@@ -4,6 +4,7 @@ import com.menta.billing.application.dto.BankAccountDetails;
 import com.menta.billing.application.port.in.AssignTrialSubscriptionUseCase;
 import com.menta.billing.application.port.in.CancelSubscriptionUseCase;
 import com.menta.billing.application.port.in.CorrectPaymentUseCase;
+import com.menta.billing.application.port.in.CreateBankTransferPhysicalPurchaseUseCase;
 import com.menta.billing.application.port.in.CreateBankTransferSubscriptionUseCase;
 import com.menta.billing.application.port.in.CreatePhysicalCourseQuoteUseCase;
 import com.menta.billing.application.port.in.CreatePhysicalPurchaseCheckoutUseCase;
@@ -46,6 +47,7 @@ import com.menta.billing.application.port.out.WebhookSignatureVerifier;
 import com.menta.billing.application.usecase.AssignTrialSubscriptionUseCaseImpl;
 import com.menta.billing.application.usecase.CancelSubscriptionUseCaseImpl;
 import com.menta.billing.application.usecase.CorrectPaymentUseCaseImpl;
+import com.menta.billing.application.usecase.CreateBankTransferPhysicalPurchaseUseCaseImpl;
 import com.menta.billing.application.usecase.CreateBankTransferSubscriptionUseCaseImpl;
 import com.menta.billing.application.usecase.CreatePhysicalCourseQuoteUseCaseImpl;
 import com.menta.billing.application.usecase.CreatePhysicalPurchaseCheckoutUseCaseImpl;
@@ -65,6 +67,7 @@ import com.menta.billing.application.usecase.PublishPaymentFulfillmentFailedUseC
 import com.menta.billing.application.usecase.PublishPhysicalPaymentCompletedUseCase;
 import com.menta.billing.application.usecase.ReceiveWebhookUseCaseImpl;
 import com.menta.billing.application.usecase.ResolvePaymentProofUseCaseImpl;
+import com.menta.billing.application.usecase.RoutingCreatePhysicalPurchaseCheckoutUseCase;
 import com.menta.billing.application.usecase.RoutingCreateSubscriptionCheckoutUseCase;
 import com.menta.billing.application.usecase.SubmitPaymentProofUseCaseImpl;
 import com.menta.billing.application.usecase.UpdatePhysicalCoursePricingUseCaseImpl;
@@ -475,6 +478,12 @@ public class BillingConfiguration {
      * billing owns its own copy of the same 30-minute default (B5) until
      * Phase 9 lands; the two keys are expected to converge onto one value in
      * practice, never to drift, since both express the same design decision.</p>
+     *
+     * <p>#36, US-BILLING-008, design C3: wraps a {@link RoutingCreatePhysicalPurchaseCheckoutUseCase}
+     * instead of {@code CreatePhysicalPurchaseCheckoutUseCaseImpl} directly — {@code MERCADO_PAGO}
+     * routes to {@code mercadoPagoUseCase} and {@code BANK_TRANSFER} routes to {@code
+     * createBankTransferPhysicalPurchaseUseCase}, one all-or-nothing write boundary regardless of
+     * which delegate the router picks, mirroring {@code createSubscriptionCheckoutUseCase}.</p>
      */
     @Bean
     public CreatePhysicalPurchaseCheckoutUseCase createPhysicalPurchaseCheckoutUseCase(
@@ -482,12 +491,39 @@ public class BillingConfiguration {
         PhysicalCourseAvailabilityPort physicalCourseAvailabilityPort, PhysicalCapacityHoldPort physicalCapacityHoldPort,
         PaymentPreferencePort paymentPreferencePort, Clock clock,
         @Value("${billing.mercadopago.merchant-account-id:}") String merchantAccountId,
-        @Value("${billing.physical.capacity.hold.ttl-ms:1800000}") long holdTtlMs
+        @Value("${billing.physical.capacity.hold.ttl-ms:1800000}") long holdTtlMs,
+        CreateBankTransferPhysicalPurchaseUseCase createBankTransferPhysicalPurchaseUseCase
     ) {
-        return new TransactionalCreatePhysicalPurchaseCheckoutUseCase(new CreatePhysicalPurchaseCheckoutUseCaseImpl(
+        CreatePhysicalPurchaseCheckoutUseCase mercadoPagoUseCase = new CreatePhysicalPurchaseCheckoutUseCaseImpl(
             quoteRepository, paymentRepository, physicalCourseAvailabilityPort, physicalCapacityHoldPort,
             paymentPreferencePort, clock, merchantAccountId, Duration.ofMillis(holdTtlMs)
+        );
+        return new TransactionalCreatePhysicalPurchaseCheckoutUseCase(new RoutingCreatePhysicalPurchaseCheckoutUseCase(
+            mercadoPagoUseCase, createBankTransferPhysicalPurchaseUseCase
         ));
+    }
+
+    /**
+     * #36, US-BILLING-008, design C2. Not wrapped in its own transactional decorator — same
+     * rationale as {@code createBankTransferSubscriptionUseCase}: one {@code Payment} write, not
+     * two writes that must commit atomically. Reuses the same four {@code
+     * billing.bank-transfer.account.*} properties the subscription bean reads, since both rails
+     * transfer into the same bank account.
+     */
+    @Bean
+    public CreateBankTransferPhysicalPurchaseUseCase createBankTransferPhysicalPurchaseUseCase(
+        PhysicalCourseQuoteRepository quoteRepository, PaymentRepository paymentRepository,
+        PhysicalCourseAvailabilityPort physicalCourseAvailabilityPort, BankTransferRateLimitPort bankTransferRateLimitPort,
+        Clock clock,
+        @Value("${billing.bank-transfer.account.cbu:}") String cbu,
+        @Value("${billing.bank-transfer.account.alias:}") String alias,
+        @Value("${billing.bank-transfer.account.holder:}") String holder,
+        @Value("${billing.bank-transfer.account.cuit:}") String cuit
+    ) {
+        return new CreateBankTransferPhysicalPurchaseUseCaseImpl(
+            quoteRepository, paymentRepository, physicalCourseAvailabilityPort, bankTransferRateLimitPort, clock,
+            new BankAccountDetails(cbu, alias, holder, cuit)
+        );
     }
 
     /** Task TASK-004: idempotently upserts a {@code Purchase(PENDING_FULFILLMENT)}

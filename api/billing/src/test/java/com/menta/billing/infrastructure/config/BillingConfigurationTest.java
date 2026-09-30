@@ -6,7 +6,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.menta.billing.application.port.in.AssignTrialSubscriptionUseCase;
+import com.menta.billing.application.port.in.CreateBankTransferPhysicalPurchaseUseCase;
 import com.menta.billing.application.port.in.CreateBankTransferSubscriptionUseCase;
+import com.menta.billing.application.port.in.CreatePhysicalPurchaseCheckoutUseCase;
 import com.menta.billing.application.port.in.CreateSubscriptionCheckoutUseCase;
 import com.menta.billing.application.port.in.GetCurrentSubscriptionUseCase;
 import com.menta.billing.application.port.in.GetPlanUseCase;
@@ -24,11 +26,15 @@ import com.menta.billing.application.port.out.PaymentProofRepository;
 import com.menta.billing.application.port.out.PaymentProofStoragePort;
 import com.menta.billing.application.port.out.PaymentProviderPort;
 import com.menta.billing.application.port.out.PaymentRepository;
+import com.menta.billing.application.port.out.PhysicalCapacityHoldPort;
+import com.menta.billing.application.port.out.PhysicalCourseAvailabilityPort;
+import com.menta.billing.application.port.out.PhysicalCourseQuoteRepository;
 import com.menta.billing.application.port.out.PlanRepository;
 import com.menta.billing.application.port.out.PurchaseRepository;
 import com.menta.billing.application.port.out.SubscriptionRepository;
 import com.menta.billing.application.port.out.WebhookInboxAppender;
 import com.menta.billing.application.port.out.WebhookSignatureVerifier;
+import com.menta.billing.application.usecase.CreateBankTransferPhysicalPurchaseUseCaseImpl;
 import com.menta.billing.application.usecase.CreateBankTransferSubscriptionUseCaseImpl;
 import com.menta.billing.application.usecase.GetCurrentSubscriptionUseCaseImpl;
 import com.menta.billing.application.usecase.GetPlanUseCaseImpl;
@@ -41,6 +47,7 @@ import com.menta.shared.billing.VirtualCourseEntitlementPort;
 import com.menta.billing.infrastructure.security.RedisBankTransferRateLimitPort;
 import com.menta.billing.infrastructure.security.RedisBillingPlansRateLimitPort;
 import com.menta.billing.infrastructure.transaction.TransactionalAssignTrialSubscriptionUseCase;
+import com.menta.billing.infrastructure.transaction.TransactionalCreatePhysicalPurchaseCheckoutUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalCreateSubscriptionCheckoutUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalReceiveWebhookUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalSubmitPaymentProofUseCase;
@@ -192,6 +199,31 @@ class BillingConfigurationTest {
         );
 
         assertThat(useCase).isInstanceOf(GetSubscriptionHistoryUseCaseImpl.class);
+    }
+
+    /** Design D7/C2, not wrapped in its own transactional decorator — same rationale as the subscription twin. */
+    @Test
+    void wires_the_bank_transfer_physical_purchase_use_case_bean() {
+        CreateBankTransferPhysicalPurchaseUseCase useCase = configuration.createBankTransferPhysicalPurchaseUseCase(
+            mock(PhysicalCourseQuoteRepository.class), mock(PaymentRepository.class),
+            mock(PhysicalCourseAvailabilityPort.class), mock(BankTransferRateLimitPort.class), mock(Clock.class),
+            "cbu-1", "alias-1", "holder-1", "cuit-1"
+        );
+
+        assertThat(useCase).isInstanceOf(CreateBankTransferPhysicalPurchaseUseCaseImpl.class);
+    }
+
+    /** #36, US-BILLING-008, design C3: the router now sits inside the transactional decorator. */
+    @Test
+    void wires_the_physical_purchase_checkout_use_case_bean_transactionally_with_the_router() {
+        CreatePhysicalPurchaseCheckoutUseCase useCase = configuration.createPhysicalPurchaseCheckoutUseCase(
+            mock(PhysicalCourseQuoteRepository.class), mock(PaymentRepository.class),
+            mock(PhysicalCourseAvailabilityPort.class), mock(PhysicalCapacityHoldPort.class),
+            mock(PaymentPreferencePort.class), mock(Clock.class), "merchant-1", 1_800_000L,
+            mock(CreateBankTransferPhysicalPurchaseUseCase.class)
+        );
+
+        assertThat(useCase).isInstanceOf(TransactionalCreatePhysicalPurchaseCheckoutUseCase.class);
     }
 
     @Test

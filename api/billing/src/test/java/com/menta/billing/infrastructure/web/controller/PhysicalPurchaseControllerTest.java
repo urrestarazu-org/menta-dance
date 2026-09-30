@@ -72,7 +72,7 @@ class PhysicalPurchaseControllerTest {
 
     private static PhysicalPurchaseCheckoutResult result() {
         return new PhysicalPurchaseCheckoutResult(
-            "pay-1", QUOTE_ID, "PENDING", "pref-1", "https://mp.example/checkout/pref-1", "PHY-pay-1"
+            "pay-1", QUOTE_ID, "PENDING", "pref-1", "https://mp.example/checkout/pref-1", "PHY-pay-1", null
         );
     }
 

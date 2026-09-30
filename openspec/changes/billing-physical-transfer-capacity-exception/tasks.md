@@ -96,21 +96,51 @@ Phase 5 adding `PhysicalPurchaseCheckoutResult.fromBankTransfer(...)` first and 
 DTO being retired/converted at that point, OR Phase 4 converting inline. Flagged here for Phase 4/5
 to resolve explicitly, not silently.
 
-## Phase 4: Router + wiring + ArchUnit widening (needs Phase 3 merged)
+## Phase 4: Router + wiring + ArchUnit widening (needs Phase 3 merged) [COMPLETE]
 
-- [ ] 4.1 RED: `RoutingCreatePhysicalPurchaseCheckoutUseCaseTest` (new, mirrors `RoutingCreateSubscriptionCheckoutUseCaseTest`) — `MERCADO_PAGO` dispatches to the MP delegate, `verifyNoInteractions` on the bank-transfer delegate.
-- [ ] 4.2 RED: same class — `BANK_TRANSFER` dispatches to the bank-transfer delegate, `verifyNoInteractions` on the MP delegate; the router adds no precondition.
-- [ ] 4.3 GREEN: `billing/application/usecase/RoutingCreatePhysicalPurchaseCheckoutUseCase.java` (new) — two-arm exhaustive `switch` on `paymentMethod`, byte-identical shape to `RoutingCreateSubscriptionCheckoutUseCase.java:19-38`.
-- [ ] 4.4 GREEN: `BillingConfiguration.java` — new `createBankTransferPhysicalPurchaseUseCase` bean mirroring `createBankTransferSubscriptionUseCase` (`:251-265`), reusing the four `billing.bank-transfer.account.*` `@Value`s and `new BankAccountDetails(cbu, alias, holder, cuit)`.
-- [ ] 4.5 GREEN: `BillingConfiguration.java` — modify `createPhysicalPurchaseCheckoutUseCase` (`:479-491`): add the new bean as a parameter, wrap `new TransactionalCreatePhysicalPurchaseCheckoutUseCase(new RoutingCreatePhysicalPurchaseCheckoutUseCase(mercadoPagoUseCase, createBankTransferPhysicalPurchaseUseCase))` — transactional decorator moves outside the router; `mercadoPagoUseCase` construction unchanged.
-- [ ] 4.6 RED: extend `ArchitectureTest.checkout_use_case_should_not_depend_on_physical_module` (`:80-86`) — widen `haveSimpleName` to also match `CreateBankTransferPhysicalPurchaseUseCaseImpl` and `RoutingCreatePhysicalPurchaseCheckoutUseCase`; assert none references `com.menta.physical..` or `com.menta.shared.physical..` (C8).
-- [ ] 4.7 GREEN: confirm 4.6 passes with no production import added (C8 — the new impl's collaborators live entirely in `com.menta.billing.application.{dto,port,usecase}`).
-- [ ] 4.8 Verify: `./gradlew :api:billing:test --tests "*RoutingCreatePhysicalPurchaseCheckoutUseCaseTest*" --tests "*BillingConfigurationTest*" --tests "*ArchitectureTest*"` and `:api:billing:jacocoTestCoverageVerification` green. P4 ready for PR.
+- [x] 4.1 RED: `RoutingCreatePhysicalPurchaseCheckoutUseCaseTest` (new, mirrors `RoutingCreateSubscriptionCheckoutUseCaseTest`) — `MERCADO_PAGO` dispatches to the MP delegate, `verifyNoInteractions` on the bank-transfer delegate.
+- [x] 4.2 RED: same class — `BANK_TRANSFER` dispatches to the bank-transfer delegate, `verifyNoInteractions` on the MP delegate; the router adds no precondition.
+- [x] 4.3 GREEN: `billing/application/usecase/RoutingCreatePhysicalPurchaseCheckoutUseCase.java` (new) — two-arm exhaustive `switch` on `paymentMethod`, byte-identical shape to `RoutingCreateSubscriptionCheckoutUseCase.java:19-38` for the `MERCADO_PAGO` arm; the `BANK_TRANSFER` arm additionally converts the bridge DTO (see deviation note below).
+- [x] 4.4 GREEN: `BillingConfiguration.java` — new `createBankTransferPhysicalPurchaseUseCase` bean mirroring `createBankTransferSubscriptionUseCase` (`:251-265`), reusing the four `billing.bank-transfer.account.*` `@Value`s and `new BankAccountDetails(cbu, alias, holder, cuit)`.
+- [x] 4.5 GREEN: `BillingConfiguration.java` — modified `createPhysicalPurchaseCheckoutUseCase` (`:479-491`): added the new bean as a parameter, wraps `new TransactionalCreatePhysicalPurchaseCheckoutUseCase(new RoutingCreatePhysicalPurchaseCheckoutUseCase(mercadoPagoUseCase, createBankTransferPhysicalPurchaseUseCase))` — transactional decorator moved outside the router; `mercadoPagoUseCase` construction unchanged.
+- [x] 4.6 RED→GREEN (approval-test style, see deviation note): extended `ArchitectureTest.checkout_use_case_should_not_depend_on_physical_module` — widened `haveSimpleName` to also match `CreateBankTransferPhysicalPurchaseUseCaseImpl` and `RoutingCreatePhysicalPurchaseCheckoutUseCase`. The checked package stayed `com.menta.physical..` only — widening it to also assert `com.menta.shared.physical..` (as originally sketched here) produced a REAL RED failure against the pre-existing `CreatePhysicalPurchaseCheckoutUseCaseImpl` MP arm, which legitimately imports `com.menta.shared.physical.MultiSessionCapacityHoldCommand`/`SessionClaim` for its hold call (design B1/B6). See deviation note below.
+- [x] 4.7 GREEN: confirmed 4.6 passes with no production import added to any of the three classes (C8 — the two new classes' collaborators live entirely in `com.menta.billing.application.{dto,port,usecase}`).
+- [x] 4.8 Verify: `./gradlew :api:billing:test --tests "*RoutingCreatePhysicalPurchaseCheckoutUseCaseTest*" --tests "*BillingConfigurationTest*" --tests "*ArchitectureTest*" --tests "*PhysicalPurchaseCheckoutResultTest*"` green; full `:api:billing:test` 804/804 green; `:api:billing:jacocoTestCoverageVerification` green. P4 ready for PR.
+
+**Deviation note (C5 pulled forward, orchestrator-resolved before this phase started)**: the router
+cannot return two different types from its two arms (`CreatePhysicalPurchaseCheckoutUseCase`
+requires `PhysicalPurchaseCheckoutResult`, but Phase 3's `CreateBankTransferPhysicalPurchaseUseCase`
+returns `PhysicalPurchaseBankTransferCheckoutResult`). Resolution: design C5 (the
+`bankTransferInstructions` nullable field + `fromBankTransfer` factory on
+`PhysicalPurchaseCheckoutResult`, originally Phase 5's job) was pulled forward into this phase,
+test-first (`PhysicalPurchaseCheckoutResultTest`, new). The router's `BANK_TRANSFER` arm then builds
+a `PhysicalPurchaseCheckoutResult` from the bridge DTO's fields directly (constructor call, not a
+literal call to the `fromBankTransfer(Payment, ...)` overload, since the router only holds the
+bridge DTO's already-extracted fields, not a `Payment` aggregate) — functionally identical output
+(provider fields null, instructions populated) to `fromBankTransfer`. Phase 3's
+`CreateBankTransferPhysicalPurchaseUseCase`/`Impl` and `PhysicalPurchaseBankTransferCheckoutResult`
+are untouched — the bridge DTO is NOT retired, conversion happens only at the router boundary.
+`PhysicalPurchaseCheckoutResponse` (web DTO) and `api/openapi/billing-v1.yaml` are intentionally
+NOT touched this phase (remain Phase 5's job) — calling the endpoint with `BANK_TRANSFER` now
+compiles, routes, and creates a real `Payment`, but the HTTP response does not yet surface
+`bankTransferInstructions` to the caller. This is an expected, temporary, stacked-PR state.
+
+**Deviation note (4.6 package scope)**: kept the ArchUnit rule's checked package as
+`com.menta.physical..` only, NOT widened to also include `com.menta.shared.physical..` as this
+task's original text sketched. Widening it would false-positive on
+`CreatePhysicalPurchaseCheckoutUseCaseImpl`'s pre-existing, correct dependency on
+`com.menta.shared.physical.MultiSessionCapacityHoldCommand`/`SessionClaim` (it places the real
+capacity hold, design B1/B6) — confirmed via a real RED test run. Design C8's own prose only
+instructs widening `haveSimpleName`; its "confirmed... imports nothing from X and Y" sentence is a
+verification note about the two NEW classes specifically, not an instruction to widen the rule's
+package scope for the pre-existing MP arm too. Both new classes independently satisfy a
+`com.menta.shared.physical..` check as well, but the shipped rule does not assert that (to avoid
+breaking the MP arm).
 
 ## Phase 5: DTO/contract arm + integration coverage (needs Phase 4 merged)
 
-- [ ] 5.1 RED: extend `PhysicalPurchaseCheckoutResultTest` — `fromBankTransfer` leaves `providerPreferenceId`/`checkoutUrl` null and populates `bankTransferInstructions`; `from` leaves `bankTransferInstructions` null.
-- [ ] 5.2 GREEN: `PhysicalPurchaseCheckoutResult.java` — add nullable `bankTransferInstructions` field + `fromBankTransfer` factory + private `build`, mirroring `SubscriptionCheckoutResult` (`:22-58`).
+- [x] 5.1 RED (done in Phase 4, pulled forward — see Phase 4's C5 deviation note): `PhysicalPurchaseCheckoutResultTest` (new) — `fromBankTransfer` leaves `providerPreferenceId`/`checkoutUrl` null and populates `bankTransferInstructions`; `from` leaves `bankTransferInstructions` null.
+- [x] 5.2 GREEN (done in Phase 4, pulled forward): `PhysicalPurchaseCheckoutResult.java` — added nullable `bankTransferInstructions` field + `fromBankTransfer` factory + private `build`, mirroring `SubscriptionCheckoutResult` (`:22-58`). Phase 5 starts from a confirmation-only pass on this task; no further action needed unless Phase 5 discovers a gap.
 - [ ] 5.3 GREEN: `PhysicalPurchaseCheckoutResponse.java` (web DTO) — same nullable field, passed through, mirroring `SubscriptionCheckoutResponse:28,34`.
 - [ ] 5.4 RED: integration test (Testcontainers MySQL, `:api:app:test`) — `201` with CBU/alias/holder/CUIT/amount/reference; zero `physical_capacity_holds` rows; zero provider-port calls (spec `bank-transfer-physical-purchase`, Scenarios "Response carries usable bank details..." and "No hold row and no provider call").
 - [ ] 5.5 RED: integration test — same request with `paymentMethod: MERCADO_PAGO` through the router is byte-identical to today, hold included (spec `bank-transfer-physical-purchase`, Scenario "Mercado Pago checkout behaves exactly as before"; MP regression).
