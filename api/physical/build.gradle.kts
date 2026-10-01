@@ -23,6 +23,10 @@ dependencies {
     // Redis — check-in door lock (US-PHYSICAL-001 escenario 6).
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
 
+    // Micrometer (#266): the check-in device-rejection adapter increments a counter. Version comes
+    // from the Spring Boot BOM; application/ must never import it (ArchitectureTest).
+    implementation("io.micrometer:micrometer-core")
+
     // Database
     runtimeOnly("com.mysql:mysql-connector-j")
 

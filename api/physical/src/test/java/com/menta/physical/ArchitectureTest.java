@@ -50,6 +50,20 @@ class ArchitectureTest {
             .check(classes);
     }
 
+    /**
+     * The device-rejection signal reaches the application layer only through
+     * {@code DeviceAuthenticationRejectionPort} (#266); Micrometer types may only appear in
+     * infrastructure.
+     */
+    @Test
+    void application_should_not_depend_on_micrometer() {
+        noClasses()
+            .that().resideInAPackage("..application..")
+            .should().dependOnClassesThat().resideInAPackage("io.micrometer..")
+            .allowEmptyShould(true)
+            .check(classes);
+    }
+
     @Test
     void physical_application_port_in_is_the_only_bridge() {
         com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes()
