@@ -38,6 +38,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -166,6 +167,20 @@ class PaymentProofIntegrationTest {
         return http.getForEntity(url, byte[].class);
     }
 
+    /**
+     * Returns the token with one bit of the HMAC flipped. Swapping the last Base64 character
+     * instead is not a reliable tamper (#297): the unpadded signature's last character carries
+     * only 4 significant bits, so for {@code A}-{@code D} the swap decodes to the very same bytes
+     * and the verifier rightly accepts the token — about 1 run in 16.
+     */
+    private static String withFlippedSignatureBit(String token) {
+        int separator = token.indexOf('.');
+        byte[] mac = Base64.getUrlDecoder().decode(token.substring(separator + 1));
+        mac[0] ^= 1;
+        return token.substring(0, separator + 1)
+            + Base64.getUrlEncoder().withoutPadding().encodeToString(mac);
+    }
+
     // --- Scenario "Valid unexpired token serves the file" -------------------
 
     @Test
@@ -203,8 +218,7 @@ class PaymentProofIntegrationTest {
     void a_tampered_token_is_rejected_with_403() throws IOException {
         PaymentId paymentId = seedPaymentWithProof(seedStudent());
         String token = tokenSigner.sign(paymentId, Instant.now());
-        String tampered = token.substring(0, token.length() - 1)
-            + (token.charAt(token.length() - 1) == 'A' ? 'B' : 'A');
+        String tampered = withFlippedSignatureBit(token);
 
         ResponseEntity<byte[]> response = fetchProof(paymentId, tampered);
 
