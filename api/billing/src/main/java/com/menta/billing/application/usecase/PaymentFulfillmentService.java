@@ -1,14 +1,19 @@
 package com.menta.billing.application.usecase;
 
+import com.menta.billing.application.dto.SubscriptionFulfillmentAlarm;
+import com.menta.billing.application.dto.SubscriptionFulfillmentAlarmReason;
 import com.menta.billing.application.port.out.Clock;
 import com.menta.billing.application.port.out.PlanRepository;
+import com.menta.billing.application.port.out.SubscriptionFulfillmentAlarmPort;
 import com.menta.billing.application.port.out.SubscriptionRepository;
+import com.menta.billing.domain.model.FulfillmentStatus;
 import com.menta.billing.domain.model.Payment;
 import com.menta.billing.domain.model.PaymentTarget;
 import com.menta.billing.domain.model.Plan;
 import com.menta.billing.domain.model.PlanId;
 import com.menta.billing.domain.model.Subscription;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Activates or releases the fulfillment that follows a settled {@link Payment} (design C10).
@@ -18,6 +23,10 @@ import java.util.Optional;
  * methods, so an approved bank-transfer payment (D1/P4) and the 72h expiry sweep (P5) activate or
  * cancel a subscription through exactly the same code an approved Mercado Pago payment already
  * does — never a second implementation of the course-snapshot freeze (escenario 2b).</p>
+ *
+ * <p>#236: the two silent virtual failures (plan missing, subscription row missing) now raise an
+ * operator alarm through {@link SubscriptionFulfillmentAlarmPort}; state transitions are
+ * untouched.</p>
  *
  * <p>Deliberately not declared {@code final}: this codebase has already hit the CGLIB/{@code
  * AopConfigException} incident (#209) from a {@code final} class wrapped by a {@code
@@ -29,15 +38,18 @@ public class PaymentFulfillmentService {
     private final PlanRepository planRepository;
     private final Clock clock;
     private final PublishPhysicalPaymentCompletedUseCase publishPhysicalPaymentCompletedUseCase;
+    private final SubscriptionFulfillmentAlarmPort alarmPort;
 
     public PaymentFulfillmentService(
         SubscriptionRepository subscriptionRepository, PlanRepository planRepository, Clock clock,
-        PublishPhysicalPaymentCompletedUseCase publishPhysicalPaymentCompletedUseCase
+        PublishPhysicalPaymentCompletedUseCase publishPhysicalPaymentCompletedUseCase,
+        SubscriptionFulfillmentAlarmPort alarmPort
     ) {
         this.subscriptionRepository = subscriptionRepository;
         this.planRepository = planRepository;
         this.clock = clock;
         this.publishPhysicalPaymentCompletedUseCase = publishPhysicalPaymentCompletedUseCase;
+        this.alarmPort = alarmPort;
     }
 
     /** Formerly {@code PaymentVerificationService.ensureFulfillment} — unchanged. */
@@ -71,7 +83,11 @@ public class PaymentFulfillmentService {
         Optional<Subscription> existing = subscriptionRepository.findByPaymentId(payment.getId());
         if (existing.isEmpty()) {
             // Only the checkout creates virtual payments and writes both rows
-            // in one transaction, so there is nothing to activate or invent.
+            // in one transaction, so there is nothing to activate or invent. #236: it used to
+            // end here silently; an operator now hears about every occurrence.
+            raiseAlarm(
+                SubscriptionFulfillmentAlarmReason.SUBSCRIPTION_MISSING, payment, virtual, null
+            );
             return;
         }
 
@@ -84,7 +100,17 @@ public class PaymentFulfillmentService {
 
         Optional<Plan> plan = planRepository.findById(PlanId.of(virtual.planId()));
         if (plan.isEmpty()) {
+            // Replays re-enter this branch while the subscription stays PENDING, so only the first
+            // transition into EXCEPTION is an alarm edge (#236).
+            boolean firstEdge =
+                existing.get().getFulfillmentStatus() != FulfillmentStatus.EXCEPTION;
             subscriptionRepository.save(existing.get().exception());
+            if (firstEdge) {
+                raiseAlarm(
+                    SubscriptionFulfillmentAlarmReason.PLAN_MISSING, payment, virtual,
+                    existing.get().getId()
+                );
+            }
             return;
         }
 
@@ -92,5 +118,15 @@ public class PaymentFulfillmentService {
             payment.confirmedAt().orElseGet(clock::now), plan.get().getDurationDays(), plan.get().courseIds()
         );
         subscriptionRepository.save(activated.assigned());
+    }
+
+    private void raiseAlarm(
+        SubscriptionFulfillmentAlarmReason reason, Payment payment, PaymentTarget.Virtual virtual,
+        UUID subscriptionId
+    ) {
+        alarmPort.raise(new SubscriptionFulfillmentAlarm(
+            reason, payment.getId().getValue(), subscriptionId, virtual.planId(),
+            payment.getUserId()
+        ));
     }
 }

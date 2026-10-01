@@ -4,11 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.menta.billing.application.dto.SubscriptionFulfillmentAlarm;
+import com.menta.billing.application.dto.SubscriptionFulfillmentAlarmReason;
 import com.menta.billing.application.port.out.Clock;
 import com.menta.billing.application.port.out.PlanRepository;
+import com.menta.billing.application.port.out.SubscriptionFulfillmentAlarmPort;
 import com.menta.billing.application.port.out.SubscriptionRepository;
 import com.menta.billing.domain.model.FulfillmentStatus;
 import com.menta.billing.domain.model.Money;
@@ -31,6 +37,8 @@ import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 
 /**
  * Unit tests for the collaborator extracted from {@code PaymentVerificationService} (design C10)
@@ -49,6 +57,7 @@ class PaymentFulfillmentServiceTest {
     private PlanRepository planRepository;
     private Clock clock;
     private PublishPhysicalPaymentCompletedUseCase publishPhysicalPaymentCompletedUseCase;
+    private SubscriptionFulfillmentAlarmPort alarmPort;
     private PaymentFulfillmentService service;
 
     @BeforeEach
@@ -57,10 +66,12 @@ class PaymentFulfillmentServiceTest {
         planRepository = mock(PlanRepository.class);
         clock = mock(Clock.class);
         publishPhysicalPaymentCompletedUseCase = mock(PublishPhysicalPaymentCompletedUseCase.class);
+        alarmPort = mock(SubscriptionFulfillmentAlarmPort.class);
         when(clock.now()).thenReturn(NOW);
         when(subscriptionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         service = new PaymentFulfillmentService(
-            subscriptionRepository, planRepository, clock, publishPhysicalPaymentCompletedUseCase
+            subscriptionRepository, planRepository, clock, publishPhysicalPaymentCompletedUseCase,
+            alarmPort
         );
     }
 
@@ -210,6 +221,139 @@ class PaymentFulfillmentServiceTest {
         var captor = org.mockito.ArgumentCaptor.forClass(Subscription.class);
         verify(subscriptionRepository).save(captor.capture());
         assertThat(captor.getValue().getStartDate()).contains(NOW);
+    }
+
+    // --- #236 alarm: case (a) plan missing, first transition into EXCEPTION ---
+
+    @Test
+    void ensure_raises_one_plan_missing_alarm_after_saving_the_first_transition_into_exception() {
+        Payment payment = virtualPayment(new PaymentStatus.Completed(NOW));
+        Subscription subscription = pendingSubscriptionFor(payment);
+        when(subscriptionRepository.findByPaymentId(payment.getId()))
+            .thenReturn(Optional.of(subscription));
+        when(planRepository.findById(PLAN_ID)).thenReturn(Optional.empty());
+
+        service.ensure(payment);
+
+        InOrder order = inOrder(subscriptionRepository, alarmPort);
+        order.verify(subscriptionRepository).save(any(Subscription.class));
+        ArgumentCaptor<SubscriptionFulfillmentAlarm> alarm =
+            ArgumentCaptor.forClass(SubscriptionFulfillmentAlarm.class);
+        order.verify(alarmPort).raise(alarm.capture());
+        order.verifyNoMoreInteractions();
+        assertThat(alarm.getValue().reason())
+            .isEqualTo(SubscriptionFulfillmentAlarmReason.PLAN_MISSING);
+        assertThat(alarm.getValue().paymentId()).isEqualTo(payment.getId().getValue());
+        assertThat(alarm.getValue().subscriptionId()).isEqualTo(subscription.getId());
+        assertThat(alarm.getValue().planId()).isEqualTo(PLAN_ID.toString());
+        assertThat(alarm.getValue().userId()).isEqualTo(USER_ID);
+    }
+
+    @Test
+    void ensure_does_not_re_alarm_a_replay_while_the_subscription_is_already_exception() {
+        Payment payment = virtualPayment(new PaymentStatus.Completed(NOW));
+        Subscription alreadyException = pendingSubscriptionFor(payment).exception();
+        when(subscriptionRepository.findByPaymentId(payment.getId()))
+            .thenReturn(Optional.of(alreadyException));
+        when(planRepository.findById(PLAN_ID)).thenReturn(Optional.empty());
+
+        service.ensure(payment);
+        service.ensure(payment);
+
+        // the replay still takes the plan-missing branch (it re-persists EXCEPTION) ...
+        verify(subscriptionRepository, times(2)).save(any(Subscription.class));
+        // ... but it is not a new edge, so it stays silent.
+        verifyNoInteractions(alarmPort);
+    }
+
+    @Test
+    void ensure_stays_silent_when_a_subscription_left_in_exception_recovers_to_assigned() {
+        Payment payment = virtualPayment(new PaymentStatus.Completed(NOW));
+        Subscription alreadyException = pendingSubscriptionFor(payment).exception();
+        when(subscriptionRepository.findByPaymentId(payment.getId()))
+            .thenReturn(Optional.of(alreadyException));
+        when(planRepository.findById(PLAN_ID)).thenReturn(Optional.of(plan("course-1")));
+
+        service.ensure(payment);
+
+        var captor = ArgumentCaptor.forClass(Subscription.class);
+        verify(subscriptionRepository).save(captor.capture());
+        assertThat(captor.getValue().getFulfillmentStatus()).isEqualTo(FulfillmentStatus.ASSIGNED);
+        verifyNoInteractions(alarmPort);
+    }
+
+    @Test
+    void ensure_never_alarms_on_the_happy_path() {
+        Payment payment = virtualPayment(new PaymentStatus.Completed(NOW));
+        when(subscriptionRepository.findByPaymentId(payment.getId()))
+            .thenReturn(Optional.of(pendingSubscriptionFor(payment)));
+        when(planRepository.findById(PLAN_ID)).thenReturn(Optional.of(plan("course-1")));
+
+        service.ensure(payment);
+
+        verify(subscriptionRepository).save(any(Subscription.class));
+        verifyNoInteractions(alarmPort);
+    }
+
+    @Test
+    void ensure_never_alarms_for_an_already_active_and_assigned_subscription() {
+        Payment payment = virtualPayment(new PaymentStatus.Completed(NOW));
+        Subscription active = pendingSubscriptionFor(payment)
+            .activate(NOW, 30, List.of("course-1")).assigned();
+        when(subscriptionRepository.findByPaymentId(payment.getId()))
+            .thenReturn(Optional.of(active));
+
+        service.ensure(payment);
+
+        verifyNoInteractions(alarmPort);
+    }
+
+    @Test
+    void ensure_never_alarms_when_it_re_grants_an_active_but_unassigned_subscription() {
+        Payment payment = virtualPayment(new PaymentStatus.Completed(NOW));
+        Subscription activeUnassigned = pendingSubscriptionFor(payment)
+            .activate(NOW, 30, List.of("course-1"));
+        when(subscriptionRepository.findByPaymentId(payment.getId()))
+            .thenReturn(Optional.of(activeUnassigned));
+
+        service.ensure(payment);
+
+        verify(subscriptionRepository).save(any(Subscription.class));
+        verifyNoInteractions(alarmPort);
+    }
+
+    @Test
+    void ensure_never_alarms_for_a_physical_payment() {
+        Payment payment = physicalPayment(new PaymentStatus.Completed(NOW));
+
+        service.ensure(payment);
+
+        verify(publishPhysicalPaymentCompletedUseCase).handle(payment);
+        verifyNoInteractions(alarmPort);
+    }
+
+    // --- #236 alarm: case (b) Completed payment with no subscription row ---
+
+    @Test
+    void ensure_raises_subscription_missing_on_every_run_and_never_creates_a_subscription() {
+        Payment payment = virtualPayment(new PaymentStatus.Completed(NOW));
+        when(subscriptionRepository.findByPaymentId(payment.getId())).thenReturn(Optional.empty());
+
+        service.ensure(payment);
+        service.ensure(payment);
+
+        ArgumentCaptor<SubscriptionFulfillmentAlarm> alarms =
+            ArgumentCaptor.forClass(SubscriptionFulfillmentAlarm.class);
+        verify(alarmPort, times(2)).raise(alarms.capture());
+        assertThat(alarms.getAllValues()).hasSize(2).allSatisfy(alarm -> {
+            assertThat(alarm.reason())
+                .isEqualTo(SubscriptionFulfillmentAlarmReason.SUBSCRIPTION_MISSING);
+            assertThat(alarm.paymentId()).isEqualTo(payment.getId().getValue());
+            assertThat(alarm.subscriptionId()).isNull();
+            assertThat(alarm.planId()).isEqualTo(PLAN_ID.toString());
+            assertThat(alarm.userId()).isEqualTo(USER_ID);
+        });
+        verify(subscriptionRepository, never()).save(any());
     }
 
     // --- ensure(payment): PaymentTarget.Physical ---

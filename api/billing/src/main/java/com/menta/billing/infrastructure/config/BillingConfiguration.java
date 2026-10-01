@@ -41,6 +41,7 @@ import com.menta.billing.application.port.out.PhysicalCourseQuoteRepository;
 import com.menta.billing.application.port.out.PlanRepository;
 import com.menta.billing.application.port.out.PurchaseRepository;
 import com.menta.billing.application.port.out.ReconciliationTaskRepository;
+import com.menta.billing.application.port.out.SubscriptionFulfillmentAlarmPort;
 import com.menta.billing.application.port.out.SubscriptionRepository;
 import com.menta.billing.application.port.out.WebhookInboxAppender;
 import com.menta.billing.application.port.out.WebhookSignatureVerifier;
@@ -174,10 +175,12 @@ public class BillingConfiguration {
     @Bean
     public PaymentFulfillmentService paymentFulfillmentService(
         SubscriptionRepository subscriptionRepository, PlanRepository planRepository, Clock clock,
-        PublishPhysicalPaymentCompletedUseCase publishPhysicalPaymentCompletedUseCase
+        PublishPhysicalPaymentCompletedUseCase publishPhysicalPaymentCompletedUseCase,
+        SubscriptionFulfillmentAlarmPort subscriptionFulfillmentAlarmPort
     ) {
         return new PaymentFulfillmentService(
-            subscriptionRepository, planRepository, clock, publishPhysicalPaymentCompletedUseCase
+            subscriptionRepository, planRepository, clock, publishPhysicalPaymentCompletedUseCase,
+            subscriptionFulfillmentAlarmPort
         );
     }
 

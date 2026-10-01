@@ -31,6 +31,10 @@ dependencies {
     // is the retry mechanism (ADR-0038), never stacked with Resilience4j's.
     implementation("io.github.resilience4j:resilience4j-circuitbreaker:2.2.0")
 
+    // Micrometer (#236): the subscription-fulfillment alarm adapter increments a counter. Version
+    // comes from the Spring Boot BOM; application/ must never import it (ArchitectureTest).
+    implementation("io.micrometer:micrometer-core")
+
     // Database
     runtimeOnly("com.mysql:mysql-connector-j")
 

@@ -31,6 +31,7 @@ import com.menta.billing.application.port.out.PhysicalCourseAvailabilityPort;
 import com.menta.billing.application.port.out.PhysicalCourseQuoteRepository;
 import com.menta.billing.application.port.out.PlanRepository;
 import com.menta.billing.application.port.out.PurchaseRepository;
+import com.menta.billing.application.port.out.SubscriptionFulfillmentAlarmPort;
 import com.menta.billing.application.port.out.SubscriptionRepository;
 import com.menta.billing.application.port.out.WebhookInboxAppender;
 import com.menta.billing.application.port.out.WebhookSignatureVerifier;
@@ -42,6 +43,7 @@ import com.menta.billing.application.usecase.GetSubscriptionHistoryUseCaseImpl;
 import com.menta.billing.application.usecase.ListPlansUseCaseImpl;
 import com.menta.billing.application.usecase.PaymentFulfillmentService;
 import com.menta.billing.application.usecase.PaymentVerificationService;
+import com.menta.billing.application.usecase.PublishPhysicalPaymentCompletedUseCase;
 import com.menta.billing.application.usecase.VirtualCourseEntitlementService;
 import com.menta.shared.billing.VirtualCourseEntitlementPort;
 import com.menta.billing.infrastructure.security.RedisBankTransferRateLimitPort;
@@ -75,7 +77,8 @@ class BillingConfigurationTest {
     void wires_the_payment_fulfillment_service_bean() {
         PaymentFulfillmentService service = configuration.paymentFulfillmentService(
             mock(SubscriptionRepository.class), mock(PlanRepository.class), mock(Clock.class),
-            mock(com.menta.billing.application.usecase.PublishPhysicalPaymentCompletedUseCase.class)
+            mock(PublishPhysicalPaymentCompletedUseCase.class),
+            mock(SubscriptionFulfillmentAlarmPort.class)
         );
 
         assertThat(service).isInstanceOf(PaymentFulfillmentService.class);
