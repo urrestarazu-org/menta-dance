@@ -5,6 +5,7 @@ import com.menta.billing.application.port.out.Clock;
 import com.menta.billing.application.port.out.PaymentProviderPort;
 import com.menta.billing.application.port.out.PaymentRepository;
 import com.menta.billing.application.port.out.PlanRepository;
+import com.menta.billing.application.port.out.SubscriptionFulfillmentAlarmPort;
 import com.menta.billing.application.port.out.SubscriptionRepository;
 import com.menta.billing.domain.exception.ProviderPaymentIdConflictException;
 import com.menta.billing.domain.model.Payment;
@@ -60,12 +61,14 @@ public final class PaymentVerificationService {
     public PaymentVerificationService(
         PaymentRepository paymentRepository, PaymentProviderPort paymentProviderPort,
         SubscriptionRepository subscriptionRepository, PlanRepository planRepository, Clock clock,
-        PublishPhysicalPaymentCompletedUseCase publishPhysicalPaymentCompletedUseCase
+        PublishPhysicalPaymentCompletedUseCase publishPhysicalPaymentCompletedUseCase,
+        SubscriptionFulfillmentAlarmPort subscriptionFulfillmentAlarmPort
     ) {
         this(
             paymentRepository, paymentProviderPort, clock,
             new PaymentFulfillmentService(
-                subscriptionRepository, planRepository, clock, publishPhysicalPaymentCompletedUseCase
+                subscriptionRepository, planRepository, clock,
+                publishPhysicalPaymentCompletedUseCase, subscriptionFulfillmentAlarmPort
             )
         );
     }

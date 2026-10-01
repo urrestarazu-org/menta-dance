@@ -9,10 +9,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.menta.billing.application.dto.ProviderPaymentResult;
+import com.menta.billing.application.dto.SubscriptionFulfillmentAlarm;
+import com.menta.billing.application.dto.SubscriptionFulfillmentAlarmReason;
 import com.menta.billing.application.port.out.Clock;
 import com.menta.billing.application.port.out.PaymentProviderPort;
 import com.menta.billing.application.port.out.PaymentRepository;
 import com.menta.billing.application.port.out.PlanRepository;
+import com.menta.billing.application.port.out.SubscriptionFulfillmentAlarmPort;
 import com.menta.billing.application.port.out.SubscriptionRepository;
 import com.menta.billing.domain.model.FulfillmentStatus;
 import com.menta.billing.domain.model.Money;
@@ -49,6 +52,7 @@ class PaymentVerificationServiceTest {
     private PlanRepository planRepository;
     private Clock clock;
     private PublishPhysicalPaymentCompletedUseCase publishPhysicalPaymentCompletedUseCase;
+    private SubscriptionFulfillmentAlarmPort alarmPort;
     private PaymentVerificationService service;
 
     @BeforeEach
@@ -59,12 +63,13 @@ class PaymentVerificationServiceTest {
         planRepository = mock(PlanRepository.class);
         clock = mock(Clock.class);
         publishPhysicalPaymentCompletedUseCase = mock(PublishPhysicalPaymentCompletedUseCase.class);
+        alarmPort = mock(SubscriptionFulfillmentAlarmPort.class);
         when(clock.now()).thenReturn(NOW);
         when(paymentRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(subscriptionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         service = new PaymentVerificationService(
             paymentRepository, paymentProviderPort, subscriptionRepository, planRepository, clock,
-            publishPhysicalPaymentCompletedUseCase
+            publishPhysicalPaymentCompletedUseCase, alarmPort
         );
     }
 
@@ -285,15 +290,18 @@ class PaymentVerificationServiceTest {
         verify(subscriptionRepository).save(captor.capture());
         assertThat(captor.getValue().getFulfillmentStatus()).isEqualTo(FulfillmentStatus.EXCEPTION);
         assertThat(captor.getValue().getStatus()).isEqualTo(SubscriptionStatus.PENDING);
-        // #209 D.4 regression lock (the #236 boundary): PaymentVerificationService
-        // has no BillingOutboxAppenderPort, MarkPurchaseExceptionUseCase, or
-        // PurchaseExceptionNotificationPort dependency at all — structurally it
-        // cannot append billing.PurchaseExceptioned / billing.PaymentFulfillmentFailed
-        // or send a notification. publishPhysicalPaymentCompletedUseCase is the
-        // only side-effecting collaborator this service holds besides the repos
-        // already verified above; asserting it is never touched on the virtual
-        // EXCEPTION path is the maximal proof available at this unit's boundary
-        // that the #236 virtual path stays fully decoupled from #209.
+        // #209 D.4 regression lock: PaymentVerificationService still has no
+        // BillingOutboxAppenderPort, MarkPurchaseExceptionUseCase, or
+        // PurchaseExceptionNotificationPort dependency, so the virtual EXCEPTION path
+        // cannot append billing.PurchaseExceptioned / billing.PaymentFulfillmentFailed or
+        // send a notification. The physical publish collaborator is never touched here.
+        // #236 adds exactly one thing on this path: the operator alarm (log + metric),
+        // raised through the fulfillment collaborator's alarm port.
+        var alarm = org.mockito.ArgumentCaptor.forClass(SubscriptionFulfillmentAlarm.class);
+        verify(alarmPort).raise(alarm.capture());
+        assertThat(alarm.getValue().reason())
+            .isEqualTo(SubscriptionFulfillmentAlarmReason.PLAN_MISSING);
+        assertThat(alarm.getValue().paymentId()).isEqualTo(payment.getId().getValue());
         verify(publishPhysicalPaymentCompletedUseCase, never()).handle(any());
     }
 
@@ -306,6 +314,13 @@ class PaymentVerificationServiceTest {
         service.verify("mp-1");
 
         verify(subscriptionRepository, never()).save(any());
+        // #236: a Completed payment with no subscription row used to vanish silently.
+        var alarm = org.mockito.ArgumentCaptor.forClass(SubscriptionFulfillmentAlarm.class);
+        verify(alarmPort).raise(alarm.capture());
+        assertThat(alarm.getValue().reason())
+            .isEqualTo(SubscriptionFulfillmentAlarmReason.SUBSCRIPTION_MISSING);
+        assertThat(alarm.getValue().paymentId()).isEqualTo(completed.getId().getValue());
+        assertThat(alarm.getValue().subscriptionId()).isNull();
     }
 
     /** Replay: an already-activated subscription must not be re-snapshotted or re-granted. */

@@ -50,6 +50,19 @@ class ArchitectureTest {
             .check(classes);
     }
 
+    /**
+     * #236: the subscription-fulfillment alarm counter lives behind an application port; Micrometer
+     * types may only appear in infrastructure.
+     */
+    @Test
+    void application_should_not_depend_on_micrometer() {
+        noClasses()
+            .that().resideInAPackage("..application..")
+            .should().dependOnClassesThat().resideInAPackage("io.micrometer..")
+            .allowEmptyShould(true)
+            .check(classes);
+    }
+
     @Test
     void domain_should_not_use_spring_annotations() {
         noClasses()
