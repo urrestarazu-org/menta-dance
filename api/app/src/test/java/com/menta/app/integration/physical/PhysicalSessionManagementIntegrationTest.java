@@ -42,6 +42,7 @@ import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacity
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
 import com.menta.shared.domain.vo.Email;
+import com.menta.shared.outbox.OutboxStatus;
 import com.menta.app.integration.support.AbstractPhysicalMySqlIntegrationTest;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -95,6 +96,7 @@ class PhysicalSessionManagementIntegrationTest extends AbstractPhysicalMySqlInte
      * races put a false green below 1 in 250.000.
      */
     private static final int OVERSELL_ITERATIONS = 10;
+    private static final int MAX_REDELIVERIES = 3;
 
     @Autowired private TestRestTemplate http;
     @Autowired private UserRepository userRepository;
@@ -490,6 +492,31 @@ class PhysicalSessionManagementIntegrationTest extends AbstractPhysicalMySqlInte
         } finally {
             pool.shutdownNow();
         }
+        redeliverUnfinished(events);
+    }
+
+    /**
+     * Mirrors the reconciler for a worker that lost a MySQL deadlock (#283).
+     *
+     * <p>Two claims interleaving genuinely can deadlock on the
+     * {@code billing_purchase_sessions} insert. InnoDB picks a victim, whose
+     * transaction rolls back and leaves its outbox row un-COMPLETED; in
+     * production the reconciler redelivers that row on its next tick, so
+     * the test does the same. The race above is untouched — only the
+     * victim's retry runs, sequentially, and the capacity invariants are
+     * still asserted by the caller.</p>
+     */
+    private void redeliverUnfinished(List<OutboxRowJpaEntity> events) {
+        for (int redelivery = 0; redelivery < MAX_REDELIVERIES; redelivery++) {
+            List<OutboxRowJpaEntity> unfinished = events.stream()
+                .map(event -> outboxRepository.findById(event.getId()).orElseThrow())
+                .filter(row -> row.getStatus() != OutboxStatus.COMPLETED)
+                .toList();
+            if (unfinished.isEmpty()) {
+                return;
+            }
+            unfinished.forEach(outboxWorker::process);
+        }
     }
 
     @Test
@@ -498,16 +525,34 @@ class PhysicalSessionManagementIntegrationTest extends AbstractPhysicalMySqlInte
 
         dispatchConcurrently(race.events());
 
-        assertThat(assignmentRepository.countBySessionId(race.sessionId())).isEqualTo(1);
+        // OutboxReconciliationWorker.process() swallows a failing handler into
+        // the row's FAILED/last_error, so a bare NoSuchElementException on the
+        // Purchase lookup hides WHY the side effect never ran (#283). Every
+        // assertion below carries the per-event outcome so a flake is
+        // diagnosable from the CI log alone.
+        String outcome = describeOutcome(race.events());
+        assertThat(assignmentRepository.countBySessionId(race.sessionId())).as(outcome).isEqualTo(1);
         // #41 PR8: the winner now settles at ASSIGNED (design A3's
         // assignAll -- ok --> purchase.assigned(), previously a pre-existing
         // gap left every winner at PENDING_FULFILLMENT).
-        assertThat(purchaseRepository.findByPaymentId(race.firstPaymentId()).orElseThrow().getStatus())
+        assertThat(purchaseRepository.findByPaymentId(race.firstPaymentId()))
+            .as(outcome).isPresent().get().extracting(purchase -> purchase.getStatus())
             .isIn("ASSIGNED", "EXCEPTION");
-        assertThat(purchaseRepository.findByPaymentId(race.secondPaymentId()).orElseThrow().getStatus())
+        assertThat(purchaseRepository.findByPaymentId(race.secondPaymentId()))
+            .as(outcome).isPresent().get().extracting(purchase -> purchase.getStatus())
             .isIn("ASSIGNED", "EXCEPTION");
-        assertThat(purchaseRepository.findAll()).extracting(purchase -> purchase.getStatus())
+        assertThat(purchaseRepository.findAll()).as(outcome).extracting(purchase -> purchase.getStatus())
             .containsExactlyInAnyOrder("ASSIGNED", "EXCEPTION");
+    }
+
+    /** Renders each dispatched event's persisted worker outcome (status, attempts, last error). */
+    private String describeOutcome(List<OutboxRowJpaEntity> events) {
+        return events.stream()
+            .map(event -> outboxRepository.findById(event.getId())
+                .map(row -> "outbox#%d status=%s attempts=%d lastError=%s".formatted(
+                    row.getId(), row.getStatus(), row.getAttempts(), row.getLastError()))
+                .orElse("outbox#" + event.getId() + " <missing>"))
+            .collect(java.util.stream.Collectors.joining(" | ", "[", "]"));
     }
 
     /**
