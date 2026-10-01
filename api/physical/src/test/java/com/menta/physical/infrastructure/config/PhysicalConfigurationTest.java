@@ -2,9 +2,12 @@ package com.menta.physical.infrastructure.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.menta.physical.application.dto.DeviceAuthenticationRejection;
 import com.menta.physical.application.port.in.BatchCreatePhysicalSessionsUseCase;
 import com.menta.physical.application.port.in.CreatePhysicalCourseUseCase;
 import com.menta.physical.application.port.in.CreatePhysicalSessionUseCase;
@@ -22,6 +25,7 @@ import com.menta.physical.application.port.in.UpdatePhysicalCourseUseCase;
 import com.menta.physical.application.port.in.UpdatePhysicalSessionUseCase;
 import com.menta.physical.application.port.out.AttendanceRepository;
 import com.menta.physical.application.port.out.Clock;
+import com.menta.physical.application.port.out.DeviceAuthenticationRejectionPort;
 import com.menta.physical.application.port.out.DeviceSecretGenerator;
 import com.menta.physical.application.port.out.DeviceSecretHasher;
 import com.menta.physical.application.port.out.PhysicalCapacityAssignmentRepository;
@@ -38,9 +42,12 @@ import com.menta.physical.application.usecase.ListManagedPhysicalCoursesUseCaseI
 import com.menta.physical.application.usecase.ListManagedPhysicalSessionsUseCaseImpl;
 import com.menta.physical.application.usecase.ListPhysicalDevicesUseCaseImpl;
 import com.menta.physical.application.usecase.PhysicalCourseAvailabilityPortImpl;
+import com.menta.physical.application.usecase.PhysicalDeviceAuthenticator;
 import com.menta.physical.application.usecase.ProcessPhysicalCheckInUseCaseImpl;
 import com.menta.physical.application.usecase.UpdatePhysicalCourseUseCaseImpl;
 import com.menta.physical.application.usecase.UpdatePhysicalSessionUseCaseImpl;
+import com.menta.physical.domain.exception.InvalidDeviceTokenException;
+import com.menta.physical.domain.model.DeviceId;
 import com.menta.physical.infrastructure.device.SecureRandomDeviceSecretGenerator;
 import com.menta.physical.infrastructure.device.Sha256DeviceSecretHasher;
 import com.menta.physical.infrastructure.qr.QrProperties;
@@ -48,15 +55,13 @@ import com.menta.physical.infrastructure.transaction.TransactionalRegisterPhysic
 import com.menta.physical.infrastructure.transaction.TransactionalRevokePhysicalDeviceUseCase;
 import com.menta.physical.infrastructure.transaction.TransactionalRotatePhysicalDeviceSecretUseCase;
 import com.menta.shared.auth.UserExistencePort;
-import java.lang.reflect.Field;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.springframework.core.env.Environment;
 import org.springframework.data.redis.core.RedisTemplate;
 
 class PhysicalConfigurationTest {
 
-    private final Environment environment = mock(Environment.class);
-    private final PhysicalConfiguration configuration = new PhysicalConfiguration(environment);
+    private final PhysicalConfiguration configuration = new PhysicalConfiguration();
 
     @Test
     void wires_the_availability_port_bean_with_the_given_repositories() {
@@ -156,37 +161,30 @@ class PhysicalConfigurationTest {
         ProcessPhysicalCheckInUseCase useCase = configuration.processPhysicalCheckInUseCase(
             mock(PhysicalSessionRepository.class), mock(PhysicalCapacityAssignmentRepository.class),
             mock(AttendanceRepository.class), redisTemplate, mock(Clock.class), new QrProperties(),
-            mock(UserExistencePort.class)
+            mock(UserExistencePort.class), mock(PhysicalDeviceAuthenticator.class)
         );
 
         assertThat(useCase).isInstanceOf(ProcessPhysicalCheckInUseCaseImpl.class);
     }
 
     @Test
-    void validateDeviceTokenNotDefaultInProduction_passes_outside_production_profiles() {
-        when(environment.getActiveProfiles()).thenReturn(new String[] {"dev"});
+    void wires_the_device_authenticator_bean_with_the_given_collaborators() {
+        PhysicalDeviceRepository repository = mock(PhysicalDeviceRepository.class);
+        DeviceSecretHasher hasher = mock(DeviceSecretHasher.class);
+        when(hasher.hash("some-secret")).thenReturn("some-hash");
+        DeviceAuthenticationRejectionPort rejectionPort =
+            mock(DeviceAuthenticationRejectionPort.class);
+        PhysicalDeviceAuthenticator authenticator = configuration.physicalDeviceAuthenticator(
+            repository, hasher, mock(Clock.class), rejectionPort
+        );
 
-        configuration.validateDeviceTokenNotDefaultInProduction();
-    }
-
-    @Test
-    void validateDeviceTokenNotDefaultInProduction_passes_in_production_with_a_custom_token()
-        throws NoSuchFieldException, IllegalAccessException {
-        when(environment.getActiveProfiles()).thenReturn(new String[] {"staging"});
-        setCheckInDeviceToken(configuration, "a-real-production-device-token");
-
-        configuration.validateDeviceTokenNotDefaultInProduction();
-    }
-
-    @Test
-    void validateDeviceTokenNotDefaultInProduction_rejects_the_dev_default_token_in_production()
-        throws NoSuchFieldException, IllegalAccessException {
-        when(environment.getActiveProfiles()).thenReturn(new String[] {"production"});
-        setCheckInDeviceToken(configuration, devDefaultDeviceToken());
-
-        assertThatThrownBy(configuration::validateDeviceTokenNotDefaultInProduction)
-            .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("SECURITY");
+        // An unknown (but well-formed) id walks the whole chain: registry lookup, hash, report.
+        String unknownId = UUID.randomUUID().toString();
+        assertThatThrownBy(() -> authenticator.authenticate(unknownId, "some-secret"))
+            .isInstanceOf(InvalidDeviceTokenException.class);
+        verify(repository).findById(any(DeviceId.class));
+        verify(hasher).hash("some-secret");
+        verify(rejectionPort).report(any(DeviceAuthenticationRejection.class));
     }
 
     @Test
@@ -246,19 +244,5 @@ class PhysicalConfigurationTest {
             configuration.listPhysicalDevicesUseCase(mock(PhysicalDeviceRepository.class));
 
         assertThat(useCase).isInstanceOf(ListPhysicalDevicesUseCaseImpl.class);
-    }
-
-    private static String devDefaultDeviceToken()
-        throws NoSuchFieldException, IllegalAccessException {
-        Field field = PhysicalConfiguration.class.getDeclaredField("DEV_DEFAULT_DEVICE_TOKEN");
-        field.setAccessible(true);
-        return (String) field.get(null);
-    }
-
-    private static void setCheckInDeviceToken(PhysicalConfiguration configuration, String token)
-        throws NoSuchFieldException, IllegalAccessException {
-        Field field = PhysicalConfiguration.class.getDeclaredField("checkInDeviceToken");
-        field.setAccessible(true);
-        field.set(configuration, token);
     }
 }

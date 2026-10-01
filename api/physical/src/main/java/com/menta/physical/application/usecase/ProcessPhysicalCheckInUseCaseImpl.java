@@ -14,7 +14,6 @@ import com.menta.physical.domain.exception.CapacityAssignmentRequiredException;
 import com.menta.physical.domain.exception.CheckInAlreadyProcessingException;
 import com.menta.physical.domain.exception.ExpiredQrCredentialException;
 import com.menta.physical.domain.exception.InsufficientRoleException;
-import com.menta.physical.domain.exception.InvalidDeviceTokenException;
 import com.menta.physical.domain.exception.InvalidQrCredentialException;
 import com.menta.physical.domain.exception.OutsideCheckInWindowException;
 import com.menta.physical.domain.exception.SessionCancelledException;
@@ -23,6 +22,7 @@ import com.menta.physical.domain.exception.SessionNotFoundException;
 import com.menta.physical.domain.exception.StudentNotFoundException;
 import com.menta.physical.domain.model.Attendance;
 import com.menta.physical.domain.model.AttendanceKind;
+import com.menta.physical.domain.model.DeviceId;
 import com.menta.physical.domain.model.PhysicalSession;
 import com.menta.physical.domain.model.SessionId;
 import com.menta.physical.domain.model.SessionStatus;
@@ -39,7 +39,7 @@ import java.util.UUID;
  * Redeems a scanned QR for a confirmed attendance row (US-PHYSICAL-001
  * escenario 2). The eleven-step validation order below is deliberate and
  * load-bearing, not incidental: every rejection reason that can be decided
- * WITHOUT talking to Redis (device token, QR shape, session existence,
+ * WITHOUT talking to Redis (device authentication, QR shape, session existence,
  * cancellation, window, assignment, idempotent replay) runs first, so a
  * flood of malformed or unauthorized scans can never create Redis lock
  * contention (escenario 4). Only a request that has cleared every one of
@@ -59,7 +59,7 @@ public class ProcessPhysicalCheckInUseCaseImpl implements ProcessPhysicalCheckIn
     private final QrCredentialSignatureService signatureService;
     private final RedisLockPort lockPort;
     private final Clock clock;
-    private final String deviceToken;
+    private final PhysicalDeviceAuthenticator deviceAuthenticator;
     private final Duration sessionWindowBefore;
     private final Duration sessionWindowAfter;
     private final Duration lockTtl;
@@ -72,7 +72,7 @@ public class ProcessPhysicalCheckInUseCaseImpl implements ProcessPhysicalCheckIn
         QrCredentialSignatureService signatureService,
         RedisLockPort lockPort,
         Clock clock,
-        String deviceToken,
+        PhysicalDeviceAuthenticator deviceAuthenticator,
         Duration sessionWindowBefore,
         Duration sessionWindowAfter,
         Duration lockTtl,
@@ -84,7 +84,7 @@ public class ProcessPhysicalCheckInUseCaseImpl implements ProcessPhysicalCheckIn
         this.signatureService = signatureService;
         this.lockPort = lockPort;
         this.clock = clock;
-        this.deviceToken = deviceToken;
+        this.deviceAuthenticator = deviceAuthenticator;
         this.sessionWindowBefore = sessionWindowBefore;
         this.sessionWindowAfter = sessionWindowAfter;
         this.lockTtl = lockTtl;
@@ -93,8 +93,10 @@ public class ProcessPhysicalCheckInUseCaseImpl implements ProcessPhysicalCheckIn
 
     @Override
     public CheckInResult checkIn(CheckInCommand command) {
-        // Step 1: reject an unauthorized reader before it learns anything else.
-        verifyDeviceToken(command.deviceToken());
+        // Step 1: reject an unauthorized reader before it learns anything else. The registry
+        // lookup is a database PK read, never Redis, so this gate stays Redis-free.
+        DeviceId authenticatedDevice =
+            deviceAuthenticator.authenticate(command.deviceId(), command.deviceToken());
 
         // Step 2: format + type validation, delegated to the helper.
         ParsedQrCredential parsed = QrCredentialParser.parse(command.qrCredentials());
@@ -147,7 +149,7 @@ public class ProcessPhysicalCheckInUseCaseImpl implements ProcessPhysicalCheckIn
         // Step 11: record the attendance.
         Attendance attendance = Attendance.record(
             command.sessionId(), parsed.studentId(), clock.now(),
-            command.deviceId(), AttendanceKind.QR
+            authenticatedDevice.toString(), AttendanceKind.QR
         );
         Attendance saved = attendanceRepository.save(attendance);
         return new CheckInResult(AttendanceViewMapper.toView(saved), true);
@@ -228,12 +230,6 @@ public class ProcessPhysicalCheckInUseCaseImpl implements ProcessPhysicalCheckIn
         );
         if (!constantTimeEquals(recomputed, original)) {
             throw new InvalidQrCredentialException();
-        }
-    }
-
-    private void verifyDeviceToken(String provided) {
-        if (provided == null || !constantTimeEquals(provided, deviceToken)) {
-            throw new InvalidDeviceTokenException();
         }
     }
 

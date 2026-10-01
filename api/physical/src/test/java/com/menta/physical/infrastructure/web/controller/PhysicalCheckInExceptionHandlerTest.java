@@ -6,6 +6,8 @@ import static org.mockito.Mockito.mock;
 import com.menta.physical.domain.exception.CapacityAssignmentRequiredException;
 import com.menta.physical.domain.exception.CheckInAlreadyProcessingException;
 import com.menta.physical.domain.exception.CheckInDegradedException;
+import com.menta.physical.domain.exception.CheckInDeviceRevokedException;
+import com.menta.physical.domain.exception.DeviceExpiredException;
 import com.menta.physical.domain.exception.ExpiredQrCredentialException;
 import com.menta.physical.domain.exception.InsufficientRoleException;
 import com.menta.physical.domain.exception.InvalidDeviceTokenException;
@@ -33,6 +35,39 @@ class PhysicalCheckInExceptionHandlerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(codeOf(response)).isEqualTo("INVALID_DEVICE_TOKEN");
+    }
+
+    @Test
+    void maps_a_revoked_device_to_401_with_its_own_code() {
+        ResponseEntity<ProblemDetail> response =
+            handler.deviceRevoked(new CheckInDeviceRevokedException());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(codeOf(response)).isEqualTo("DEVICE_REVOKED");
+    }
+
+    @Test
+    void maps_an_expired_device_to_401_with_its_own_code() {
+        ResponseEntity<ProblemDetail> response =
+            handler.deviceExpired(new DeviceExpiredException());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(codeOf(response)).isEqualTo("DEVICE_EXPIRED");
+    }
+
+    @Test
+    void the_three_device_rejections_expose_nothing_beyond_the_code() {
+        ProblemDetail invalid =
+            handler.invalidDeviceToken(new InvalidDeviceTokenException()).getBody();
+        ProblemDetail revoked =
+            handler.deviceRevoked(new CheckInDeviceRevokedException()).getBody();
+        ProblemDetail expired = handler.deviceExpired(new DeviceExpiredException()).getBody();
+
+        assertThat(invalid.getProperties()).containsOnlyKeys("code");
+        assertThat(revoked.getProperties()).containsOnlyKeys("code");
+        assertThat(expired.getProperties()).containsOnlyKeys("code");
+        assertThat(revoked.getDetail()).isEqualTo("The device has been revoked.");
+        assertThat(expired.getDetail()).isEqualTo("The device credential has expired.");
     }
 
     @Test

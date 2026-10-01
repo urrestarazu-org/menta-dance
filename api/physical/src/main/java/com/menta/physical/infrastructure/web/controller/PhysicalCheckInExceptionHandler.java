@@ -3,6 +3,8 @@ package com.menta.physical.infrastructure.web.controller;
 import com.menta.physical.domain.exception.CapacityAssignmentRequiredException;
 import com.menta.physical.domain.exception.CheckInAlreadyProcessingException;
 import com.menta.physical.domain.exception.CheckInDegradedException;
+import com.menta.physical.domain.exception.CheckInDeviceRevokedException;
+import com.menta.physical.domain.exception.DeviceExpiredException;
 import com.menta.physical.domain.exception.ExpiredQrCredentialException;
 import com.menta.physical.domain.exception.InsufficientRoleException;
 import com.menta.physical.domain.exception.InvalidDeviceTokenException;
@@ -32,6 +34,25 @@ public class PhysicalCheckInExceptionHandler {
     ResponseEntity<ProblemDetail> invalidDeviceToken(InvalidDeviceTokenException exception) {
         return ProblemDetails.response(
             HttpStatus.UNAUTHORIZED, "The device token is invalid.", exception.getErrorCode()
+        );
+    }
+
+    /**
+     * #266: a proven-but-revoked reader. Check-in context only (401); the admin advice maps the
+     * unrelated {@code DeviceRevokedException} (rotate after revoke) to 409.
+     */
+    @ExceptionHandler(CheckInDeviceRevokedException.class)
+    ResponseEntity<ProblemDetail> deviceRevoked(CheckInDeviceRevokedException exception) {
+        return ProblemDetails.response(
+            HttpStatus.UNAUTHORIZED, "The device has been revoked.", exception.getErrorCode()
+        );
+    }
+
+    /** #266: a proven reader whose registered expiry has been reached. */
+    @ExceptionHandler(DeviceExpiredException.class)
+    ResponseEntity<ProblemDetail> deviceExpired(DeviceExpiredException exception) {
+        return ProblemDetails.response(
+            HttpStatus.UNAUTHORIZED, "The device credential has expired.", exception.getErrorCode()
         );
     }
 

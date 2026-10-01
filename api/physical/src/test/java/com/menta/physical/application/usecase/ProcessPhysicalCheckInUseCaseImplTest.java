@@ -26,6 +26,8 @@ import com.menta.physical.application.port.out.RedisLockPort;
 import com.menta.physical.domain.exception.CapacityAssignmentRequiredException;
 import com.menta.physical.domain.exception.CheckInAlreadyProcessingException;
 import com.menta.physical.domain.exception.CheckInDegradedException;
+import com.menta.physical.domain.exception.CheckInDeviceRevokedException;
+import com.menta.physical.domain.exception.DeviceExpiredException;
 import com.menta.physical.domain.exception.ExpiredQrCredentialException;
 import com.menta.physical.domain.exception.InsufficientRoleException;
 import com.menta.physical.domain.exception.InvalidDeviceTokenException;
@@ -38,6 +40,7 @@ import com.menta.physical.domain.exception.StudentNotFoundException;
 import com.menta.physical.domain.model.Attendance;
 import com.menta.physical.domain.model.AttendanceKind;
 import com.menta.physical.domain.model.CourseId;
+import com.menta.physical.domain.model.DeviceId;
 import com.menta.physical.domain.model.PhysicalSession;
 import com.menta.physical.domain.model.SessionId;
 import com.menta.physical.domain.model.SessionStatus;
@@ -47,21 +50,24 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 
 class ProcessPhysicalCheckInUseCaseImplTest {
 
     private static final Instant NOW = Instant.parse("2026-08-25T20:00:00Z");
-    private static final String DEVICE_TOKEN = "shared-secret";
+    private static final String READER_SECRET = "reader-secret";
     private static final Duration WINDOW_BEFORE = Duration.ofMinutes(30);
     private static final Duration WINDOW_AFTER = Duration.ofHours(2);
     private static final Duration LOCK_TTL = Duration.ofSeconds(10);
-    private static final String DEVICE_ID = "reader-01";
+    private static final DeviceId AUTHENTICATED_DEVICE = DeviceId.generate();
+    private static final String DEVICE_ID = AUTHENTICATED_DEVICE.toString().toUpperCase();
     private static final String JTI = "jti-1";
 
     private final PhysicalSessionRepository sessionRepository =
@@ -75,6 +81,8 @@ class ProcessPhysicalCheckInUseCaseImplTest {
     private final RedisLockPort lockPort = mock(RedisLockPort.class);
     private final Clock clock = mock(Clock.class);
     private final UserExistencePort userExistencePort = mock(UserExistencePort.class);
+    private final PhysicalDeviceAuthenticator deviceAuthenticator =
+        mock(PhysicalDeviceAuthenticator.class);
 
     private SessionId sessionId;
     private UUID studentId;
@@ -83,12 +91,14 @@ class ProcessPhysicalCheckInUseCaseImplTest {
     @BeforeEach
     void setUp() {
         when(clock.now()).thenReturn(NOW);
+        when(deviceAuthenticator.authenticate(DEVICE_ID, READER_SECRET))
+            .thenReturn(AUTHENTICATED_DEVICE);
         sessionId = SessionId.generate();
         studentId = UUID.randomUUID();
         useCase = new ProcessPhysicalCheckInUseCaseImpl(
             sessionRepository, assignmentRepository, attendanceRepository,
             signatureService, lockPort, clock,
-            DEVICE_TOKEN, WINDOW_BEFORE, WINDOW_AFTER, LOCK_TTL, userExistencePort
+            deviceAuthenticator, WINDOW_BEFORE, WINDOW_AFTER, LOCK_TTL, userExistencePort
         );
     }
 
@@ -111,7 +121,7 @@ class ProcessPhysicalCheckInUseCaseImplTest {
     }
 
     private CheckInCommand command(String qrCredentials) {
-        return CheckInCommand.qr(sessionId, qrCredentials, DEVICE_ID, DEVICE_TOKEN);
+        return CheckInCommand.qr(sessionId, qrCredentials, DEVICE_ID, READER_SECRET);
     }
 
     private void allowHappyPathUpToLocks() {
@@ -137,7 +147,11 @@ class ProcessPhysicalCheckInUseCaseImplTest {
         assertThat(result.newlyRecorded()).isTrue();
         assertThat(result.attendance().userId()).isEqualTo(studentId);
         assertThat(result.attendance().sessionId()).isEqualTo(sessionId);
-        assertThat(result.attendance().deviceId()).isEqualTo(DEVICE_ID);
+        // A10: the stored device_id is the authenticated canonical (lowercase) UUID, never the
+        // raw submitted text (DEVICE_ID is deliberately submitted in uppercase).
+        assertThat(result.attendance().deviceId()).isEqualTo(AUTHENTICATED_DEVICE.toString());
+        assertThat(result.attendance().deviceId()).isNotEqualTo(DEVICE_ID);
+        verify(deviceAuthenticator).authenticate(DEVICE_ID, READER_SECRET);
         verify(lockPort).acquireIfAbsent(eq("checkin:qr:" + JTI), eq(LOCK_TTL));
         String attendanceKey = "checkin:attendance:" + sessionId + ":" + studentId;
         verify(lockPort).acquireIfAbsent(eq(attendanceKey), eq(LOCK_TTL));
@@ -164,24 +178,29 @@ class ProcessPhysicalCheckInUseCaseImplTest {
         verify(attendanceRepository, never()).save(any());
     }
 
-    @Test
-    void rejects_before_any_other_check_when_the_device_token_is_wrong() {
-        CheckInCommand command =
-            CheckInCommand.qr(sessionId, "irrelevant", DEVICE_ID, "wrong-secret");
-
-        assertThatThrownBy(() -> useCase.checkIn(command))
-            .isInstanceOf(InvalidDeviceTokenException.class);
-        verifyNoInteractions(
-            sessionRepository, assignmentRepository, attendanceRepository, lockPort
+    static Stream<RuntimeException> deviceRejections() {
+        return Stream.of(
+            new InvalidDeviceTokenException(),
+            new CheckInDeviceRevokedException(),
+            new DeviceExpiredException()
         );
     }
 
-    @Test
-    void rejects_a_null_device_token() {
-        CheckInCommand command = CheckInCommand.qr(sessionId, "irrelevant", DEVICE_ID, null);
+    @ParameterizedTest
+    @MethodSource("deviceRejections")
+    void rejects_before_any_other_check_when_the_device_authentication_fails(
+        RuntimeException rejection
+    ) {
+        when(deviceAuthenticator.authenticate(DEVICE_ID, "wrong-secret")).thenThrow(rejection);
+        CheckInCommand command =
+            CheckInCommand.qr(sessionId, "irrelevant", DEVICE_ID, "wrong-secret");
 
-        assertThatThrownBy(() -> useCase.checkIn(command))
-            .isInstanceOf(InvalidDeviceTokenException.class);
+        assertThatThrownBy(() -> useCase.checkIn(command)).isSameAs(rejection);
+        verifyNoInteractions(
+            sessionRepository, assignmentRepository, attendanceRepository, signatureService,
+            lockPort, userExistencePort
+        );
+        verify(clock, never()).now();
     }
 
     @Test
@@ -366,6 +385,7 @@ class ProcessPhysicalCheckInUseCaseImplTest {
                 useCase.checkInManually(CheckInCommand.manual(sessionId, studentId, receptionist(actorId)));
 
             assertThat(result.newlyRecorded()).isTrue();
+            verifyNoInteractions(deviceAuthenticator);
         }
 
         @Test

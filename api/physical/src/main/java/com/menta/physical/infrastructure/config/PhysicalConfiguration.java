@@ -19,6 +19,7 @@ import com.menta.physical.application.port.in.UpdatePhysicalCourseUseCase;
 import com.menta.physical.application.port.in.UpdatePhysicalSessionUseCase;
 import com.menta.physical.application.port.out.AttendanceRepository;
 import com.menta.physical.application.port.out.Clock;
+import com.menta.physical.application.port.out.DeviceAuthenticationRejectionPort;
 import com.menta.physical.application.port.out.DeviceSecretGenerator;
 import com.menta.physical.application.port.out.DeviceSecretHasher;
 import com.menta.physical.application.port.out.PhysicalCapacityAssignmentRepository;
@@ -37,6 +38,7 @@ import com.menta.physical.application.usecase.ListManagedPhysicalSessionsUseCase
 import com.menta.physical.application.usecase.ListPhysicalDevicesUseCaseImpl;
 import com.menta.physical.application.usecase.PhysicalCourseAvailabilityPortImpl;
 import com.menta.physical.application.usecase.PhysicalCourseOwnershipPortImpl;
+import com.menta.physical.application.usecase.PhysicalDeviceAuthenticator;
 import com.menta.physical.application.usecase.ProcessPhysicalCheckInUseCaseImpl;
 import com.menta.physical.application.usecase.RegisterPhysicalDeviceUseCaseImpl;
 import com.menta.physical.application.usecase.RevokePhysicalDeviceUseCaseImpl;
@@ -52,16 +54,12 @@ import com.menta.physical.infrastructure.transaction.TransactionalRegisterPhysic
 import com.menta.physical.infrastructure.transaction.TransactionalRevokePhysicalDeviceUseCase;
 import com.menta.physical.infrastructure.transaction.TransactionalRotatePhysicalDeviceSecretUseCase;
 import com.menta.shared.auth.UserExistencePort;
-import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.time.ZoneId;
-import java.util.Locale;
-import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.env.Environment;
 import org.springframework.data.redis.core.RedisTemplate;
 
 /**
@@ -79,49 +77,6 @@ import org.springframework.data.redis.core.RedisTemplate;
 @Configuration
 @ConfigurationPropertiesScan(basePackages = "com.menta.physical.infrastructure.qr")
 public class PhysicalConfiguration {
-
-    /**
-     * Dev-only default check-in device token — same criterion as {@code
-     * BillingConfiguration.DEV_DEFAULT_WEBHOOK_HMAC_SECRET}: detects
-     * insecure configuration in production.
-     */
-    private static final String DEV_DEFAULT_DEVICE_TOKEN =
-        "ZGV2LW9ubHktY2hlY2tpbi1kZXZpY2UtdG9rZW4tbm90LWZvci1wcm9kdWN0aW9uLXVzZQ==";
-
-    private static final Set<String> PRODUCTION_PROFILES = Set.of("prod", "production", "staging");
-
-    private final Environment environment;
-
-    @Value("${app.physical.checkin.device-token:" + DEV_DEFAULT_DEVICE_TOKEN + "}")
-    private String checkInDeviceToken;
-
-    public PhysicalConfiguration(Environment environment) {
-        this.environment = environment;
-    }
-
-    /**
-     * Fail-fast: reject the dev-only check-in device token in production
-     * profiles (US-PHYSICAL-001).
-     */
-    @PostConstruct
-    void validateDeviceTokenNotDefaultInProduction() {
-        if (isProductionProfile() && DEV_DEFAULT_DEVICE_TOKEN.equals(checkInDeviceToken)) {
-            throw new IllegalStateException(
-                "SECURITY: production requires a non-default check-in device token. "
-                    + "Set app.physical.checkin.device-token via environment variables. "
-                    + "Active profiles: " + String.join(", ", environment.getActiveProfiles())
-            );
-        }
-    }
-
-    private boolean isProductionProfile() {
-        for (String profile : environment.getActiveProfiles()) {
-            if (PRODUCTION_PROFILES.contains(profile.toLowerCase(Locale.ROOT))) {
-                return true;
-            }
-        }
-        return false;
-    }
 
     /**
      * Production {@link Clock} adapter for the application-layer port.
@@ -194,13 +149,29 @@ public class PhysicalConfiguration {
         PhysicalSessionRepository sessionRepository,
         PhysicalCapacityAssignmentRepository assignmentRepository,
         AttendanceRepository attendanceRepository, RedisTemplate<String, String> redisTemplate,
-        Clock clock, QrProperties qrProperties, UserExistencePort userExistencePort
+        Clock clock, QrProperties qrProperties, UserExistencePort userExistencePort,
+        PhysicalDeviceAuthenticator deviceAuthenticator
     ) {
         return new ProcessPhysicalCheckInUseCaseImpl(
             sessionRepository, assignmentRepository, attendanceRepository,
             new FormatQrCredentialSignatureService(), new RedisCheckInLockPort(redisTemplate),
-            clock, checkInDeviceToken, qrProperties.getSessionWindowBefore(),
+            clock, deviceAuthenticator, qrProperties.getSessionWindowBefore(),
             qrProperties.getSessionWindowAfter(), qrProperties.getLockTtl(), userExistencePort
+        );
+    }
+
+    /**
+     * #266 -- gate 1 of the QR check-in: authenticates the reader against the #44 device
+     * registry. Plain class composed here (same rationale as the use cases); the rejection port
+     * is the {@code @Component} log-and-metric adapter.
+     */
+    @Bean
+    public PhysicalDeviceAuthenticator physicalDeviceAuthenticator(
+        PhysicalDeviceRepository deviceRepository, DeviceSecretHasher secretHasher, Clock clock,
+        DeviceAuthenticationRejectionPort rejectionPort
+    ) {
+        return new PhysicalDeviceAuthenticator(
+            deviceRepository, secretHasher, clock, rejectionPort
         );
     }
 
