@@ -34,6 +34,7 @@ require 'maxmemory-policy' docker-compose.yml
 require 'noeviction' docker-compose.yml
 require 'otel-collector:' docker-compose.yml
 require 'loki:' docker-compose.yml
+require '\.\./\.\./\.\./observability/grafana/provisioning:/etc/grafana/provisioning' infra/docker/database/docker-compose.yml
 require 'jdbc:mysql://localhost:3306/menta' api/app/src/main/resources/application.yml
 require 'username: \$\{MYSQL_APP_USER' api/app/src/main/resources/application.yml
 require 'password: \$\{MYSQL_APP_PASSWORD\}' api/app/src/main/resources/application.yml
