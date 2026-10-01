@@ -27,11 +27,14 @@ import com.menta.physical.domain.model.CourseStatus;
 import com.menta.physical.infrastructure.persistence.entity.AttendanceJpaEntity;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalCapacityAssignmentJpaEntity;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalCourseJpaEntity;
+import com.menta.physical.infrastructure.persistence.entity.PhysicalDeviceJpaEntity;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalSessionJpaEntity;
 import com.menta.physical.infrastructure.persistence.repository.AttendanceJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityAssignmentJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJpaRepository;
+import com.menta.physical.infrastructure.persistence.repository.PhysicalDeviceJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
+import com.menta.physical.infrastructure.device.Sha256DeviceSecretHasher;
 import com.menta.physical.infrastructure.qr.FormatQrCredentialSignatureService;
 import com.menta.shared.domain.vo.Email;
 import com.menta.app.integration.support.AbstractPhysicalMySqlIntegrationTest;
@@ -41,6 +44,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -56,8 +60,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 
 /**
  * HTTP-level coverage for US-PHYSICAL-001's check-in flow, through the real
@@ -87,17 +89,10 @@ import org.springframework.test.context.DynamicPropertySource;
 @ActiveProfiles("integration-test")
 class PhysicalCheckInIntegrationTest extends AbstractPhysicalMySqlIntegrationTest {
 
-    private static final String DEVICE_TOKEN = "integration-test-device-token";
+    /** Raw secret of the reader seeded in {@link #seedReader()}; only its hash is stored. */
+    private static final String READER_SECRET = "integration-test-reader-secret";
     private static final FormatQrCredentialSignatureService SIGNATURE_SERVICE =
         new FormatQrCredentialSignatureService();
-
-    @DynamicPropertySource
-    static void properties(DynamicPropertyRegistry registry) {
-        // Mirrors PaymentWebhookIntegrationTest's HMAC_SECRET override: a
-        // known value for the shared door-reader secret, never touching
-        // application.yml / application-test.yml.
-        registry.add("app.physical.checkin.device-token", () -> DEVICE_TOKEN);
-    }
 
     @Autowired private TestRestTemplate http;
     @Autowired private UserRepository userRepository;
@@ -106,6 +101,7 @@ class PhysicalCheckInIntegrationTest extends AbstractPhysicalMySqlIntegrationTes
     @Autowired private PhysicalSessionJpaRepository sessionRepository;
     @Autowired private PhysicalCapacityAssignmentJpaRepository assignmentRepository;
     @Autowired private AttendanceJpaRepository attendanceRepository;
+    @Autowired private PhysicalDeviceJpaRepository deviceRepository;
 
     @MockBean private AuthDegradedGuard authDegradedGuard;
     @MockBean private TokenBlacklistPort tokenBlacklistPort;
@@ -121,8 +117,22 @@ class PhysicalCheckInIntegrationTest extends AbstractPhysicalMySqlIntegrationTes
     @MockBean
     private RedisTemplate redisTemplate;
 
+    private UUID readerId;
+
+    /** #266: QR check-ins authenticate against the device registry, so seed an ACTIVE reader. */
+    @BeforeEach
+    void seedReader() {
+        readerId = UUID.randomUUID();
+        Instant now = Instant.now();
+        deviceRepository.save(new PhysicalDeviceJpaEntity(
+            readerId, "Door reader", "Main entrance",
+            new Sha256DeviceSecretHasher().hash(READER_SECRET), "ACTIVE", null, now, now
+        ));
+    }
+
     @AfterEach
     void cleanUp() {
+        deviceRepository.deleteAll();
         attendanceRepository.deleteAll();
         assignmentRepository.deleteAll();
         sessionRepository.deleteAll();
@@ -203,7 +213,7 @@ class PhysicalCheckInIntegrationTest extends AbstractPhysicalMySqlIntegrationTes
         headers.setContentType(MediaType.APPLICATION_JSON);
         Map<String, Object> body = Map.of(
             "type", "QR", "qrCredentials", qrCredentials,
-            "deviceId", "reader-1", "deviceToken", deviceToken
+            "deviceId", readerId.toString(), "deviceToken", deviceToken
         );
         return http.exchange(
             "/api/v1/physical/sessions/" + sessionId + "/check-ins", HttpMethod.POST,
@@ -398,7 +408,7 @@ class PhysicalCheckInIntegrationTest extends AbstractPhysicalMySqlIntegrationTes
         ResponseEntity<Map> qrResponse = issueAccessQr(sessionId, studentId);
         String qrCredentials = (String) qrResponse.getBody().get("qrCredentials");
 
-        ResponseEntity<Map> qrCheckIn = checkIn(sessionId, qrCredentials, DEVICE_TOKEN);
+        ResponseEntity<Map> qrCheckIn = checkIn(sessionId, qrCredentials, READER_SECRET);
 
         assertThat(qrCheckIn.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(attendanceRepository.count()).isEqualTo(1);
@@ -423,10 +433,14 @@ class PhysicalCheckInIntegrationTest extends AbstractPhysicalMySqlIntegrationTes
         assertThat(qrCredentials).isNotBlank();
 
         stubRedisLockAcquired();
-        ResponseEntity<Map> checkInResponse = checkIn(sessionId, qrCredentials, DEVICE_TOKEN);
+        ResponseEntity<Map> checkInResponse = checkIn(sessionId, qrCredentials, READER_SECRET);
 
         assertThat(checkInResponse.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(attendanceRepository.count()).isEqualTo(1);
+        AttendanceJpaEntity stored =
+            attendanceRepository.findBySessionIdAndUserId(sessionId, studentId).orElseThrow();
+        assertThat(stored.getDeviceId()).isEqualTo(readerId.toString());
+        assertThat(stored.getKind()).isEqualTo("QR");
     }
 
     // --- Escenario 3: no confirmed assignment -------------------------
@@ -453,7 +467,7 @@ class PhysicalCheckInIntegrationTest extends AbstractPhysicalMySqlIntegrationTes
             Instant.now().plusSeconds(60).getEpochSecond()
         );
 
-        ResponseEntity<Map> response = checkIn(sessionId, qrCredentials, DEVICE_TOKEN);
+        ResponseEntity<Map> response = checkIn(sessionId, qrCredentials, READER_SECRET);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(response.getBody().get("code")).isEqualTo("CAPACITY_ASSIGNMENT_REQUIRED");
@@ -471,7 +485,7 @@ class PhysicalCheckInIntegrationTest extends AbstractPhysicalMySqlIntegrationTes
             Instant.now().plusSeconds(60).getEpochSecond()
         );
 
-        ResponseEntity<Map> response = checkIn(pathSessionId, qrCredentials, DEVICE_TOKEN);
+        ResponseEntity<Map> response = checkIn(pathSessionId, qrCredentials, READER_SECRET);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody().get("code")).isEqualTo("INVALID_QR_CREDENTIAL");
@@ -487,7 +501,7 @@ class PhysicalCheckInIntegrationTest extends AbstractPhysicalMySqlIntegrationTes
             Instant.now().minusSeconds(60).getEpochSecond()
         );
 
-        ResponseEntity<Map> response = checkIn(sessionId, qrCredentials, DEVICE_TOKEN);
+        ResponseEntity<Map> response = checkIn(sessionId, qrCredentials, READER_SECRET);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.GONE);
         assertThat(response.getBody().get("code")).isEqualTo("EXPIRED_QR_CREDENTIAL");
@@ -506,7 +520,7 @@ class PhysicalCheckInIntegrationTest extends AbstractPhysicalMySqlIntegrationTes
             Instant.now().plusSeconds(60).getEpochSecond()
         );
 
-        ResponseEntity<Map> response = checkIn(sessionId, qrCredentials, DEVICE_TOKEN);
+        ResponseEntity<Map> response = checkIn(sessionId, qrCredentials, READER_SECRET);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(response.getBody().get("code")).isEqualTo("OUTSIDE_CHECK_IN_WINDOW");
@@ -551,7 +565,7 @@ class PhysicalCheckInIntegrationTest extends AbstractPhysicalMySqlIntegrationTes
             Instant.now().plusSeconds(60).getEpochSecond()
         );
 
-        ResponseEntity<Map> response = checkIn(sessionId, qrCredentials, DEVICE_TOKEN);
+        ResponseEntity<Map> response = checkIn(sessionId, qrCredentials, READER_SECRET);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(response.getBody().get("code")).isEqualTo("SESSION_CANCELLED");
@@ -586,13 +600,13 @@ class PhysicalCheckInIntegrationTest extends AbstractPhysicalMySqlIntegrationTes
         String qrCredentials = (String) qrResponse.getBody().get("qrCredentials");
 
         stubRedisLockAcquired();
-        ResponseEntity<Map> first = checkIn(sessionId, qrCredentials, DEVICE_TOKEN);
+        ResponseEntity<Map> first = checkIn(sessionId, qrCredentials, READER_SECRET);
         assertThat(first.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 
         // The idempotent replay short-circuits on the read-through check
         // (step 8) before ever reaching the locks again — no new Redis
         // stubbing needed for this second call to succeed.
-        ResponseEntity<Map> replay = checkIn(sessionId, qrCredentials, DEVICE_TOKEN);
+        ResponseEntity<Map> replay = checkIn(sessionId, qrCredentials, READER_SECRET);
 
         assertThat(replay.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(attendanceRepository.count()).isEqualTo(1);
