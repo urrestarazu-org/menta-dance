@@ -1,0 +1,53 @@
+meta {
+  name: List Purchases In Exception
+  type: http
+  seq: 13
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admin/billing/purchases?status=EXCEPTION&page=0&size=20
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+params:query {
+  status: EXCEPTION
+  page: 0
+  size: 20
+}
+
+docs {
+  #237. Requires an ADMIN bearer token. Returns physical purchases stuck in
+  EXCEPTION, oldest-first by the joined Payment.createdAt. Read-only —
+  no way to resolve, transition, or reassign a purchase.
+
+  size above 50 is rejected with 400 — never clamped (same as the
+  pending-verification payments inbox).
+
+  Success contract (200):
+    { items: [{ purchaseId, paymentId, userId, targetModality,
+                 targetReference, amount, currency, createdAt,
+                 physicalSessionIds }],
+      page, size, totalElements, totalPages }
+
+  Error contract:
+    400 INVALID_REQUEST  → size > 50
+    401                   → no access token
+    403                   → caller is not ADMIN
+}
+
+tests {
+  test("Returns a paginated, oldest-first list", function() {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody()).to.have.property("items");
+    expect(res.getBody()).to.have.property("page");
+  });
+}
+
+assert {
+  res.status: eq 200
+}
