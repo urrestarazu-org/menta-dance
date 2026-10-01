@@ -93,10 +93,14 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
     // Time-bomb fix (#45 follow-up): every seeded session date is computed relative to the
     // real clock at test-run time instead of a hardcoded absolute calendar date, so the suite
     // can never flake just because "now" caught up with a literal that used to be safely in
-    // the future. FIRST_MONTH is pinned 3 months out — comfortably beyond normal test runtime
-    // — and SECOND_MONTH/EMPTY_MONTH are derived from it so every month-query string stays in
-    // sync with the dates it describes.
-    private static final YearMonth FIRST_MONTH = YearMonth.from(LocalDate.now(ZoneOffset.UTC).plusMonths(3));
+    // the future. FIRST_MONTH is pinned to NEXT month — far enough ahead of normal test runtime
+    // (earliest seeded session is day 3) yet inside CoveragePlanner.COVERAGE_LOOKAHEAD (120
+    // days): the monthly-purchase scenario checks out against SECOND_MONTH's sessions, so the
+    // farthest one (SECOND_MONTH day 5, at most ~65 days away) must stay within that horizon.
+    // A 3-month offset broke the suite during the first days of every month (81/366 days).
+    // SECOND_MONTH/EMPTY_MONTH are derived from it so every month-query string stays in sync
+    // with the dates it describes.
+    private static final YearMonth FIRST_MONTH = YearMonth.from(LocalDate.now(ZoneOffset.UTC).plusMonths(1));
     private static final YearMonth SECOND_MONTH = FIRST_MONTH.plusMonths(1);
     private static final YearMonth EMPTY_MONTH = FIRST_MONTH.plusMonths(2);
 
