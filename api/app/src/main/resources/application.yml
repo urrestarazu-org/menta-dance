@@ -206,6 +206,15 @@ physical:
         rate-ms: ${PHYSICAL_CAPACITY_HOLD_EXPIRY_RATE_MS:60000}
         batch-size: ${PHYSICAL_CAPACITY_HOLD_EXPIRY_BATCH_SIZE:100}
 
+# Public catalog composition (#107)
+catalog:
+  physical:
+    sessions:
+      # Forward window, in days, of the upcoming sessions listed on a physical course detail:
+      # [now, now + window-days). Valid range 1..90 (enforced by CatalogCompositionService, so an
+      # invalid value stops startup); there is no per-request override.
+      window-days: ${CATALOG_PHYSICAL_SESSIONS_WINDOW_DAYS:30}
+
 server:
   port: 8081
   servlet:

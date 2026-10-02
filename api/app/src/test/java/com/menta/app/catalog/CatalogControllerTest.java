@@ -1,5 +1,6 @@
 package com.menta.app.catalog;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
@@ -13,7 +14,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.menta.physical.application.dto.PhysicalCourseSummary;
+import com.menta.physical.application.dto.PhysicalSessionAvailability;
 import com.menta.physical.application.port.in.PhysicalCourseAvailabilityPort;
 import com.menta.virtual.application.dto.VirtualCourseDetailView;
 import com.menta.virtual.application.dto.VirtualCourseStats;
@@ -21,6 +25,10 @@ import com.menta.virtual.application.dto.VirtualLessonSummary;
 import com.menta.virtual.application.dto.VirtualModuleDetail;
 import com.menta.virtual.application.dto.VirtualCourseSummary;
 import com.menta.virtual.application.port.in.VirtualCourseCatalogPort;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,13 +42,11 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
  * logic is covered by {@code CatalogCompositionServiceTest}; here we only
  * assert wire shape, status codes, and the non-enumeration rule.
  *
- * <p>Scope note (#47): {@code GET /api/v1/catalog/courses/{courseId}} was
- * previously modality-agnostic via {@code compositionService.getCourse}.
- * After this change the same URL resolves
- * {@link CatalogCompositionService#getCourseDetail(String)} — virtual only.
- * Physical-only {@code courseId}s therefore map to the standard 404, which
- * is the trade-off recorded in {@code CatalogCompositionService.getCourseDetail}'s
- * Javadoc.</p>
+ * <p>Scope note (#107): {@code GET /api/v1/catalog/courses/{courseId}}
+ * resolves {@link CatalogCompositionService#getCourseDetail(String)}, which
+ * answers the virtual detail for a virtual id and the physical detail (course
+ * data plus upcoming sessions) for a physical id. Both shapes are pinned here
+ * through Spring's real message converter.</p>
  */
 class CatalogControllerTest {
 
@@ -52,7 +58,9 @@ class CatalogControllerTest {
     void setUp() {
         physicalPort = mock(PhysicalCourseAvailabilityPort.class);
         virtualPort = mock(VirtualCourseCatalogPort.class);
-        CatalogCompositionService compositionService = new CatalogCompositionService(physicalPort, virtualPort);
+        Clock clock = Clock.fixed(Instant.parse("2026-10-02T12:00:00Z"), ZoneOffset.UTC);
+        CatalogCompositionService compositionService =
+            new CatalogCompositionService(physicalPort, virtualPort, clock, 30);
         mockMvc = MockMvcBuilders.standaloneSetup(new CatalogController(compositionService))
             .setControllerAdvice(new CatalogExceptionHandler())
             .build();
@@ -60,6 +68,29 @@ class CatalogControllerTest {
 
     private static PhysicalCourseSummary aPhysicalCourse(String id) {
         return new PhysicalCourseSummary(id, "Salsa inicial", "María García", "TUESDAY", "19:00", "BEGINNER", 20);
+    }
+
+    private static PhysicalSessionAvailability sessionOf(String id, String at, int available) {
+        // assigned 3 and holds 2 are internal counts that must never reach the wire.
+        return new PhysicalSessionAvailability(id, "phys-1", at, 20, 3, 2, available);
+    }
+
+    private void givenPhysicalOnlyCourse() {
+        when(virtualPort.findPublishedDetailById("phys-1")).thenReturn(Optional.empty());
+        when(physicalPort.findActiveById("phys-1"))
+            .thenReturn(Optional.of(aPhysicalCourse("phys-1")));
+    }
+
+    private JsonNode getBody(String path) throws Exception {
+        String json = mockMvc.perform(get(path)).andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+        return new ObjectMapper().readTree(json);
+    }
+
+    private static List<String> keysOf(JsonNode node) {
+        List<String> names = new ArrayList<>();
+        node.fieldNames().forEachRemaining(names::add);
+        return names;
     }
 
     private static VirtualCourseSummary aVirtualCourse(String id) {
@@ -169,23 +200,90 @@ class CatalogControllerTest {
         mockMvc.perform(get("/api/v1/catalog/courses/virt-1"))
             .andExpect(status().isOk());
 
-        // Composition must query virtual only — physical detail is a follow-up.
+        // Virtual-first: a published virtual course never reaches physical.
         org.mockito.Mockito.verify(physicalPort, org.mockito.Mockito.never()).findActiveById(any());
         org.mockito.Mockito.verify(physicalPort, org.mockito.Mockito.never()).listCourses(any(), anyInt());
     }
 
     @Test
-    void get_returns_404_when_physical_alone_is_resolved_for_the_id() throws Exception {
-        // Trade-off (#47 scope): physical detail is a follow-up, so a
-        // physical-only courseId reaches CourseNotFoundException — same 404
-        // as "no modality has it" so the two cases stay indistinguishable.
-        when(physicalPort.findActiveById("phys-only")).thenReturn(Optional.of(aPhysicalCourse("phys-only")));
-        when(virtualPort.findPublishedDetailById("phys-only")).thenReturn(Optional.empty());
+    void get_returns_the_physical_detail_when_only_physical_resolves_the_id() throws Exception {
+        givenPhysicalOnlyCourse();
+        when(physicalPort.listSessions(any(), any(), any())).thenReturn(List.of(
+            sessionOf("s-1", "2026-10-03T22:00:00Z", 17),
+            sessionOf("s-2", "2026-10-10T22:00:00Z", 0)
+        ));
 
-        mockMvc.perform(get("/api/v1/catalog/courses/phys-only"))
-            .andExpect(status().isNotFound())
+        mockMvc.perform(get("/api/v1/catalog/courses/phys-1"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.courseId", is("phys-1")))
+            .andExpect(jsonPath("$.modality", is("PHYSICAL")))
+            .andExpect(jsonPath("$.title", is("Salsa inicial")))
+            .andExpect(jsonPath("$.level", is("BEGINNER")))
+            .andExpect(jsonPath("$.physical.professorName", is("María García")))
+            .andExpect(jsonPath("$.physical.dayOfWeek", is("TUESDAY")))
+            .andExpect(jsonPath("$.physical.startTime", is("19:00")))
+            .andExpect(jsonPath("$.physical.capacity", is(20)))
+            .andExpect(jsonPath("$.physical.sessions[0].sessionId", is("s-1")))
+            .andExpect(jsonPath("$.physical.sessions[0].scheduledAt", is("2026-10-03T22:00:00Z")))
+            .andExpect(jsonPath("$.physical.sessions[0].capacity", is(20)))
+            .andExpect(jsonPath("$.physical.sessions[0].availableSpots", is(17)))
+            .andExpect(jsonPath("$.physical.sessions[1].availableSpots", is(0)));
+    }
+
+    @Test
+    void the_physical_detail_body_has_only_the_public_keys_and_no_type_property() throws Exception {
+        givenPhysicalOnlyCourse();
+        when(physicalPort.listSessions(any(), any(), any()))
+            .thenReturn(List.of(sessionOf("s-1", "2026-10-03T22:00:00Z", 17)));
+
+        JsonNode body = getBody("/api/v1/catalog/courses/phys-1");
+
+        assertThat(keysOf(body))
+            .containsExactlyInAnyOrder("courseId", "modality", "title", "level", "physical");
+        assertThat(keysOf(body.get("physical")))
+            .containsExactlyInAnyOrder(
+                "professorName", "dayOfWeek", "startTime", "capacity", "sessions"
+            );
+        assertThat(keysOf(body.get("physical").get("sessions").get(0)))
+            .containsExactlyInAnyOrder("sessionId", "scheduledAt", "capacity", "availableSpots");
+    }
+
+    @Test
+    void the_physical_detail_serializes_an_empty_sessions_array_not_null() throws Exception {
+        givenPhysicalOnlyCourse();
+        when(physicalPort.listSessions(any(), any(), any())).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/v1/catalog/courses/phys-1"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.physical.sessions").isArray())
+            .andExpect(jsonPath("$.physical.sessions").isEmpty());
+    }
+
+    @Test
+    void the_virtual_detail_body_keeps_its_shape_with_no_modality_or_sessions() throws Exception {
+        when(virtualPort.findPublishedDetailById("virt-1"))
+            .thenReturn(Optional.of(aVirtualDetail("virt-1")));
+
+        JsonNode body = getBody("/api/v1/catalog/courses/virt-1");
+
+        assertThat(keysOf(body)).containsExactlyInAnyOrder(
+            "courseId", "title", "description", "thumbnailUrl", "category", "level",
+            "isPremium", "modules", "stats"
+        );
+    }
+
+    @Test
+    void get_maps_a_sessions_failure_to_a_503_problem_without_course_data() throws Exception {
+        givenPhysicalOnlyCourse();
+        when(physicalPort.listSessions(any(), any(), any()))
+            .thenThrow(new RuntimeException("db down"));
+
+        mockMvc.perform(get("/api/v1/catalog/courses/phys-1"))
+            .andExpect(status().isServiceUnavailable())
             .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
-            .andExpect(jsonPath("$.code", is("COURSE_NOT_FOUND")));
+            .andExpect(jsonPath("$.code", is("CATALOG_DEGRADED")))
+            .andExpect(jsonPath("$.courseId").doesNotExist())
+            .andExpect(header().string("Retry-After", is("30")));
     }
 
     @Test
