@@ -3,7 +3,9 @@ package com.menta.physical.application.port.in;
 import com.menta.physical.application.dto.PhysicalCourseSummary;
 import com.menta.physical.application.dto.PhysicalSessionAvailability;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -44,6 +46,26 @@ public interface PhysicalCourseAvailabilityPort {
      *     cases apart.
      */
     Optional<PhysicalCourseSummary> findActiveById(String courseId);
+
+    /**
+     * Batch counterpart of {@link #findActiveById(String)}: same visibility
+     * ({@code ACTIVE} only) and same summary, resolved with a single query
+     * regardless of how many ids are requested.
+     *
+     * <p>Null, blank and non-UUID ids are skipped without a query and never
+     * fail the batch (unlike the single-id lookup, which propagates
+     * {@link IllegalArgumentException}). Duplicate ids are looked up once.</p>
+     *
+     * @param courseIds the opaque course ids to look up; must not be
+     *     {@code null} (a {@code null} collection throws {@link
+     *     NullPointerException}).
+     * @return an immutable map keyed by the id string exactly as the caller
+     *     passed it (so an uppercase UUID is answered under its uppercase
+     *     key, while {@code summary.courseId()} stays canonical), containing
+     *     only the courses that exist and are {@code ACTIVE}. Unknown and
+     *     inactive ids are omitted without distinguishing them.
+     */
+    Map<String, PhysicalCourseSummary> findActiveByIds(Collection<String> courseIds);
 
     /**
      * Lists the {@code SCHEDULED} sessions of a course in the half-open range

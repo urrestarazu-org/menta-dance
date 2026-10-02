@@ -2,8 +2,13 @@ package com.menta.virtual.infrastructure.persistence.adapter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.menta.virtual.domain.model.CourseId;
@@ -16,10 +21,12 @@ import com.menta.virtual.infrastructure.persistence.repository.VirtualCourseJpaR
 import com.menta.virtual.infrastructure.persistence.repository.VirtualLessonJpaRepository;
 import com.menta.virtual.infrastructure.persistence.repository.VirtualModuleJpaRepository;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class VirtualCourseRepositoryAdapterTest {
 
@@ -284,5 +291,78 @@ class VirtualCourseRepositoryAdapterTest {
         adapter.delete(CourseId.of(id));
 
         org.mockito.Mockito.verify(courseRepository).deleteById(id);
+    }
+
+    @Test
+    void find_published_by_ids_runs_three_constant_queries_and_joins_the_aggregates_of_the_hits() {
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+        UUID unknown = UUID.randomUUID();
+        when(courseRepository.findByIdInAndStatus(anyCollection(), eq(CourseStatus.PUBLISHED)))
+            .thenReturn(List.of(aCourseEntity(first), aCourseEntity(second)));
+
+        ModuleCountProjection moduleCount = mock(ModuleCountProjection.class);
+        when(moduleCount.getCourseId()).thenReturn(first);
+        when(moduleCount.getModuleCount()).thenReturn(2L);
+        when(moduleRepository.countByCourseIdIn(anyList())).thenReturn(List.of(moduleCount));
+
+        LessonAggregateProjection lessonAggregate = mock(LessonAggregateProjection.class);
+        when(lessonAggregate.getCourseId()).thenReturn(first);
+        when(lessonAggregate.getLessonCount()).thenReturn(5L);
+        when(lessonAggregate.getTotalDurationMinutes()).thenReturn(75L);
+        when(lessonRepository.aggregateByCourseIdIn(anyList()))
+            .thenReturn(List.of(lessonAggregate));
+
+        List<VirtualCourse> result = adapter.findPublishedByIds(
+            List.of(CourseId.of(first), CourseId.of(second), CourseId.of(unknown))
+        );
+
+        assertThat(result).hasSize(2);
+        VirtualCourse withAggregates = byId(result, first);
+        assertThat(withAggregates.getModuleCount()).isEqualTo(2);
+        assertThat(withAggregates.getLessonCount()).isEqualTo(5);
+        assertThat(withAggregates.getTotalDurationMinutes()).isEqualTo(75);
+        VirtualCourse withoutAggregates = byId(result, second);
+        assertThat(withoutAggregates.getModuleCount()).isZero();
+        assertThat(withoutAggregates.getLessonCount()).isZero();
+        assertThat(withoutAggregates.getTotalDurationMinutes()).isZero();
+
+        ArgumentCaptor<Collection<UUID>> requested = uuidCollectionCaptor();
+        verify(courseRepository)
+            .findByIdInAndStatus(requested.capture(), eq(CourseStatus.PUBLISHED));
+        assertThat(requested.getValue()).containsExactlyInAnyOrder(first, second, unknown);
+        verify(moduleRepository).countByCourseIdIn(List.of(first, second));
+        verify(lessonRepository).aggregateByCourseIdIn(List.of(first, second));
+        verify(courseRepository, never()).findById(any());
+    }
+
+    @Test
+    void find_published_by_ids_skips_the_aggregate_queries_when_nothing_matches() {
+        when(courseRepository.findByIdInAndStatus(anyCollection(), eq(CourseStatus.PUBLISHED)))
+            .thenReturn(List.of());
+
+        List<VirtualCourse> result = adapter.findPublishedByIds(List.of(CourseId.generate()));
+
+        assertThat(result).isEmpty();
+        verifyNoInteractions(moduleRepository, lessonRepository);
+    }
+
+    @Test
+    void find_published_by_ids_does_no_query_for_an_empty_id_collection() {
+        assertThat(adapter.findPublishedByIds(List.of())).isEmpty();
+
+        verifyNoInteractions(courseRepository, moduleRepository, lessonRepository);
+    }
+
+    private static VirtualCourse byId(List<VirtualCourse> courses, UUID id) {
+        return courses.stream()
+            .filter(c -> c.getId().getValue().equals(id))
+            .findFirst()
+            .orElseThrow();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ArgumentCaptor<Collection<UUID>> uuidCollectionCaptor() {
+        return ArgumentCaptor.forClass(Collection.class);
     }
 }

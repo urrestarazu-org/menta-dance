@@ -18,6 +18,8 @@ import com.menta.app.integration.support.PhysicalVirtualCatalogPortMocksIntegrat
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -279,5 +281,37 @@ class PhysicalCourseAvailabilityIntegrationTest extends PhysicalVirtualCatalogPo
         );
 
         assertThat(result).isEmpty();
+    }
+
+    @Test
+    void batch_and_single_id_lookups_return_only_the_active_course_with_the_same_title() {
+        UUID activeId = seedCourse("Salsa inicial", CourseStatus.ACTIVE);
+        UUID inactiveId = seedCourse("Bachata pausada", CourseStatus.INACTIVE);
+        UUID unknownId = UUID.randomUUID();
+        List<String> ids =
+            List.of(activeId.toString(), inactiveId.toString(), unknownId.toString());
+
+        Map<String, PhysicalCourseSummary> batch =
+            physicalCourseAvailabilityPort.findActiveByIds(ids);
+
+        assertThat(batch).containsOnlyKeys(activeId.toString());
+        PhysicalCourseSummary single =
+            physicalCourseAvailabilityPort.findActiveById(activeId.toString()).orElseThrow();
+        assertThat(batch.get(activeId.toString())).isEqualTo(single);
+        assertThat(batch.get(activeId.toString()).title()).isEqualTo("Salsa inicial");
+        assertThat(ids.stream().filter(id -> !id.equals(activeId.toString()))
+            .map(physicalCourseAvailabilityPort::findActiveById)).allMatch(Optional::isEmpty);
+    }
+
+    @Test
+    void batch_lookup_skips_a_malformed_id_and_keys_an_uppercase_id_by_its_input_form() {
+        UUID activeId = seedCourse("Salsa inicial", CourseStatus.ACTIVE);
+        String upperCaseInput = activeId.toString().toUpperCase();
+
+        Map<String, PhysicalCourseSummary> batch =
+            physicalCourseAvailabilityPort.findActiveByIds(List.of("course-1", upperCaseInput));
+
+        assertThat(batch).containsOnlyKeys(upperCaseInput);
+        assertThat(batch.get(upperCaseInput).courseId()).isEqualTo(activeId.toString());
     }
 }

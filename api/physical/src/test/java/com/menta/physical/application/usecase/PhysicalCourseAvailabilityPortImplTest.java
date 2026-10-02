@@ -1,9 +1,11 @@
 package com.menta.physical.application.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.menta.physical.application.dto.PhysicalCourseSummary;
@@ -19,12 +21,16 @@ import com.menta.physical.domain.model.SessionId;
 import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalTime;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -125,5 +131,106 @@ class PhysicalCourseAvailabilityPortImplTest {
         when(sessionRepository.findScheduled(courseId, from, to)).thenReturn(List.of());
 
         assertThat(port.listSessions(courseId.toString(), from, to)).isEmpty();
+    }
+
+    @Test
+    void find_active_by_ids_skips_malformed_blank_and_null_ids_and_queries_only_the_valid_one() {
+        CourseId id = CourseId.generate();
+        when(courseRepository.findActiveByIds(any())).thenReturn(List.of(activeCourse(id)));
+
+        Map<String, PhysicalCourseSummary> result =
+            port.findActiveByIds(Arrays.asList("course-1", " ", null, id.toString()));
+
+        assertThat(queriedIds()).containsExactly(id);
+        assertThat(result).containsOnlyKeys(id.toString());
+    }
+
+    @Test
+    void find_active_by_ids_with_no_valid_id_returns_an_empty_map_without_querying() {
+        Map<String, PhysicalCourseSummary> result =
+            port.findActiveByIds(Arrays.asList("course-1", "", null));
+
+        assertThat(result).isEmpty();
+        verifyNoInteractions(courseRepository);
+    }
+
+    @Test
+    void find_active_by_ids_with_an_empty_collection_returns_an_empty_map_without_querying() {
+        assertThat(port.findActiveByIds(List.of())).isEmpty();
+
+        verifyNoInteractions(courseRepository);
+    }
+
+    @Test
+    void find_active_by_ids_keys_the_result_by_the_input_string_not_the_canonical_id() {
+        CourseId id = CourseId.generate();
+        String upperCaseInput = id.toString().toUpperCase();
+        when(courseRepository.findActiveByIds(any())).thenReturn(List.of(activeCourse(id)));
+
+        Map<String, PhysicalCourseSummary> result = port.findActiveByIds(List.of(upperCaseInput));
+
+        assertThat(result).containsOnlyKeys(upperCaseInput);
+        assertThat(result.get(upperCaseInput).courseId()).isEqualTo(id.toString());
+    }
+
+    @Test
+    void find_active_by_ids_looks_a_duplicated_id_up_once_and_answers_every_input_form() {
+        CourseId id = CourseId.generate();
+        String lowerCaseInput = id.toString();
+        String upperCaseInput = id.toString().toUpperCase();
+        when(courseRepository.findActiveByIds(any())).thenReturn(List.of(activeCourse(id)));
+
+        Map<String, PhysicalCourseSummary> result = port.findActiveByIds(
+            List.of(lowerCaseInput, lowerCaseInput, upperCaseInput)
+        );
+
+        assertThat(queriedIds()).containsExactly(id);
+        assertThat(result).containsOnlyKeys(lowerCaseInput, upperCaseInput);
+    }
+
+    @Test
+    void find_active_by_ids_omits_the_ids_the_repository_did_not_answer() {
+        CourseId active = CourseId.generate();
+        CourseId notVisible = CourseId.generate();
+        when(courseRepository.findActiveByIds(any())).thenReturn(List.of(activeCourse(active)));
+
+        Map<String, PhysicalCourseSummary> result =
+            port.findActiveByIds(List.of(active.toString(), notVisible.toString()));
+
+        assertThat(queriedIds()).containsExactlyInAnyOrder(active, notVisible);
+        assertThat(result).containsOnlyKeys(active.toString());
+    }
+
+    @Test
+    void find_active_by_ids_rejects_a_null_collection() {
+        assertThatThrownBy(() -> port.findActiveByIds(null))
+            .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void find_active_by_ids_maps_a_hit_to_the_same_summary_as_find_active_by_id() {
+        CourseId id = CourseId.generate();
+        when(courseRepository.findActiveById(id)).thenReturn(Optional.of(activeCourse(id)));
+        when(courseRepository.findActiveByIds(any())).thenReturn(List.of(activeCourse(id)));
+
+        PhysicalCourseSummary single = port.findActiveById(id.toString()).orElseThrow();
+        PhysicalCourseSummary batch =
+            port.findActiveByIds(List.of(id.toString())).get(id.toString());
+
+        assertThat(batch).isEqualTo(single);
+    }
+
+    private static PhysicalCourse activeCourse(CourseId id) {
+        return new PhysicalCourse(
+            id, "Salsa inicial", "desc", UUID.randomUUID(), "María García", DayOfWeek.TUESDAY,
+            LocalTime.of(19, 0), 60, PhysicalCourseLevel.BEGINNER, 20, CourseStatus.ACTIVE
+        );
+    }
+
+    @SuppressWarnings("unchecked")
+    private Collection<CourseId> queriedIds() {
+        ArgumentCaptor<Collection<CourseId>> captor = ArgumentCaptor.forClass(Collection.class);
+        verify(courseRepository).findActiveByIds(captor.capture());
+        return captor.getValue();
     }
 }

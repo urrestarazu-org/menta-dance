@@ -2,6 +2,7 @@ package com.menta.virtual.application.port.out;
 
 import com.menta.virtual.domain.model.CourseId;
 import com.menta.virtual.domain.model.VirtualCourse;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -26,6 +27,19 @@ public interface VirtualCourseRepository {
      *     Optional.empty()} otherwise (not found or not published).
      */
     Optional<VirtualCourse> findPublishedById(CourseId courseId);
+
+    /**
+     * Batch counterpart of {@link #findPublishedById(CourseId)}: same
+     * visibility and same pre-aggregated counts, with a constant number of
+     * queries regardless of how many ids are requested.
+     *
+     * @param courseIds the courses to look up; an empty collection performs
+     *     no query.
+     * @return the requested courses that exist and are {@code PUBLISHED}, in
+     *     no particular order; unknown and non-published ids are omitted
+     *     without distinguishing them.
+     */
+    List<VirtualCourse> findPublishedByIds(Collection<CourseId> courseIds);
 
     /**
      * Unfiltered by status — management endpoints (US-VIRTUAL-006) must be

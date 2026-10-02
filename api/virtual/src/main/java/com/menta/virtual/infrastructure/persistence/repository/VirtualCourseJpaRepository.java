@@ -2,6 +2,7 @@ package com.menta.virtual.infrastructure.persistence.repository;
 
 import com.menta.virtual.domain.model.CourseStatus;
 import com.menta.virtual.infrastructure.persistence.entity.VirtualCourseJpaEntity;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Pageable;
@@ -27,4 +28,7 @@ public interface VirtualCourseJpaRepository extends JpaRepository<VirtualCourseJ
 
     /** Management view for an INSTRUCTOR (US-VIRTUAL-006) — every status, not just PUBLISHED. */
     List<VirtualCourseJpaEntity> findByProfessorId(UUID professorId);
+
+    /** Batch lookup by id and status in a single {@code IN} query (no ordering guarantee). */
+    List<VirtualCourseJpaEntity> findByIdInAndStatus(Collection<UUID> ids, CourseStatus status);
 }

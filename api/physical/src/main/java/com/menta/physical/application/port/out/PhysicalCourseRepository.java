@@ -2,6 +2,7 @@ package com.menta.physical.application.port.out;
 
 import com.menta.physical.domain.model.CourseId;
 import com.menta.physical.domain.model.PhysicalCourse;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -26,6 +27,18 @@ public interface PhysicalCourseRepository {
      *     Optional.empty()} otherwise (not found or inactive).
      */
     Optional<PhysicalCourse> findActiveById(CourseId courseId);
+
+    /**
+     * Batch counterpart of {@link #findActiveById(CourseId)}: same visibility,
+     * resolved with a single query regardless of how many ids are requested.
+     *
+     * @param courseIds the courses to look up; an empty collection performs
+     *     no query.
+     * @return the requested courses that exist and are {@code ACTIVE}, in no
+     *     particular order; unknown and inactive ids are omitted without
+     *     distinguishing them.
+     */
+    List<PhysicalCourse> findActiveByIds(Collection<CourseId> courseIds);
 
     /**
      * Unfiltered by status — management endpoints (US-PHYSICAL-005) must be

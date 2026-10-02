@@ -2,8 +2,11 @@ package com.menta.physical.infrastructure.persistence.adapter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.menta.physical.domain.model.CourseId;
@@ -15,6 +18,7 @@ import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJp
 import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -148,5 +152,48 @@ class PhysicalCourseRepositoryAdapterTest {
         PhysicalCourse saved = adapter.save(course);
 
         assertThat(saved.getId()).isEqualTo(course.getId());
+    }
+
+    @Test
+    void find_active_by_ids_runs_a_single_query_filtered_by_active_status_and_maps_the_hits() {
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+        UUID unknown = UUID.randomUUID();
+        when(courseRepository.findByIdInAndStatus(any(), eq(CourseStatus.ACTIVE)))
+            .thenReturn(List.of(
+                entity(first, CourseStatus.ACTIVE, Instant.now()),
+                entity(second, CourseStatus.ACTIVE, Instant.now())
+            ));
+
+        List<PhysicalCourse> result = adapter.findActiveByIds(
+            List.of(CourseId.of(first), CourseId.of(second), CourseId.of(unknown))
+        );
+
+        assertThat(result).extracting(course -> course.getId().getValue())
+            .containsExactlyInAnyOrder(first, second);
+        ArgumentCaptor<Collection<UUID>> requested = uuidCollectionCaptor();
+        verify(courseRepository).findByIdInAndStatus(requested.capture(), eq(CourseStatus.ACTIVE));
+        assertThat(requested.getValue()).containsExactlyInAnyOrder(first, second, unknown);
+        verify(courseRepository, never()).findById(any());
+    }
+
+    @Test
+    void find_active_by_ids_returns_empty_when_no_requested_course_is_active() {
+        when(courseRepository.findByIdInAndStatus(any(), eq(CourseStatus.ACTIVE)))
+            .thenReturn(List.of());
+
+        assertThat(adapter.findActiveByIds(List.of(CourseId.generate()))).isEmpty();
+    }
+
+    @Test
+    void find_active_by_ids_does_no_query_for_an_empty_id_collection() {
+        assertThat(adapter.findActiveByIds(List.of())).isEmpty();
+
+        verifyNoInteractions(courseRepository);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ArgumentCaptor<Collection<UUID>> uuidCollectionCaptor() {
+        return ArgumentCaptor.forClass(Collection.class);
     }
 }
