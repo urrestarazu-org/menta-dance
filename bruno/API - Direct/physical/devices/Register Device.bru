@@ -32,8 +32,8 @@ docs {
   #44, US-PHYSICAL-007 escenario 1. Requires an ADMIN bearer token — unlike
   /courses/** and /sessions/**, INSTRUCTOR has no access to this prefix.
 
-  `expiresAt` is optional and omitted here; it is inert metadata in this
-  change (no enforcement occurs anywhere yet).
+  `expiresAt` is optional and omitted here (the device never expires). When
+  set, QR check-in answers 401 DEVICE_EXPIRED once `expiresAt <= now` (#266).
 
   Success contract: 201 with the raw secret exactly once, under `secret`.
   That value is never retrievable again through any endpoint.

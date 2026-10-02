@@ -66,7 +66,7 @@ import org.springframework.test.context.ActiveProfiles;
  * {@code SecurityConfig} filter chain — this is what proves {@code
  * access-qr} requires authentication while {@code check-ins} is
  * {@code permitAll()} at the filter level (the door reader authenticates
- * with {@code deviceToken} inside the use case instead).
+ * against the device registry inside the use case instead).
  *
  * <p>Covers issue #38 escenarios 1, 2, 3, 4 and 5, per the plan's explicit
  * MVP scope. Escenario 6 (Redis compare-and-delete compensation when the

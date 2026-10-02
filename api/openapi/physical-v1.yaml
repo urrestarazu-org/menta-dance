@@ -41,7 +41,9 @@ info:
     propia autorización. `POST
     /api/v1/physical/sessions/{sessionId}/check-ins` es público a nivel de
     filtro (`permitAll`) para AMBAS variantes de su body: el lector de
-    puerta (variante QR) se autentica con un `deviceToken` compartido que el
+    puerta (variante QR) se autentica contra el registro de dispositivos
+    (#44) con el `deviceId` (UUID del dispositivo registrado) y el
+    `deviceToken` (secreto propio de ese dispositivo) de su body, que el
     caso de uso verifica internamente, nunca con un Bearer token de usuario;
     el recepcionista/ADMIN (variante MANUAL, #45) sí envía un Bearer token
     de usuario, pero su rol se verifica DENTRO del caso de uso, no en el
@@ -413,8 +415,9 @@ paths:
       summary: Redimir un QR escaneado en la puerta, o registrar un check-in manual
       description: |
         Público a nivel de filtro (`permitAll`) para ambas variantes — el
-        lector QR se autentica con `deviceToken` (US-PHYSICAL-001 escenario
-        2), y la variante MANUAL (#45, US-PHYSICAL-008) resuelve su propia
+        lector QR se autentica contra el registro de dispositivos con
+        `deviceId` + `deviceToken` (US-PHYSICAL-001 escenario 2, #266), y la
+        variante MANUAL (#45, US-PHYSICAL-008) resuelve su propia
         autorización de rol DENTRO del caso de uso, no en el filtro de
         seguridad, porque `RoleAuthorizationManager` discrimina sólo por
         prefijo de URL y no puede leer el body para decidir entre variantes.
@@ -425,12 +428,25 @@ paths:
         **Variante QR** — Responde `201 Created` en el primer escaneo válido
         y `200 OK` en cualquier replay idempotente del mismo QR (escenario
         5, `count()` nunca crece en el replay). El orden de validación es
-        deliberado: `deviceToken`, forma del QR, coincidencia de
-        `sessionId`, firma, expiración, existencia/ventana de la sesión y
-        asignación de cupo se resuelven TODOS antes de tocar Redis
-        (escenario 4) — sólo un request que pasó todas esas puertas llega a
-        los locks que producen `409 ALREADY_PROCESSING` o
-        `503 CHECK_IN_DEGRADED`.
+        deliberado: autenticación del dispositivo, forma del QR,
+        coincidencia de `sessionId`, firma, expiración, existencia/ventana
+        de la sesión y asignación de cupo se resuelven TODOS antes de tocar
+        Redis (escenario 4) — sólo un request que pasó todas esas puertas
+        llega a los locks que producen `409 ALREADY_PROCESSING` o
+        `503 CHECK_IN_DEGRADED`. Una autenticación de dispositivo fallida
+        corta todas las puertas siguientes (un dispositivo inválido con una
+        credencial QR malformada responde el error del dispositivo).
+
+        La autenticación del dispositivo (#266) valida `deviceId` y
+        `deviceToken` contra el registro: un `deviceId` desconocido, que no
+        es un UUID, o un `deviceToken` incorrecto responden
+        `401 INVALID_DEVICE_TOKEN` con el mismo cuerpo (no revela si el
+        dispositivo existe); sólo con el secreto correcto se distingue un
+        dispositivo revocado (`401 DEVICE_REVOKED`) o vencido
+        (`401 DEVICE_EXPIRED`, inclusive: `expiresAt <= ahora`; si está
+        revocado y vencido, gana `DEVICE_REVOKED`). Un dispositivo vencido
+        no se recupera rotando su secreto: hay que registrarlo de nuevo. El
+        secreto compartido anterior ya no autentica ningún request.
 
         **Variante MANUAL** — Requiere un Bearer token autenticado con rol
         `RECEPTIONIST` o `ADMIN`; cualquier otro rol, o ausencia de
@@ -507,7 +523,16 @@ paths:
                     detail: The QR credential is malformed or does not match the target session.
                     code: INVALID_QR_CREDENTIAL
         '401':
-          description: '`deviceToken` inválido (`INVALID_DEVICE_TOKEN`) — sólo variante QR.'
+          description: |
+            Sólo variante QR — falló la autenticación del dispositivo contra
+            el registro (#266). `INVALID_DEVICE_TOKEN`: `deviceId`
+            desconocido o que no es un UUID, o `deviceToken` incorrecto (los
+            tres casos son indistinguibles). `DEVICE_REVOKED`: dispositivo
+            revocado, con su secreto correcto. `DEVICE_EXPIRED`:
+            dispositivo vencido (`expiresAt <= ahora`), con su secreto
+            correcto. El código `DEVICE_REVOKED` responde `401` aquí y
+            `409` en la rotación de secreto de un dispositivo revocado
+            (`POST /api/v1/admin/physical/devices/{deviceId}/rotate-secret`).
           content:
             application/problem+json:
               schema:
@@ -520,6 +545,20 @@ paths:
                     status: 401
                     detail: The device token is invalid.
                     code: INVALID_DEVICE_TOKEN
+                dispositivo_revocado:
+                  value:
+                    type: https://menta.dance/problems/device_revoked
+                    title: Unauthorized
+                    status: 401
+                    detail: The device has been revoked.
+                    code: DEVICE_REVOKED
+                dispositivo_vencido:
+                  value:
+                    type: https://menta.dance/problems/device_expired
+                    title: Unauthorized
+                    status: 401
+                    detail: The device credential has expired.
+                    code: DEVICE_EXPIRED
         '403':
           description: |
             QR: sesión cancelada (`SESSION_CANCELLED`), fuera de la ventana
@@ -724,8 +763,9 @@ paths:
         Crea el dispositivo en estado `ACTIVE` y persiste únicamente el hash
         SHA-256 de un secreto generado. El secreto crudo viene en la
         respuesta y NUNCA vuelve a estar disponible por ningún endpoint
-        (#44, US-PHYSICAL-007 escenario 1). `expiresAt` es opcional y en
-        este cambio es metadata inerte — no se aplica ninguna expiración.
+        (#44, US-PHYSICAL-007 escenario 1). `expiresAt` es opcional; desde
+        #266 el check-in QR rechaza con `401 DEVICE_EXPIRED` a un
+        dispositivo cuyo `expiresAt` ya se alcanzó.
       operationId: registerPhysicalDevice
       requestBody:
         required: true
@@ -819,7 +859,9 @@ paths:
         validar) y devuelve el nuevo secreto crudo exactamente una vez
         (#44, US-PHYSICAL-007 escenario 3). Rechazado con `409` sobre un
         dispositivo `REVOKED` — es un estado absorbente, nunca un no-op
-        silencioso ni una rotación exitosa.
+        silencioso ni una rotación exitosa. El mismo código
+        `DEVICE_REVOKED` responde `401` en el check-in QR de un dispositivo
+        revocado (contexto distinto, ver `processPhysicalCheckIn`).
       operationId: rotatePhysicalDeviceSecret
       parameters:
         - name: deviceId
@@ -1159,9 +1201,19 @@ components:
           type: string
         deviceId:
           type: string
+          format: uuid
+          description: |
+            UUID del dispositivo registrado (`id` devuelto por
+            `POST /api/v1/admin/physical/devices`). Un valor que no es un
+            UUID responde `401 INVALID_DEVICE_TOKEN`, no `400`; en blanco
+            o ausente responde `400 INVALID_REQUEST`.
         deviceToken:
           type: string
-          description: Secreto compartido del lector, verificado dentro del caso de uso.
+          description: |
+            Secreto propio de ese dispositivo, el mismo que se muestra una
+            sola vez al registrarlo o rotarlo (`secret`). Se verifica
+            dentro del caso de uso contra el hash almacenado; el secreto
+            compartido anterior ya no se acepta.
 
     CheckInManualRequest:
       description: |
@@ -1258,7 +1310,9 @@ components:
         expiresAt:
           type: [string, "null"]
           format: date-time
-          description: Opcional; metadata inerte en este cambio — no se aplica ninguna expiración.
+          description: |
+            Opcional. Desde #266 el check-in QR responde `401 DEVICE_EXPIRED`
+            cuando `expiresAt <= ahora` (inclusive); sin valor, nunca vence.
 
     PhysicalDeviceResponse:
       type: object
