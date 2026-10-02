@@ -46,12 +46,19 @@ public interface PhysicalCourseAvailabilityPort {
     Optional<PhysicalCourseSummary> findActiveById(String courseId);
 
     /**
+     * Lists the {@code SCHEDULED} sessions of a course in the half-open range
+     * {@code [from, to)}: a session exactly at {@code from} is included, one
+     * exactly at {@code to} is not. Cancelled sessions never appear. The
+     * result is ordered by {@code scheduledAt} ascending, so callers that
+     * truncate the list keep the earliest sessions.
+     *
      * @param courseId the recurring course whose scheduled sessions to list.
      * @param from lower bound (inclusive) of the schedule range.
      * @param to upper bound (exclusive) of the schedule range.
      * @return sessions scheduled for {@code courseId} within
-     *     {@code [from, to)}, each with its live-computed availability, or
-     *     an empty list if none are scheduled in that range.
+     *     {@code [from, to)}, ordered by {@code scheduledAt} ascending, each
+     *     with its live-computed availability, or an empty list if none are
+     *     scheduled in that range.
      */
     List<PhysicalSessionAvailability> listSessions(String courseId, Instant from, Instant to);
 }
