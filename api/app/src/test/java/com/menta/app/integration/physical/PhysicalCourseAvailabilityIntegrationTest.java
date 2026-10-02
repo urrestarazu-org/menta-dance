@@ -83,6 +83,12 @@ class PhysicalCourseAvailabilityIntegrationTest extends PhysicalVirtualCatalogPo
         ));
     }
 
+    private void seedConvertedHold(UUID sessionId, Instant expiresAt) {
+        holdRepository.save(new PhysicalCapacityHoldJpaEntity(
+            UUID.randomUUID(), sessionId, UUID.randomUUID(), expiresAt, Instant.now(), Instant.now()
+        ));
+    }
+
     @Test
     void lists_only_active_courses() {
         UUID activeId = seedCourse("Salsa inicial", CourseStatus.ACTIVE);
@@ -138,6 +144,23 @@ class PhysicalCourseAvailabilityIntegrationTest extends PhysicalVirtualCatalogPo
         assertThat(availability.assignedSpots()).isEqualTo(2);
         assertThat(availability.activeCapacityHolds()).isEqualTo(1);
         assertThat(availability.availableSpots()).isEqualTo(17);
+    }
+
+    @Test
+    void a_converted_hold_is_not_subtracted_from_availability_while_an_active_one_is() {
+        UUID courseId = seedCourse("Salsa inicial", CourseStatus.ACTIVE);
+        Instant scheduledAt = Instant.parse("2026-08-25T22:00:00Z");
+        UUID sessionId = seedSession(courseId, scheduledAt, 20);
+        // Both holds are unexpired: only converted_at tells them apart.
+        seedHold(sessionId, Instant.now().plusSeconds(300));
+        seedConvertedHold(sessionId, Instant.now().plusSeconds(300));
+
+        PhysicalSessionAvailability availability = physicalCourseAvailabilityPort.listSessions(
+            courseId.toString(), scheduledAt.minusSeconds(60), scheduledAt.plusSeconds(60)
+        ).get(0);
+
+        assertThat(availability.activeCapacityHolds()).isEqualTo(1);
+        assertThat(availability.availableSpots()).isEqualTo(19);
     }
 
     @Test
@@ -205,6 +228,24 @@ class PhysicalCourseAvailabilityIntegrationTest extends PhysicalVirtualCatalogPo
         assertThat(result)
             .extracting(PhysicalSessionAvailability::sessionId)
             .containsExactly(atFrom.toString(), inside.toString());
+    }
+
+    @Test
+    void a_zero_width_or_inverted_range_is_empty_even_with_a_session_on_the_bound() {
+        UUID courseId = seedCourse("Salsa inicial", CourseStatus.ACTIVE);
+        Instant at = Instant.parse("2026-09-01T00:00:00Z");
+        UUID sessionId = seedSession(courseId, at, 20);
+
+        assertThat(physicalCourseAvailabilityPort.listSessions(
+            courseId.toString(), at, at
+        )).isEmpty();
+        assertThat(physicalCourseAvailabilityPort.listSessions(
+            courseId.toString(), at.plusSeconds(3600), at
+        )).isEmpty();
+        // Control: the same session is returned by a range that does contain it.
+        assertThat(physicalCourseAvailabilityPort.listSessions(
+            courseId.toString(), at, at.plusSeconds(1)
+        )).extracting(PhysicalSessionAvailability::sessionId).containsExactly(sessionId.toString());
     }
 
     @Test

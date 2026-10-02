@@ -3,6 +3,7 @@ package com.menta.app.catalog;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -93,6 +94,18 @@ class CatalogCompositionServiceTest {
             ),
             new VirtualCourseStats(1, 2, 25)
         );
+    }
+
+    @Test
+    void listCourses_returns_physical_courses_without_reading_any_session_availability() {
+        when(physicalPort.listCourses(any(), anyInt()))
+            .thenReturn(List.of(physicalCourse("phys-1")));
+        when(virtualPort.listPublished(any(), anyInt())).thenReturn(List.of());
+
+        List<CatalogCourseResponse> courses = composition.listCourses();
+
+        assertThat(courses).extracting(CatalogCourseResponse::courseId).containsExactly("phys-1");
+        verify(physicalPort, never()).listSessions(any(), any(), any());
     }
 
     @Test
