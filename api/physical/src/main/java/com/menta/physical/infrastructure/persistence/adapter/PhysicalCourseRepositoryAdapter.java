@@ -8,6 +8,7 @@ import com.menta.physical.infrastructure.persistence.entity.PhysicalCourseJpaEnt
 import com.menta.physical.infrastructure.persistence.mapper.PhysicalCourseJpaMapper;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJpaRepository;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -43,6 +44,18 @@ public class PhysicalCourseRepositoryAdapter implements PhysicalCourseRepository
         return courseRepository.findById(courseId.getValue())
             .filter(entity -> entity.getStatus() == CourseStatus.ACTIVE)
             .map(PhysicalCourseJpaMapper::toDomain);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public List<PhysicalCourse> findActiveByIds(Collection<CourseId> courseIds) {
+        if (courseIds.isEmpty()) {
+            return List.of();
+        }
+        List<UUID> ids = courseIds.stream().map(CourseId::getValue).toList();
+        return courseRepository.findByIdInAndStatus(ids, CourseStatus.ACTIVE).stream()
+            .map(PhysicalCourseJpaMapper::toDomain)
+            .toList();
     }
 
     @Override

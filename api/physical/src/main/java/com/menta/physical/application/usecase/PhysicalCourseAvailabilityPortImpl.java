@@ -9,8 +9,15 @@ import com.menta.physical.domain.model.CourseId;
 import com.menta.physical.domain.model.PhysicalCourse;
 import com.menta.physical.domain.model.PhysicalSession;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public class PhysicalCourseAvailabilityPortImpl implements PhysicalCourseAvailabilityPort {
 
@@ -35,6 +42,38 @@ public class PhysicalCourseAvailabilityPortImpl implements PhysicalCourseAvailab
     public Optional<PhysicalCourseSummary> findActiveById(String courseId) {
         return courseRepository.findActiveById(CourseId.of(courseId))
             .map(PhysicalCourseAvailabilityPortImpl::toSummary);
+    }
+
+    @Override
+    public Map<String, PhysicalCourseSummary> findActiveByIds(Collection<String> courseIds) {
+        Objects.requireNonNull(courseIds, "courseIds");
+        Map<String, CourseId> parsedByInput = new LinkedHashMap<>();
+        for (String input : new LinkedHashSet<>(courseIds)) {
+            try {
+                parsedByInput.put(input, CourseId.of(input));
+            } catch (IllegalArgumentException malformed) {
+                // Null, blank or non-UUID: unresolvable, never a batch failure.
+            }
+        }
+        if (parsedByInput.isEmpty()) {
+            return Map.of();
+        }
+
+        Set<CourseId> distinctIds = new LinkedHashSet<>(parsedByInput.values());
+        Map<CourseId, PhysicalCourseSummary> summariesById = courseRepository
+            .findActiveByIds(distinctIds).stream()
+            .collect(Collectors.toMap(
+                PhysicalCourse::getId, PhysicalCourseAvailabilityPortImpl::toSummary
+            ));
+
+        Map<String, PhysicalCourseSummary> result = new LinkedHashMap<>();
+        parsedByInput.forEach((input, id) -> {
+            PhysicalCourseSummary summary = summariesById.get(id);
+            if (summary != null) {
+                result.put(input, summary);
+            }
+        });
+        return Map.copyOf(result);
     }
 
     @Override

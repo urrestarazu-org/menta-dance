@@ -14,6 +14,8 @@ import com.menta.virtual.infrastructure.persistence.repository.VirtualModuleJpaR
 import com.menta.app.integration.support.PhysicalVirtualCatalogPortMocksIntegrationTestBase;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -145,5 +147,41 @@ class VirtualCourseCatalogIntegrationTest extends PhysicalVirtualCatalogPortMock
 
         assertThat(secondPage).hasSize(2);
         assertThat(secondPage).noneMatch(c -> c.courseId().equals(cursor));
+    }
+
+    @Test
+    void batch_and_single_id_lookups_return_only_the_published_course_with_the_same_title() {
+        UUID publishedId = seedCourse("Tango Básico", CourseStatus.PUBLISHED);
+        seedModuleWithLessons(publishedId, 2, 10);
+        UUID draftId = seedCourse("Salsa Draft", CourseStatus.DRAFT);
+        UUID archivedId = seedCourse("Vals Archivado", CourseStatus.ARCHIVED);
+        UUID unknownId = UUID.randomUUID();
+        List<String> ids = List.of(
+            publishedId.toString(), draftId.toString(), archivedId.toString(), unknownId.toString()
+        );
+
+        Map<String, VirtualCourseSummary> batch = virtualCourseCatalogPort.findPublishedByIds(ids);
+
+        assertThat(batch).containsOnlyKeys(publishedId.toString());
+        VirtualCourseSummary single =
+            virtualCourseCatalogPort.findPublishedById(publishedId.toString()).orElseThrow();
+        assertThat(batch.get(publishedId.toString())).isEqualTo(single);
+        assertThat(batch.get(publishedId.toString()).title()).isEqualTo("Tango Básico");
+        assertThat(batch.get(publishedId.toString()).moduleCount()).isEqualTo(1);
+        assertThat(batch.get(publishedId.toString()).lessonCount()).isEqualTo(2);
+        assertThat(ids.stream().filter(id -> !id.equals(publishedId.toString()))
+            .map(virtualCourseCatalogPort::findPublishedById)).allMatch(Optional::isEmpty);
+    }
+
+    @Test
+    void batch_lookup_skips_a_malformed_id_and_keys_an_uppercase_id_by_its_input_form() {
+        UUID publishedId = seedCourse("Tango Básico", CourseStatus.PUBLISHED);
+        String upperCaseInput = publishedId.toString().toUpperCase();
+
+        Map<String, VirtualCourseSummary> batch =
+            virtualCourseCatalogPort.findPublishedByIds(List.of("course-1", upperCaseInput));
+
+        assertThat(batch).containsOnlyKeys(upperCaseInput);
+        assertThat(batch.get(upperCaseInput).courseId()).isEqualTo(publishedId.toString());
     }
 }

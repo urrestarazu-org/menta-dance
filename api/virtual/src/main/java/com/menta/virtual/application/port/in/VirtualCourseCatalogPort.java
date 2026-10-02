@@ -3,7 +3,9 @@ package com.menta.virtual.application.port.in;
 import com.menta.virtual.application.dto.VirtualCourseAdminDetailView;
 import com.menta.virtual.application.dto.VirtualCourseDetailView;
 import com.menta.virtual.application.dto.VirtualCourseSummary;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -43,6 +45,26 @@ public interface VirtualCourseCatalogPort {
      *     the two cases apart.
      */
     Optional<VirtualCourseSummary> findPublishedById(String courseId);
+
+    /**
+     * Batch counterpart of {@link #findPublishedById(String)}: same
+     * visibility ({@code PUBLISHED} only) and same summary, with a constant
+     * number of queries regardless of how many ids are requested.
+     *
+     * <p>Null, blank and non-UUID ids are skipped without a query and never
+     * fail the batch (unlike the single-id lookup, which propagates
+     * {@link IllegalArgumentException}). Duplicate ids are looked up once.</p>
+     *
+     * @param courseIds the opaque course ids to look up; must not be
+     *     {@code null} (a {@code null} collection throws {@link
+     *     NullPointerException}).
+     * @return an immutable map keyed by the id string exactly as the caller
+     *     passed it (so an uppercase UUID is answered under its uppercase
+     *     key, while {@code summary.courseId()} stays canonical), containing
+     *     only the courses that exist and are {@code PUBLISHED}. Unknown and
+     *     non-published ids are omitted without distinguishing them.
+     */
+    Map<String, VirtualCourseSummary> findPublishedByIds(Collection<String> courseIds);
 
     /**
      * Rich-detail lookup for {@code api:app}'s public course-detail endpoint

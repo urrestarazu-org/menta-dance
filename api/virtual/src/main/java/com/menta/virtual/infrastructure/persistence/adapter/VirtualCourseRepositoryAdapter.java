@@ -12,6 +12,7 @@ import com.menta.virtual.infrastructure.persistence.repository.VirtualCourseJpaR
 import com.menta.virtual.infrastructure.persistence.repository.VirtualLessonJpaRepository;
 import com.menta.virtual.infrastructure.persistence.repository.VirtualModuleJpaRepository;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -74,6 +75,46 @@ public class VirtualCourseRepositoryAdapter implements VirtualCourseRepository {
                 lessonAggregateOf(lessonAggregates, course.getId(), LessonAggregateProjection::getLessonCount),
                 lessonAggregateOf(
                     lessonAggregates, course.getId(), LessonAggregateProjection::getTotalDurationMinutes
+                )
+            ))
+            .toList();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public List<VirtualCourse> findPublishedByIds(Collection<CourseId> courseIds) {
+        if (courseIds.isEmpty()) {
+            return List.of();
+        }
+        List<VirtualCourseJpaEntity> courses = courseRepository.findByIdInAndStatus(
+            courseIds.stream().map(CourseId::getValue).toList(), CourseStatus.PUBLISHED
+        );
+        if (courses.isEmpty()) {
+            return List.of();
+        }
+
+        List<UUID> hitIds = courses.stream().map(VirtualCourseJpaEntity::getId).toList();
+        Map<UUID, Long> moduleCounts = moduleRepository.countByCourseIdIn(hitIds).stream()
+            .collect(java.util.stream.Collectors.toMap(
+                ModuleCountProjection::getCourseId, ModuleCountProjection::getModuleCount
+            ));
+        Map<UUID, LessonAggregateProjection> lessonAggregates = lessonRepository
+            .aggregateByCourseIdIn(hitIds).stream()
+            .collect(java.util.stream.Collectors.toMap(
+                LessonAggregateProjection::getCourseId, aggregate -> aggregate
+            ));
+
+        return courses.stream()
+            .map(course -> VirtualCourseJpaMapper.toDomain(
+                course,
+                moduleCounts.getOrDefault(course.getId(), 0L).intValue(),
+                lessonAggregateOf(
+                    lessonAggregates, course.getId(), LessonAggregateProjection::getLessonCount
+                ),
+                lessonAggregateOf(
+                    lessonAggregates,
+                    course.getId(),
+                    LessonAggregateProjection::getTotalDurationMinutes
                 )
             ))
             .toList();

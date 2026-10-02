@@ -2,6 +2,7 @@ package com.menta.physical.infrastructure.persistence.repository;
 
 import com.menta.physical.domain.model.CourseStatus;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalCourseJpaEntity;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Pageable;
@@ -27,4 +28,7 @@ public interface PhysicalCourseJpaRepository extends JpaRepository<PhysicalCours
 
     /** Management view for an INSTRUCTOR (US-PHYSICAL-005) — every status, not just ACTIVE. */
     List<PhysicalCourseJpaEntity> findByProfessorId(UUID professorId);
+
+    /** Batch lookup by id and status in a single {@code IN} query (no ordering guarantee). */
+    List<PhysicalCourseJpaEntity> findByIdInAndStatus(Collection<UUID> ids, CourseStatus status);
 }

@@ -16,8 +16,15 @@ import com.menta.virtual.domain.model.CourseId;
 import com.menta.virtual.domain.model.VirtualCourse;
 import com.menta.virtual.domain.model.VirtualLesson;
 import com.menta.virtual.domain.model.VirtualModule;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public class VirtualCourseCatalogPortImpl implements VirtualCourseCatalogPort {
 
@@ -46,6 +53,38 @@ public class VirtualCourseCatalogPortImpl implements VirtualCourseCatalogPort {
     public Optional<VirtualCourseSummary> findPublishedById(String courseId) {
         return virtualCourseRepository.findPublishedById(CourseId.of(courseId))
             .map(VirtualCourseCatalogPortImpl::toSummary);
+    }
+
+    @Override
+    public Map<String, VirtualCourseSummary> findPublishedByIds(Collection<String> courseIds) {
+        Objects.requireNonNull(courseIds, "courseIds");
+        Map<String, CourseId> parsedByInput = new LinkedHashMap<>();
+        for (String input : new LinkedHashSet<>(courseIds)) {
+            try {
+                parsedByInput.put(input, CourseId.of(input));
+            } catch (IllegalArgumentException malformed) {
+                // Null, blank or non-UUID: unresolvable, never a batch failure.
+            }
+        }
+        if (parsedByInput.isEmpty()) {
+            return Map.of();
+        }
+
+        Set<CourseId> distinctIds = new LinkedHashSet<>(parsedByInput.values());
+        Map<CourseId, VirtualCourseSummary> summariesById = virtualCourseRepository
+            .findPublishedByIds(distinctIds).stream()
+            .collect(Collectors.toMap(
+                VirtualCourse::getId, VirtualCourseCatalogPortImpl::toSummary
+            ));
+
+        Map<String, VirtualCourseSummary> result = new LinkedHashMap<>();
+        parsedByInput.forEach((input, id) -> {
+            VirtualCourseSummary summary = summariesById.get(id);
+            if (summary != null) {
+                result.put(input, summary);
+            }
+        });
+        return Map.copyOf(result);
     }
 
     /**
