@@ -14,28 +14,39 @@ body:json {
   {
     "type": "QR",
     "qrCredentials": "{{physicalQrCredentials}}",
-    "deviceId": "reader-1",
-    "deviceToken": "{{physicalDeviceToken}}"
+    "deviceId": "{{physicalDeviceId}}",
+    "deviceToken": "{{physicalDeviceSecret}}"
   }
 }
 
 docs {
   #38, US-PHYSICAL-001 escenario 2. Public at the filter level (`permitAll`)
-  — the door reader authenticates with `deviceToken`, a shared secret
-  verified inside the use case, never a Bearer token. `qrCredentials` comes
-  from `POST /access-qr` (a Bearer-authenticated student endpoint, not in
-  this folder).
+  — the door reader authenticates against the device registry (#266) with
+  `deviceId` (the registered device's UUID) and `deviceToken` (that device's
+  own secret), verified inside the use case, never a Bearer token.
+  `qrCredentials` comes from `POST /access-qr` (a Bearer-authenticated
+  student endpoint, not in this folder).
 
-  Validation order before touching Redis: deviceToken, QR shape, sessionId
-  match, signature, expiry, session existence/window, confirmed capacity
-  assignment. Only a request that clears all of those reaches the locks.
+  Prerequisite: run `devices/Register Device` first (ADMIN token). Its
+  post-response script stores `physicalDeviceId` and `physicalDeviceSecret`,
+  which this request reads; `devices/Rotate Device Secret` refreshes the
+  secret. The raw secret is shown only once, so a device registered outside
+  Bruno needs both variables set by hand.
+
+  Validation order before touching Redis: device authentication, QR shape,
+  sessionId match, signature, expiry, session existence/window, confirmed
+  capacity assignment. Only a request that clears all of those reaches the
+  locks.
 
   Success contract: 201 on the first valid scan, 200 on any idempotent
   replay of the same QR — the attendance row count never grows on replay.
   Error contract:
     400 INVALID_REQUEST / INVALID_QR_CREDENTIAL → malformed body or QR bound
         to a different session
-    401 INVALID_DEVICE_TOKEN
+    401 INVALID_DEVICE_TOKEN → unknown deviceId, deviceId that is not a UUID, or
+        wrong deviceToken (all three look identical)
+    401 DEVICE_REVOKED       → revoked device, correct secret
+    401 DEVICE_EXPIRED       → device past its expiresAt, correct secret
     403 SESSION_CANCELLED | OUTSIDE_CHECK_IN_WINDOW | CAPACITY_ASSIGNMENT_REQUIRED
     404 SESSION_NOT_FOUND
     409 ALREADY_PROCESSING

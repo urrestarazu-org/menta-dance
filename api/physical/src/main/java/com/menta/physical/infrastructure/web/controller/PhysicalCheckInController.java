@@ -37,9 +37,10 @@ import org.springframework.web.bind.annotation.RestController;
  *   <li>{@code POST /api/v1/physical/sessions/{sessionId}/check-ins} is
  *   {@code permitAll()} at the filter level, so authorization for both its
  *   variants happens inside the use case, not the filter chain (D5). The QR
- *   variant's door reader authenticates with a shared {@code deviceToken}
- *   the use case itself verifies, and its {@link CheckInCommand} always
- *   carries {@code studentId == null} and {@link CheckInActor#anonymous()}.
+ *   variant's door reader authenticates against the device registry (#266)
+ *   with its own {@code deviceId} and {@code deviceToken}, which the use case
+ *   itself verifies, and its {@link CheckInCommand} always carries
+ *   {@code studentId == null} and {@link CheckInActor#anonymous()}.
  *   The MANUAL variant (#45, US-PHYSICAL-008) is receptionist-initiated, so
  *   this endpoint reads {@link Authentication} to resolve the acting
  *   {@link CheckInActor}, stripping the Spring Security {@code ROLE_}

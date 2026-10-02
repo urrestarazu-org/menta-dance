@@ -39,14 +39,18 @@
 - **Dado** un dispositivo activo o expirado.
 - **Cuando** envía `POST /api/v1/physical/devices/{deviceId}/revoke`.
 - **Entonces** el dispositivo pasa a estado `REVOKED` y no puede procesar más
-  check-ins. La revocación es irreversible.
+  check-ins: el check-in QR con su secreto correcto responde `401 DEVICE_REVOKED`
+  (si además está vencido, gana `DEVICE_REVOKED`). La revocación es irreversible.
 
 **Escenario 5: dispositivo expirado**
 
 - **Dado** un dispositivo cuya fecha de expiración ha pasado.
-- **Cuando** intenta procesar un check-in.
+- **Cuando** intenta procesar un check-in QR con su `deviceId` y su secreto correcto.
 - **Entonces** Physical rechaza la solicitud con `401 Unauthorized` y
-  `DEVICE_EXPIRED`.
+  `DEVICE_EXPIRED` (inclusive: `expiresAt <= ahora`). Un dispositivo vencido no se
+  recupera rotando su secreto; debe registrarse de nuevo.
+- **Y** con un secreto incorrecto la respuesta es `INVALID_DEVICE_TOKEN`, sin revelar
+  que el dispositivo existe.
 
 **Escenario 6: listar dispositivos**
 
@@ -83,6 +87,9 @@
 - El secreto usa un algoritmo de hash seguro (bcrypt o argon2).
 - La auditoría registra creación, rotación y revocación con timestamp y actor.
 - La autenticación del dispositivo es independiente de JWT de usuarios.
+- El check-in QR autentica al lector con `deviceId` (UUID del dispositivo registrado)
+  y `deviceToken` (su secreto) en el body (#266). Un `deviceId` desconocido, que no es
+  UUID, o un secreto incorrecto responden el mismo `401 INVALID_DEVICE_TOKEN`.
 
 ## Definition of Done
 
