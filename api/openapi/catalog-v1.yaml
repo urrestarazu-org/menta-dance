@@ -63,8 +63,19 @@ paths:
       tags: [Catálogo]
       summary: Obtener el detalle de un curso por id, sin indicar la modalidad
       description: |
-        `api:app` determina la modalidad consultando ambos puertos dueños y
-        se queda con el que responde (ADR-0037).
+        `api:app` determina la modalidad consultando primero Virtual y, si no
+        hay un curso publicado con ese id, Physical. Un id virtual
+        responde el detalle virtual (sin `sessions`); un id presencial activo
+        responde el detalle presencial con sus próximas sesiones.
+
+        La ventana de sesiones es `[ahora, ahora + W)`, con `W` en días tomado
+        de la propiedad `catalog.physical.sessions.window-days` (por defecto
+        30, rango 1 a 90). El endpoint no acepta `from`/`to`: si se envían,
+        se ignoran. Las sesiones salen en orden ascendente por `scheduledAt`
+        y se limitan a 100 (las 100 más próximas, sin señal de truncado). Una
+        sesión agotada se lista con `availableSpots` 0; una cancelada no se
+        lista. Si la consulta de sesiones falla, toda la respuesta es `503`:
+        nunca se devuelve un detalle parcial.
       operationId: getCatalogCourse
       security: []
       parameters:
@@ -76,11 +87,16 @@ paths:
             format: uuid
       responses:
         '200':
-          description: Curso encontrado.
+          description: >-
+            Curso encontrado. Detalle virtual o presencial según la modalidad
+            del id; las dos formas son excluyentes por sus campos requeridos
+            (no hay discriminador).
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CatalogCourseResponse'
+                oneOf:
+                  - $ref: '#/components/schemas/CatalogVirtualCourseDetail'
+                  - $ref: '#/components/schemas/CatalogPhysicalCourseDetail'
         '404':
           $ref: '#/components/responses/CourseNotFound'
         '503':
@@ -144,6 +160,128 @@ components:
           type: integer
         totalDurationMinutes:
           type: integer
+    CatalogVirtualCourseDetail:
+      type: object
+      description: >-
+        Detalle de un curso VIRTUAL publicado (#47). No lleva `modality`,
+        `physical` ni `sessions`; los lessons nunca exponen video.
+      properties:
+        courseId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        thumbnailUrl:
+          type: string
+        category:
+          type: string
+        level:
+          type: string
+        isPremium:
+          type: boolean
+        modules:
+          type: array
+          items:
+            type: object
+            properties:
+              moduleId:
+                type: string
+                format: uuid
+              title:
+                type: string
+              order:
+                type: integer
+              lessons:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    lessonId:
+                      type: string
+                      format: uuid
+                    title:
+                      type: string
+                    duration:
+                      type: string
+                      description: '`mm:ss` bajo 60 minutos, `h:mm` desde 60.'
+                    isFree:
+                      type: boolean
+                    order:
+                      type: integer
+                  required: [lessonId, title, duration, isFree, order]
+            required: [moduleId, title, order, lessons]
+        stats:
+          type: object
+          properties:
+            moduleCount:
+              type: integer
+            lessonCount:
+              type: integer
+            totalDuration:
+              type: string
+              description: '`Xm` bajo 60 minutos, `Xh Ym` desde 60.'
+          required: [moduleCount, lessonCount, totalDuration]
+      required: [courseId, title, level, isPremium, modules, stats]
+    CatalogPhysicalCourseDetail:
+      type: object
+      description: >-
+        Detalle de un curso PRESENCIAL activo (#107): datos del curso más las
+        próximas sesiones programadas con su disponibilidad. No lleva precios
+        ni `quoteEndpoint`; las cotizaciones siguen en Billing.
+      properties:
+        courseId:
+          type: string
+          format: uuid
+        modality:
+          type: string
+          const: PHYSICAL
+        title:
+          type: string
+        level:
+          type: string
+        physical:
+          type: object
+          properties:
+            professorName:
+              type: string
+            dayOfWeek:
+              type: string
+            startTime:
+              type: string
+            capacity:
+              type: integer
+            sessions:
+              type: array
+              maxItems: 100
+              description: >-
+                Sesiones SCHEDULED en `[ahora, ahora + W)`, ascendentes por
+                `scheduledAt`, hasta 100. Vacío (nunca nulo) si no hay ninguna.
+              items:
+                $ref: '#/components/schemas/CatalogPublicSession'
+          required: [professorName, dayOfWeek, startTime, capacity, sessions]
+      required: [courseId, modality, title, level, physical]
+    CatalogPublicSession:
+      type: object
+      description: >-
+        Sesión pública. Sólo se publica `availableSpots`; los cupos asignados y
+        los holds activos son datos internos y no se serializan.
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        scheduledAt:
+          type: string
+          format: date-time
+          description: Instante ISO-8601 en UTC (termina en `Z`).
+        capacity:
+          type: integer
+        availableSpots:
+          type: integer
+          minimum: 0
+          description: Cupos libres; 0 si la sesión está agotada.
+      required: [sessionId, scheduledAt, capacity, availableSpots]
     ProblemDetail:
       type: object
       properties:
