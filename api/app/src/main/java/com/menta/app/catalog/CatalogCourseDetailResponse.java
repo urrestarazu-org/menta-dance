@@ -8,17 +8,10 @@ import java.util.List;
 /**
  * Wire shape of the public course detail returned by
  * {@code GET /api/v1/catalog/courses/{courseId}} for {@code VIRTUAL} courses
- * (US-VIRTUAL-002 escenario 1, #47).
- *
- * <p>For this MVP the endpoint resolves <strong>only against Virtual's detail
- * port</strong> — physical detail is out of scope and will return the
- * standard 404 problem. That is the explicit trade-off made in #47's scope:
- * the composition method {@code CatalogCompositionService.getCourseDetail}
- * delegates to {@code virtualPort.findPublishedDetailById} alone and lets
- * physical fall through to {@code CourseNotFoundException}. Once the physical
- * side adds a comparable detail read a future change symmetrically adds a
- * {@code fromPhysical} factory here — until then do not add one or the
- * composition will silently misclassify physical detail as virtual.</p>
+ * (US-VIRTUAL-002 escenario 1, #47). It is one of the two shapes of
+ * {@link CatalogCourseDetail}; a {@code PHYSICAL} id answers
+ * {@link CatalogPhysicalCourseDetailResponse} instead (#107), so this shape
+ * stays virtual-only and never carries a {@code sessions} field.
  *
  * <p>Duration strings are NOT domain primitives: {@code VirtualLesson.durationMinutes}
  * is the integer-minute domain value; this record turns it into a UI string.
@@ -35,7 +28,7 @@ public record CatalogCourseDetailResponse(
     boolean isPremium,
     List<PublicModuleDetail> modules,
     PublicStats stats
-) {
+) implements CatalogCourseDetail {
 
     public static CatalogCourseDetailResponse fromVirtual(VirtualCourseDetailView view) {
         return new CatalogCourseDetailResponse(

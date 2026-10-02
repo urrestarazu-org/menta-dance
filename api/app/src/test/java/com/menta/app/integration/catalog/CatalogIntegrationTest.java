@@ -27,8 +27,8 @@ import org.springframework.http.ResponseEntity;
 
 /**
  * MySQL-backed HTTP integration coverage for the composed public catalog
- * (#95, #47): list composition, the virtual rich detail path, the 404
- * rules, and the unauthenticated-access requirement. The
+ * (#95, #47, #107): list composition, the virtual rich detail path, the
+ * physical detail, the 404 rules, and the unauthenticated-access requirement. The
  * "an owning module fails" case (#95 acceptance criteria) is covered with
  * mocked ports instead, in {@code CatalogControllerTest} — forcing a real
  * port to throw here would mean tearing down live infrastructure mid-test,
@@ -189,16 +189,23 @@ class CatalogIntegrationTest extends CatalogAccessMocksIntegrationTestBase {
 
     @Test
     @SuppressWarnings("unchecked")
-    void get_a_physical_only_course_answers_the_same_404_as_a_missing_one() {
-        // #47 scope trade-off: physical detail is a follow-up. Until it
-        // lands, a physical-only courseId answers 404 indistinguishable
-        // from "no modality has it" — so a visitor cannot probe modality.
+    void get_a_physical_only_course_returns_its_physical_detail() {
+        // #107: a physical id no longer answers 404. The real physical ports
+        // resolve the seeded ACTIVE course; with no session seeded, the
+        // sessions collection is an empty array, not null.
         UUID physicalId = seedPhysicalCourse("Salsa inicial", CourseStatus.ACTIVE);
 
         ResponseEntity<Map> response =
             http.exchange("/api/v1/catalog/courses/" + physicalId, HttpMethod.GET, null, Map.class);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(response.getBody().get("code")).isEqualTo("COURSE_NOT_FOUND");
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        Map<String, Object> body = response.getBody();
+        assertThat(body.get("courseId")).isEqualTo(physicalId.toString());
+        assertThat(body.get("modality")).isEqualTo("PHYSICAL");
+        assertThat(body.get("title")).isEqualTo("Salsa inicial");
+        Map<String, Object> physical = (Map<String, Object>) body.get("physical");
+        assertThat(physical.get("professorName")).isEqualTo("María García");
+        assertThat(physical.get("capacity")).isEqualTo(20);
+        assertThat((List<Object>) physical.get("sessions")).isEmpty();
     }
 }
