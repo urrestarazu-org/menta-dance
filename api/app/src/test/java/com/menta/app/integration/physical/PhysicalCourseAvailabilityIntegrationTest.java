@@ -190,6 +190,41 @@ class PhysicalCourseAvailabilityIntegrationTest extends PhysicalVirtualCatalogPo
     }
 
     @Test
+    void a_session_exactly_at_the_upper_bound_is_excluded_and_one_at_the_lower_bound_included() {
+        UUID courseId = seedCourse("Salsa inicial", CourseStatus.ACTIVE);
+        Instant from = Instant.parse("2026-09-01T00:00:00Z");
+        Instant to = Instant.parse("2026-10-01T00:00:00Z");
+        UUID atFrom = seedSession(courseId, from, 20);
+        UUID inside = seedSession(courseId, from.plusSeconds(3600), 20);
+        seedSession(courseId, to, 20);
+
+        List<PhysicalSessionAvailability> result = physicalCourseAvailabilityPort.listSessions(
+            courseId.toString(), from, to
+        );
+
+        assertThat(result)
+            .extracting(PhysicalSessionAvailability::sessionId)
+            .containsExactly(atFrom.toString(), inside.toString());
+    }
+
+    @Test
+    void sessions_are_listed_in_ascending_scheduled_order() {
+        UUID courseId = seedCourse("Salsa inicial", CourseStatus.ACTIVE);
+        Instant base = Instant.parse("2026-09-01T00:00:00Z");
+        UUID latest = seedSession(courseId, base.plusSeconds(7200), 20);
+        UUID earliest = seedSession(courseId, base, 20);
+        UUID middle = seedSession(courseId, base.plusSeconds(3600), 20);
+
+        List<PhysicalSessionAvailability> result = physicalCourseAvailabilityPort.listSessions(
+            courseId.toString(), base, base.plusSeconds(86400)
+        );
+
+        assertThat(result)
+            .extracting(PhysicalSessionAvailability::sessionId)
+            .containsExactly(earliest.toString(), middle.toString(), latest.toString());
+    }
+
+    @Test
     void a_cancelled_session_never_appears_in_the_public_availability_read() {
         // US-PHYSICAL-006 (#43): a cancelled class must never be offered as
         // available to an external visitor -- only the management view

@@ -18,6 +18,12 @@ public interface PhysicalSessionJpaRepository extends JpaRepository<PhysicalSess
      * A hold counts only while {@code expires_at > :now}. Public-safe: only
      * {@code SCHEDULED} sessions (US-PHYSICAL-006) — a cancelled session
      * must never be offered as available to an external visitor.
+     *
+     * <p>The range is half-open {@code [from, to)}: a session exactly at
+     * {@code from} is returned, one exactly at {@code to} is not. Results are
+     * ordered by {@code scheduled_at} ascending. The management read
+     * {@link #findManagedWithAvailability} deliberately stays inclusive at
+     * both ends.</p>
      */
     @Query(
         value = "SELECT s.id AS id, s.course_id AS courseId, s.scheduled_at AS scheduledAt, "
@@ -29,7 +35,7 @@ public interface PhysicalSessionJpaRepository extends JpaRepository<PhysicalSess
             + "AS activeCapacityHolds, "
             + "s.status AS status, s.notes AS notes "
             + "FROM physical_sessions s "
-            + "WHERE s.course_id = :courseId AND s.scheduled_at BETWEEN :from AND :to "
+            + "WHERE s.course_id = :courseId AND s.scheduled_at >= :from AND s.scheduled_at < :to "
             + "AND s.status = 'SCHEDULED' "
             + "ORDER BY s.scheduled_at ASC",
         nativeQuery = true
@@ -43,7 +49,8 @@ public interface PhysicalSessionJpaRepository extends JpaRepository<PhysicalSess
 
     /**
      * Management read (US-PHYSICAL-006 escenario 3): every status, unlike
-     * {@link #findScheduledWithAvailability} above.
+     * {@link #findScheduledWithAvailability} above. The range stays inclusive
+     * at both ends ({@code BETWEEN}), unlike that half-open public read.
      */
     @Query(
         value = "SELECT s.id AS id, s.course_id AS courseId, s.scheduled_at AS scheduledAt, "
