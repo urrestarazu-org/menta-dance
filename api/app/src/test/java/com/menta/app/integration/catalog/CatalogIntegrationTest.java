@@ -3,8 +3,12 @@ package com.menta.app.integration.catalog;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.menta.physical.domain.model.CourseStatus;
+import com.menta.physical.infrastructure.persistence.entity.PhysicalCapacityAssignmentJpaEntity;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalCourseJpaEntity;
+import com.menta.physical.infrastructure.persistence.entity.PhysicalSessionJpaEntity;
+import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityAssignmentJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJpaRepository;
+import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
 import com.menta.virtual.infrastructure.persistence.entity.VirtualCourseJpaEntity;
 import com.menta.virtual.infrastructure.persistence.entity.VirtualLessonJpaEntity;
 import com.menta.virtual.infrastructure.persistence.entity.VirtualModuleJpaEntity;
@@ -12,8 +16,10 @@ import com.menta.virtual.infrastructure.persistence.repository.VirtualCourseJpaR
 import com.menta.virtual.infrastructure.persistence.repository.VirtualLessonJpaRepository;
 import com.menta.virtual.infrastructure.persistence.repository.VirtualModuleJpaRepository;
 import com.menta.app.integration.support.CatalogAccessMocksIntegrationTestBase;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -28,7 +34,8 @@ import org.springframework.http.ResponseEntity;
 /**
  * MySQL-backed HTTP integration coverage for the composed public catalog
  * (#95, #47, #107): list composition, the virtual rich detail path, the
- * physical detail, the 404 rules, and the unauthenticated-access requirement. The
+ * physical detail with its session window, the 404 rules, and the
+ * unauthenticated-access requirement. The
  * "an owning module fails" case (#95 acceptance criteria) is covered with
  * mocked ports instead, in {@code CatalogControllerTest} — forcing a real
  * port to throw here would mean tearing down live infrastructure mid-test,
@@ -39,6 +46,8 @@ class CatalogIntegrationTest extends CatalogAccessMocksIntegrationTestBase {
 
     @Autowired private TestRestTemplate http;
     @Autowired private PhysicalCourseJpaRepository physicalCourseRepository;
+    @Autowired private PhysicalSessionJpaRepository physicalSessionRepository;
+    @Autowired private PhysicalCapacityAssignmentJpaRepository physicalAssignmentRepository;
     @Autowired private VirtualCourseJpaRepository virtualCourseRepository;
     @Autowired private VirtualModuleJpaRepository virtualModuleRepository;
     @Autowired private VirtualLessonJpaRepository virtualLessonRepository;
@@ -47,6 +56,9 @@ class CatalogIntegrationTest extends CatalogAccessMocksIntegrationTestBase {
     void cleanUp() {
         virtualLessonRepository.deleteAll();
         virtualModuleRepository.deleteAll();
+        // FK V7: assignments reference sessions, sessions reference courses.
+        physicalAssignmentRepository.deleteAll();
+        physicalSessionRepository.deleteAll();
         physicalCourseRepository.deleteAll();
         virtualCourseRepository.deleteAll();
     }
@@ -59,6 +71,39 @@ class CatalogIntegrationTest extends CatalogAccessMocksIntegrationTestBase {
             60, "BEGINNER", 20, status, now, now
         ));
         return id;
+    }
+
+    private UUID seedSession(UUID courseId, Instant scheduledAt, int capacity, String status) {
+        UUID id = UUID.randomUUID();
+        physicalSessionRepository.save(
+            new PhysicalSessionJpaEntity(id, courseId, scheduledAt, capacity, status, null));
+        return id;
+    }
+
+    private void seedAssignments(UUID sessionId, int count) {
+        for (int i = 0; i < count; i++) {
+            physicalAssignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
+                UUID.randomUUID(), sessionId, UUID.randomUUID(), Instant.now()));
+        }
+    }
+
+    /** Day-scale offsets keep the window assertions deterministic without a clock override. */
+    private static Instant inDays(long days) {
+        return Instant.now().plus(days, ChronoUnit.DAYS);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> getDetailBody(UUID courseId, String query) {
+        ResponseEntity<Map> response = http.exchange(
+            "/api/v1/catalog/courses/" + courseId + query, HttpMethod.GET, null, Map.class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        return response.getBody();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> sessionsOf(Map<String, Object> body) {
+        Map<String, Object> physical = (Map<String, Object>) body.get("physical");
+        return (List<Map<String, Object>>) physical.get("sessions");
     }
 
     private UUID seedVirtualCourse(String title, com.menta.virtual.domain.model.CourseStatus status) {
@@ -207,5 +252,103 @@ class CatalogIntegrationTest extends CatalogAccessMocksIntegrationTestBase {
         assertThat(physical.get("professorName")).isEqualTo("María García");
         assertThat(physical.get("capacity")).isEqualTo(20);
         assertThat((List<Object>) physical.get("sessions")).isEmpty();
+    }
+
+    @Test
+    void get_lists_only_scheduled_sessions_inside_the_window_in_ascending_order() {
+        UUID courseId = seedPhysicalCourse("Salsa inicial", CourseStatus.ACTIVE);
+        seedSession(courseId, Instant.now().minus(Duration.ofHours(1)), 20, "SCHEDULED");
+        seedSession(courseId, inDays(3), 20, "CANCELLED");
+        seedSession(courseId, inDays(31), 20, "SCHEDULED");
+        UUID otherCourseId = seedPhysicalCourse("Bachata", CourseStatus.ACTIVE);
+        seedSession(otherCourseId, inDays(4), 20, "SCHEDULED");
+        // Inserted out of chronological order on purpose.
+        UUID later = seedSession(courseId, inDays(20), 20, "SCHEDULED");
+        UUID sooner = seedSession(courseId, inDays(2), 20, "SCHEDULED");
+
+        List<Map<String, Object>> sessions = sessionsOf(getDetailBody(courseId, ""));
+
+        assertThat(sessions).extracting(s -> s.get("sessionId"))
+            .containsExactly(sooner.toString(), later.toString());
+    }
+
+    @Test
+    void get_exposes_exactly_the_four_public_session_fields_with_a_utc_instant() {
+        UUID courseId = seedPhysicalCourse("Salsa inicial", CourseStatus.ACTIVE);
+        Instant scheduledAt = inDays(5);
+        UUID sessionId = seedSession(courseId, scheduledAt, 20, "SCHEDULED");
+        seedAssignments(sessionId, 3);
+
+        Map<String, Object> session = sessionsOf(getDetailBody(courseId, "")).get(0);
+
+        assertThat(session.keySet())
+            .containsExactlyInAnyOrder("sessionId", "scheduledAt", "capacity", "availableSpots");
+        assertThat(session.get("sessionId")).isEqualTo(sessionId.toString());
+        assertThat(session.get("capacity")).isEqualTo(20);
+        assertThat(session.get("availableSpots")).isEqualTo(17);
+        String wireInstant = (String) session.get("scheduledAt");
+        assertThat(wireInstant).endsWith("Z");
+        assertThat(Duration.between(Instant.parse(wireInstant), scheduledAt).abs())
+            .isLessThan(Duration.ofSeconds(1));
+    }
+
+    @Test
+    void get_lists_a_sold_out_session_with_zero_available_spots() {
+        UUID courseId = seedPhysicalCourse("Salsa inicial", CourseStatus.ACTIVE);
+        UUID soldOut = seedSession(courseId, inDays(2), 2, "SCHEDULED");
+        seedAssignments(soldOut, 2);
+        UUID open = seedSession(courseId, inDays(4), 2, "SCHEDULED");
+
+        List<Map<String, Object>> sessions = sessionsOf(getDetailBody(courseId, ""));
+
+        assertThat(sessions).extracting(s -> s.get("sessionId"))
+            .containsExactly(soldOut.toString(), open.toString());
+        assertThat(sessions).extracting(s -> s.get("availableSpots")).containsExactly(0, 2);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void get_an_inactive_physical_course_returns_the_same_404_as_a_missing_one() {
+        UUID courseId = seedPhysicalCourse("Bachata pausada", CourseStatus.INACTIVE);
+        seedSession(courseId, inDays(2), 20, "SCHEDULED");
+
+        ResponseEntity<Map> response =
+            http.exchange("/api/v1/catalog/courses/" + courseId, HttpMethod.GET, null, Map.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getBody().get("code")).isEqualTo("COURSE_NOT_FOUND");
+    }
+
+    @Test
+    void get_ignores_from_and_to_query_parameters_on_the_detail() {
+        UUID courseId = seedPhysicalCourse("Salsa inicial", CourseStatus.ACTIVE);
+        UUID sooner = seedSession(courseId, inDays(1), 20, "SCHEDULED");
+        UUID later = seedSession(courseId, inDays(10), 20, "SCHEDULED");
+        UUID outsideWindow = seedSession(courseId, inDays(40), 20, "SCHEDULED");
+        String query = "?from=" + inDays(5) + "&to=" + inDays(20);
+
+        List<Map<String, Object>> sessions = sessionsOf(getDetailBody(courseId, query));
+
+        assertThat(sessions).extracting(s -> s.get("sessionId"))
+            .containsExactly(sooner.toString(), later.toString())
+            .doesNotContain(outsideWindow.toString());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void list_items_carry_no_sessions_even_when_the_course_has_scheduled_sessions() {
+        UUID courseId = seedPhysicalCourse("Salsa inicial", CourseStatus.ACTIVE);
+        seedSession(courseId, inDays(2), 20, "SCHEDULED");
+
+        ResponseEntity<Map> response =
+            http.exchange("/api/v1/catalog/courses", HttpMethod.GET, null, Map.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        List<Map<String, Object>> courses =
+            (List<Map<String, Object>>) response.getBody().get("courses");
+        assertThat(courses).extracting(c -> c.get("courseId")).containsExactly(courseId.toString());
+        Map<String, Object> item = courses.get(0);
+        assertThat(item).doesNotContainKey("sessions");
+        assertThat((Map<String, Object>) item.get("physical")).doesNotContainKey("sessions");
     }
 }

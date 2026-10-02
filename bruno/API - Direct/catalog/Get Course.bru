@@ -12,15 +12,14 @@ get {
 
 docs {
   Rich detail of a single VIRTUAL course (#47, US-VIRTUAL-002 escenarios 1, 3, 4).
-  The endpoint no longer fans out to both modalities: it resolves against
-  Virtual's detail port alone. Physical detail is a follow-up, so a
-  physical-only courseId answers the same 404 as a missing id — a visitor
-  cannot probe modality.
+  The id is resolved against the virtual catalog first, so a VIRTUAL id keeps
+  this shape and never carries `sessions`. A PHYSICAL id answers the physical
+  detail instead (#107): see "Get Course - Physical".
 
   Prerequisite: set the runtime-only `courseId` variable to an id returned
   by "List Courses" (VIRTUAL modality).
 
-  Success contract (VIRTUAL only — physical returns 404):
+  Success contract (VIRTUAL):
     body → {
       courseId,
       title,
@@ -44,9 +43,9 @@ docs {
   persisted with one are projected without it for the public read.
 
   Error contract:
-    404 COURSE_NOT_FOUND   → unknown id, exists but not published, OR id
-                              belongs to physical modality (#47 scope)
-    503 CATALOG_DEGRADED   + Retry-After → the virtual port failed
+    404 COURSE_NOT_FOUND   → unknown id, exists but not published, or an
+                              inactive physical course (indistinguishable)
+    503 CATALOG_DEGRADED   + Retry-After → an owning module failed
 }
 
 tests {
@@ -61,6 +60,11 @@ tests {
   test("Body carries modules and stats", function() {
     expect(res.getBody()).to.have.property('modules');
     expect(res.getBody()).to.have.property('stats');
+  });
+
+  test("Virtual detail carries no sessions property", function() {
+    expect(res.getBody()).to.not.have.property('sessions');
+    expect(res.getBody()).to.not.have.property('physical');
   });
 
   test("No lesson carries videoId or videoUrl", function() {
