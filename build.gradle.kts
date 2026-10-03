@@ -1,6 +1,7 @@
 import org.gradle.api.tasks.SourceSetContainer
 import org.gradle.api.tasks.testing.Test
 import org.gradle.api.plugins.JavaPluginExtension
+import org.gradle.api.plugins.quality.Checkstyle
 import org.gradle.jvm.tasks.Jar
 import org.gradle.testing.jacoco.tasks.JacocoReport
 
@@ -36,6 +37,36 @@ val moduleCoverageFloor = mapOf(
     ":api:app" to "0.90",    // real 97.4%
     ":bff" to "0.85"         // real 94.9%
 )
+
+// Checkstyle warning ratchet (#298, ADR-0043). Maximum warnings allowed per
+// Checkstyle task, keyed by task path. Fix or lower, never raise: a cleanup PR
+// re-measures and commits the exact count of every task it touches. A task
+// with no entry (and whose module is not strict) fails the build.
+// Measure: ./gradlew <checkstyle tasks> --rerun-tasks --no-build-cache --continue
+val checkstyleWarningCeiling = mapOf(
+    ":api:app:checkstyleMain" to 24,
+    ":api:app:checkstyleTest" to 139,
+    ":api:auth:checkstyleMain" to 382,
+    ":api:auth:checkstyleTest" to 92,
+    ":api:billing:checkstyleMain" to 216,
+    ":api:billing:checkstyleTest" to 67,
+    ":api:physical:checkstyleMain" to 140,
+    ":api:physical:checkstyleTest" to 11,
+    ":api:shared:checkstyleMain" to 10,
+    ":api:shared:checkstyleTest" to 7,
+    ":api:virtual:checkstyleMain" to 182,
+    ":api:virtual:checkstyleTest" to 16,
+    ":bff:checkstyleMain" to 252,
+    ":bff:checkstyleTest" to 328,
+)
+
+// Modules that reached 0 warnings: both Checkstyle tasks run with severity
+// `error` and need no ceiling entry. A module is added here in the same PR
+// that deletes its two ceiling keys.
+// `:api` is the aggregator project of the api modules: it has no sources (its
+// Checkstyle tasks are NO-SOURCE) but `./gradlew build` realizes them, so it
+// starts strict with zero findings.
+val checkstyleStrictModules = setOf(":api")
 
 // Modules whose coverage feeds the aggregated report below.
 val jvmCoverageModules = listOf(
@@ -160,9 +191,27 @@ subprojects {
             useJUnitPlatform()
         }
 
+        val strict = project.path in checkstyleStrictModules
         checkstyle {
             toolVersion = checkstyleVersion
             configFile = rootProject.file("config/checkstyle/google_checks.xml")
+            // Severity is flipped through configProperties: the -D system
+            // property is not seen by the Checkstyle worker.
+            if (strict) configProperties = mapOf("org.checkstyle.google.severity" to "error")
+        }
+
+        tasks.withType<Checkstyle>().configureEach {
+            val ceiling = checkstyleWarningCeiling[path]
+            maxWarnings = when {
+                strict -> 0.also {
+                    if (ceiling != null) logger.warn("Stale Checkstyle ceiling for $path (strict module); remove it.")
+                }
+                ceiling != null -> ceiling
+                else -> throw GradleException(
+                    "No Checkstyle warning ceiling for $path: add it to checkstyleWarningCeiling " +
+                        "in the root build.gradle.kts with its measured count (ADR-0043)."
+                )
+            }
         }
 
         jacoco {

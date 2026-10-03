@@ -152,3 +152,63 @@ solo en la clase de test que necesita el bean real (vía `@DynamicPropertySource
 o `@TestPropertySource`). Un `rate-ms` alto sigue siendo necesario en esas
 clases para que la única ejecución sea la manual del test, pero no reemplaza
 el apagado por defecto en el resto de la suite.
+
+## Estilo: trinquete de Checkstyle
+
+Checkstyle (`config/checkstyle/google_checks.xml`, versión en
+`gradle/libs.versions.toml`) corre en los 7 módulos JVM, con dos tareas por
+módulo: 14 tareas en total (`:api:{shared,auth,billing,virtual,physical,app}:checkstyle{Main,Test}`
+y `:bff:checkstyle{Main,Test}`). Desde #298 cada tarea tiene un **techo de
+advertencias** y el build falla cuando una tarea lo supera. La decisión y su
+justificación están en [ADR-0043](adr/0043-checkstyle-policy-ratchet.md).
+
+**Dónde vive el techo**: el mapa `checkstyleWarningCeiling` del
+`build.gradle.kts` raíz, justo debajo de `moduleCoverageFloor`. La clave es
+el *path* de la tarea (`:api:auth:checkstyleTest`), una por línea y en orden
+alfabético. Una tarea sin clave (por ejemplo, un *source set* nuevo) falla al
+configurarse con un mensaje que nombra la tarea.
+
+**Regla: corregir o bajar, nunca subir.** Un PR que reduce los hallazgos de
+una tarea deja en el mapa el conteo exacto que midió; un PR que agrega
+hallazgos los corrige, no sube el techo. La única excepción es un PR de
+actualización de la versión de Checkstyle, que recalibra y lo declara. Dos PRs
+que tocan la misma clave: el segundo rebasea y re-mide, nunca resuelve el
+conflicto eligiendo un número.
+
+**Cómo medir** (una invocación de Gradle a la vez; la lista explícita evita las
+tareas sin fuentes del proyecto raíz y el módulo Android):
+
+```bash
+T=":api:shared:checkstyleMain :api:shared:checkstyleTest :api:auth:checkstyleMain :api:auth:checkstyleTest :api:billing:checkstyleMain :api:billing:checkstyleTest :api:virtual:checkstyleMain :api:virtual:checkstyleTest :api:physical:checkstyleMain :api:physical:checkstyleTest :api:app:checkstyleMain :api:app:checkstyleTest :bff:checkstyleMain :bff:checkstyleTest"
+./gradlew $T --rerun-tasks --no-build-cache --continue
+rg -c --include-zero '<error ' api/*/build/reports/checkstyle/{main,test}.xml bff/build/reports/checkstyle/{main,test}.xml
+```
+
+`--rerun-tasks --no-build-cache` evita conteos viejos restaurados de la
+caché, y `--continue` conserva el reporte de cada tarea aunque otra supere su
+techo. Para el detalle por regla:
+`rg -o --no-filename 'source="[^"]+"' <los mismos reportes> | sort | uniq -c | sort -rn`.
+
+**Los PRs de limpieza no cambian el comportamiento.** Todo PR que edita Java
+compara el total de tests por módulo antes y después: la suma de `tests=` y
+`skipped=` de los `<testsuite>` en `<módulo>/build/test-results/test/*.xml`
+(`api/<módulo>` o `bff`), tras `cleanTest` + `test`. Deben ser iguales.
+Además corren `*ArchitectureTest` y `jacocoTestCoverageVerification`.
+
+**Estrictez por módulo y por regla**:
+
+* Un módulo con sus dos tareas en 0 pasa a `checkstyleStrictModules` y sus dos
+  claves se borran en el mismo PR; corre con severidad `error` fijada por
+  `configProperties` (no por `-Dorg.checkstyle.google.severity`, que no
+  tiene efecto).
+* El proyecto agregador `:api` no tiene fuentes, pero `./gradlew build` arma
+  sus tareas de Checkstyle (`NO-SOURCE`); por eso nace en
+  `checkstyleStrictModules` y no lleva tope. Verificar siempre el trinquete con
+  `./gradlew build --dry-run`, que arma el mismo grafo de tareas que el CI.
+* Una regla con 0 hallazgos en las 14 tareas se bloquea con
+  `<property name="severity" value="error"/>` en `google_checks.xml`: sus
+  hallazgos fallan el build sin consumir techo.
+
+**Estado final**: severidad por defecto `error`, `maxWarnings = 0`, y se
+eliminan el mapa, el conjunto estricto y los bloqueos por regla redundantes:
+cualquier hallazgo falla el build.
