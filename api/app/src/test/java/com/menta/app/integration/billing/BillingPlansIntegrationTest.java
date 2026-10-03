@@ -16,7 +16,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -94,7 +93,7 @@ class BillingPlansIntegrationTest extends CatalogAccessMocksIntegrationTestBase 
         allowRateLimit();
         UUID id = seedPlan("Mensual", new BigDecimal("15000.00"), true, PlanStatus.ACTIVE);
         planCourseJpaRepository.save(new PlanCourseJpaEntity(id, "course-1"));
-        when(courseCatalogPort.courseName("course-1")).thenReturn(Optional.of("Tango Basico"));
+        when(courseCatalogPort.courseNames(any())).thenReturn(Map.of("course-1", "Tango Basico"));
 
         ResponseEntity<Map> response = http.exchange(
             "/api/v1/billing/plans/" + id, HttpMethod.GET, null, Map.class

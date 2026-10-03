@@ -4,9 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import com.menta.billing.application.dto.PlanCourseResult;
 import com.menta.billing.application.dto.PlanDetailResult;
 import com.menta.billing.application.dto.RateLimitDecision;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
@@ -16,12 +19,15 @@ import com.menta.billing.domain.exception.PlanNotFoundException;
 import com.menta.billing.domain.exception.PlanRateLimitedException;
 import com.menta.billing.domain.model.Money;
 import com.menta.billing.domain.model.Plan;
+import com.menta.billing.domain.model.PlanCourse;
 import com.menta.billing.domain.model.PlanId;
 import com.menta.billing.domain.model.PlanStatus;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -47,9 +53,13 @@ class GetPlanUseCaseImplTest {
     }
 
     private static Plan plan(PlanId id) {
+        return plan(id, List.of());
+    }
+
+    private static Plan plan(PlanId id, List<PlanCourse> courses) {
         return new Plan(
             id, "Plan Mensual", "desc", Money.of(BigDecimal.TEN, "ARS"), 30,
-            true, PlanStatus.ACTIVE, "terms", "cancellation", List.of(),
+            true, PlanStatus.ACTIVE, "terms", "cancellation", courses,
             java.util.Set.of(com.menta.billing.domain.model.PaymentMethod.MERCADO_PAGO)
         );
     }
@@ -59,13 +69,45 @@ class GetPlanUseCaseImplTest {
         allowRateLimit();
         PlanId id = PlanId.generate();
         when(planRepository.findActiveById(id)).thenReturn(Optional.of(plan(id)));
-        when(courseCatalogPort.courseName(any())).thenReturn(Optional.empty());
+        when(courseCatalogPort.courseNames(any())).thenReturn(Map.of());
 
         PlanDetailResult result = useCase.getPlan(id.toString(), CLIENT_FINGERPRINT);
 
         assertThat(result.id()).isEqualTo(id.toString());
         assertThat(result.termsAndConditions()).isEqualTo("terms");
         assertThat(result.cancellationPolicy()).isEqualTo("cancellation");
+    }
+
+    @Test
+    void resolves_the_course_names_of_the_plan_with_one_batch_call() {
+        allowRateLimit();
+        PlanId id = PlanId.generate();
+        Plan plan = plan(
+            id, List.of(PlanCourse.of("c1"), PlanCourse.of("c2"), PlanCourse.of("c3"))
+        );
+        when(planRepository.findActiveById(id)).thenReturn(Optional.of(plan));
+        when(courseCatalogPort.courseNames(any())).thenReturn(Map.of("c1", "Salsa", "c3", "Tango"));
+
+        PlanDetailResult result = useCase.getPlan(id.toString(), CLIENT_FINGERPRINT);
+
+        verify(courseCatalogPort).courseNames(Set.of("c1", "c2", "c3"));
+        verifyNoMoreInteractions(courseCatalogPort);
+        assertThat(result.courses()).containsExactly(
+            new PlanCourseResult("c1", "Salsa"),
+            new PlanCourseResult("c2", null),
+            new PlanCourseResult("c3", "Tango")
+        );
+    }
+
+    @Test
+    void a_plan_without_courses_never_reaches_the_catalog() {
+        allowRateLimit();
+        PlanId id = PlanId.generate();
+        when(planRepository.findActiveById(id)).thenReturn(Optional.of(plan(id)));
+
+        useCase.getPlan(id.toString(), CLIENT_FINGERPRINT);
+
+        verifyNoInteractions(courseCatalogPort);
     }
 
     @Test

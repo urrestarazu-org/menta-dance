@@ -1,7 +1,8 @@
 package com.menta.billing.infrastructure.catalog;
 
 import com.menta.billing.application.port.out.CourseCatalogPort;
-import java.util.Optional;
+import java.util.Collection;
+import java.util.Map;
 import org.springframework.stereotype.Component;
 
 /**
@@ -21,7 +22,7 @@ public class NotImplementedCourseCatalogPort implements CourseCatalogPort {
         "CourseCatalogPort adapter not implemented yet — see issues #40/#46";
 
     @Override
-    public Optional<String> courseName(String courseId) {
+    public Map<String, String> courseNames(Collection<String> courseIds) {
         throw new UnsupportedOperationException(MESSAGE);
     }
 }
