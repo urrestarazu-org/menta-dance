@@ -12,15 +12,15 @@ import org.springframework.stereotype.Component;
 
 /**
  * Spring Session adapter for storing authentication tokens.
- * <p>
- * Implements {@link SessionTokenRepository} using HttpSession attributes.
+ *
+ * <p>Implements {@link SessionTokenRepository} using HttpSession attributes.
  * Tokens are stored in Redis via Spring Session Data Redis.
  * </p>
- * <p>
- * Part of Clean Architecture infrastructure layer.
+ *
+ * <p>Part of Clean Architecture infrastructure layer.
  * </p>
- * <p>
- * Thread safety: HttpSession is thread-safe in Servlet containers.
+ *
+ * <p>Thread safety: HttpSession is thread-safe in Servlet containers.
  * </p>
  */
 @Slf4j

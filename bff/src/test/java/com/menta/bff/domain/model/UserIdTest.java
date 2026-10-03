@@ -8,8 +8,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Tests for UserId value object.
- * <p>
- * Verifies:
+ *
+ * <p>Verifies:
  * - Null validation
  * - UUID generation
  * - Equality semantics

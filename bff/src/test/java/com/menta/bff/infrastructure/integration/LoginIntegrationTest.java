@@ -13,8 +13,8 @@ import org.springframework.mock.web.MockHttpSession;
 
 /**
  * Integration test for login flow.
- * <p>
- * Verifies:
+ *
+ * <p>Verifies:
  * - POST /login with valid credentials creates session in Redis
  * - Session contains serialized SessionTokens
  * - Response redirects to /dashboard

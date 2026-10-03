@@ -8,8 +8,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Tests for SessionTokens value object.
- * <p>
- * Verifies:
+ *
+ * <p>Verifies:
  * - Immutability (record)
  * - Null validation
  * - Expiration logic

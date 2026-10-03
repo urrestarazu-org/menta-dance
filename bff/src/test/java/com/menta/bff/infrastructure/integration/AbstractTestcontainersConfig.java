@@ -9,16 +9,16 @@ import org.testcontainers.utility.DockerImageName;
 
 /**
  * Singleton Testcontainers and WireMock configuration shared across all integration test classes.
- * <p>
- * This abstract class ensures:
+ *
+ * <p>This abstract class ensures:
  * - Redis container starts ONCE before any test class
  * - WireMock server starts ONCE before any test class
  * - Both are reused across all test classes (JUnit 5 shared state)
  * - @DynamicPropertySource registers properties once with stable port mapping
  * - No "Connection reset" errors due to port remapping between test classes
  * </p>
- * <p>
- * Pattern: Singleton Container + Singleton WireMock
+ *
+ * <p>Pattern: Singleton Container + Singleton WireMock
  * Reference: https://java.testcontainers.org/test_framework_integration/junit_5/#singleton-containers
  * </p>
  */
@@ -26,22 +26,22 @@ public abstract class AbstractTestcontainersConfig {
 
     /**
      * Singleton Redis container shared across ALL integration test classes.
-     * <p>
-     * Lifecycle:
+     *
+     * <p>Lifecycle:
      * - Starts before first test class
      * - Reused by all test classes in JVM
      * - Stopped when JVM exits (Testcontainers Ryuk cleanup)
      * </p>
-     * <p>
-     * Using same image as production (docker-compose: redis:7.4-alpine)
+     *
+     * <p>Using same image as production (docker-compose: redis:7.4-alpine)
      * </p>
      */
     protected static final GenericContainer<?> REDIS_CONTAINER;
 
     /**
      * Singleton WireMock server shared across ALL integration test classes.
-     * <p>
-     * Lifecycle:
+     *
+     * <p>Lifecycle:
      * - Starts before first test class
      * - Reused by all test classes in JVM
      * - Stopped when JVM exits
@@ -65,8 +65,8 @@ public abstract class AbstractTestcontainersConfig {
 
     /**
      * Configure Spring properties dynamically from singleton Testcontainers and WireMock.
-     * <p>
-     * Called ONCE per test class, but always returns same ports from singleton instances.
+     *
+     * <p>Called ONCE per test class, but always returns same ports from singleton instances.
      * This prevents "Connection reset" errors and WireMock port mismatches.
      * </p>
      */

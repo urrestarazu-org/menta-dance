@@ -10,8 +10,8 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Implementation of {@link GetCourseDetailViewUseCase}.
- * <p>
- * Runs the Data Flow sequence from design.md: catalog first, unauthenticated
+ *
+ * <p>Runs the Data Flow sequence from design.md: catalog first, unauthenticated
  * and untranslated on failure (#170 unchanged); then, only when a caller
  * token is present, course progress — wrapped in a broad guard that
  * collapses every failure and every unresolvable state to {@link

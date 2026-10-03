@@ -13,12 +13,12 @@ import org.springframework.stereotype.Component;
 /**
  * Custom logout handler that revokes refresh token in Auth API BEFORE
  * Spring Security invalidates the session.
- * <p>
- * This handler is invoked BEFORE session invalidation, ensuring the
+ *
+ * <p>This handler is invoked BEFORE session invalidation, ensuring the
  * refresh token is still available in the session when we attempt to revoke it.
  * </p>
- * <p>
- * Flow:
+ *
+ * <p>Flow:
  * 1. Spring Security triggers logout (POST /logout with CSRF token)
  * 2. This handler executes FIRST
  * 3. Load refresh token from session (still available)
@@ -26,13 +26,13 @@ import org.springframework.stereotype.Component;
  * 5. Spring Security invalidates session (automatic)
  * 6. BffLogoutSuccessHandler redirects to /login?logout
  * </p>
- * <p>
- * Fail-open: If Auth API revocation fails, we still allow logout to proceed.
+ *
+ * <p>Fail-open: If Auth API revocation fails, we still allow logout to proceed.
  * The local session will be invalidated and the refresh token will eventually
  * expire in Auth API (7 days TTL).
  * </p>
- * <p>
- * Part of Clean Architecture infrastructure layer.
+ *
+ * <p>Part of Clean Architecture infrastructure layer.
  * </p>
  */
 @Component

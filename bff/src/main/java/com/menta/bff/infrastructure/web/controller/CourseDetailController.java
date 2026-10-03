@@ -12,8 +12,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 /**
  * Course detail controller — anonymous-reachable (spec:
  * {@code virtual-course-detail-view}, "Anonymous course detail access").
- * <p>
- * Reads the caller's access token from {@link TokenRefreshFilter#ACCESS_TOKEN_ATTRIBUTE},
+ *
+ * <p>Reads the caller's access token from {@link TokenRefreshFilter#ACCESS_TOKEN_ATTRIBUTE},
  * present only for already-authenticated callers and {@code null} for
  * anonymous ones, and forwards it straight through to
  * {@link GetCourseDetailViewUseCase}, mirroring {@link LessonViewController}.
@@ -26,14 +26,14 @@ import org.springframework.web.bind.annotation.PathVariable;
  * through Spring Boot's default {@code /error} → {@code error.html} path, so
  * no upstream problem-detail body ever reaches the browser.
  * </p>
- * <p>
- * The {@code switch} below is a Java 21 exhaustive statement over the sealed
+ *
+ * <p>The {@code switch} below is a Java 21 exhaustive statement over the sealed
  * {@link CourseDetailView} — the compiler, not review, guarantees both
  * {@link CourseDetailView.Plain} and {@link CourseDetailView.Resumable} are
  * handled, so no {@code default} branch exists or is needed.
  * </p>
- * <p>
- * Part of Clean Architecture infrastructure layer.
+ *
+ * <p>Part of Clean Architecture infrastructure layer.
  * </p>
  */
 @Controller

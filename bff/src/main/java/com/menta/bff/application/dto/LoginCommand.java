@@ -4,12 +4,12 @@ import java.util.Objects;
 
 /**
  * Command DTO for user login request.
- * <p>
- * Captures user credentials from login form.
+ *
+ * <p>Captures user credentials from login form.
  * Part of application layer - bridges controller input to use case.
  * </p>
- * <p>
- * SECURITY: Never log password field.
+ *
+ * <p>SECURITY: Never log password field.
  * </p>
  *
  * @param email    User email address (username)

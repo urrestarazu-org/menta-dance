@@ -5,14 +5,14 @@ import com.menta.bff.application.dto.TokenPairResponse;
 
 /**
  * Port for communicating with the Auth API.
- * <p>
- * Defines operations needed for authentication flows:
+ *
+ * <p>Defines operations needed for authentication flows:
  * - Login (exchange credentials for tokens)
  * - Refresh (exchange refresh token for new access token)
  * - Logout (revoke refresh token)
  * </p>
- * <p>
- * Part of Clean Architecture application layer - abstracts HTTP/REST details.
+ *
+ * <p>Part of Clean Architecture application layer - abstracts HTTP/REST details.
  * Implementations use WebClient or similar HTTP clients.
  * </p>
  */
@@ -20,8 +20,8 @@ public interface AuthApiClient {
 
     /**
      * Authenticates user credentials and obtains token pair.
-     * <p>
-     * Calls POST /api/v1/auth/login with email and password.
+     *
+     * <p>Calls POST /api/v1/auth/login with email and password.
      * </p>
      *
      * @param command Login credentials (email, password)
@@ -33,8 +33,8 @@ public interface AuthApiClient {
 
     /**
      * Refreshes an expired access token using a refresh token.
-     * <p>
-     * Calls POST /api/v1/auth/refresh with X-Refresh-Token header.
+     *
+     * <p>Calls POST /api/v1/auth/refresh with X-Refresh-Token header.
      * </p>
      *
      * @param refreshToken Refresh token from previous login/refresh
@@ -47,8 +47,8 @@ public interface AuthApiClient {
 
     /**
      * Revokes a refresh token to prevent future use.
-     * <p>
-     * Calls POST /api/v1/auth/logout with X-Refresh-Token header.
+     *
+     * <p>Calls POST /api/v1/auth/logout with X-Refresh-Token header.
      * Idempotent - revoking an already-revoked token is safe.
      * </p>
      *

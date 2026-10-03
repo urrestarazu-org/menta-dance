@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 /**
  * Login view controller.
  *
- * Only handles GET /login to display the login form.
+ * <p>Only handles GET /login to display the login form.
  * POST /login is handled automatically by Spring Security
  * via BffAuthenticationProvider.
  */

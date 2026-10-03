@@ -18,8 +18,8 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 
 /**
  * WebClient adapter for the upstream billing plans endpoint.
- * <p>
- * Implements {@link BillingApiClient} using Spring WebClient to call
+ *
+ * <p>Implements {@link BillingApiClient} using Spring WebClient to call
  * api:billing's public plans endpoint. Holds a single-entry TTL cache in
  * front of the upstream call (design: cache lives in the adapter, hand-rolled,
  * single-entry) — {@code getPlans()} serves a fresh cache entry without
@@ -27,15 +27,15 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
  * single upstream refresh (single-flight, guarding against D1's rate-limit
  * concern under concurrent traffic).
  * </p>
- * <p>
- * <b>No stale-on-failure</b>: an expired entry is never served, whether the
+ *
+ * <p><b>No stale-on-failure</b>: an expired entry is never served, whether the
  * cache is cold or holds an expired entry — a refresh failure always
  * propagates and leaves the existing cache entry untouched (D6, strict, per
  * design's corrected reasoning). Only a successful {@code 200} response ever
  * replaces the cached {@link Entry}.
  * </p>
- * <p>
- * Part of Clean Architecture infrastructure layer. Uses an explicit
+ *
+ * <p>Part of Clean Architecture infrastructure layer. Uses an explicit
  * constructor because {@code @Qualifier("billingApiWebClient")} cannot be
  * carried by Lombok's {@code @RequiredArgsConstructor}, mirroring
  * {@code VirtualApiAdapter}.

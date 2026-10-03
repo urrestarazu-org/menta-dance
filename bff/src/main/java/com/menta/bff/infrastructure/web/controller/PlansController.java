@@ -8,8 +8,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 /**
  * Plans listing controller — anonymous-reachable (spec: {@code
  * bff-plans-view}, "Anonymous-reachable plans route").
- * <p>
- * Delegates straight to {@link GetPlansViewUseCase} and renders every plan
+ *
+ * <p>Delegates straight to {@link GetPlansViewUseCase} and renders every plan
  * it returns. No try/catch, mirroring {@link CourseDetailController}:
  * uncaught, {@code @ResponseStatus}-annotated upstream failures ({@link
  * com.menta.bff.application.port.out.BillingApiClient.NotFoundException} /
@@ -18,8 +18,8 @@ import org.springframework.web.bind.annotation.GetMapping;
  * path, so no upstream problem-detail body ever reaches the browser (design
  * D6).
  * </p>
- * <p>
- * Part of Clean Architecture infrastructure layer.
+ *
+ * <p>Part of Clean Architecture infrastructure layer.
  * </p>
  */
 @Controller

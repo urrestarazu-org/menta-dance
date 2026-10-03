@@ -8,8 +8,8 @@ import org.springframework.session.web.http.DefaultCookieSerializer;
 
 /**
  * Configuration for Spring Session with Redis backend.
- * <p>
- * Enables server-side session storage in Redis with secure cookie attributes:
+ *
+ * <p>Enables server-side session storage in Redis with secure cookie attributes:
  * - HttpOnly: prevents XSS attacks from accessing session cookie
  * - Secure: requires HTTPS in production
  * - SameSite=Lax: prevents CSRF attacks while allowing normal navigation

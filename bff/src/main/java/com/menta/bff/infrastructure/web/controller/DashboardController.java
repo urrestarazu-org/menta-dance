@@ -8,8 +8,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 
 /**
  * Dashboard controller - authenticated endpoint for testing.
- * <p>
- * Requires authentication to access.
+ *
+ * <p>Requires authentication to access.
  * </p>
  */
 @Controller

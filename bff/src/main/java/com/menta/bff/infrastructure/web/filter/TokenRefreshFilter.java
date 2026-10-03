@@ -15,36 +15,36 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
  * Filter for transparent access token refresh.
- * <p>
- * Runs BEFORE business logic on every authenticated request:
+ *
+ * <p>Runs BEFORE business logic on every authenticated request:
  * 1. Checks if request is authenticated
  * 2. Loads session tokens via {@link GetValidAccessTokenUseCase}
  * 3. If access token expired, refreshes it transparently
  * 4. Sets access token as request attribute for downstream use
  * 5. Continues filter chain
  * </p>
- * <p>
- * Fail-closed behavior:
+ *
+ * <p>Fail-closed behavior:
  * - Refresh failures (401, 423) → clear session + redirect to login
  * - Auth API unavailable (503) → return 503 error
  * </p>
- * <p>
- * Anonymous requests are skipped by two independent defenses: filter ordering
+ *
+ * <p>Anonymous requests are skipped by two independent defenses: filter ordering
  * (this filter runs before {@code AnonymousAuthenticationFilter}, so the
  * security context authentication is still {@code null}) and an explicit
  * {@link AnonymousAuthenticationToken} check in {@link #doFilterInternal} —
  * see that method's comment for why both exist (#170).
  * </p>
- * <p>
- * Part of Clean Architecture infrastructure layer.
+ *
+ * <p>Part of Clean Architecture infrastructure layer.
  * </p>
  */
 public class TokenRefreshFilter extends OncePerRequestFilter {
 
     /**
      * Request attribute key for storing the valid access token.
-     * <p>
-     * Controllers can read this attribute to get the current access token
+     *
+     * <p>Controllers can read this attribute to get the current access token
      * for making authenticated API calls.
      * </p>
      */

@@ -8,8 +8,8 @@ package com.menta.bff.application.dto;
  * The upstream {@code subscription}/{@code access} blocks are not
  * carried here — the BFF owns its own subscription CTA and the
  * granted/denied distinction is already structural (200 vs 403).
- * <p>
- * {@code videoId} is {@code null} on a free lesson — that only means the
+ *
+ * <p>{@code videoId} is {@code null} on a free lesson — that only means the
  * upstream withholds the raw Bunny id, not that no stream exists for it;
  * see design's "A granted lesson always needs the stream call" note.
  * Component names match the JSON so no Jackson annotation is needed,

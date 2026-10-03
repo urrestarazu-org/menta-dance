@@ -4,12 +4,12 @@ import java.util.Objects;
 
 /**
  * DTO for Auth API token pair response.
- * <p>
- * Represents the result of login or refresh operations from Auth API.
+ *
+ * <p>Represents the result of login or refresh operations from Auth API.
  * Contains access token, refresh token, and TTL (time-to-live) in seconds.
  * </p>
- * <p>
- * SECURITY: Never log token fields.
+ *
+ * <p>SECURITY: Never log token fields.
  * </p>
  *
  * @param accessToken  JWT access token for API authentication

@@ -9,8 +9,8 @@ import org.springframework.validation.annotation.Validated;
 
 /**
  * Configuration properties for Auth API client.
- * <p>
- * Binds to application.yml properties prefixed with {@code menta.auth}.
+ *
+ * <p>Binds to application.yml properties prefixed with {@code menta.auth}.
  * </p>
  */
 @Data

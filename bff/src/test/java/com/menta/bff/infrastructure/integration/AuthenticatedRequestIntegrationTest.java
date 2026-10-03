@@ -13,8 +13,8 @@ import org.springframework.mock.web.MockHttpSession;
 
 /**
  * Integration test for authenticated requests.
- * <p>
- * Verifies:
+ *
+ * <p>Verifies:
  * - GET /dashboard with valid SESSION cookie returns 200
  * - TokenRefreshFilter loads tokens from session
  * - Access token is available as request attribute
@@ -93,19 +93,19 @@ class AuthenticatedRequestIntegrationTest extends BaseIntegrationTest {
 
     /**
      * DISABLED: Cannot test token refresh/revoke scenarios at integration level
-     * with Spring Session + Redis + MockHttpSession due to architectural limitations:
+     * with Spring Session + Redis + MockHttpSession due to architectural limitations.
      *
-     * 1. MockHttpSession doesn't persist to Redis (it's mock-only)
+     * <p>1. MockHttpSession doesn't persist to Redis (it's mock-only)
      * 2. @MockBean SessionTokenRepository breaks other tests
      * 3. Cannot manipulate session state after login in integration tests
      *
-     * ✅ These scenarios ARE covered by TokenRefreshFilterTest unit tests:
+     * <p>✅ These scenarios ARE covered by TokenRefreshFilterTest unit tests:
      *    - shouldLoadTokensForAuthenticatedRequest() → transparent refresh
      *    - shouldClearSessionAndRedirectOnAuthenticationException() → refresh fail 401
      *    - shouldClearSessionAndRedirectOnTokenRevoked() → token revoked 423
      *    - shouldPropagateServiceUnavailableException() → service unavailable 503
      *
-     * Integration tests verify the happy path (valid tokens), unit tests verify edge cases.
+     * <p>Integration tests verify the happy path (valid tokens), unit tests verify edge cases.
      */
     @Test
     @DisplayName("GET /dashboard con access token expirado debe hacer refresh transparente")

@@ -9,8 +9,8 @@ import org.springframework.validation.annotation.Validated;
 
 /**
  * Configuration properties for the Virtual/Catalog API client.
- * <p>
- * Binds to application.yml properties prefixed with {@code menta.api}.
+ *
+ * <p>Binds to application.yml properties prefixed with {@code menta.api}.
  * </p>
  */
 @Data

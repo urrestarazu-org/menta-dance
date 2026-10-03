@@ -9,8 +9,8 @@ import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 
 /**
  * Test configuration for Spring Security.
- * <p>
- * Provides an in-memory UserDetailsService for testing.
+ *
+ * <p>Provides an in-memory UserDetailsService for testing.
  * </p>
  */
 @TestConfiguration

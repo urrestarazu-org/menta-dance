@@ -20,12 +20,12 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 
 /**
  * WebClient adapter for the upstream catalog and virtual lesson endpoints.
- * <p>
- * Implements {@link VirtualApiClient} port using Spring WebClient to call
+ *
+ * <p>Implements {@link VirtualApiClient} port using Spring WebClient to call
  * api:app's public catalog and api:virtual's lesson endpoints.
  * </p>
- * <p>
- * Part of Clean Architecture infrastructure layer. Uses an explicit constructor
+ *
+ * <p>Part of Clean Architecture infrastructure layer. Uses an explicit constructor
  * (design decision C) because {@code @Qualifier("virtualApiWebClient")} cannot be
  * carried by Lombok's {@code @RequiredArgsConstructor}.
  * </p>

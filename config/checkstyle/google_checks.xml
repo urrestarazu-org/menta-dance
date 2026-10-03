@@ -422,6 +422,7 @@
     </module>
     <module name="JavadocParagraph">
       <property name="allowNewlineParagraph" value="false"/>
+      <property name="severity" value="error"/>
     </module>
     <module name="RequireEmptyLineBeforeBlockTagGroup"/>
     <module name="AtclauseOrder">

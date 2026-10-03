@@ -5,13 +5,13 @@ import java.util.Optional;
 
 /**
  * Port for storing and retrieving session tokens.
- * <p>
- * Abstracts the session storage mechanism (Spring Session + Redis in production).
+ *
+ * <p>Abstracts the session storage mechanism (Spring Session + Redis in production).
  * Part of Clean Architecture application layer - defines what the use cases need,
  * not how it's implemented.
  * </p>
- * <p>
- * Thread safety: implementations MUST be thread-safe, as HTTP sessions can be
+ *
+ * <p>Thread safety: implementations MUST be thread-safe, as HTTP sessions can be
  * accessed concurrently by refresh filters and user requests.
  * </p>
  */
@@ -19,8 +19,8 @@ public interface SessionTokenRepository {
 
     /**
      * Stores tokens in the current HTTP session.
-     * <p>
-     * MUST be called within an active HTTP request context.
+     *
+     * <p>MUST be called within an active HTTP request context.
      * Overwrites any existing tokens in the session.
      * </p>
      *
@@ -31,8 +31,8 @@ public interface SessionTokenRepository {
 
     /**
      * Loads tokens from the current HTTP session.
-     * <p>
-     * MUST be called within an active HTTP request context.
+     *
+     * <p>MUST be called within an active HTTP request context.
      * </p>
      *
      * @return Tokens if present in session, empty if not found or session doesn't exist
@@ -42,8 +42,8 @@ public interface SessionTokenRepository {
 
     /**
      * Clears tokens from the current HTTP session.
-     * <p>
-     * Idempotent - calling multiple times is safe.
+     *
+     * <p>Idempotent - calling multiple times is safe.
      * MUST be called within an active HTTP request context.
      * </p>
      *

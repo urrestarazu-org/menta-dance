@@ -8,8 +8,8 @@ import java.util.Optional;
 
 /**
  * Implementation of {@link LogoutUseCase}.
- * <p>
- * Implements fail-open logout: always clears local session,
+ *
+ * <p>Implements fail-open logout: always clears local session,
  * even if Auth API revocation fails.
  * </p>
  */

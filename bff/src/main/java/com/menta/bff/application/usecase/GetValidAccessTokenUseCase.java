@@ -2,27 +2,27 @@ package com.menta.bff.application.usecase;
 
 /**
  * Use case for retrieving a valid access token from session.
- * <p>
- * Orchestrates token retrieval with automatic refresh:
+ *
+ * <p>Orchestrates token retrieval with automatic refresh:
  * 1. Load tokens from session
  * 2. Check if access token is expired
  * 3. If expired, refresh transparently via Auth API
  * 4. Return valid access token
  * </p>
- * <p>
- * This use case enables transparent token refresh before making
+ *
+ * <p>This use case enables transparent token refresh before making
  * authenticated API calls.
  * </p>
- * <p>
- * Part of Clean Architecture application layer.
+ *
+ * <p>Part of Clean Architecture application layer.
  * </p>
  */
 public interface GetValidAccessTokenUseCase {
 
     /**
      * Gets a valid (non-expired) access token from session.
-     * <p>
-     * Automatically refreshes if expired.
+     *
+     * <p>Automatically refreshes if expired.
      * </p>
      *
      * @return Valid access token (JWT)

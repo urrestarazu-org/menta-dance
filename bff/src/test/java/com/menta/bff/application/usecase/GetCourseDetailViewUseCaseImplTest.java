@@ -23,8 +23,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * Unit tests for {@link GetCourseDetailViewUseCaseImpl}.
- * <p>
- * The load-bearing behavior under test is the broad collapse-to-{@link
+ *
+ * <p>The load-bearing behavior under test is the broad collapse-to-{@link
  * CourseDetailView.Plain} rule (design D4): a missing token, a
  * zero-progress/zero-lesson course, every {@code RuntimeException} from the
  * progress call ({@code 403}/{@code 404}/unmapped {@code 401}/{@code 503}),

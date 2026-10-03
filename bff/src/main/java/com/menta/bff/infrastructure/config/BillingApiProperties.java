@@ -9,8 +9,8 @@ import org.springframework.validation.annotation.Validated;
 
 /**
  * Configuration properties for the Billing API client.
- * <p>
- * Binds to application.yml properties prefixed with {@code menta.billing}.
+ *
+ * <p>Binds to application.yml properties prefixed with {@code menta.billing}.
  * </p>
  */
 @Data
