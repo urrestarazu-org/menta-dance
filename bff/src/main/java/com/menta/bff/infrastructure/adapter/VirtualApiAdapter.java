@@ -7,6 +7,8 @@ import com.menta.bff.application.dto.LessonStream;
 import com.menta.bff.application.dto.Nav;
 import com.menta.bff.application.port.out.VirtualApiClient;
 import com.menta.bff.infrastructure.config.VirtualApiProperties;
+import java.time.Instant;
+import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
@@ -15,9 +17,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
-
-import java.time.Instant;
-import java.util.Objects;
 
 /**
  * WebClient adapter for the upstream catalog and virtual lesson endpoints.

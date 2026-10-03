@@ -56,8 +56,8 @@ val checkstyleWarningCeiling = mapOf(
     ":api:shared:checkstyleTest" to 1,
     ":api:virtual:checkstyleMain" to 181,
     ":api:virtual:checkstyleTest" to 12,
-    ":bff:checkstyleMain" to 252,
-    ":bff:checkstyleTest" to 328,
+    ":bff:checkstyleMain" to 206,
+    ":bff:checkstyleTest" to 165,
 )
 
 // Modules that reached 0 warnings: both Checkstyle tasks run with severity

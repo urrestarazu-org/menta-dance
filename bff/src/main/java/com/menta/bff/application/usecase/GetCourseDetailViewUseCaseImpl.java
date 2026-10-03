@@ -3,11 +3,10 @@ package com.menta.bff.application.usecase;
 import com.menta.bff.application.dto.CourseDetail;
 import com.menta.bff.application.dto.CourseProgress;
 import com.menta.bff.application.port.out.VirtualApiClient;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.List;
 import java.util.Objects;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Implementation of {@link GetCourseDetailViewUseCase}.

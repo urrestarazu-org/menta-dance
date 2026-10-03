@@ -1,11 +1,10 @@
 package com.menta.bff.domain.model;
 
-import org.junit.jupiter.api.Test;
-
-import java.time.Instant;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.time.Instant;
+import org.junit.jupiter.api.Test;
 
 /**
  * Tests for SessionTokens value object.

@@ -3,6 +3,7 @@ package com.menta.bff.infrastructure.security;
 import com.menta.bff.application.dto.LoginCommand;
 import com.menta.bff.application.port.out.AuthApiClient;
 import com.menta.bff.application.usecase.LoginUseCase;
+import java.util.List;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.InternalAuthenticationServiceException;
@@ -12,8 +13,6 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Component;
-
-import java.util.List;
 
 /**
  * Bridges Spring Security's {@code formLogin()} to the application layer.

@@ -4,7 +4,6 @@ import com.menta.bff.application.dto.TokenPairResponse;
 import com.menta.bff.application.port.out.AuthApiClient;
 import com.menta.bff.application.port.out.SessionTokenRepository;
 import com.menta.bff.domain.model.SessionTokens;
-
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;

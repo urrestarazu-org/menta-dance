@@ -3,13 +3,12 @@ package com.menta.bff.infrastructure.adapter;
 import com.menta.bff.application.port.out.SessionTokenRepository;
 import com.menta.bff.domain.model.SessionTokens;
 import jakarta.servlet.http.HttpSession;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
-
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Supplier;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
 
 /**
  * Spring Session adapter for storing authentication tokens.

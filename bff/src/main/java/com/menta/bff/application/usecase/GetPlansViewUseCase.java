@@ -1,7 +1,6 @@
 package com.menta.bff.application.usecase;
 
 import com.menta.bff.application.dto.PlanSummary;
-
 import java.util.List;
 
 /**

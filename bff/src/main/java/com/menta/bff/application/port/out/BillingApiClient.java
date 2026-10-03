@@ -1,10 +1,9 @@
 package com.menta.bff.application.port.out;
 
 import com.menta.bff.application.dto.PlanSummary;
+import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ResponseStatus;
-
-import java.util.List;
 
 /**
  * Port for communicating with the upstream billing plans endpoint. Part of
