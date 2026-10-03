@@ -3,6 +3,7 @@ package com.menta.app.integration.billing.outbox;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
+import com.menta.app.integration.support.AbstractBillingMySqlIntegrationTest;
 import com.menta.auth.application.port.out.ActivationRateLimitPort;
 import com.menta.auth.application.port.out.AuthDegradedGuard;
 import com.menta.auth.application.port.out.LoginRateLimitPort;
@@ -12,9 +13,9 @@ import com.menta.auth.application.port.out.TokenBlacklistPort;
 import com.menta.billing.application.dto.ProviderPaymentResult;
 import com.menta.billing.application.port.out.BankTransferRateLimitPort;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
-import com.menta.billing.application.usecase.PaymentVerificationService;
 import com.menta.billing.application.port.out.CourseCatalogPort;
 import com.menta.billing.application.port.out.PaymentProviderPort;
+import com.menta.billing.application.usecase.PaymentVerificationService;
 import com.menta.billing.domain.model.Money;
 import com.menta.billing.infrastructure.outbox.BillingOutboxRowJpaRepository;
 import com.menta.billing.infrastructure.persistence.entity.PaymentJpaEntity;
@@ -25,7 +26,6 @@ import com.menta.billing.infrastructure.persistence.repository.ReconciliationTas
 import com.menta.billing.infrastructure.persistence.repository.WebhookInboxJpaRepository;
 import com.menta.billing.infrastructure.webhook.WebhookInboxStatus;
 import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
-import com.menta.app.integration.support.AbstractBillingMySqlIntegrationTest;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;

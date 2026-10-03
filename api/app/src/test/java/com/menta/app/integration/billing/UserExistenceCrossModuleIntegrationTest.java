@@ -3,6 +3,7 @@ package com.menta.app.integration.billing;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
+import com.menta.app.integration.support.AbstractBillingMySqlIntegrationTest;
 import com.menta.auth.application.port.out.AuthDegradedGuard;
 import com.menta.auth.application.port.out.LoginRateLimitPort;
 import com.menta.auth.application.port.out.RateLimitDecision;
@@ -12,7 +13,6 @@ import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.shared.auth.UserExistencePort;
 import com.menta.shared.domain.vo.Email;
-import com.menta.app.integration.support.AbstractBillingMySqlIntegrationTest;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

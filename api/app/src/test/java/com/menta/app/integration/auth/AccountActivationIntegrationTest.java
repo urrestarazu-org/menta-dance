@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.menta.app.integration.support.AbstractAuthMySqlIntegrationTest;
 import com.menta.app.outbox.ActivationOutboxEventHandler;
 import com.menta.auth.application.dto.ActivateAccountCommand;
 import com.menta.auth.application.dto.LoginCommand;
@@ -29,7 +30,6 @@ import com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity;
 import com.menta.auth.infrastructure.persistence.repository.ActivationTokenJpaRepository;
 import com.menta.auth.infrastructure.persistence.repository.OutboxRowJpaRepository;
 import com.menta.shared.domain.vo.Email;
-import com.menta.app.integration.support.AbstractAuthMySqlIntegrationTest;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;

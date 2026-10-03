@@ -7,12 +7,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
-import java.time.Duration;
-import java.util.Map;
-import java.util.OptionalLong;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-
+import com.menta.app.integration.support.AbstractAuthMySqlIntegrationTest;
 import com.menta.app.outbox.OutboxBlacklistReconciler;
 import com.menta.auth.application.port.out.ActivationRateLimitPort;
 import com.menta.auth.application.port.out.AuthDegradedGuard;
@@ -26,8 +21,11 @@ import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.auth.infrastructure.persistence.repository.OutboxRowJpaRepository;
 import com.menta.shared.domain.vo.Email;
-import com.menta.app.integration.support.AbstractAuthMySqlIntegrationTest;
-
+import java.time.Duration;
+import java.util.Map;
+import java.util.OptionalLong;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

@@ -15,11 +15,9 @@ import com.menta.auth.application.port.out.TokenBlacklistPort;
 import com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity;
 import com.menta.auth.infrastructure.persistence.repository.OutboxRowJpaRepository;
 import com.menta.shared.outbox.OutboxStatus;
-
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

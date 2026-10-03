@@ -3,6 +3,7 @@ package com.menta.physical.infrastructure.config;
 import com.menta.physical.application.port.in.BatchCreatePhysicalSessionsUseCase;
 import com.menta.physical.application.port.in.CreatePhysicalCourseUseCase;
 import com.menta.physical.application.port.in.CreatePhysicalSessionUseCase;
+import com.menta.physical.application.port.in.GetPhysicalAttendanceHistoryUseCase;
 import com.menta.physical.application.port.in.GetPhysicalDeviceUseCase;
 import com.menta.physical.application.port.in.IssuePhysicalAccessQrUseCase;
 import com.menta.physical.application.port.in.ListManagedPhysicalCoursesUseCase;
@@ -10,7 +11,6 @@ import com.menta.physical.application.port.in.ListManagedPhysicalSessionsUseCase
 import com.menta.physical.application.port.in.ListPhysicalDevicesUseCase;
 import com.menta.physical.application.port.in.PhysicalCourseAvailabilityPort;
 import com.menta.physical.application.port.in.PhysicalCourseOwnershipPort;
-import com.menta.physical.application.port.in.GetPhysicalAttendanceHistoryUseCase;
 import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
 import com.menta.physical.application.port.in.RegisterPhysicalDeviceUseCase;
 import com.menta.physical.application.port.in.RevokePhysicalDeviceUseCase;

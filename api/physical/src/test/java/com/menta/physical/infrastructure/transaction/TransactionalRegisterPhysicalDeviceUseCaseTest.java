@@ -6,8 +6,8 @@ import static org.mockito.Mockito.when;
 
 import com.menta.physical.application.dto.PhysicalDeviceSecretResult;
 import com.menta.physical.application.dto.PhysicalDeviceView;
-import com.menta.physical.application.port.in.RegisterPhysicalDeviceUseCase;
 import com.menta.physical.application.dto.RegisterPhysicalDeviceCommand;
+import com.menta.physical.application.port.in.RegisterPhysicalDeviceUseCase;
 import com.menta.physical.domain.model.DeviceStatus;
 import java.lang.reflect.Method;
 import java.time.Instant;

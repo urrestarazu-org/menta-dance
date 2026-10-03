@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
+import com.menta.app.integration.support.AbstractBillingMySqlIntegrationTest;
 import com.menta.auth.application.port.out.AccessTokenIssuer;
 import com.menta.auth.application.port.out.ActivationRateLimitPort;
 import com.menta.auth.application.port.out.AuthDegradedGuard;
@@ -21,8 +22,8 @@ import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.port.out.Clock;
 import com.menta.billing.application.port.out.CourseCatalogPort;
 import com.menta.billing.infrastructure.persistence.entity.PhysicalCoursePricingJpaEntity;
-import com.menta.billing.infrastructure.persistence.repository.PhysicalCourseQuoteJpaRepository;
 import com.menta.billing.infrastructure.persistence.repository.PhysicalCoursePricingJpaRepository;
+import com.menta.billing.infrastructure.persistence.repository.PhysicalCourseQuoteJpaRepository;
 import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
 import com.menta.physical.domain.model.CourseStatus;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalCourseJpaEntity;
@@ -30,7 +31,6 @@ import com.menta.physical.infrastructure.persistence.entity.PhysicalSessionJpaEn
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
 import com.menta.shared.domain.vo.Email;
-import com.menta.app.integration.support.AbstractBillingMySqlIntegrationTest;
 import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.Instant;

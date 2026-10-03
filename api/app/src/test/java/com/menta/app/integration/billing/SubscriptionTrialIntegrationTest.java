@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
+import com.menta.app.integration.support.AbstractBillingMySqlIntegrationTest;
 import com.menta.auth.application.port.out.AccessTokenIssuer;
 import com.menta.auth.application.port.out.ActivationRateLimitPort;
 import com.menta.auth.application.port.out.AuthDegradedGuard;
@@ -44,7 +45,6 @@ import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
 import com.menta.shared.billing.CourseAccessSnapshot;
 import com.menta.shared.billing.VirtualCourseEntitlementPort;
 import com.menta.shared.domain.vo.Email;
-import com.menta.app.integration.support.AbstractBillingMySqlIntegrationTest;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.HashMap;

@@ -2,6 +2,7 @@ package com.menta.app.integration.virtual;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.menta.app.integration.support.CatalogAccessMocksIntegrationTestBase;
 import com.menta.auth.application.port.out.AccessTokenIssuer;
 import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.User;
@@ -27,7 +28,6 @@ import com.menta.virtual.infrastructure.persistence.entity.VirtualModuleJpaEntit
 import com.menta.virtual.infrastructure.persistence.repository.VirtualCourseJpaRepository;
 import com.menta.virtual.infrastructure.persistence.repository.VirtualLessonJpaRepository;
 import com.menta.virtual.infrastructure.persistence.repository.VirtualModuleJpaRepository;
-import com.menta.app.integration.support.CatalogAccessMocksIntegrationTestBase;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;

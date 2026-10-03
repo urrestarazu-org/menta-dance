@@ -2,6 +2,7 @@ package com.menta.app.integration.catalog;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.menta.app.integration.support.CatalogAccessMocksIntegrationTestBase;
 import com.menta.physical.domain.model.CourseStatus;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalCapacityAssignmentJpaEntity;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalCourseJpaEntity;
@@ -15,7 +16,6 @@ import com.menta.virtual.infrastructure.persistence.entity.VirtualModuleJpaEntit
 import com.menta.virtual.infrastructure.persistence.repository.VirtualCourseJpaRepository;
 import com.menta.virtual.infrastructure.persistence.repository.VirtualLessonJpaRepository;
 import com.menta.virtual.infrastructure.persistence.repository.VirtualModuleJpaRepository;
-import com.menta.app.integration.support.CatalogAccessMocksIntegrationTestBase;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
