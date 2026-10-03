@@ -3,11 +3,13 @@ package com.menta.billing.application.usecase;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import com.menta.billing.application.dto.PlanCourseResult;
 import com.menta.billing.application.dto.PlanSummaryResult;
 import com.menta.billing.application.dto.RateLimitDecision;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
@@ -22,7 +24,8 @@ import com.menta.billing.domain.model.PlanStatus;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -83,7 +86,7 @@ class ListPlansUseCaseImplTest {
         allowRateLimit();
         Plan plan = plan("Plan", false, List.of(PlanCourse.of("course-1")));
         when(planRepository.findAllActiveOrderByPriceAsc()).thenReturn(List.of(plan));
-        when(courseCatalogPort.courseName("course-1")).thenReturn(Optional.of("Tango Basico"));
+        when(courseCatalogPort.courseNames(any())).thenReturn(Map.of("course-1", "Tango Basico"));
 
         List<PlanSummaryResult> result = useCase.listActivePlans(CLIENT_FINGERPRINT);
 
@@ -99,7 +102,7 @@ class ListPlansUseCaseImplTest {
         allowRateLimit();
         Plan plan = plan("Plan", false, List.of(PlanCourse.of("course-1")));
         when(planRepository.findAllActiveOrderByPriceAsc()).thenReturn(List.of(plan));
-        when(courseCatalogPort.courseName(any())).thenReturn(Optional.empty());
+        when(courseCatalogPort.courseNames(any())).thenReturn(Map.of());
 
         List<PlanSummaryResult> result = useCase.listActivePlans(CLIENT_FINGERPRINT);
 
@@ -108,18 +111,49 @@ class ListPlansUseCaseImplTest {
 
     @Test
     void a_catalog_port_that_throws_degrades_to_a_null_name_instead_of_failing_the_whole_list() {
-        // The real scenario today: NotImplementedCourseCatalogPort throws
-        // because #40/#46 do not exist yet. That must never 500 the whole
-        // plans listing over a missing display name.
+        // A port that breaks its contract (it must never throw for a missing
+        // course) must not 500 the whole plans listing over a display name.
         allowRateLimit();
         Plan plan = plan("Plan", false, List.of(PlanCourse.of("course-1")));
         when(planRepository.findAllActiveOrderByPriceAsc()).thenReturn(List.of(plan));
-        when(courseCatalogPort.courseName(eq("course-1")))
+        when(courseCatalogPort.courseNames(any()))
             .thenThrow(new UnsupportedOperationException("not implemented yet"));
 
         List<PlanSummaryResult> result = useCase.listActivePlans(CLIENT_FINGERPRINT);
 
         assertThat(result.get(0).courses().get(0).courseName()).isNull();
+    }
+
+    @Test
+    void resolves_the_courses_of_all_plans_with_one_batch_call() {
+        allowRateLimit();
+        Plan first = plan("Mensual", false, List.of(PlanCourse.of("c1"), PlanCourse.of("c2")));
+        Plan second = plan("Anual", true, List.of(PlanCourse.of("c2"), PlanCourse.of("c3")));
+        when(planRepository.findAllActiveOrderByPriceAsc()).thenReturn(List.of(first, second));
+        when(courseCatalogPort.courseNames(any()))
+            .thenReturn(Map.of("c1", "Salsa", "c2", "Tango", "c3", "Bachata"));
+
+        List<PlanSummaryResult> result = useCase.listActivePlans(CLIENT_FINGERPRINT);
+
+        verify(courseCatalogPort).courseNames(Set.of("c1", "c2", "c3"));
+        verifyNoMoreInteractions(courseCatalogPort);
+        assertThat(result.get(0).courses()).containsExactly(
+            new PlanCourseResult("c1", "Salsa"), new PlanCourseResult("c2", "Tango")
+        );
+        assertThat(result.get(1).courses()).containsExactly(
+            new PlanCourseResult("c2", "Tango"), new PlanCourseResult("c3", "Bachata")
+        );
+    }
+
+    @Test
+    void plans_without_courses_never_reach_the_catalog() {
+        allowRateLimit();
+        when(planRepository.findAllActiveOrderByPriceAsc())
+            .thenReturn(List.of(plan("Mensual", false, List.of())));
+
+        useCase.listActivePlans(CLIENT_FINGERPRINT);
+
+        verifyNoInteractions(courseCatalogPort);
     }
 
     @Test

@@ -9,6 +9,7 @@ import com.menta.billing.application.port.out.PlanRepository;
 import com.menta.billing.domain.exception.PlanRateLimitedException;
 import com.menta.billing.domain.model.Plan;
 import java.util.List;
+import java.util.Map;
 
 /** Implementation of {@link ListPlansUseCase}. */
 public class ListPlansUseCaseImpl implements ListPlansUseCase {
@@ -32,12 +33,14 @@ public class ListPlansUseCaseImpl implements ListPlansUseCase {
         if (!decision.isAllowed()) {
             throw new PlanRateLimitedException(decision.getRetryAfter());
         }
-        return planRepository.findAllActiveOrderByPriceAsc().stream()
-            .map(this::toSummary)
+        List<Plan> plans = planRepository.findAllActiveOrderByPriceAsc();
+        Map<String, String> courseNames = PlanCourseResolver.resolveNames(plans, courseCatalogPort);
+        return plans.stream()
+            .map(plan -> toSummary(plan, courseNames))
             .toList();
     }
 
-    private PlanSummaryResult toSummary(Plan plan) {
+    private static PlanSummaryResult toSummary(Plan plan, Map<String, String> courseNames) {
         return new PlanSummaryResult(
             plan.getId().toString(),
             plan.getName(),
@@ -46,7 +49,7 @@ public class ListPlansUseCaseImpl implements ListPlansUseCase {
             plan.getPrice().getCurrency(),
             plan.getDurationDays(),
             plan.isFeatured(),
-            PlanCourseResolver.resolve(plan.getCourses(), courseCatalogPort)
+            PlanCourseResolver.toResults(plan.getCourses(), courseNames)
         );
     }
 }

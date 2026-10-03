@@ -1,6 +1,7 @@
 package com.menta.billing.application.port.out;
 
-import java.util.Optional;
+import java.util.Collection;
+import java.util.Map;
 
 /**
  * Cross-module read port toward Virtual/Physical's course catalog
@@ -8,17 +9,26 @@ import java.util.Optional;
  *
  * <p>{@code billing_plan_courses} stores only {@code course_id} by value —
  * never a FK, never a JOIN into another module's schema. Resolving the
- * human-readable course name for a response is this port's job; today no
- * implementation of it exists (issues #40/#46 build the real Virtual/Physical
- * catalog ports Billing will eventually call through), so the wired adapter
- * is a placeholder — see {@code NotImplementedCourseCatalogPort}.</p>
+ * human-readable course names for a response is this port's job, and it is
+ * done in one batch per request so the cost does not grow with the number of
+ * plans or courses. Today the wired adapter is still a placeholder — see
+ * {@code NotImplementedCourseCatalogPort}.</p>
  */
 public interface CourseCatalogPort {
 
     /**
-     * @return the course's display name, or empty if the course is unknown
-     *     to the catalog (deleted, or the id is stale). Never throws for a
-     *     missing course — only for an infrastructure failure.
+     * Resolves the display names of the given courses in one batch.
+     *
+     * <p>The result is immutable and contains only the resolved ids, keyed by
+     * the exact id string of the input. An id that cannot be resolved
+     * (unknown, not publicly visible, or not a valid course id) is simply
+     * absent; it is never an error. Duplicate ids are looked up once. An
+     * empty input returns an empty map without any lookup. The method throws
+     * only for an infrastructure failure.</p>
+     *
+     * @param courseIds the course ids to resolve; must not be {@code null}
+     * @return the resolved names keyed by input id, never {@code null}
+     * @throws NullPointerException if {@code courseIds} is {@code null}
      */
-    Optional<String> courseName(String courseId);
+    Map<String, String> courseNames(Collection<String> courseIds);
 }
