@@ -12,10 +12,8 @@ import java.util.UUID;
  * api:app} implements this billing out port by calling that Physical in
  * port directly — a plain Java interface, never HTTP, RabbitMQ or a shared
  * schema, same pattern as {@code CatalogCompositionService}. Deliberately
- * NOT the {@code NotImplementedXxxPort} placeholder pattern used elsewhere
- * in this module (e.g. {@code NotImplementedCourseCatalogPort}): those never
- * got a real adapter across two prior issues, so this port is wired for real
- * from the start.</p>
+ * NOT a {@code NotImplementedXxxPort} placeholder: this port is wired for
+ * real from the start.</p>
  */
 public interface PhysicalCourseOwnershipPort {
 

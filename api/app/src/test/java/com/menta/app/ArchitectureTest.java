@@ -34,6 +34,7 @@ class ArchitectureTest {
         classes()
             .that().haveSimpleName("PhysicalCapacityAssignmentAdapter")
             .or().haveSimpleName("MarkPurchaseExceptionAdapter")
+            .or().haveSimpleName("CourseCatalogPortAdapter")
             .should().resideInAPackage("com.menta.app.billing")
             .check(classes);
     }
@@ -52,6 +53,35 @@ class ArchitectureTest {
             "com.menta.app.billing.MarkPurchaseExceptionAdapter",
             "com.menta.billing.application.port.in.MarkPurchaseExceptionPort"
         );
+    }
+
+    @Test
+    void course_catalog_port_adapter_uses_the_virtual_and_physical_in_ports() {
+        assertDirectDependency(
+            "com.menta.app.billing.CourseCatalogPortAdapter",
+            "com.menta.virtual.application.port.in.VirtualCourseCatalogPort"
+        );
+        assertDirectDependency(
+            "com.menta.app.billing.CourseCatalogPortAdapter",
+            "com.menta.physical.application.port.in.PhysicalCourseAvailabilityPort"
+        );
+    }
+
+    @Test
+    void course_catalog_port_adapter_reaches_virtual_and_physical_only_through_their_in_ports() {
+        noClasses()
+            .that().haveFullyQualifiedName("com.menta.app.billing.CourseCatalogPortAdapter")
+            .should().dependOnClassesThat().resideInAnyPackage(
+                "com.menta.virtual.domain..",
+                "com.menta.virtual.application.usecase..",
+                "com.menta.virtual.application.port.out..",
+                "com.menta.virtual.infrastructure..",
+                "com.menta.physical.domain..",
+                "com.menta.physical.application.usecase..",
+                "com.menta.physical.application.port.out..",
+                "com.menta.physical.infrastructure.."
+            )
+            .check(classes);
     }
 
     @Test

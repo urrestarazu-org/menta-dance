@@ -50,10 +50,20 @@ alcanzar Redis, responden `503 BILLING_DEGRADED` en vez de dejar pasar
 tráfico sin límite.
 
 `billing_plan_courses` referencia cursos de Virtual/Physical por `course_id`
-sin FK ni JOIN (`docs/25-ARCHITECTURE-RULES.md`); el nombre de cada curso se
-resuelve vía `CourseCatalogPort`, cuyo adapter real todavía no existe
-(pendiente de #40/#46) — hasta entonces `courses[].name` puede venir `null`
-sin que la respuesta falle.
+sin FK ni JOIN (`docs/25-ARCHITECTURE-RULES.md`). El nombre de cada curso se
+resuelve vía `CourseCatalogPort` (#108): `api:app` consulta Virtual y Physical
+en una sola búsqueda por módulo por solicitud, sin importar cuántos planes o
+cursos tenga la respuesta. `courses[].name` es el título del curso cuando es un
+curso virtual `PUBLISHED` o un curso presencial `ACTIVE`; si el mismo id
+existe en ambos módulos gana el virtual (Physical sólo se consulta por los ids
+que Virtual no resolvió).
+
+Cualquier otro caso — id inexistente, curso virtual `DRAFT` o `ARCHIVED`,
+curso presencial inactivo o un id que no es un UUID — devuelve `name: null`
+con el `id` guardado: el curso no se quita de `courses` y la respuesta sigue
+siendo `200` con el plan completo. Si un módulo falla, sólo se degradan a
+`null` los cursos que ese módulo habría respondido (se registra un `WARN` con
+el módulo y los ids afectados); el otro módulo conserva sus nombres.
 
 ## Checkout de suscripción virtual (US-BILLING-010)
 
