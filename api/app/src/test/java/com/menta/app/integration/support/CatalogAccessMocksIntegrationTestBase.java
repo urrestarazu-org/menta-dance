@@ -8,7 +8,6 @@ import com.menta.auth.application.port.out.PasswordResetRequestRateLimitPort;
 import com.menta.auth.application.port.out.TokenBlacklistPort;
 import com.menta.billing.application.port.out.BankTransferRateLimitPort;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
-import com.menta.billing.application.port.out.CourseCatalogPort;
 import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -39,6 +38,5 @@ public abstract class CatalogAccessMocksIntegrationTestBase extends AbstractVirt
     @MockBean protected PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
     @MockBean protected BillingPlansRateLimitPort billingPlansRateLimitPort;
     @MockBean protected BankTransferRateLimitPort bankTransferRateLimitPort;
-    @MockBean protected CourseCatalogPort courseCatalogPort;
     @MockBean protected ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
 }

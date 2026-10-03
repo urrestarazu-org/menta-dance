@@ -49,6 +49,10 @@ dependencies {
     // Logging
     implementation("net.logstash.logback:logstash-logback-encoder:8.0")
 
+    // Annotations
+    compileOnly(libs.lombok)
+    annotationProcessor(libs.lombok)
+
     // Testing
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")

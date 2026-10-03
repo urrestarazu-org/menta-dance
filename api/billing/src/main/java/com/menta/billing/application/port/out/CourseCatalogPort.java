@@ -11,8 +11,10 @@ import java.util.Map;
  * never a FK, never a JOIN into another module's schema. Resolving the
  * human-readable course names for a response is this port's job, and it is
  * done in one batch per request so the cost does not grow with the number of
- * plans or courses. Today the wired adapter is still a placeholder — see
- * {@code NotImplementedCourseCatalogPort}.</p>
+ * plans or courses. The wired adapter lives in {@code api:app} ({@code
+ * com.menta.app.billing.CourseCatalogPortAdapter}) and composes Virtual's and
+ * Physical's entry ports, virtual first — a plain Java call, never HTTP or a
+ * shared schema (ADR-0037).</p>
  */
 public interface CourseCatalogPort {
 

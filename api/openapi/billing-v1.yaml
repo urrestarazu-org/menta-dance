@@ -1261,8 +1261,11 @@ components:
         name:
           type: [string, "null"]
           description: |
-            Nombre del curso. `null` si el catálogo de Virtual/Physical no
-            pudo resolverlo todavía (ver #40/#46).
+            Título del curso resuelto en el catálogo de Virtual (curso
+            `PUBLISHED`) o de Physical (curso `ACTIVE`); si el id existe en
+            ambos gana el virtual. `null` cuando no se puede resolver: id
+            inexistente, curso no visible públicamente, id que no es un UUID o
+            falla del catálogo. El curso se devuelve igual, con su `id`.
 
     PlanSummaryResponse:
       type: object

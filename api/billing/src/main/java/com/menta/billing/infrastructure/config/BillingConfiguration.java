@@ -99,10 +99,9 @@ import org.springframework.data.redis.core.RedisTemplate;
 
 /**
  * Wires the plans and payment-webhook use cases. Adapter classes ({@code
- * PlanRepositoryAdapter}, {@code NotImplementedCourseCatalogPort}, {@code
- * PaymentRepositoryAdapter}, etc.) are {@code @Component}-scanned; the use
- * cases are plain Java classes composed here, mirroring {@code
- * AuthConfiguration}'s rationale: calling use cases directly from
+ * PlanRepositoryAdapter}, {@code PaymentRepositoryAdapter}, etc.) are
+ * {@code @Component}-scanned; the use cases are plain Java classes composed
+ * here, mirroring {@code AuthConfiguration}'s rationale: calling use cases directly from
  * controllers keeps port dependencies visible at the boundary instead of
  * implicit {@code @Autowired} on use-case classes.
  */
