@@ -37,7 +37,8 @@ class AuthenticatedRequestIntegrationTest extends BaseIntegrationTest {
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withHeader("X-Refresh-Token", refreshToken)
-                        .withBody("""
+                        .withBody(
+                                """
                                 {
                                   "access_token": "%s",
                                   "token_type": "Bearer",

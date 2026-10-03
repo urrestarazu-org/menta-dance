@@ -36,7 +36,8 @@ class LogoutIntegrationTest extends BaseIntegrationTest {
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withHeader("X-Refresh-Token", refreshToken)
-                        .withBody("""
+                        .withBody(
+                                """
                                 {
                                   "access_token": "%s",
                                   "token_type": "Bearer",
@@ -95,7 +96,8 @@ class LogoutIntegrationTest extends BaseIntegrationTest {
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withHeader("X-Refresh-Token", refreshToken)
-                        .withBody("""
+                        .withBody(
+                                """
                                 {
                                   "access_token": "%s",
                                   "token_type": "Bearer",
@@ -132,7 +134,8 @@ class LogoutIntegrationTest extends BaseIntegrationTest {
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withHeader("X-Refresh-Token", refreshToken)
-                        .withBody("""
+                        .withBody(
+                                """
                                 {
                                   "access_token": "%s",
                                   "token_type": "Bearer",
@@ -154,7 +157,8 @@ class LogoutIntegrationTest extends BaseIntegrationTest {
                 .willReturn(aResponse()
                         .withStatus(503)
                         .withHeader("Content-Type", "application/problem+json")
-                        .withBody("""
+                        .withBody(
+                                """
                                 {
                                   "type": "about:blank",
                                   "title": "Service Unavailable",

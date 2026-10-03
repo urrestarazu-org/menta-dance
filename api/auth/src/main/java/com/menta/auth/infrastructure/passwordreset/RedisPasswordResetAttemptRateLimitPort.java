@@ -23,7 +23,8 @@ public final class RedisPasswordResetAttemptRateLimitPort
 
     private static final String CLIENT_KEY_PREFIX = "rate:auth-password-reset-attempt:client:";
 
-    private static final RedisScript<List> CONSUME_SCRIPT = new DefaultRedisScript<>("""
+    private static final RedisScript<List> CONSUME_SCRIPT = new DefaultRedisScript<>(
+        """
         local clientCount = redis.call('INCR', KEYS[1])
         if clientCount == 1 then redis.call('EXPIRE', KEYS[1], ARGV[2]) end
         local clientTtl = redis.call('TTL', KEYS[1])

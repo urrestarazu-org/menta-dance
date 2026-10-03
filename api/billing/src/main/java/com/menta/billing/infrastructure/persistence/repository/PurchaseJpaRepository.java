@@ -59,7 +59,8 @@ public interface PurchaseJpaRepository extends JpaRepository<PurchaseJpaEntity, 
      * billing_purchases.status} exists (accepted tradeoff, per proposal): revisit if this table
      * exceeds ~10⁵ rows.
      */
-    @Query(value = """
+    @Query(value =
+        """
         SELECT new com.menta.billing.infrastructure.persistence.projection.ExceptionPurchaseRow(
             pu.id, pu.paymentId, pay.userId, pay.targetModality, pay.targetReference,
             pay.expectedAmount, pay.expectedCurrency, pay.createdAt)

@@ -157,7 +157,8 @@ class PaymentAdminControllerTest {
         mockMvc.perform(post("/api/v1/admin/billing/payments/{id}/corrections", PAYMENT_ID)
             .principal(authOf("ADMIN", adminId))
             .contentType(MediaType.APPLICATION_JSON)
-            .content("""
+            .content(
+                """
                 {"decision": "APPROVED", "reason": "Transferencia confirmada por el banco", \
                 "evidence": "captura-extracto.pdf"}
                 """))
@@ -187,7 +188,8 @@ class PaymentAdminControllerTest {
         mockMvc.perform(post("/api/v1/admin/billing/payments/{id}/corrections", PAYMENT_ID)
             .principal(authOf("ADMIN"))
             .contentType(MediaType.APPLICATION_JSON)
-            .content("""
+            .content(
+                """
                 {"decision": "APPROVED", "reason": "Transferencia confirmada por el banco", "evidence": ""}
                 """))
             .andExpect(status().isBadRequest());
@@ -201,7 +203,8 @@ class PaymentAdminControllerTest {
         mockMvc.perform(post("/api/v1/admin/billing/payments/{id}/corrections", PAYMENT_ID)
             .principal(authOf("STUDENT"))
             .contentType(MediaType.APPLICATION_JSON)
-            .content("""
+            .content(
+                """
                 {"decision": "APPROVED", "reason": "Transferencia confirmada por el banco", \
                 "evidence": "captura-extracto.pdf"}
                 """))

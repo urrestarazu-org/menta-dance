@@ -25,7 +25,8 @@ public final class RedisBillingPlansRateLimitPort implements BillingPlansRateLim
 
     private static final String KEY_PREFIX = "rate:billing-plans:ip:";
 
-    private static final RedisScript<List> CONSUME_SCRIPT = new DefaultRedisScript<>("""
+    private static final RedisScript<List> CONSUME_SCRIPT = new DefaultRedisScript<>(
+        """
         local count = redis.call('INCR', KEYS[1])
         if count == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
         local ttl = redis.call('TTL', KEYS[1])

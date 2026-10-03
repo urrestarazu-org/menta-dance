@@ -47,7 +47,8 @@ public interface OutboxRowJpaRepository extends JpaRepository<OutboxRowJpaEntity
      * @param pageable  pagination (page size = batch size)
      * @return list of rows to process, ordered by id ASC
      */
-    @Query("""
+    @Query(
+        """
         SELECT e FROM OutboxRowJpaEntity e
         WHERE e.status = 'PENDING'
            OR (e.status = 'FAILED' AND e.nextRetryAt <= :now)
