@@ -19,7 +19,6 @@ import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.model.UserStatus;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.shared.domain.vo.Email;
-
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;

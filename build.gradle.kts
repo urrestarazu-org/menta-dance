@@ -46,8 +46,8 @@ val moduleCoverageFloor = mapOf(
 val checkstyleWarningCeiling = mapOf(
     ":api:app:checkstyleMain" to 22,
     ":api:app:checkstyleTest" to 54,
-    ":api:auth:checkstyleMain" to 382,
-    ":api:auth:checkstyleTest" to 92,
+    ":api:auth:checkstyleMain" to 283,
+    ":api:auth:checkstyleTest" to 37,
     ":api:billing:checkstyleMain" to 208,
     ":api:billing:checkstyleTest" to 49,
     ":api:physical:checkstyleMain" to 138,

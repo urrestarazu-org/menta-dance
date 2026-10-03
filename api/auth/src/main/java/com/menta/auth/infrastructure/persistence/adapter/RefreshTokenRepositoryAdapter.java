@@ -6,12 +6,10 @@ import com.menta.auth.domain.model.RefreshTokenStatus;
 import com.menta.auth.infrastructure.persistence.entity.RefreshTokenJpaEntity;
 import com.menta.auth.infrastructure.persistence.mapper.RefreshTokenJpaMapper;
 import com.menta.auth.infrastructure.persistence.repository.RefreshTokenJpaRepository;
-
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;

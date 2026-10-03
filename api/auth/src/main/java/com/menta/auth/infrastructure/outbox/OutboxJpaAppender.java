@@ -1,12 +1,11 @@
 package com.menta.auth.infrastructure.outbox;
 
 import com.menta.auth.application.port.out.OutboxAppender;
-import com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity;
-import com.menta.auth.infrastructure.persistence.repository.OutboxRowJpaRepository;
 import com.menta.auth.infrastructure.outbox.persistence.OutboxClock;
 import com.menta.auth.infrastructure.outbox.persistence.UlidGenerator;
+import com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity;
+import com.menta.auth.infrastructure.persistence.repository.OutboxRowJpaRepository;
 import com.menta.shared.outbox.OutboxStatus;
-
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;

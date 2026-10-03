@@ -10,7 +10,6 @@ import com.menta.auth.domain.model.ActivationToken;
 import com.menta.auth.domain.model.ActivationTokenStatus;
 import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.repository.UserRepository;
-
 import java.time.Instant;
 
 /**

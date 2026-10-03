@@ -8,11 +8,9 @@ import com.menta.auth.domain.exception.SamePasswordException;
 import com.menta.auth.domain.exception.WeakPasswordException;
 import com.menta.auth.domain.model.PasswordPolicyViolation;
 import com.menta.auth.infrastructure.web.ProblemDetails;
-
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.stream.Collectors;
-
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;

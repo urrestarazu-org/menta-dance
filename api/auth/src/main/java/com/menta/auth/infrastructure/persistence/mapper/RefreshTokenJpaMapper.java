@@ -3,7 +3,6 @@ package com.menta.auth.infrastructure.persistence.mapper;
 import com.menta.auth.domain.model.RefreshToken;
 import com.menta.auth.domain.model.UserId;
 import com.menta.auth.infrastructure.persistence.entity.RefreshTokenJpaEntity;
-
 import java.util.List;
 
 /**

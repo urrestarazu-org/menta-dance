@@ -15,11 +15,9 @@ import static org.mockito.Mockito.when;
 
 import com.menta.auth.application.port.out.AuthDegradedGuard;
 import com.menta.auth.application.port.out.TokenBlacklistPort;
-
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

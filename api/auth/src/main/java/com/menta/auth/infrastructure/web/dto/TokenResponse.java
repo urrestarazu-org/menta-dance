@@ -1,7 +1,6 @@
 package com.menta.auth.infrastructure.web.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-
 import java.time.Duration;
 
 /**

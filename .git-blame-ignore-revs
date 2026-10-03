@@ -1,0 +1,5 @@
+# Commits de formato masivo que `git blame` debe ignorar (#298).
+# GitHub usa este archivo solo; en local: git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# W1.1 orden de imports fuera de auth y bff (#334)
+5eab4192a58eb7a165a1a6da90cae495a82e1dca

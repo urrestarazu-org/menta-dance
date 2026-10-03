@@ -15,9 +15,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.time.Duration;
-import java.util.UUID;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.menta.auth.application.dto.LoginCommand;
 import com.menta.auth.application.dto.LogoutCommand;
@@ -32,7 +29,8 @@ import com.menta.auth.domain.exception.LockedUserException;
 import com.menta.auth.domain.exception.LoginRateLimitedException;
 import com.menta.auth.domain.exception.RefreshTokenCompromisedException;
 import com.menta.auth.infrastructure.web.dto.LoginRequest;
-
+import java.time.Duration;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;

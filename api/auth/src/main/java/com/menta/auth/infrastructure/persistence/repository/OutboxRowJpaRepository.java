@@ -2,10 +2,8 @@ package com.menta.auth.infrastructure.persistence.repository;
 
 import com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity;
 import com.menta.shared.outbox.OutboxStatus;
-
 import java.time.Instant;
 import java.util.List;
-
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;

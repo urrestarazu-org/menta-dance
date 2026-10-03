@@ -3,12 +3,10 @@ package com.menta.auth.infrastructure.security;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.menta.auth.domain.model.Role;
-
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Supplier;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

@@ -1,20 +1,19 @@
 package com.menta.auth.infrastructure.web.controller;
 
-import static org.mockito.Mockito.mock;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.menta.auth.application.port.in.RegisterUserUseCase;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.menta.auth.application.dto.UserResult;
+import com.menta.auth.application.port.in.RegisterUserUseCase;
+import com.menta.auth.domain.exception.DuplicateRegistrationException;
 import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.UserStatus;
-import com.menta.auth.domain.exception.DuplicateRegistrationException;
 import com.menta.auth.infrastructure.web.dto.RegisterUserRequest;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;

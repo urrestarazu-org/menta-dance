@@ -1,16 +1,14 @@
 package com.menta.auth.infrastructure.persistence.entity;
 
 import com.menta.auth.domain.model.RefreshTokenStatus;
-
-import java.time.Instant;
-import java.util.UUID;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.time.Instant;
+import java.util.UUID;
 
 /**
  * JPA binding for auth_refresh_tokens (ADR-0025 V2 DDL).

@@ -25,10 +25,8 @@ import com.menta.auth.domain.exception.PasswordResetTokenNotFoundException;
 import com.menta.auth.domain.exception.SamePasswordException;
 import com.menta.auth.domain.exception.WeakPasswordException;
 import com.menta.auth.domain.model.PasswordPolicyViolation;
-
 import java.time.Duration;
 import java.util.EnumSet;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;

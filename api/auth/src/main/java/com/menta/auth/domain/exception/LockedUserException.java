@@ -1,7 +1,6 @@
 package com.menta.auth.domain.exception;
 
 import com.menta.shared.domain.exceptions.BusinessException;
-
 import java.util.UUID;
 
 /**
