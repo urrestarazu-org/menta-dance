@@ -33,7 +33,8 @@ class VirtualLearningSecurityIntegrationTest extends BaseIntegrationTest {
     private static final String COURSE_ID = "course-1";
     private static final String LESSON_ID = "lesson-1";
 
-    private static final String COURSE_DETAIL_BODY = """
+    private static final String COURSE_DETAIL_BODY =
+            """
             {
               "courseId": "course-1",
               "title": "Ballet Básico",
@@ -66,7 +67,8 @@ class VirtualLearningSecurityIntegrationTest extends BaseIntegrationTest {
             }
             """;
 
-    private static final String LESSON_BODY = """
+    private static final String LESSON_BODY =
+            """
             {
               "lesson": {
                 "lessonId": "lesson-1",
@@ -85,7 +87,8 @@ class VirtualLearningSecurityIntegrationTest extends BaseIntegrationTest {
             }
             """;
 
-    private static final String STREAM_BODY = """
+    private static final String STREAM_BODY =
+            """
             {
               "stream": {
                 "url": "https://cdn/stream.m3u8",
@@ -194,7 +197,8 @@ class VirtualLearningSecurityIntegrationTest extends BaseIntegrationTest {
     // gets its both-directions regression coverage added here, not split
     // into a per-feature security test class.
 
-    private static final String PLANS_BODY = """
+    private static final String PLANS_BODY =
+            """
             {
               "plans": [
                 {

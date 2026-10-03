@@ -29,7 +29,8 @@ public final class RedisLoginRateLimitPort implements LoginRateLimitPort {
      * Read-only. Reports the remaining window when either budget is spent, so
      * the caller can answer with an honest {@code Retry-After}.
      */
-    private static final RedisScript<List> CHECK_SCRIPT = new DefaultRedisScript<>("""
+    private static final RedisScript<List> CHECK_SCRIPT = new DefaultRedisScript<>(
+        """
         local emailCount = tonumber(redis.call('GET', KEYS[1]) or '0')
         local clientCount = tonumber(redis.call('GET', KEYS[2]) or '0')
         if emailCount < tonumber(ARGV[1]) and clientCount < tonumber(ARGV[2]) then
@@ -44,7 +45,8 @@ public final class RedisLoginRateLimitPort implements LoginRateLimitPort {
         """, List.class);
 
     /** Write-only. Both counters move together or not at all. */
-    private static final RedisScript<List> RECORD_FAILURE_SCRIPT = new DefaultRedisScript<>("""
+    private static final RedisScript<List> RECORD_FAILURE_SCRIPT = new DefaultRedisScript<>(
+        """
         local emailCount = redis.call('INCR', KEYS[1])
         if emailCount == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
         local clientCount = redis.call('INCR', KEYS[2])

@@ -31,7 +31,8 @@ public final class RedisBankTransferRateLimitPort implements BankTransferRateLim
     private static final String SUBSCRIPTION_CREATION_KEY_PREFIX = "rate:billing-bank-transfer:user:";
     private static final String PROOF_UPLOAD_KEY_PREFIX = "rate:billing-proof-upload:payment:";
 
-    private static final RedisScript<List> CONSUME_SCRIPT = new DefaultRedisScript<>("""
+    private static final RedisScript<List> CONSUME_SCRIPT = new DefaultRedisScript<>(
+        """
         local count = redis.call('INCR', KEYS[1])
         if count == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
         local ttl = redis.call('TTL', KEYS[1])

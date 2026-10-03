@@ -46,10 +46,10 @@ val moduleCoverageFloor = mapOf(
 val checkstyleWarningCeiling = mapOf(
     ":api:app:checkstyleMain" to 17,
     ":api:app:checkstyleTest" to 46,
-    ":api:auth:checkstyleMain" to 172,
+    ":api:auth:checkstyleMain" to 127,
     ":api:auth:checkstyleTest" to 13,
-    ":api:billing:checkstyleMain" to 198,
-    ":api:billing:checkstyleTest" to 49,
+    ":api:billing:checkstyleMain" to 183,
+    ":api:billing:checkstyleTest" to 40,
     ":api:physical:checkstyleMain" to 137,
     ":api:physical:checkstyleTest" to 10,
     ":api:shared:checkstyleMain" to 5,
@@ -57,7 +57,7 @@ val checkstyleWarningCeiling = mapOf(
     ":api:virtual:checkstyleMain" to 181,
     ":api:virtual:checkstyleTest" to 12,
     ":bff:checkstyleMain" to 9,
-    ":bff:checkstyleTest" to 114,
+    ":bff:checkstyleTest" to 27,
 )
 
 // Modules that reached 0 warnings: both Checkstyle tasks run with severity

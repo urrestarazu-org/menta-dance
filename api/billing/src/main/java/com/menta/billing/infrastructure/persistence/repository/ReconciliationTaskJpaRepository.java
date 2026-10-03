@@ -17,7 +17,8 @@ public interface ReconciliationTaskJpaRepository extends JpaRepository<Reconcili
      * no local payment matched, so a payment can legitimately have no tied task.
      */
     @Modifying(clearAutomatically = true)
-    @Query("""
+    @Query(
+        """
         UPDATE ReconciliationTaskJpaEntity t
            SET t.resolved = true, t.resolvedAt = :at, t.resolvedBy = :adminId
          WHERE t.paymentId = :paymentId AND t.resolved = false
