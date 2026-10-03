@@ -2,7 +2,6 @@ package com.menta.auth.infrastructure.outbox.persistence;
 
 import java.security.SecureRandom;
 import java.time.Instant;
-
 import org.springframework.stereotype.Component;
 
 /**

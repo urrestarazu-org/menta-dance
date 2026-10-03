@@ -12,7 +12,6 @@ import com.menta.auth.domain.exception.RefreshTokenCompromisedException;
 import com.menta.auth.domain.model.RefreshToken;
 import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.repository.UserRepository;
-
 import java.util.Optional;
 import java.util.UUID;
 

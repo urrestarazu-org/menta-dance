@@ -1,9 +1,6 @@
 package com.menta.auth.infrastructure.persistence.entity;
 
 import com.menta.shared.outbox.OutboxStatus;
-
-import java.time.Instant;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -13,6 +10,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.time.Instant;
 
 /**
  * JPA entity for the {@code common_outbox_events} table (ADR-0030).

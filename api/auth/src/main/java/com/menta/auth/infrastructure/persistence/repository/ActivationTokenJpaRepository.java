@@ -1,6 +1,7 @@
 package com.menta.auth.infrastructure.persistence.repository;
 
 import com.menta.auth.infrastructure.persistence.entity.ActivationTokenJpaEntity;
+import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -9,7 +10,6 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import jakarta.persistence.LockModeType;
 
 /** Queries that preserve activation-token single-use semantics. */
 public interface ActivationTokenJpaRepository extends JpaRepository<ActivationTokenJpaEntity, UUID> {

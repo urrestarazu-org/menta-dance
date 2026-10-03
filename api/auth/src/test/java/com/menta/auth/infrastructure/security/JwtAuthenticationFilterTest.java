@@ -11,15 +11,12 @@ import com.menta.auth.application.port.out.AccessTokenIssuer;
 import com.menta.auth.application.port.out.AccessTokenIssuer.ParsedAccessToken;
 import com.menta.auth.application.port.out.TokenBlacklistPort;
 import com.menta.auth.domain.model.Role;
-
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.UUID;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

@@ -1,7 +1,6 @@
 package com.menta.auth.application.port.out;
 
 import com.menta.auth.domain.model.User;
-
 import java.time.Duration;
 import java.util.Optional;
 

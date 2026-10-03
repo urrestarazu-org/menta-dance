@@ -1,12 +1,10 @@
 package com.menta.auth.infrastructure.security;
 
-import com.menta.auth.domain.model.Role;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
+import com.menta.auth.domain.model.Role;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
-
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;

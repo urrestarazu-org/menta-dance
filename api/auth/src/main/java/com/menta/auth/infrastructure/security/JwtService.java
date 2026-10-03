@@ -4,20 +4,17 @@ import com.menta.auth.application.port.out.AccessTokenIssuer;
 import com.menta.auth.application.port.out.IssuedAccessToken;
 import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.User;
-
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Date;
-import java.util.Optional;
-import java.util.UUID;
-
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
-
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Date;
+import java.util.Optional;
+import java.util.UUID;
 import javax.crypto.SecretKey;
 
 /**

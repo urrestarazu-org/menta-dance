@@ -2,7 +2,6 @@ package com.menta.auth.application.port.out;
 
 import com.menta.auth.domain.model.PasswordResetToken;
 import com.menta.auth.domain.model.UserId;
-
 import java.time.Instant;
 import java.util.Optional;
 

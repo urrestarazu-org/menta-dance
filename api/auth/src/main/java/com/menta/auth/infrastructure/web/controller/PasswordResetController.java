@@ -6,10 +6,8 @@ import com.menta.auth.application.port.in.RequestPasswordResetUseCase;
 import com.menta.auth.application.port.in.ResetPasswordUseCase;
 import com.menta.auth.infrastructure.web.dto.ForgotPasswordRequest;
 import com.menta.auth.infrastructure.web.dto.ResetPasswordRequest;
-
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;

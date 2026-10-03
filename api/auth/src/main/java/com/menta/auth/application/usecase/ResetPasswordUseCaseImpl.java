@@ -23,7 +23,6 @@ import com.menta.auth.domain.model.PasswordResetToken;
 import com.menta.auth.domain.model.PasswordResetTokenStatus;
 import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.repository.UserRepository;
-
 import java.time.Instant;
 
 /**

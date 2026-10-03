@@ -2,7 +2,6 @@ package com.menta.auth.application.port.out;
 
 import com.menta.auth.domain.model.RefreshToken;
 import com.menta.auth.domain.model.UserId;
-
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
