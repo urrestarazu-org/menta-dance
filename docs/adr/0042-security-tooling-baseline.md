@@ -12,7 +12,7 @@ Estado verificado en fuente al momento de esta decisión:
 
 | Herramienta | Dónde corre | Qué valida realmente |
 |---|---|---|
-| Checkstyle (`config/checkstyle/google_checks.xml`) | 8 módulos JVM, ambos workflows | Estilo de código. Cero reglas de seguridad. |
+| Checkstyle (`config/checkstyle/google_checks.xml`) | 7 módulos JVM (14 tareas), ambos workflows | Estilo de código. Cero reglas de seguridad. |
 | ArchUnit | `auth`, `billing`, `virtual`, `physical` | Regla de dependencia entre capas |
 | JaCoCo | `pr-main.yml` | Cobertura por capa |
 | ShellCheck | `pr-develop.yml`, `pr-main.yml` | Scripts de `infra/docker/` |
@@ -21,11 +21,19 @@ Estado verificado en fuente al momento de esta decisión:
 
 El riesgo de esta configuración no es la ausencia de herramientas: es que
 la abundancia de análisis estático **aparenta** una cobertura de seguridad
-que no existe. Checkstyle corre sobre los ocho módulos JVM en los dos
-workflows y falla el build; es razonable asumir que algo tan visible cubre
+que no existe. Checkstyle corre sobre los 7 módulos JVM (14 tareas) en los
+dos workflows y sólo falla el build cuando una tarea supera su techo de
+advertencias (ver ADR-0043); es razonable asumir que algo tan visible cubre
 algo más que indentación. No lo hace. Hadolint aprueba un `FROM` impecable
 hacia una imagen base con CVEs críticos publicados: la sintaxis es correcta
 y el contenido es vulnerable.
+
+> **Corrección (2026-10-03, #298):** la versión original de este ADR decía
+> que Checkstyle corría sobre 8 módulos JVM y que "falla el build". Ambas
+> afirmaciones eran erróneas: los módulos JVM con Checkstyle son 7 (el
+> proyecto raíz sólo tiene tareas sin fuentes) y, con severidad `warning` y
+> sin umbral, ninguna cantidad de hallazgos rompía el build. Desde ADR-0043
+> cada tarea falla únicamente por encima de su techo de advertencias.
 
 Gaps concretos, todos verificados por ausencia en el árbol de fuentes:
 

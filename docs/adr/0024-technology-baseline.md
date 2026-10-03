@@ -23,7 +23,7 @@ del baseline inicial:
 | Tailwind CSS | 3.4.1 |
 | Node.js | 20.11.1 |
 | PostCSS / Autoprefixer | 8.4.35 / 10.4.17 |
-| Checkstyle | 10.23.0 |
+| Checkstyle | 13.8.0 |
 
 Spring-managed dependencies se resuelven mediante el BOM exacto de Spring Boot
 3.5.14 y se congelan en lockfiles al crear el scaffold. La salida de logging es

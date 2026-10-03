@@ -29,6 +29,7 @@
 | [0040](0040-local-bunny-net-signature-adapter.md) | Adaptador local determinista de firma Bunny.net |
 | [0041](0041-lesson-access-unplanned-course-denial.md) | Un curso sin plan deniega acceso a lecciones protegidas |
 | [0042](0042-security-tooling-baseline.md) | Baseline de tooling de seguridad de código |
+| [0043](0043-checkstyle-policy-ratchet.md) | Política de Checkstyle y trinquete |
 
 Los ADRs no listados fueron eliminados por contener decisiones incompatibles con
 el diseño vigente. Sus números no se reutilizan.
