@@ -43,7 +43,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 /**
  * US-AUTH-005: forgot-password.
  *
- * The observable response is byte-for-byte identical for a nonexistent email
+ * <p>The observable response is byte-for-byte identical for a nonexistent email
  * and every non-ACTIVE status (PENDING_ACTIVATION, INACTIVE, SUSPENDED,
  * LOCKED) — only an ACTIVE account causes a persistence side-effect. This
  * generalises the issue's two named scenarios (bloqueada/inactiva) to every

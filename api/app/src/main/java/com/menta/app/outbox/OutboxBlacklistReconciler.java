@@ -21,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
  * Outbox reconciler that projects PENDING common_outbox_events to Redis
  * side-effects (ADR-0026 + design.md Decision 2).
  *
- * Lifecycle per tick (PR3):
+ * <p>Lifecycle per tick (PR3):
  *   1. Bounded SELECT — fetch up to `batchSize` rows ordered by id:
  *      - All PENDING rows (never processed)
  *      - FAILED rows whose next_retry_at <= now (due for retry)
@@ -119,7 +119,7 @@ public class OutboxBlacklistReconciler {
     /**
      * Daily cleanup job to prevent unbounded table growth (ADR-0030).
      *
-     * Deletes COMPLETED outbox events older than the configured retention period.
+     * <p>Deletes COMPLETED outbox events older than the configured retention period.
      * Runs once per day at 3:00 AM server time. The cron expression is configurable
      * via {@code auth.outbox.cleanup-cron}.
      *

@@ -45,12 +45,12 @@ import org.springframework.test.context.ActiveProfiles;
 /**
  * Integration test for atomic auth mutations with outbox.
  *
- * Uses MySQL Testcontainers to prove that:
+ * <p>Uses MySQL Testcontainers to prove that:
  * 1. Successful login/refresh/logout commit domain mutation + outbox row together
  * 2. Outbox append failure rolls back the entire domain mutation
  * 3. Token version changes persist through refresh family revocation
  *
- * This test invokes the proxied transactional use case ports, NOT the raw
+ * <p>This test invokes the proxied transactional use case ports, NOT the raw
  * implementation classes. The decorators will be wired in AuthConfiguration
  * as the sole input port beans.
  */

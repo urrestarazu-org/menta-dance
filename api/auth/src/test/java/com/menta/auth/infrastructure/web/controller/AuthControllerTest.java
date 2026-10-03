@@ -43,15 +43,15 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 /**
  * AuthController unit tests at the web boundary (MockMvc standalone setup).
  *
- * Standalone setup keeps the test focused on the controller's contract:
+ * <p>Standalone setup keeps the test focused on the controller's contract:
  *   - request body validation & mapping to command DTOs;
  *   - @ExceptionHandler RFC 9457 status code & body fan-out;
  *   - response wire shape (snake_case JSON for the auth-login spec).
  *
- * Security wiring and full-stack integration coverage live in
+ * <p>Security wiring and full-stack integration coverage live in
  * AuthFlowIntegrationTest.
  *
- * RED-first contract for AuthController:
+ * <p>RED-first contract for AuthController:
  *   - POST /api/v1/auth/login 200 with TokenResponse.
  *   - Refresh and logout accept their sensitive token only via X-Refresh-Token.
  *   - Validation and domain errors use application/problem+json.

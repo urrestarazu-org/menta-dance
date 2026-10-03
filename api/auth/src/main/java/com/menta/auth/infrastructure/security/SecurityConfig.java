@@ -20,13 +20,13 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 /**
  * Spring Security configuration for :api:auth.
  *
- * Wires the JWT bearer filter before UsernamePasswordAuthenticationFilter so
+ * <p>Wires the JWT bearer filter before UsernamePasswordAuthenticationFilter so
  * authenticated requests populate the SecurityContext, installs the
  * RoleAuthorizationManager as the path-prefix authorization manager, and
  * exposes default rules so public + authenticated routes have a stable
  * default-deny fail policy.
  *
- * Path policy:
+ * <p>Path policy:
  *   - PUT/GET /api/v1/virtual/lessons/{lessonId}/progress and
  *     POST /api/v1/virtual/lessons/{lessonId}/complete → authenticated
  *     (any role) (#52, US-VIRTUAL-005; these share the
@@ -158,7 +158,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *   - everything else under /api/v1/instructor/** → requires INSTRUCTOR authority
  *   - other authenticated paths                 → fall-through via RoleAuthorizationManager.
  *
- * The @EnableScheduling annotation lights up @Scheduled tasks so the
+ * <p>The @EnableScheduling annotation lights up @Scheduled tasks so the
  * OutboxBlacklistReconciler (wired in :api:app) can drive its pull-batch
  * cadence without an external scheduler.
  */

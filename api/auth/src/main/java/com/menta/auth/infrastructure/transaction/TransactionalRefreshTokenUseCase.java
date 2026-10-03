@@ -9,10 +9,10 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Transactional decorator for RefreshTokenUseCase.
  *
- * Wraps the refresh use case with a database transaction to ensure atomicity
+ * <p>Wraps the refresh use case with a database transaction to ensure atomicity
  * between refresh rotation (USED → ACTIVE) and outbox event creation.
  *
- * This decorator is the ONLY input port bean exposed by AuthConfiguration.
+ * <p>This decorator is the ONLY input port bean exposed by AuthConfiguration.
  */
 public class TransactionalRefreshTokenUseCase implements RefreshTokenUseCase {
 

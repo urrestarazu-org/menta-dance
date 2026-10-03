@@ -23,7 +23,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 /**
  * UserController unit tests at the web boundary (MockMvc standalone setup).
  *
- * Both registration URLs are a temporary compatibility pair and must use the
+ * <p>Both registration URLs are a temporary compatibility pair and must use the
  * same input port rather than maintaining separate registration flows.
  */
 class UserControllerTest {

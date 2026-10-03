@@ -41,6 +41,7 @@ import org.springframework.stereotype.Component;
  * {@code FAILED/backoff} lifecycle per design §9 R9.</p>
  *
  * <h2>studentId resolution</h2>
+ *
  * <p>{@code MultiSessionCapacityAssignmentCommand} requires a {@code
  * studentId}; the payload only carries {@code paymentId, targetReference}.
  * We load the underlying {@link Payment} via {@link PaymentRepository} and
@@ -51,6 +52,7 @@ import org.springframework.stereotype.Component;
  * rather than a silent dead-letter.</p>
  *
  * <h2>Purchase row built directly at EXCEPTION (#238)</h2>
+ *
  * <p>Each of the three sites where no {@code Purchase} row can ever exist yet
  * (this branch, the quote-not-found branch, and the coverage-shortfall
  * branch) calls {@link PurchaseCreationFromEventPort#createPurchaseFromPaymentEvent}
@@ -75,6 +77,7 @@ import org.springframework.stereotype.Component;
  * branch) and is skipped entirely at these three sites.</p>
  *
  * <h2>Quote resolution and coverage (#41 PR6)</h2>
+ *
  * <p>{@link com.menta.billing.domain.model.PaymentTarget.Physical}'s
  * reference is the {@code quoteId}, not a session id (design A5). This
  * handler loads the real {@link PhysicalCourseQuote} for that reference and

@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
 /**
  * Redis-backed implementation of TokenBlacklistPort + AuthDegradedGuard.
  *
- * Two responsibilities share one Redis client:
+ * <p>Two responsibilities share one Redis client:
  *   1. JTI blacklist (TokenBlacklistPort): when an access token must be
  *      invalidated, the outbox reconciler (api:app / OutboxBlacklistReconciler)
  *      projects the event to Redis with key `blacklist:jti:{jti}` value `1`
@@ -25,7 +25,7 @@ import org.springframework.stereotype.Component;
  *      Auth flows fail-closed when the heartbeat is missing OR older than
  *      the degraded window (ADR-0026).
  *
- * Failure semantics (PR3):
+ * <p>Failure semantics (PR3):
  *   - Write path (blacklist, writeHeartbeat): PROPAGATE Redis errors. The
  *     reconciler MUST detect write failures to transition outbox rows to
  *     FAILED with retry backoff instead of marking them COMPLETED incorrectly.

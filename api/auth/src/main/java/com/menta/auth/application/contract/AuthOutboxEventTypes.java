@@ -4,8 +4,8 @@ package com.menta.auth.application.contract;
  * Canonical event type constants for the auth module's outbox events (ADR-0030).
  *
  * <h2>Why constants instead of an enum?</h2>
- * <p>
- * Event types are stored as strings in the database ({@code event_type} column)
+ *
+ * <p>Event types are stored as strings in the database ({@code event_type} column)
  * and matched by consumers. Using {@code String} constants allows:
  * </p>
  * <ul>
@@ -15,8 +15,8 @@ package com.menta.auth.application.contract;
  * </ul>
  *
  * <h2>Naming convention</h2>
- * <p>
- * Event types follow the pattern {@code <module>.<EventName>}:
+ *
+ * <p>Event types follow the pattern {@code <module>.<EventName>}:
  * </p>
  * <ul>
  *   <li>{@code auth.AuthUserLoggedIn} — user successfully authenticated</li>
@@ -26,8 +26,8 @@ package com.menta.auth.application.contract;
  * </ul>
  *
  * <h2>Stability contract</h2>
- * <p>
- * These values are <b>part of the public API</b>. Consumers (including future
+ *
+ * <p>These values are <b>part of the public API</b>. Consumers (including future
  * cross-module listeners) match on these exact strings. Changing them requires
  * a migration strategy: either dual-write during transition or a database
  * migration to update existing rows.

@@ -3,10 +3,10 @@ package com.menta.shared.outbox;
 /**
  * Marker contract for cross-module outbox consumers.
  *
- * Implementations live in the consumer module's infrastructure layer and are
+ * <p>Implementations live in the consumer module's infrastructure layer and are
  * wired into the reconciler once consumers are added in a follow-up change.
  *
- * Functional interface so it can be expressed as a lambda when convenient.
+ * <p>Functional interface so it can be expressed as a lambda when convenient.
  * Living in :api:shared with no framework imports (ADR-0021).
  */
 @FunctionalInterface

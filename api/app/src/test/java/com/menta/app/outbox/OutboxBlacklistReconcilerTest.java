@@ -33,12 +33,12 @@ import org.springframework.data.domain.Pageable;
  * BEFORE 3.8 GREEN provides the impl, so it must not compile until the
  * impl exists in :api:app/outbox.
  *
- * Spec scenarios covered (common-outbox):
+ * <p>Spec scenarios covered (common-outbox):
  *   - "Reconciler procesa lote y marca COMPLETED"
  *   - "Redis caído marca FAILED con backoff"
  *   - "Crash entre commit y reconciler retoma"
  *
- * Strict TDD: every assertion exercises the production code through the
+ * <p>Strict TDD: every assertion exercises the production code through the
  * collaborator boundary (TokenBlacklistPort + JPA repository). Mock harness
  * drives real branch decisions (TTL math, failure-mode mapping, attempts
  * and last_error attribution after a red-failure or crash).

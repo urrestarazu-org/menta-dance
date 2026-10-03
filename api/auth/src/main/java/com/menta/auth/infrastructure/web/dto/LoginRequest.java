@@ -6,7 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 /**
  * Login endpoint request body.
  *
- * Maps to {@link com.menta.auth.application.dto.LoginCommand} at the
+ * <p>Maps to {@link com.menta.auth.application.dto.LoginCommand} at the
  * controller boundary. Validation lives in the web layer per Clean
  * Architecture — the application layer accepts deliberate inputs.
  */

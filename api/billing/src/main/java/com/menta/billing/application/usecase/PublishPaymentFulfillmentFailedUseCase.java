@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
  * outbox event (proposal D10; design C1/C2).
  *
  * <h2>Why {@code REQUIRES_NEW}, never {@code REQUIRED} (C2)</h2>
+ *
  * <p>The three call sites this use case covers
  * ({@code PhysicalCapacityAssignmentOutboxEventHandler} lines 130/202/239)
  * call {@code markException} with no {@code Purchase} row existing yet
@@ -35,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
  * never delivered on exactly the paths this use case exists to cover.</p>
  *
  * <h2>Idempotency</h2>
+ *
  * <p>Certain on redelivery: the worker retries the same doomed path every
  * time. V2 {@code idx_common_outbox_aggregate_event_type} absorbs the
  * duplicate as {@code DataIntegrityViolationException}, which the caller

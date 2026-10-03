@@ -43,11 +43,11 @@ import org.springframework.test.context.ActiveProfiles;
  * full HTTP stack including JwtAuthenticationFilter + AuthController +
  * use cases + JPA persist (login + refresh ops hit MySQL/H2).
  *
- * Heaviest dependencies (Redis side-effect, JWT signing, outbox) stay real
+ * <p>Heaviest dependencies (Redis side-effect, JWT signing, outbox) stay real
  * because PRD3 wiring exercises them. The outbox reconciler is NOT mocked —
  * the focus is the controller/use-case orchestration, not the side-effect loop.
  *
- * Stubbing policy:
+ * <p>Stubbing policy:
  *   - AuthDegradedGuard: always false so the fail-closed path does not block.
  *   - TokenBlacklistPort + RedisTemplate: mocked so the test runs without a
  *     running Redis. Side-effect during login is part of the production loop
@@ -55,7 +55,7 @@ import org.springframework.test.context.ActiveProfiles;
  *   - OutboxAppender: no-op stub. The outbox row is consumable by the
  *     reconciler later, not by the request path.
  *
- * Schema: this test relies on Hibernate's create-drop schema with the
+ * <p>Schema: this test relies on Hibernate's create-drop schema with the
  * application-test.yml profile. The RefreshTokenJpaEntity's
  * columnDefinition='BINARY(16)' is MySQL-flavored but H2 tolerates it as a
  * fixed-width binary — verified by the live test run.

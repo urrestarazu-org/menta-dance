@@ -5,7 +5,7 @@ import com.menta.shared.domain.exceptions.BusinessException;
 /**
  * Thrown when login credentials are not valid.
  *
- * The error message MUST be identical for "unknown email" and "wrong password"
+ * <p>The error message MUST be identical for "unknown email" and "wrong password"
  * so attackers cannot discriminate between the two cases (spec
  * auth-login: "401 sin discriminar").
  */

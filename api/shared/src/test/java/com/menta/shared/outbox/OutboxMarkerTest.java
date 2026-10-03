@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Safety net for the outbox marker contract living in :api:shared.
  *
- * Verifies:
+ * <p>Verifies:
  *   - OutboxEvent, OutboxStatus, OutboxListener compile and have the expected
  *     shape (the API other modules will consume).
  *   - The three classes have NO Spring or JPA imports (ADR-0021): the marker

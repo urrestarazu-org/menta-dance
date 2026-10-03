@@ -8,7 +8,7 @@ import java.util.Optional;
 /**
  * Persistence port for the {@link ActivationToken} aggregate.
  *
- * All operations MUST participate in the caller's transaction so the token
+ * <p>All operations MUST participate in the caller's transaction so the token
  * lifecycle shares an atomic COMMIT with the originating user/outbox
  * mutation (auth-account-activation spec: "Registro pendiente y entrega
  * durable").

@@ -78,7 +78,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
  * OutboxJpaAppender, Sha256TokenHasher, PasswordEncoderAdapter) are
  * {@code @Component}-scanned.
  *
- * The {@code @Bean}-methods here exist for two reasons:
+ * <p>The {@code @Bean}-methods here exist for two reasons:
  *   1. Constructor injection: JwtService needs the resolved base64 secret +
  *      TTL at construction; Spring cannot satisfy that with @Autowired
  *      alone. The {@code @Value} placeholders ({@code auth.jwt.base64-secret},
@@ -89,7 +89,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
  *      (no implicit {@code @Autowired} on use-case classes — the orchestrator
  *      wants ports visible at the boundary).
  *
- * The TokenBlacklistPortImpl is bound to BOTH {@link TokenBlacklistPort} and
+ * <p>The TokenBlacklistPortImpl is bound to BOTH {@link TokenBlacklistPort} and
  * {@link AuthDegradedGuard} (it implements both). The latter is what the
  * login/refresh/logout use cases consult for the fail-closed 503 path.
  */

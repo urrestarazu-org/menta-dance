@@ -21,14 +21,14 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Loads the authenticated principal's UserDetails from the UserRepository.
  *
- * The JWT carries the role claim, so in steady state this lookup is rarely
+ * <p>The JWT carries the role claim, so in steady state this lookup is rarely
  * needed for role enforcement. It exists for:
  *   - Spring Security internals that require a UserDetailsService bean.
  *   - Code paths that re-validate the user's status (e.g. TOKEN_VERSION bump
  *     after compromise) — failed re-validation surfaces a NOT_FOUND, the
  *     AuthenticationEntryPoint will treat this as 401.
  *
- * Lookup by email (UserRepository.findByEmail) — the principal name in the
+ * <p>Lookup by email (UserRepository.findByEmail) — the principal name in the
  * JwtAuthenticationFilter is a userId UUID, so this service also accepts
  * UUID strings for `loadUserByUsername`.
  */

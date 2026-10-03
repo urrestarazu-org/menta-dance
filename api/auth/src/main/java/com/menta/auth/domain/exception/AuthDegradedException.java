@@ -8,7 +8,7 @@ import com.menta.shared.domain.exceptions.BusinessException;
  * refuse to advance while degraded; the HTTP layer maps this to 503 with
  * Retry-After: 30.
  *
- * Internal users of this exception:
+ * <p>Internal users of this exception:
  * - LoginUseCase / RefreshTokenUseCase / LogoutUseCase guard against issuing
  *   or rotating tokens while the guard reports degraded.
  */

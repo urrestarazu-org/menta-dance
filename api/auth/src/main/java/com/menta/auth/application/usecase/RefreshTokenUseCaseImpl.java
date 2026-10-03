@@ -23,7 +23,7 @@ import java.util.UUID;
 /**
  * Implementation of the refresh-rotation use case.
  *
- * Decision order (fail-closed, ADR-0026 + spec scenarios):
+ * <p>Decision order (fail-closed, ADR-0026 + spec scenarios):
  *   1. Degraded reconciler → AuthDegradedException.
  *   2. Unknown hash → compromise exception (no event, no info leak).
  *   3. REVOKED → immutability exception (no event).

@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
  * Unit tests for Sha256TokenHasher (port/infrastructure adapter for
  * TokenHasher).
  *
- * The hashing contract: SHA-256 over the raw refresh UUID, lowercase hex,
+ * <p>The hashing contract: SHA-256 over the raw refresh UUID, lowercase hex,
  * 64 characters. The implementation is deterministic — same input yields
  * same digest (used for both insert + lookup paths in MySQL).
  */

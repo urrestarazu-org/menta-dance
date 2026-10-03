@@ -15,7 +15,7 @@ import java.util.Optional;
  * method fails loudly if ever invoked at runtime so a missing PR2 rollout is
  * never silently swallowed.</p>
  *
- * // TODO(PR2 task 2.1): replace with real JPA adapter.
+ * <p>// TODO(PR2 task 2.1): replace with real JPA adapter.
  */
 public class NotImplementedActivationTokenRepository implements ActivationTokenRepository {
 

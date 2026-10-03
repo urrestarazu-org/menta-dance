@@ -9,7 +9,7 @@ import java.util.List;
  * Manual mapper between RefreshTokenJpaEntity and the domain RefreshToken
  * aggregate (ADR-0021 — domain layer has no JPA knowledge).
  *
- * Forward direction (domain → entity) only carries fields the constructor
+ * <p>Forward direction (domain → entity) only carries fields the constructor
  * accepts. Reverse direction (entity → domain) uses the explicit
  * RefreshToken.reconstitute factory so the load path can hydrate a row that
  * already carries any status / rotatedAt / revokedAt combination.

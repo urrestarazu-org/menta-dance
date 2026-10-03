@@ -45,7 +45,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * and {@code ResendActivationResult} before either exists, so the file must
  * not compile until GREEN provides them.
  *
- * Covers auth-account-activation spec scenario "Reenvío no enumerativo": the
+ * <p>Covers auth-account-activation spec scenario "Reenvío no enumerativo": the
  * observable response is byte-for-byte identical for a nonexistent email, an
  * already-active email, and a pending email; only the pending case causes a
  * persistence side-effect (design.md decision #6).

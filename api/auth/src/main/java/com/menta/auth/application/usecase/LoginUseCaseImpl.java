@@ -33,10 +33,10 @@ import java.util.UUID;
 /**
  * Implementation of the login use case.
  *
- * Pure application orchestration — no Spring, no JPA, no framework imports
+ * <p>Pure application orchestration — no Spring, no JPA, no framework imports
  * (ArchUnit-enforced by ArchitectureTest).
  *
- * Decision order (fail-closed):
+ * <p>Decision order (fail-closed):
  *   1. Degraded guard blocks everything (ADR-0026 → 503 upstream).
  *   2. Failure budget already spent → LoginRateLimitedException (429 upstream).
  *   3. Unknown email → InvalidCredentialsException (no discrimination).
@@ -44,16 +44,16 @@ import java.util.UUID;
  *   5. Wrong password → InvalidCredentialsException (no discrimination).
  *   6. Otherwise: issue access, mint refresh in new family, append outbox.
  *
- * Budgets count failures, never attempts (ADR-0035). Step 2 only reads, so a
+ * <p>Budgets count failures, never attempts (ADR-0035). Step 2 only reads, so a
  * successful login costs nothing; the counters move in the failure branches.
  * Checking before the repository lookup keeps a throttled caller to one Redis
  * round-trip instead of a query plus a deliberately slow bcrypt comparison.
  *
- * Volumetric protection is NGINX's job and already happened at the edge. What
+ * <p>Volumetric protection is NGINX's job and already happened at the edge. What
  * is left here is the judgement only this layer can make: whether the attempt
  * actually failed.
  *
- * Every judged attempt is audited through LoginAttemptAuditPort, which writes
+ * <p>Every judged attempt is audited through LoginAttemptAuditPort, which writes
  * outside transactional control — a failed login rolls the transaction back,
  * so the outbox cannot carry that trail.
  */

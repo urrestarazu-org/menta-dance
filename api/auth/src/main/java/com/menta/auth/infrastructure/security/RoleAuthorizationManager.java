@@ -17,11 +17,11 @@ import org.springframework.stereotype.Component;
  * Path-prefix → required-role Spring Security 6 authorization manager
  * (ADR-0025 + design.md Decision 4).
  *
- * Construction receives an immutable path-to-roles map. At check time the
+ * <p>Construction receives an immutable path-to-roles map. At check time the
  * longest path-prefix wins (deterministic order, more specific paths
  * declared first by the application bootstrap).
  *
- * Fall-through semantics:
+ * <p>Fall-through semantics:
  *   - Path matches no entry → grant (the controller layer is responsible
  *     for finer-grained checks; this manager is the coarse gate).
  *   - Authentication missing or anonymous → deny for any protected path.

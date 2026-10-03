@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
  * existing read port; this adapter strictly honours that contract.</p>
  *
  * <h2>Capacity invariant under concurrency (issue #216)</h2>
+ *
  * <p>The plain read-then-insert pattern is racy: two handlers can both
  * observe {@code assignedSpots = 0 < capacity = 1} and both insert
  * successfully, because V7 {@code UNIQUE (session_id, student_id)} only

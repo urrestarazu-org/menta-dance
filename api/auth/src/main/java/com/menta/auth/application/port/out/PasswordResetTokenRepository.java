@@ -11,7 +11,7 @@ import java.util.Optional;
  * atomicity requirement — but for a distinct security domain: burning a
  * reset budget must never touch activation state and vice versa.
  *
- * All operations MUST participate in the caller's transaction so the token
+ * <p>All operations MUST participate in the caller's transaction so the token
  * lifecycle shares an atomic COMMIT with the originating outbox mutation.
  */
 public interface PasswordResetTokenRepository {

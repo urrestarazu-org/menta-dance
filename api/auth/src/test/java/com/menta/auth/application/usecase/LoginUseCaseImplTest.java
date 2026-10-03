@@ -54,13 +54,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * RED-GREEN discipline: this test references LoginUseCaseImpl BEFORE it
  * exists, so the file must not compile until 2.2 GREEN provides the impl.
  *
- * Covers auth-login spec scenarios:
+ * <p>Covers auth-login spec scenarios:
  *   - "Credenciales válidas y reconciliador al día"
  *   - "Cuenta LOCKED rechaza login"
  *   - "Credenciales inválidas responde 401 sin discriminar"
  *   - "Reconciliador atrasado produce 503" (ADR-0026 AUTH_DEGRADED)
  *
- * Pure Mockito test: no Spring context, no Testcontainers. Domain layer is
+ * <p>Pure Mockito test: no Spring context, no Testcontainers. Domain layer is
  * not touched — mocks isolate the application orchestration.
  */
 @ExtendWith(MockitoExtension.class)

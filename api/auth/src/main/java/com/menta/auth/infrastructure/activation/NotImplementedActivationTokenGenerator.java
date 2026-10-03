@@ -5,7 +5,7 @@ import com.menta.auth.application.port.out.ActivationTokenGenerator;
 /**
  * Compile-boundary placeholder for {@link ActivationTokenGenerator}.
  *
- * // TODO(PR2 task 2.2): replace with SecureRandomActivationTokenGenerator.
+ * <p>// TODO(PR2 task 2.2): replace with SecureRandomActivationTokenGenerator.
  */
 public class NotImplementedActivationTokenGenerator implements ActivationTokenGenerator {
 

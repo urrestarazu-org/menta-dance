@@ -36,7 +36,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * and {@code ActivationTokenInvalidException} before either exists, so the
  * file must not compile until GREEN provides them.
  *
- * Covers auth-account-activation spec scenarios:
+ * <p>Covers auth-account-activation spec scenarios:
  *   - "Token válido" — user transitions to ACTIVE, token consumed, single call.
  *   - "Reutilización" — used token rejected with the generic exception.
  *   - "Expiración o invalidación" — expired/invalidated token rejected.
