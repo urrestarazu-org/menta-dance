@@ -3,3 +3,6 @@
 
 # W1.1 orden de imports fuera de auth y bff (#334)
 5eab4192a58eb7a165a1a6da90cae495a82e1dca
+
+# W1.2 orden de imports en api:auth (#335)
+7b9913f1ffd3b1587a174b2cc8a3fa7003e6290e
