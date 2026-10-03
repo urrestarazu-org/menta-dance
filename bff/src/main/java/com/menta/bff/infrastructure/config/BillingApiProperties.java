@@ -1,12 +1,11 @@
 package com.menta.bff.infrastructure.config;
 
+import jakarta.validation.constraints.NotBlank;
+import java.time.Duration;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 import org.springframework.validation.annotation.Validated;
-
-import jakarta.validation.constraints.NotBlank;
-import java.time.Duration;
 
 /**
  * Configuration properties for the Billing API client.

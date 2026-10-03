@@ -3,11 +3,10 @@ package com.menta.bff.infrastructure.security;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.web.authentication.logout.LogoutSuccessHandler;
 import org.springframework.stereotype.Component;
-
-import java.io.IOException;
 
 /**
  * Custom logout success handler that redirects to login page after logout.

@@ -1,7 +1,6 @@
 package com.menta.bff.application.port.out;
 
 import com.menta.bff.domain.model.SessionTokens;
-
 import java.util.Optional;
 
 /**

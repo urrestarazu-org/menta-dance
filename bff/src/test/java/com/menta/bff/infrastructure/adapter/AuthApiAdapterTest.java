@@ -1,5 +1,9 @@
 package com.menta.bff.infrastructure.adapter;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
@@ -7,19 +11,14 @@ import com.menta.bff.application.dto.LoginCommand;
 import com.menta.bff.application.dto.TokenPairResponse;
 import com.menta.bff.application.port.out.AuthApiClient;
 import com.menta.bff.infrastructure.config.AuthProperties;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.web.reactive.function.client.WebClient;
-
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.time.Duration;
 import java.util.Map;
-
-import static com.github.tomakehurst.wiremock.client.WireMock.*;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.web.reactive.function.client.WebClient;
 
 @WireMockTest
 @DisplayName("AuthApiAdapter")

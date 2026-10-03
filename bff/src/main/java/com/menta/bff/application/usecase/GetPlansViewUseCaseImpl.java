@@ -2,7 +2,6 @@ package com.menta.bff.application.usecase;
 
 import com.menta.bff.application.dto.PlanSummary;
 import com.menta.bff.application.port.out.BillingApiClient;
-
 import java.util.List;
 import java.util.Objects;
 

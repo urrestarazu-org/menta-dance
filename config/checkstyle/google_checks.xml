@@ -356,6 +356,7 @@
       <property name="sortImportsInGroupAlphabetically" value="true"/>
       <property name="separateLineBetweenGroups" value="true"/>
       <property name="customImportOrderRules" value="STATIC###THIRD_PARTY_PACKAGE"/>
+      <property name="severity" value="error"/>
     </module>
     <module name="MethodParamPad">
       <property name="tokens"

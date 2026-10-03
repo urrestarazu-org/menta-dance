@@ -3,13 +3,12 @@ package com.menta.bff.infrastructure.security;
 import com.menta.bff.application.usecase.LogoutUseCase;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.web.authentication.logout.LogoutHandler;
 import org.springframework.stereotype.Component;
-
-import java.util.Objects;
 
 /**
  * Custom logout handler that revokes refresh token in Auth API BEFORE

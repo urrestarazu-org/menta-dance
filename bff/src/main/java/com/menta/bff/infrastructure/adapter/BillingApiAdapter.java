@@ -3,6 +3,11 @@ package com.menta.bff.infrastructure.adapter;
 import com.menta.bff.application.dto.PlanSummary;
 import com.menta.bff.application.port.out.BillingApiClient;
 import com.menta.bff.infrastructure.config.BillingApiProperties;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
@@ -10,12 +15,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * WebClient adapter for the upstream billing plans endpoint.
