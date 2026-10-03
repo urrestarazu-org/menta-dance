@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 
+import com.menta.app.integration.support.AbstractPhysicalMySqlIntegrationTest;
 import com.menta.auth.application.port.out.AccessTokenIssuer;
 import com.menta.auth.application.port.out.ActivationRateLimitPort;
 import com.menta.auth.application.port.out.AuthDegradedGuard;
@@ -25,7 +26,6 @@ import com.menta.physical.application.port.out.PhysicalDeviceAuditRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalDeviceAuditJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalDeviceJpaRepository;
 import com.menta.shared.domain.vo.Email;
-import com.menta.app.integration.support.AbstractPhysicalMySqlIntegrationTest;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;

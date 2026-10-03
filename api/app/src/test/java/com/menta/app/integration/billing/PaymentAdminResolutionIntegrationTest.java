@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import com.menta.app.integration.support.AbstractBillingMySqlIntegrationTest;
 import com.menta.auth.application.port.out.AccessTokenIssuer;
 import com.menta.auth.application.port.out.ActivationRateLimitPort;
 import com.menta.auth.application.port.out.AuthDegradedGuard;
@@ -41,7 +42,6 @@ import com.menta.billing.infrastructure.persistence.repository.SubscriptionCours
 import com.menta.billing.infrastructure.persistence.repository.SubscriptionJpaRepository;
 import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
 import com.menta.shared.domain.vo.Email;
-import com.menta.app.integration.support.AbstractBillingMySqlIntegrationTest;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.Instant;

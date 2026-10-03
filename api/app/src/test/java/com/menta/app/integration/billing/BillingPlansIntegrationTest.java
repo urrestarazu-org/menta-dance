@@ -4,13 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import com.menta.app.integration.support.CatalogAccessMocksIntegrationTestBase;
 import com.menta.billing.application.dto.RateLimitDecision;
 import com.menta.billing.domain.model.PlanStatus;
 import com.menta.billing.infrastructure.persistence.entity.PlanCourseJpaEntity;
 import com.menta.billing.infrastructure.persistence.entity.PlanJpaEntity;
 import com.menta.billing.infrastructure.persistence.repository.PlanCourseJpaRepository;
 import com.menta.billing.infrastructure.persistence.repository.PlanJpaRepository;
-import com.menta.app.integration.support.CatalogAccessMocksIntegrationTestBase;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalCourseJpaEntity;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJpaRepository;
 import com.menta.virtual.domain.model.CourseStatus;

@@ -2,7 +2,11 @@ package com.menta.app.integration.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.when;
 
+import com.menta.app.integration.support.AbstractAuthMySqlIntegrationTest;
 import com.menta.auth.application.dto.LoginCommand;
 import com.menta.auth.application.dto.LogoutCommand;
 import com.menta.auth.application.dto.RefreshCommand;
@@ -18,30 +22,25 @@ import com.menta.auth.domain.model.RefreshTokenStatus;
 import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.model.UserStatus;
-import com.menta.shared.outbox.OutboxStatus;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity;
 import com.menta.auth.infrastructure.persistence.entity.RefreshTokenJpaEntity;
 import com.menta.auth.infrastructure.persistence.repository.OutboxRowJpaRepository;
 import com.menta.auth.infrastructure.persistence.repository.RefreshTokenJpaRepository;
 import com.menta.shared.domain.vo.Email;
-import com.menta.app.integration.support.AbstractAuthMySqlIntegrationTest;
+import com.menta.shared.outbox.OutboxStatus;
+import jakarta.persistence.EntityManager;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import jakarta.persistence.EntityManager;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
-
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.when;
 
 /**
  * Integration test for atomic auth mutations with outbox.

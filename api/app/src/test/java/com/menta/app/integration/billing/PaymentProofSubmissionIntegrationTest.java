@@ -6,6 +6,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.menta.app.integration.support.AbstractBillingMySqlIntegrationTest;
 import com.menta.auth.application.port.out.AccessTokenIssuer;
 import com.menta.auth.application.port.out.ActivationRateLimitPort;
 import com.menta.auth.application.port.out.AuthDegradedGuard;
@@ -35,7 +36,6 @@ import com.menta.billing.infrastructure.persistence.repository.PaymentJpaReposit
 import com.menta.billing.infrastructure.persistence.repository.PaymentProofJpaRepository;
 import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
 import com.menta.shared.domain.vo.Email;
-import com.menta.app.integration.support.AbstractBillingMySqlIntegrationTest;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;

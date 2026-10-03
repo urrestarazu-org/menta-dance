@@ -2,6 +2,7 @@ package com.menta.app.integration.physical;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.menta.app.integration.support.PhysicalVirtualCatalogPortMocksIntegrationTestBase;
 import com.menta.physical.application.dto.PhysicalCourseSummary;
 import com.menta.physical.application.dto.PhysicalSessionAvailability;
 import com.menta.physical.application.port.in.PhysicalCourseAvailabilityPort;
@@ -14,7 +15,6 @@ import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacity
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityHoldJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
-import com.menta.app.integration.support.PhysicalVirtualCatalogPortMocksIntegrationTestBase;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;

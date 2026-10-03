@@ -44,18 +44,18 @@ val moduleCoverageFloor = mapOf(
 // with no entry (and whose module is not strict) fails the build.
 // Measure: ./gradlew <checkstyle tasks> --rerun-tasks --no-build-cache --continue
 val checkstyleWarningCeiling = mapOf(
-    ":api:app:checkstyleMain" to 24,
-    ":api:app:checkstyleTest" to 139,
+    ":api:app:checkstyleMain" to 22,
+    ":api:app:checkstyleTest" to 54,
     ":api:auth:checkstyleMain" to 382,
     ":api:auth:checkstyleTest" to 92,
-    ":api:billing:checkstyleMain" to 216,
-    ":api:billing:checkstyleTest" to 67,
-    ":api:physical:checkstyleMain" to 140,
-    ":api:physical:checkstyleTest" to 11,
+    ":api:billing:checkstyleMain" to 208,
+    ":api:billing:checkstyleTest" to 49,
+    ":api:physical:checkstyleMain" to 138,
+    ":api:physical:checkstyleTest" to 10,
     ":api:shared:checkstyleMain" to 10,
-    ":api:shared:checkstyleTest" to 7,
-    ":api:virtual:checkstyleMain" to 182,
-    ":api:virtual:checkstyleTest" to 16,
+    ":api:shared:checkstyleTest" to 1,
+    ":api:virtual:checkstyleMain" to 181,
+    ":api:virtual:checkstyleTest" to 12,
     ":bff:checkstyleMain" to 252,
     ":bff:checkstyleTest" to 328,
 )

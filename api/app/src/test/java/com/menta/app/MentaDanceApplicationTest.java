@@ -1,7 +1,6 @@
 package com.menta.app;
 
 import com.menta.auth.application.port.out.TokenBlacklistPort;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;

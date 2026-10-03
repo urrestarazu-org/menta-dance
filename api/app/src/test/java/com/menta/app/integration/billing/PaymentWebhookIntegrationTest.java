@@ -4,12 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import com.menta.app.integration.support.AbstractBillingMySqlIntegrationTest;
+import com.menta.app.outbox.OutboxReconciliationWorker;
 import com.menta.auth.application.port.out.ActivationRateLimitPort;
 import com.menta.auth.application.port.out.AuthDegradedGuard;
 import com.menta.auth.application.port.out.LoginRateLimitPort;
 import com.menta.auth.application.port.out.PasswordResetAttemptRateLimitPort;
 import com.menta.auth.application.port.out.PasswordResetRequestRateLimitPort;
 import com.menta.auth.application.port.out.TokenBlacklistPort;
+import com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity;
+import com.menta.auth.infrastructure.persistence.repository.OutboxRowJpaRepository;
 import com.menta.billing.application.contract.BillingOutboxEventTypes;
 import com.menta.billing.application.dto.CreateSubscriptionCheckoutCommand;
 import com.menta.billing.application.dto.PaymentPreferenceResult;
@@ -40,9 +44,6 @@ import com.menta.billing.infrastructure.persistence.repository.SubscriptionCours
 import com.menta.billing.infrastructure.persistence.repository.SubscriptionJpaRepository;
 import com.menta.billing.infrastructure.persistence.repository.WebhookInboxJpaRepository;
 import com.menta.billing.infrastructure.webhook.WebhookVerificationWorker;
-import com.menta.app.outbox.OutboxReconciliationWorker;
-import com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity;
-import com.menta.auth.infrastructure.persistence.repository.OutboxRowJpaRepository;
 import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
 import com.menta.physical.domain.model.CourseStatus;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalCapacityAssignmentJpaEntity;
@@ -51,7 +52,6 @@ import com.menta.physical.infrastructure.persistence.entity.PhysicalSessionJpaEn
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityAssignmentJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
-import com.menta.app.integration.support.AbstractBillingMySqlIntegrationTest;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;

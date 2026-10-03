@@ -45,7 +45,6 @@ import com.menta.billing.application.usecase.PaymentFulfillmentService;
 import com.menta.billing.application.usecase.PaymentVerificationService;
 import com.menta.billing.application.usecase.PublishPhysicalPaymentCompletedUseCase;
 import com.menta.billing.application.usecase.VirtualCourseEntitlementService;
-import com.menta.shared.billing.VirtualCourseEntitlementPort;
 import com.menta.billing.infrastructure.security.RedisBankTransferRateLimitPort;
 import com.menta.billing.infrastructure.security.RedisBillingPlansRateLimitPort;
 import com.menta.billing.infrastructure.transaction.TransactionalAssignTrialSubscriptionUseCase;
@@ -54,6 +53,7 @@ import com.menta.billing.infrastructure.transaction.TransactionalCreateSubscript
 import com.menta.billing.infrastructure.transaction.TransactionalReceiveWebhookUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalSubmitPaymentProofUseCase;
 import com.menta.shared.auth.UserExistencePort;
+import com.menta.shared.billing.VirtualCourseEntitlementPort;
 import java.lang.reflect.Field;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.env.Environment;

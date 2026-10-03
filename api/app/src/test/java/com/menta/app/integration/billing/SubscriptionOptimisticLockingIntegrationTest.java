@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
+import com.menta.app.integration.support.AbstractBillingMySqlIntegrationTest;
 import com.menta.auth.application.port.out.AuthDegradedGuard;
 import com.menta.auth.application.port.out.LoginRateLimitPort;
 import com.menta.auth.application.port.out.TokenBlacklistPort;
@@ -15,7 +16,6 @@ import com.menta.billing.domain.model.PlanId;
 import com.menta.billing.domain.model.Subscription;
 import com.menta.billing.domain.model.SubscriptionStatus;
 import com.menta.billing.domain.model.SubscriptionType;
-import com.menta.app.integration.support.AbstractBillingMySqlIntegrationTest;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
