@@ -14,8 +14,8 @@ public class SessionConfig {
 
     /**
      * Provides SpringSessionTokenRepository with request-scoped HttpSession supplier.
-     * <p>
-     * The supplier lazily evaluates to avoid accessing session outside request context.
+     *
+     * <p>The supplier lazily evaluates to avoid accessing session outside request context.
      * </p>
      */
     @Bean

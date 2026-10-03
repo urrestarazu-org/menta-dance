@@ -4,22 +4,22 @@ import com.menta.bff.application.dto.LoginCommand;
 
 /**
  * Use case for user login flow.
- * <p>
- * Orchestrates the login process:
+ *
+ * <p>Orchestrates the login process:
  * 1. Call Auth API with credentials
  * 2. Store received tokens in server-side session
  * 3. Return success (tokens never exposed to browser)
  * </p>
- * <p>
- * Part of Clean Architecture application layer.
+ *
+ * <p>Part of Clean Architecture application layer.
  * </p>
  */
 public interface LoginUseCase {
 
     /**
      * Executes login flow.
-     * <p>
-     * Calls Auth API to authenticate credentials, then stores
+     *
+     * <p>Calls Auth API to authenticate credentials, then stores
      * the returned token pair in the current HTTP session.
      * </p>
      *

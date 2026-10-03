@@ -19,12 +19,12 @@ import reactor.core.publisher.Mono;
 
 /**
  * WebClient adapter for Auth API communication.
- * <p>
- * Implements {@link AuthApiClient} port using Spring WebClient
+ *
+ * <p>Implements {@link AuthApiClient} port using Spring WebClient
  * to call Auth API endpoints (login, refresh, logout).
  * </p>
- * <p>
- * Part of Clean Architecture infrastructure layer.
+ *
+ * <p>Part of Clean Architecture infrastructure layer.
  * </p>
  */
 @Slf4j

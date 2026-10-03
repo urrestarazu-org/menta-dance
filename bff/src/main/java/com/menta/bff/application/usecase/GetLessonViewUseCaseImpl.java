@@ -12,8 +12,8 @@ import java.util.Objects;
 
 /**
  * Implementation of {@link GetLessonViewUseCase}.
- * <p>
- * Runs the 1 → 2 → (3) sequence from design's Data Flow section: course
+ *
+ * <p>Runs the 1 → 2 → (3) sequence from design's Data Flow section: course
  * detail first, letting {@code NotFoundException}/{@code
  * ServiceUnavailableException} short-circuit before any lesson or stream
  * call; then the lesson detail, whose {@code ForbiddenException} (bare 403,

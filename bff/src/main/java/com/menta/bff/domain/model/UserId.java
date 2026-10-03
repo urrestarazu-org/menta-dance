@@ -5,8 +5,8 @@ import java.util.UUID;
 
 /**
  * Value object representing a user identifier.
- * <p>
- * Wraps UUID to provide type safety and domain semantics.
+ *
+ * <p>Wraps UUID to provide type safety and domain semantics.
  * Part of domain layer with ZERO framework dependencies.
  * </p>
  *

@@ -7,8 +7,8 @@ import java.util.Objects;
 
 /**
  * Implementation of {@link GetPlansViewUseCase}.
- * <p>
- * Pure pass-through, no try/catch: {@link BillingApiClient#getPlans()} is
+ *
+ * <p>Pure pass-through, no try/catch: {@link BillingApiClient#getPlans()} is
  * the plans page's only upstream dependency, so any {@link
  * BillingApiClient.NotFoundException} or {@link
  * BillingApiClient.ServiceUnavailableException} it throws propagates

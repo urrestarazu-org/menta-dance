@@ -10,8 +10,8 @@ import java.util.Objects;
 
 /**
  * Implementation of {@link LoginUseCase}.
- * <p>
- * Coordinates Auth API calls and session token storage.
+ *
+ * <p>Coordinates Auth API calls and session token storage.
  * This class contains business logic but no infrastructure details
  * (no HTTP, no Redis, no Spring annotations except @Component in infrastructure layer).
  * </p>

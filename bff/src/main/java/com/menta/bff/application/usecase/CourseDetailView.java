@@ -6,8 +6,8 @@ import com.menta.bff.application.dto.CourseDetail;
  * Result of {@link GetCourseDetailViewUseCase}: the course-detail page's
  * rendering decision, made by the use case rather than the controller
  * (design decision D2).
- * <p>
- * A sealed interface makes the "no personalization without resumable
+ *
+ * <p>A sealed interface makes the "no personalization without resumable
  * progress" guarantee structural instead of a template condition someone has
  * to remember (design decision D1): {@link Plain} has no {@link Resume}
  * field at all, so a denied, anonymous, or zero-progress visitor cannot carry
@@ -51,8 +51,8 @@ public sealed interface CourseDetailView {
      * {@code resumeLesson.lessonId} against the already-fetched
      * {@code CourseDetail.modules[].lessons[]} (the progress aggregate does
      * not carry a lesson title itself).
-     * <p>
-     * Deliberately carries no {@code positionSeconds} field, even though the
+     *
+     * <p>Deliberately carries no {@code positionSeconds} field, even though the
      * wire {@code CourseProgress.ResumeLesson} DTO has one: the "Continuar"
      * link is locked to {@code /courses/{courseId}/lessons/{lessonId}} only,
      * with no seek or position hint (locked product decision, design D1/D4)

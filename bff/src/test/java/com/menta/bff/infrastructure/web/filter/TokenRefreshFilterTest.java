@@ -25,8 +25,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
  * Unit tests for {@link TokenRefreshFilter}.
- * <p>
- * Tests transparent token refresh behavior for authenticated requests.
+ *
+ * <p>Tests transparent token refresh behavior for authenticated requests.
  * </p>
  */
 @ExtendWith(MockitoExtension.class)

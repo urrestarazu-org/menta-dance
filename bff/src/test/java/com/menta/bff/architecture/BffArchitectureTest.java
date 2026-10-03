@@ -12,8 +12,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * ArchUnit tests enforcing Clean Architecture for BFF module.
- * <p>
- * Validates:
+ *
+ * <p>Validates:
  * - Domain layer has ZERO framework dependencies (no Spring, no JPA, no Jackson)
  * - Application layer only depends on domain
  * - Infrastructure layer can depend on application and domain

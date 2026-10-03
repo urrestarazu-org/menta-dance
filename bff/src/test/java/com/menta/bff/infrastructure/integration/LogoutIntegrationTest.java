@@ -12,8 +12,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Integration test for logout flow.
- * <p>
- * Verifies:
+ *
+ * <p>Verifies:
  * - POST /logout revokes refresh token in Auth API
  * - POST /logout clears session (invalidates session)
  * - POST /logout redirects to /login?logout

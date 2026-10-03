@@ -10,8 +10,8 @@ import java.util.Optional;
 
 /**
  * Implementation of {@link GetValidAccessTokenUseCase}.
- * <p>
- * Handles transparent token refresh logic.
+ *
+ * <p>Handles transparent token refresh logic.
  * </p>
  */
 public class GetValidAccessTokenUseCaseImpl implements GetValidAccessTokenUseCase {

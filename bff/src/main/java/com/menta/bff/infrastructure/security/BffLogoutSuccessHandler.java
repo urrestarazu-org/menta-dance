@@ -10,24 +10,24 @@ import org.springframework.stereotype.Component;
 
 /**
  * Custom logout success handler that redirects to login page after logout.
- * <p>
- * This handler is invoked AFTER:
+ *
+ * <p>This handler is invoked AFTER:
  * - BffLogoutHandler revokes refresh token (if present)
  * - Spring Security invalidates session
  * </p>
- * <p>
- * Its only responsibility is to redirect the user to /login?logout
+ *
+ * <p>Its only responsibility is to redirect the user to /login?logout
  * to display a "logout successful" message.
  * </p>
- * <p>
- * Flow:
+ *
+ * <p>Flow:
  * 1. Spring Security triggers logout (POST /logout with CSRF token)
  * 2. BffLogoutHandler revokes refresh token in Auth API
  * 3. Spring Security invalidates session
  * 4. This handler redirects to /login?logout
  * </p>
- * <p>
- * Part of Clean Architecture infrastructure layer.
+ *
+ * <p>Part of Clean Architecture infrastructure layer.
  * </p>
  */
 @Component

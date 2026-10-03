@@ -17,8 +17,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * Unit tests for {@link GetPlansViewUseCaseImpl}.
- * <p>
- * The load-bearing behavior is that this use case is a pure pass-through
+ *
+ * <p>The load-bearing behavior is that this use case is a pure pass-through
  * (tasks.md 4.2): it delegates to {@link BillingApiClient#getPlans()} and
  * returns the result unchanged, with no try/catch — every exception the
  * client throws propagates untranslated.

@@ -18,8 +18,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 /**
  * Security configuration for BFF.
- * <p>
- * Configures:
+ *
+ * <p>Configures:
  * - Custom AuthenticationProvider (validates against Auth API)
  * - Form-based login (custom login page)
  * - Custom LogoutHandler (revokes refresh token BEFORE session invalidation)
@@ -29,8 +29,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * - Public endpoints (/login, /actuator/health, /error)
  * - Protected endpoints (all others require authentication)
  * </p>
- * <p>
- * Part of Clean Architecture infrastructure layer.
+ *
+ * <p>Part of Clean Architecture infrastructure layer.
  * </p>
  */
 @Configuration

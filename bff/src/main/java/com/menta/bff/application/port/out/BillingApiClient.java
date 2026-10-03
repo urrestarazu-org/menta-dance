@@ -13,8 +13,8 @@ public interface BillingApiClient {
 
     /**
      * Retrieves the public plan catalog.
-     * <p>
-     * Calls GET /api/v1/billing/plans. Never sends an {@code Authorization}
+     *
+     * <p>Calls GET /api/v1/billing/plans. Never sends an {@code Authorization}
      * header — the plans endpoint is public and caller-agnostic (every
      * visitor sees the same plans at the same prices), so this method takes
      * no access-token parameter at all: there is no parameter an implementer
@@ -30,8 +30,8 @@ public interface BillingApiClient {
 
     /**
      * Exception thrown when the requested resource does not exist upstream (404).
-     * <p>
-     * {@code @ResponseStatus} lets an uncaught instance resolve through Spring
+     *
+     * <p>{@code @ResponseStatus} lets an uncaught instance resolve through Spring
      * Boot's default {@code /error} → {@code error.html} path with no new
      * exception-handler class, so no upstream body or status detail ever
      * reaches the browser (spec: graceful degradation on upstream failure).
@@ -52,8 +52,8 @@ public interface BillingApiClient {
      * Exception thrown when the upstream is unavailable, rate-limits the BFF
      * (429), or errors (5xx), optionally carrying the {@code Retry-After}
      * value in seconds when the upstream provided one.
-     * <p>
-     * {@code @ResponseStatus} lets an uncaught instance resolve through Spring
+     *
+     * <p>{@code @ResponseStatus} lets an uncaught instance resolve through Spring
      * Boot's default {@code /error} → {@code error.html} path with no new
      * exception-handler class; the {@code Retry-After} hint stays internal to
      * the BFF and is never exposed to the browser.

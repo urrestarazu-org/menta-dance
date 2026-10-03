@@ -18,8 +18,8 @@ import org.junit.jupiter.api.Test;
  * else"), extended by #177's {@code GET /plans} route (spec {@code
  * bff-plans-view}, "Plans-list route is permitted without widening access
  * elsewhere").
- * <p>
- * Both directions are exercised in the same class: new routes must be
+ *
+ * <p>Both directions are exercised in the same class: new routes must be
  * anonymously reachable, AND every previously-protected route must still
  * redirect — a matcher tested only positively can fail open silently and no
  * error would ever surface it. Every new anonymous-reachable route's

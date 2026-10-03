@@ -5,8 +5,8 @@ import java.util.List;
 
 /**
  * Use case for retrieving the plans page's rendering data.
- * <p>
- * Part of Clean Architecture application layer.
+ *
+ * <p>Part of Clean Architecture application layer.
  * </p>
  */
 public interface GetPlansViewUseCase {
@@ -14,8 +14,8 @@ public interface GetPlansViewUseCase {
     /**
      * Retrieves the list of plans to render on the plans page, in upstream
      * response order.
-     * <p>
-     * This is a pure pass-through to {@link
+     *
+     * <p>This is a pure pass-through to {@link
      * com.menta.bff.application.port.out.BillingApiClient#getPlans()}: no
      * branching, no cross-reference with any other upstream call. Every
      * failure propagates untranslated (design: the plans page has exactly

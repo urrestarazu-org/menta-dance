@@ -27,8 +27,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * Unit tests for {@link GetLessonViewUseCaseImpl}.
- * <p>
- * The load-bearing behavior under test: a {@code 200} from the lesson
+ *
+ * <p>The load-bearing behavior under test: a {@code 200} from the lesson
  * endpoint means access was granted, not that a playable URL was supplied
  * with it — {@code getStream} MUST be called for every granted lesson, free
  * ones included. Two earlier authoring passes (spec and design) independently

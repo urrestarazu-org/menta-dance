@@ -17,8 +17,8 @@ public interface VirtualApiClient {
 
     /**
      * Retrieves the public course detail projection.
-     * <p>
-     * Calls GET /api/v1/catalog/courses/{courseId}. Never sends an
+     *
+     * <p>Calls GET /api/v1/catalog/courses/{courseId}. Never sends an
      * {@code Authorization} header — catalog access is caller-agnostic (design D2).
      * </p>
      *
@@ -31,8 +31,8 @@ public interface VirtualApiClient {
 
     /**
      * Retrieves lesson detail, gated by subscription entitlement.
-     * <p>
-     * Calls GET /api/v1/virtual/lessons/{lessonId} with a conditional Bearer token:
+     *
+     * <p>Calls GET /api/v1/virtual/lessons/{lessonId} with a conditional Bearer token:
      * present iff {@code accessToken} is non-null, omitted entirely (not blank)
      * when {@code null} (design D2).
      * </p>
@@ -48,8 +48,8 @@ public interface VirtualApiClient {
 
     /**
      * Retrieves a signed lesson stream URL, gated by subscription entitlement.
-     * <p>
-     * Calls GET /api/v1/virtual/lessons/{lessonId}/stream with the same
+     *
+     * <p>Calls GET /api/v1/virtual/lessons/{lessonId}/stream with the same
      * conditional Bearer token rule as {@link #getLesson}. A granted lesson
      * always needs this call, free ones included — {@code videoId == null}
      * on the lesson detail does not mean no stream exists.
@@ -66,8 +66,8 @@ public interface VirtualApiClient {
 
     /**
      * Retrieves the caller's progress on a course.
-     * <p>
-     * Calls GET /api/v1/virtual/courses/{courseId}/progress. Unlike
+     *
+     * <p>Calls GET /api/v1/virtual/courses/{courseId}/progress. Unlike
      * {@link #getLesson} and {@link #getStream}, this call has no anonymous
      * form at all: {@code accessToken} is mandatory and the
      * {@code Authorization} header is always sent (design D3). A bare {@code
@@ -90,8 +90,8 @@ public interface VirtualApiClient {
 
     /**
      * Exception thrown when the requested resource does not exist upstream (404).
-     * <p>
-     * {@code @ResponseStatus} lets an uncaught instance resolve through Spring
+     *
+     * <p>{@code @ResponseStatus} lets an uncaught instance resolve through Spring
      * Boot's default {@code /error} → {@code error.html} path with no new
      * exception-handler class, so no upstream body or status detail ever
      * reaches the browser (spec: graceful degradation on upstream failure).
@@ -124,8 +124,8 @@ public interface VirtualApiClient {
     /**
      * Exception thrown when the upstream is unavailable, optionally carrying the
      * {@code Retry-After} value in seconds when the upstream provided one.
-     * <p>
-     * {@code @ResponseStatus} lets an uncaught instance resolve through Spring
+     *
+     * <p>{@code @ResponseStatus} lets an uncaught instance resolve through Spring
      * Boot's default {@code /error} → {@code error.html} path with no new
      * exception-handler class; the {@code Retry-After} hint stays internal to
      * the BFF and is never exposed to the browser.

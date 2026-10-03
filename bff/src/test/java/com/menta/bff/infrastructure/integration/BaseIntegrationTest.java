@@ -12,18 +12,18 @@ import org.springframework.test.web.servlet.MockMvc;
 
 /**
  * Base class for integration tests.
- * <p>
- * Provides:
+ *
+ * <p>Provides:
  * - Singleton Testcontainers Redis (from AbstractTestcontainersConfig)
  * - Singleton WireMock for Auth API mocking (from AbstractTestcontainersConfig)
  * - MockMvc for HTTP testing
  * - Redis and WireMock cleanup between tests
  * </p>
- * <p>
- * Integration tests verify end-to-end flows with real Redis and mocked Auth API.
+ *
+ * <p>Integration tests verify end-to-end flows with real Redis and mocked Auth API.
  * </p>
- * <p>
- * Pattern: Extends AbstractTestcontainersConfig for singleton resource management.
+ *
+ * <p>Pattern: Extends AbstractTestcontainersConfig for singleton resource management.
  * This prevents "Connection reset" errors and WireMock port mismatches when running
  * multiple test classes together.
  * </p>
@@ -43,8 +43,8 @@ public abstract class BaseIntegrationTest extends AbstractTestcontainersConfig {
 
     /**
      * Reset WireMock stubs before each test.
-     * <p>
-     * Uses singleton WIRE_MOCK_SERVER from AbstractTestcontainersConfig.
+     *
+     * <p>Uses singleton WIRE_MOCK_SERVER from AbstractTestcontainersConfig.
      * </p>
      */
     @BeforeEach
@@ -54,8 +54,8 @@ public abstract class BaseIntegrationTest extends AbstractTestcontainersConfig {
 
     /**
      * Clear Redis data after each test to ensure test isolation.
-     * <p>
-     * IMPORTANT: This runs after EACH test method, not just after each test class.
+     *
+     * <p>IMPORTANT: This runs after EACH test method, not just after each test class.
      * </p>
      */
     @AfterEach
@@ -72,8 +72,8 @@ public abstract class BaseIntegrationTest extends AbstractTestcontainersConfig {
 
     /**
      * Helper: Get WireMock base URL for building expected requests.
-     * <p>
-     * Uses singleton WIRE_MOCK_SERVER from AbstractTestcontainersConfig.
+     *
+     * <p>Uses singleton WIRE_MOCK_SERVER from AbstractTestcontainersConfig.
      * </p>
      */
     protected String getAuthApiBaseUrl() {

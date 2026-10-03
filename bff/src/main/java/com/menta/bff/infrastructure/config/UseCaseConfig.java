@@ -11,8 +11,8 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * Configuration for use case beans.
- * <p>
- * Wires up application layer use cases with infrastructure adapters.
+ *
+ * <p>Wires up application layer use cases with infrastructure adapters.
  * </p>
  */
 @Configuration

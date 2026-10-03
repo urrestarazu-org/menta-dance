@@ -6,13 +6,13 @@ import java.util.Objects;
 
 /**
  * Value object representing authentication tokens stored in server-side session.
- * <p>
- * Contains JWT access token, opaque refresh token, and expiration timestamp.
+ *
+ * <p>Contains JWT access token, opaque refresh token, and expiration timestamp.
  * This class is part of the domain layer and has ZERO framework dependencies
  * (no Spring, no JPA, no Jackson annotations).
  * </p>
- * <p>
- * Implements {@link Serializable} for Redis session storage via Spring Session.
+ *
+ * <p>Implements {@link Serializable} for Redis session storage via Spring Session.
  * </p>
  *
  * @param accessToken  JWT access token for API authentication (short-lived, 15 min)
@@ -47,8 +47,8 @@ public record SessionTokens(
 
     /**
      * Custom toString that prevents token leakage in logs.
-     * <p>
-     * SECURITY: Never log raw tokens - they are credentials.
+     *
+     * <p>SECURITY: Never log raw tokens - they are credentials.
      * Only log expiration time for debugging.
      * </p>
      *

@@ -2,8 +2,8 @@ package com.menta.bff.application.usecase;
 
 /**
  * Use case for retrieving the render-ready view of a single lesson.
- * <p>
- * Orchestrates the 1 → 2 → (3) upstream call sequence from the design's Data
+ *
+ * <p>Orchestrates the 1 → 2 → (3) upstream call sequence from the design's Data
  * Flow section: course detail first (fail fast on catalog failure), then the
  * lesson detail (its {@code 403}/{@code 200} shape decides {@link
  * LessonView.Sample} vs proceeding), then conditionally the signed stream —
@@ -11,8 +11,8 @@ package com.menta.bff.application.usecase;
  * {@code videoId}. The upstream access decision is rendered here, never
  * re-evaluated (design decision B; {@code virtual/spec.md} line 19).
  * </p>
- * <p>
- * Part of Clean Architecture application layer.
+ *
+ * <p>Part of Clean Architecture application layer.
  * </p>
  */
 public interface GetLessonViewUseCase {
