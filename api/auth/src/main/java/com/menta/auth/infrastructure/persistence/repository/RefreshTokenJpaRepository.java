@@ -16,7 +16,7 @@ import org.springframework.stereotype.Repository;
 /**
  * Spring Data JPA repository for auth_refresh_tokens.
  *
- * The bulk update and the ACTIVE|USED finder are derived queries that
+ * <p>The bulk update and the ACTIVE|USED finder are derived queries that
  * map naturally to the (family_id, status) index declared in V2 DDL. The
  * find-by-hash query uses the UNIQUE index on token_hash.
  */
@@ -34,7 +34,7 @@ public interface RefreshTokenJpaRepository extends JpaRepository<RefreshTokenJpa
      * ACTIVE|USED as REVOKED. Returns the number of rows updated so the
      * adapter can log/observe the blast radius of a compromise.
      *
-     * revokedAt comes from the application clock rather than JPQL
+     * <p>revokedAt comes from the application clock rather than JPQL
      * CURRENT_TIMESTAMP (portable across MySQL/H2 + mimics the per-row
      * semantics when this slice uses H2 spring.test profile).
      */

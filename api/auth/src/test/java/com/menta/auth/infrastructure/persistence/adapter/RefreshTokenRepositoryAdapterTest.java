@@ -29,13 +29,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * BEFORE 3.3 GREEN provides the impl, so it must not compile until the
  * adapter class exists.
  *
- * Tests cover the adapter's interaction with RefreshTokenJpaRepository:
+ * <p>Tests cover the adapter's interaction with RefreshTokenJpaRepository:
  *   - findByHash: round-trips JPA entity → domain RefreshToken.
  *   - save: round-trips domain → JPA entity, returns mapped domain.
  *   - revokeFamily: delegates to bulk-update derived query.
  *   - findActiveOrUsedByFamily: delegates to derived query for ACTIVE|USED.
  *
- * Strict TDD: every assertion exercises the adapter (production code). The
+ * <p>Strict TDD: every assertion exercises the adapter (production code). The
  * mapper boundary is verified end-to-end through the roundtrip — a regression
  * in field mapping would surface as a failing test.
  */

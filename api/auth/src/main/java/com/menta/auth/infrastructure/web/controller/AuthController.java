@@ -35,23 +35,23 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * REST controller for the auth domain.
  *
- * Three endpoints wired to the application use cases via their port-in
+ * <p>Three endpoints wired to the application use cases via their port-in
  * contracts (LoginUseCase, RefreshTokenUseCase, LogoutUseCase). The
  * controller maps:
  *   - HTTP request body @Valid DTO → application command;
  *   - application TokenPair → wire-shaped TokenResponse (snake_case JSON);
  *   - domain exceptions → status codes via @ExceptionHandler.
  *
- * Status mapping (spec):
+ * <p>Status mapping (spec):
  *   login → 200 / 401 / 423 / 503 (Retry-After)
  *   refresh → 200 / 401 / 503
  *   logout → 204 / 401 / 503
  *
- * Security note:
+ * <p>Security note:
  *   - refresh_token is returned in X-Refresh-Token HTTP header (not in body)
  *   - access_token is returned in response body
  *
- * SecurityConfig registers JwtAuthenticationFilter + RoleAuthorizationManager
+ * <p>SecurityConfig registers JwtAuthenticationFilter + RoleAuthorizationManager
  * bean; the controller does NOT enforce roles itself — paths under
  * /api/v1/auth/login and /api/v1/auth/refresh are public. Logout is protected
  * by Spring Security and additionally receives the refresh only in a header.

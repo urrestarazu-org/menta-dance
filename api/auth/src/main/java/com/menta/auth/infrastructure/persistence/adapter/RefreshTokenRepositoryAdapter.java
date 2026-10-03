@@ -17,12 +17,12 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Adapter implementing RefreshTokenRepository port (ADR-0025, ADR-0027).
  *
- * Every method participates in the caller's transaction so refresh lifecycle
+ * <p>Every method participates in the caller's transaction so refresh lifecycle
  * mutations and outbox appends share an atomic COMMIT. Default propagation
  * REQUIRED — already-running transactions are joined, fresh transactions
  * reuse the JpaRepository infrastructure.
  *
- * revokeFamily delegates to a JPQL bulk-update that touches ACTIVE|USED rows
+ * <p>revokeFamily delegates to a JPQL bulk-update that touches ACTIVE|USED rows
  * only; REVOKED rows are preserved (idempotency). The bulk update returns the
  * row count for observability.
  */

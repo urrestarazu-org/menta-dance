@@ -25,7 +25,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 /**
  * Bearer-token filter for requests to protected endpoints.
  *
- * Order of operations:
+ * <p>Order of operations:
  *   1. Extract `Authorization: Bearer <token>`.
  *   2. Verify with the AccessTokenIssuer (signature + expiration + role +
  *      tokenVersion claim set).
@@ -43,7 +43,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
  *      chain decides — controllers mapped to permitAll() continue; protected
  *      routes trigger 401.
  *
- * The filter does NOT throw on bad credentials. Throwing here would skip
+ * <p>The filter does NOT throw on bad credentials. Throwing here would skip
  * the chain and surface 500 for unauthenticated traffic; we let auth
  * happen via the standard entry point.
  */

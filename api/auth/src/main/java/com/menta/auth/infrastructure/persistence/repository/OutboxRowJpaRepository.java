@@ -13,10 +13,10 @@ import org.springframework.stereotype.Repository;
 /**
  * Spring Data JPA repository for common_outbox_events.
  *
- * The reconciler (api:app) reads PENDING rows via findByStatusOrderByIdAsc.
+ * <p>The reconciler (api:app) reads PENDING rows via findByStatusOrderByIdAsc.
  * Writes from :api:auth go through JpaRepository#save.
  *
- * Pagination is the throttle: a single tick fetches at most `pageSize` rows
+ * <p>Pagination is the throttle: a single tick fetches at most `pageSize` rows
  * so a stuck producer cannot monopolize the reconciler thread.
  */
 @Repository
@@ -39,9 +39,9 @@ public interface OutboxRowJpaRepository extends JpaRepository<OutboxRowJpaEntity
     /**
      * PR3: Find rows eligible for processing:
      *   - All PENDING rows (never processed)
-     *   - FAILED rows whose next_retry_at has passed (due for retry)
+     *   - FAILED rows whose next_retry_at has passed (due for retry).
      *
-     * Ordered by id ASC for FIFO processing. Pageable controls batch size.
+     * <p>Ordered by id ASC for FIFO processing. Pageable controls batch size.
      *
      * @param now       current timestamp; FAILED rows with next_retry_at > now are skipped
      * @param pageable  pagination (page size = batch size)

@@ -43,11 +43,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * RED-GREEN discipline: this test references LogoutUseCaseImpl BEFORE it
  * exists, so the file must not compile until 2.6 GREEN provides the impl.
  *
- * Covers scenarios:
+ * <p>Covers scenarios:
  *   - auth-login spec: "Logout invalida refresh con evento post-commit"
  *   - auth-login spec: "Refresh ya rotado activa revocación de familia" (logout of a rotated refresh).
  *
- * Pure Mockito — no Spring context, no DB.
+ * <p>Pure Mockito — no Spring context, no DB.
  */
 @ExtendWith(MockitoExtension.class)
 class LogoutUseCaseImplTest {

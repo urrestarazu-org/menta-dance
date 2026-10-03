@@ -13,11 +13,11 @@ import java.util.UUID;
 /**
  * JPA binding for auth_refresh_tokens (ADR-0025 V2 DDL).
  *
- * Persistence model only — never returned across ports. The domain aggregate
+ * <p>Persistence model only — never returned across ports. The domain aggregate
  * is com.menta.auth.domain.model.RefreshToken; conversion happens through
  * RefreshTokenJpaMapper so the application layer stays JDBC-free.
  *
- * Column notes:
+ * <p>Column notes:
  *   - PK is BINARY(16) for UUID v4 storage.
  *   - token_hash is CHAR(64) — the SHA-256 hex digest of the opaque refresh.
  *   - status mapped as VARCHAR via EnumType.STRING so adding new statuses

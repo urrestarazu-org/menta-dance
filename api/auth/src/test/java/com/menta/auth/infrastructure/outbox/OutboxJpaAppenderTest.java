@@ -27,13 +27,13 @@ import org.springframework.dao.DataIntegrityViolationException;
  * RED-GREEN discipline: this test references OutboxJpaAppender BEFORE 3.6
  * GREEN provides the impl, so it must not compile until the impl exists.
  *
- * Covers common-outbox spec scenarios:
+ * <p>Covers common-outbox spec scenarios:
  *   - "Login emite AuthUserLoggedIn post-commit" — adapter inserts with
  *     event_id ULID, status=PENDING, payload verbatim from caller.
  *   - "Inserción duplicada rechazada por la base" — adapter propagates
  *     UNIQUE constraint violations so the reconciler / caller can decide.
  *
- * Strict TDD: each assertion exercises the production code through the port
+ * <p>Strict TDD: each assertion exercises the production code through the port
  * boundary and verifies both the column mapping AND the propagated exception.
  */
 @ExtendWith(MockitoExtension.class)

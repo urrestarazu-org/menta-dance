@@ -9,13 +9,13 @@ import java.util.UUID;
 /**
  * Persistence port for the refresh-token aggregate.
  *
- * Operations:
+ * <p>Operations:
  * - findByHash: lookup by SHA-256 hex token_hash (raw refresh never leaves the
  *   client boundary).
  * - save: insert a new refresh (either initial family or rotation).
  * - revokeFamily: bulk-revoke every ACTIVE/USED token in a family. Idempotent.
  *
- * All operations MUST participate in the caller's transaction so refresh
+ * <p>All operations MUST participate in the caller's transaction so refresh
  * lifecycle and outbox append share an atomic COMMIT (ADR-0027).
  */
 public interface RefreshTokenRepository {

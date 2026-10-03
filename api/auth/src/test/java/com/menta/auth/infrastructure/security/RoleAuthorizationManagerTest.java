@@ -26,7 +26,7 @@ import org.springframework.security.web.access.intercept.RequestAuthorizationCon
  * RED-GREEN discipline: this test references RoleAuthorizationManager BEFORE
  * 3.5 GREEN provides the impl, so it must not compile until the manager exists.
  *
- * Strict TDD: path-to-required-role matching is verified through the actual
+ * <p>Strict TDD: path-to-required-role matching is verified through the actual
  * AuthorizationDecision returned to the SecurityFilterChain. The map is
  * loaded once at construction and reused per call (immutable config is part
  * of the spec).

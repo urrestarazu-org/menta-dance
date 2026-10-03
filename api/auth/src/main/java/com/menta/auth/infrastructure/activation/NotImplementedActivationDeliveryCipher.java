@@ -6,7 +6,7 @@ import com.menta.auth.application.port.out.DeliveryEnvelope;
 /**
  * Compile-boundary placeholder for {@link ActivationDeliveryCipher}.
  *
- * // TODO(PR2 task 2.3): replace with real AES-GCM adapter.
+ * <p>// TODO(PR2 task 2.3): replace with real AES-GCM adapter.
  */
 public class NotImplementedActivationDeliveryCipher implements ActivationDeliveryCipher {
 

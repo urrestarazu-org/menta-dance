@@ -29,7 +29,7 @@ import org.junit.jupiter.api.Test;
  * provides the impl, so the file must not compile until JwtService.java
  * exists in the same package.
  *
- * Covers spec auth-login "Login emite par de tokens válidos" — verifying the
+ * <p>Covers spec auth-login "Login emite par de tokens válidos" — verifying the
  * access token:
  *   - is a compact JWT string
  *   - signs with HS256 (header alg=HS256)
@@ -37,7 +37,7 @@ import org.junit.jupiter.api.Test;
  *   - exposes a jti that is a valid UUID distinct across consecutive issues
  *   - ttl() matches the configured duration (tests a stable 15-min default)
  *
- * Strict TDD: this test asserts REAL behavior against the parsed JWT — not
+ * <p>Strict TDD: this test asserts REAL behavior against the parsed JWT — not
  * a mock of JwtService. The full HS256 round-trip via jjwt proves the token
  * is a verifiable JWT conforming to the spec.
  */

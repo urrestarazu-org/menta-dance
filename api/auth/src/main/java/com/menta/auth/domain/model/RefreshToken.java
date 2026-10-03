@@ -7,7 +7,7 @@ import java.util.UUID;
 /**
  * Refresh token aggregate (ADR-0025).
  *
- * Pure POJO without framework annotations. MySQL is the authority for the
+ * <p>Pure POJO without framework annotations. MySQL is the authority for the
  * status, family scope, and token_version snapshot. The corresponding JPA
  * entity lives in :api:auth infrastructure layer (PR2).
  */
@@ -121,7 +121,7 @@ public class RefreshToken {
     /**
      * Reconstitute a RefreshToken from persisted state.
      *
-     * Distinct from {@link #newFamily} and {@link #rotate} which mint new
+     * <p>Distinct from {@link #newFamily} and {@link #rotate} which mint new
      * tokens with strict invariants. RefreshTokenJpaMapper uses this to
      * hydrate a row that already carries arbitrary status / rotatedAt /
      * revokedAt values from MySQL. Domain invariants (status non-null,

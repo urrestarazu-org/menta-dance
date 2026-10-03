@@ -16,8 +16,8 @@ import java.time.Instant;
  * JPA entity for the {@code common_outbox_events} table (ADR-0030).
  *
  * <h2>Purpose in the Transactional Outbox Pattern</h2>
- * <p>
- * This entity represents a single outbox event row. Each row is an <b>intent</b>
+ *
+ * <p>This entity represents a single outbox event row. Each row is an <b>intent</b>
  * to notify consumers about something that happened in the system. The row is
  * written atomically with the domain mutation, ensuring the event exists if and
  * only if the business operation committed successfully.
@@ -41,8 +41,8 @@ import java.time.Instant;
  * }</pre>
  *
  * <h2>Ownership</h2>
- * <p>
- * The <b>appender</b> ({@code OutboxJpaAppender}) writes new rows with status=PENDING.
+ *
+ * <p>The <b>appender</b> ({@code OutboxJpaAppender}) writes new rows with status=PENDING.
  * The <b>reconciler</b> ({@code OutboxBlacklistReconciler}) reads, processes, and
  * updates the lifecycle columns (attempts, last_error, next_retry_at, processed_at).
  * </p>

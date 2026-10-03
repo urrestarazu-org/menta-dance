@@ -47,17 +47,17 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * RED-GREEN discipline: this test references RefreshTokenUseCaseImpl BEFORE
  * it exists, so the file must not compile until 2.4 GREEN provides the impl.
  *
- * Covers auth-refresh spec scenarios:
+ * <p>Covers auth-refresh spec scenarios:
  *   - "Rotación exitosa emite par nuevo y conserva familia"
  *   - "Refresh USED dispara revocación de familia"
  *   - "Refresh con más de 7 días se rechaza"
  *   - "Refresh con tokenVersion viejo dispara familia revocada"
  *   - "Refresh REVOKED se rechaza inmutablemente"
  *
- * Also covers auth-login spec scenario "Refresh ya rotado activa
+ * <p>Also covers auth-login spec scenario "Refresh ya rotado activa
  * revocación de familia" via the family-revoke outbox event.
  *
- * Pure Mockito — no Spring context, no DB.
+ * <p>Pure Mockito — no Spring context, no DB.
  */
 @ExtendWith(MockitoExtension.class)
 class RefreshTokenUseCaseImplTest {

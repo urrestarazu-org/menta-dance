@@ -5,13 +5,13 @@ import java.time.Duration;
 /**
  * Cross-module port for the Redis JTI blacklist (ADR-0026).
  *
- * The outbox reconciler in :api:app projects PENDING AuthUserLoggedIn /
+ * <p>The outbox reconciler in :api:app projects PENDING AuthUserLoggedIn /
  * RefreshRevoked / UserLoggedOut events into Redis side-effects via this port.
  * Conversely, the LoginUseCase / RefreshTokenUseCase fail-closed guard depends
  * on the AuthDegradedGuard implementation that shares the same Redis client
  * and degraded-state derivation.
  *
- * Living as a Java interface in :api:auth application layer keeps the cross-
+ * <p>Living as a Java interface in :api:auth application layer keeps the cross-
  * module contract explicit. The implementation in :api:auth infrastructure
  * layer uses Spring Data Redis (RedisTemplate) and is the single source for
  * the blacklist side-effect.

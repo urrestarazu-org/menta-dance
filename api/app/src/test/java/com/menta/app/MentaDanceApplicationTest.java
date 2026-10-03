@@ -10,7 +10,7 @@ import org.springframework.test.context.ActiveProfiles;
 /**
  * Integration smoke test: verifies the Spring Boot application context loads.
  *
- * PR2 added JWT (JwtService) and Redis-backed (TokenBlacklistPortImpl,
+ * <p>PR2 added JWT (JwtService) and Redis-backed (TokenBlacklistPortImpl,
  * OutboxBlacklistReconciler) components. The full Spring wiring — schema
  * validation, MySQL config, embedded Redis, JWT secret — belongs to
  * Phase 4 (PR3). This test stubs the new dependencies so the smoke

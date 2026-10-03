@@ -6,7 +6,7 @@ import java.util.UUID;
 /**
  * Thrown when login is attempted against a user account in LOCKED status.
  *
- * The login flow MUST NOT emit any outbox event and MUST NOT issue tokens; the
+ * <p>The login flow MUST NOT emit any outbox event and MUST NOT issue tokens; the
  * caller is expected to map this to HTTP 423 Locked.
  */
 public class LockedUserException extends BusinessException {

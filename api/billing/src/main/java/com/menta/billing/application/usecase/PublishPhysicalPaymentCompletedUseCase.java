@@ -23,6 +23,7 @@ import org.springframework.stereotype.Component;
  * outbox semantics; tasks TASK-003).
  *
  * <h2>Lifecycle</h2>
+ *
  * <p>Called from {@link PaymentVerificationService#ensureFulfillment}
  * inside the payment-status commit. The use case persists the outbox row
  * synchronously through an appender that joins that transaction. Consequently,
@@ -30,6 +31,7 @@ import org.springframework.stereotype.Component;
  * commit makes them visible atomically to the reconciler.</p>
  *
  * <h2>Scope</h2>
+ *
  * <p>Only fires for {@code PaymentTarget.Physical} that has reached
  * {@link PaymentStatus.Completed}: Virtual fulfillment already lives in
  * {@code ensureSubscription} (this class never participates in the Virtual
@@ -37,6 +39,7 @@ import org.springframework.stereotype.Component;
  * layer.</p>
  *
  * <h2>Bank-transfer origin (#36, US-BILLING-008)</h2>
+ *
  * <p>A physical payment approved manually (design D1) reaches {@code Completed} without ever
  * binding a provider payment id — there is no provider on this rail. {@link #toPayload} passes
  * that absence through as {@code null} rather than failing the whole publish, so the
@@ -44,6 +47,7 @@ import org.springframework.stereotype.Component;
  * does for Mercado Pago.</p>
  *
  * <h2>Idempotency (#242)</h2>
+ *
  * <p>Two complementary layers:
  * <ul>
  *   <li><b>App-level pre-check (the normal redelivery path)</b> — {@code

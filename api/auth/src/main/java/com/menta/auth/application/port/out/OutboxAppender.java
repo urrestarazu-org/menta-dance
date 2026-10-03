@@ -4,8 +4,8 @@ package com.menta.auth.application.port.out;
  * Application port for the Transactional Outbox Pattern (ADR-0030).
  *
  * <h2>What is the Transactional Outbox Pattern?</h2>
- * <p>
- * When a business operation needs to both mutate local state AND notify other
+ *
+ * <p>When a business operation needs to both mutate local state AND notify other
  * systems, we face the "dual-write problem": if we commit first and publish fails,
  * the event is lost; if we publish first and commit fails, consumers see a phantom
  * event. The Transactional Outbox solves this by writing the event to a database
@@ -23,16 +23,15 @@ package com.menta.auth.application.port.out;
  * }
  * }</pre>
  *
- * <p>
- * A background reconciler polls {@code common_outbox_events} for PENDING rows,
+ * <p>A background reconciler polls {@code common_outbox_events} for PENDING rows,
  * processes them, and marks them PROCESSED. This guarantees <b>at-least-once
  * delivery</b>: events may be processed more than once (if the reconciler crashes
  * between processing and marking), but they are never lost.
  * </p>
  *
  * <h2>Clean Architecture placement</h2>
- * <p>
- * This interface lives in the <b>application layer</b> (port/out) because it
+ *
+ * <p>This interface lives in the <b>application layer</b> (port/out) because it
  * defines WHAT the application needs (append an event) without specifying HOW
  * (JPA, JDBC, etc.). The infrastructure layer provides {@code OutboxJpaAppender}
  * as the concrete implementation. This makes use cases unit-testable with a mock.

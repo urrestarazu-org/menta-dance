@@ -7,10 +7,10 @@ import org.springframework.stereotype.Component;
 /**
  * Default UlidGenerator that emits Crockford-base32 ULIDs (26 chars).
  *
- * 80 bits encode ms since UNIX epoch; 48 bits are random — collision odds
+ * <p>80 bits encode ms since UNIX epoch; 48 bits are random — collision odds
  * over the lifetime of the application are astronomically low.
  *
- * Pure dependency-free: no Ulid library required for PR2. PR3 can swap to
+ * <p>Pure dependency-free: no Ulid library required for PR2. PR3 can swap to
  * com.github.f4b6a3:ulid-creator if needed; the interface boundary keeps
  * the swap a one-line bean change.
  */

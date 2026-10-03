@@ -7,11 +7,11 @@ import java.util.Optional;
 /**
  * Port that issues AND verifies short-lived JWT access tokens (ADR-0025).
  *
- * Infrastructure adapter (PR2) signs with HS256 secret loaded from env, embeds
+ * <p>Infrastructure adapter (PR2) signs with HS256 secret loaded from env, embeds
  * `jti` UUID, `tokenVersion` claim, `sub/userId/role`, and `exp`. The same
  * adapter parses incoming bearer tokens during request authentication.
  *
- * The issuer MUST be deterministic given the same user + invocation time —
+ * <p>The issuer MUST be deterministic given the same user + invocation time —
  * callers can use it as the `aggregate_id` for AuthUserLoggedIn outbox events
  * (jti ties the event to the side-effect the reconciler later projects).
  */

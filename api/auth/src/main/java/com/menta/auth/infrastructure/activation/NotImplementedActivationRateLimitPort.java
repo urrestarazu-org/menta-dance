@@ -6,7 +6,7 @@ import com.menta.auth.application.port.out.RateLimitDecision;
 /**
  * Compile-boundary placeholder for {@link ActivationRateLimitPort}.
  *
- * // TODO(PR2 task 2.4): replace with real Redis-backed adapter.
+ * <p>// TODO(PR2 task 2.4): replace with real Redis-backed adapter.
  */
 public class NotImplementedActivationRateLimitPort implements ActivationRateLimitPort {
 

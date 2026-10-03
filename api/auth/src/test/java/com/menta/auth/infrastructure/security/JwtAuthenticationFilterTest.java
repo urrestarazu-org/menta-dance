@@ -35,7 +35,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
  * RED-GREEN discipline: this test references JwtAuthenticationFilter BEFORE
  * 3.5 GREEN provides the impl, so it must not compile until the filter exists.
  *
- * Strict TDD: every assertion exercises the filter's behaviour through the
+ * <p>Strict TDD: every assertion exercises the filter's behaviour through the
  * SecurityContext (a real side-effect, observable downstream). Returning
  * Optional.empty() from AccessTokenIssuer.parse leaves the SecurityContext
  * empty and the chain is allowed to handle the unauthenticated request.

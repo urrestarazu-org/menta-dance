@@ -39,7 +39,7 @@ import org.springframework.data.redis.core.script.RedisScript;
  *   - AuthDegradedGuard (fail-closed health check driven by the reconciler's
  *     last successful tick timestamp in Redis).
  *
- * Strict TDD: each test exercises a real branch of the production logic and
+ * <p>Strict TDD: each test exercises a real branch of the production logic and
  * asserts concrete Redis interactions (key, value, TTL) so a regression in
  * the Redis contract would surface as a failing test, not as silent syndrome.
  */

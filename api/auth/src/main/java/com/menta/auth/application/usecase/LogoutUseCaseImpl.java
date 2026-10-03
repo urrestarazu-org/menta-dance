@@ -18,7 +18,7 @@ import java.util.UUID;
 /**
  * Implementation of the logout use case.
  *
- * Decision order:
+ * <p>Decision order:
  *   1. Degraded reconciler → AuthDegradedException.
  *   2. Unknown hash → RefreshTokenCompromisedException (no leak).
  *   3. Already REVOKED → already done, refuse without re-publishing event.

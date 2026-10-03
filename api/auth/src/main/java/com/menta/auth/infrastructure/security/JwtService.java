@@ -20,7 +20,7 @@ import javax.crypto.SecretKey;
 /**
  * HS256 access-token issuer (ADR-0025).
  *
- * Produces compact JWTs with claims:
+ * <p>Produces compact JWTs with claims:
  *   - sub        : userId UUID (string per JWT convention)
  *   - role       : {@link com.menta.auth.domain.model.Role} name as canonical
  *                  English identifier (STUDENT / INSTRUCTOR / ADMIN).
@@ -30,7 +30,7 @@ import javax.crypto.SecretKey;
  *                  AuthUserLoggedIn event projected by the reconciler.
  *   - iat / exp  : standard JWT timestamps; exp = now + ttl.
  *
- * Secret MUST be at least 32 bytes (HS256 requires 256-bit key material);
+ * <p>Secret MUST be at least 32 bytes (HS256 requires 256-bit key material);
  * construction-time validation prevents weak secrets reaching the signing
  * path.
  */
