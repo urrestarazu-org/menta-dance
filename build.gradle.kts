@@ -63,7 +63,10 @@ val checkstyleWarningCeiling = mapOf(
 // Modules that reached 0 warnings: both Checkstyle tasks run with severity
 // `error` and need no ceiling entry. A module is added here in the same PR
 // that deletes its two ceiling keys.
-val checkstyleStrictModules = setOf<String>()
+// `:api` is the aggregator project of the api modules: it has no sources (its
+// Checkstyle tasks are NO-SOURCE) but `./gradlew build` realizes them, so it
+// starts strict with zero findings.
+val checkstyleStrictModules = setOf(":api")
 
 // Modules whose coverage feeds the aggregated report below.
 val jvmCoverageModules = listOf(

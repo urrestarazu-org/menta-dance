@@ -201,6 +201,10 @@ Además corren `*ArchitectureTest` y `jacocoTestCoverageVerification`.
   claves se borran en el mismo PR; corre con severidad `error` fijada por
   `configProperties` (no por `-Dorg.checkstyle.google.severity`, que no
   tiene efecto).
+* El proyecto agregador `:api` no tiene fuentes, pero `./gradlew build` arma
+  sus tareas de Checkstyle (`NO-SOURCE`); por eso nace en
+  `checkstyleStrictModules` y no lleva tope. Verificar siempre el trinquete con
+  `./gradlew build --dry-run`, que arma el mismo grafo de tareas que el CI.
 * Una regla con 0 hallazgos en las 14 tareas se bloquea con
   `<property name="severity" value="error"/>` en `google_checks.xml`: sus
   hallazgos fallan el build sin consumir techo.
