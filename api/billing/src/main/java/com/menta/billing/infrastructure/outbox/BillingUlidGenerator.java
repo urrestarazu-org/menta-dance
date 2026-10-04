@@ -9,5 +9,6 @@ import java.time.Instant;
  */
 public interface BillingUlidGenerator {
 
+    /** Returns a fresh 26-character ULID to be used as the id of an outbox row. */
     String next();
 }

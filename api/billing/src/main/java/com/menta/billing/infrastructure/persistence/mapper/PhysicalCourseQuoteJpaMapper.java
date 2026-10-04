@@ -13,6 +13,13 @@ public final class PhysicalCourseQuoteJpaMapper {
     private PhysicalCourseQuoteJpaMapper() {
     }
 
+    /**
+     * Rebuilds the quote through {@code PhysicalCourseQuote.reconstitute}, keeping its stored
+     * identifiers, prices, and creation and expiry instants.
+     *
+     * <p>The quote id is parsed as a UUID and the purchase type and availability as enum names, so
+     * a corrupted value fails with {@link IllegalArgumentException}.
+     */
     public static PhysicalCourseQuote toDomain(PhysicalCourseQuoteJpaEntity entity) {
         return PhysicalCourseQuote.reconstitute(
             UUID.fromString(entity.getId()),
@@ -30,6 +37,10 @@ public final class PhysicalCourseQuoteJpaMapper {
         );
     }
 
+    /**
+     * Flattens the quote into a row, storing the id as text, the enums by name and each price as an
+     * amount and a currency.
+     */
     public static PhysicalCourseQuoteJpaEntity toEntity(PhysicalCourseQuote quote) {
         return new PhysicalCourseQuoteJpaEntity(
             quote.getId().toString(),

@@ -13,5 +13,15 @@ import com.menta.billing.application.dto.SubscriptionCheckoutResult;
  */
 public interface CreateBankTransferSubscriptionUseCase {
 
+    /**
+     * Opens a bank-transfer subscription checkout and returns the transfer instructions.
+     *
+     * <p>The daily creation budget is consumed before anything else, and a refusal surfaces as
+     * {@code BankTransferRateLimitedException}. Fails with {@code PlanNotAvailableException} when
+     * the plan is missing or inactive, with {@code PaymentMethodNotAcceptedException} when the plan
+     * does not accept the method, and with {@code SubscriptionAlreadyActiveException} when the user
+     * already holds a current subscription. On success a payment in {@code
+     * AwaitingManualVerification} and a pending subscription are saved.
+     */
     SubscriptionCheckoutResult create(CreateSubscriptionCheckoutCommand command);
 }

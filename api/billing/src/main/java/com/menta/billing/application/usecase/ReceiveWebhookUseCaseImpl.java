@@ -11,6 +11,14 @@ import com.menta.billing.domain.exception.WebhookTimestampExpiredException;
 import java.time.Duration;
 import java.time.Instant;
 
+/**
+ * Application-layer implementation of {@link ReceiveWebhookUseCase}.
+ *
+ * <p>The signature is checked through {@code WebhookSignatureVerifier} with the configured HMAC
+ * secret, the signed timestamp must not be older than five minutes (a non-numeric timestamp counts
+ * as an invalid signature), and the notification is appended to the inbox under the key {@code
+ * dataId:requestId}. It never calls the provider and applies no payment effect.
+ */
 public class ReceiveWebhookUseCaseImpl implements ReceiveWebhookUseCase {
 
     private static final Duration MAX_TIMESTAMP_AGE = Duration.ofMinutes(5);

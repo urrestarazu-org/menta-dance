@@ -11,6 +11,7 @@ import java.time.Instant;
  */
 public record PaymentStatusResponse(String status, Instant createdAt, Instant updatedAt) {
 
+    /** Maps the status result to the wire shape without altering any value. */
     public static PaymentStatusResponse from(PaymentStatusResult result) {
         return new PaymentStatusResponse(result.status(), result.createdAt(), result.updatedAt());
     }

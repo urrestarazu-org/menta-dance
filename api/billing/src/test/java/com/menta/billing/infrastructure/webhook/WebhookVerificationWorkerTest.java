@@ -118,12 +118,12 @@ class WebhookVerificationWorkerTest {
 
     @Test
     void exhausting_retries_marks_reconciliation_required_and_creates_a_task_referencing_the_payment() {
-        WebhookInboxJpaEntity row = row(1);
         when(verificationService.verify("mp-1")).thenThrow(new IllegalStateException("timeout"));
         Payment pending = payment(new PaymentStatus.AwaitingProvider());
         when(paymentRepository.findByProviderPaymentId("mp-1")).thenReturn(Optional.of(pending));
         when(paymentRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
+        WebhookInboxJpaEntity row = row(1);
         worker.process(row);
 
         assertThat(row.getStatus()).isEqualTo(WebhookInboxStatus.RECONCILIATION_REQUIRED);

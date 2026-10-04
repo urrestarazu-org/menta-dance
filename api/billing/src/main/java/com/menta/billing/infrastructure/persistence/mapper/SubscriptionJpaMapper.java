@@ -23,6 +23,12 @@ public final class SubscriptionJpaMapper {
     private SubscriptionJpaMapper() {
     }
 
+    /**
+     * Rebuilds the subscription from its row and its separately loaded course ids.
+     *
+     * <p>A missing payment id, cancellation or trial grant is restored as absent: a row without
+     * {@code cancelled_at} was never cancelled, and one without {@code granted_at} is not a trial.
+     */
     public static Subscription toDomain(SubscriptionJpaEntity entity, List<String> courseIds) {
         return new Subscription(
             entity.getId(),
@@ -45,6 +51,13 @@ public final class SubscriptionJpaMapper {
         );
     }
 
+    /**
+     * Flattens the subscription into its row.
+     *
+     * <p>{@code active_user_id} is derived here from {@code occupiesUserSlot()}: it is the user's
+     * id while the subscription holds the slot and {@code null} otherwise, so callers can never set
+     * it and the single-active-subscription uniqueness always follows the domain state.
+     */
     public static SubscriptionJpaEntity toEntity(Subscription subscription) {
         Cancellation cancellation = subscription.getCancellation().orElse(null);
         TrialGrant grant = subscription.getTrialGrant().orElse(null);

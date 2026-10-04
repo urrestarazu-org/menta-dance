@@ -13,6 +13,13 @@ public final class PaymentJpaMapper {
     private PaymentJpaMapper() {
     }
 
+    /**
+     * Rebuilds the domain payment from a stored row.
+     *
+     * <p>The target modality {@code PHYSICAL} selects a physical target and any other value a
+     * virtual one. The status is rebuilt from {@code status_type}, and an unknown status type fails
+     * with {@link IllegalStateException}.
+     */
     public static Payment toDomain(PaymentJpaEntity entity) {
         return new Payment(
             PaymentId.of(entity.getId()),
@@ -27,6 +34,13 @@ public final class PaymentJpaMapper {
         );
     }
 
+    /**
+     * Flattens the payment into a row.
+     *
+     * <p>The sealed status is split into a type, an optional reason and an optional change instant,
+     * the target into a modality and a reference, and a missing provider payment id is stored as
+     * {@code null}.
+     */
     public static PaymentJpaEntity toEntity(Payment payment) {
         StatusColumns statusColumns = toStatusColumns(payment.getStatus());
         TargetColumns targetColumns = toTargetColumns(payment.getTarget());

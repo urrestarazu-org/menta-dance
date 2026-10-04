@@ -18,6 +18,10 @@ public record PlanDetailResponse(
     List<PlanCourseResponse> courses
 ) {
 
+    /**
+     * Maps the plan detail, including the terms and the cancellation policy, to the wire shape and
+     * converts each included course.
+     */
     public static PlanDetailResponse from(PlanDetailResult result) {
         return new PlanDetailResponse(
             result.id(), result.name(), result.description(), result.price(), result.currency(),

@@ -14,6 +14,8 @@ import com.menta.billing.application.dto.PaymentPreferenceResult;
 public interface PaymentPreferencePort {
 
     /**
+     * Creates a hosted checkout preference for the request and returns its id and redirect URL.
+     *
      * @throws RuntimeException on any provider/transport failure — the caller aborts the checkout, never retries.
      */
     PaymentPreferenceResult createPreference(PaymentPreferenceRequest request);

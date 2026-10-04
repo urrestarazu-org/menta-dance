@@ -16,6 +16,10 @@ public record PlanSummaryResponse(
     List<PlanCourseResponse> courses
 ) {
 
+    /**
+     * Maps a plan list item to the wire shape and converts each included course; the terms and the
+     * cancellation policy are not part of the summary.
+     */
     public static PlanSummaryResponse from(PlanSummaryResult result) {
         return new PlanSummaryResponse(
             result.id(), result.name(), result.description(), result.price(), result.currency(),

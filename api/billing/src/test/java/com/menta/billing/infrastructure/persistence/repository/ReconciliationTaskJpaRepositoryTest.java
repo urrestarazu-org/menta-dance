@@ -59,7 +59,7 @@ class ReconciliationTaskJpaRepositoryTest {
         UUID paymentId = UUID.randomUUID();
         UUID firstAdmin = UUID.randomUUID();
         UUID secondAdmin = UUID.randomUUID();
-        ReconciliationTaskJpaEntity task = repository.saveAndFlush(openTaskFor(paymentId));
+        final ReconciliationTaskJpaEntity task = repository.saveAndFlush(openTaskFor(paymentId));
         repository.resolveOpenByPaymentId(paymentId, NOW, firstAdmin);
         repository.flush();
 

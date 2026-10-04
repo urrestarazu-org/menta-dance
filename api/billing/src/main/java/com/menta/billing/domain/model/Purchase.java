@@ -33,6 +33,11 @@ public final class Purchase {
         this.status = Objects.requireNonNull(status, "status cannot be null");
     }
 
+    /**
+     * Creates a purchase waiting for fulfillment, with a fresh id.
+     *
+     * <p>The session ids must not be empty and are kept as an immutable copy in the given order.
+     */
     public static Purchase pendingFulfillment(PaymentId paymentId, List<String> physicalSessionIds) {
         return new Purchase(UUID.randomUUID(), paymentId, physicalSessionIds, FulfillmentStatus.PENDING_FULFILLMENT);
     }
@@ -50,10 +55,22 @@ public final class Purchase {
         return new Purchase(UUID.randomUUID(), paymentId, physicalSessionIds, FulfillmentStatus.EXCEPTION);
     }
 
+    /**
+     * Returns a copy in {@code EXCEPTION} status that keeps the id, the payment and the sessions.
+     *
+     * <p>The transition is not guarded here; the use case that applies it decides which current
+     * statuses may move.
+     */
     public Purchase exception() {
         return new Purchase(id, paymentId, physicalSessionIds, FulfillmentStatus.EXCEPTION);
     }
 
+    /**
+     * Returns a copy in {@code ASSIGNED} status that keeps the id, the payment and the sessions.
+     *
+     * <p>The transition is not guarded here; the use case that applies it decides which current
+     * statuses may move.
+     */
     public Purchase assigned() {
         return new Purchase(id, paymentId, physicalSessionIds, FulfillmentStatus.ASSIGNED);
     }

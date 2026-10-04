@@ -8,10 +8,21 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+/**
+ * Out-port for persisting and querying {@link Payment} aggregates.
+ *
+ * <p>The JPA adapter requires {@code save} to run inside a caller-owned transaction, while its
+ * reads join an existing transaction or open a read-only one. A payment is located by its id, by
+ * the provider's payment id, or by the external reference generated at checkout. The two list
+ * queries take primitive paging arguments so that no Spring type crosses into the application
+ * layer.
+ */
 public interface PaymentRepository {
 
+    /** Persists the payment, inserting or updating it by id, and returns the stored state. */
     Payment save(Payment payment);
 
+    /** Finds a payment by its id. */
     Optional<Payment> findById(PaymentId id);
 
     /** Only ever finds a payment already bound to the provider's id — a fresh checkout has none yet. */

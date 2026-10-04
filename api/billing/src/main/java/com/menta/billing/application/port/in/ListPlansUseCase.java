@@ -7,6 +7,9 @@ import java.util.List;
 public interface ListPlansUseCase {
 
     /**
+     * Lists the {@code ACTIVE} plans, cheapest first, after charging the caller's rate-limit
+     * budget.
+     *
      * @throws com.menta.billing.domain.exception.PlanRateLimitedException if the caller's IP budget is spent.
      */
     List<PlanSummaryResult> listActivePlans(String clientFingerprint);

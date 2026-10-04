@@ -10,5 +10,13 @@ import com.menta.billing.application.dto.WebhookSignal;
  */
 public interface ReceiveWebhookUseCase {
 
+    /**
+     * Verifies a webhook notification and records it for later processing.
+     *
+     * <p>Fails with {@code WebhookSignatureInvalidException} when the signature is malformed or
+     * does not match, and with {@code WebhookTimestampExpiredException} when the signed timestamp
+     * is more than five minutes old. A valid notification is appended to the inbox keyed by data id
+     * and request id, so a redelivery is not stored twice.
+     */
     void receive(WebhookSignal signal);
 }

@@ -27,6 +27,12 @@ public record SubscriptionCheckoutResponse(
     String providerPreferenceId, String externalReference, String checkoutUrl, OverlapNotice overlapNotice,
     BankTransferInstructions bankTransferInstructions
 ) {
+    /**
+     * Maps the checkout result to the wire shape, rendering the subscription status by enum name.
+     *
+     * <p>The overlap notice and the transfer instructions are passed through and may be {@code
+     * null}.
+     */
     public static SubscriptionCheckoutResponse from(SubscriptionCheckoutResult result) {
         return new SubscriptionCheckoutResponse(
             result.subscriptionId(), result.paymentId(), result.planId(), result.status().name(),

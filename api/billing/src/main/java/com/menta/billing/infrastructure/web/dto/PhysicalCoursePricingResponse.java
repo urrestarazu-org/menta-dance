@@ -10,6 +10,10 @@ public record PhysicalCoursePricingResponse(
     Instant updatedAt
 ) {
 
+    /**
+     * Maps the pricing result to the wire shape, keeping the monthly price, the surcharge
+     * percentage, the version and the update instant unchanged.
+     */
     public static PhysicalCoursePricingResponse from(PhysicalCoursePricingResult result) {
         return new PhysicalCoursePricingResponse(
             result.courseId(), result.monthlyPrice(), result.currency(), result.individualSurchargePercent(),

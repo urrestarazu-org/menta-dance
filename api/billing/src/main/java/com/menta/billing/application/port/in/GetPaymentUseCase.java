@@ -9,6 +9,8 @@ import java.util.UUID;
 public interface GetPaymentUseCase {
 
     /**
+     * Returns the status and timestamps of a payment owned by the acting user.
+     *
      * @throws com.menta.billing.domain.exception.PaymentNotFoundException if {@code paymentId}
      *     resolves to no row, or resolves to one owned by a different user (C8 — never a 403).
      */

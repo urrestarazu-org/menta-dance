@@ -22,6 +22,14 @@ public final class Money {
         this.currency = currency;
     }
 
+    /**
+     * Creates a money value after validating both parts.
+     *
+     * <p>A {@code null} or negative amount (zero is allowed) and a currency that is not three
+     * uppercase letters are rejected with {@link IllegalArgumentException}. The amount is kept as
+     * given, without rounding or rescaling, and equality ignores scale: {@code 10.0 ARS} equals
+     * {@code 10.00 ARS}.
+     */
     public static Money of(BigDecimal amount, String currency) {
         if (amount == null || amount.signum() < 0) {
             throw new IllegalArgumentException("amount must be zero or positive");

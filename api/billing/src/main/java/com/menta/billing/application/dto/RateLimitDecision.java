@@ -15,10 +15,17 @@ public final class RateLimitDecision {
         this.retryAfter = retryAfter;
     }
 
+    /** Returns the shared decision that lets the request through; it carries no retry window. */
     public static RateLimitDecision allowed() {
         return ALLOWED;
     }
 
+    /**
+     * Creates a decision that refuses the request and tells the caller how long to wait.
+     *
+     * <p>A {@code null} or negative {@code retryAfter} is rejected with {@link
+     * IllegalArgumentException}; zero is accepted.
+     */
     public static RateLimitDecision limited(Duration retryAfter) {
         if (retryAfter == null || retryAfter.isNegative()) {
             throw new IllegalArgumentException("retryAfter must be a non-negative duration");
@@ -31,6 +38,8 @@ public final class RateLimitDecision {
     }
 
     /**
+     * Returns how long the caller must wait before retrying a limited decision.
+     *
      * @throws IllegalStateException if {@link #isAllowed()} is true — there is nothing to retry.
      */
     public Duration getRetryAfter() {

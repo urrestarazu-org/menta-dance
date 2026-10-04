@@ -32,6 +32,14 @@ public class ProofAccessTokenVerifier {
         this.secret = requiredValue(secret, "payment proof token secret");
     }
 
+    /**
+     * Validates a proof access token and returns the payment it was minted for.
+     *
+     * <p>Every failure (null token, wrong shape, bad signature, unknown version, malformed payload
+     * or id, expired) throws the same {@link InvalidProofAccessTokenException}, so a caller cannot
+     * tell an expired token from a forged one. The signature is compared in constant time, and a
+     * token is expired only when {@code now} is after its expiry second.
+     */
     public PaymentId verify(String token, Instant now) {
         if (token == null) {
             throw new InvalidProofAccessTokenException();

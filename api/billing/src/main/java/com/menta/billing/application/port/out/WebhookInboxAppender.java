@@ -9,6 +9,9 @@ import java.time.Instant;
 public interface WebhookInboxAppender {
 
     /**
+     * Appends the notification to the inbox as {@code RECEIVED} unless its dedupe key was already
+     * recorded.
+     *
      * @param dedupeKey unique key identifying this exact notification
      *     (dataId + requestId) — a second call with the same key must not
      *     create a second row.

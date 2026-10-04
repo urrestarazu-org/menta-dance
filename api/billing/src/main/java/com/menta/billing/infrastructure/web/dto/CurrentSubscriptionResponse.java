@@ -30,6 +30,13 @@ public record CurrentSubscriptionResponse(
     /** Sourced here, not duplicated — infrastructure is the only layer that knows its own routes. */
     public static final String PLANS_URL = "/api/v1/billing/plans";
 
+    /**
+     * Maps the current-subscription variant to the flat response, discriminated by the {@code
+     * status} string.
+     *
+     * <p>Only the fields of the matching variant are filled and the rest are {@code null}; an
+     * expired subscription also gets the plan catalog URL so that the client can offer a renewal.
+     */
     public static CurrentSubscriptionResponse from(CurrentSubscriptionResult result) {
         return switch (result) {
             case CurrentSubscriptionResult.Active active -> new CurrentSubscriptionResponse(

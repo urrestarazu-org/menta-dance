@@ -18,6 +18,8 @@ import java.util.UUID;
 public interface PhysicalCourseOwnershipPort {
 
     /**
+     * Resolves which professor owns a course.
+     *
      * @param courseId the opaque course id to look up.
      * @return the owning professor's id, or {@code Optional.empty()} if the
      *     course does not exist in Physical.

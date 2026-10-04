@@ -11,6 +11,8 @@ import com.menta.billing.application.dto.ProviderPaymentResult;
 public interface PaymentProviderPort {
 
     /**
+     * Fetches the provider's current view of a payment by the provider's own payment id.
+     *
      * @throws RuntimeException on any provider/transport failure — the caller retries via the inbox.
      */
     ProviderPaymentResult fetchPayment(String providerPaymentId);

@@ -9,6 +9,13 @@ package com.menta.billing.application.port.out;
  */
 public interface PaymentProofStoragePort {
 
+    /**
+     * Writes the blob under the given key.
+     *
+     * <p>The filesystem adapter creates missing parent directories and overwrites an existing blob.
+     * An I/O failure surfaces as {@link java.io.UncheckedIOException} and a key that escapes the
+     * storage root as {@link IllegalArgumentException}.
+     */
     void store(String storageKey, byte[] content);
 
     /** Silent no-op when {@code storageKey} does not exist — mirrors delete-if-present semantics. */

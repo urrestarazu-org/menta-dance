@@ -14,6 +14,13 @@ public record OverlapNotice(String code, Instant currentAccessEndsAt) {
 
     public static final String OVERLAPPING_PAID_PERIOD = "OVERLAPPING_PAID_PERIOD";
 
+    /**
+     * Creates the notice for an earlier cancelled subscription whose paid access is still in force.
+     *
+     * <p>The code is always {@link #OVERLAPPING_PAID_PERIOD}. {@code currentAccessEndsAt} is the
+     * end date of the latest cancelled subscription of the same user and plan that still has
+     * remaining access; it is not validated here.
+     */
     public static OverlapNotice of(Instant currentAccessEndsAt) {
         return new OverlapNotice(OVERLAPPING_PAID_PERIOD, currentAccessEndsAt);
     }

@@ -14,6 +14,11 @@ public record AssignTrialResponse(
     String subscriptionId, String userId, String planId, String type, String status,
     Instant startDate, Instant endDate, int days
 ) {
+    /**
+     * Maps the trial result to the wire shape, rendering type and status by enum name.
+     *
+     * <p>The grant's reason is not part of the result, so it never reaches the response.
+     */
     public static AssignTrialResponse from(TrialAssignmentResult result) {
         return new AssignTrialResponse(
             result.subscriptionId(), result.userId(), result.planId(), result.type().name(),

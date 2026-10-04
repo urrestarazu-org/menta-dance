@@ -12,6 +12,10 @@ public record PhysicalCourseQuoteResponse(
     Instant expiresAt
 ) {
 
+    /**
+     * Maps the quote result to the wire shape, rendering the purchase type and the availability by
+     * enum name and keeping amounts and instants unchanged.
+     */
     public static PhysicalCourseQuoteResponse from(PhysicalCourseQuoteResult result) {
         return new PhysicalCourseQuoteResponse(
             result.id(), result.courseId(), result.purchaseType().name(), result.scheduledSessionCount(),

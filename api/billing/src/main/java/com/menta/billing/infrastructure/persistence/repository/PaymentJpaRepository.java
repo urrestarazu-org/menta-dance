@@ -12,10 +12,21 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+/**
+ * Spring Data repository over {@code billing_payments}.
+ *
+ * <p>Used only through {@code PaymentRepositoryAdapter}. Besides the lookups by unique column it
+ * hosts the two paged queries behind the expiry sweep and the admin verification inbox.
+ */
 public interface PaymentJpaRepository extends JpaRepository<PaymentJpaEntity, UUID> {
 
+    /** Finds the payment bound to a provider payment id; the column is unique, so at most one row matches. */
     Optional<PaymentJpaEntity> findByProviderPaymentId(String providerPaymentId);
 
+    /**
+     * Finds the payment by the external reference generated at checkout; the column is unique, so
+     * at most one row matches.
+     */
     Optional<PaymentJpaEntity> findByExpectedExternalReference(String expectedExternalReference);
 
     /**

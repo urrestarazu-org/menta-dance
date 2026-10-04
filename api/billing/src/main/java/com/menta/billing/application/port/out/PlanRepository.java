@@ -12,6 +12,8 @@ public interface PlanRepository {
     List<Plan> findAllActiveOrderByPriceAsc();
 
     /**
+     * Looks up a plan by id, but only when it is {@code ACTIVE}.
+     *
      * @return the plan only if it exists AND is {@code ACTIVE}. An inactive
      *     plan reads as absent — the caller cannot distinguish "never
      *     existed" from "exists but inactive" from this return value alone.

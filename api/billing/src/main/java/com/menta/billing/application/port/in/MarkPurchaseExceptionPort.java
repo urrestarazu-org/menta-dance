@@ -15,5 +15,14 @@ import com.menta.billing.domain.model.Reason;
  */
 public interface MarkPurchaseExceptionPort {
 
+    /**
+     * Marks the purchase of a payment as {@code EXCEPTION}, recording why.
+     *
+     * <p>Implemented by {@code MarkPurchaseExceptionUseCase}: an unknown payment fails with {@code
+     * PaymentNotFoundException}, a purchase already in {@code EXCEPTION} is left untouched, and one
+     * that is {@code ASSIGNED} is refused with {@code IllegalPurchaseStateTransitionException}. The
+     * reason is not stored on the purchase; it only travels in the {@code
+     * billing.PurchaseExceptioned} outbox payload, which is appended on the first transition.
+     */
     void markException(PaymentId paymentId, Reason reason);
 }

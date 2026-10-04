@@ -12,6 +12,7 @@ public final class PlanId {
         this.value = value;
     }
 
+    /** Wraps an existing UUID; {@code null} is rejected with {@link IllegalArgumentException}. */
     public static PlanId of(UUID value) {
         if (value == null) {
             throw new IllegalArgumentException("PlanId cannot be null");
@@ -19,6 +20,12 @@ public final class PlanId {
         return new PlanId(value);
     }
 
+    /**
+     * Parses the canonical UUID text of a plan id.
+     *
+     * <p>{@code null}, blank and malformed input are all rejected with {@link
+     * IllegalArgumentException}.
+     */
     public static PlanId of(String value) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException("PlanId cannot be null or empty");
@@ -30,6 +37,7 @@ public final class PlanId {
         }
     }
 
+    /** Creates an id backed by a fresh random UUID. */
     public static PlanId generate() {
         return new PlanId(UUID.randomUUID());
     }

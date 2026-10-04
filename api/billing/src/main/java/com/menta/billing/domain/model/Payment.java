@@ -219,6 +219,12 @@ public final class Payment {
         return !(status instanceof PaymentStatus.Pending);
     }
 
+    /**
+     * Returns the instant the payment was confirmed, present only when it is {@code Completed}.
+     *
+     * <p>Empty in every other status, including {@code Rejected}; {@link #statusChangedAt()} covers
+     * the instant of any terminal transition.
+     */
     public Optional<Instant> confirmedAt() {
         return status instanceof PaymentStatus.Completed completed
             ? Optional.of(completed.confirmedAt())

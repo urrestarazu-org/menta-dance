@@ -11,6 +11,9 @@ import com.menta.billing.application.dto.CancellationResult;
 public interface CancelSubscriptionUseCase {
 
     /**
+     * Cancels the auto-renewal of an {@code ACTIVE} subscription and returns the resulting status,
+     * end date and the plan's cancellation policy text.
+     *
      * @throws com.menta.billing.domain.exception.SubscriptionNotFoundException if no matching
      *     {@code ACTIVE} subscription is found, or the caller may not act on it.
      * @throws IllegalArgumentException if the admin route's {@code reason} is blank or absent.

@@ -14,7 +14,14 @@ import java.util.Optional;
  */
 public interface PaymentProofRepository {
 
+    /**
+     * Persists the proof, replacing any earlier proof of the same payment.
+     *
+     * <p>The JPA adapter deletes the existing row before inserting the new one, and requires an
+     * active transaction.
+     */
     PaymentProof save(PaymentProof proof);
 
+    /** Finds the proof currently stored for a payment, if one was ever submitted. */
     Optional<PaymentProof> findByPaymentId(PaymentId paymentId);
 }

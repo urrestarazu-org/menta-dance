@@ -7,6 +7,9 @@ import java.util.UUID;
 public interface GetCurrentSubscriptionUseCase {
 
     /**
+     * Resolves the user's current subscription: a {@code PENDING} or {@code ACTIVE} one when it
+     * exists, otherwise the latest {@code EXPIRED} one.
+     *
      * @throws com.menta.billing.domain.exception.NoSubscriptionException if the user has no
      *     {@code PENDING}, {@code ACTIVE}, or {@code EXPIRED} subscription (D1)
      */

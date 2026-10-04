@@ -24,6 +24,12 @@ public final class PurchaseJpaMapper {
         );
     }
 
+    /**
+     * Flattens the purchase into its row.
+     *
+     * <p>The row holds only the id, the payment id and the status name; the session ids are written
+     * separately through {@link #toSessionEntities}.
+     */
     public static PurchaseJpaEntity toEntity(Purchase purchase) {
         return new PurchaseJpaEntity(purchase.getId(), purchase.getPaymentId().getValue(), purchase.getStatus().name());
     }

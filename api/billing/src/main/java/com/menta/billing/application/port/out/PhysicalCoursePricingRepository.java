@@ -11,7 +11,9 @@ import java.util.Optional;
  */
 public interface PhysicalCoursePricingRepository {
 
+    /** Finds the current pricing version of a course, if its pricing was ever published. */
     Optional<PhysicalCoursePricing> findByCourseId(String courseId);
 
+    /** Stores the given pricing version as the course's current one and returns the stored state. */
     PhysicalCoursePricing save(PhysicalCoursePricing pricing);
 }
