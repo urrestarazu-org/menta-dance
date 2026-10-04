@@ -22,8 +22,20 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface OutboxRowJpaRepository extends JpaRepository<OutboxRowJpaEntity, Long> {
 
+    /**
+     * Returns one page of the rows in the given status, oldest id first.
+     *
+     * @param status the status to filter by
+     * @param pageable the page size acts as the batch limit
+     * @return the matching rows ordered by id ascending
+     */
     List<OutboxRowJpaEntity> findByStatusOrderByIdAsc(OutboxStatus status, Pageable pageable);
 
+    /**
+     * Counts the rows in the given status.
+     *
+     * @return the number of rows with that status
+     */
     long countByStatus(OutboxStatus status);
 
     /**

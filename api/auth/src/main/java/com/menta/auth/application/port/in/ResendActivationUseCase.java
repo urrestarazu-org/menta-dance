@@ -13,5 +13,13 @@ import com.menta.auth.application.dto.ResendActivationResult;
  */
 public interface ResendActivationUseCase {
 
+    /**
+     * Issues a fresh activation token for a pending account without revealing whether the account exists.
+     *
+     * <p>Any previously issued active token of the account is invalidated first.
+     *
+     * @param command carries the email and the client fingerprint used for throttling
+     * @return always the same acknowledgement, for unknown, active and pending accounts alike
+     */
     ResendActivationResult resend(ResendActivationCommand command);
 }

@@ -19,12 +19,31 @@ public final class ProblemDetails {
     private ProblemDetails() {
     }
 
+    /**
+     * Builds the HTTP response that carries the problem as {@code application/problem+json}.
+     *
+     * @param status the HTTP status of the response and of the problem
+     * @param detail the human-readable explanation, shown to the client
+     * @param code the stable application-specific error code
+     * @return a response with the given status whose body comes from {@link #body}
+     */
     public static ResponseEntity<ProblemDetail> response(HttpStatus status, String detail, String code) {
         return ResponseEntity.status(status)
             .contentType(MediaType.APPLICATION_PROBLEM_JSON)
             .body(body(status, detail, code));
     }
 
+    /**
+     * Builds the problem body without wrapping it in a response.
+     *
+     * <p>The title is the reason phrase of the status, the type is derived from the lowercase {@code code}, and
+     * the code is also exposed as the {@code code} property.
+     *
+     * @param status the HTTP status of the problem
+     * @param detail the human-readable explanation, shown to the client
+     * @param code the stable application-specific error code
+     * @return the populated problem detail
+     */
     public static ProblemDetail body(HttpStatus status, String detail, String code) {
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(status, detail);
         problemDetail.setType(URI.create("https://menta.dance/problems/" + code.toLowerCase(Locale.ROOT)));

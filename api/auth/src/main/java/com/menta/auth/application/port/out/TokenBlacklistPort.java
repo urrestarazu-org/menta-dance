@@ -29,6 +29,8 @@ public interface TokenBlacklistPort {
     void blacklist(String jti, Duration ttl);
 
     /**
+     * Tells whether the JWT identified by the given jti must be rejected.
+     *
      * @return true if the JTI is currently blacklisted (and therefore the JWT
      *         must be rejected) or if Redis is unreachable (fail-closed under
      *         ADR-0026). False only when the entry is absent AND Redis is up.
@@ -63,6 +65,8 @@ public interface TokenBlacklistPort {
     void projectTokenVersion(String userId, long tokenVersion);
 
     /**
+     * Reads the projected token version of a user.
+     *
      * @return the projected {@code tokenVersion} for the user, or
      *     {@link java.util.OptionalLong#empty()} when none has been projected
      *     yet — which is the normal state for a user who never revoked

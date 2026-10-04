@@ -14,9 +14,21 @@ import org.springframework.data.repository.query.Param;
 /** Queries that preserve activation-token single-use semantics. */
 public interface ActivationTokenJpaRepository extends JpaRepository<ActivationTokenJpaEntity, UUID> {
 
+    /**
+     * Finds a token by hash under a pessimistic write lock.
+     *
+     * <p>The lock serializes concurrent requests presenting the same token until the surrounding transaction ends.
+     */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<ActivationTokenJpaEntity> findByTokenHash(String tokenHash);
 
+    /**
+     * Invalidates every still-active token of the user.
+     *
+     * <p>A token is active while it is unused, not invalidated and not yet expired at {@code now}.
+     *
+     * @return the number of tokens invalidated
+     */
     @Modifying(clearAutomatically = true)
     @Query(
         """
@@ -29,6 +41,11 @@ public interface ActivationTokenJpaRepository extends JpaRepository<ActivationTo
         """)
     int invalidateActiveByUserId(@Param("userId") UUID userId, @Param("now") Instant now);
 
+    /**
+     * Marks the token as used only if it is still active, in a single conditional update.
+     *
+     * @return 1 when the token was consumed, 0 when a concurrent request already consumed, invalidated or expired it
+     */
     @Modifying(clearAutomatically = true)
     @Query(
         """
@@ -43,6 +60,11 @@ public interface ActivationTokenJpaRepository extends JpaRepository<ActivationTo
         @Param("id") UUID id, @Param("usedAt") Instant usedAt, @Param("now") Instant now
     );
 
+    /**
+     * Erases the encrypted delivery material of the token once it has been delivered.
+     *
+     * @return the number of rows updated
+     */
     @Modifying(clearAutomatically = true)
     @Query(
         """

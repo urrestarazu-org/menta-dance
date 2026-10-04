@@ -10,10 +10,24 @@ public final class ActivationTokenJpaMapper {
 
     private ActivationTokenJpaMapper() {}
 
+    /**
+     * Maps the token to its JPA entity without delivery material.
+     *
+     * <p>The delivery columns of the resulting entity are null, so saving it over an existing row clears them.
+     *
+     * @return the entity, or null when {@code token} is null
+     */
     public static ActivationTokenJpaEntity toJpaEntity(ActivationToken token) {
         return toJpaEntity(token, null);
     }
 
+    /**
+     * Maps the token to its JPA entity together with the encrypted delivery material.
+     *
+     * @param token the aggregate to map
+     * @param envelope the delivery material to store in the same row; null leaves the delivery columns empty
+     * @return the entity, or null when {@code token} is null
+     */
     public static ActivationTokenJpaEntity toJpaEntity(
         ActivationToken token, DeliveryEnvelope envelope
     ) {
@@ -29,6 +43,14 @@ public final class ActivationTokenJpaMapper {
         );
     }
 
+    /**
+     * Rebuilds the domain token from a row.
+     *
+     * <p>The delivery envelope is deliberately not read back: it only travels from the use case to storage and
+     * to the delivery handler.
+     *
+     * @return the token, or null when {@code entity} is null
+     */
     public static ActivationToken toDomain(ActivationTokenJpaEntity entity) {
         if (entity == null) {
             return null;

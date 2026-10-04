@@ -11,6 +11,8 @@ package com.menta.auth.application.port.out;
 public interface AuthDegradedGuard {
 
     /**
+     * Tells whether the system must refuse to issue or rotate tokens.
+     *
      * @return true when the reconciler has been lagging longer than the
      *         configured window (default 30 s); false when the system is healthy.
      */

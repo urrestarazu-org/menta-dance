@@ -10,5 +10,10 @@ import java.time.Instant;
  */
 public interface OutboxClock {
 
+    /**
+     * Returns the instant to stamp on a new outbox row.
+     *
+     * @return the current instant according to this clock
+     */
     Instant now();
 }

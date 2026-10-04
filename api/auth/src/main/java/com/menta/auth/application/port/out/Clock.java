@@ -12,5 +12,10 @@ import java.time.Instant;
  */
 public interface Clock {
 
+    /**
+     * Returns the current instant according to this clock.
+     *
+     * @return the instant to use as "now" for expiry and timestamp decisions within a single use case
+     */
     Instant now();
 }

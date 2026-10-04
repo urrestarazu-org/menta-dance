@@ -32,6 +32,8 @@ public final class Password {
     }
 
     /**
+     * Validates the raw value against the password policy.
+     *
      * @throws WeakPasswordException carrying <em>every</em> unmet rule, so the
      *     caller can report them all at once.
      */
@@ -66,6 +68,8 @@ public final class Password {
     }
 
     /**
+     * Exposes the plaintext password.
+     *
      * @return the plaintext, for handing to the password encoder only.
      */
     public String value() {

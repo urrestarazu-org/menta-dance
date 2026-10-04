@@ -15,6 +15,8 @@ package com.menta.auth.application.port.out;
 public interface PasswordResetRequestRateLimitPort {
 
     /**
+     * Consumes one unit of the forgot-password budget for the email and client pair.
+     *
      * @param emailFingerprint opaque, non-reversible fingerprint of the target
      *                         email (never the raw address).
      * @param clientFingerprint opaque, non-reversible fingerprint of the

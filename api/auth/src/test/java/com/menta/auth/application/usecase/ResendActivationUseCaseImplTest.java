@@ -168,7 +168,7 @@ class ResendActivationUseCaseImplTest {
         allowRateLimit();
 
         when(userRepository.findByEmail(any())).thenReturn(Optional.empty());
-        ResendActivationResult nonexistent = useCase.resend(new ResendActivationCommand(EMAIL, "client-fp"));
+        final ResendActivationResult nonexistent = useCase.resend(new ResendActivationCommand(EMAIL, "client-fp"));
 
         when(userRepository.findByEmail(any())).thenReturn(Optional.of(userWithStatus(UserStatus.ACTIVE)));
         ResendActivationResult active = useCase.resend(new ResendActivationCommand(EMAIL, "client-fp"));

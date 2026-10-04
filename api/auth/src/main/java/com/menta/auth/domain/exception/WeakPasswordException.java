@@ -27,6 +27,8 @@ public class WeakPasswordException extends BusinessException {
     }
 
     /**
+     * Returns the policy rules the rejected password failed.
+     *
      * @return the unmet rules. Never contains the attempted password — an
      *     exception message is exactly the kind of value that ends up in logs.
      */

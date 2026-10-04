@@ -13,6 +13,8 @@ package com.menta.auth.application.port.out;
 public interface PasswordResetAttemptRateLimitPort {
 
     /**
+     * Consumes one unit of the reset-attempt budget of the requesting client.
+     *
      * @param clientFingerprint opaque, non-reversible fingerprint of the requesting client.
      */
     RateLimitDecision consume(String clientFingerprint);

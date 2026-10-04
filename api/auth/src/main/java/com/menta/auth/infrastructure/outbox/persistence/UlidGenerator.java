@@ -13,6 +13,8 @@ package com.menta.auth.infrastructure.outbox.persistence;
 public interface UlidGenerator {
 
     /**
+     * Generates the identifier of a new outbox event.
+     *
      * @return a fresh unique identifier suitable for the
      *         common_outbox_events.event_id CHAR(26) column.
      */

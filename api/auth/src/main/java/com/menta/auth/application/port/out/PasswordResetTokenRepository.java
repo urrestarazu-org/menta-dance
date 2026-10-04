@@ -25,6 +25,13 @@ public interface PasswordResetTokenRepository {
      */
     PasswordResetToken save(PasswordResetToken token, DeliveryEnvelope deliveryEnvelope);
 
+    /**
+     * Looks a token up by the hash of its raw value.
+     *
+     * <p>The lookup takes a write lock on the row, so two resets presenting the same token are serialized.
+     *
+     * @return the token, or empty when no token has that hash
+     */
     Optional<PasswordResetToken> findByHash(String tokenHash);
 
     /**

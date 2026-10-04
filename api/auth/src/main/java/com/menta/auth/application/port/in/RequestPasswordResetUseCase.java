@@ -13,5 +13,11 @@ import com.menta.auth.application.dto.RequestPasswordResetResult;
  */
 public interface RequestPasswordResetUseCase {
 
+    /**
+     * Requests a password reset for the given email without revealing whether the account exists.
+     *
+     * @param command carries the email and the client fingerprint used for throttling
+     * @return always the same acknowledgement, for unknown, inactive and active accounts alike
+     */
     RequestPasswordResetResult request(RequestPasswordResetCommand command);
 }

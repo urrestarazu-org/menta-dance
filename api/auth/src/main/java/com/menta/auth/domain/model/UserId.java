@@ -14,6 +14,13 @@ public final class UserId {
         this.value = value;
     }
 
+    /**
+     * Wraps an existing UUID.
+     *
+     * @param value the identifier; must not be null
+     * @return the identifier value object
+     * @throws IllegalArgumentException when {@code value} is null
+     */
     public static UserId of(UUID value) {
         if (value == null) {
             throw new IllegalArgumentException("UserId cannot be null");
@@ -21,6 +28,13 @@ public final class UserId {
         return new UserId(value);
     }
 
+    /**
+     * Parses an identifier from its canonical UUID string form.
+     *
+     * @param value the textual UUID; must not be null or blank
+     * @return the identifier value object
+     * @throws IllegalArgumentException when {@code value} is null, blank or not a valid UUID
+     */
     public static UserId of(String value) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException("UserId cannot be null or empty");
@@ -32,6 +46,11 @@ public final class UserId {
         }
     }
 
+    /**
+     * Generates a new random identifier.
+     *
+     * @return an identifier backed by a random (version 4) UUID
+     */
     public static UserId generate() {
         return new UserId(UUID.randomUUID());
     }

@@ -23,6 +23,13 @@ public interface PasswordResetTokenJpaRepository
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<PasswordResetTokenJpaEntity> findByTokenHash(String tokenHash);
 
+    /**
+     * Invalidates every still-active reset token of the user.
+     *
+     * <p>A token is active while it is unused, not invalidated and not yet expired at {@code now}.
+     *
+     * @return the number of tokens invalidated
+     */
     @Modifying(clearAutomatically = true)
     @Query(
         """
@@ -53,6 +60,11 @@ public interface PasswordResetTokenJpaRepository
         @Param("id") UUID id, @Param("usedAt") Instant usedAt, @Param("now") Instant now
     );
 
+    /**
+     * Erases the encrypted delivery material of the token once it has been delivered.
+     *
+     * @return the number of rows updated
+     */
     @Modifying(clearAutomatically = true)
     @Query(
         """

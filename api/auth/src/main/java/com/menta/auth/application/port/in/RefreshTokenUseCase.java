@@ -22,5 +22,13 @@ import com.menta.auth.application.dto.TokenPair;
  */
 public interface RefreshTokenUseCase {
 
+    /**
+     * Rotates the presented refresh token into a new access/refresh token pair.
+     *
+     * <p>The presented token becomes single-use: presenting it a second time is treated as a compromise.
+     *
+     * @param command carries the raw refresh token presented by the client
+     * @return the freshly issued access token and the replacement refresh token
+     */
     TokenPair execute(RefreshCommand command);
 }
