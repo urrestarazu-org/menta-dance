@@ -9,6 +9,7 @@ public record PublicModuleRef(
     String title
 ) {
 
+    /** Builds the reference from a module id, rendered as its UUID string, and its title. */
     public static PublicModuleRef of(ModuleId id, String title) {
         return new PublicModuleRef(id.toString(), title);
     }

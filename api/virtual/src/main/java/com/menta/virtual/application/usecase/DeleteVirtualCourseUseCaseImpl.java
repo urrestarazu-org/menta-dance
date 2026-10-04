@@ -10,6 +10,10 @@ import com.menta.virtual.domain.model.CourseId;
 import com.menta.virtual.domain.model.VirtualCourse;
 import java.util.UUID;
 
+/**
+ * Default {@link DeleteVirtualCourseUseCase}, wrapped by its transactional decorator in {@code
+ * VirtualConfiguration}, so the writes and the audit row commit together.
+ */
 public class DeleteVirtualCourseUseCaseImpl implements DeleteVirtualCourseUseCase {
 
     private final VirtualCourseRepository courseRepository;

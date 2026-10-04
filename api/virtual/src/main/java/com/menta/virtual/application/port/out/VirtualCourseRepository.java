@@ -22,6 +22,8 @@ public interface VirtualCourseRepository {
     List<VirtualCourse> findPublished(CourseId afterCursor, int pageSize);
 
     /**
+     * Finds a published course by id, with its pre-aggregated counts populated.
+     *
      * @param courseId the course to look up.
      * @return the course if it exists and is {@code PUBLISHED}; {@code
      *     Optional.empty()} otherwise (not found or not published).

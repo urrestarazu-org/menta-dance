@@ -12,6 +12,7 @@ public final class VirtualLessonJpaMapper {
     private VirtualLessonJpaMapper() {
     }
 
+    /** Rebuilds the domain lesson from its stored row, wrapping the stored UUIDs in their value objects. */
     public static VirtualLesson toDomain(VirtualLessonJpaEntity entity) {
         return new VirtualLesson(
             LessonId.of(entity.getId()), ModuleId.of(entity.getModuleId()), CourseId.of(entity.getCourseId()),
@@ -20,6 +21,7 @@ public final class VirtualLessonJpaMapper {
         );
     }
 
+    /** Builds the stored row of a lesson, unwrapping its value objects. */
     public static VirtualLessonJpaEntity toEntity(VirtualLesson lesson) {
         return new VirtualLessonJpaEntity(
             lesson.getId().getValue(), lesson.getModuleId().getValue(), lesson.getCourseId().getValue(),

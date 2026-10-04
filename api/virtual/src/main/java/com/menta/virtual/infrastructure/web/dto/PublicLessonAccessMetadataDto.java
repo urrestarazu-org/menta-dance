@@ -12,10 +12,18 @@ public record PublicLessonAccessMetadataDto(
     boolean requiresSubscription
 ) {
 
+    /**
+     * Metadata for a lesson served as a public preview: {@code preview} is {@code true} and no
+     * subscription is required.
+     */
     public static PublicLessonAccessMetadataDto publicPreview() {
         return new PublicLessonAccessMetadataDto(true, false);
     }
 
+    /**
+     * Metadata for a lesson served as full paid access: {@code preview} and {@code
+     * requiresSubscription} are both {@code false}.
+     */
     public static PublicLessonAccessMetadataDto entitled() {
         return new PublicLessonAccessMetadataDto(false, false);
     }

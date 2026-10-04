@@ -12,6 +12,7 @@ package com.menta.virtual.application.dto;
  */
 public record PublicStreamQuality(String label, long bitrate) {
 
+    /** Creates a rendition entry; neither value is validated. */
     public static PublicStreamQuality of(String label, long bitrate) {
         return new PublicStreamQuality(label, bitrate);
     }

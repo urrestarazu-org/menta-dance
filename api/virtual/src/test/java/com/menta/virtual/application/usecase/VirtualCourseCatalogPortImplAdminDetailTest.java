@@ -31,7 +31,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Coverage for {@link VirtualCourseCatalogPortImpl#findByIdForAdmin} —
  * split from {@code VirtualCourseCatalogPortImplDetailTest}, which covers
- * the public detail path, because the admin path has its own invariants:
+ * the public detail path, because the admin path has its own invariants.
  * <ol>
  *   <li>must expose {@code status} (DRAFT/PUBLISHED/ARCHIVED) regardless
  *       of the public non-enumeration discipline,</li>

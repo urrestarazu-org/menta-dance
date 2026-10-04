@@ -22,6 +22,8 @@ import java.util.Optional;
 public interface VirtualCourseCatalogPort {
 
     /**
+     * Lists one page of published courses ordered by course id ascending.
+     *
      * @param afterCursor {@code null} for the first page; otherwise the
      *     opaque {@code courseId} of the last course seen on the previous
      *     page.

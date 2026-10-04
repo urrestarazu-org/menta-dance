@@ -14,6 +14,7 @@ public record PublicLessonAccessDto(
     String plansUrl
 ) {
 
+    /** Maps the application access decision to its wire form. */
     public static PublicLessonAccessDto from(LessonAccessDecisionDto dto) {
         return new PublicLessonAccessDto(dto.allowed(), dto.reason(), dto.message(), dto.plansUrl());
     }

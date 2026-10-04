@@ -10,6 +10,10 @@ import com.menta.virtual.domain.model.ModuleId;
 import com.menta.virtual.domain.model.VirtualModule;
 import java.util.UUID;
 
+/**
+ * Default {@link UpdateVirtualModuleUseCase}, wrapped by its transactional decorator in {@code
+ * VirtualConfiguration}, so the writes and the audit row commit together.
+ */
 public class UpdateVirtualModuleUseCaseImpl implements UpdateVirtualModuleUseCase {
 
     private final VirtualModuleRepository moduleRepository;
@@ -32,7 +36,7 @@ public class UpdateVirtualModuleUseCaseImpl implements UpdateVirtualModuleUseCas
         VirtualModule module = ModuleOwnershipGuard.resolveOwnedModule(
             moduleRepository, courseRepository, ModuleId.of(moduleId), actingUserId, actingAsAdmin
         );
-        String before = "title=" + module.getTitle() + ", preview=" + module.isPreview() + ", order="
+        final String before = "title=" + module.getTitle() + ", preview=" + module.isPreview() + ", order="
             + module.getOrder();
 
         VirtualModule updated = module;

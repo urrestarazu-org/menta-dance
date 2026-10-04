@@ -11,5 +11,10 @@ import java.util.UUID;
  */
 public interface GetLessonProgressUseCase {
 
+    /**
+     * Returns the saved progress of the user for the lesson, or a zeroed view when none was saved
+     * yet; the position is capped at the lesson's current duration. A lesson that requires a
+     * subscription the user does not hold fails with {@code ForbiddenLessonAccessException}.
+     */
     Optional<LessonProgressView> get(String lessonId, UUID actingUserId);
 }

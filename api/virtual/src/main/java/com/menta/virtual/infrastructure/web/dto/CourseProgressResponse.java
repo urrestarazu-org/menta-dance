@@ -16,6 +16,7 @@ public record CourseProgressResponse(
         }
     }
 
+    /** Maps the application view to the wire response. */
     public static CourseProgressResponse from(CourseProgressView view) {
         return new CourseProgressResponse(
             view.courseId(), view.completedLessons(), view.totalLessons(), view.percentage(),

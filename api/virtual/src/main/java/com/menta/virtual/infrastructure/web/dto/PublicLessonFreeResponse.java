@@ -10,6 +10,7 @@ public record PublicLessonFreeResponse(
     PublicLessonAccessMetadataDto access
 ) implements PublicLessonResponse {
 
+    /** Maps the free-lesson view, marking the access metadata as a public preview. */
     public static PublicLessonFreeResponse from(PublicLessonFreeView view) {
         return new PublicLessonFreeResponse(
             PublicLessonDetailDto.fromFree(view.lesson()),

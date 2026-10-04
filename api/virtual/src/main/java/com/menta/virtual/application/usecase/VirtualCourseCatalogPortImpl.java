@@ -26,6 +26,10 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * Default {@link VirtualCourseCatalogPort}: composes the published catalog reads and the admin
+ * detail read from the course, module and lesson repositories.
+ */
 public class VirtualCourseCatalogPortImpl implements VirtualCourseCatalogPort {
 
     private final VirtualCourseRepository virtualCourseRepository;

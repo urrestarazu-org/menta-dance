@@ -10,6 +10,10 @@ import com.menta.virtual.domain.model.LessonId;
 import com.menta.virtual.domain.model.VirtualLesson;
 import java.util.UUID;
 
+/**
+ * Default {@link UpdateVirtualLessonUseCase}, wrapped by its transactional decorator in {@code
+ * VirtualConfiguration}, so the writes and the audit row commit together.
+ */
 public class UpdateVirtualLessonUseCaseImpl implements UpdateVirtualLessonUseCase {
 
     private final VirtualLessonRepository lessonRepository;
@@ -32,7 +36,7 @@ public class UpdateVirtualLessonUseCaseImpl implements UpdateVirtualLessonUseCas
         VirtualLesson lesson = LessonOwnershipGuard.resolveOwnedLesson(
             lessonRepository, courseRepository, LessonId.of(lessonId), actingUserId, actingAsAdmin
         );
-        String before = auditSnapshot(lesson);
+        final String before = auditSnapshot(lesson);
 
         VirtualLesson updated = lesson;
         if (command.title().isPresent()) {

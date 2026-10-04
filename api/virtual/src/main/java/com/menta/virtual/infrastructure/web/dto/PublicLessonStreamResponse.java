@@ -45,6 +45,7 @@ public record PublicLessonStreamResponse(StreamBlock stream, LessonRef lesson) {
         String duration
     ) {}
 
+    /** Maps the application view into the {@code stream} and {@code lesson} blocks of the response. */
     public static PublicLessonStreamResponse from(PublicLessonStreamView view) {
         return new PublicLessonStreamResponse(
             new StreamBlock(

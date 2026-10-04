@@ -15,5 +15,6 @@ import java.time.Instant;
  */
 public interface Clock {
 
+    /** Returns the current instant; the production bean delegates to the UTC system clock. */
     Instant now();
 }

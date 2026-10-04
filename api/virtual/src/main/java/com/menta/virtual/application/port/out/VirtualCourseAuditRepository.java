@@ -15,6 +15,8 @@ import java.util.UUID;
 public interface VirtualCourseAuditRepository {
 
     /**
+     * Appends one audit row for a management action on a course.
+     *
      * @param previousValue a human-readable snapshot before the change, or
      *     {@code null} for a creation (there is no "before").
      * @param newValue a human-readable snapshot after the change.

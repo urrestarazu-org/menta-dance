@@ -11,5 +11,10 @@ import java.util.UUID;
  */
 public interface GetCourseProgressUseCase {
 
+    /**
+     * Returns the user's progress over a course: completed and total lessons, the percentage and
+     * the lesson to resume. A user without a current entitlement to the course fails with {@code
+     * ForbiddenCourseProgressException}.
+     */
     CourseProgressView get(String courseId, UUID actingUserId);
 }

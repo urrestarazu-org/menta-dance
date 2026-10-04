@@ -9,8 +9,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+/** Spring Data repository of the stored lesson progress, with the joined query that feeds the course-progress read. */
 public interface LessonProgressJpaRepository extends JpaRepository<LessonProgressJpaEntity, UUID> {
 
+    /** Finds the row of a user in a lesson; a unique constraint allows at most one per pair. */
     Optional<LessonProgressJpaEntity> findByUserIdAndLessonId(UUID userId, UUID lessonId);
 
     /**

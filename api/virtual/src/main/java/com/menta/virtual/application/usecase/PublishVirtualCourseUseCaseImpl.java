@@ -17,6 +17,10 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+/**
+ * Default {@link PublishVirtualCourseUseCase}, wrapped by its transactional decorator in {@code
+ * VirtualConfiguration}, so the writes and the audit row commit together.
+ */
 public class PublishVirtualCourseUseCaseImpl implements PublishVirtualCourseUseCase {
 
     private final VirtualCourseRepository courseRepository;

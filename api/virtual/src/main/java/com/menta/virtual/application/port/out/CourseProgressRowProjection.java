@@ -17,17 +17,27 @@ import java.util.UUID;
  */
 public interface CourseProgressRowProjection {
 
+    /** Returns the id of the lesson the row describes. */
     UUID getLessonId();
 
+    /** Returns the id of the module that contains the lesson. */
     UUID getModuleId();
 
+    /** Returns the last saved playback position, in seconds. */
     int getPositionSeconds();
 
+    /** Returns whether the student completed the lesson. */
     boolean isCompleted();
 
+    /**
+     * Returns when the position was last saved; it is {@code null} for a row created only by
+     * completing a lesson that was never played.
+     */
     Instant getPositionUpdatedAt();
 
+    /** Returns the display order of the lesson inside its module. */
     int getLessonOrder();
 
+    /** Returns the display order of the module inside its course. */
     int getModuleOrder();
 }

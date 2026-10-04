@@ -6,6 +6,7 @@ import java.time.Instant;
 /** Wire response shared by the save, read, and complete progress endpoints. */
 public record LessonProgressResponse(String lessonId, int positionSeconds, boolean completed, Instant completedAt) {
 
+    /** Maps the application view to the wire response. */
     public static LessonProgressResponse from(LessonProgressView view) {
         return new LessonProgressResponse(
             view.lessonId(), view.positionSeconds(), view.completed(), view.completedAt()

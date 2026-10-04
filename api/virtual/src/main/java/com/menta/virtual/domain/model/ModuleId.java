@@ -12,6 +12,7 @@ public final class ModuleId {
         this.value = value;
     }
 
+    /** Wraps an existing UUID; {@code null} is rejected with {@link IllegalArgumentException}. */
     public static ModuleId of(UUID value) {
         if (value == null) {
             throw new IllegalArgumentException("ModuleId cannot be null");
@@ -19,6 +20,10 @@ public final class ModuleId {
         return new ModuleId(value);
     }
 
+    /**
+     * Parses the textual form of a UUID; a {@code null}, blank or malformed value is rejected with
+     * {@link IllegalArgumentException}.
+     */
     public static ModuleId of(String value) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException("ModuleId cannot be null or empty");
@@ -30,6 +35,7 @@ public final class ModuleId {
         }
     }
 
+    /** Creates an id backed by a random UUID. */
     public static ModuleId generate() {
         return new ModuleId(UUID.randomUUID());
     }

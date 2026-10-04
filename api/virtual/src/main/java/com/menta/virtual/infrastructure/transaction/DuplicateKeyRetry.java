@@ -13,6 +13,10 @@ public final class DuplicateKeyRetry {
     private DuplicateKeyRetry() {
     }
 
+    /**
+     * Runs the attempt and, if it fails with a {@link DataIntegrityViolationException}, runs it
+     * once more; a second failure propagates.
+     */
     public static <T> T once(Supplier<T> attempt) {
         try {
             return attempt.get();

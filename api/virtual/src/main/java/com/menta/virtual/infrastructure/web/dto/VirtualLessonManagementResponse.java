@@ -2,6 +2,7 @@ package com.menta.virtual.infrastructure.web.dto;
 
 import com.menta.virtual.application.dto.VirtualLessonManagementResult;
 
+/** Wire response for a lesson in the management endpoints. */
 public record VirtualLessonManagementResponse(
     String lessonId,
     String moduleId,
@@ -14,6 +15,7 @@ public record VirtualLessonManagementResponse(
     int order
 ) {
 
+    /** Maps the application result to the wire response. */
     public static VirtualLessonManagementResponse from(VirtualLessonManagementResult result) {
         return new VirtualLessonManagementResponse(
             result.lessonId(),

@@ -2,6 +2,7 @@ package com.menta.virtual.infrastructure.web.dto;
 
 import com.menta.virtual.application.dto.VirtualCourseManagementResult;
 
+/** Wire response for a course in the management endpoints. */
 public record VirtualCourseManagementResponse(
     String courseId,
     String title,
@@ -15,6 +16,7 @@ public record VirtualCourseManagementResponse(
     String status
 ) {
 
+    /** Maps the application result to the wire response. */
     public static VirtualCourseManagementResponse from(VirtualCourseManagementResult result) {
         return new VirtualCourseManagementResponse(
             result.courseId(),

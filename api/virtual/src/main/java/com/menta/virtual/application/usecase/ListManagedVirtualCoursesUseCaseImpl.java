@@ -7,6 +7,7 @@ import com.menta.virtual.domain.model.VirtualCourse;
 import java.util.List;
 import java.util.UUID;
 
+/** Default {@link ListManagedVirtualCoursesUseCase}; a plain read, registered without a transactional decorator. */
 public class ListManagedVirtualCoursesUseCaseImpl implements ListManagedVirtualCoursesUseCase {
 
     private final VirtualCourseRepository courseRepository;

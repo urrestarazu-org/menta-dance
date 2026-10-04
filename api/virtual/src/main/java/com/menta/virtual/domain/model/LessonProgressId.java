@@ -12,6 +12,7 @@ public final class LessonProgressId {
         this.value = value;
     }
 
+    /** Wraps an existing UUID; {@code null} is rejected with {@link IllegalArgumentException}. */
     public static LessonProgressId of(UUID value) {
         if (value == null) {
             throw new IllegalArgumentException("LessonProgressId cannot be null");
@@ -19,6 +20,7 @@ public final class LessonProgressId {
         return new LessonProgressId(value);
     }
 
+    /** Creates an id backed by a random UUID. */
     public static LessonProgressId generate() {
         return new LessonProgressId(UUID.randomUUID());
     }

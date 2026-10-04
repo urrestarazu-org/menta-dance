@@ -17,6 +17,7 @@ public record PublicLessonNavigationRef(
     boolean isFree
 ) {
 
+    /** Builds the reference from a lesson id, rendered as its UUID string, its title and its free flag. */
     public static PublicLessonNavigationRef of(LessonId id, String title, boolean isFree) {
         return new PublicLessonNavigationRef(id.toString(), title, isFree);
     }

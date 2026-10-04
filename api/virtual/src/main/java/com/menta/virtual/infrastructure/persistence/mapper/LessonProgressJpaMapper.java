@@ -13,6 +13,7 @@ public final class LessonProgressJpaMapper {
     private LessonProgressJpaMapper() {
     }
 
+    /** Rebuilds the domain progress from its stored row, wrapping the stored UUIDs in their value objects. */
     public static LessonProgress toDomain(LessonProgressJpaEntity entity) {
         return new LessonProgress(
             LessonProgressId.of(entity.getId()), entity.getUserId(), LessonId.of(entity.getLessonId()),

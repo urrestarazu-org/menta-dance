@@ -30,22 +30,27 @@ public final class VirtualModule {
         this(id, courseId, title, false, order);
     }
 
+    /** Creates a module with a fresh {@link ModuleId}; the order must not be negative. */
     public static VirtualModule create(CourseId courseId, String title, boolean preview, int order) {
         return new VirtualModule(ModuleId.generate(), courseId, title, preview, order);
     }
 
+    /** Creates a module that is not a preview, with a fresh {@link ModuleId}. */
     public static VirtualModule create(CourseId courseId, String title, int order) {
         return create(courseId, title, false, order);
     }
 
+    /** Returns a copy of this module with another title; the module itself is immutable. */
     public VirtualModule withTitle(String newTitle) {
         return new VirtualModule(id, courseId, newTitle, preview, order);
     }
 
+    /** Returns a copy of this module with the preview flag changed. */
     public VirtualModule withPreview(boolean newPreview) {
         return new VirtualModule(id, courseId, title, newPreview, order);
     }
 
+    /** Returns a copy of this module with another display order, which must not be negative. */
     public VirtualModule withOrder(int newOrder) {
         return new VirtualModule(id, courseId, title, preview, newOrder);
     }

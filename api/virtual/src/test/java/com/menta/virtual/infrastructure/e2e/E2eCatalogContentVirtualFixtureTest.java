@@ -27,8 +27,6 @@ class E2eCatalogContentVirtualFixtureTest {
         ListManagedVirtualCoursesUseCase list = mock(ListManagedVirtualCoursesUseCase.class);
         CreateVirtualCourseUseCase courses = mock(CreateVirtualCourseUseCase.class);
         CreateVirtualModuleUseCase modules = mock(CreateVirtualModuleUseCase.class);
-        CreateVirtualLessonUseCase lessons = mock(CreateVirtualLessonUseCase.class);
-        PublishVirtualCourseUseCase publish = mock(PublishVirtualCourseUseCase.class);
         when(list.list(any(), anyBoolean())).thenReturn(List.of());
         when(courses.create(any(), any(), anyBoolean())).thenReturn(
             course("published-id", E2eCatalogContentVirtualFixture.PUBLISHED_TITLE),
@@ -36,6 +34,8 @@ class E2eCatalogContentVirtualFixtureTest {
         );
         when(modules.create(anyString(), any(), any(), anyBoolean()))
             .thenReturn(new VirtualModuleManagementResult("module-id", "course-id", "Module", true, 0));
+        CreateVirtualLessonUseCase lessons = mock(CreateVirtualLessonUseCase.class);
+        PublishVirtualCourseUseCase publish = mock(PublishVirtualCourseUseCase.class);
 
         new E2eCatalogContentVirtualFixture(list, courses, modules, lessons, publish).run(mock());
 

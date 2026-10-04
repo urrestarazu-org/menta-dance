@@ -12,6 +12,7 @@ public final class LessonId {
         this.value = value;
     }
 
+    /** Wraps an existing UUID; {@code null} is rejected with {@link IllegalArgumentException}. */
     public static LessonId of(UUID value) {
         if (value == null) {
             throw new IllegalArgumentException("LessonId cannot be null");
@@ -19,6 +20,10 @@ public final class LessonId {
         return new LessonId(value);
     }
 
+    /**
+     * Parses the textual form of a UUID; a {@code null}, blank or malformed value is rejected with
+     * {@link IllegalArgumentException}.
+     */
     public static LessonId of(String value) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException("LessonId cannot be null or empty");
@@ -30,6 +35,7 @@ public final class LessonId {
         }
     }
 
+    /** Creates an id backed by a random UUID. */
     public static LessonId generate() {
         return new LessonId(UUID.randomUUID());
     }
