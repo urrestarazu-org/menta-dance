@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clases presenciales - Menta Dance</title>
+</head>
+<body>
+<h1>Clases presenciales</h1>
+
+<p th:if="${#lists.isEmpty(classes)}">Todavía no hay clases presenciales publicadas. Volvé pronto.</p>
+
+<div th:each="item : ${classes}">
+    <h2><a th:href="@{/classes/{id}(id=${item.courseId()})}" th:text="${item.title()}">Salsa inicial</a></h2>
+    <p>
+        <span th:text="${item.level()}">Inicial</span> ·
+        <span th:text="${item.professorName()}">Profesora</span> ·
+        <span th:text="${item.schedule()}">Martes 19:00</span> ·
+        <span th:text="${item.capacity()} + ' lugares por clase'">20 lugares por clase</span>
+    </p>
+</div>
+</body>
+</html>

@@ -48,6 +48,11 @@ menta:
     base-url: ${BILLING_API_BASE_URL:http://localhost:8081}
     timeout: 5s
     cache-ttl: 5m
+  classes:
+    # Zone the in-person class pages show session times in. Sessions are
+    # stored as UTC instants; the academy's local clock is what students read
+    # (catalog example: a 19:00 class is 22:00Z).
+    display-zone: ${CLASSES_DISPLAY_ZONE:America/Argentina/Buenos_Aires}
 
 # Actuator
 management:

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirmar compra - Menta Dance</title>
+</head>
+<body>
+<h1>Confirmar compra</h1>
+
+<div th:if="${payable}">
+    <p>
+        <span th:text="${payable.quote().purchaseType().name() == 'MONTHLY' ? 'Mes completo' : 'Clase suelta'}">Mes completo</span>:
+        <strong th:text="${#numbers.formatDecimal(payable.quote().amount(), 1, 'POINT', 2, 'COMMA')} + ' ' + ${payable.quote().currency()}">12.000,00 ARS</strong>
+    </p>
+    <p>Este precio vale hasta el <span th:text="${payable.expiresAt()}">6/10 20:15</span>.</p>
+
+    <form th:action="@{/classes/purchases}" method="post">
+        <input type="hidden" name="courseId" th:value="${payable.courseId()}">
+        <input type="hidden" name="quoteId" th:value="${payable.quote().quoteId()}">
+        <input type="hidden" name="idempotencyKey" th:value="${payable.idempotencyKey()}">
+        <p>
+            <label><input type="radio" name="paymentMethod" value="MERCADO_PAGO" checked> Mercado Pago</label>
+            <label><input type="radio" name="paymentMethod" value="BANK_TRANSFER"> Transferencia bancaria</label>
+        </p>
+        <button type="submit">Pagar</button>
+    </form>
+</div>
+
+<p th:if="${outcome == 'soldOut'}">No quedan lugares para esta clase.</p>
+<p th:if="${outcome == 'rejected'}">No pudimos cotizar esta clase. Volvé a la clase e intentá de nuevo.</p>
+
+<p><a th:href="@{/classes/{id}(id=${courseId})}">Volver a la clase</a></p>
+</body>
+</html>

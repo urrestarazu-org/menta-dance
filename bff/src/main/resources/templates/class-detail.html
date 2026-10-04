@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${course.title()} + ' - Menta Dance'">Clase - Menta Dance</title>
+</head>
+<body>
+<p><a th:href="@{/classes}">Todas las clases presenciales</a></p>
+
+<h1 th:text="${course.title()}">Salsa inicial</h1>
+<p>
+    <span th:text="${course.level()}">Inicial</span> ·
+    <span th:text="${course.professorName()}">Profesora</span> ·
+    <span th:text="${course.schedule()}">Martes 19:00</span>
+</p>
+
+<div th:if="${course.pricing()}">
+    <p>
+        Mes completo:
+        <span th:text="${#numbers.formatDecimal(course.pricing().monthlyPrice(), 1, 'POINT', 2, 'COMMA')} + ' ' + ${course.pricing().currency()}">12.000,00 ARS</span>
+    </p>
+    <p>Clase suelta: el precio se calcula al cotizar, según las clases del mes.</p>
+</div>
+<p th:unless="${course.pricing()}">El precio de esta clase todavía no fue publicado.</p>
+
+<div th:if="${course.purchasable()}">
+    <form th:if="${signedIn}" th:action="@{/classes/{id}/quote(id=${course.courseId()})}" method="post">
+        <input type="hidden" name="purchaseType" value="MONTHLY">
+        <button type="submit">Comprar el mes</button>
+    </form>
+    <p th:unless="${signedIn}"><a th:href="@{/login}">Iniciá sesión para comprar</a></p>
+</div>
+
+<h2>Próximas clases</h2>
+<p th:if="${#lists.isEmpty(course.sessions())}">No hay clases programadas en los próximos días.</p>
+<ul>
+    <li th:each="slot : ${course.sessions()}">
+        <span th:text="${slot.startsAt()}">Martes 6/10 · 19:00</span> —
+        <span th:if="${slot.soldOut()}">Completo</span>
+        <span th:unless="${slot.soldOut()}"
+              th:text="${slot.availableSpots()} + (${slot.availableSpots()} == 1 ? ' lugar libre' : ' lugares libres')">17 lugares libres</span>
+        <form th:if="${signedIn and course.pricing() != null and !slot.soldOut()}"
+              th:action="@{/classes/{id}/quote(id=${course.courseId()})}" method="post" style="display:inline">
+            <input type="hidden" name="purchaseType" value="INDIVIDUAL">
+            <input type="hidden" name="sessionId" th:value="${slot.sessionId()}">
+            <button type="submit">Comprar esta clase</button>
+        </form>
+    </li>
+</ul>
+</body>
+</html>

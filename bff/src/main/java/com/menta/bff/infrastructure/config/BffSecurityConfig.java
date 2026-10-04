@@ -70,6 +70,11 @@ public class BffSecurityConfig {
                         // wildcard would also permit a future /plans/{id}
                         // that this change never intended to open.
                         .requestMatchers(HttpMethod.GET, "/plans").permitAll()
+                        // In-person class list and class page are public reads
+                        // (bff-physical-classes-view): GET-only and a single "*",
+                        // so the quote/purchase POSTs and any deeper subpath stay
+                        // authenticated by the catch-all below.
+                        .requestMatchers(HttpMethod.GET, "/classes", "/classes/*").permitAll()
                         // All other endpoints require authentication
                         .anyRequest().authenticated()
                 )

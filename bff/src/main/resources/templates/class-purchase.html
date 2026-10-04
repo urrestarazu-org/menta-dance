@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compra - Menta Dance</title>
+</head>
+<body>
+<div th:if="${bankTransfer}">
+    <h1>Transferí para confirmar tu lugar</h1>
+    <p>Tu lugar se confirma cuando verifiquemos la transferencia.</p>
+    <ul>
+        <li>Monto: <strong th:text="${#numbers.formatDecimal(bankTransfer.amount(), 1, 'POINT', 2, 'COMMA')} + ' ' + ${bankTransfer.currency()}">12.000,00 ARS</strong></li>
+        <li>CBU: <span th:text="${bankTransfer.cbu()}">0000000000000000000000</span></li>
+        <li>Alias: <span th:text="${bankTransfer.alias()}">menta.dance</span></li>
+        <li>Titular: <span th:text="${bankTransfer.holder()}">Menta Dance</span></li>
+        <li>CUIT: <span th:text="${bankTransfer.cuit()}">00-00000000-0</span></li>
+        <li>Referencia: <strong th:text="${bankTransfer.reference()}">SUB-0000</strong> (indicala en la transferencia)</li>
+    </ul>
+</div>
+
+<div th:if="${outcome == 'soldOut'}">
+    <h1>No quedan lugares</h1>
+    <p>Alguien tomó el último lugar mientras confirmabas. No se te cobró nada.</p>
+</div>
+
+<div th:if="${outcome == 'quoteExpired'}">
+    <h1>La cotización venció</h1>
+    <p>Volvé a la clase para cotizar de nuevo. No se te cobró nada.</p>
+</div>
+
+<p><a th:href="@{/classes/{id}(id=${courseId})}">Volver a la clase</a></p>
+</body>
+</html>
