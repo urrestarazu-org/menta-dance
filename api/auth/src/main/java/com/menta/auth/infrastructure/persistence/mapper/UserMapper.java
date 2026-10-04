@@ -15,6 +15,11 @@ public final class UserMapper {
         // Utility class - prevent instantiation
     }
 
+    /**
+     * Maps the user to its JPA entity, including status and token version.
+     *
+     * @return the entity, or null when {@code user} is null
+     */
     public static UserJpaEntity toJpaEntity(User user) {
         if (user == null) {
             return null;
@@ -32,6 +37,11 @@ public final class UserMapper {
         );
     }
 
+    /**
+     * Rebuilds the domain user from a row without applying registration rules.
+     *
+     * @return the user, or null when {@code entity} is null
+     */
     public static User toDomain(UserJpaEntity entity) {
         if (entity == null) {
             return null;

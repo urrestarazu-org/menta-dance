@@ -18,6 +18,8 @@ import java.util.Optional;
 public interface AccessTokenIssuer {
 
     /**
+     * Issues a signed access token for the given user.
+     *
      * @return issuedAccessToken with token (compact JWT), jti (UUID, unique
      *         per token), and ttl (time-to-live steering client cache).
      */

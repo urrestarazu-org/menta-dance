@@ -19,6 +19,8 @@ package com.menta.auth.application.port.out;
 public interface LoginAttemptAuditPort {
 
     /**
+     * Records one login attempt together with its outcome.
+     *
      * @param outcome what happened.
      * @param emailFingerprint opaque, non-reversible fingerprint of the target
      *                         email (never the raw address).

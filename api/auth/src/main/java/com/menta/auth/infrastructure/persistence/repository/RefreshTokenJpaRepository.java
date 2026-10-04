@@ -23,8 +23,18 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface RefreshTokenJpaRepository extends JpaRepository<RefreshTokenJpaEntity, UUID> {
 
+    /**
+     * Finds a refresh token by the digest of its raw value, backed by the unique index on the hash column.
+     *
+     * @return the token, or empty when no token has that hash
+     */
     Optional<RefreshTokenJpaEntity> findByTokenHash(String tokenHash);
 
+    /**
+     * Finds the tokens of a family whose status is one of the given ones.
+     *
+     * @return the matching tokens, in no guaranteed order
+     */
     List<RefreshTokenJpaEntity> findByFamilyIdAndStatusIn(
         UUID familyId, Collection<RefreshTokenStatus> statuses
     );

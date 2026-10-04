@@ -18,5 +18,12 @@ import com.menta.auth.application.dto.LogoutCommand;
  */
 public interface LogoutUseCase {
 
+    /**
+     * Ends the session identified by the presented refresh token.
+     *
+     * @param command carries the raw refresh token presented by the client
+     * @throws com.menta.auth.domain.exception.RefreshTokenCompromisedException when the token is unknown, was already
+     *      revoked, or was already rotated (in which case its whole family is revoked first)
+     */
     void execute(LogoutCommand command);
 }

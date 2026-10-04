@@ -31,10 +31,23 @@ public final class RateLimitDecision {
         this.retryAfter = retryAfter;
     }
 
+    /**
+     * Returns the decision that lets the request proceed.
+     *
+     * @return a shared instance whose retry delay is zero
+     */
     public static RateLimitDecision allowed() {
         return ALLOWED;
     }
 
+    /**
+     * Returns the decision that rejects the request.
+     *
+     * @param retryAfter how long the caller must wait before trying again; must be positive
+     * @return a decision that reports {@code retryAfter} to the client
+     * @throws IllegalArgumentException when {@code retryAfter} is zero or negative
+     * @throws NullPointerException when {@code retryAfter} is null
+     */
     public static RateLimitDecision limited(Duration retryAfter) {
         return new RateLimitDecision(false, retryAfter);
     }

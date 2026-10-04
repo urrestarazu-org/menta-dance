@@ -9,6 +9,8 @@ package com.menta.auth.application.port.out;
 public interface PasswordResetTokenGenerator {
 
     /**
+     * Generates a new raw password-reset token.
+     *
      * @return a fresh, URL-safe, high-entropy raw reset token.
      */
     String generate();

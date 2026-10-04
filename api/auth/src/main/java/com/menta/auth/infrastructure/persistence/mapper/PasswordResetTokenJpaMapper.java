@@ -11,6 +11,13 @@ public final class PasswordResetTokenJpaMapper {
     private PasswordResetTokenJpaMapper() {
     }
 
+    /**
+     * Maps the token to its JPA entity together with the encrypted delivery material.
+     *
+     * @param token the aggregate to map
+     * @param envelope the delivery material to store in the same row; null leaves the delivery columns empty
+     * @return the entity, or null when {@code token} is null
+     */
     public static PasswordResetTokenJpaEntity toJpaEntity(
         PasswordResetToken token, DeliveryEnvelope envelope
     ) {
@@ -27,6 +34,11 @@ public final class PasswordResetTokenJpaMapper {
         );
     }
 
+    /**
+     * Rebuilds the domain token from a row, without the delivery envelope.
+     *
+     * @return the token, or null when {@code entity} is null
+     */
     public static PasswordResetToken toDomain(PasswordResetTokenJpaEntity entity) {
         if (entity == null) {
             return null;

@@ -15,6 +15,14 @@ import java.util.Optional;
  */
 public interface ActivationTokenRepository {
 
+    /**
+     * Persists the token without a delivery envelope, inserting or updating the row.
+     *
+     * <p>Registration and resend use {@link #save(ActivationToken, DeliveryEnvelope)} instead, because only that
+     * overload stores the delivery material.
+     *
+     * @return the stored token
+     */
     ActivationToken save(ActivationToken token);
 
     /**
@@ -35,6 +43,13 @@ public interface ActivationTokenRepository {
      */
     ActivationToken save(ActivationToken token, DeliveryEnvelope deliveryEnvelope);
 
+    /**
+     * Looks a token up by the hash of its raw value.
+     *
+     * <p>The lookup takes a write lock on the row, so concurrent requests presenting the same token are serialized.
+     *
+     * @return the token, or empty when no token has that hash
+     */
     Optional<ActivationToken> findByHash(String tokenHash);
 
     /**

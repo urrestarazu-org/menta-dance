@@ -38,6 +38,16 @@ public final class DeliveryEnvelope {
         this.keyVersion = keyVersion;
     }
 
+    /**
+     * Builds an envelope from already-encrypted delivery material.
+     *
+     * <p>The arrays are copied, so later changes by the caller never alter the envelope.
+     *
+     * @param ciphertext the encrypted payload; must not be null or empty
+     * @param nonce the AES-GCM nonce; must be exactly 12 bytes
+     * @param keyVersion the version of the key that encrypted the payload; must be positive
+     * @throws IllegalArgumentException when any argument violates the constraints above
+     */
     public static DeliveryEnvelope of(byte[] ciphertext, byte[] nonce, int keyVersion) {
         return new DeliveryEnvelope(ciphertext, nonce, keyVersion);
     }

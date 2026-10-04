@@ -9,6 +9,8 @@ package com.menta.auth.application.port.out;
 public interface ActivationTokenGenerator {
 
     /**
+     * Generates a new raw activation token.
+     *
      * @return a fresh, URL-safe, high-entropy raw activation token.
      */
     String generate();

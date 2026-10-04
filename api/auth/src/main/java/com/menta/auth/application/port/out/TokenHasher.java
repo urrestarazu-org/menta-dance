@@ -13,6 +13,8 @@ import java.util.UUID;
 public interface TokenHasher {
 
     /**
+     * Hashes a raw refresh token into the digest that is persisted and looked up.
+     *
      * @param rawRefreshToken UUID string as presented by the client.
      * @return 64-char lowercase hex digest suitable for column token_hash.
      */

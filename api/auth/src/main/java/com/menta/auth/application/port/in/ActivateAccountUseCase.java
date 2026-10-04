@@ -15,5 +15,12 @@ import com.menta.auth.application.dto.ActivateAccountCommand;
  */
 public interface ActivateAccountUseCase {
 
+    /**
+     * Activates the account that owns the presented raw activation token.
+     *
+     * @param command carries the raw token from the activation link
+     * @throws com.menta.auth.domain.exception.ActivationTokenInvalidException for every failure, without telling
+     *      the caller whether the token was unknown, expired, used, invalidated or lost a race
+     */
     void activate(ActivateAccountCommand command);
 }

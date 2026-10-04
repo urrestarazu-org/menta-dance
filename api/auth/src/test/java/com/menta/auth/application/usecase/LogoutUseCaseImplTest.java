@@ -83,7 +83,6 @@ class LogoutUseCaseImplTest {
 
         @Test
         void marks_active_refresh_as_revoked_and_publishes_event() {
-            String raw = UUID.randomUUID().toString();
             String presentedHash = paddedHash("logout-hash");
             RefreshToken presented = activeRefresh(
                 presentedHash,
@@ -97,6 +96,7 @@ class LogoutUseCaseImplTest {
             when(userRepository.findById(any())).thenReturn(Optional.of(user));
             when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
+            String raw = UUID.randomUUID().toString();
             useCase.execute(new LogoutCommand(raw));
 
             assertThat(presented.getStatus()).isEqualTo(RefreshTokenStatus.REVOKED);
@@ -155,7 +155,6 @@ class LogoutUseCaseImplTest {
 
         @Test
         void used_refresh_triggers_family_revoke_on_logout() {
-            String raw = UUID.randomUUID().toString();
             String presentedHash = paddedHash("already-rotated");
             RefreshToken presented = activeRefresh(presentedHash, TOKEN_VERSION,
                 Instant.now().plus(REFRESH_TTL));
@@ -168,6 +167,7 @@ class LogoutUseCaseImplTest {
             when(userRepository.findById(any())).thenReturn(Optional.of(user));
             when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
+            String raw = UUID.randomUUID().toString();
             assertThatThrownBy(() -> useCase.execute(new LogoutCommand(raw)))
                 .isInstanceOf(RefreshTokenCompromisedException.class);
 

@@ -15,6 +15,12 @@ public record OutboxRowIdMarker(Long value) {
         }
     }
 
+    /**
+     * Wraps a primitive row id, which can therefore never be null.
+     *
+     * @param value the auto-increment primary key of an outbox row
+     * @return the marker for that key
+     */
     public static OutboxRowIdMarker of(long value) {
         return new OutboxRowIdMarker(value);
     }

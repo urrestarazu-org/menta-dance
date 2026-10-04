@@ -20,6 +20,11 @@ public final class RefreshTokenJpaMapper {
         // Utility class — prevent instantiation.
     }
 
+    /**
+     * Maps the token, with its status and rotation/revocation timestamps, to its JPA entity.
+     *
+     * @return the entity, or null when {@code token} is null
+     */
     public static RefreshTokenJpaEntity toJpaEntity(RefreshToken token) {
         if (token == null) {
             return null;
@@ -38,6 +43,11 @@ public final class RefreshTokenJpaMapper {
         );
     }
 
+    /**
+     * Rebuilds the domain token from a row, whatever status it is in.
+     *
+     * @return the token, or null when {@code entity} is null
+     */
     public static RefreshToken toDomain(RefreshTokenJpaEntity entity) {
         if (entity == null) {
             return null;
@@ -56,6 +66,11 @@ public final class RefreshTokenJpaMapper {
         );
     }
 
+    /**
+     * Maps every row of the list, preserving order.
+     *
+     * @return the tokens, or an empty list when {@code entities} is null
+     */
     public static List<RefreshToken> toDomainList(List<RefreshTokenJpaEntity> entities) {
         if (entities == null) {
             return List.of();

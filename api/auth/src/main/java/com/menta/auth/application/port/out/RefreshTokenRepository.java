@@ -20,8 +20,18 @@ import java.util.UUID;
  */
 public interface RefreshTokenRepository {
 
+    /**
+     * Looks a refresh token up by the SHA-256 hex digest of its raw value.
+     *
+     * @return the token, or empty when no token has that hash
+     */
     Optional<RefreshToken> findByHash(String tokenHash);
 
+    /**
+     * Persists a refresh token, either the first of a new family or the replacement created by a rotation.
+     *
+     * @return the stored token
+     */
     RefreshToken save(RefreshToken newRefresh);
 
     /**

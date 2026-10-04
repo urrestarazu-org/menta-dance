@@ -19,5 +19,13 @@ import com.menta.auth.application.dto.TokenPair;
  */
 public interface LoginUseCase {
 
+    /**
+     * Authenticates the credentials and issues a new access/refresh token pair.
+     *
+     * <p>Each successful login starts a new refresh-token family; it never reuses an existing one.
+     *
+     * @param command carries the email, the password and the client fingerprint used for throttling
+     * @return the access token and the refresh token to hand to the client
+     */
     TokenPair execute(LoginCommand command);
 }

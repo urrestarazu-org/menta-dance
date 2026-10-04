@@ -88,6 +88,14 @@ public class User {
         );
     }
 
+    /**
+     * Rebuilds a user from persisted state, trusting the stored status and timestamps.
+     *
+     * <p>Unlike {@link #register} and {@link #create}, nothing is generated here: the id, the status, the
+     * timestamps and the token version come from storage as they are.
+     *
+     * @return the user as it was persisted
+     */
     public static User rehydrate(
         UserId id,
         Email email,
@@ -101,6 +109,11 @@ public class User {
         return new User(id, email, passwordHash, role, status, createdAt, updatedAt, tokenVersion);
     }
 
+    /**
+     * Moves a pending account to {@code ACTIVE}.
+     *
+     * @throws IllegalStateException when the account is not pending activation
+     */
     public void activate() {
         if (this.status != UserStatus.PENDING_ACTIVATION) {
             throw new IllegalStateException("Only a user pending activation can be activated");
@@ -109,6 +122,12 @@ public class User {
         this.updatedAt = LocalDateTime.now();
     }
 
+    /**
+     * Marks the account as {@code INACTIVE}.
+     *
+     * <p>Unlike {@link #activate()}, this transition has no precondition on the current status. The change is
+     * persisted by the caller through the repository.
+     */
     public void deactivate() {
         this.status = UserStatus.INACTIVE;
         this.updatedAt = LocalDateTime.now();

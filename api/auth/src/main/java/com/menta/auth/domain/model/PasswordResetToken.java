@@ -56,6 +56,16 @@ public final class PasswordResetToken {
         this.invalidatedAt = invalidatedAt;
     }
 
+    /**
+     * Creates a token that is active from {@code now} until {@code expiresAt}.
+     *
+     * @param userId the account whose password the token resets
+     * @param tokenHash the lowercase SHA-256 hex digest of the raw token; the raw value never enters the aggregate
+     * @param expiresAt the instant from which the token is expired; must be after {@code now}
+     * @param now the creation instant
+     * @return a new unused, non-invalidated token with a generated id
+     * @throws IllegalArgumentException when the hash is malformed or {@code expiresAt} is not after {@code now}
+     */
     public static PasswordResetToken issue(
         UserId userId,
         String tokenHash,
@@ -67,6 +77,15 @@ public final class PasswordResetToken {
         );
     }
 
+    /**
+     * Rebuilds a token from persisted state, applying the same invariants as {@link #issue}.
+     *
+     * <p>A row that is both used and invalidated is rejected, since that combination is unreachable through the
+     * behavior methods.
+     *
+     * @return the token with the given id and lifecycle timestamps
+     * @throws IllegalArgumentException when the persisted state violates an invariant
+     */
     public static PasswordResetToken reconstitute(
         UUID id,
         UserId userId,
@@ -81,6 +100,15 @@ public final class PasswordResetToken {
         );
     }
 
+    /**
+     * Derives the lifecycle status at the given instant.
+     *
+     * <p>Precedence is USED, then INVALIDATED, then EXPIRED; a token is expired from {@code expiresAt} on, boundary
+     * included.
+     *
+     * @param now the instant to evaluate against; must not be null
+     * @return the status at {@code now}
+     */
     public PasswordResetTokenStatus statusAt(Instant now) {
         Objects.requireNonNull(now, "now cannot be null");
         if (usedAt != null) {

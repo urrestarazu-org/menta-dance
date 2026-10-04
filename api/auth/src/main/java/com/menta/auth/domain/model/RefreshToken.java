@@ -185,6 +185,14 @@ public class RefreshToken {
             || this.status == RefreshTokenStatus.REVOKED;
     }
 
+    /**
+     * Tells whether the token has reached its expiry at the given instant.
+     *
+     * <p>The expiry instant itself already counts as expired.
+     *
+     * @param now the instant to evaluate against
+     * @return true when {@code expiresAt} is not after {@code now}
+     */
     public boolean isExpired(Instant now) {
         return !this.expiresAt.isAfter(now);
     }
