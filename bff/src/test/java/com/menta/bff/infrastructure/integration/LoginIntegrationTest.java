@@ -7,6 +7,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.response.SecurityMockMvcResultMatchers.authenticated;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
@@ -34,9 +35,7 @@ class LoginIntegrationTest extends BaseIntegrationTest {
     @DisplayName("POST /login con credenciales válidas debe crear sesión en Redis y redirigir a /dashboard")
     void loginWithValidCredentials_shouldCreateSessionInRedis() throws Exception {
         // Given: Mock Auth API /api/v1/auth/login returning tokens
-        String accessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
-            + "eyJzdWIiOiJ1c2VyQGV4YW1wbGUuY29tIiwicm9sZXMiOlsiUk9MRV9VU0VSIl0sImV4cCI6OTk5OTk5OTk5OX0."
-            + "signature";
+        String accessToken = TestAccessTokens.withRole("STUDENT");
         String refreshToken = "refresh_token_abc123";
 
         WIRE_MOCK_SERVER.stubFor(WireMock.post(urlEqualTo("/api/v1/auth/login"))
@@ -72,6 +71,8 @@ class LoginIntegrationTest extends BaseIntegrationTest {
                 // Then: Should redirect to /dashboard
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/dashboard"))
+                // And: authorities come from the token's role claim, not a hardcoded default
+                .andExpect(authenticated().withUsername("user@example.com").withRoles("STUDENT"))
 
                 // And: Should set SESSION cookie
                 .andExpect(cookie().exists("SESSION"))

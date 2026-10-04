@@ -3,11 +3,15 @@ package com.menta.bff.application.usecase;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.menta.bff.application.dto.LoginCommand;
+import com.menta.bff.application.dto.LoginResult;
 import com.menta.bff.application.dto.TokenPairResponse;
+import com.menta.bff.application.port.out.AccessTokenClaimsReader;
 import com.menta.bff.application.port.out.AuthApiClient;
 import com.menta.bff.application.port.out.SessionTokenRepository;
 import com.menta.bff.domain.model.SessionTokens;
@@ -33,11 +37,15 @@ class LoginUseCaseTest {
     @Mock
     private SessionTokenRepository sessionTokenRepository;
 
+    @Mock
+    private AccessTokenClaimsReader accessTokenClaimsReader;
+
     private LoginUseCase loginUseCase;
 
     @BeforeEach
     void setUp() {
-        loginUseCase = new LoginUseCaseImpl(authApiClient, sessionTokenRepository);
+        loginUseCase = new LoginUseCaseImpl(authApiClient, sessionTokenRepository, accessTokenClaimsReader);
+        lenient().when(accessTokenClaimsReader.roleOf(any())).thenReturn("STUDENT");
     }
 
     @Test
@@ -143,5 +151,37 @@ class LoginUseCaseTest {
         assertThat(storedTokens.expiresAt())
                 .isAfterOrEqualTo(expectedExpiresAt)
                 .isBefore(afterCall.plusSeconds(expiresIn + 5)); // Allow 5 sec tolerance
+    }
+
+    @Test
+    @DisplayName("should return the role read from the access token")
+    void shouldReturnRoleReadFromAccessToken() {
+        LoginCommand command = new LoginCommand("user@example.com", "ValidPass123!", CLIENT_ADDRESS);
+        when(authApiClient.login(command)).thenReturn(new TokenPairResponse("jwt", "refresh", 900L));
+        when(accessTokenClaimsReader.roleOf("jwt")).thenReturn("ADMIN");
+
+        LoginResult result = loginUseCase.execute(command);
+
+        assertThat(result.role()).isEqualTo("ADMIN");
+    }
+
+    @Test
+    @DisplayName("should not store tokens when the access token carries no usable role")
+    void shouldNotStoreTokensWhenRoleIsUnreadable() {
+        LoginCommand command = new LoginCommand("user@example.com", "ValidPass123!", CLIENT_ADDRESS);
+        when(authApiClient.login(command)).thenReturn(new TokenPairResponse("jwt", "refresh", 900L));
+        when(accessTokenClaimsReader.roleOf("jwt"))
+                .thenThrow(new AccessTokenClaimsReader.UnreadableTokenException("no role"));
+
+        assertThatThrownBy(() -> loginUseCase.execute(command))
+                .isInstanceOf(AccessTokenClaimsReader.UnreadableTokenException.class);
+        verify(sessionTokenRepository, never()).store(any());
+    }
+
+    @Test
+    @DisplayName("should reject a null claims reader")
+    void shouldRejectNullClaimsReader() {
+        assertThatThrownBy(() -> new LoginUseCaseImpl(authApiClient, sessionTokenRepository, null))
+                .isInstanceOf(NullPointerException.class);
     }
 }

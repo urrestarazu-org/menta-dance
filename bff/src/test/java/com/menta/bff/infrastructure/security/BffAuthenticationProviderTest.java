@@ -4,11 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.menta.bff.application.dto.LoginCommand;
+import com.menta.bff.application.dto.LoginResult;
+import com.menta.bff.application.port.out.AccessTokenClaimsReader;
 import com.menta.bff.application.port.out.AuthApiClient;
 import com.menta.bff.application.usecase.LoginUseCase;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,6 +42,11 @@ class BffAuthenticationProviderTest {
     @Mock private LoginUseCase loginUseCase;
     @InjectMocks private BffAuthenticationProvider provider;
 
+    @BeforeEach
+    void loginSucceedsAsStudentByDefault() {
+        lenient().when(loginUseCase.execute(any(LoginCommand.class))).thenReturn(new LoginResult("STUDENT"));
+    }
+
     private static Authentication formLogin() {
         return new UsernamePasswordAuthenticationToken(EMAIL, PASSWORD);
     }
@@ -58,7 +68,26 @@ class BffAuthenticationProviderTest {
 
         assertThat(result.isAuthenticated()).isTrue();
         assertThat(result.getName()).isEqualTo(EMAIL);
-        assertThat(result.getAuthorities()).extracting(Object::toString).contains("ROLE_USER");
+    }
+
+    @Test
+    @DisplayName("Grants the role read from the access token, not a hardcoded default")
+    void grants_the_role_returned_by_the_login_use_case() {
+        when(loginUseCase.execute(any(LoginCommand.class))).thenReturn(new LoginResult("INSTRUCTOR"));
+
+        Authentication result = provider.authenticate(formLogin());
+
+        assertThat(result.getAuthorities()).extracting(Object::toString).containsExactly("ROLE_INSTRUCTOR");
+    }
+
+    @Test
+    void maps_an_unreadable_token_to_an_internal_service_error() {
+        // The password was right; reporting bad credentials would be a lie.
+        doThrow(new AccessTokenClaimsReader.UnreadableTokenException("no role"))
+            .when(loginUseCase).execute(any(LoginCommand.class));
+
+        assertThatThrownBy(() -> provider.authenticate(formLogin()))
+            .isInstanceOf(InternalAuthenticationServiceException.class);
     }
 
     @Test

@@ -31,9 +31,7 @@ class AuthenticatedRequestIntegrationTest extends BaseIntegrationTest {
     @DisplayName("GET /dashboard con SESSION cookie válida debe retornar 200 OK")
     void authenticatedRequest_withValidSession_shouldReturn200() throws Exception {
         // Given: User is logged in (simulate successful login first)
-        String accessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
-            + "eyJzdWIiOiJ1c2VyQGV4YW1wbGUuY29tIiwicm9sZXMiOlsiUk9MRV9VU0VSIl0sImV4cCI6OTk5OTk5OTk5OX0."
-            + "signature";
+        String accessToken = TestAccessTokens.withRole("STUDENT");
         String refreshToken = "refresh_token_abc123";
 
         // Mock Auth API login

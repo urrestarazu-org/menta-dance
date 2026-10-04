@@ -1,5 +1,6 @@
 package com.menta.bff.infrastructure.config;
 
+import com.menta.bff.application.port.out.AccessTokenClaimsReader;
 import com.menta.bff.application.port.out.AuthApiClient;
 import com.menta.bff.application.port.out.BillingApiClient;
 import com.menta.bff.application.port.out.SessionTokenRepository;
@@ -32,9 +33,10 @@ public class UseCaseConfig {
     @Bean
     public LoginUseCase loginUseCase(
             AuthApiClient authApiClient,
-            SessionTokenRepository sessionTokenRepository
+            SessionTokenRepository sessionTokenRepository,
+            AccessTokenClaimsReader accessTokenClaimsReader
     ) {
-        return new LoginUseCaseImpl(authApiClient, sessionTokenRepository);
+        return new LoginUseCaseImpl(authApiClient, sessionTokenRepository, accessTokenClaimsReader);
     }
 
     @Bean

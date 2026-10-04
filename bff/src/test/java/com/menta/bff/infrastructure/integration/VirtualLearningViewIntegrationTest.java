@@ -244,7 +244,7 @@ class VirtualLearningViewIntegrationTest extends BaseIntegrationTest {
     @Test
     @DisplayName("entitled student navigates via the upstream navigation block, not course-detail order")
     void entitledStudentRequest_shouldRenderPlayerWithUpstreamNavigation() throws Exception {
-        String accessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdHVkZW50QGV4YW1wbGUuY29tIn0.signature";
+        String accessToken = TestAccessTokens.withRole("STUDENT");
         WIRE_MOCK_SERVER.stubFor(WireMock.post(urlEqualTo("/api/v1/auth/login"))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -380,7 +380,7 @@ class VirtualLearningViewIntegrationTest extends BaseIntegrationTest {
      * (lines 234-257), factored out for the progress-aware cases below.
      */
     private Cookie loginAndGetSessionCookie() throws Exception {
-        String accessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdHVkZW50QGV4YW1wbGUuY29tIn0.signature";
+        String accessToken = TestAccessTokens.withRole("STUDENT");
         WIRE_MOCK_SERVER.stubFor(WireMock.post(urlEqualTo("/api/v1/auth/login"))
                 .willReturn(aResponse()
                         .withStatus(200)
