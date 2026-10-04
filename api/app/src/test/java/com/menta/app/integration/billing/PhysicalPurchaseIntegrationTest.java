@@ -548,7 +548,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
     // --- Design step 8: conversion is idempotent under repeated redelivery ----
 
     /**
-     * design B3/step 8: the hold is converted exactly once — every row for
+     * Design B3/step 8: the hold is converted exactly once — every row for
      * this payment gets its {@code converted_at} set on the first delivery,
      * and every later delivery finds every row already converted
      * ({@code ConvertOutcome.AlreadyConverted}) and writes nothing further,
@@ -1170,7 +1170,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
     void an_approved_bank_transfer_purchase_with_available_capacity_reaches_assigned() {
         UUID userId = seedStudent();
         UUID courseId = seedCourse();
-        List<UUID> sessionIds = seedScheduledSessions(courseId, 2, 5);
+        final List<UUID> sessionIds = seedScheduledSessions(courseId, 2, 5);
         String quoteId = seedMonthlyQuote(courseId, 2, MONTHLY_PRICE);
         UUID admin = seedAdmin();
         PaymentId paymentId = seedAwaitingManualVerificationPhysicalPayment(userId, quoteId, MONTHLY_PRICE);

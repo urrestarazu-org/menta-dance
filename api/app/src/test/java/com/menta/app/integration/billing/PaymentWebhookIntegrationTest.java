@@ -289,12 +289,12 @@ class PaymentWebhookIntegrationTest extends AbstractBillingMySqlIntegrationTest 
     @Test
     void the_worker_confirms_a_matching_physical_payment_without_creating_billing_fulfillment() {
         UUID sessionId = seedSession(2);
-        UUID paymentId = seedPendingPhysicalPayment("mp-idempotent", UUID.randomUUID(), sessionId);
         when(paymentProviderPort.fetchPayment("mp-idempotent")).thenReturn(
             new ProviderPaymentResult("approved", Money.of(new BigDecimal("100.00"), "ARS"), "ext-1", "merchant-1")
         );
         WebhookInboxJpaEntity row = receivedWebhookRow("mp-idempotent", "req-1");
 
+        UUID paymentId = seedPendingPhysicalPayment("mp-idempotent", UUID.randomUUID(), sessionId);
         worker.process(row);
         dispatchPendingOutboxEvent();
 
@@ -363,7 +363,7 @@ class PaymentWebhookIntegrationTest extends AbstractBillingMySqlIntegrationTest 
     void webhook_redelivery_is_idempotent_and_does_not_create_a_second_purchase_row() {
         UUID sessionId = seedSession(2);
         UUID studentId = UUID.randomUUID();
-        UUID paymentId = seedPendingPhysicalPayment("mp-idempotent", studentId, sessionId);
+        final UUID paymentId = seedPendingPhysicalPayment("mp-idempotent", studentId, sessionId);
         when(paymentProviderPort.fetchPayment("mp-idempotent")).thenReturn(
             new ProviderPaymentResult("approved", Money.of(new BigDecimal("100.00"), "ARS"), "ext-1", "merchant-1")
         );
@@ -397,12 +397,12 @@ class PaymentWebhookIntegrationTest extends AbstractBillingMySqlIntegrationTest 
         physicalCapacityAssignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
             UUID.randomUUID(), sessionId, UUID.randomUUID(), Instant.now()
         ));
-        UUID paymentId = seedPendingPhysicalPayment("mp-capacity-full", UUID.randomUUID(), sessionId);
         when(paymentProviderPort.fetchPayment("mp-capacity-full")).thenReturn(
             new ProviderPaymentResult("approved", Money.of(new BigDecimal("100.00"), "ARS"), "ext-1", "merchant-1")
         );
         WebhookInboxJpaEntity row = receivedWebhookRow("mp-capacity-full", "req-1");
 
+        UUID paymentId = seedPendingPhysicalPayment("mp-capacity-full", UUID.randomUUID(), sessionId);
         worker.process(row);
         dispatchPendingOutboxEvent();
 
@@ -452,7 +452,6 @@ class PaymentWebhookIntegrationTest extends AbstractBillingMySqlIntegrationTest 
 
     @Test
     void exhausting_provider_lookup_retries_creates_a_reconciliation_task() {
-        UUID paymentId = seedPendingPhysicalPayment("mp-exhausted", UUID.randomUUID(), seedSession(2));
         when(paymentProviderPort.fetchPayment("mp-exhausted")).thenThrow(new RuntimeException("timeout"));
         WebhookInboxJpaEntity row = new WebhookInboxJpaEntity(
             "mp-exhausted:req-1", "mp-exhausted", "req-1",
@@ -460,6 +459,7 @@ class PaymentWebhookIntegrationTest extends AbstractBillingMySqlIntegrationTest 
         );
         inboxRepository.save(row);
 
+        UUID paymentId = seedPendingPhysicalPayment("mp-exhausted", UUID.randomUUID(), seedSession(2));
         worker.process(row);
 
         assertThat(paymentRepository.findById(paymentId).orElseThrow().getStatusType())

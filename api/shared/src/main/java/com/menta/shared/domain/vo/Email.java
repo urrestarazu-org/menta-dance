@@ -19,6 +19,18 @@ public final class Email {
         this.value = value;
     }
 
+    /**
+     * Creates an email from raw user input, normalizing it before validation.
+     *
+     * <p>Surrounding whitespace is trimmed and the address is lower-cased, so two inputs that differ
+     * only in case or padding yield equal instances. The normalized form must then match a
+     * deliberately simple {@code local@domain.tld} pattern; this is a format check, not a
+     * deliverability check.</p>
+     *
+     * @param value the raw address as typed by the user
+     * @return the validated, normalized email
+     * @throws IllegalArgumentException if the value is null, blank or not a well-formed address
+     */
     public static Email of(String value) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException("Email cannot be null or empty");

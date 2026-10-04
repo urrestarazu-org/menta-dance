@@ -118,7 +118,6 @@ class LoginUseCaseTest {
         // Given
         LoginCommand command = new LoginCommand("user@example.com", "ValidPass123!", CLIENT_ADDRESS);
         long expiresIn = 900L;
-        Instant beforeCall = Instant.now();
 
         TokenPairResponse apiResponse = new TokenPairResponse(
                 "access_token",
@@ -129,6 +128,7 @@ class LoginUseCaseTest {
         when(authApiClient.login(command)).thenReturn(apiResponse);
 
         // When
+        Instant beforeCall = Instant.now();
         loginUseCase.execute(command);
 
         // Then

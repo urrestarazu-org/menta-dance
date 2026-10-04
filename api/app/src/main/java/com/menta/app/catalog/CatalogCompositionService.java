@@ -67,6 +67,15 @@ public class CatalogCompositionService {
         this.sessionWindow = Duration.ofDays(sessionWindowDays);
     }
 
+    /**
+     * Lists every catalog course, physical ones first and virtual ones after.
+     *
+     * <p>Each port is read once with a single page of {@value #LIST_PAGE_SIZE} entries; no merging or
+     * re-sorting happens across modalities. The listing is all-or-nothing: a failure in either port
+     * is a {@link CatalogUpstreamException} and no partial list is returned.</p>
+     *
+     * @return the course entries of both modalities
+     */
     public List<CatalogCourseResponse> listCourses() {
         List<CatalogCourseResponse> courses = new ArrayList<>();
         callPort("physical", () -> physicalPort.listCourses(null, LIST_PAGE_SIZE))

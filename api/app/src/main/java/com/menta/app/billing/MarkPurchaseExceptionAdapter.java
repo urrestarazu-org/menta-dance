@@ -20,6 +20,15 @@ public class MarkPurchaseExceptionAdapter {
         this.markPurchaseExceptionPort = markPurchaseExceptionPort;
     }
 
+    /**
+     * Moves the purchase behind the payment from pending fulfillment to the exception state.
+     *
+     * <p>Pure delegation: the transition rules, and any exception raised when the payment is
+     * unknown, belong to the billing port and propagate to the caller unchanged.</p>
+     *
+     * @param paymentId the payment whose purchase could not be fulfilled
+     * @param reason the codified reason recorded for the exception
+     */
     public void markException(PaymentId paymentId, Reason reason) {
         markPurchaseExceptionPort.markException(paymentId, reason);
     }

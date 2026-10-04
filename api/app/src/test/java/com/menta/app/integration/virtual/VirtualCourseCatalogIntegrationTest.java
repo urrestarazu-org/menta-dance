@@ -64,7 +64,7 @@ class VirtualCourseCatalogIntegrationTest extends PhysicalVirtualCatalogPortMock
 
     @Test
     void lists_only_published_courses() {
-        UUID publishedId = seedCourse("Tango Básico", CourseStatus.PUBLISHED);
+        final UUID publishedId = seedCourse("Tango Básico", CourseStatus.PUBLISHED);
         seedCourse("Salsa Draft", CourseStatus.DRAFT);
         seedCourse("Vals Archivado", CourseStatus.ARCHIVED);
 

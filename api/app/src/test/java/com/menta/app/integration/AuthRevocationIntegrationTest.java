@@ -234,7 +234,7 @@ class AuthRevocationIntegrationTest extends AbstractAuthMySqlIntegrationTest {
             "/api/v1/auth/login", HttpMethod.POST,
             jsonEntity(Map.of("email", bystanderEmail, "password", RAW_PASSWORD)), Map.class
         );
-        String bystanderAccess = (String) bystanderLogin.getBody().get("access_token");
+        final String bystanderAccess = (String) bystanderLogin.getBody().get("access_token");
 
         // Rotate then reuse the victim's original refresh to trigger family
         // revocation on the victim only.
@@ -261,12 +261,12 @@ class AuthRevocationIntegrationTest extends AbstractAuthMySqlIntegrationTest {
             jsonEntity(Map.of("email", email, "password", RAW_PASSWORD)), Map.class
         );
         String refresh = loginResponse.getHeaders().getFirst("X-Refresh-Token");
-        String access = (String) loginResponse.getBody().get("access_token");
 
         http.exchange("/api/v1/auth/refresh", HttpMethod.POST, refreshEntity(refresh), Map.class);
         http.exchange("/api/v1/auth/refresh", HttpMethod.POST, refreshEntity(refresh), Map.class);
         reconciler.processBatch();
 
+        String access = (String) loginResponse.getBody().get("access_token");
         ResponseEntity<Map> response = http.exchange(
             ADMIN_PROBE, HttpMethod.GET, bearerEntity(access), Map.class
         );

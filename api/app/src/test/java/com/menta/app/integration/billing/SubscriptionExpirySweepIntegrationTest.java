@@ -153,7 +153,7 @@ class SubscriptionExpirySweepIntegrationTest extends AbstractBillingMySqlIntegra
         Instant now = now();
         Instant past = now.minusSeconds(3600);
         UUID cancelledId = seedSubscription("CANCELLED", "PAID", past.minusSeconds(600), past, 0L);
-        UUID alreadyExpiredId = seedSubscription("EXPIRED", "PAID", past.minusSeconds(600), past, 0L);
+        final UUID alreadyExpiredId = seedSubscription("EXPIRED", "PAID", past.minusSeconds(600), past, 0L);
 
         reconciler.tick();
 

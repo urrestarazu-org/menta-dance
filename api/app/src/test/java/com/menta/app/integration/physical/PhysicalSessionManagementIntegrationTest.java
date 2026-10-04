@@ -324,7 +324,6 @@ class PhysicalSessionManagementIntegrationTest extends AbstractPhysicalMySqlInte
 
     @Test
     void reducing_capacity_below_assigned_spots_is_rejected() {
-        UUID adminId = issueUser(Role.ADMIN);
         UUID courseId = seedCourse(UUID.randomUUID());
         UUID sessionId = seedSession(courseId, Instant.now().plusSeconds(86400), 20, "SCHEDULED");
         // Two assignments so a @Positive-legal capacity (>= 1) can still be
@@ -338,6 +337,7 @@ class PhysicalSessionManagementIntegrationTest extends AbstractPhysicalMySqlInte
             UUID.randomUUID(), sessionId, UUID.randomUUID(), Instant.now()
         ));
 
+        UUID adminId = issueUser(Role.ADMIN);
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(tokenFor(adminId, Role.ADMIN));
@@ -391,7 +391,6 @@ class PhysicalSessionManagementIntegrationTest extends AbstractPhysicalMySqlInte
         UUID studentId = issueUser(Role.STUDENT);
         UUID courseId = seedCourse(UUID.randomUUID());
         UUID sessionId = seedSession(courseId, Instant.now(), 1, "SCHEDULED");
-        UUID paymentId = seedPendingPhysicalPayment("mp-capacity-happy", studentId, sessionId);
         when(paymentProviderPort.fetchPayment("mp-capacity-happy")).thenReturn(
             new ProviderPaymentResult(
                 "approved", Money.of(new BigDecimal("100.00"), "ARS"),
@@ -399,6 +398,7 @@ class PhysicalSessionManagementIntegrationTest extends AbstractPhysicalMySqlInte
             )
         );
 
+        UUID paymentId = seedPendingPhysicalPayment("mp-capacity-happy", studentId, sessionId);
         verifyAndDispatch("mp-capacity-happy");
 
         assertThat(assignmentRepository.countBySessionId(sessionId)).isEqualTo(1);
@@ -423,8 +423,8 @@ class PhysicalSessionManagementIntegrationTest extends AbstractPhysicalMySqlInte
         UUID sessionId = seedSession(courseId, Instant.now(), 1, "SCHEDULED");
         String firstProviderId = "mp-" + tag + "-1";
         String secondProviderId = "mp-" + tag + "-2";
-        UUID firstPaymentId = seedPendingPhysicalPayment(firstProviderId, UUID.randomUUID(), sessionId);
-        UUID secondPaymentId = seedPendingPhysicalPayment(secondProviderId, UUID.randomUUID(), sessionId);
+        final UUID firstPaymentId = seedPendingPhysicalPayment(firstProviderId, UUID.randomUUID(), sessionId);
+        final UUID secondPaymentId = seedPendingPhysicalPayment(secondProviderId, UUID.randomUUID(), sessionId);
         for (String providerId : List.of(firstProviderId, secondProviderId)) {
             when(paymentProviderPort.fetchPayment(providerId)).thenReturn(
                 new ProviderPaymentResult(
@@ -609,15 +609,15 @@ class PhysicalSessionManagementIntegrationTest extends AbstractPhysicalMySqlInte
     void concurrent_monthly_purchases_over_overlapping_sessions_one_assigned_one_exception() throws Exception {
         UUID courseId = seedCourse(UUID.randomUUID());
         Instant base = Instant.now().plusSeconds(3600);
-        UUID sessionOne = seedSession(courseId, base, 1, "SCHEDULED");
-        UUID sessionTwo = seedSession(courseId, base.plusSeconds(3600), 1, "SCHEDULED");
+        final UUID sessionOne = seedSession(courseId, base, 1, "SCHEDULED");
+        final UUID sessionTwo = seedSession(courseId, base.plusSeconds(3600), 1, "SCHEDULED");
 
         UUID firstQuoteId = seedMonthlyQuote(courseId, 2);
         UUID secondQuoteId = seedMonthlyQuote(courseId, 2);
-        UUID firstPaymentId = seedPendingPhysicalPaymentForTarget(
+        final UUID firstPaymentId = seedPendingPhysicalPaymentForTarget(
             "mp-monthly-1", UUID.randomUUID(), firstQuoteId.toString()
         );
-        UUID secondPaymentId = seedPendingPhysicalPaymentForTarget(
+        final UUID secondPaymentId = seedPendingPhysicalPaymentForTarget(
             "mp-monthly-2", UUID.randomUUID(), secondQuoteId.toString()
         );
         when(paymentProviderPort.fetchPayment("mp-monthly-1")).thenReturn(

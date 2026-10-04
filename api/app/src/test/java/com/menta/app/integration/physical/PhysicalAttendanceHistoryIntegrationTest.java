@@ -422,9 +422,9 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
         // 2 sessions in FIRST_MONTH, 1 in SECOND_MONTH — all computed relative to "now" so they
         // stay safely in the future and CoveragePlanner claims them regardless of run date.
         LocalDate firstMonthLastDay = FIRST_MONTH.atEndOfMonth();
-        UUID septemberFirst = seedSession(courseId, instantAt(firstMonthLastDay.minusDays(1)));
-        UUID septemberSecond = seedSession(courseId, instantAt(firstMonthLastDay));
-        UUID octoberFirst = seedSession(courseId, instantAt(SECOND_MONTH, 5));
+        final UUID septemberFirst = seedSession(courseId, instantAt(firstMonthLastDay.minusDays(1)));
+        final UUID septemberSecond = seedSession(courseId, instantAt(firstMonthLastDay));
+        final UUID octoberFirst = seedSession(courseId, instantAt(SECOND_MONTH, 5));
         String quoteId = seedMonthlyQuote(courseId, 3, MONTHLY_PRICE);
 
         when(paymentPreferencePort.createPreference(any())).thenReturn(
@@ -530,7 +530,6 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
     /** R6 — ADMIN reads any student's month unrestricted, across multiple courses. */
     @Test
     void admin_reads_any_students_month_unrestricted_across_courses() {
-        UUID adminId = issueUser(Role.ADMIN);
         UUID studentId = issueUser(Role.STUDENT);
         UUID courseA = seedCourse();
         UUID courseB = seedCourse();
@@ -545,6 +544,7 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
         UUID sessionE = seedSession(courseB, instantAt(FIRST_MONTH, 19));
         seedAssignment(sessionE, studentId);
 
+        UUID adminId = issueUser(Role.ADMIN);
         ResponseEntity<Map> response = readElevatedMonth(adminId, Role.ADMIN, studentId, monthQuery(FIRST_MONTH));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);

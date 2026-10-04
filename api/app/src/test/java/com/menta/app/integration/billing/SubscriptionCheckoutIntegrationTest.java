@@ -332,7 +332,7 @@ class SubscriptionCheckoutIntegrationTest extends AbstractBillingMySqlIntegratio
         String externalReference = (String) checkout.getBody().get("externalReference");
 
         deliverWebhook("mp-replay", externalReference, "approved");
-        Instant firstStartDate = subscriptionRepository.findAll().get(0).getStartDate();
+        final Instant firstStartDate = subscriptionRepository.findAll().get(0).getStartDate();
         inboxRepository.deleteAll();
         deliverWebhook("mp-replay", externalReference, "approved");
 
