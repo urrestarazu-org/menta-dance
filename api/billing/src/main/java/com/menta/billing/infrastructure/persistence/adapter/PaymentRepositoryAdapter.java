@@ -19,6 +19,14 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * JPA adapter for {@link PaymentRepository}, mapping through {@code PaymentJpaMapper} so the domain
+ * never sees entities.
+ *
+ * <p>Writes require an existing transaction ({@code MANDATORY}), while reads join one or open a
+ * read-only one. The admin inbox query pages through a projection that carries a correlated proof
+ * count, and the expiry candidate query is capped by the {@code limit} argument.
+ */
 @Component
 public class PaymentRepositoryAdapter implements PaymentRepository {
 

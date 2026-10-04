@@ -8,12 +8,19 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+/**
+ * Spring Data repository over {@code billing_purchase_sessions}, the ordered physical session ids
+ * of each purchase.
+ *
+ * <p>Used only through {@code PurchaseRepositoryAdapter}. It offers a locking per-purchase read for
+ * the fulfillment writers and a non-locking batch read for the admin list.
+ */
 public interface PurchaseSessionJpaRepository extends JpaRepository<PurchaseSessionJpaEntity, Long> {
 
     /**
      * A LOCKING read (#245), unconditionally — both of {@code
      * PurchaseRepositoryAdapter}'s two call sites need it, and neither has a
-     * self-block risk from it:
+     * self-block risk from it. The call sites are:
      *
      * <ul>
      *   <li>{@code insert()}'s own "already inserted?" guard — the

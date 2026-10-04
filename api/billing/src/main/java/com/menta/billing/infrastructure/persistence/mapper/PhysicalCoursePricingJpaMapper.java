@@ -10,6 +10,10 @@ public final class PhysicalCoursePricingJpaMapper {
     private PhysicalCoursePricingJpaMapper() {
     }
 
+    /**
+     * Rebuilds the pricing through {@code PhysicalCoursePricing.reconstitute}, keeping the stored
+     * version and update time instead of computing new ones.
+     */
     public static PhysicalCoursePricing toDomain(PhysicalCoursePricingJpaEntity entity) {
         return PhysicalCoursePricing.reconstitute(
             entity.getCourseId(),
@@ -20,6 +24,7 @@ public final class PhysicalCoursePricingJpaMapper {
         );
     }
 
+    /** Flattens the pricing into a row, splitting the monthly price into an amount and a currency. */
     public static PhysicalCoursePricingJpaEntity toEntity(PhysicalCoursePricing pricing) {
         return new PhysicalCoursePricingJpaEntity(
             pricing.getCourseId(),

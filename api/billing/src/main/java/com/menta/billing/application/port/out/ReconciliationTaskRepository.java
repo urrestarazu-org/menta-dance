@@ -12,5 +12,11 @@ import java.util.UUID;
  */
 public interface ReconciliationTaskRepository {
 
+    /**
+     * Marks every open reconciliation task of a payment as resolved by the given admin at the given
+     * instant, and returns how many rows changed.
+     *
+     * <p>Re-running it is harmless because tasks that are already resolved are skipped.
+     */
     int resolveOpenByPaymentId(PaymentId paymentId, Instant at, UUID adminId);
 }

@@ -15,5 +15,12 @@ import com.menta.billing.domain.model.PaymentId;
  */
 public interface MarkPurchaseAssignedPort {
 
+    /**
+     * Marks the purchase of a payment as {@code ASSIGNED}.
+     *
+     * <p>Implemented by {@code MarkPurchaseAssignedUseCase}: an unknown payment fails with {@code
+     * PaymentNotFoundException}, a purchase that is already {@code ASSIGNED} is left untouched, and
+     * one in {@code EXCEPTION} is refused with {@code IllegalPurchaseStateTransitionException}.
+     */
     void markAssigned(PaymentId paymentId);
 }

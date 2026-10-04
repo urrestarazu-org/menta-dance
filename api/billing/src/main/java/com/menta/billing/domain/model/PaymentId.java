@@ -12,6 +12,7 @@ public final class PaymentId {
         this.value = value;
     }
 
+    /** Wraps an existing UUID; {@code null} is rejected with {@link IllegalArgumentException}. */
     public static PaymentId of(UUID value) {
         if (value == null) {
             throw new IllegalArgumentException("PaymentId cannot be null");
@@ -19,6 +20,12 @@ public final class PaymentId {
         return new PaymentId(value);
     }
 
+    /**
+     * Parses the canonical UUID text of a payment id.
+     *
+     * <p>{@code null}, blank and malformed input are all rejected with {@link
+     * IllegalArgumentException}.
+     */
     public static PaymentId of(String value) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException("PaymentId cannot be null or empty");
@@ -30,6 +37,7 @@ public final class PaymentId {
         }
     }
 
+    /** Creates an id backed by a fresh random UUID. */
     public static PaymentId generate() {
         return new PaymentId(UUID.randomUUID());
     }

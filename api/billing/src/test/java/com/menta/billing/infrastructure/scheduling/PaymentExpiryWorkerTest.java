@@ -52,7 +52,6 @@ class PaymentExpiryWorkerTest {
     @Test
     void expires_and_releases_a_real_transition() {
         PaymentRepository repository = mock(PaymentRepository.class);
-        PaymentFulfillmentService fulfillmentService = mock(PaymentFulfillmentService.class);
         Clock clock = mock(Clock.class);
         Instant now = Instant.parse("2026-09-21T00:00:00Z");
         when(clock.now()).thenReturn(now);
@@ -61,6 +60,7 @@ class PaymentExpiryWorkerTest {
                 Optional.of(paymentWith(new PaymentStatus.AwaitingManualVerification(), now.minusSeconds(3600))));
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
+        PaymentFulfillmentService fulfillmentService = mock(PaymentFulfillmentService.class);
         new PaymentExpiryWorker(repository, fulfillmentService, clock).expireOne(PAYMENT_ID.getValue());
 
         verify(repository, times(1)).save(any(Payment.class));

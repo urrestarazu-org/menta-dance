@@ -55,6 +55,16 @@ public class WebhookVerificationWorker {
         this.maxAttempts = maxAttempts;
     }
 
+    /**
+     * Verifies one inbox row against the provider and records the result on the row.
+     *
+     * <p>Runs in its own {@code REQUIRES_NEW} transaction, and a failure is handled inside the
+     * method so it never aborts the rest of the batch. A failed verification, such as a provider
+     * lookup error, is retried with backoff until the attempt limit is reached; after that the row,
+     * and the payment when one is bound, move to reconciliation and a reconciliation task is
+     * created. A verification that ends in a mismatch or finds no local payment also creates a
+     * task.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void process(WebhookInboxJpaEntity row) {
         try {

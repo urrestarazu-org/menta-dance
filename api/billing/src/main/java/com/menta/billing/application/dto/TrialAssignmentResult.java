@@ -18,6 +18,12 @@ public record TrialAssignmentResult(
     String subscriptionId, String userId, String planId, SubscriptionType type, SubscriptionStatus status,
     Instant startDate, Instant endDate, int days
 ) {
+    /**
+     * Projects a trial subscription into the admin-facing result.
+     *
+     * <p>An unset start or end date becomes {@code null}, and {@code days} comes from the trial
+     * grant, falling back to {@code 0} when the subscription carries none.
+     */
     public static TrialAssignmentResult from(Subscription subscription) {
         return new TrialAssignmentResult(
             subscription.getId().toString(),

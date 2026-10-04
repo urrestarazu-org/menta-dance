@@ -12,5 +12,11 @@ import java.util.UUID;
  */
 public interface PaymentAuditRepository {
 
+    /**
+     * Appends one audit row for an admin decision on a payment.
+     *
+     * <p>The JPA adapter joins the caller's transaction, so the row commits or rolls back together
+     * with the payment's status change. {@code reason} may be {@code null}.
+     */
     void append(PaymentId paymentId, UUID adminId, PaymentAuditAction action, String reason);
 }

@@ -11,6 +11,10 @@ public record PendingVerificationItemResponse(
     String currency, String statusType, boolean hasProof, Instant createdAt
 ) {
 
+    /**
+     * Copies the inbox item field by field; {@code hasProof} tells whether a proof was already
+     * submitted for the payment.
+     */
     public static PendingVerificationItemResponse from(PendingVerificationItem item) {
         return new PendingVerificationItemResponse(
             item.paymentId(), item.userId(), item.targetModality(), item.targetReference(), item.amount(),

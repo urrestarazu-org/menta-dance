@@ -9,5 +9,10 @@ import java.time.Instant;
  */
 public interface BillingOutboxClock {
 
+    /**
+     * Returns the instant stamped on a new outbox row as its creation time.
+     *
+     * <p>Production wiring uses the system clock; tests pin it.
+     */
     Instant now();
 }

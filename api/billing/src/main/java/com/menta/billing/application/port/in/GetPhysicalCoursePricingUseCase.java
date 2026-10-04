@@ -9,6 +9,8 @@ import com.menta.billing.application.dto.PhysicalCoursePricingResult;
 public interface GetPhysicalCoursePricingUseCase {
 
     /**
+     * Returns the current published pricing of a physical course.
+     *
      * @throws com.menta.billing.domain.exception.PhysicalCoursePricingNotFoundException if never published.
      */
     PhysicalCoursePricingResult getPricing(String courseId);

@@ -12,6 +12,9 @@ import java.util.UUID;
 public interface UpdatePhysicalCoursePricingUseCase {
 
     /**
+     * Publishes a new pricing version for a course, creating the first version or revising the
+     * current one, and records an audit revision with the reason.
+     *
      * @throws com.menta.billing.domain.exception.PhysicalCourseNotFoundException if the course does not exist.
      * @throws com.menta.billing.domain.exception.PricingNotOwnedException if the caller does not own the course.
      * @throws com.menta.billing.domain.exception.InvalidIndividualSurchargeException if the surcharge is <= 0.

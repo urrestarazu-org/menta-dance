@@ -20,6 +20,12 @@ public record PhysicalPurchaseCheckoutResponse(
     String paymentId, String quoteId, String status, String providerPreferenceId, String checkoutUrl,
     String externalReference, BankTransferInstructions bankTransferInstructions
 ) {
+    /**
+     * Maps the checkout result to the wire shape.
+     *
+     * <p>The provider preference id and checkout URL are {@code null} for a bank-transfer checkout,
+     * and the transfer instructions are {@code null} for a Mercado Pago one.
+     */
     public static PhysicalPurchaseCheckoutResponse from(PhysicalPurchaseCheckoutResult result) {
         return new PhysicalPurchaseCheckoutResponse(
             result.paymentId(), result.quoteId(), result.status(), result.providerPreferenceId(),

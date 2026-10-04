@@ -14,7 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * State-machine guard for the successful {@code ASSIGNED} terminal state —
- * the mirror image of {@link MarkPurchaseExceptionUseCase}:
+ * the mirror image of {@link MarkPurchaseExceptionUseCase}. Transitions by current status:
  *
  * <ul>
  *   <li>{@code PENDING_FULFILLMENT} → {@code ASSIGNED} — accepted; every

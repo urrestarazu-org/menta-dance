@@ -8,6 +8,12 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+/**
+ * Spring Data repository over {@code billing_reconciliation_tasks}.
+ *
+ * <p>Used by {@code ReconciliationTaskRepositoryAdapter} for the admin correction flow and directly
+ * by {@code WebhookVerificationWorker}, which creates the tasks.
+ */
 public interface ReconciliationTaskJpaRepository extends JpaRepository<ReconciliationTaskJpaEntity, UUID> {
 
     /**

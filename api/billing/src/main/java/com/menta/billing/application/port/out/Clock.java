@@ -9,5 +9,6 @@ import java.time.Instant;
  */
 public interface Clock {
 
+    /** Returns the current instant according to this clock; tests substitute a fixed one. */
     Instant now();
 }

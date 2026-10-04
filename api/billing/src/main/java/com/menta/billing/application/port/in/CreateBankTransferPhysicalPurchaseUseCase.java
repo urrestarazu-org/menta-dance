@@ -15,5 +15,15 @@ import com.menta.billing.application.dto.PhysicalPurchaseBankTransferCheckoutRes
  */
 public interface CreateBankTransferPhysicalPurchaseUseCase {
 
+    /**
+     * Opens a bank-transfer purchase for a physical-course quote and returns the transfer
+     * instructions.
+     *
+     * <p>The daily creation budget is consumed first, and a refusal surfaces as {@code
+     * BankTransferRateLimitedException}. The same user and idempotency key always map to the same
+     * payment, so a replay returns the existing one instead of creating another. An unknown or
+     * expired quote fails with {@code PhysicalCourseQuoteExpiredException}, and no capacity is
+     * held: the capacity decision is deferred to the approval of the payment.
+     */
     PhysicalPurchaseBankTransferCheckoutResult create(CreatePhysicalPurchaseCheckoutCommand command);
 }

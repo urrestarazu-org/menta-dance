@@ -29,6 +29,8 @@ public class PaymentProofContentValidator {
     private static final byte[] PDF_MAGIC = {'%', 'P', 'D', 'F', '-'};
 
     /**
+     * Validates the declared content type and the bytes of an uploaded proof.
+     *
      * @throws PaymentProofRejectedException whenever the declared type is not one of the three
      *     accepted types, the file is empty or larger than 5 MB, or the sniffed magic bytes do not
      *     agree with the declared type (a spoofed extension/content type).

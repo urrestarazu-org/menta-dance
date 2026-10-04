@@ -11,5 +11,11 @@ import com.menta.billing.application.dto.RateLimitDecision;
  */
 public interface BillingPlansRateLimitPort {
 
+    /**
+     * Consumes one unit of the caller's request budget and reports whether the request may proceed.
+     *
+     * <p>The budget is keyed by the opaque client fingerprint, and a limited decision carries the
+     * time to wait.
+     */
     RateLimitDecision consume(String clientFingerprint);
 }

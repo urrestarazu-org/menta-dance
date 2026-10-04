@@ -83,6 +83,16 @@ public final class PaymentVerificationService {
         this.paymentFulfillmentService = paymentFulfillmentService;
     }
 
+    /**
+     * Verifies one provider payment against the provider's authoritative answer and applies the
+     * outcome locally.
+     *
+     * <p>A payment already bound to this provider id is handled first; otherwise the provider is
+     * asked and the external reference in its response selects the local payment. An unknown
+     * reference yields {@code NoLocalPayment}. A payment already in a final state is returned
+     * untouched, although a completed one still has its fulfillment ensured again. Failures of the
+     * provider lookup are not caught and propagate to the caller.
+     */
     public VerificationOutcome verify(String providerPaymentId) {
         Optional<Payment> alreadyBound = paymentRepository.findByProviderPaymentId(providerPaymentId);
         if (alreadyBound.isPresent()) {

@@ -16,6 +16,8 @@ import java.util.List;
 public interface PhysicalCourseAvailabilityPort {
 
     /**
+     * Lists the scheduled sessions of a course within a half-open time range.
+     *
      * @param courseId the opaque course id to look up.
      * @param periodStart lower bound (inclusive) of the calendar-month period.
      * @param periodEndExclusive upper bound (exclusive) of the calendar-month period.

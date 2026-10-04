@@ -6,6 +6,8 @@ import com.menta.billing.application.dto.PlanDetailResult;
 public interface GetPlanUseCase {
 
     /**
+     * Returns the detail of one {@code ACTIVE} plan after charging the caller's rate-limit budget.
+     *
      * @throws com.menta.billing.domain.exception.PlanNotFoundException if absent or not ACTIVE.
      * @throws com.menta.billing.domain.exception.PlanRateLimitedException if the caller's IP budget is spent.
      */

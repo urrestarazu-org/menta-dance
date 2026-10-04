@@ -15,6 +15,7 @@ public record ExceptionPurchasePageResponse(
     List<ExceptionPurchaseItem> items, int page, int size, long totalElements, int totalPages
 ) {
 
+    /** Maps the application page to the wire shape, passing the items through unchanged and copying the paging data. */
     public static ExceptionPurchasePageResponse from(ExceptionPurchasePage page) {
         return new ExceptionPurchasePageResponse(
             page.items(), page.page(), page.size(), page.totalElements(), page.totalPages()

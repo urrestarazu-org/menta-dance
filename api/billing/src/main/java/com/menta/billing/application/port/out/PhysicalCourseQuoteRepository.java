@@ -14,7 +14,14 @@ import java.util.Optional;
  */
 public interface PhysicalCourseQuoteRepository {
 
+    /** Persists the quote under its own id and returns the stored state. */
     PhysicalCourseQuote save(PhysicalCourseQuote quote);
 
+    /**
+     * Finds a quote by its id.
+     *
+     * <p>Expired quotes are returned too, so callers must check {@code getExpiresAt()} themselves,
+     * as the checkout use cases do.
+     */
     Optional<PhysicalCourseQuote> findById(String quoteId);
 }

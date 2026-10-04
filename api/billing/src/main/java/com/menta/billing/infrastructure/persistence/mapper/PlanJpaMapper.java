@@ -18,6 +18,11 @@ public final class PlanJpaMapper {
     private PlanJpaMapper() {
     }
 
+    /**
+     * Rebuilds the plan from its row plus its already loaded course and payment-method rows.
+     *
+     * <p>A plan without any payment-method row is treated as accepting only {@code MERCADO_PAGO}.
+     */
     public static Plan toDomain(
         PlanJpaEntity entity, List<PlanCourseJpaEntity> courses, List<PlanPaymentMethodJpaEntity> paymentMethods
     ) {

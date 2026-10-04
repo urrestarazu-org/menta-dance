@@ -5,6 +5,13 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import java.util.UUID;
 
+/**
+ * JPA row of {@code billing_purchases}: one fulfillment record per payment.
+ *
+ * <p>{@code payment_id} is unique, the status is stored as the {@code FulfillmentStatus} name, and
+ * the ordered session ids live in the child table {@code billing_purchase_sessions} (see {@link
+ * PurchaseSessionJpaEntity}) instead of a relationship on this entity.
+ */
 @Entity
 @Table(name = "billing_purchases")
 public class PurchaseJpaEntity {

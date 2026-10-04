@@ -10,6 +10,13 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+/**
+ * Spring Data repository over {@code billing_purchases}.
+ *
+ * <p>Besides plain CRUD it exposes two reads by payment id, one deliberately non-locking and one
+ * locking, and the admin inbox projection of purchases in {@code EXCEPTION}. Used only through
+ * {@code PurchaseRepositoryAdapter}.
+ */
 public interface PurchaseJpaRepository extends JpaRepository<PurchaseJpaEntity, UUID> {
 
     /**

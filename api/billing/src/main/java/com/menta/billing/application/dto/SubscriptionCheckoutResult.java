@@ -24,6 +24,14 @@ public record SubscriptionCheckoutResult(
     String providerPreferenceId, String checkoutUrl, String externalReference, OverlapNotice overlapNotice,
     BankTransferInstructions bankTransferInstructions
 ) {
+    /**
+     * Builds the Checkout Pro result for a subscription that is already persisted with its
+     * preference.
+     *
+     * <p>The preference id and checkout URL come from the subscription (an absent value becomes
+     * {@code null}), the overlap notice is passed through and may be {@code null}, and {@code
+     * bankTransferInstructions} is always {@code null} on this arm.
+     */
     public static SubscriptionCheckoutResult from(
         Subscription subscription, String externalReference, OverlapNotice overlapNotice
     ) {

@@ -11,6 +11,8 @@ import com.menta.billing.domain.exception.WebhookSignatureInvalidException;
 public interface WebhookSignatureVerifier {
 
     /**
+     * Extracts the timestamp and the signature hash from the {@code x-signature} header.
+     *
      * @throws WebhookSignatureInvalidException if the header is missing {@code ts} or {@code v1}.
      */
     ParsedSignature parse(String signatureHeader);

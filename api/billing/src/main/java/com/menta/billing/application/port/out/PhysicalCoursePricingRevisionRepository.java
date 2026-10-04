@@ -15,6 +15,9 @@ import java.util.UUID;
 public interface PhysicalCoursePricingRevisionRepository {
 
     /**
+     * Appends one revision row describing a pricing change, with its actor, reason, version, before
+     * and after snapshots and instant.
+     *
      * @param previousValue a human-readable snapshot before the change, or
      *     {@code null} for the first-ever version (there is no "before").
      * @param newValue a human-readable snapshot after the change.

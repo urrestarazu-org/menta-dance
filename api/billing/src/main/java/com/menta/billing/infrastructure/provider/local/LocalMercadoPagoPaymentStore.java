@@ -25,6 +25,13 @@ public final class LocalMercadoPagoPaymentStore {
     private final Map<String, PaymentPreferenceRequest> preferenceRequests = new ConcurrentHashMap<>();
     private final Map<String, ProviderPaymentResult> payments = new ConcurrentHashMap<>();
 
+    /**
+     * Registers a fake preference for the request and returns it.
+     *
+     * <p>The store is idempotent per external reference: the first request and its preference are
+     * kept, and later calls with the same reference return the same preference id and local
+     * checkout URL.
+     */
     public PaymentPreferenceResult createPreference(PaymentPreferenceRequest request) {
         preferenceRequests.putIfAbsent(request.externalReference(), request);
         return preferences.computeIfAbsent(request.externalReference(), reference -> new PaymentPreferenceResult(
@@ -40,6 +47,12 @@ public final class LocalMercadoPagoPaymentStore {
         return request;
     }
 
+    /**
+     * Returns the payment registered under a provider payment id.
+     *
+     * <p>Only payments prepared by {@code LocalWebhookPreparationService} are known; an unknown id
+     * fails with {@link IllegalArgumentException}.
+     */
     public ProviderPaymentResult fetchPayment(String providerPaymentId) {
         ProviderPaymentResult payment = payments.get(providerPaymentId);
         if (payment == null) {

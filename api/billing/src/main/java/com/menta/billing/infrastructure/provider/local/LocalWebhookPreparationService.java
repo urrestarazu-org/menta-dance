@@ -30,6 +30,16 @@ public final class LocalWebhookPreparationService {
         this.merchantAccountId = merchantAccountId;
     }
 
+    /**
+     * Prepares a webhook whose provider lookup will report an approved payment that matches the
+     * registered preference.
+     *
+     * <p>Registers the payment in the local store and returns a notification with a valid HMAC
+     * signature over a manifest stamped with the current time; receiving and processing it is left
+     * to Billing's normal flow. The reported merchant account is the configured one, so the payment
+     * matches what the checkout expected. An external reference without a registered preference
+     * fails with {@link IllegalArgumentException}.
+     */
     public LocalWebhookNotification prepareApproved(
         String externalReference, String providerPaymentId, String requestId) {
         return prepare(externalReference, providerPaymentId, requestId, merchantAccountId);

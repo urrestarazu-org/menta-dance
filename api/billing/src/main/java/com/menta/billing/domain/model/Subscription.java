@@ -344,6 +344,14 @@ public final class Subscription {
         );
     }
 
+    /**
+     * Tells whether the subscription currently entitles its user to the plan's courses.
+     *
+     * <p>True only when it is {@code ACTIVE} and its fulfillment snapshot is {@code ASSIGNED}, so a
+     * paid subscription that is active but still pending or in exception fulfillment grants
+     * nothing. A trial is created {@code ACTIVE} and {@code ASSIGNED}, so it grants access
+     * immediately.
+     */
     public boolean grantsAccess() {
         return status == SubscriptionStatus.ACTIVE && fulfillmentStatus == FulfillmentStatus.ASSIGNED;
     }

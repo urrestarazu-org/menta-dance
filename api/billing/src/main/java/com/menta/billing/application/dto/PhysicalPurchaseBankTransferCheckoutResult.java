@@ -24,6 +24,14 @@ public record PhysicalPurchaseBankTransferCheckoutResult(
     String paymentId, String quoteId, String status, String externalReference,
     BankTransferInstructions bankTransferInstructions
 ) {
+    /**
+     * Projects a bank-transfer physical payment into the checkout result.
+     *
+     * <p>The payment must target a physical quote ({@code PaymentTarget.Physical}); any other
+     * target fails with a {@link ClassCastException}. The status is a coarse label in which every
+     * non-terminal state ({@code AwaitingProvider}, {@code AwaitingManualVerification} and {@code
+     * ReconciliationRequired}) reads as {@code PENDING}.
+     */
     public static PhysicalPurchaseBankTransferCheckoutResult from(
         Payment payment, BankTransferInstructions bankTransferInstructions
     ) {

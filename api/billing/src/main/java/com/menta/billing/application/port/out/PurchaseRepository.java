@@ -5,8 +5,23 @@ import com.menta.billing.domain.model.PaymentId;
 import com.menta.billing.domain.model.Purchase;
 import java.util.Optional;
 
+/**
+ * Out-port for persisting and querying {@link Purchase} aggregates, the physical fulfillment record
+ * of a payment.
+ *
+ * <p>The methods follow the concurrency rules of the fulfillment transaction: the isolated insert,
+ * the plain read and the locking read are deliberately separate, as described on each of them. The
+ * JPA adapter requires an ambient transaction for {@code save} and for both reads by payment id,
+ * while {@code saveIsolated} opens its own and {@code findInException} runs read-only on its own.
+ */
 public interface PurchaseRepository {
 
+    /**
+     * Persists the purchase, creating its ordered session rows only on the first save.
+     *
+     * <p>Later saves, such as a status transition, update the purchase row and leave the session
+     * rows untouched.
+     */
     Purchase save(Purchase purchase);
 
     /**

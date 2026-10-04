@@ -24,6 +24,14 @@ public record PhysicalPurchaseCheckoutResult(
     String paymentId, String quoteId, String status, String providerPreferenceId, String checkoutUrl,
     String externalReference, BankTransferInstructions bankTransferInstructions
 ) {
+    /**
+     * Projects a Checkout Pro physical payment into the checkout result, taking the preference id
+     * and checkout URL from the provider's preference.
+     *
+     * <p>{@code bankTransferInstructions} stays {@code null}. The payment must target a physical
+     * quote, otherwise a {@link ClassCastException} is thrown, and the status is a coarse label in
+     * which every non-terminal state reads as {@code PENDING}.
+     */
     public static PhysicalPurchaseCheckoutResult from(Payment payment, PaymentPreferenceResult preference) {
         return build(
             payment, preference.preferenceId(), preference.checkoutUrl(), null

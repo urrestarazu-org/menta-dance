@@ -11,6 +11,7 @@ public final class PaymentProofJpaMapper {
     private PaymentProofJpaMapper() {
     }
 
+    /** Rebuilds the domain proof from a stored row, wrapping the raw ids in their value objects. */
     public static PaymentProof toDomain(PaymentProofJpaEntity entity) {
         return new PaymentProof(
             PaymentProofId.of(entity.getId()),
@@ -23,6 +24,10 @@ public final class PaymentProofJpaMapper {
         );
     }
 
+    /**
+     * Flattens the domain proof into a row, unwrapping the ids and copying the storage key and file
+     * metadata as they are.
+     */
     public static PaymentProofJpaEntity toEntity(PaymentProof proof) {
         return new PaymentProofJpaEntity(
             proof.getId().getValue(),

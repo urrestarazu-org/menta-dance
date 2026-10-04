@@ -115,13 +115,13 @@ class BankTransferCreationBudgetIntegrationTest {
             planRepository, sharedPaymentRepository, subscriptionRepository, rateLimitPort, clock, ACCOUNT
         );
 
-        PhysicalCourseQuoteRepository quoteRepository = mock(PhysicalCourseQuoteRepository.class);
-        PhysicalCourseAvailabilityPort availabilityPort = mock(PhysicalCourseAvailabilityPort.class);
         PaymentRepository physicalPaymentRepository = mock(PaymentRepository.class);
         when(physicalPaymentRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(physicalPaymentRepository.findByExternalReference(any())).thenReturn(Optional.empty());
         fixedQuote = monthlyQuote();
+        PhysicalCourseQuoteRepository quoteRepository = mock(PhysicalCourseQuoteRepository.class);
         when(quoteRepository.findById(fixedQuote.getId().toString())).thenReturn(Optional.of(fixedQuote));
+        PhysicalCourseAvailabilityPort availabilityPort = mock(PhysicalCourseAvailabilityPort.class);
         when(availabilityPort.findScheduledSessions(any(), any(), any())).thenReturn(sessionsFrom(4, 5));
         physicalUseCase = new CreateBankTransferPhysicalPurchaseUseCaseImpl(
             quoteRepository, physicalPaymentRepository, availabilityPort, rateLimitPort, clock, ACCOUNT

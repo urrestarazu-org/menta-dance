@@ -11,6 +11,7 @@ public record PendingVerificationPageResponse(
     List<PendingVerificationItemResponse> items, int page, int size, long totalElements, int totalPages
 ) {
 
+    /** Maps each inbox item and copies the paging data, keeping the order of the items as received (oldest first). */
     public static PendingVerificationPageResponse from(PendingVerificationPage page) {
         return new PendingVerificationPageResponse(
             page.items().stream().map(PendingVerificationItemResponse::from).toList(),

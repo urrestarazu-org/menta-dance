@@ -10,15 +10,30 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+/**
+ * Spring Data repository over {@code billing_subscriptions}.
+ *
+ * <p>Used only through {@code SubscriptionRepositoryAdapter}. Several lookups exist for a distinct
+ * reason, documented on each method: the slot-based current lookup, the strict {@code ACTIVE}
+ * lookup, the overlap query and the expiry sweep.
+ */
 public interface SubscriptionJpaRepository extends JpaRepository<SubscriptionJpaEntity, UUID> {
 
+    /** Finds the subscription created for a payment; there is none for a trial, which has no payment. */
     Optional<SubscriptionJpaEntity> findByPaymentId(UUID paymentId);
 
+    /**
+     * Finds the subscription a user already created with an idempotency key.
+     *
+     * <p>The pair is unique ({@code uq_billing_subscriptions_idempotency}), so a replayed checkout
+     * resolves to one row.
+     */
     Optional<SubscriptionJpaEntity> findByUserIdAndIdempotencyKey(UUID userId, String idempotencyKey);
 
     /** Resolves the user's slot through the column the unique index sits on — never a status scan. */
     Optional<SubscriptionJpaEntity> findByActiveUserId(UUID activeUserId);
 
+    /** Lists every subscription of a user, in no particular order. */
     List<SubscriptionJpaEntity> findAllByUserId(UUID userId);
 
     /**

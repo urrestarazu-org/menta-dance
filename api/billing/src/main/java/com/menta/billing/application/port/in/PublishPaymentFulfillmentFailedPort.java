@@ -20,6 +20,8 @@ import java.util.UUID;
 public interface PublishPaymentFulfillmentFailedPort {
 
     /**
+     * Appends the {@code billing.PaymentFulfillmentFailed} event for a payment to the outbox.
+     *
      * @param paymentId the payment whose fulfillment could not be completed.
      * @param userId the buyer to notify; may be {@code null} when the
      *     {@code Payment} row itself is absent (site 130, {@code payment == null}).

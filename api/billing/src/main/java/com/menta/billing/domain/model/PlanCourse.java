@@ -18,6 +18,12 @@ public final class PlanCourse {
         this.courseId = courseId;
     }
 
+    /**
+     * Creates a reference to a course by its cross-module id.
+     *
+     * <p>A {@code null} or blank id is rejected with {@link IllegalArgumentException}; the id is
+     * not checked against any catalog here.
+     */
     public static PlanCourse of(String courseId) {
         if (courseId == null || courseId.isBlank()) {
             throw new IllegalArgumentException("courseId cannot be null or empty");

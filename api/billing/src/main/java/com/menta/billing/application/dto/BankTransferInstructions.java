@@ -25,6 +25,13 @@ public record BankTransferInstructions(
         Objects.requireNonNull(reference, "reference cannot be null");
     }
 
+    /**
+     * Builds the instructions from the configured bank account plus the amount and reference of the
+     * payment just opened.
+     *
+     * <p>The account's CBU, alias, holder and CUIT are copied as they are, and the canonical
+     * constructor then rejects any {@code null} component with {@link NullPointerException}.
+     */
     public static BankTransferInstructions of(BankAccountDetails account, Money amount, String reference) {
         return new BankTransferInstructions(
             account.cbu(), account.alias(), account.holder(), account.cuit(), amount, reference

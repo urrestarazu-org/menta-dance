@@ -22,6 +22,12 @@ public record UpdatePhysicalCoursePricingRequest(
 
     private static final String DEFAULT_CURRENCY = "ARS";
 
+    /**
+     * Returns the requested currency, or {@code "ARS"} when it is {@code null} or blank.
+     *
+     * <p>The value is not validated as ISO-4217 here; that check happens when the domain builds the
+     * {@code Money}.
+     */
     public String currencyOrDefault() {
         return currency == null || currency.isBlank() ? DEFAULT_CURRENCY : currency;
     }

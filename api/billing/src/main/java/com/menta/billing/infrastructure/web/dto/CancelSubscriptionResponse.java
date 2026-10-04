@@ -15,6 +15,12 @@ import java.time.Instant;
 public record CancelSubscriptionResponse(
     String subscriptionId, String status, Instant accessEndsAt, String cancellationPolicy
 ) {
+    /**
+     * Maps the cancellation result to the wire shape, rendering the status by enum name.
+     *
+     * <p>It exposes the access end date and the plan's cancellation policy text, but never a
+     * cancellation reason.
+     */
     public static CancelSubscriptionResponse from(CancellationResult result) {
         return new CancelSubscriptionResponse(
             result.subscriptionId(), result.status().name(), result.accessEndsAt(), result.cancellationPolicy()

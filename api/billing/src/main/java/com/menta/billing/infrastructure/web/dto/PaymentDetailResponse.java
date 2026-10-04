@@ -20,6 +20,13 @@ public record PaymentDetailResponse(
     String currency, String statusType, Instant createdAt, String proofUrl
 ) {
 
+    /**
+     * Builds the admin detail from a payment and an already prepared proof URL.
+     *
+     * <p>The target is flattened into a modality and a reference (quote id or plan id) and the
+     * status into its upper-snake name. {@code proofUrl} is passed through, so it is {@code null}
+     * when no proof was submitted.
+     */
     public static PaymentDetailResponse from(Payment payment, String proofUrl) {
         return new PaymentDetailResponse(
             payment.getId().getValue(), payment.getUserId(), targetModality(payment.getTarget()),
