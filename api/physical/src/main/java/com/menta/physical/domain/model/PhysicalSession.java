@@ -71,12 +71,19 @@ public final class PhysicalSession {
         return Math.max(0, capacity - assignedSpots - activeCapacityHolds);
     }
 
+    /**
+     * Returns a copy scheduled at the given instant, with every other attribute carried over.
+     *
+     * <p>Whether a session that already happened may be moved is a use case decision, not enforced
+     * here.
+     */
     public PhysicalSession withSchedule(Instant newScheduledAt) {
         return new PhysicalSession(
             id, courseId, newScheduledAt, capacity, assignedSpots, activeCapacityHolds, status, notes
         );
     }
 
+    /** Returns a copy with new notes; {@code null} clears them. */
     public PhysicalSession withNotes(String newNotes) {
         return new PhysicalSession(
             id, courseId, scheduledAt, capacity, assignedSpots, activeCapacityHolds, status, newNotes
@@ -97,12 +104,23 @@ public final class PhysicalSession {
         );
     }
 
+    /**
+     * Returns a copy in {@code CANCELLED} status.
+     *
+     * <p>Cancelling an already cancelled session yields an equivalent copy. Assignments are not
+     * touched here: they remain on record.
+     */
     public PhysicalSession cancel() {
         return new PhysicalSession(
             id, courseId, scheduledAt, capacity, assignedSpots, activeCapacityHolds, SessionStatus.CANCELLED, notes
         );
     }
 
+    /**
+     * Tells whether the scheduled start is strictly before {@code now}.
+     *
+     * <p>A session starting exactly at {@code now} has not occurred yet.
+     */
     public boolean hasOccurred(Instant now) {
         return scheduledAt.isBefore(now);
     }

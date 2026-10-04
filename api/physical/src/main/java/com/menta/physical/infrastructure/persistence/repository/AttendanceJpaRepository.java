@@ -5,6 +5,12 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+/**
+ * Spring Data repository over the {@code physical_attendances} table.
+ *
+ * <p>Used only through {@code AttendanceRepositoryAdapter}; it never leaves the infrastructure
+ * layer.
+ */
 public interface AttendanceJpaRepository extends JpaRepository<AttendanceJpaEntity, UUID> {
 
     /**

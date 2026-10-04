@@ -15,6 +15,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Generates the sessions of a course over a date range after checking that the caller manages it.
+ *
+ * <p>Uses {@code CourseOwnershipGuard} for authorization and persists the whole batch through the
+ * session repository's batch write.
+ */
 public class BatchCreatePhysicalSessionsUseCaseImpl implements BatchCreatePhysicalSessionsUseCase {
 
     private final PhysicalCourseRepository courseRepository;

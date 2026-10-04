@@ -5,9 +5,14 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+/** In-port for the management view of a course's sessions (US-PHYSICAL-006), cancelled ones included. */
 public interface ListManagedPhysicalSessionsUseCase {
 
     /**
+     * Lists the sessions of a course for its owner or an administrator, whatever their status.
+     *
+     * <p>Each session reports live assigned and held counts.
+     *
      * @param from lower bound (inclusive), or {@code null} for an
      *     effectively unbounded lower end — the implementation decides what
      *     "unbounded" resolves to.

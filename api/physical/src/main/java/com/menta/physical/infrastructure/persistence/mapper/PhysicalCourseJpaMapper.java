@@ -13,6 +13,12 @@ public final class PhysicalCourseJpaMapper {
     private PhysicalCourseJpaMapper() {
     }
 
+    /**
+     * Rebuilds the domain course from a stored row.
+     *
+     * <p>The stored day of week and level must be valid enum names, otherwise {@link
+     * IllegalArgumentException} is thrown.
+     */
     public static PhysicalCourse toDomain(PhysicalCourseJpaEntity entity) {
         return new PhysicalCourse(
             CourseId.of(entity.getId()),

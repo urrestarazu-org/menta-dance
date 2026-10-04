@@ -6,7 +6,7 @@ import java.util.UUID;
 
 /**
  * Outcome of {@link ConvertCapacityHoldUseCase#convertAll} (design B3,
- * "Data Flow"):
+ * "Data Flow"). The possible results are:
  *
  * <ul>
  *   <li>{@link HoldNotFound} — zero rows for {@code paymentId}: the payment

@@ -25,6 +25,13 @@ public final class MonthlyAttendanceAssembler {
     private MonthlyAttendanceAssembler() {
     }
 
+    /**
+     * Builds the monthly attendance summary from rows that are already scoped to the reader.
+     *
+     * <p>The rate is attended over scheduled sessions as a percentage with two decimals, and is
+     * {@code 0.00} when there are no rows. {@code includeAbsent} only filters the {@code sessions}
+     * list; the counts always cover every row.
+     */
     public static AttendanceHistoryView assemble(
         String period, List<AttendanceHistoryRow> rows, boolean includeAbsent) {
         int scheduledSessionCount = rows.size();

@@ -24,6 +24,8 @@ import java.util.Optional;
 public interface PhysicalCourseAvailabilityPort {
 
     /**
+     * Lists active recurring courses, ordered by id and cursor-paginated.
+     *
      * @param afterCursor {@code null} for the first page; otherwise the
      *     opaque {@code courseId} of the last course seen on the previous
      *     page.

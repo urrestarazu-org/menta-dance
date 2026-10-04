@@ -9,5 +9,10 @@ import java.util.List;
  */
 public interface ListPhysicalDevicesUseCase {
 
+    /**
+     * Returns every registered device, whatever its status.
+     *
+     * <p>Ordered by creation time and then id; unpaginated by design.
+     */
     List<PhysicalDeviceView> list();
 }

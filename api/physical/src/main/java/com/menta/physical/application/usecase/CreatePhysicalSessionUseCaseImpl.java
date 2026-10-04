@@ -12,6 +12,12 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
 
+/**
+ * Creates one session for a course after checking that the caller manages it.
+ *
+ * <p>Uses {@code CourseOwnershipGuard} for authorization and saves the session through the session
+ * repository, which re-reads it with live availability counts.
+ */
 public class CreatePhysicalSessionUseCaseImpl implements CreatePhysicalSessionUseCase {
 
     private final PhysicalCourseRepository courseRepository;

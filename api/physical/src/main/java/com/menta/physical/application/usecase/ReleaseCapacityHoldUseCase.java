@@ -22,6 +22,11 @@ public class ReleaseCapacityHoldUseCase {
         this.holdWriter = holdWriter;
     }
 
+    /**
+     * Deletes every hold row of a payment in a new transaction.
+     *
+     * <p>Idempotent: releasing an unknown payment id is a no-op.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void release(UUID paymentId) {
         holdWriter.release(paymentId);

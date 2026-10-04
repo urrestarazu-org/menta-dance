@@ -18,5 +18,11 @@ import java.time.Instant;
  */
 public interface Clock {
 
+    /**
+     * Returns the current instant.
+     *
+     * <p>The single seam for time in the application layer, so use cases can be tested
+     * deterministically.
+     */
     Instant now();
 }

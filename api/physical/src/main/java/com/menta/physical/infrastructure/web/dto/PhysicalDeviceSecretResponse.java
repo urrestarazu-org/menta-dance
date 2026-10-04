@@ -9,6 +9,7 @@ import com.menta.physical.application.dto.PhysicalDeviceSecretResult;
  */
 public record PhysicalDeviceSecretResponse(PhysicalDeviceResponse device, String secret) {
 
+    /** Combines the secret-less device data with the one-time raw secret from the use case result. */
     public static PhysicalDeviceSecretResponse from(PhysicalDeviceSecretResult result) {
         return new PhysicalDeviceSecretResponse(
             PhysicalDeviceResponse.from(result.device()), result.rawSecret()

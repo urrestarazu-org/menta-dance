@@ -15,19 +15,27 @@ import java.time.Instant;
  */
 public interface PhysicalSessionAvailabilityProjection {
 
+    /** Session id as the raw 16-byte {@code BINARY(16)} value; decoded by the mapper. */
     byte[] getId();
 
+    /** Course id as the raw 16-byte {@code BINARY(16)} value; decoded by the mapper. */
     byte[] getCourseId();
 
+    /** Instant at which the session starts. */
     Instant getScheduledAt();
 
+    /** Configured capacity of the session. */
     Integer getCapacity();
 
+    /** Live count of confirmed assignments, computed by a correlated subquery at query time. */
     Integer getAssignedSpots();
 
+    /** Live count of unconverted holds that have not expired at the query's {@code now}. */
     Integer getActiveCapacityHolds();
 
+    /** Session status name, parsed into {@code SessionStatus} by the mapper. */
     String getStatus();
 
+    /** Free-text notes of the session; may be {@code null}. */
     String getNotes();
 }

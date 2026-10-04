@@ -14,6 +14,7 @@ public record AccessQrResponse(
     int refreshAfterSeconds
 ) {
 
+    /** Maps the QR view, rendering the expiry instant as text. */
     public static AccessQrResponse from(AccessQrView view) {
         return new AccessQrResponse(
             view.qrCredentials(), view.expiresAt().toString(), view.refreshAfterSeconds()

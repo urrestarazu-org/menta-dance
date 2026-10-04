@@ -10,6 +10,12 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+/**
+ * Spring Data repository over the {@code physical_courses} table.
+ *
+ * <p>Used only through {@code PhysicalCourseRepositoryAdapter}; it never leaves the infrastructure
+ * layer.
+ */
 public interface PhysicalCourseJpaRepository extends JpaRepository<PhysicalCourseJpaEntity, UUID> {
 
     /**

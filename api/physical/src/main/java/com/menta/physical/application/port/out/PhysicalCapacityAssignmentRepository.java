@@ -22,6 +22,11 @@ import java.util.UUID;
  */
 public interface PhysicalCapacityAssignmentRepository {
 
+    /**
+     * Tells whether the student holds a confirmed assignment for the session.
+     *
+     * <p>A plain existence check: a row in the assignments table is by definition confirmed.
+     */
     boolean existsConfirmedAssignment(SessionId sessionId, UUID studentId);
 
     /**

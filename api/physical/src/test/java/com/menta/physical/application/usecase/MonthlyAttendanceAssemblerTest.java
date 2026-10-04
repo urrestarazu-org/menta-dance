@@ -64,7 +64,7 @@ class MonthlyAttendanceAssemblerTest {
         assertThat(view.attendanceRate()).isEqualByComparingTo("80.00");
     }
 
-    /** design C6/Risk #5 — multiply-by-100-before-dividing, pinned as its own case. */
+    /** Design C6/Risk #5 — multiply-by-100-before-dividing, pinned as its own case. */
     @Test
     void two_of_three_attended_rounds_half_up_to_66_67_not_67_00() {
         List<AttendanceHistoryRow> rows = List.of(

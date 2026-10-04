@@ -17,6 +17,7 @@ public record CheckInResponse(
     String kind
 ) {
 
+    /** Maps the attendance view, rendering id and instant as text and the kind by enum name. */
     public static CheckInResponse from(AttendanceView view) {
         return new CheckInResponse(
             view.attendanceId().toString(), view.recordedAt().toString(), view.kind().name()

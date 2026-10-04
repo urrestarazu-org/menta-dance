@@ -15,6 +15,7 @@ import java.util.UUID;
  */
 public sealed interface AttendanceViewer {
 
+    /** The student whose attendance is being read, whoever is doing the reading. */
     UUID studentId();
 
     record Self(UUID studentId) implements AttendanceViewer {}

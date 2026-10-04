@@ -28,6 +28,13 @@ public record CheckInCommand(
     CheckInActor actor
 ) {
 
+    /**
+     * Builds the command for a door-reader QR scan.
+     *
+     * <p>Always tagged {@link AttendanceKind#QR} and carrying {@link CheckInActor#anonymous()}: the
+     * reader authenticates with its device token rather than a user identity, and the student comes
+     * from the signed QR credential, so {@code studentId} stays {@code null}.
+     */
     public static CheckInCommand qr(
         SessionId sessionId, String qrCredentials, String deviceId, String deviceToken
     ) {
@@ -37,6 +44,13 @@ public record CheckInCommand(
         );
     }
 
+    /**
+     * Builds the command for a receptionist-initiated manual check-in.
+     *
+     * <p>Always tagged {@link AttendanceKind#MANUAL}. The student being checked in is explicit, the
+     * acting staff member travels in {@code actor}, and the QR-only fields (credentials, device id
+     * and device token) are {@code null}.
+     */
     public static CheckInCommand manual(SessionId sessionId, UUID studentId, CheckInActor actor) {
         return new CheckInCommand(
             sessionId, AttendanceKind.MANUAL, studentId, null, null, null, actor

@@ -375,12 +375,12 @@ class ProcessPhysicalCheckInUseCaseImplTest {
 
         @Test
         void receptionist_reaches_past_the_role_gate() {
-            UUID actorId = UUID.randomUUID();
             allowHappyPathUpToLocks();
             when(lockPort.acquireIfAbsent(anyString(), eq(LOCK_TTL))).thenReturn(Optional.of("nonce"));
             when(attendanceRepository.save(any(Attendance.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
+            UUID actorId = UUID.randomUUID();
             CheckInResult result =
                 useCase.checkInManually(CheckInCommand.manual(sessionId, studentId, receptionist(actorId)));
 
@@ -390,12 +390,12 @@ class ProcessPhysicalCheckInUseCaseImplTest {
 
         @Test
         void admin_also_reaches_past_the_role_gate() {
-            UUID actorId = UUID.randomUUID();
             allowHappyPathUpToLocks();
             when(lockPort.acquireIfAbsent(anyString(), eq(LOCK_TTL))).thenReturn(Optional.of("nonce"));
             when(attendanceRepository.save(any(Attendance.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
+            UUID actorId = UUID.randomUUID();
             CheckInResult result =
                 useCase.checkInManually(CheckInCommand.manual(sessionId, studentId, admin(actorId)));
 
@@ -555,13 +555,13 @@ class ProcessPhysicalCheckInUseCaseImplTest {
 
         @Test
         void acquires_exactly_one_lock_with_the_shared_attendance_key_and_persists_the_actor_as_device_id() {
-            UUID actorId = UUID.randomUUID();
             allowHappyPathUpToLocks();
             when(lockPort.acquireIfAbsent(anyString(), eq(LOCK_TTL))).thenReturn(Optional.of("nonce"));
             ArgumentCaptor<Attendance> attendanceCaptor = ArgumentCaptor.forClass(Attendance.class);
             when(attendanceRepository.save(attendanceCaptor.capture()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
+            UUID actorId = UUID.randomUUID();
             CheckInResult result = useCase.checkInManually(
                 CheckInCommand.manual(sessionId, studentId, receptionist(actorId)));
 
