@@ -9,6 +9,7 @@ public record PublicLessonPremiumAccessibleResponse(
     PublicLessonAccessMetadataDto access
 ) implements PublicLessonResponse {
 
+    /** Maps the premium view, marking the access metadata as entitled. */
     public static PublicLessonPremiumAccessibleResponse from(PublicLessonPremiumAccessibleView view) {
         return new PublicLessonPremiumAccessibleResponse(
             PublicLessonDetailDto.fromPremium(view.lesson()),

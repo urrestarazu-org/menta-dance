@@ -16,6 +16,10 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+/**
+ * Default {@link ReorderVirtualModulesUseCase}, wrapped by its transactional decorator in {@code
+ * VirtualConfiguration}, so the writes and the audit row commit together.
+ */
 public class ReorderVirtualModulesUseCaseImpl implements ReorderVirtualModulesUseCase {
 
     private final VirtualCourseRepository courseRepository;

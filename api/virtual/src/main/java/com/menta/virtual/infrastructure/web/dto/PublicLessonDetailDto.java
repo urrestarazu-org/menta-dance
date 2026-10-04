@@ -23,6 +23,7 @@ public record PublicLessonDetailDto(
     String thumbnailUrl
 ) {
 
+    /** Maps the application detail to its wire form, copying {@code videoId} exactly as the view carries it. */
     public static PublicLessonDetailDto fromFree(PublicLessonDetailView view) {
         // Free view constructs the detail record with videoId == null;
         // serialise as null intentionally so the JSON shape is uniform
@@ -38,6 +39,7 @@ public record PublicLessonDetailDto(
         );
     }
 
+    /** Maps the detail of an accessible premium lesson; it shares the mapping of {@link #fromFree}. */
     public static PublicLessonDetailDto fromPremium(PublicLessonDetailView view) {
         return fromFree(view);
     }

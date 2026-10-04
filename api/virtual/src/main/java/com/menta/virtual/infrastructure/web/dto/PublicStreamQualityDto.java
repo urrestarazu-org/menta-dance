@@ -10,6 +10,7 @@ import com.menta.virtual.application.dto.PublicStreamQuality;
  */
 public record PublicStreamQualityDto(String label, long bitrate) {
 
+    /** Maps the application rendition to its wire form. */
     public static PublicStreamQualityDto from(PublicStreamQuality quality) {
         return new PublicStreamQualityDto(quality.label(), quality.bitrate());
     }

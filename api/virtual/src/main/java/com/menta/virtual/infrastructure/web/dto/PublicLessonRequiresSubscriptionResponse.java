@@ -14,6 +14,7 @@ public record PublicLessonRequiresSubscriptionResponse(
     PublicLessonAccessDto access
 ) implements PublicLessonResponse {
 
+    /** Maps the teaser view and its access decision. */
     public static PublicLessonRequiresSubscriptionResponse from(PublicLessonRequiresSubscriptionView view) {
         return new PublicLessonRequiresSubscriptionResponse(
             PublicLessonPreviewDto.from(view.lesson()),

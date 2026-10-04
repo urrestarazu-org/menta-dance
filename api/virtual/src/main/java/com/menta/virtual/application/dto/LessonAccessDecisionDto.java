@@ -21,6 +21,10 @@ public record LessonAccessDecisionDto(
     String plansUrl
 ) {
 
+    /**
+     * Builds the block for an authenticated caller without a current entitlement: not allowed,
+     * reason {@code SUBSCRIPTION_REQUIRED}, a fixed Spanish message and the given plans URL.
+     */
     public static LessonAccessDecisionDto requiresSubscription(String plansUrl) {
         return new LessonAccessDecisionDto(
             false,

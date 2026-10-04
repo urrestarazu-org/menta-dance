@@ -4,6 +4,9 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.PositiveOrZero;
 
 /**
+ * Request body for creating a lesson; the title and description must not be blank and the numeric
+ * fields must not be negative.
+ *
  * @param durationMinutes an integer, not the {@code "mm:ss"} display string
  *     from the original US-VIRTUAL-006 example — {@code
  *     virtual_lessons.duration_minutes} has been an {@code INT} since #46.

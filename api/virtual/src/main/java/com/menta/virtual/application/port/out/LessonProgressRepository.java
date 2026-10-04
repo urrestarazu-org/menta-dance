@@ -13,8 +13,13 @@ import java.util.UUID;
  */
 public interface LessonProgressRepository {
 
+    /** Finds the progress of a user in a lesson; there is at most one row per user and lesson. */
     Optional<LessonProgress> findByUserIdAndLessonId(UUID userId, LessonId lessonId);
 
+    /**
+     * Inserts or updates the progress row and returns the persisted state; an update keeps the
+     * creation timestamp of the existing row.
+     */
     LessonProgress save(LessonProgress progress);
 
     /** Rows already ordered for resume selection — see {@link CourseProgressRowProjection}. */

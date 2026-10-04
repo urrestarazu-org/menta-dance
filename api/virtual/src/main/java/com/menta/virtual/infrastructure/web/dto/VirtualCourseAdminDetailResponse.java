@@ -45,6 +45,7 @@ public record VirtualCourseAdminDetailResponse(
     AdminStats stats
 ) {
 
+    /** Maps the admin detail view; the status is rendered by its enum name and the total duration is formatted. */
     public static VirtualCourseAdminDetailResponse fromVirtualAdmin(VirtualCourseAdminDetailView view) {
         return new VirtualCourseAdminDetailResponse(
             view.courseId(),
@@ -67,6 +68,7 @@ public record VirtualCourseAdminDetailResponse(
         List<AdminLessonDetail> lessons
     ) {
 
+        /** Maps the admin module projection with its lessons. */
         public static AdminModuleDetail from(VirtualModuleAdminDetail module) {
             return new AdminModuleDetail(
                 module.moduleId(),
@@ -86,6 +88,7 @@ public record VirtualCourseAdminDetailResponse(
         String videoId
     ) {
 
+        /** Maps the admin lesson projection, which carries the {@code videoId}. */
         public static AdminLessonDetail from(VirtualLessonAdminSummary lesson) {
             return new AdminLessonDetail(
                 lesson.lessonId(),
@@ -104,6 +107,7 @@ public record VirtualCourseAdminDetailResponse(
         String totalDuration
     ) {
 
+        /** Builds the statistics block, formatting the total duration with {@link Formats#formatTotalDuration}. */
         public static AdminStats of(int moduleCount, int lessonCount, int totalDurationMinutes) {
             return new AdminStats(
                 moduleCount,
@@ -137,6 +141,10 @@ public record VirtualCourseAdminDetailResponse(
         private Formats() {
         }
 
+        /**
+         * Formats minutes as {@code Xm} below one hour and as {@code Xh Ym} otherwise; negative
+         * input is clamped to zero.
+         */
         public static String formatTotalDuration(int minutes) {
             int safe = Math.max(0, minutes);
             if (safe < 60) {

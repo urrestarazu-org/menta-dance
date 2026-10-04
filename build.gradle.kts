@@ -43,10 +43,8 @@ val moduleCoverageFloor = mapOf(
 // re-measures and commits the exact count of every task it touches. A task
 // with no entry (and whose module is not strict) fails the build.
 // Measure: ./gradlew <checkstyle tasks> --rerun-tasks --no-build-cache --continue
-val checkstyleWarningCeiling = mapOf(
-    ":api:virtual:checkstyleMain" to 170,
-    ":api:virtual:checkstyleTest" to 5,
-)
+// Empty: every JVM module is strict now; the map goes away with the W3 default-severity flip.
+val checkstyleWarningCeiling = emptyMap<String, Int>()
 
 // Modules that reached 0 warnings: both Checkstyle tasks run with severity
 // `error` and need no ceiling entry. A module is added here in the same PR
@@ -55,7 +53,7 @@ val checkstyleWarningCeiling = mapOf(
 // Checkstyle tasks are NO-SOURCE) but `./gradlew build` realizes them, so it
 // starts strict with zero findings.
 val checkstyleStrictModules = setOf(
-    ":api", ":api:app", ":api:auth", ":api:billing", ":api:physical", ":api:shared", ":bff"
+    ":api", ":api:app", ":api:auth", ":api:billing", ":api:physical", ":api:shared", ":api:virtual", ":bff"
 )
 
 // Modules whose coverage feeds the aggregated report below.

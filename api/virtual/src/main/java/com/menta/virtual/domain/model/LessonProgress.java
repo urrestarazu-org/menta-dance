@@ -38,6 +38,10 @@ public final class LessonProgress {
         this.positionUpdatedAt = positionUpdatedAt;
     }
 
+    /**
+     * Creates the initial progress of a user in a lesson: a fresh id, position {@code 0}, not
+     * completed and without timestamps.
+     */
     public static LessonProgress start(UUID userId, LessonId lessonId, CourseId courseId) {
         return new LessonProgress(LessonProgressId.generate(), userId, lessonId, courseId, 0, false, null, null);
     }

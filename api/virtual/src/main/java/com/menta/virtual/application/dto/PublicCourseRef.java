@@ -8,6 +8,7 @@ public record PublicCourseRef(
     String title
 ) {
 
+    /** Builds the reference from a course id, rendered as its UUID string, and its title. */
     public static PublicCourseRef of(CourseId id, String title) {
         return new PublicCourseRef(id.toString(), title);
     }

@@ -37,11 +37,11 @@ class VirtualCourseRepositoryAdapterTest {
     private final VirtualCourseRepositoryAdapter adapter =
         new VirtualCourseRepositoryAdapter(courseRepository, moduleRepository, lessonRepository);
 
-    private static VirtualCourseJpaEntity aCourseEntity(UUID id) {
-        return aCourseEntity(id, CourseStatus.PUBLISHED);
+    private static VirtualCourseJpaEntity courseEntity(UUID id) {
+        return courseEntity(id, CourseStatus.PUBLISHED);
     }
 
-    private static VirtualCourseJpaEntity aCourseEntity(UUID id, CourseStatus status) {
+    private static VirtualCourseJpaEntity courseEntity(UUID id, CourseStatus status) {
         Instant now = Instant.now();
         return new VirtualCourseJpaEntity(
             id, "Tango Básico", "desc", "descripción larga", UUID.randomUUID(), "https://cdn/img.jpg", "tango",
@@ -63,7 +63,7 @@ class VirtualCourseRepositoryAdapterTest {
         UUID withAggregates = UUID.randomUUID();
         UUID withoutAggregates = UUID.randomUUID();
         when(courseRepository.findByStatusAfterCursor(any(), any(), any()))
-            .thenReturn(List.of(aCourseEntity(withAggregates), aCourseEntity(withoutAggregates)));
+            .thenReturn(List.of(courseEntity(withAggregates), courseEntity(withoutAggregates)));
 
         ModuleCountProjection moduleCount = mock(ModuleCountProjection.class);
         when(moduleCount.getCourseId()).thenReturn(withAggregates);
@@ -94,7 +94,7 @@ class VirtualCourseRepositoryAdapterTest {
     @Test
     void find_published_by_id_returns_the_course_with_its_aggregates() {
         UUID id = UUID.randomUUID();
-        when(courseRepository.findById(id)).thenReturn(Optional.of(aCourseEntity(id)));
+        when(courseRepository.findById(id)).thenReturn(Optional.of(courseEntity(id)));
 
         ModuleCountProjection moduleCount = mock(ModuleCountProjection.class);
         when(moduleCount.getCourseId()).thenReturn(id);
@@ -126,7 +126,7 @@ class VirtualCourseRepositoryAdapterTest {
     @Test
     void find_published_by_id_returns_empty_when_the_course_is_not_published() {
         UUID id = UUID.randomUUID();
-        when(courseRepository.findById(id)).thenReturn(Optional.of(aCourseEntity(id, CourseStatus.DRAFT)));
+        when(courseRepository.findById(id)).thenReturn(Optional.of(courseEntity(id, CourseStatus.DRAFT)));
 
         assertThat(adapter.findPublishedById(CourseId.of(id))).isEmpty();
     }
@@ -134,7 +134,7 @@ class VirtualCourseRepositoryAdapterTest {
     @Test
     void find_by_id_is_unfiltered_by_status() {
         UUID id = UUID.randomUUID();
-        when(courseRepository.findById(id)).thenReturn(Optional.of(aCourseEntity(id, CourseStatus.DRAFT)));
+        when(courseRepository.findById(id)).thenReturn(Optional.of(courseEntity(id, CourseStatus.DRAFT)));
 
         Optional<VirtualCourse> result = adapter.findById(CourseId.of(id));
 
@@ -158,7 +158,7 @@ class VirtualCourseRepositoryAdapterTest {
         // exist for the course id; the port must NOT silently promote to
         // null/not-applicable.
         UUID id = UUID.randomUUID();
-        when(courseRepository.findById(id)).thenReturn(Optional.of(aCourseEntity(id, CourseStatus.DRAFT)));
+        when(courseRepository.findById(id)).thenReturn(Optional.of(courseEntity(id, CourseStatus.DRAFT)));
         when(moduleRepository.countByCourseIdIn(List.of(id))).thenReturn(List.of());
         when(lessonRepository.aggregateByCourseIdIn(List.of(id))).thenReturn(List.of());
 
@@ -178,7 +178,7 @@ class VirtualCourseRepositoryAdapterTest {
         // it intact so operators can inspect (and un-archive) it.
         UUID id = UUID.randomUUID();
         when(courseRepository.findById(id))
-            .thenReturn(Optional.of(aCourseEntity(id, CourseStatus.ARCHIVED)));
+            .thenReturn(Optional.of(courseEntity(id, CourseStatus.ARCHIVED)));
 
         ModuleCountProjection moduleCount = mock(ModuleCountProjection.class);
         when(moduleCount.getCourseId()).thenReturn(id);
@@ -206,7 +206,7 @@ class VirtualCourseRepositoryAdapterTest {
         // also in scope here so operators browsing their full inventory
         // (including the already-published half) get the same counts.
         UUID id = UUID.randomUUID();
-        when(courseRepository.findById(id)).thenReturn(Optional.of(aCourseEntity(id)));
+        when(courseRepository.findById(id)).thenReturn(Optional.of(courseEntity(id)));
 
         ModuleCountProjection moduleCount = mock(ModuleCountProjection.class);
         when(moduleCount.getCourseId()).thenReturn(id);
@@ -231,7 +231,7 @@ class VirtualCourseRepositoryAdapterTest {
     @Test
     void find_all_maps_every_course_regardless_of_status() {
         when(courseRepository.findAll()).thenReturn(
-            List.of(aCourseEntity(UUID.randomUUID(), CourseStatus.DRAFT), aCourseEntity(UUID.randomUUID()))
+            List.of(courseEntity(UUID.randomUUID(), CourseStatus.DRAFT), courseEntity(UUID.randomUUID()))
         );
 
         assertThat(adapter.findAll()).hasSize(2);
@@ -241,7 +241,7 @@ class VirtualCourseRepositoryAdapterTest {
     void find_by_professor_id_maps_every_owned_course() {
         UUID professorId = UUID.randomUUID();
         when(courseRepository.findByProfessorId(professorId))
-            .thenReturn(List.of(aCourseEntity(UUID.randomUUID(), CourseStatus.DRAFT)));
+            .thenReturn(List.of(courseEntity(UUID.randomUUID(), CourseStatus.DRAFT)));
 
         assertThat(adapter.findByProfessorId(professorId)).hasSize(1);
     }
@@ -299,7 +299,7 @@ class VirtualCourseRepositoryAdapterTest {
         UUID second = UUID.randomUUID();
         UUID unknown = UUID.randomUUID();
         when(courseRepository.findByIdInAndStatus(anyCollection(), eq(CourseStatus.PUBLISHED)))
-            .thenReturn(List.of(aCourseEntity(first), aCourseEntity(second)));
+            .thenReturn(List.of(courseEntity(first), courseEntity(second)));
 
         ModuleCountProjection moduleCount = mock(ModuleCountProjection.class);
         when(moduleCount.getCourseId()).thenReturn(first);

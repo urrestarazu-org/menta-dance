@@ -18,6 +18,7 @@ public record PublicLessonPreviewDto(
     String thumbnailUrl
 ) {
 
+    /** Maps the application teaser projection to its wire form. */
     public static PublicLessonPreviewDto from(PublicLessonPreviewView view) {
         return new PublicLessonPreviewDto(
             view.lessonId(),

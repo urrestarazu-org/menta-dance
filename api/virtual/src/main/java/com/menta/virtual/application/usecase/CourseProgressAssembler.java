@@ -15,6 +15,11 @@ public final class CourseProgressAssembler {
     private CourseProgressAssembler() {
     }
 
+    /**
+     * Builds the course-progress view from the ordered rows of a user: the completed rows are
+     * counted, the first row becomes the resume lesson ({@code null} when there are no rows) and
+     * the percentage is rounded half up, capped at 99 unless every lesson is completed.
+     */
     public static CourseProgressView assemble(
         String courseId, List<CourseProgressRowProjection> orderedRows, long totalLessons
     ) {

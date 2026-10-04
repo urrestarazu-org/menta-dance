@@ -13,6 +13,10 @@ public final class VirtualCourseJpaMapper {
     private VirtualCourseJpaMapper() {
     }
 
+    /**
+     * Rebuilds the domain course from its stored row; the counts are passed in because the entity
+     * does not store them and the adapter computes them separately.
+     */
     public static VirtualCourse toDomain(
         VirtualCourseJpaEntity entity, int moduleCount, int lessonCount, int totalDurationMinutes
     ) {

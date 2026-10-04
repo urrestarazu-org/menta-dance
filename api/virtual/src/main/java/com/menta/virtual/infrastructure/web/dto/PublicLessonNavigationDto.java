@@ -13,6 +13,7 @@ public record PublicLessonNavigationDto(
     PublicLessonSummaryRefDto nextLesson
 ) {
 
+    /** Maps the navigation; a missing previous or next pointer stays {@code null}. */
     public static PublicLessonNavigationDto from(PublicLessonNavigation navigation) {
         return new PublicLessonNavigationDto(
             navigation.previousLesson() == null ? null : PublicLessonSummaryRefDto.from(navigation.previousLesson()),

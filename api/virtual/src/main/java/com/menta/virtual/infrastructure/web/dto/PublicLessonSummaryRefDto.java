@@ -13,6 +13,7 @@ public record PublicLessonSummaryRefDto(
     boolean isFree
 ) {
 
+    /** Maps the application sibling reference to its wire form. */
     public static PublicLessonSummaryRefDto from(PublicLessonNavigationRef ref) {
         return new PublicLessonSummaryRefDto(ref.lessonId(), ref.title(), ref.isFree());
     }

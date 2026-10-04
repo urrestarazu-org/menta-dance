@@ -82,34 +82,42 @@ public final class VirtualCourse {
         return status == CourseStatus.DRAFT;
     }
 
+    /** Returns whether the given user is this course's owner, that is, whether it equals {@code professorId}. */
     public boolean isOwnedBy(UUID candidateProfessorId) {
         return professorId.equals(candidateProfessorId);
     }
 
+    /** Returns a copy of this course with another title; the course itself is immutable. */
     public VirtualCourse withTitle(String newTitle) {
         return copyWith(newTitle, shortDescription, description, imageUrl, category, level, premium, status);
     }
 
+    /** Returns a copy of this course with another short description. */
     public VirtualCourse withShortDescription(String newShortDescription) {
         return copyWith(title, newShortDescription, description, imageUrl, category, level, premium, status);
     }
 
+    /** Returns a copy of this course with another description. */
     public VirtualCourse withDescription(String newDescription) {
         return copyWith(title, shortDescription, newDescription, imageUrl, category, level, premium, status);
     }
 
+    /** Returns a copy of this course with another image URL. */
     public VirtualCourse withImageUrl(String newImageUrl) {
         return copyWith(title, shortDescription, description, newImageUrl, category, level, premium, status);
     }
 
+    /** Returns a copy of this course with another category. */
     public VirtualCourse withCategory(CourseCategory newCategory) {
         return copyWith(title, shortDescription, description, imageUrl, newCategory, level, premium, status);
     }
 
+    /** Returns a copy of this course with another level. */
     public VirtualCourse withLevel(CourseLevel newLevel) {
         return copyWith(title, shortDescription, description, imageUrl, category, newLevel, premium, status);
     }
 
+    /** Returns a copy of this course with the premium flag changed. */
     public VirtualCourse withPremium(boolean newPremium) {
         return copyWith(title, shortDescription, description, imageUrl, category, level, newPremium, status);
     }

@@ -11,6 +11,7 @@ public final class VirtualModuleJpaMapper {
     private VirtualModuleJpaMapper() {
     }
 
+    /** Rebuilds the domain module from its stored row, wrapping the stored UUIDs in their value objects. */
     public static VirtualModule toDomain(VirtualModuleJpaEntity entity) {
         return new VirtualModule(
             ModuleId.of(entity.getId()), CourseId.of(entity.getCourseId()), entity.getTitle(), entity.isPreview(),
@@ -18,6 +19,7 @@ public final class VirtualModuleJpaMapper {
         );
     }
 
+    /** Builds the stored row of a module, unwrapping its value objects. */
     public static VirtualModuleJpaEntity toEntity(VirtualModule module) {
         return new VirtualModuleJpaEntity(
             module.getId().getValue(), module.getCourseId().getValue(), module.getTitle(), module.isPreview(),

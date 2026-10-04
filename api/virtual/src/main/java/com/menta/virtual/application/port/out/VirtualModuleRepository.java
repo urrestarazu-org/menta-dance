@@ -9,15 +9,22 @@ import java.util.Optional;
 /** Persistence port for {@link VirtualModule}. */
 public interface VirtualModuleRepository {
 
+    /** Finds a module by id. */
     Optional<VirtualModule> findById(ModuleId moduleId);
 
     /** Every module of a course, ordered by {@code order} ascending. */
     List<VirtualModule> findByCourseId(CourseId courseId);
 
+    /** Counts the modules of a course. */
     int countByCourseId(CourseId courseId);
 
+    /** Inserts or updates a module and returns the persisted state. */
     VirtualModule save(VirtualModule module);
 
+    /**
+     * Inserts or updates all the given modules in one call; the reorder use case uses it to persist
+     * a new display order.
+     */
     void saveAll(List<VirtualModule> modules);
 
     /**

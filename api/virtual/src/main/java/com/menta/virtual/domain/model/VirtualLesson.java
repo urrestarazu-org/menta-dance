@@ -43,6 +43,10 @@ public final class VirtualLesson {
         this.order = order;
     }
 
+    /**
+     * Creates a lesson with a fresh {@link LessonId}; the constructor rules apply, so duration and
+     * order must not be negative.
+     */
     public static VirtualLesson create(
         ModuleId moduleId, CourseId courseId, String title, String description, String videoId,
         int durationMinutes, boolean free, int order
@@ -62,26 +66,32 @@ public final class VirtualLesson {
         return videoId != null && !videoId.isBlank();
     }
 
+    /** Returns a copy of this lesson with another title; the lesson itself is immutable. */
     public VirtualLesson withTitle(String newTitle) {
         return new VirtualLesson(id, moduleId, courseId, newTitle, description, videoId, durationMinutes, free, order);
     }
 
+    /** Returns a copy of this lesson with another description. */
     public VirtualLesson withDescription(String newDescription) {
         return new VirtualLesson(id, moduleId, courseId, title, newDescription, videoId, durationMinutes, free, order);
     }
 
+    /** Returns a copy of this lesson with another video id; a {@code null} id leaves the lesson incomplete. */
     public VirtualLesson withVideoId(String newVideoId) {
         return new VirtualLesson(id, moduleId, courseId, title, description, newVideoId, durationMinutes, free, order);
     }
 
+    /** Returns a copy of this lesson with another duration in minutes, which must not be negative. */
     public VirtualLesson withDurationMinutes(int newDurationMinutes) {
         return new VirtualLesson(id, moduleId, courseId, title, description, videoId, newDurationMinutes, free, order);
     }
 
+    /** Returns a copy of this lesson with the free flag changed. */
     public VirtualLesson withFree(boolean newFree) {
         return new VirtualLesson(id, moduleId, courseId, title, description, videoId, durationMinutes, newFree, order);
     }
 
+    /** Returns a copy of this lesson with another display order, which must not be negative. */
     public VirtualLesson withOrder(int newOrder) {
         return new VirtualLesson(id, moduleId, courseId, title, description, videoId, durationMinutes, free, newOrder);
     }

@@ -17,6 +17,11 @@ public final class CourseCategory {
         this.value = value;
     }
 
+    /**
+     * Creates a category from its name; a {@code null} or blank value is rejected with {@link
+     * IllegalArgumentException}. The text is stored exactly as given, with no trimming or case
+     * folding.
+     */
     public static CourseCategory of(String value) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException("CourseCategory cannot be null or blank");

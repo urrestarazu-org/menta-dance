@@ -11,6 +11,10 @@ import com.menta.virtual.domain.model.VirtualCourse;
 import com.menta.virtual.domain.model.VirtualModule;
 import java.util.UUID;
 
+/**
+ * Default {@link CreateVirtualModuleUseCase}, wrapped by its transactional decorator in {@code
+ * VirtualConfiguration}, so the writes and the audit row commit together.
+ */
 public class CreateVirtualModuleUseCaseImpl implements CreateVirtualModuleUseCase {
 
     private final VirtualCourseRepository courseRepository;

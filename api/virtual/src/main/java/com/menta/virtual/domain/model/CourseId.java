@@ -12,6 +12,7 @@ public final class CourseId {
         this.value = value;
     }
 
+    /** Wraps an existing UUID; {@code null} is rejected with {@link IllegalArgumentException}. */
     public static CourseId of(UUID value) {
         if (value == null) {
             throw new IllegalArgumentException("CourseId cannot be null");
@@ -19,6 +20,10 @@ public final class CourseId {
         return new CourseId(value);
     }
 
+    /**
+     * Parses the textual form of a UUID; a {@code null}, blank or malformed value is rejected with
+     * {@link IllegalArgumentException}.
+     */
     public static CourseId of(String value) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException("CourseId cannot be null or empty");
@@ -30,6 +35,7 @@ public final class CourseId {
         }
     }
 
+    /** Creates an id backed by a random UUID. */
     public static CourseId generate() {
         return new CourseId(UUID.randomUUID());
     }

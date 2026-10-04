@@ -20,6 +20,11 @@ public final class CourseProgressAccessPolicy {
         this.entitlementPort = Objects.requireNonNull(entitlementPort, "entitlementPort cannot be null");
     }
 
+    /**
+     * Returns whether the user holds a current entitlement to the course; a {@code null} user, a
+     * missing snapshot and any {@link RuntimeException} from the entitlement port all yield {@code
+     * false}.
+     */
     public boolean isGranted(CourseId courseId, UUID actingUserId) {
         try {
             CourseAccessSnapshot access =
