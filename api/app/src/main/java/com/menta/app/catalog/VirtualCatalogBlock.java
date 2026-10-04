@@ -13,6 +13,15 @@ public record VirtualCatalogBlock(
     int totalDurationMinutes
 ) {
 
+    /**
+     * Projects the virtual-only fields of a course summary into this block.
+     *
+     * <p>Fields shared with physical courses (id, title, level) are deliberately left out because
+     * they live at the top level of the catalog response.</p>
+     *
+     * @param summary the virtual course summary supplied by the virtual module
+     * @return the block carrying the descriptive, category and content-size fields
+     */
     public static VirtualCatalogBlock from(VirtualCourseSummary summary) {
         return new VirtualCatalogBlock(
             summary.shortDescription(), summary.imageUrl(), summary.category(), summary.premium(),

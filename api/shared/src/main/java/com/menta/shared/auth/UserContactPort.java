@@ -17,6 +17,11 @@ import java.util.UUID;
 public interface UserContactPort {
 
     /**
+     * Resolves the address at which a user can currently be reached by email.
+     *
+     * <p>The lookup is read-only and never fails for an unknown user: absence is expressed as an
+     * empty result so the caller can decide whether to skip the notification.</p>
+     *
      * @param userId the user whose contact address is requested
      * @return the user's current email, or {@link Optional#empty()} when no such user exists
      */

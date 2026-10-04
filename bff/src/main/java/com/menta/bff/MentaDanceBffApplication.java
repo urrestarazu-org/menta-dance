@@ -14,6 +14,14 @@ public final class MentaDanceBffApplication {
         // Private constructor to prevent instantiation
     }
 
+    /**
+     * Boots the BFF Spring context.
+     *
+     * <p>The application class is a non-instantiable launcher, so this entry point is the only way
+     * to start it.</p>
+     *
+     * @param args command-line arguments forwarded to Spring Boot
+     */
     public static void main(String[] args) {
         SpringApplication.run(MentaDanceBffApplication.class, args);
     }

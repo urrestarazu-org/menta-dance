@@ -18,6 +18,14 @@ public class MarkPurchaseAssignedAdapter {
         this.markPurchaseAssignedPort = markPurchaseAssignedPort;
     }
 
+    /**
+     * Moves the purchase behind the payment to the assigned state once all its sessions were claimed.
+     *
+     * <p>Pure delegation: the transition rules, and any exception raised when the payment is
+     * unknown, belong to the billing port and propagate to the caller unchanged.</p>
+     *
+     * @param paymentId the payment whose purchase was fully assigned
+     */
     public void markAssigned(PaymentId paymentId) {
         markPurchaseAssignedPort.markAssigned(paymentId);
     }

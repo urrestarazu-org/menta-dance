@@ -39,6 +39,13 @@ public class ClientOriginResolver {
     }
 
     /**
+     * Resolves the address of the client that originated the request.
+     *
+     * <p>The {@code X-Real-IP} header is honored only when the immediate peer belongs to a trusted
+     * proxy range; a missing or blank header also falls back to the peer, and a present value is
+     * trimmed before use.</p>
+     *
+     * @param request the incoming request whose peer address and headers are inspected
      * @return the originating client address, or the immediate peer's address
      *     when no trustworthy origin can be established.
      */

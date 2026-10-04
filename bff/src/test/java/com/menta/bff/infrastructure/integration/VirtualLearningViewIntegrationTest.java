@@ -259,14 +259,6 @@ class VirtualLearningViewIntegrationTest extends BaseIntegrationTest {
                                 }
                                 """.formatted(accessToken))));
 
-        var loginResult = mockMvc.perform(post("/login")
-                        .param("username", "student@example.com")
-                        .param("password", "password123")
-                        .with(csrf()))
-                .andExpect(status().is3xxRedirection())
-                .andReturn();
-        var sessionCookie = loginResult.getResponse().getCookie("SESSION");
-
         stubCourseDetail();
         // The upstream navigation block deliberately differs from course-detail
         // order (which would derive "lesson-1"/"Postura básica" as previous):
@@ -310,6 +302,13 @@ class VirtualLearningViewIntegrationTest extends BaseIntegrationTest {
                                 }
                                 """.formatted(PREMIUM_STREAM_URL))));
 
+        var loginResult = mockMvc.perform(post("/login")
+                        .param("username", "student@example.com")
+                        .param("password", "password123")
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+        var sessionCookie = loginResult.getResponse().getCookie("SESSION");
         var result = mockMvc.perform(get("/courses/{courseId}/lessons/{lessonId}", COURSE_ID, PREMIUM_LESSON_ID)
                         .cookie(sessionCookie))
                 .andExpect(status().isOk())

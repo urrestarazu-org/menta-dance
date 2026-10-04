@@ -22,6 +22,16 @@ public class PublishPaymentFulfillmentFailedAdapter {
         this.publishPaymentFulfillmentFailedPort = publishPaymentFulfillmentFailedPort;
     }
 
+    /**
+     * Publishes the payment-level fulfillment-failed event through the billing port.
+     *
+     * <p>The port commits the publication independently of the caller's transaction, so the event
+     * survives even when that transaction is about to roll back.</p>
+     *
+     * @param paymentId the payment whose fulfillment could not be completed
+     * @param userId the buyer to notify; may be {@code null} when the payment row itself is absent
+     * @param reason the codified fallback reason
+     */
     public void publish(PaymentId paymentId, UUID userId, Reason reason) {
         publishPaymentFulfillmentFailedPort.publish(paymentId, userId, reason);
     }

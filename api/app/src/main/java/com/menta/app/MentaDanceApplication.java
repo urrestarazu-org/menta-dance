@@ -15,6 +15,14 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 @SuppressWarnings("checkstyle:HideUtilityClassConstructor")
 public class MentaDanceApplication {
 
+    /**
+     * Boots the full Menta Dance application.
+     *
+     * <p>Component, JPA repository and entity scanning all cover the whole {@code com.menta}
+     * package, so every module on the classpath is assembled into this single process.</p>
+     *
+     * @param args command-line arguments forwarded to Spring Boot
+     */
     public static void main(String[] args) {
         SpringApplication.run(MentaDanceApplication.class, args);
     }

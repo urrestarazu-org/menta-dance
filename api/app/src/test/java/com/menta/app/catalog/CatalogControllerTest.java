@@ -66,7 +66,7 @@ class CatalogControllerTest {
             .build();
     }
 
-    private static PhysicalCourseSummary aPhysicalCourse(String id) {
+    private static PhysicalCourseSummary physicalCourse(String id) {
         return new PhysicalCourseSummary(id, "Salsa inicial", "María García", "TUESDAY", "19:00", "BEGINNER", 20);
     }
 
@@ -78,7 +78,7 @@ class CatalogControllerTest {
     private void givenPhysicalOnlyCourse() {
         when(virtualPort.findPublishedDetailById("phys-1")).thenReturn(Optional.empty());
         when(physicalPort.findActiveById("phys-1"))
-            .thenReturn(Optional.of(aPhysicalCourse("phys-1")));
+            .thenReturn(Optional.of(physicalCourse("phys-1")));
     }
 
     private JsonNode getBody(String path) throws Exception {
@@ -93,14 +93,14 @@ class CatalogControllerTest {
         return names;
     }
 
-    private static VirtualCourseSummary aVirtualCourse(String id) {
+    private static VirtualCourseSummary virtualCourse(String id) {
         return new VirtualCourseSummary(
             id, "Tango Básico", "Aprendé los pasos fundamentales", "https://cdn/tango.jpg",
             "tango", "BEGINNER", true, 5, 20, 150
         );
     }
 
-    private static VirtualCourseDetailView aVirtualDetail(String id) {
+    private static VirtualCourseDetailView virtualDetail(String id) {
         return new VirtualCourseDetailView(
             id,
             "Tango Básico",
@@ -124,8 +124,8 @@ class CatalogControllerTest {
 
     @Test
     void list_combines_physical_and_virtual_courses() throws Exception {
-        when(physicalPort.listCourses(isNull(), anyInt())).thenReturn(List.of(aPhysicalCourse("phys-1")));
-        when(virtualPort.listPublished(isNull(), anyInt())).thenReturn(List.of(aVirtualCourse("virt-1")));
+        when(physicalPort.listCourses(isNull(), anyInt())).thenReturn(List.of(physicalCourse("phys-1")));
+        when(virtualPort.listPublished(isNull(), anyInt())).thenReturn(List.of(virtualCourse("virt-1")));
 
         mockMvc.perform(get("/api/v1/catalog/courses"))
             .andExpect(status().isOk())
@@ -163,7 +163,7 @@ class CatalogControllerTest {
     @Test
     void get_returns_virtual_detail_with_modules_lessons_and_premium_flag_set() throws Exception {
         when(virtualPort.findPublishedDetailById("virt-1"))
-            .thenReturn(Optional.of(aVirtualDetail("virt-1")));
+            .thenReturn(Optional.of(virtualDetail("virt-1")));
 
         mockMvc.perform(get("/api/v1/catalog/courses/virt-1"))
             .andExpect(status().isOk())
@@ -195,7 +195,7 @@ class CatalogControllerTest {
     @Test
     void get_does_not_ask_the_physical_port_for_a_virtual_detail() throws Exception {
         when(virtualPort.findPublishedDetailById("virt-1"))
-            .thenReturn(Optional.of(aVirtualDetail("virt-1")));
+            .thenReturn(Optional.of(virtualDetail("virt-1")));
 
         mockMvc.perform(get("/api/v1/catalog/courses/virt-1"))
             .andExpect(status().isOk());
@@ -262,7 +262,7 @@ class CatalogControllerTest {
     @Test
     void the_virtual_detail_body_keeps_its_shape_with_no_modality_or_sessions() throws Exception {
         when(virtualPort.findPublishedDetailById("virt-1"))
-            .thenReturn(Optional.of(aVirtualDetail("virt-1")));
+            .thenReturn(Optional.of(virtualDetail("virt-1")));
 
         JsonNode body = getBody("/api/v1/catalog/courses/virt-1");
 

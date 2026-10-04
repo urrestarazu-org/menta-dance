@@ -30,6 +30,16 @@ public record CatalogCourseDetailResponse(
     PublicStats stats
 ) implements CatalogCourseDetail {
 
+    /**
+     * Maps a published virtual course detail view to its public wire shape.
+     *
+     * <p>The view's image URL is exposed as {@code thumbnailUrl}, and the nested modules, lessons
+     * and statistics are converted so that every duration reaches the wire as a formatted string
+     * (see {@link Formats}).</p>
+     *
+     * @param view the published course detail supplied by the virtual module
+     * @return the public detail of that course
+     */
     public static CatalogCourseDetailResponse fromVirtual(VirtualCourseDetailView view) {
         return new CatalogCourseDetailResponse(
             view.courseId(),
@@ -51,6 +61,12 @@ public record CatalogCourseDetailResponse(
         List<PublicLessonDetail> lessons
     ) {
 
+        /**
+         * Maps a module of the virtual detail view, converting each of its lessons.
+         *
+         * @param module the module supplied by the virtual module
+         * @return the public module with its lessons in the order the view provides
+         */
         public static PublicModuleDetail from(VirtualModuleDetail module) {
             return new PublicModuleDetail(
                 module.moduleId(),
@@ -69,6 +85,13 @@ public record CatalogCourseDetailResponse(
         int order
     ) {
 
+        /**
+         * Maps a lesson of the virtual detail view, rendering its duration as a display string.
+         *
+         * @param lesson the lesson supplied by the virtual module
+         * @return the public lesson, with its duration formatted by
+         *     {@link Formats#formatLessonDuration(int)}
+         */
         public static PublicLessonDetail from(VirtualLessonSummary lesson) {
             return new PublicLessonDetail(
                 lesson.lessonId(),
@@ -86,6 +109,13 @@ public record CatalogCourseDetailResponse(
         String totalDuration
     ) {
 
+        /**
+         * Maps the aggregate counters of a course, rendering the total duration as a display string.
+         *
+         * @param stats the course statistics supplied by the virtual module
+         * @return the public statistics, with the total formatted by
+         *     {@link Formats#formatTotalDuration(int)}
+         */
         public static PublicStats of(com.menta.virtual.application.dto.VirtualCourseStats stats) {
             return new PublicStats(
                 stats.moduleCount(),
@@ -125,6 +155,15 @@ public record CatalogCourseDetailResponse(
         private Formats() {
         }
 
+        /**
+         * Formats a lesson duration for display.
+         *
+         * <p>Negative values are clamped to zero. Under an hour the result is zero-padded
+         * {@code "mm:00"}, because the domain has no seconds; from an hour on it is {@code "h:mm"}.</p>
+         *
+         * @param minutes the lesson length in whole minutes
+         * @return the display string, for example {@code "05:00"} or {@code "1:05"}
+         */
         public static String formatLessonDuration(int minutes) {
             int safe = Math.max(0, minutes);
             if (safe < 60) {
@@ -135,6 +174,15 @@ public record CatalogCourseDetailResponse(
             return String.format("%d:%02d", hours, remaining);
         }
 
+        /**
+         * Formats the total duration of a course for display.
+         *
+         * <p>Negative values are clamped to zero. Under an hour the result is {@code "Xm"}; from an
+         * hour on it is {@code "Xh Ym"}, with the minutes part never zero-padded.</p>
+         *
+         * @param minutes the total length in whole minutes
+         * @return the display string, for example {@code "45m"} or {@code "2h 30m"}
+         */
         public static String formatTotalDuration(int minutes) {
             int safe = Math.max(0, minutes);
             if (safe < 60) {

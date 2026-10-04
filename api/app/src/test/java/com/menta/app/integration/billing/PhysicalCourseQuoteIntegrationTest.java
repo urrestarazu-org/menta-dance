@@ -170,7 +170,6 @@ class PhysicalCourseQuoteIntegrationTest extends AbstractBillingMySqlIntegration
     @Test
     void monthly_quote_succeeds_with_available_sessions_in_september_2026() {
         when(clock.now()).thenReturn(SEPTEMBER_NOW);
-        UUID studentId = issueUser(Role.STUDENT);
         UUID courseId = seedCourse();
         seedPricing(courseId.toString(), "150.00", "10");
         seedSession(courseId, Instant.parse("2026-09-05T20:00:00Z"), 20);
@@ -180,6 +179,7 @@ class PhysicalCourseQuoteIntegrationTest extends AbstractBillingMySqlIntegration
         // Just outside September must never be counted.
         seedSession(courseId, Instant.parse("2026-10-03T20:00:00Z"), 20);
 
+        UUID studentId = issueUser(Role.STUDENT);
         ResponseEntity<Map> response = http.exchange(
             "/api/v1/billing/physical/quotes", HttpMethod.POST,
             new HttpEntity<>(quoteBody(courseId.toString(), "MONTHLY", null), headersFor(studentId, Role.STUDENT)),
@@ -198,7 +198,6 @@ class PhysicalCourseQuoteIntegrationTest extends AbstractBillingMySqlIntegration
     @Test
     void monthly_quote_succeeds_with_available_sessions_in_october_2026() {
         when(clock.now()).thenReturn(OCTOBER_NOW);
-        UUID studentId = issueUser(Role.STUDENT);
         UUID courseId = seedCourse();
         seedPricing(courseId.toString(), "150.00", "10");
         // October 2026 has 31 days -- five weekly sessions fit, unlike September's four.
@@ -210,6 +209,7 @@ class PhysicalCourseQuoteIntegrationTest extends AbstractBillingMySqlIntegration
         // Just outside October must never be counted.
         seedSession(courseId, Instant.parse("2026-11-04T20:00:00Z"), 20);
 
+        UUID studentId = issueUser(Role.STUDENT);
         ResponseEntity<Map> response = http.exchange(
             "/api/v1/billing/physical/quotes", HttpMethod.POST,
             new HttpEntity<>(quoteBody(courseId.toString(), "MONTHLY", null), headersFor(studentId, Role.STUDENT)),
@@ -223,7 +223,6 @@ class PhysicalCourseQuoteIntegrationTest extends AbstractBillingMySqlIntegration
     @Test
     void individual_quote_succeeds_and_applies_the_surcharge() {
         when(clock.now()).thenReturn(SEPTEMBER_NOW);
-        UUID studentId = issueUser(Role.STUDENT);
         UUID courseId = seedCourse();
         seedPricing(courseId.toString(), "100.00", "10");
         seedSession(courseId, Instant.parse("2026-09-05T20:00:00Z"), 20);
@@ -231,6 +230,7 @@ class PhysicalCourseQuoteIntegrationTest extends AbstractBillingMySqlIntegration
         UUID selected = seedSession(courseId, Instant.parse("2026-09-19T20:00:00Z"), 20);
         seedSession(courseId, Instant.parse("2026-09-26T20:00:00Z"), 20);
 
+        UUID studentId = issueUser(Role.STUDENT);
         ResponseEntity<Map> response = http.exchange(
             "/api/v1/billing/physical/quotes", HttpMethod.POST,
             new HttpEntity<>(

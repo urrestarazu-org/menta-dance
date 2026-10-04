@@ -79,7 +79,7 @@ class AccountActivationIntegrationTest extends AbstractAuthMySqlIntegrationTest 
     @MockBean private AuthDegradedGuard authDegradedGuard;
     @MockBean private TokenBlacklistPort tokenBlacklistPort;
     /**
-     * api:app now also assembles api:billing, whose plans rate limiter needs
+     * The api:app module now also assembles api:billing, whose plans rate limiter needs
      * a RedisTemplate this slice does not provide.
      */
     @MockBean

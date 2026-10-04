@@ -130,7 +130,7 @@ class HoldExpiryWorkerIntegrationTest extends AbstractPhysicalMySqlIntegrationTe
 
         UUID expiredUnconverted = seedHold(sessionId, now.minusSeconds(60), null);
         UUID oldConverted = seedHold(sessionId, now.plusSeconds(1800), now.minus(2, ChronoUnit.DAYS));
-        UUID stillActive = seedHold(sessionId, now.plusSeconds(1800), null);
+        final UUID stillActive = seedHold(sessionId, now.plusSeconds(1800), null);
 
         worker.sweep();
 

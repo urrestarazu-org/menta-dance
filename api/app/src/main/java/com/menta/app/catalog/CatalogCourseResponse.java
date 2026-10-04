@@ -20,6 +20,15 @@ public record CatalogCourseResponse(
     VirtualCatalogBlock virtual
 ) {
 
+    /**
+     * Builds the response for a physical course.
+     *
+     * <p>Only the {@code physical} block is populated and {@code virtual} stays {@code null},
+     * preserving the exactly-one-block invariant of this record.</p>
+     *
+     * @param summary the physical course summary supplied by the physical module
+     * @return the catalog entry with modality {@code PHYSICAL}
+     */
     public static CatalogCourseResponse fromPhysical(PhysicalCourseSummary summary) {
         return new CatalogCourseResponse(
             summary.courseId(), CourseModality.PHYSICAL, summary.title(), summary.level(),
@@ -27,6 +36,15 @@ public record CatalogCourseResponse(
         );
     }
 
+    /**
+     * Builds the response for a virtual course.
+     *
+     * <p>Only the {@code virtual} block is populated and {@code physical} stays {@code null},
+     * preserving the exactly-one-block invariant of this record.</p>
+     *
+     * @param summary the virtual course summary supplied by the virtual module
+     * @return the catalog entry with modality {@code VIRTUAL}
+     */
     public static CatalogCourseResponse fromVirtual(VirtualCourseSummary summary) {
         return new CatalogCourseResponse(
             summary.courseId(), CourseModality.VIRTUAL, summary.title(), summary.level(),
