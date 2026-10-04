@@ -1,6 +1,8 @@
 package com.menta.bff.infrastructure.security;
 
 import com.menta.bff.application.dto.LoginCommand;
+import com.menta.bff.application.dto.LoginResult;
+import com.menta.bff.application.port.out.AccessTokenClaimsReader;
 import com.menta.bff.application.port.out.AuthApiClient;
 import com.menta.bff.application.usecase.LoginUseCase;
 import java.util.List;
@@ -10,7 +12,6 @@ import org.springframework.security.authentication.InternalAuthenticationService
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Component;
 
@@ -42,24 +43,24 @@ public class BffAuthenticationProvider implements AuthenticationProvider {
         String email = authentication.getName();
         String password = authentication.getCredentials().toString();
 
+        LoginResult result;
         try {
-            loginUseCase.execute(new LoginCommand(email, password, clientAddressOf(authentication)));
+            result = loginUseCase.execute(new LoginCommand(email, password, clientAddressOf(authentication)));
         } catch (AuthApiClient.AuthenticationException e) {
             throw new BadCredentialsException("Invalid email or password");
         } catch (AuthApiClient.ServiceUnavailableException e) {
             throw new InternalAuthenticationServiceException("Auth service temporarily unavailable");
+        } catch (AccessTokenClaimsReader.UnreadableTokenException e) {
+            // The credentials were right; the Auth API answered with a token we
+            // cannot derive a role from. Not the user's fault, so not a bad password.
+            throw new InternalAuthenticationServiceException("Auth service returned an unusable token", e);
         }
-
-        // TODO: Extract role from JWT claims instead of hardcoding
-        // For MVP, we'll use ROLE_USER
-        List<GrantedAuthority> authorities = List.of(
-            new SimpleGrantedAuthority("ROLE_USER")
-        );
 
         // Credentials are dropped: this token is stored in the session-backed
         // security context and would otherwise outlive the request that
         // carried the password.
-        return new UsernamePasswordAuthenticationToken(email, null, authorities);
+        return new UsernamePasswordAuthenticationToken(
+            email, null, List.of(new SimpleGrantedAuthority("ROLE_" + result.role())));
     }
 
     /**
