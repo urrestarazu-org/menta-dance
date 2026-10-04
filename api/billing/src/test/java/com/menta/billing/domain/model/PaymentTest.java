@@ -90,7 +90,8 @@ class PaymentTest {
         Payment updated = pendingPayment().applyProviderOutcome(mismatched, NOW);
 
         assertThat(updated.getStatus())
-            .isEqualTo(new PaymentStatus.ReconciliationRequired("provider outcome does not match expected payment fields"));
+            .isEqualTo(
+                new PaymentStatus.ReconciliationRequired("provider outcome does not match expected payment fields"));
     }
 
     @Test

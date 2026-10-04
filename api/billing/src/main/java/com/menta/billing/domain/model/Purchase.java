@@ -50,12 +50,12 @@ public final class Purchase {
         return new Purchase(UUID.randomUUID(), paymentId, physicalSessionIds, FulfillmentStatus.EXCEPTION);
     }
 
-    public Purchase assigned() {
-        return new Purchase(id, paymentId, physicalSessionIds, FulfillmentStatus.ASSIGNED);
-    }
-
     public Purchase exception() {
         return new Purchase(id, paymentId, physicalSessionIds, FulfillmentStatus.EXCEPTION);
+    }
+
+    public Purchase assigned() {
+        return new Purchase(id, paymentId, physicalSessionIds, FulfillmentStatus.ASSIGNED);
     }
 
     /** No asistencia se habilita hasta este punto (docs/06-BILLING-API.md) — Physical's own responsibility. */

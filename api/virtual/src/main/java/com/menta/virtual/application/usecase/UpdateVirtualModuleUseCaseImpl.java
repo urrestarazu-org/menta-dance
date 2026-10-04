@@ -32,7 +32,8 @@ public class UpdateVirtualModuleUseCaseImpl implements UpdateVirtualModuleUseCas
         VirtualModule module = ModuleOwnershipGuard.resolveOwnedModule(
             moduleRepository, courseRepository, ModuleId.of(moduleId), actingUserId, actingAsAdmin
         );
-        String before = "title=" + module.getTitle() + ", preview=" + module.isPreview() + ", order=" + module.getOrder();
+        String before = "title=" + module.getTitle() + ", preview=" + module.isPreview() + ", order="
+            + module.getOrder();
 
         VirtualModule updated = module;
         if (command.title().isPresent()) {

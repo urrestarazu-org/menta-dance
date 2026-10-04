@@ -2,7 +2,9 @@ package com.menta.virtual.application.dto;
 
 import java.util.Optional;
 
-/** @param order empty means "append at the end". */
+/**
+ * @param order empty means "append at the end".
+ */
 public record CreateVirtualModuleCommand(String title, Optional<Integer> order, boolean preview) {
 
     public CreateVirtualModuleCommand(String title, Optional<Integer> order) {

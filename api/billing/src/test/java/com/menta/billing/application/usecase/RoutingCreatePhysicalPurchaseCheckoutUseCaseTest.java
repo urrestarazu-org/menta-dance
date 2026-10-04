@@ -63,7 +63,8 @@ class RoutingCreatePhysicalPurchaseCheckoutUseCaseTest {
     @Test
     void dispatches_bank_transfer_to_the_bank_transfer_use_case_and_converts_its_result() {
         CreatePhysicalPurchaseCheckoutCommand command = command(PaymentMethod.BANK_TRANSFER);
-        PhysicalPurchaseBankTransferCheckoutResult bridgeResult = mock(PhysicalPurchaseBankTransferCheckoutResult.class);
+        PhysicalPurchaseBankTransferCheckoutResult bridgeResult =
+            mock(PhysicalPurchaseBankTransferCheckoutResult.class);
         when(bankTransferUseCase.create(command)).thenReturn(bridgeResult);
         when(bridgeResult.paymentId()).thenReturn("pay-1");
         when(bridgeResult.quoteId()).thenReturn("quote-1");

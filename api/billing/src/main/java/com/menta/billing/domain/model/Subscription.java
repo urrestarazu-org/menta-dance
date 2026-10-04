@@ -428,7 +428,10 @@ public final class Subscription {
         return Optional.ofNullable(cancellation);
     }
 
-    /** Whether this subscription was paid for or granted (US-BILLING-012). Descriptive only — never an authorization input. */
+    /**
+     * Whether this subscription was paid for or granted (US-BILLING-012). Descriptive only — never an authorization
+     * input.
+     */
     public SubscriptionType getType() {
         return type;
     }

@@ -164,7 +164,8 @@ public class VirtualConfiguration {
 
     /**
      * US-VIRTUAL-004. Same shape as
-     * {@link #getPublicLessonUseCase(VirtualLessonRepository, VirtualModuleRepository, VirtualCourseRepository, VirtualCourseEntitlementPort)},
+     * {@link #getPublicLessonUseCase(VirtualLessonRepository, VirtualModuleRepository, VirtualCourseRepository,
+     * VirtualCourseEntitlementPort)},
      * but the cross-module {@link VirtualCourseEntitlementPort} is now a
      * stream-authorization dependency rather than a detail-visibility
      * dependency. Both beans share a process-level entitlement projection
@@ -377,7 +378,8 @@ public class VirtualConfiguration {
      * exception here (design.md decision 5) — see {@link CourseProgressAccessPolicy}'s Javadoc.
      */
     @Bean
-    public CourseProgressAccessPolicy courseProgressAccessPolicy(VirtualCourseEntitlementPort virtualCourseEntitlementPort) {
+    public CourseProgressAccessPolicy courseProgressAccessPolicy(
+        VirtualCourseEntitlementPort virtualCourseEntitlementPort) {
         return new CourseProgressAccessPolicy(virtualCourseEntitlementPort);
     }
 

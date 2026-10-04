@@ -75,8 +75,10 @@ public class WebhookVerificationWorker {
                 markProcessed(row);
             }
             case VerificationOutcome.NoLocalPayment noLocalPayment -> {
-                log.warn("No local Payment for providerPaymentId={} — creating reconciliation task", row.getProviderPaymentId());
-                createReconciliationTask(null, row.getProviderPaymentId(), "no local Payment found for providerPaymentId");
+                log.warn("No local Payment for providerPaymentId={} — creating reconciliation task",
+                    row.getProviderPaymentId());
+                createReconciliationTask(
+                    null, row.getProviderPaymentId(), "no local Payment found for providerPaymentId");
                 markReconciliationRequired(row);
             }
         }

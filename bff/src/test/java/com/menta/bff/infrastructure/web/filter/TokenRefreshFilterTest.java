@@ -1,6 +1,9 @@
 package com.menta.bff.infrastructure.web.filter;
 
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import com.menta.bff.application.usecase.GetValidAccessTokenUseCase;
 import jakarta.servlet.FilterChain;
@@ -123,7 +126,8 @@ class TokenRefreshFilterTest {
         when(authentication.isAuthenticated()).thenReturn(true);
         when(securityContext.getAuthentication()).thenReturn(authentication);
         when(getValidAccessTokenUseCase.execute())
-                .thenThrow(new com.menta.bff.application.port.out.AuthApiClient.AuthenticationException("Invalid refresh token"));
+                .thenThrow(new com.menta.bff.application.port.out.AuthApiClient.AuthenticationException(
+                    "Invalid refresh token"));
 
         // When
         filter.doFilterInternal(request, response, filterChain);
@@ -142,7 +146,8 @@ class TokenRefreshFilterTest {
         when(authentication.isAuthenticated()).thenReturn(true);
         when(securityContext.getAuthentication()).thenReturn(authentication);
         when(getValidAccessTokenUseCase.execute())
-                .thenThrow(new com.menta.bff.application.port.out.AuthApiClient.RefreshTokenRevokedException("Token family revoked"));
+                .thenThrow(new com.menta.bff.application.port.out.AuthApiClient.RefreshTokenRevokedException(
+                    "Token family revoked"));
 
         // When
         filter.doFilterInternal(request, response, filterChain);
@@ -161,7 +166,8 @@ class TokenRefreshFilterTest {
         when(authentication.isAuthenticated()).thenReturn(true);
         when(securityContext.getAuthentication()).thenReturn(authentication);
         when(getValidAccessTokenUseCase.execute())
-                .thenThrow(new com.menta.bff.application.port.out.AuthApiClient.ServiceUnavailableException("Auth API unavailable"));
+                .thenThrow(new com.menta.bff.application.port.out.AuthApiClient.ServiceUnavailableException(
+                    "Auth API unavailable"));
 
         // When
         filter.doFilterInternal(request, response, filterChain);

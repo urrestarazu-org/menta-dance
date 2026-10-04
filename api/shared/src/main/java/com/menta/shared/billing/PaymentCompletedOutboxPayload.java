@@ -18,9 +18,10 @@ import java.util.UUID;
  * <h2>Validation rules — all enforced in the compact constructor</h2>
  * <ul>
  *   <li>{@code paymentId} — non-null UUID (carried to {@code common_outbox_events.aggregate_id VARCHAR(64)}).</li>
- *   <li>String fields — non-blank, max length 64 (matches {@code billing_payments.provider_payment_id VARCHAR(64)} for the
- *       {@code providerPaymentId} field; the others follow the same defensive contract).</li>
- *   <li>{@code amount} — {@code BigDecimal.signum() >= 0} (mirrors {@code chk_billing_payments_amount_non_negative}, V8 line 22).</li>
+ *   <li>String fields — non-blank, max length 64 (matches {@code billing_payments.provider_payment_id VARCHAR(64)}
+ *       for the {@code providerPaymentId} field; the others follow the same defensive contract).</li>
+ *   <li>{@code amount} — {@code BigDecimal.signum() >= 0} (mirrors {@code chk_billing_payments_amount_non_negative}, V8
+ *       line 22).</li>
  *   <li>{@code currency} — exactly 3 ISO-4217 characters (matches {@code CHAR(3)}).</li>
  *   <li>{@code confirmedAt} — ISO-8601 UTC {@link Instant}; rejects any non-UTC offset.</li>
  * </ul>

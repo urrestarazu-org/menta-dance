@@ -148,7 +148,8 @@ class SubmitPaymentProofUseCaseImplTest {
     void invalid_content_never_touches_the_limiter_or_storage() {
         when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(awaitingVerificationPayment(USER_ID)));
         SubmitPaymentProofCommand invalid = new SubmitPaymentProofCommand(
-            PAYMENT_ID.toString(), USER_ID, new PaymentProofUpload("application/pdf", "fake.pdf", 3, new byte[]{1, 2, 3})
+            PAYMENT_ID.toString(), USER_ID,
+                new PaymentProofUpload("application/pdf", "fake.pdf", 3, new byte[]{1, 2, 3})
         );
 
         assertThatThrownBy(() -> useCase.submit(invalid)).isInstanceOf(PaymentProofRejectedException.class);

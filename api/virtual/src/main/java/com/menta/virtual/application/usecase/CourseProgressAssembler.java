@@ -25,7 +25,8 @@ public final class CourseProgressAssembler {
             }
         }
         CourseProgressView.ResumeLesson resume = orderedRows.isEmpty() ? null : resumeFrom(orderedRows.get(0));
-        return new CourseProgressView(courseId, completed, (int) totalLessons, percentageOf(completed, totalLessons), resume);
+        return new CourseProgressView(
+            courseId, completed, (int) totalLessons, percentageOf(completed, totalLessons), resume);
     }
 
     private static CourseProgressView.ResumeLesson resumeFrom(CourseProgressRowProjection row) {

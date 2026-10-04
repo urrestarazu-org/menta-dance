@@ -98,7 +98,8 @@ class GetLessonViewUseCaseImplTest {
     }
 
     @Test
-    @DisplayName("free lesson granted (200, videoId null) returns Playable and still calls getStream with a null token, non-empty streamUrl")
+    @DisplayName("free lesson granted (200, videoId null) returns Playable and still calls getStream with a null "
+        + "token, non-empty streamUrl")
     void shouldReturnPlayableForFreeGrantedLessonCallingStreamWithNullToken() {
         CourseDetail course = sampleCourseDetail();
         LessonDetail freeLesson = sampleLessonDetail(FREE_LESSON_ID, null, sampleNavigation());
@@ -116,7 +117,8 @@ class GetLessonViewUseCaseImplTest {
     }
 
     @Test
-    @DisplayName("entitled premium lesson (200, videoId present) returns Playable and calls getStream with the caller's token")
+    @DisplayName(
+        "entitled premium lesson (200, videoId present) returns Playable and calls getStream with the caller's token")
     void shouldReturnPlayableForEntitledLessonCallingStreamWithCallerToken() {
         String token = "user-token-abc";
         CourseDetail course = sampleCourseDetail();
@@ -135,7 +137,8 @@ class GetLessonViewUseCaseImplTest {
     }
 
     @Test
-    @DisplayName("granted lesson (200) renders navigation from the lesson endpoint's own block, not course-detail order")
+    @DisplayName(
+        "granted lesson (200) renders navigation from the lesson endpoint's own block, not course-detail order")
     void shouldUseNavigationFromLessonEndpointWhenGranted() {
         CourseDetail course = sampleCourseDetail();
         Nav upstreamNav = new Nav(

@@ -182,7 +182,8 @@ class PaymentProofSubmissionIntegrationTest extends AbstractBillingMySqlIntegrat
     }
 
     @SuppressWarnings("unchecked")
-    private ResponseEntity<java.util.Map> submitProofUnauthenticated(String paymentId, byte[] content, String filename) {
+    private ResponseEntity<java.util.Map> submitProofUnauthenticated(
+        String paymentId, byte[] content, String filename) {
         MultiValueMap<String, Object> multipart = new LinkedMultiValueMap<>();
         multipart.add("file", namedResource(content, filename));
         HttpHeaders headers = new HttpHeaders();

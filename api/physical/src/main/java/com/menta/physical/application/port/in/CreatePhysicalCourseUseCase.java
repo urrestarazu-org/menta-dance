@@ -16,5 +16,6 @@ public interface CreatePhysicalCourseUseCase {
      *     reads Spring Security authorities) resolves the role into this
      *     boolean before calling in.
      */
-    PhysicalCourseManagementResult create(CreatePhysicalCourseCommand command, UUID actingUserId, boolean actingAsAdmin);
+    PhysicalCourseManagementResult create(
+        CreatePhysicalCourseCommand command, UUID actingUserId, boolean actingAsAdmin);
 }

@@ -405,7 +405,8 @@ class VirtualLearningViewIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("entitled student with resumable progress: renders Continuar with exact data and a query/fragment-free link")
+    @DisplayName(
+        "entitled student with resumable progress: renders Continuar with exact data and a query/fragment-free link")
     void entitledStudentWithProgress_shouldRenderContinuarWithExactDataAndCleanLink() throws Exception {
         Cookie sessionCookie = loginAndGetSessionCookie();
         stubCourseDetail();

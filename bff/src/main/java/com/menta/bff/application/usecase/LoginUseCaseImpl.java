@@ -32,7 +32,8 @@ public class LoginUseCaseImpl implements LoginUseCase {
             SessionTokenRepository sessionTokenRepository
     ) {
         this.authApiClient = Objects.requireNonNull(authApiClient, "authApiClient cannot be null");
-        this.sessionTokenRepository = Objects.requireNonNull(sessionTokenRepository, "sessionTokenRepository cannot be null");
+        this.sessionTokenRepository =
+            Objects.requireNonNull(sessionTokenRepository, "sessionTokenRepository cannot be null");
     }
 
     @Override

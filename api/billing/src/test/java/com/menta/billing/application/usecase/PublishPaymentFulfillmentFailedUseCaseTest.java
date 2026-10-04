@@ -137,7 +137,7 @@ class PublishPaymentFulfillmentFailedUseCaseTest {
         void fails_without_appending_when_payload_serialization_fails() throws Exception {
             ObjectWriter failingWriter = mock(ObjectWriter.class);
             when(failingWriter.writeValueAsString(any()))
-                .thenThrow(new JsonProcessingException("serialization failed") { });
+                .thenThrow(new JsonProcessingException("serialization failed") {});
             useCase = new PublishPaymentFulfillmentFailedUseCase(outboxAppender, clock, failingWriter);
 
             assertThatThrownBy(() -> useCase.publish(PAYMENT_ID, USER_ID, Reason.TARGET_NOT_SCHEDULED))

@@ -65,7 +65,9 @@ public final class Password {
         return violations;
     }
 
-    /** @return the plaintext, for handing to the password encoder only. */
+    /**
+     * @return the plaintext, for handing to the password encoder only.
+     */
     public String value() {
         return value;
     }

@@ -19,7 +19,8 @@ public class ActivationTokenJpaEntity {
     @Column(name = "user_id", columnDefinition = "BINARY(16)", nullable = false)
     private UUID userId;
 
-    @Column(name = "token_hash", columnDefinition = "CHAR(64)", length = 64, nullable = false, unique = true, updatable = false)
+    @Column(name = "token_hash", columnDefinition = "CHAR(64)", length = 64, nullable = false, unique = true,
+        updatable = false)
     private String tokenHash;
 
     @Column(name = "delivery_ciphertext", columnDefinition = "VARBINARY(1024)")
@@ -64,16 +65,47 @@ public class ActivationTokenJpaEntity {
         this.invalidatedAt = invalidatedAt;
     }
 
-    public UUID getId() { return id; }
-    public UUID getUserId() { return userId; }
-    public String getTokenHash() { return tokenHash; }
-    public byte[] getDeliveryCiphertext() { return deliveryCiphertext; }
-    public byte[] getDeliveryNonce() { return deliveryNonce; }
-    public Short getDeliveryKeyVersion() { return deliveryKeyVersion; }
-    public Instant getExpiresAt() { return expiresAt; }
-    public Instant getCreatedAt() { return createdAt; }
-    public Instant getUsedAt() { return usedAt; }
-    public Instant getInvalidatedAt() { return invalidatedAt; }
+    public UUID getId() {
+        return id;
+    }
 
-    public void setUserId(UUID userId) { this.userId = userId; }
+    public UUID getUserId() {
+        return userId;
+    }
+
+    public String getTokenHash() {
+        return tokenHash;
+    }
+
+    public byte[] getDeliveryCiphertext() {
+        return deliveryCiphertext;
+    }
+
+    public byte[] getDeliveryNonce() {
+        return deliveryNonce;
+    }
+
+    public Short getDeliveryKeyVersion() {
+        return deliveryKeyVersion;
+    }
+
+    public Instant getExpiresAt() {
+        return expiresAt;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public Instant getUsedAt() {
+        return usedAt;
+    }
+
+    public Instant getInvalidatedAt() {
+        return invalidatedAt;
+    }
+
+    public void setUserId(UUID userId) {
+        this.userId = userId;
+    }
 }

@@ -131,7 +131,8 @@ class WebhookVerificationWorkerTest {
         ArgumentCaptor<Payment> paymentCaptor = ArgumentCaptor.forClass(Payment.class);
         verify(paymentRepository).save(paymentCaptor.capture());
         assertThat(paymentCaptor.getValue().getStatus()).isInstanceOf(PaymentStatus.ReconciliationRequired.class);
-        ArgumentCaptor<ReconciliationTaskJpaEntity> taskCaptor = ArgumentCaptor.forClass(ReconciliationTaskJpaEntity.class);
+        ArgumentCaptor<ReconciliationTaskJpaEntity> taskCaptor =
+            ArgumentCaptor.forClass(ReconciliationTaskJpaEntity.class);
         verify(reconciliationTaskRepository).save(taskCaptor.capture());
         assertThat(taskCaptor.getValue().getPaymentId()).isEqualTo(pending.getId().getValue());
     }
@@ -145,7 +146,8 @@ class WebhookVerificationWorkerTest {
         worker.process(row);
 
         verify(paymentRepository, never()).save(any());
-        ArgumentCaptor<ReconciliationTaskJpaEntity> taskCaptor = ArgumentCaptor.forClass(ReconciliationTaskJpaEntity.class);
+        ArgumentCaptor<ReconciliationTaskJpaEntity> taskCaptor =
+            ArgumentCaptor.forClass(ReconciliationTaskJpaEntity.class);
         verify(reconciliationTaskRepository).save(taskCaptor.capture());
         assertThat(taskCaptor.getValue().getPaymentId()).isNull();
     }

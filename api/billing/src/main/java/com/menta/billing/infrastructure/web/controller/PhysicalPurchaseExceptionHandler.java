@@ -25,7 +25,10 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice(annotations = PhysicalPurchaseEndpoint.class)
 public class PhysicalPurchaseExceptionHandler {
 
-    /** A7: a time-limited artifact whose remedy is a fresh one — same precedent as {@code PasswordResetTokenExpiredException}. */
+    /**
+     * A7: a time-limited artifact whose remedy is a fresh one — same precedent as
+     * {@code PasswordResetTokenExpiredException}.
+     */
     @ExceptionHandler(PhysicalCourseQuoteExpiredException.class)
     ResponseEntity<ProblemDetail> quoteExpired(PhysicalCourseQuoteExpiredException exception) {
         return ProblemDetails.response(

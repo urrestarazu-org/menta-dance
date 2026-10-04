@@ -43,7 +43,7 @@ public class HmacSha256WebhookSignatureVerifier implements WebhookSignatureVerif
             switch (keyValue[0].trim()) {
                 case "ts" -> timestamp = keyValue[1].trim();
                 case "v1" -> hash = keyValue[1].trim();
-                default -> { }
+                default -> {}
             }
         }
         if (timestamp == null || hash == null) {

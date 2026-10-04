@@ -28,7 +28,8 @@ public interface GetValidAccessTokenUseCase {
      * @return Valid access token (JWT)
      * @throws SessionNotFoundException if no active session exists
      * @throws com.menta.bff.application.port.out.AuthApiClient.AuthenticationException if refresh token invalid
-     * @throws com.menta.bff.application.port.out.AuthApiClient.RefreshTokenRevokedException if token family revoked (security breach)
+     * @throws com.menta.bff.application.port.out.AuthApiClient.RefreshTokenRevokedException if token family revoked
+     *     (security breach)
      * @throws com.menta.bff.application.port.out.AuthApiClient.ServiceUnavailableException if Auth API unavailable
      */
     String execute();

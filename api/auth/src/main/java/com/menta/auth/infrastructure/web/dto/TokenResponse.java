@@ -10,8 +10,8 @@ import java.time.Duration;
  * <p>The refresh_token is returned in the X-Refresh-Token HTTP header for
  * security reasons (not exposed in response body).
  *
- * <p>The Java field names stay semantic (camelCase, Duration). Jackson's
- * @JsonProperty maps them to the spec-required snake_case JSON so the
+ * <p>The Java field names stay semantic (camelCase, Duration). Jackson's @JsonProperty
+ * maps them to the spec-required snake_case JSON so the
  * application layer never leaks wire-format concerns.
  */
 public record TokenResponse(

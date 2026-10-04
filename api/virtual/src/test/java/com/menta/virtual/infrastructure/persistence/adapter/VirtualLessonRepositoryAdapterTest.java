@@ -72,7 +72,8 @@ class VirtualLessonRepositoryAdapterTest {
 
     @Test
     void save_delegates_and_maps_back() {
-        VirtualLesson lesson = VirtualLesson.create(ModuleId.generate(), CourseId.generate(), "L1", "d", "v", 10, false, 0);
+        VirtualLesson lesson =
+            VirtualLesson.create(ModuleId.generate(), CourseId.generate(), "L1", "d", "v", 10, false, 0);
         when(jpaRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         assertThat(adapter.save(lesson).getTitle()).isEqualTo("L1");

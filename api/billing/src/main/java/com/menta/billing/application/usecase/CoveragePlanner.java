@@ -116,7 +116,8 @@ public final class CoveragePlanner {
             .filter(session -> session.sessionId().equals(selectedSessionId))
             .filter(session -> !requireAvailable || session.availableSpots() > 0)
             .findFirst()
-            .<Plan>map(session -> new Plan.Complete(List.of(new EligibleSession(session.sessionId(), session.scheduledAt()))))
+            .<Plan>map(
+                session -> new Plan.Complete(List.of(new EligibleSession(session.sessionId(), session.scheduledAt()))))
             .orElseGet(Plan.Insufficient::new);
     }
 

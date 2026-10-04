@@ -30,7 +30,8 @@ public final class LocalWebhookPreparationService {
         this.merchantAccountId = merchantAccountId;
     }
 
-    public LocalWebhookNotification prepareApproved(String externalReference, String providerPaymentId, String requestId) {
+    public LocalWebhookNotification prepareApproved(
+        String externalReference, String providerPaymentId, String requestId) {
         return prepare(externalReference, providerPaymentId, requestId, merchantAccountId);
     }
 
@@ -69,5 +70,5 @@ public final class LocalWebhookPreparationService {
         }
     }
 
-    public record LocalWebhookNotification(String providerPaymentId, String requestId, String signature) { }
+    public record LocalWebhookNotification(String providerPaymentId, String requestId, String signature) {}
 }

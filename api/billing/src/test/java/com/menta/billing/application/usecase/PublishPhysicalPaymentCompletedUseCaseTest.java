@@ -161,7 +161,7 @@ class PublishPhysicalPaymentCompletedUseCaseTest {
         void fails_without_appending_when_payload_serialization_fails() throws Exception {
             ObjectWriter failingWriter = mock(ObjectWriter.class);
             when(failingWriter.writeValueAsString(any()))
-                .thenThrow(new JsonProcessingException("serialization failed") { });
+                .thenThrow(new JsonProcessingException("serialization failed") {});
             useCase = new PublishPhysicalPaymentCompletedUseCase(outboxAppender, failingWriter);
 
             assertThatThrownBy(() -> useCase.handle(physicalPayment(new PaymentStatus.Completed(NOW))))

@@ -55,7 +55,8 @@ class PurchaseExceptionNotificationOutboxEventHandlerTest {
 
         handler.handle(row);
 
-        ArgumentCaptor<PurchaseExceptionNotification> captor = ArgumentCaptor.forClass(PurchaseExceptionNotification.class);
+        ArgumentCaptor<PurchaseExceptionNotification> captor =
+            ArgumentCaptor.forClass(PurchaseExceptionNotification.class);
         verify(notificationPort).notify(captor.capture());
         PurchaseExceptionNotification notification = captor.getValue();
         assertThat(notification.paymentId()).isEqualTo(PAYMENT_ID);
@@ -76,7 +77,8 @@ class PurchaseExceptionNotificationOutboxEventHandlerTest {
 
         handler.handle(row);
 
-        ArgumentCaptor<PurchaseExceptionNotification> captor = ArgumentCaptor.forClass(PurchaseExceptionNotification.class);
+        ArgumentCaptor<PurchaseExceptionNotification> captor =
+            ArgumentCaptor.forClass(PurchaseExceptionNotification.class);
         verify(notificationPort).notify(captor.capture());
         PurchaseExceptionNotification notification = captor.getValue();
         assertThat(notification.paymentId()).isEqualTo(PAYMENT_ID);

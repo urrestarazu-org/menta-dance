@@ -25,7 +25,8 @@ public final class MonthlyAttendanceAssembler {
     private MonthlyAttendanceAssembler() {
     }
 
-    public static AttendanceHistoryView assemble(String period, List<AttendanceHistoryRow> rows, boolean includeAbsent) {
+    public static AttendanceHistoryView assemble(
+        String period, List<AttendanceHistoryRow> rows, boolean includeAbsent) {
         int scheduledSessionCount = rows.size();
         int attended = 0;
         List<AttendanceSessionView> sessions = new ArrayList<>();

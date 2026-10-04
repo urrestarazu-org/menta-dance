@@ -74,7 +74,10 @@ public final class SubscriptionJpaMapper {
         );
     }
 
-    /** NULL {@code cancelled_at} means this row was never cancelled through {@code Subscription.cancel} — pre-existing terminal-payment rows map to {@link java.util.Optional#empty()} (A8 / V17 migration note). */
+    /**
+     * NULL {@code cancelled_at} means this row was never cancelled through {@code Subscription.cancel} — pre-existing
+     * terminal-payment rows map to {@link java.util.Optional#empty()} (A8 / V17 migration note).
+     */
     private static Cancellation toCancellation(SubscriptionJpaEntity entity) {
         if (entity.getCancelledAt() == null) {
             return null;
@@ -82,7 +85,9 @@ public final class SubscriptionJpaMapper {
         return new Cancellation(entity.getCancelledAt(), entity.getCancelledBy(), entity.getCancellationReason());
     }
 
-    /** NULL {@code granted_at} means this row is not a TRIAL — every PAID row back-filled by V18 (US-BILLING-012 A17). */
+    /**
+     * NULL {@code granted_at} means this row is not a TRIAL — every PAID row back-filled by V18 (US-BILLING-012 A17).
+     */
     private static TrialGrant toTrialGrant(SubscriptionJpaEntity entity) {
         if (entity.getGrantedAt() == null) {
             return null;

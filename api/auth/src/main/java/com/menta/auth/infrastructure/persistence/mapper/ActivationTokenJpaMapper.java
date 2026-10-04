@@ -8,7 +8,7 @@ import com.menta.auth.infrastructure.persistence.entity.ActivationTokenJpaEntity
 /** Keeps JPA delivery-envelope details outside the activation domain aggregate. */
 public final class ActivationTokenJpaMapper {
 
-    private ActivationTokenJpaMapper() { }
+    private ActivationTokenJpaMapper() {}
 
     public static ActivationTokenJpaEntity toJpaEntity(ActivationToken token) {
         return toJpaEntity(token, null);

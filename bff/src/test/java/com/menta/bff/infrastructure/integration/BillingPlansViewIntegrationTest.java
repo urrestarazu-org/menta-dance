@@ -135,7 +135,8 @@ class BillingPlansViewIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("billing 503 renders the shared error view with no leaked problem-detail body and no plans-specific copy")
+    @DisplayName(
+        "billing 503 renders the shared error view with no leaked problem-detail body and no plans-specific copy")
     void billingUnavailable_shouldRenderErrorViewWithoutLeakingUpstreamDetails() throws Exception {
         WIRE_MOCK_SERVER.stubFor(WireMock.get(urlEqualTo(PLANS_URL))
                 .willReturn(aResponse()

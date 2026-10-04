@@ -58,7 +58,10 @@ class GetPublicLessonStreamUseCaseImplTest {
     private final VirtualCourseEntitlementPort entitlementPort = mock(VirtualCourseEntitlementPort.class);
     private final BunnyNetSignatureService signatureService = mock(BunnyNetSignatureService.class);
     private final Clock fixedClock = new Clock() {
-        @Override public Instant now() { return java.time.Clock.fixed(FIXED_NOW, ZoneOffset.UTC).instant(); }
+        @Override
+        public Instant now() {
+            return java.time.Clock.fixed(FIXED_NOW, ZoneOffset.UTC).instant();
+        }
     };
     private final GetPublicLessonStreamUseCaseImpl useCase = new GetPublicLessonStreamUseCaseImpl(
         lessonRepository, moduleRepository, new LessonAccessPolicy(entitlementPort), signatureService, fixedClock
@@ -109,13 +112,15 @@ class GetPublicLessonStreamUseCaseImplTest {
         PublicLessonStreamView view = ((PublicLessonStreamResult.Authorized) result).view();
 
         // Stream URL must come from the signature service, byte-for-byte, with the TTL epoch-second forwarded.
-        verify(signatureService).generateSignedUrl(eq("vid-target"), eq(FIXED_NOW.plus(Duration.ofHours(4)).getEpochSecond()));
+        verify(signatureService)
+            .generateSignedUrl(eq("vid-target"), eq(FIXED_NOW.plus(Duration.ofHours(4)).getEpochSecond()));
         assertThat(view.streamUrl()).isEqualTo(PULL_ZONE_HOSTNAME + "/" + VIDEO_LIBRARY_ID + "/" + "vid-target");
         assertThat(view.type()).isEqualTo("HLS");
         assertThat(view.lessonId()).isEqualTo(lessonId.toString());
         assertThat(view.lessonTitle()).isEqualTo("Caminata");
         assertThat(view.lessonDurationFormatted()).isEqualTo("15:00");
-        assertThat(view.expiresAt()).isCloseTo(FIXED_NOW.plus(Duration.ofHours(4)), within(100, java.time.temporal.ChronoUnit.MILLIS));
+        assertThat(view.expiresAt())
+            .isCloseTo(FIXED_NOW.plus(Duration.ofHours(4)), within(100, java.time.temporal.ChronoUnit.MILLIS));
         assertThat(view.qualities())
             .extracting(PublicStreamQuality::label, PublicStreamQuality::bitrate)
             .containsExactly(

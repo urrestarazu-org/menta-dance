@@ -17,11 +17,11 @@ public sealed interface AttendanceViewer {
 
     UUID studentId();
 
-    record Self(UUID studentId) implements AttendanceViewer { }
+    record Self(UUID studentId) implements AttendanceViewer {}
 
-    record Admin(UUID studentId) implements AttendanceViewer { }
+    record Admin(UUID studentId) implements AttendanceViewer {}
 
-    record InstructorOwnCourses(UUID studentId, UUID professorId) implements AttendanceViewer { }
+    record InstructorOwnCourses(UUID studentId, UUID professorId) implements AttendanceViewer {}
 
     /** The self endpoint has no studentId parameter at all — subject == caller, structurally. */
     static AttendanceViewer self(UUID actingUserId) {

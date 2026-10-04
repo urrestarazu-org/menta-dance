@@ -27,7 +27,7 @@ class ActivationTokenJpaRepositoryTest {
     @Configuration
     @EntityScan(basePackageClasses = ActivationTokenJpaEntity.class)
     @EnableJpaRepositories(basePackageClasses = ActivationTokenJpaRepository.class)
-    static class JpaConfiguration { }
+    static class JpaConfiguration {}
 
     @Test
     void enforces_the_unique_token_hash_constraint() {
@@ -45,7 +45,8 @@ class ActivationTokenJpaRepositoryTest {
         active.setUserId(userId);
         ActivationTokenJpaEntity expired = token(UUID.randomUUID(), "c".repeat(64), NOW.minusSeconds(1), null, null);
         expired.setUserId(userId);
-        ActivationTokenJpaEntity used = token(UUID.randomUUID(), "d".repeat(64), NOW.plusSeconds(3600), NOW.minusSeconds(1), null);
+        ActivationTokenJpaEntity used =
+            token(UUID.randomUUID(), "d".repeat(64), NOW.plusSeconds(3600), NOW.minusSeconds(1), null);
         used.setUserId(userId);
         repository.saveAllAndFlush(java.util.List.of(active, expired, used));
 

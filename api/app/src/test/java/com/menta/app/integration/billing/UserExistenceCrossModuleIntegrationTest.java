@@ -54,7 +54,8 @@ class UserExistenceCrossModuleIntegrationTest extends AbstractBillingMySqlIntegr
     @BeforeEach
     void setUp() {
         when(authDegradedGuard.isDegraded()).thenReturn(false);
-        when(loginRateLimitPort.check(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString()))
+        when(loginRateLimitPort.check(
+            org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString()))
             .thenReturn(RateLimitDecision.allowed());
 
         seededUser = User.create(

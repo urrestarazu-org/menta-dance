@@ -10,4 +10,4 @@ import java.util.UUID;
 public record AttendanceSessionView(
     UUID sessionId, Instant scheduledAt, String courseName, String instructorName,
     AttendanceStatus status, Instant recordedAt
-) { }
+) {}

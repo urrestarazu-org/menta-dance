@@ -130,7 +130,8 @@ public class PurchaseRepositoryAdapter implements PurchaseRepository {
             jpaRepository.findByStatusOrderByPaymentCreatedAt("EXCEPTION", PageRequest.of(page, size));
         List<ExceptionPurchaseRow> rows = jpaPage.getContent();
         Map<UUID, List<String>> sessionsByPurchaseId = rows.isEmpty() ? Map.of() : sessionJpaRepository
-            .findByPurchaseIdInOrderByPurchaseIdAscPositionAsc(rows.stream().map(ExceptionPurchaseRow::purchaseId).toList())
+            .findByPurchaseIdInOrderByPurchaseIdAscPositionAsc(
+                rows.stream().map(ExceptionPurchaseRow::purchaseId).toList())
             .stream()
             .collect(Collectors.groupingBy(
                 PurchaseSessionJpaEntity::getPurchaseId,

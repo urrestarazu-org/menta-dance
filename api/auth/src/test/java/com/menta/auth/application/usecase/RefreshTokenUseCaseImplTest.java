@@ -79,17 +79,17 @@ class RefreshTokenUseCaseImplTest {
 
     private RefreshTokenUseCaseImpl useCase;
 
-@BeforeEach
-        void setUp() {
-            useCase = new RefreshTokenUseCaseImpl(
-                userRepository,
-                refreshTokenRepository,
-                accessTokenIssuer,
-                tokenHasher,
-                outboxAppender,
-                authDegradedGuard
-            );
-        }
+    @BeforeEach
+    void setUp() {
+        useCase = new RefreshTokenUseCaseImpl(
+            userRepository,
+            refreshTokenRepository,
+            accessTokenIssuer,
+            tokenHasher,
+            outboxAppender,
+            authDegradedGuard
+        );
+    }
 
     @Nested
     @DisplayName("Spec: Rotación exitosa emite par nuevo y conserva familia")

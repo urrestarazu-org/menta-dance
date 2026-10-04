@@ -354,8 +354,10 @@ class SubscriptionAdminControllerTest {
             .andExpect(jsonPath("$.code", is("USER_NOT_FOUND")));
     }
 
-    /** Proves the shared {@code @SubscriptionEndpoint} advice maps this route's own
-     * {@link PlanNotAvailableException} to 422, not just the sibling checkout route. */
+    /**
+     * Proves the shared {@code @SubscriptionEndpoint} advice maps this route's own
+     * {@link PlanNotAvailableException} to 422, not just the sibling checkout route.
+     */
     @Test
     void an_unavailable_plan_maps_to_422() throws Exception {
         when(assignTrialUseCase.assign(any())).thenThrow(new PlanNotAvailableException());

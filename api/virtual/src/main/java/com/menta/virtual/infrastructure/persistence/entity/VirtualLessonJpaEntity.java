@@ -32,7 +32,9 @@ public class VirtualLessonJpaEntity {
     @Column(name = "description", nullable = false, columnDefinition = "TEXT")
     private String description;
 
-    /** {@code null} means no video assigned yet — {@code VirtualLesson.isComplete()} depends on this being reachable. */
+    /**
+     * {@code null} means no video assigned yet — {@code VirtualLesson.isComplete()} depends on this being reachable.
+     */
     @Column(name = "video_id")
     private String videoId;
 

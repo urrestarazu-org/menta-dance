@@ -162,7 +162,8 @@ class CreateBankTransferSubscriptionUseCaseImplTest {
     /** Design C7 / task 2.8: a 429 creates neither the Payment nor the Subscription. */
     @Test
     void an_exhausted_daily_budget_creates_neither_payment_nor_subscription() {
-        when(rateLimitPort.consumeBankTransferCreation(USER_ID)).thenReturn(RateLimitDecision.limited(Duration.ofHours(2)));
+        when(rateLimitPort.consumeBankTransferCreation(USER_ID))
+            .thenReturn(RateLimitDecision.limited(Duration.ofHours(2)));
 
         assertThatThrownBy(() -> useCase.create(command()))
             .isInstanceOf(BankTransferRateLimitedException.class)
@@ -197,7 +198,8 @@ class CreateBankTransferSubscriptionUseCaseImplTest {
     @Test
     void an_already_active_subscription_blocks_a_new_bank_transfer_checkout() {
         Subscription active = Subscription
-            .pendingCheckout(UUID.randomUUID(), com.menta.billing.domain.model.PaymentId.generate(), USER_ID, PLAN_ID, "idem-0", NOW)
+            .pendingCheckout(
+                UUID.randomUUID(), com.menta.billing.domain.model.PaymentId.generate(), USER_ID, PLAN_ID, "idem-0", NOW)
             .activate(NOW, 30, List.of("course-1"));
         when(planRepository.findActiveById(PLAN_ID)).thenReturn(Optional.of(activePlan(PaymentMethod.BANK_TRANSFER)));
         when(subscriptionRepository.findCurrentByUserId(USER_ID)).thenReturn(Optional.of(active));

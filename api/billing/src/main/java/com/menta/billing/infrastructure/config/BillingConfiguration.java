@@ -108,7 +108,10 @@ import org.springframework.data.redis.core.RedisTemplate;
 @Configuration
 public class BillingConfiguration {
 
-    /** Dev-only default HMAC secret — detects insecure configuration in production, same criterion as auth.jwt.base64-secret. */
+    /**
+     * Dev-only default HMAC secret — detects insecure configuration in production, same criterion as
+     * auth.jwt.base64-secret.
+     */
     private static final String DEV_DEFAULT_WEBHOOK_HMAC_SECRET =
         "ZGV2LW9ubHktd2ViaG9vay1zZWNyZXQtbm90LWZvci1wcm9kdWN0aW9uLXVzZQ==";
 
@@ -128,7 +131,8 @@ public class BillingConfiguration {
     @PostConstruct
     void validateWebhookSecretNotDefaultInProduction() {
         if (isProductionProfile() && isLocalMercadoPagoProfileActive()) {
-            throw new IllegalStateException("SECURITY: local Mercado Pago simulation cannot run in a production profile");
+            throw new IllegalStateException(
+                "SECURITY: local Mercado Pago simulation cannot run in a production profile");
         }
         if (isProductionProfile() && DEV_DEFAULT_WEBHOOK_HMAC_SECRET.equals(webhookHmacSecret)) {
             throw new IllegalStateException(
@@ -193,8 +197,10 @@ public class BillingConfiguration {
         );
     }
 
-    /** Task TASK-003: produces the {@code billing.PhysicalPaymentCompleted}
-     *  outbox event from a completed physical payment. */
+    /**
+     * Task TASK-003: produces the {@code billing.PhysicalPaymentCompleted}
+     * outbox event from a completed physical payment.
+     */
     @Bean
     public PublishPhysicalPaymentCompletedUseCase publishPhysicalPaymentCompletedUseCase(
         com.menta.billing.application.port.out.BillingOutboxAppenderPort billingOutboxAppenderPort
@@ -490,7 +496,8 @@ public class BillingConfiguration {
     @Bean
     public CreatePhysicalPurchaseCheckoutUseCase createPhysicalPurchaseCheckoutUseCase(
         PhysicalCourseQuoteRepository quoteRepository, PaymentRepository paymentRepository,
-        PhysicalCourseAvailabilityPort physicalCourseAvailabilityPort, PhysicalCapacityHoldPort physicalCapacityHoldPort,
+        PhysicalCourseAvailabilityPort physicalCourseAvailabilityPort,
+            PhysicalCapacityHoldPort physicalCapacityHoldPort,
         PaymentPreferencePort paymentPreferencePort, Clock clock,
         @Value("${billing.mercadopago.merchant-account-id:}") String merchantAccountId,
         @Value("${billing.physical.capacity.hold.ttl-ms:1800000}") long holdTtlMs,
@@ -515,7 +522,8 @@ public class BillingConfiguration {
     @Bean
     public CreateBankTransferPhysicalPurchaseUseCase createBankTransferPhysicalPurchaseUseCase(
         PhysicalCourseQuoteRepository quoteRepository, PaymentRepository paymentRepository,
-        PhysicalCourseAvailabilityPort physicalCourseAvailabilityPort, BankTransferRateLimitPort bankTransferRateLimitPort,
+        PhysicalCourseAvailabilityPort physicalCourseAvailabilityPort,
+            BankTransferRateLimitPort bankTransferRateLimitPort,
         Clock clock,
         @Value("${billing.bank-transfer.account.cbu:}") String cbu,
         @Value("${billing.bank-transfer.account.alias:}") String alias,
@@ -528,8 +536,10 @@ public class BillingConfiguration {
         );
     }
 
-    /** Task TASK-004: idempotently upserts a {@code Purchase(PENDING_FULFILLMENT)}
-     *  keyed on paymentId when an outbox event arrives. */
+    /**
+     * Task TASK-004: idempotently upserts a {@code Purchase(PENDING_FULFILLMENT)}
+     * keyed on paymentId when an outbox event arrives.
+     */
     @Bean
     public CreatePurchaseFromPaymentEventUseCase createPurchaseFromPaymentEventUseCase(
         PurchaseRepository purchaseRepository
@@ -537,8 +547,10 @@ public class BillingConfiguration {
         return new CreatePurchaseFromPaymentEventUseCase(purchaseRepository);
     }
 
-    /** Task TASK-004: state-machine guard for the {@code EXCEPTION} terminal
-     *  residual (refuses {@code ASSIGNED → EXCEPTION}). */
+    /**
+     * Task TASK-004: state-machine guard for the {@code EXCEPTION} terminal
+     * residual (refuses {@code ASSIGNED → EXCEPTION}).
+     */
     @Bean
     public MarkPurchaseExceptionUseCase markPurchaseExceptionUseCase(
         PurchaseRepository purchaseRepository, PaymentRepository paymentRepository,

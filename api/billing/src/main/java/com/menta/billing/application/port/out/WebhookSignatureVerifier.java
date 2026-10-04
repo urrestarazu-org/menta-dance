@@ -10,7 +10,9 @@ import com.menta.billing.domain.exception.WebhookSignatureInvalidException;
  */
 public interface WebhookSignatureVerifier {
 
-    /** @throws WebhookSignatureInvalidException if the header is missing {@code ts} or {@code v1}. */
+    /**
+     * @throws WebhookSignatureInvalidException if the header is missing {@code ts} or {@code v1}.
+     */
     ParsedSignature parse(String signatureHeader);
 
     /** Manifest is {@code id:{dataId};request-id:{requestId};ts:{timestamp};} — never the raw JSON body. */

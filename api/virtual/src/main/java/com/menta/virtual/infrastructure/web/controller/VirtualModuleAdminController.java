@@ -52,7 +52,8 @@ public class VirtualModuleAdminController {
     ) {
         UpdateVirtualModuleCommand command =
             new UpdateVirtualModuleCommand(
-                Optional.ofNullable(request.title()), Optional.ofNullable(request.order()), Optional.ofNullable(request.preview())
+                Optional.ofNullable(request.title()), Optional.ofNullable(request.order()),
+                    Optional.ofNullable(request.preview())
             );
         VirtualModuleManagementResult result = updateVirtualModuleUseCase.update(
             moduleId, command, actingUserId(authentication), isAdmin(authentication)

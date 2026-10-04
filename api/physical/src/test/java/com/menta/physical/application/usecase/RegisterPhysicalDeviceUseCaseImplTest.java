@@ -86,7 +86,8 @@ class RegisterPhysicalDeviceUseCaseImplTest {
         verifyNoMoreInteractions(auditRepository);
 
         assertThat(previousValueCaptor.getValue()).isNull();
-        assertThat(newValueCaptor.getValue()).contains("status=ACTIVE").contains("secretHashPrefix=" + HASH.substring(0, 8));
+        assertThat(newValueCaptor.getValue()).contains("status=ACTIVE")
+            .contains("secretHashPrefix=" + HASH.substring(0, 8));
     }
 
     @Test

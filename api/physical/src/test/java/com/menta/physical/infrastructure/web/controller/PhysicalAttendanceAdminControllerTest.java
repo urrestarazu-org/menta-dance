@@ -55,7 +55,8 @@ class PhysicalAttendanceAdminControllerTest {
         UUID adminId = UUID.randomUUID();
         AttendanceHistoryView view =
             new AttendanceHistoryView("2026-09", 5, 4, 1, new BigDecimal("80.00"), List.of());
-        when(useCase.history(eq(AttendanceViewer.elevated(studentId, adminId, true)), eq(YearMonth.of(2026, 9)), eq(false)))
+        when(useCase.history(
+            eq(AttendanceViewer.elevated(studentId, adminId, true)), eq(YearMonth.of(2026, 9)), eq(false)))
             .thenReturn(view);
 
         mockMvc.perform(get("/api/v1/admin/physical/attendance/{studentId}", studentId)

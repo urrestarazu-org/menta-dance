@@ -316,7 +316,8 @@ class PaymentWebhookIntegrationTest extends AbstractBillingMySqlIntegrationTest 
             new PaymentPreferenceResult("pref-virtual", "https://mp.example/checkout/pref-virtual")
         );
         var checkout = createSubscriptionCheckoutUseCase.create(
-            new CreateSubscriptionCheckoutCommand(studentId, planId.toString(), PaymentMethod.MERCADO_PAGO, "idem-virtual")
+            new CreateSubscriptionCheckoutCommand(
+                studentId, planId.toString(), PaymentMethod.MERCADO_PAGO, "idem-virtual")
         );
         when(paymentProviderPort.fetchPayment("mp-virtual-approved")).thenReturn(
             new ProviderPaymentResult(

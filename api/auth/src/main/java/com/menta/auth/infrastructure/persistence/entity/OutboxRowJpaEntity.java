@@ -65,7 +65,8 @@ public class OutboxRowJpaEntity {
     @Column(name = "id", nullable = false, updatable = false)
     private Long id;
 
-    @Column(name = "event_id", length = 26, nullable = false, updatable = false, unique = true, columnDefinition = "CHAR(26)")
+    @Column(name = "event_id", length = 26, nullable = false, updatable = false, unique = true,
+        columnDefinition = "CHAR(26)")
     private String eventId;
 
     @Column(name = "event_type", length = 100, nullable = false, updatable = false)

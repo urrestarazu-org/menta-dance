@@ -130,7 +130,8 @@ class CreateBankTransferPhysicalPurchaseUseCaseImplTest {
         assertThat(result.quoteId()).isEqualTo(quote.getId().toString());
         assertThat(result.paymentId()).isEqualTo(payment.getValue().getId().toString());
         assertThat(result.bankTransferInstructions()).isEqualTo(
-            com.menta.billing.application.dto.BankTransferInstructions.of(ACCOUNT, quote.getAmount(), result.externalReference())
+            com.menta.billing.application.dto.BankTransferInstructions.of(
+                ACCOUNT, quote.getAmount(), result.externalReference())
         );
     }
 
