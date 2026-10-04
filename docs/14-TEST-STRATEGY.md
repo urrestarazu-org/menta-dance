@@ -153,27 +153,24 @@ o `@TestPropertySource`). Un `rate-ms` alto sigue siendo necesario en esas
 clases para que la única ejecución sea la manual del test, pero no reemplaza
 el apagado por defecto en el resto de la suite.
 
-## Estilo: trinquete de Checkstyle
+## Estilo: Checkstyle estricto
 
 Checkstyle (`config/checkstyle/google_checks.xml`, versión en
 `gradle/libs.versions.toml`) corre en los 7 módulos JVM, con dos tareas por
 módulo: 14 tareas en total (`:api:{shared,auth,billing,virtual,physical,app}:checkstyle{Main,Test}`
-y `:bff:checkstyle{Main,Test}`). Desde #298 cada tarea tiene un **techo de
-advertencias** y el build falla cuando una tarea lo supera. La decisión y su
-justificación están en [ADR-0043](adr/0043-checkstyle-policy-ratchet.md).
+y `:bff:checkstyle{Main,Test}`). La severidad por defecto es `error` y
+`maxWarnings = 0`: **cualquier hallazgo falla el build**, sin techos ni
+excepciones por módulo o por regla. La decisión, el historial del trinquete que
+llevó hasta acá y su justificación están en
+[ADR-0043](adr/0043-checkstyle-policy-ratchet.md).
 
-**Dónde vive el techo**: el mapa `checkstyleWarningCeiling` del
-`build.gradle.kts` raíz, justo debajo de `moduleCoverageFloor`. La clave es
-el *path* de la tarea (`:api:auth:checkstyleTest`), una por línea y en orden
-alfabético. Una tarea sin clave (por ejemplo, un *source set* nuevo) falla al
-configurarse con un mensaje que nombra la tarea.
-
-**Regla: corregir o bajar, nunca subir.** Un PR que reduce los hallazgos de
-una tarea deja en el mapa el conteo exacto que midió; un PR que agrega
-hallazgos los corrige, no sube el techo. La única excepción es un PR de
-actualización de la versión de Checkstyle, que recalibra y lo declara. Dos PRs
-que tocan la misma clave: el segundo rebasea y re-mide, nunca resuelve el
-conflicto eligiendo un número.
+**Regla: un hallazgo nuevo se corrige, no se sube ni se suprime.** No existe un
+mapa de techos al que subir un número ni un bloqueo por regla que mantener. Una
+supresión sólo vive en `google_checks.xml`, con su justificación, y no se usan
+comentarios `CHECKSTYLE.SUPPRESS` para esquivar límites de línea. Una
+actualización de la versión de Checkstyle que introduzca hallazgos nuevos se
+resuelve corrigiéndolos en el mismo PR; también debe revisar que la supresión
+de `MethodName` para `@Test` siga coincidiendo con el texto del mensaje (ADR-0043).
 
 **Cómo medir** (una invocación de Gradle a la vez; la lista explícita evita las
 tareas sin fuentes del proyecto raíz y el módulo Android):
@@ -185,8 +182,8 @@ rg -c --include-zero '<error ' api/*/build/reports/checkstyle/{main,test}.xml bf
 ```
 
 `--rerun-tasks --no-build-cache` evita conteos viejos restaurados de la
-caché, y `--continue` conserva el reporte de cada tarea aunque otra supere su
-techo. Para el detalle por regla:
+caché, y `--continue` conserva el reporte de cada tarea aunque otra falle. El
+conteo esperado es 0 en las 14. Para el detalle por regla:
 `rg -o --no-filename 'source="[^"]+"' <los mismos reportes> | sort | uniq -c | sort -rn`.
 
 **Los PRs de limpieza no cambian el comportamiento.** Todo PR que edita Java
@@ -195,20 +192,7 @@ compara el total de tests por módulo antes y después: la suma de `tests=` y
 (`api/<módulo>` o `bff`), tras `cleanTest` + `test`. Deben ser iguales.
 Además corren `*ArchitectureTest` y `jacocoTestCoverageVerification`.
 
-**Estrictez por módulo y por regla**:
-
-* Un módulo con sus dos tareas en 0 pasa a `checkstyleStrictModules` y sus dos
-  claves se borran en el mismo PR; corre con severidad `error` fijada por
-  `configProperties` (no por `-Dorg.checkstyle.google.severity`, que no
-  tiene efecto).
-* El proyecto agregador `:api` no tiene fuentes, pero `./gradlew build` arma
-  sus tareas de Checkstyle (`NO-SOURCE`); por eso nace en
-  `checkstyleStrictModules` y no lleva tope. Verificar siempre el trinquete con
-  `./gradlew build --dry-run`, que arma el mismo grafo de tareas que el CI.
-* Una regla con 0 hallazgos en las 14 tareas se bloquea con
-  `<property name="severity" value="error"/>` en `google_checks.xml`: sus
-  hallazgos fallan el build sin consumir techo.
-
-**Estado final**: severidad por defecto `error`, `maxWarnings = 0`, y se
-eliminan el mapa, el conjunto estricto y los bloqueos por regla redundantes:
-cualquier hallazgo falla el build.
+El proyecto agregador `:api` no tiene fuentes, pero `./gradlew build` arma sus
+tareas de Checkstyle (`NO-SOURCE`). Ante un cambio en el `build.gradle.kts`
+raíz, verificar con `./gradlew build --dry-run`, que arma el mismo grafo de
+tareas que el CI.

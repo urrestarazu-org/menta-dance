@@ -1,7 +1,8 @@
 # ADR-0043: Política de Checkstyle y trinquete
 
 **Fecha:** 2026-10-03
-**Estado:** Aceptado
+**Estado:** Aceptado. El trinquete cumplió su ciclo y el estado final ya
+rige (2026-10-04, #332): ver "Estado final (vigente)".
 **Decisores:** Alejandro Urrestarazu
 
 ## Contexto y Problema
@@ -187,9 +188,13 @@ revisarla.
 * El archivo `suppressions.xml` muerto desaparece y queda una única
   superficie de supresión.
 * El plan final (severidad `error` por defecto, mapa eliminado, bloqueos
-  por regla redundantes retirados) es una edición acotada.
+  por regla redundantes retirados) fue una edición acotada y ya se aplicó
+  (#332).
 
 ### Negativas / Deuda Técnica
+
+Las dos primeras viñetas describen el período del trinquete; con el estado
+final vigente ya no hay techos, y un hallazgo nuevo se corrige siempre.
 
 * **Los PRs de feature abiertos se ponen en rojo por diseño** si agregan
   advertencias por encima del techo de su tarea. La regla es **"corregir o
@@ -225,24 +230,46 @@ revisarla.
   comportamiento warning-only sin cambio de esquema ni de runtime. Cada PR
   posterior lleva sus propios techos y se revierte en orden inverso.
 
-### Bloqueos de rigor (estricto) y estado final
+### Bloqueos de rigor (histórico)
 
-* **Bloqueo por regla:** una regla con 0 hallazgos en las 14 tareas puede
-  pasar a `severity=error` en `google_checks.xml`; sus hallazgos nunca consumen
-  techo. No se puede fijar un bloqueo mientras alguna tarea reporte la regla
-  (el build falla).
+Durante la limpieza el trinquete se endureció por dos vías, hoy retiradas:
+
+* **Bloqueo por regla:** una regla con 0 hallazgos en las 14 tareas pasaba a
+  `severity=error` en `google_checks.xml`; sus hallazgos nunca consumían
+  techo.
 * **Módulo estricto:** al llevar ambas tareas de un módulo a 0, el mismo PR
-  borra sus dos claves y lo agrega a `checkstyleStrictModules`.
-* **Estado final:** severidad por defecto `error`, `maxWarnings = 0`, y se
-  elimina el mapa, el conjunto estricto y los bloqueos por regla redundantes.
-  Cualquier hallazgo falla el build.
+  borraba sus dos claves y lo agregaba a `checkstyleStrictModules`.
+
+### Estado final (vigente)
+
+Con el último PR de #298 (#332) las 14 tareas están en 0 hallazgos y el
+mecanismo temporal se retiró:
+
+* `config/checkstyle/google_checks.xml` fija la severidad por defecto en
+  **`error`** (`org.checkstyle.google.severity`); los 23 bloqueos por regla
+  quedaron redundantes y se eliminaron. Ninguna regla declara una severidad
+  más débil.
+* El `build.gradle.kts` raíz declara `maxWarnings = 0` para todos los módulos
+  JVM y ya no contiene `checkstyleWarningCeiling`, `checkstyleStrictModules`,
+  el bloque `configureEach` ni el `configProperties` condicional.
+* **Cualquier hallazgo falla el build.** Una regla nueva, una actualización de
+  versión de Checkstyle o un PR de feature que produzca hallazgos los corrige
+  en el mismo cambio: ya no existe un techo que recalibrar, y la excepción
+  "recalibrar en la actualización de versión" dejó de aplicar. Subir la
+  severidad de una regla a algo menor que `error` o agregar una supresión sólo
+  es válido con una justificación escrita junto a la regla (ver la dependencia
+  del mensaje de `MethodName` más arriba).
+* El texto anterior sobre techos, holgura, intercambio de reglas y la regla
+  "corregir o bajar, nunca subir" se conserva como contexto histórico de cómo
+  se llegó a este estado, no como instrucción vigente.
 
 ## Referencias y Decisiones Relacionadas
 
 * Issue #298 (limpieza y trinquete de Checkstyle) y sus sub-issues.
 * Corrige a: ADR-0042 (la afirmación de que Checkstyle "falla el build").
 * Complementa a: ADR-0024 (versión de Checkstyle declarada en el baseline).
-* `docs/14-TEST-STRATEGY.md` — sección "Estilo: trinquete de Checkstyle" con
+* `docs/14-TEST-STRATEGY.md` — sección "Estilo: Checkstyle estricto" con
   los comandos de medición.
-* `build.gradle.kts` (mapa `checkstyleWarningCeiling`) y
-  `config/checkstyle/google_checks.xml` (política y supresiones).
+* `build.gradle.kts` (`maxWarnings = 0`) y
+  `config/checkstyle/google_checks.xml` (política y supresiones). El mapa
+  `checkstyleWarningCeiling` existió hasta #332 y ya no está.
