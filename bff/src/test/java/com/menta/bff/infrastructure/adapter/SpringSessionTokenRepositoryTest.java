@@ -2,7 +2,9 @@ package com.menta.bff.infrastructure.adapter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.menta.bff.domain.model.SessionTokens;
 import jakarta.servlet.http.HttpSession;

@@ -66,7 +66,6 @@ class VirtualCourseEntitlementServiceTest {
             .isEqualTo(new CourseAccessSnapshot(false, true));
     }
 
-
     @Test
     void grants_a_cancelled_assigned_snapshot_before_its_paid_end_date() {
         when(planRepository.findAllActiveOrderByPriceAsc()).thenReturn(List.of(plan("course-1")));
@@ -102,9 +101,12 @@ class VirtualCourseEntitlementServiceTest {
     void denies_pending_exceptional_and_expired_snapshots() {
         when(planRepository.findAllActiveOrderByPriceAsc()).thenReturn(List.of(plan("course-1")));
         when(subscriptionRepository.findAllByUserId(USER_ID)).thenReturn(List.of(
-            subscription(NOW, NOW.plusSeconds(10), SubscriptionStatus.PENDING, FulfillmentStatus.ASSIGNED, List.of("course-1")),
-            subscription(NOW, NOW.plusSeconds(10), SubscriptionStatus.ACTIVE, FulfillmentStatus.EXCEPTION, List.of("course-1")),
-            subscription(NOW, NOW.plusSeconds(10), SubscriptionStatus.EXPIRED, FulfillmentStatus.ASSIGNED, List.of("course-1"))
+            subscription(
+                NOW, NOW.plusSeconds(10), SubscriptionStatus.PENDING, FulfillmentStatus.ASSIGNED, List.of("course-1")),
+            subscription(
+                NOW, NOW.plusSeconds(10), SubscriptionStatus.ACTIVE, FulfillmentStatus.EXCEPTION, List.of("course-1")),
+            subscription(
+                NOW, NOW.plusSeconds(10), SubscriptionStatus.EXPIRED, FulfillmentStatus.ASSIGNED, List.of("course-1"))
         ));
 
         assertThat(service.resolveCourseAccess(USER_ID, "course-1").currentEntitlement()).isFalse();

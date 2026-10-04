@@ -109,7 +109,8 @@ class CoveragePlannerTest {
         Plan plan = CoveragePlanner.planMonthly(calendar, CONFIRMED_AT, 1, false);
 
         assertThat(plan)
-            .isEqualTo(new Plan.Complete(List.of(new EligibleSession(SESSION_2, CONFIRMED_AT.plus(Duration.ofDays(1))))));
+            .isEqualTo(
+                new Plan.Complete(List.of(new EligibleSession(SESSION_2, CONFIRMED_AT.plus(Duration.ofDays(1))))));
     }
 
     @Test
@@ -122,7 +123,8 @@ class CoveragePlannerTest {
         Plan plan = CoveragePlanner.planMonthly(calendar, CONFIRMED_AT, 1, true);
 
         assertThat(plan)
-            .isEqualTo(new Plan.Complete(List.of(new EligibleSession(SESSION_2, CONFIRMED_AT.plus(Duration.ofDays(2))))));
+            .isEqualTo(
+                new Plan.Complete(List.of(new EligibleSession(SESSION_2, CONFIRMED_AT.plus(Duration.ofDays(2))))));
     }
 
     @Test
@@ -133,7 +135,8 @@ class CoveragePlannerTest {
         Plan plan = CoveragePlanner.planMonthly(calendar, CONFIRMED_AT, 1, false);
 
         assertThat(plan)
-            .isEqualTo(new Plan.Complete(List.of(new EligibleSession(SESSION_1, CONFIRMED_AT.plus(Duration.ofDays(1))))));
+            .isEqualTo(
+                new Plan.Complete(List.of(new EligibleSession(SESSION_1, CONFIRMED_AT.plus(Duration.ofDays(1))))));
     }
 
     @Test
@@ -180,7 +183,8 @@ class CoveragePlannerTest {
         Plan plan = CoveragePlanner.planIndividual(calendar, SESSION_2, false);
 
         assertThat(plan)
-            .isEqualTo(new Plan.Complete(List.of(new EligibleSession(SESSION_2, CONFIRMED_AT.plus(Duration.ofDays(2))))));
+            .isEqualTo(
+                new Plan.Complete(List.of(new EligibleSession(SESSION_2, CONFIRMED_AT.plus(Duration.ofDays(2))))));
     }
 
     @Test
@@ -211,7 +215,8 @@ class CoveragePlannerTest {
         Plan plan = CoveragePlanner.planIndividual(calendar, SESSION_1, false);
 
         assertThat(plan)
-            .isEqualTo(new Plan.Complete(List.of(new EligibleSession(SESSION_1, CONFIRMED_AT.plus(Duration.ofDays(1))))));
+            .isEqualTo(
+                new Plan.Complete(List.of(new EligibleSession(SESSION_1, CONFIRMED_AT.plus(Duration.ofDays(1))))));
     }
 
     @Test

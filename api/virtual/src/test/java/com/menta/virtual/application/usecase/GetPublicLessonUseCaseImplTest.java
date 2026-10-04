@@ -366,7 +366,8 @@ class GetPublicLessonUseCaseImplTest {
         // never be able to surface a Bunny.net reference. If a future refactor
         // adds a videoId component to the preview record, this test fails before
         // the change ever reaches review.
-        java.lang.reflect.RecordComponent[] components = com.menta.virtual.application.dto.PublicLessonPreviewView.class.getRecordComponents();
+        java.lang.reflect.RecordComponent[] components =
+            com.menta.virtual.application.dto.PublicLessonPreviewView.class.getRecordComponents();
         assertThat(components).extracting(java.lang.reflect.RecordComponent::getName)
             .containsExactlyInAnyOrder("lessonId", "title", "description", "duration", "isFree", "thumbnailUrl");
     }

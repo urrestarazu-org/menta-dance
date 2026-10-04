@@ -262,7 +262,8 @@ class RegisterUserUseCaseImplTest {
         ));
 
         ArgumentCaptor<String> emailFingerprint = ArgumentCaptor.forClass(String.class);
-        verify(activationRateLimitPort).consume(emailFingerprint.capture(), org.mockito.ArgumentMatchers.eq("client-fp"));
+        verify(activationRateLimitPort)
+            .consume(emailFingerprint.capture(), org.mockito.ArgumentMatchers.eq("client-fp"));
         assertThat(emailFingerprint.getValue()).doesNotContain("student@example.com");
         assertThat(emailFingerprint.getValue()).hasSize(64);
     }

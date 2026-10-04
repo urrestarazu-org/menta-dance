@@ -118,7 +118,8 @@ class AccountActivationIntegrationTest extends AbstractAuthMySqlIntegrationTest 
         assertThatThrownBy(() -> loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD, CLIENT_FINGERPRINT)))
             .isInstanceOf(InvalidCredentialsException.class);
         activateAccountUseCase.activate(new ActivateAccountCommand(RAW_TOKEN));
-        assertThat(loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD, CLIENT_FINGERPRINT)).accessToken()).isNotBlank();
+        assertThat(loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD, CLIENT_FINGERPRINT)).accessToken())
+            .isNotBlank();
     }
 
     @Test

@@ -62,7 +62,8 @@ class AssignTrialSubscriptionUseCaseImplTest {
         userExistencePort = mock(UserExistencePort.class);
         clock = mock(Clock.class);
         when(clock.now()).thenReturn(NOW);
-        useCase = new AssignTrialSubscriptionUseCaseImpl(subscriptionRepository, planRepository, userExistencePort, clock);
+        useCase =
+            new AssignTrialSubscriptionUseCaseImpl(subscriptionRepository, planRepository, userExistencePort, clock);
     }
 
     private static AssignTrialCommand command(UUID userId, UUID planId, UUID adminId, boolean isAdmin, int days) {
@@ -174,7 +175,8 @@ class AssignTrialSubscriptionUseCaseImplTest {
         Subscription pendingOther = new Subscription(
             UUID.randomUUID(), null, userId, planId, "trial:other", SubscriptionStatus.PENDING,
             FulfillmentStatus.PENDING_FULFILLMENT, null, null, List.of(), null, null, NOW.minusSeconds(60), null,
-            SubscriptionType.TRIAL, new com.menta.billing.domain.model.TrialGrant(NOW.minusSeconds(60), adminId, "otro motivo", 5)
+            SubscriptionType.TRIAL,
+                new com.menta.billing.domain.model.TrialGrant(NOW.minusSeconds(60), adminId, "otro motivo", 5)
         );
         when(subscriptionRepository.findCurrentByUserId(userId)).thenReturn(Optional.of(pendingOther));
 

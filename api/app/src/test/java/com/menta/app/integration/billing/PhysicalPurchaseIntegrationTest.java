@@ -239,6 +239,17 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         return headers;
     }
 
+    private HttpHeaders headersFor(UUID userId, Role role) {
+        User user = new User(
+            UserId.of(userId), Email.of("token-" + UUID.randomUUID() + "@example.com"), "hash", role,
+            UserStatus.ACTIVE, java.time.LocalDateTime.now(), java.time.LocalDateTime.now()
+        );
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(accessTokenIssuer.issue(user).token());
+        return headers;
+    }
+
     private UUID seedCourse() {
         UUID courseId = UUID.randomUUID();
         Instant now = Instant.now();
@@ -318,17 +329,6 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         return user.getId().getValue();
     }
 
-    private HttpHeaders headersFor(UUID userId, Role role) {
-        User user = new User(
-            UserId.of(userId), Email.of("token-" + UUID.randomUUID() + "@example.com"), "hash", role,
-            UserStatus.ACTIVE, java.time.LocalDateTime.now(), java.time.LocalDateTime.now()
-        );
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.setBearerAuth(accessTokenIssuer.issue(user).token());
-        return headers;
-    }
-
     /**
      * Seeds a bank-transfer physical {@code Payment} directly in {@code AwaitingManualVerification}
      * — the same real-persistence shape {@code CreateBankTransferPhysicalPurchaseUseCaseImpl}
@@ -382,7 +382,8 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         return outboxRepository.findAll().stream()
             .filter(candidate -> candidate.getEventType().equals(BillingOutboxEventTypes.PHYSICAL_PAYMENT_COMPLETED))
             .reduce((first, second) -> second) // most recent, in case a prior scenario in the same test left rows
-            .orElseThrow(() -> new IllegalStateException("No billing.PhysicalPaymentCompleted outbox row was produced"));
+            .orElseThrow(
+                () -> new IllegalStateException("No billing.PhysicalPaymentCompleted outbox row was produced"));
     }
 
     // --- Phase D (#209) fixtures -----------------------------------------------
@@ -435,7 +436,8 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         return outboxRepository.findAll().stream()
             .filter(candidate -> candidate.getEventType().equals(BillingOutboxEventTypes.PHYSICAL_PAYMENT_COMPLETED))
             .reduce((first, second) -> second)
-            .orElseThrow(() -> new IllegalStateException("No billing.PhysicalPaymentCompleted outbox row was produced"));
+            .orElseThrow(
+                () -> new IllegalStateException("No billing.PhysicalPaymentCompleted outbox row was produced"));
     }
 
     private List<OutboxRowJpaEntity> outboxRowsFor(String eventType, UUID paymentId) {
@@ -818,7 +820,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
      */
     @Test
     @SuppressWarnings("unchecked")
-    void an_exception_transition_appends_one_purchase_exceptioned_row_and_notifies_two_recipients_with_no_duplicate_on_redelivery() {
+    void an_exception_transition_appends_one_exceptioned_row_and_notifies_two_recipients_once_despite_redelivery() {
         SeededStudent student = seedStudentWithKnownEmail();
         UUID courseId = seedCourse();
         List<UUID> sessionIds = seedScheduledSessions(courseId, 2, 1);
@@ -841,7 +843,8 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         assertThat(outboxWorker.process(event)).isFalse();
 
         assertThat(purchaseRepository.findByPaymentId(paymentId).orElseThrow().getStatus()).isEqualTo("EXCEPTION");
-        List<OutboxRowJpaEntity> exceptionedRows = outboxRowsFor(BillingOutboxEventTypes.PURCHASE_EXCEPTIONED, paymentId);
+        List<OutboxRowJpaEntity> exceptionedRows =
+            outboxRowsFor(BillingOutboxEventTypes.PURCHASE_EXCEPTIONED, paymentId);
         assertThat(exceptionedRows).hasSize(1);
 
         // Dispatch the notification — Phase C's consumer.
@@ -906,7 +909,8 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
             pool.submit(() -> {
                 try {
                     start.await();
-                    results.add(purchaseCreationFromEventPort.createPurchaseFromPaymentEvent(payload, eligibleSessionIds));
+                    results.add(
+                        purchaseCreationFromEventPort.createPurchaseFromPaymentEvent(payload, eligibleSessionIds));
                 } catch (Throwable raceOutcome) {
                     failures.add(raceOutcome);
                 } finally {

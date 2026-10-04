@@ -8,7 +8,9 @@ import com.menta.billing.infrastructure.persistence.entity.PurchaseSessionJpaEnt
 import java.util.List;
 import java.util.stream.IntStream;
 
-/** Manual mapping between {@link PurchaseJpaEntity}/{@link PurchaseSessionJpaEntity} and the domain {@link Purchase}. */
+/**
+ * Manual mapping between {@link PurchaseJpaEntity}/{@link PurchaseSessionJpaEntity} and the domain {@link Purchase}.
+ */
 public final class PurchaseJpaMapper {
 
     private PurchaseJpaMapper() {

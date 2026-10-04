@@ -30,7 +30,9 @@ public final class RateLimitDecision {
         return allowed;
     }
 
-    /** @throws IllegalStateException if {@link #isAllowed()} is true — there is nothing to retry. */
+    /**
+     * @throws IllegalStateException if {@link #isAllowed()} is true — there is nothing to retry.
+     */
     public Duration getRetryAfter() {
         if (allowed) {
             throw new IllegalStateException("an allowed decision has no retryAfter");

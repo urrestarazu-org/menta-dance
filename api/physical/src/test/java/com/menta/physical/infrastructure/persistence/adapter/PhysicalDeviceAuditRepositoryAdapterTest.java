@@ -79,7 +79,8 @@ class PhysicalDeviceAuditRepositoryAdapterTest {
         UUID deviceId = seedDevice();
         UUID actorId = UUID.randomUUID();
 
-        adapter().append(DeviceId.of(deviceId), actorId, "DEVICE_REGISTERED", null, "status=ACTIVE;secretHashPrefix=aaaaaaaa");
+        adapter().append(
+            DeviceId.of(deviceId), actorId, "DEVICE_REGISTERED", null, "status=ACTIVE;secretHashPrefix=aaaaaaaa");
 
         List<PhysicalDeviceAuditJpaEntity> rows = auditRepository.findByDeviceIdOrderByCreatedAtAsc(deviceId);
         assertThat(rows).hasSize(1);
@@ -94,7 +95,8 @@ class PhysicalDeviceAuditRepositoryAdapterTest {
     void rows_are_append_only_and_survive_a_subsequent_device_update() {
         UUID deviceId = seedDevice();
         UUID actorId = UUID.randomUUID();
-        adapter().append(DeviceId.of(deviceId), actorId, "DEVICE_REGISTERED", null, "status=ACTIVE;secretHashPrefix=aaaaaaaa");
+        adapter().append(
+            DeviceId.of(deviceId), actorId, "DEVICE_REGISTERED", null, "status=ACTIVE;secretHashPrefix=aaaaaaaa");
 
         PhysicalDeviceJpaEntity current = deviceRepository.findById(deviceId).orElseThrow();
         deviceRepository.saveAndFlush(new PhysicalDeviceJpaEntity(

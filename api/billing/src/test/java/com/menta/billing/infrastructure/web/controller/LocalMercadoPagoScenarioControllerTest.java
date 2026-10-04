@@ -23,7 +23,8 @@ class LocalMercadoPagoScenarioControllerTest {
 
         mockMvc.perform(post("/api/v1/e2e/mercadopago/approved-webhook")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"externalReference\":\"reference-1\",\"providerPaymentId\":\"provider-1\",\"requestId\":\"request-1\"}"))
+                .content("{\"externalReference\":\"reference-1\",\"providerPaymentId\":\"provider-1\","
+                    + "\"requestId\":\"request-1\"}"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.providerPaymentId").value("provider-1"))
             .andExpect(jsonPath("$.signature").value("ts=1,v1=abc"))
@@ -40,7 +41,8 @@ class LocalMercadoPagoScenarioControllerTest {
 
         mockMvc.perform(post("/api/v1/e2e/mercadopago/inconsistent-webhook")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"externalReference\":\"reference-2\",\"providerPaymentId\":\"provider-2\",\"requestId\":\"request-2\"}"))
+                .content("{\"externalReference\":\"reference-2\",\"providerPaymentId\":\"provider-2\","
+                    + "\"requestId\":\"request-2\"}"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.providerPaymentId").value("provider-2"))
             .andExpect(jsonPath("$.signature").value("ts=2,v1=def"));

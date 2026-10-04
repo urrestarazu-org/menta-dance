@@ -123,7 +123,8 @@ public class CreatePhysicalCourseQuoteUseCaseImpl implements CreatePhysicalCours
         Instant periodStart = calendarMonthStart(selectedSession.scheduledAt());
         Instant periodEnd = addMonths(periodStart, 1);
         long scheduledSessionCount = broadWindowSessions.stream()
-            .filter(session -> !session.scheduledAt().isBefore(periodStart) && session.scheduledAt().isBefore(periodEnd))
+            .filter(session -> !session.scheduledAt().isBefore(periodStart)
+                && session.scheduledAt().isBefore(periodEnd))
             .count();
 
         QuoteAvailability availability =

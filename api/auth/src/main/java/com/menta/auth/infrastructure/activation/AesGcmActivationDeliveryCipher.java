@@ -88,7 +88,8 @@ public final class AesGcmActivationDeliveryCipher implements ActivationDeliveryC
             }
             return decoded;
         } catch (IllegalArgumentException exception) {
-            throw new IllegalArgumentException("activation delivery key must be base64-encoded 256-bit data", exception);
+            throw new IllegalArgumentException(
+                "activation delivery key must be base64-encoded 256-bit data", exception);
         }
     }
 }

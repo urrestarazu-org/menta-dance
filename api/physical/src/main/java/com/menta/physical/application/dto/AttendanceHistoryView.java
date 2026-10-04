@@ -12,4 +12,4 @@ import java.util.List;
 public record AttendanceHistoryView(
     String period, int scheduledSessionCount, int attended, int absent,
     BigDecimal attendanceRate, List<AttendanceSessionView> sessions
-) { }
+) {}

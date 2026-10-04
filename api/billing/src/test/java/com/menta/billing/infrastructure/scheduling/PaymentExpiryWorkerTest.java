@@ -57,7 +57,8 @@ class PaymentExpiryWorkerTest {
         Instant now = Instant.parse("2026-09-21T00:00:00Z");
         when(clock.now()).thenReturn(now);
         when(repository.findById(PAYMENT_ID))
-            .thenReturn(Optional.of(paymentWith(new PaymentStatus.AwaitingManualVerification(), now.minusSeconds(3600))));
+            .thenReturn(
+                Optional.of(paymentWith(new PaymentStatus.AwaitingManualVerification(), now.minusSeconds(3600))));
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         new PaymentExpiryWorker(repository, fulfillmentService, clock).expireOne(PAYMENT_ID.getValue());

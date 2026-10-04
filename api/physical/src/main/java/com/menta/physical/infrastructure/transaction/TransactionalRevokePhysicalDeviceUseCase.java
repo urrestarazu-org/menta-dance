@@ -5,7 +5,9 @@ import com.menta.physical.application.port.in.RevokePhysicalDeviceUseCase;
 import java.util.UUID;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Transactional decorator (#44, US-PHYSICAL-007, design C5) -- see {@link TransactionalRegisterPhysicalDeviceUseCase}. */
+/**
+ * Transactional decorator (#44, US-PHYSICAL-007, design C5) -- see {@link TransactionalRegisterPhysicalDeviceUseCase}.
+ */
 public class TransactionalRevokePhysicalDeviceUseCase implements RevokePhysicalDeviceUseCase {
 
     private final RevokePhysicalDeviceUseCase delegate;

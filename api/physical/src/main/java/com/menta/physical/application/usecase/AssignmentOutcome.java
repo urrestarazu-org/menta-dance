@@ -20,12 +20,14 @@ public sealed interface AssignmentOutcome permits AssignmentOutcome.ASSIGNED,
 
     final class ASSIGNED implements AssignmentOutcome {
         public static final ASSIGNED INSTANCE = new ASSIGNED();
+
         private ASSIGNED() {
         }
     }
 
     final class RACE_LOST implements AssignmentOutcome {
         public static final RACE_LOST INSTANCE = new RACE_LOST();
+
         private RACE_LOST() {
         }
     }

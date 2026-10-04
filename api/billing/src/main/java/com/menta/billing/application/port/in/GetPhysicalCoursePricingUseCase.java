@@ -8,6 +8,8 @@ import com.menta.billing.application.dto.PhysicalCoursePricingResult;
  */
 public interface GetPhysicalCoursePricingUseCase {
 
-    /** @throws com.menta.billing.domain.exception.PhysicalCoursePricingNotFoundException if never published. */
+    /**
+     * @throws com.menta.billing.domain.exception.PhysicalCoursePricingNotFoundException if never published.
+     */
     PhysicalCoursePricingResult getPricing(String courseId);
 }

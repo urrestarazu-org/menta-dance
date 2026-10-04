@@ -25,7 +25,8 @@ public interface LoginUseCase {
      *
      * @param command Login credentials (email, password)
      * @throws com.menta.bff.application.port.out.AuthApiClient.AuthenticationException if credentials invalid (401)
-     * @throws com.menta.bff.application.port.out.AuthApiClient.ServiceUnavailableException if Auth API unavailable (503)
+     * @throws com.menta.bff.application.port.out.AuthApiClient.ServiceUnavailableException if Auth API unavailable
+     *     (503)
      * @throws IllegalStateException if no active HTTP session
      */
     void execute(LoginCommand command);

@@ -116,7 +116,8 @@ public final class VirtualCourse {
 
     /** US-VIRTUAL-006 escenario 4 — publish validation (module/lesson completeness) is the use case's job. */
     public VirtualCourse publish() {
-        return copyWith(title, shortDescription, description, imageUrl, category, level, premium, CourseStatus.PUBLISHED);
+        return copyWith(
+            title, shortDescription, description, imageUrl, category, level, premium, CourseStatus.PUBLISHED);
     }
 
     /**

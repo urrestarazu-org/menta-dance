@@ -41,6 +41,7 @@ public final class LocalMercadoPagoScenarioController {
         );
     }
 
-    public record ApprovedWebhookRequest(String externalReference, String providerPaymentId, String requestId) { }
-    public record WebhookResponse(String providerPaymentId, String requestId, String signature) { }
+    public record ApprovedWebhookRequest(String externalReference, String providerPaymentId, String requestId) {}
+
+    public record WebhookResponse(String providerPaymentId, String requestId, String signature) {}
 }

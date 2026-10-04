@@ -1,6 +1,11 @@
 package com.menta.bff.infrastructure.adapter;
 
-import static com.github.tomakehurst.wiremock.client.WireMock.*;
+import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.verify;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -66,7 +71,8 @@ class BillingApiAdapterTest {
     }
 
     @Test
-    @DisplayName("should return the mapped plan list when upstream responds with 200, ignoring an unknown courses field")
+    @DisplayName(
+        "should return the mapped plan list when upstream responds with 200, ignoring an unknown courses field")
     void shouldReturnMappedPlanListWhenUpstreamRespondsWith200() {
         // Given
         stubFor(get(urlEqualTo(PLANS_PATH))

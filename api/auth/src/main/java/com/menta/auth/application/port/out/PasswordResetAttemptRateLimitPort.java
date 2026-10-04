@@ -12,6 +12,8 @@ package com.menta.auth.application.port.out;
  */
 public interface PasswordResetAttemptRateLimitPort {
 
-    /** @param clientFingerprint opaque, non-reversible fingerprint of the requesting client. */
+    /**
+     * @param clientFingerprint opaque, non-reversible fingerprint of the requesting client.
+     */
     RateLimitDecision consume(String clientFingerprint);
 }

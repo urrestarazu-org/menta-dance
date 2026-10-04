@@ -108,7 +108,8 @@ class PurchaseRepositoryAdapterTest {
             new PurchaseSessionJpaEntity(purchase.getId(), 1, "session-2")
         ));
 
-        Optional<Purchase> found = new PurchaseRepositoryAdapter(jpaRepository, sessionJpaRepository, transactionManager())
+        Optional<Purchase> found =
+            new PurchaseRepositoryAdapter(jpaRepository, sessionJpaRepository, transactionManager())
             .findByPaymentId(purchase.getPaymentId());
 
         assertThat(found).isPresent();
@@ -143,7 +144,8 @@ class PurchaseRepositoryAdapterTest {
             new PurchaseSessionJpaEntity(purchase.getId(), 1, "session-2")
         ));
 
-        Optional<Purchase> found = new PurchaseRepositoryAdapter(jpaRepository, sessionJpaRepository, transactionManager())
+        Optional<Purchase> found =
+            new PurchaseRepositoryAdapter(jpaRepository, sessionJpaRepository, transactionManager())
             .findByPaymentIdForUpdate(purchase.getPaymentId());
 
         assertThat(found).isPresent();

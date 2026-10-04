@@ -80,7 +80,8 @@ class VirtualPublicLessonControllerTest {
                 new PublicLessonNavigationRef(UUID.randomUUID().toString(), "Intro", true),
                 new PublicLessonNavigationRef(UUID.randomUUID().toString(), "Salida", false)
             ),
-            new PublicLessonSubscriptionPrompt("¡Suscríbete para acceder a todas las lecciones!", "/api/v1/billing/plans")
+            new PublicLessonSubscriptionPrompt(
+                "¡Suscríbete para acceder a todas las lecciones!", "/api/v1/billing/plans")
         );
     }
 

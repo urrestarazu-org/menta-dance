@@ -7,7 +7,10 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 
-/** JPA persistence model for the append-only billing_physical_course_pricing_revisions table. Never updated after insert. */
+/**
+ * JPA persistence model for the append-only billing_physical_course_pricing_revisions table. Never updated after
+ * insert.
+ */
 @Entity
 @Table(name = "billing_physical_course_pricing_revisions")
 public class PhysicalCoursePricingRevisionJpaEntity {

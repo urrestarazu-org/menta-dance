@@ -71,11 +71,8 @@ class OutboxJpaAppenderTest {
             OutboxAppender port = appender;
             port.append(EVENT_TYPE, AGGREGATE_ID, PAYLOAD);
 
-            ArgumentCaptor<
-                com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity
-            > captor = ArgumentCaptor.forClass(
-                com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity.class
-            );
+            ArgumentCaptor<com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity> captor =
+                ArgumentCaptor.forClass(com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity.class);
             verify(repository, times(1)).save(captor.capture());
 
             com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity saved =

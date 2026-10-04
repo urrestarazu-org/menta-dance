@@ -130,7 +130,8 @@ class BillingOutboxAppenderAfterCommitIntegrationTest extends AbstractBillingMyS
         ));
         wireApproved(providerId, externalRef);
 
-        new TransactionTemplate(txManager).executeWithoutResult(status -> paymentVerificationService.verify(providerId));
+        new TransactionTemplate(txManager)
+            .executeWithoutResult(status -> paymentVerificationService.verify(providerId));
 
         assertThat(outboxRepository.findAll())
             .singleElement()

@@ -12,7 +12,10 @@ package com.menta.billing.domain.model;
  */
 public enum Reason {
 
-    /** {@link com.menta.physical.domain.exception.CapacityBelowAssignedException} — capacity was reduced below already assigned spots, or a new read-time check trips. */
+    /**
+     * {@link com.menta.physical.domain.exception.CapacityBelowAssignedException} — capacity was reduced below already
+     * assigned spots, or a new read-time check trips.
+     */
     CAPACITY_BELOW_ASSIGNED,
 
     /** V7 {@code UNIQUE (session_id, student_id)} collision — concurrent INSERT lost to another handler. */

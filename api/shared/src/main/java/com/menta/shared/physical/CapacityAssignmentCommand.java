@@ -17,8 +17,8 @@ import java.util.UUID;
  *
  * @param sessionId the physical session the buyer is paying for.
  * @param studentId the buyer's user id (Capacity row keys on this — V7 line 44 UNIQUE per (session, student)).
- * @param paymentId the billing payment id this capacity row is a consequence of. The capacity row itself does not carry this id
- *     (see V7 schema); the link is reconstructed via {@code billing_purchases.payment_id} when needed.
+ * @param paymentId the billing payment id this capacity row is a consequence of. The capacity row itself does not carry
+ *     this id (see V7 schema); the link is reconstructed via {@code billing_purchases.payment_id} when needed.
  */
 public record CapacityAssignmentCommand(
     UUID sessionId,

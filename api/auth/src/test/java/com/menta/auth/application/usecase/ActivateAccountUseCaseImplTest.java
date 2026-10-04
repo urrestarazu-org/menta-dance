@@ -85,7 +85,8 @@ class ActivateAccountUseCaseImplTest {
         stubClock();
         when(activationTokenRepository.findByHash(TOKEN_HASH)).thenReturn(Optional.of(token));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(activationTokenRepository.consumeIfActive(any(ActivationToken.class), org.mockito.ArgumentMatchers.eq(NOW)))
+        when(activationTokenRepository.consumeIfActive(
+            any(ActivationToken.class), org.mockito.ArgumentMatchers.eq(NOW)))
             .thenReturn(true);
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -111,7 +112,8 @@ class ActivateAccountUseCaseImplTest {
         stubClock();
         when(activationTokenRepository.findByHash(TOKEN_HASH)).thenReturn(Optional.of(token));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(activationTokenRepository.consumeIfActive(any(ActivationToken.class), org.mockito.ArgumentMatchers.eq(NOW)))
+        when(activationTokenRepository.consumeIfActive(
+            any(ActivationToken.class), org.mockito.ArgumentMatchers.eq(NOW)))
             .thenReturn(false);
 
         assertThatThrownBy(() -> useCase.activate(new ActivateAccountCommand(RAW_TOKEN)))

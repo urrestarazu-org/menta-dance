@@ -10,7 +10,8 @@ final class VirtualModuleResultMapper {
 
     static VirtualModuleManagementResult toResult(VirtualModule module) {
         return new VirtualModuleManagementResult(
-            module.getId().toString(), module.getCourseId().toString(), module.getTitle(), module.isPreview(), module.getOrder()
+            module.getId().toString(), module.getCourseId().toString(), module.getTitle(), module.isPreview(),
+                module.getOrder()
         );
     }
 }

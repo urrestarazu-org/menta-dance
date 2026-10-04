@@ -45,7 +45,8 @@ class ReceiveWebhookUseCaseImplTest {
 
     @Test
     void appends_to_the_inbox_when_signature_and_timestamp_are_valid() {
-        when(signatureVerifier.parse(any())).thenReturn(new ParsedSignature(String.valueOf(NOW.getEpochSecond()), "abc"));
+        when(signatureVerifier.parse(any()))
+            .thenReturn(new ParsedSignature(String.valueOf(NOW.getEpochSecond()), "abc"));
         when(signatureVerifier.isValid(eq("data-1"), eq("req-1"), any(), eq("abc"), eq(SECRET))).thenReturn(true);
 
         useCase.receive(signal());
@@ -55,7 +56,8 @@ class ReceiveWebhookUseCaseImplTest {
 
     @Test
     void succeeds_silently_on_a_duplicate_notification() {
-        when(signatureVerifier.parse(any())).thenReturn(new ParsedSignature(String.valueOf(NOW.getEpochSecond()), "abc"));
+        when(signatureVerifier.parse(any()))
+            .thenReturn(new ParsedSignature(String.valueOf(NOW.getEpochSecond()), "abc"));
         when(signatureVerifier.isValid(any(), any(), any(), any(), any())).thenReturn(true);
         when(inboxAppender.appendIfNew(any(), any(), any(), any())).thenReturn(false);
 
@@ -66,7 +68,8 @@ class ReceiveWebhookUseCaseImplTest {
 
     @Test
     void rejects_an_invalid_signature_without_touching_the_inbox() {
-        when(signatureVerifier.parse(any())).thenReturn(new ParsedSignature(String.valueOf(NOW.getEpochSecond()), "abc"));
+        when(signatureVerifier.parse(any()))
+            .thenReturn(new ParsedSignature(String.valueOf(NOW.getEpochSecond()), "abc"));
         when(signatureVerifier.isValid(any(), any(), any(), any(), any())).thenReturn(false);
 
         assertThatThrownBy(() -> useCase.receive(signal())).isInstanceOf(WebhookSignatureInvalidException.class);

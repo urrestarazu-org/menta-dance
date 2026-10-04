@@ -43,7 +43,7 @@ class SubscriptionJpaRepositoryTest {
     @Configuration
     @EntityScan(basePackageClasses = SubscriptionJpaEntity.class)
     @EnableJpaRepositories(basePackageClasses = SubscriptionJpaRepository.class)
-    static class JpaConfiguration { }
+    static class JpaConfiguration {}
 
     /**
      * Seeds 5 rows for the same user: the one row that must match, three distractors that must
@@ -134,10 +134,14 @@ class SubscriptionJpaRepositoryTest {
         UUID userId = UUID.randomUUID();
         UUID planId = UUID.randomUUID();
 
-        SubscriptionJpaEntity oldest = rowCreatedAt(userId, planId, SubscriptionStatus.EXPIRED.name(), NOW.minusSeconds(3 * DAY));
-        SubscriptionJpaEntity middle = rowCreatedAt(userId, planId, SubscriptionStatus.CANCELLED.name(), NOW.minusSeconds(2 * DAY));
-        SubscriptionJpaEntity newest = rowCreatedAt(userId, planId, SubscriptionStatus.ACTIVE.name(), NOW.minusSeconds(DAY));
-        SubscriptionJpaEntity otherUser = rowCreatedAt(UUID.randomUUID(), planId, SubscriptionStatus.ACTIVE.name(), NOW);
+        SubscriptionJpaEntity oldest =
+            rowCreatedAt(userId, planId, SubscriptionStatus.EXPIRED.name(), NOW.minusSeconds(3 * DAY));
+        SubscriptionJpaEntity middle =
+            rowCreatedAt(userId, planId, SubscriptionStatus.CANCELLED.name(), NOW.minusSeconds(2 * DAY));
+        SubscriptionJpaEntity newest =
+            rowCreatedAt(userId, planId, SubscriptionStatus.ACTIVE.name(), NOW.minusSeconds(DAY));
+        SubscriptionJpaEntity otherUser =
+            rowCreatedAt(UUID.randomUUID(), planId, SubscriptionStatus.ACTIVE.name(), NOW);
         repository.saveAllAndFlush(List.of(oldest, middle, newest, otherUser));
 
         List<SubscriptionJpaEntity> found = repository.findAllByUserIdOrderByCreatedAtDesc(userId);

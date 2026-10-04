@@ -39,7 +39,8 @@ public class CreateVirtualModuleUseCaseImpl implements CreateVirtualModuleUseCas
         VirtualModule saved = moduleRepository.save(module);
         auditRepository.append(
             parsedCourseId, actingUserId, "CREATE_MODULE", null,
-            "moduleId=" + saved.getId() + ", title=" + saved.getTitle() + ", preview=" + saved.isPreview() + ", order=" + saved.getOrder()
+            "moduleId=" + saved.getId() + ", title=" + saved.getTitle() + ", preview=" + saved.isPreview() + ", order="
+                + saved.getOrder()
         );
         return VirtualModuleResultMapper.toResult(saved);
     }

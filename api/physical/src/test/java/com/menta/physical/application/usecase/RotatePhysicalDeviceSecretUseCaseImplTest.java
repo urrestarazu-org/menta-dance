@@ -108,7 +108,8 @@ class RotatePhysicalDeviceSecretUseCaseImplTest {
         verify(auditRepository).append(
             any(), any(), eq("DEVICE_SECRET_ROTATED"), previousValueCaptor.capture(), newValueCaptor.capture()
         );
-        assertThat(previousValueCaptor.getValue()).doesNotContain("new-raw-secret").doesNotContainPattern("[0-9a-f]{64}");
+        assertThat(previousValueCaptor.getValue()).doesNotContain("new-raw-secret")
+            .doesNotContainPattern("[0-9a-f]{64}");
         assertThat(newValueCaptor.getValue()).doesNotContain("new-raw-secret").doesNotContainPattern("[0-9a-f]{64}");
     }
 

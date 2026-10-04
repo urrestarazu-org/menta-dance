@@ -3,6 +3,9 @@ package com.menta.physical.infrastructure.persistence.adapter;
 import com.menta.physical.application.port.out.Clock;
 import com.menta.physical.application.port.out.PhysicalCapacityAssignmentWriter;
 import com.menta.physical.domain.exception.CapacityBelowAssignedException;
+import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityAssignmentJpaRepository;
+import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityHoldJpaRepository;
+import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
 import java.time.Instant;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -69,15 +72,15 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 public class JpaPhysicalCapacityAssignmentAdapter implements PhysicalCapacityAssignmentWriter {
 
-    private final com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityAssignmentJpaRepository jpaRepository;
-    private final com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository sessionRepository;
-    private final com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityHoldJpaRepository holdRepository;
+    private final PhysicalCapacityAssignmentJpaRepository jpaRepository;
+    private final PhysicalSessionJpaRepository sessionRepository;
+    private final PhysicalCapacityHoldJpaRepository holdRepository;
     private final Clock clock;
 
     public JpaPhysicalCapacityAssignmentAdapter(
-        com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityAssignmentJpaRepository jpaRepository,
-        com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository sessionRepository,
-        com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityHoldJpaRepository holdRepository,
+        PhysicalCapacityAssignmentJpaRepository jpaRepository,
+        PhysicalSessionJpaRepository sessionRepository,
+        PhysicalCapacityHoldJpaRepository holdRepository,
         Clock clock
     ) {
         this.jpaRepository = jpaRepository;

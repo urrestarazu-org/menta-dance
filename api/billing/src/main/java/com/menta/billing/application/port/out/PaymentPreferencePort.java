@@ -13,6 +13,8 @@ import com.menta.billing.application.dto.PaymentPreferenceResult;
  */
 public interface PaymentPreferencePort {
 
-    /** @throws RuntimeException on any provider/transport failure — the caller aborts the checkout, never retries. */
+    /**
+     * @throws RuntimeException on any provider/transport failure — the caller aborts the checkout, never retries.
+     */
     PaymentPreferenceResult createPreference(PaymentPreferenceRequest request);
 }

@@ -42,7 +42,7 @@ class PlansControllerTest {
         // handler ("Circular view path"). A no-op View sidesteps rendering
         // entirely — this test only asserts the model attribute and the
         // resolved view name, never actual template output.
-        View noOpView = (model, request, response) -> { };
+        View noOpView = (model, request, response) -> {};
         mockMvc = MockMvcBuilders.standaloneSetup(new PlansController(getPlansViewUseCase))
                 .setSingleView(noOpView)
                 .build();

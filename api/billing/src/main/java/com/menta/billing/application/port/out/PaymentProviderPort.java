@@ -10,6 +10,8 @@ import com.menta.billing.application.dto.ProviderPaymentResult;
  */
 public interface PaymentProviderPort {
 
-    /** @throws RuntimeException on any provider/transport failure — the caller retries via the inbox. */
+    /**
+     * @throws RuntimeException on any provider/transport failure — the caller retries via the inbox.
+     */
     ProviderPaymentResult fetchPayment(String providerPaymentId);
 }

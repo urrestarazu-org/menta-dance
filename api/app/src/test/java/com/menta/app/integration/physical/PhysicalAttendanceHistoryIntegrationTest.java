@@ -284,7 +284,8 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
         return outboxRepository.findAll().stream()
             .filter(candidate -> candidate.getEventType().equals(BillingOutboxEventTypes.PHYSICAL_PAYMENT_COMPLETED))
             .reduce((first, second) -> second)
-            .orElseThrow(() -> new IllegalStateException("No billing.PhysicalPaymentCompleted outbox row was produced"));
+            .orElseThrow(
+                () -> new IllegalStateException("No billing.PhysicalPaymentCompleted outbox row was produced"));
     }
 
     private ResponseEntity<Map> readOwnMonth(UUID studentId, String month, Boolean includeAbsent) {
@@ -407,7 +408,8 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
      * Verify-report remediation, CRITICAL finding 1 (spec "Denominator counts assignments, not
      * purchase coverage windows" — scenario "A mid-month MONTHLY purchase splits across two
      * monthly views"). Drives a real checkout + webhook confirmation through the full Billing
-     * stack (mirrors {@code PhysicalPurchaseIntegrationTest.monthly_purchase_confirmed_assigns_every_covered_session_end_to_end}),
+     * stack (mirrors
+     * {@code PhysicalPurchaseIntegrationTest.monthly_purchase_confirmed_assigns_every_covered_session_end_to_end}),
      * covering 3 sessions split across September and October. Asserts each month's
      * {@code scheduledSessionCount} reflects only that month's assigned sessions, and that
      * neither month's count equals the purchase's own coverage-window session count (3).

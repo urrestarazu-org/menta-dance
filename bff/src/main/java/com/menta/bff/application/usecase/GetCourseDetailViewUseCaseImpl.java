@@ -79,7 +79,8 @@ public class GetCourseDetailViewUseCaseImpl implements GetCourseDetailViewUseCas
         }
 
         CourseDetailView.Resume resume = new CourseDetailView.Resume(
-                resumeLesson.lessonId(), title, progress.percentage(), progress.completedLessons(), progress.totalLessons());
+                resumeLesson.lessonId(), title, progress.percentage(), progress.completedLessons(),
+                    progress.totalLessons());
         return new CourseDetailView.Resumable(course, resume);
     }
 
