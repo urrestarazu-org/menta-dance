@@ -51,7 +51,8 @@ public class TokenBlacklistPortImpl implements TokenBlacklistPort, AuthDegradedG
      * one atomic server-side script, mirroring the rate-limit ports'
      * pattern.
      */
-    private static final RedisScript<Long> PROJECT_TOKEN_VERSION_SCRIPT = new DefaultRedisScript<>("""
+    private static final RedisScript<Long> PROJECT_TOKEN_VERSION_SCRIPT = new DefaultRedisScript<>(
+        """
         local current = tonumber(redis.call('GET', KEYS[1]))
         if (current == nil) or (tonumber(ARGV[1]) > current) then
             redis.call('SET', KEYS[1], ARGV[1])

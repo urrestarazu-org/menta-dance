@@ -18,7 +18,8 @@ public interface ActivationTokenJpaRepository extends JpaRepository<ActivationTo
     Optional<ActivationTokenJpaEntity> findByTokenHash(String tokenHash);
 
     @Modifying(clearAutomatically = true)
-    @Query("""
+    @Query(
+        """
         UPDATE ActivationTokenJpaEntity token
            SET token.invalidatedAt = :now
          WHERE token.userId = :userId
@@ -29,7 +30,8 @@ public interface ActivationTokenJpaRepository extends JpaRepository<ActivationTo
     int invalidateActiveByUserId(@Param("userId") UUID userId, @Param("now") Instant now);
 
     @Modifying(clearAutomatically = true)
-    @Query("""
+    @Query(
+        """
         UPDATE ActivationTokenJpaEntity token
            SET token.usedAt = :usedAt
          WHERE token.id = :id
@@ -42,7 +44,8 @@ public interface ActivationTokenJpaRepository extends JpaRepository<ActivationTo
     );
 
     @Modifying(clearAutomatically = true)
-    @Query("""
+    @Query(
+        """
         UPDATE ActivationTokenJpaEntity token
            SET token.deliveryCiphertext = NULL,
                token.deliveryNonce = NULL,

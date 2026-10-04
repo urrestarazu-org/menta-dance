@@ -27,7 +27,8 @@ class BillingPlansViewIntegrationTest extends BaseIntegrationTest {
      * response order — this is the load-bearing proof of D5: the badge must
      * appear without moving the plan to the front of the rendered list.
      */
-    private static final String PLANS_BODY = """
+    private static final String PLANS_BODY =
+            """
             {
               "plans": [
                 {
@@ -108,7 +109,8 @@ class BillingPlansViewIntegrationTest extends BaseIntegrationTest {
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
-                        .withBody("""
+                        .withBody(
+                                """
                                 {
                                   "plans": [
                                     {
@@ -140,7 +142,8 @@ class BillingPlansViewIntegrationTest extends BaseIntegrationTest {
                         .withStatus(503)
                         .withHeader("Retry-After", "30")
                         .withHeader("Content-Type", "application/problem+json")
-                        .withBody("""
+                        .withBody(
+                                """
                                 {"type":"about:blank","title":"Service unavailable","status":503}
                                 """)));
 

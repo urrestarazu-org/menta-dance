@@ -37,7 +37,8 @@ public interface PaymentJpaRepository extends JpaRepository<PaymentJpaEntity, UU
      * multiply rows. Served by the existing {@code idx_billing_payments_status_created
      * (status_type, created_at)} (V20_1_5) — no new index needed.
      */
-    @Query(value = """
+    @Query(value =
+        """
         SELECT new com.menta.billing.infrastructure.persistence.projection.PendingVerificationRow(
             p.id, p.userId, p.targetModality, p.targetReference, p.expectedAmount, p.expectedCurrency,
             p.statusType, p.createdAt,

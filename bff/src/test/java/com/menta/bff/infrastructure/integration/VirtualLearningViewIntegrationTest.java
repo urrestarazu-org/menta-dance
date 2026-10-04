@@ -28,7 +28,8 @@ class VirtualLearningViewIntegrationTest extends BaseIntegrationTest {
     private static final String COURSE_ID = "course-1";
     private static final String COURSE_DETAIL_URL = "/api/v1/catalog/courses/" + COURSE_ID;
 
-    private static final String COURSE_DETAIL_BODY = """
+    private static final String COURSE_DETAIL_BODY =
+            """
             {
               "courseId": "course-1",
               "title": "Ballet Básico",
@@ -100,7 +101,8 @@ class VirtualLearningViewIntegrationTest extends BaseIntegrationTest {
                 .willReturn(aResponse()
                         .withStatus(404)
                         .withHeader("Content-Type", "application/problem+json")
-                        .withBody("""
+                        .withBody(
+                                """
                                 {"type":"about:blank","title":"Course not found","status":404}
                                 """)));
 
@@ -122,7 +124,8 @@ class VirtualLearningViewIntegrationTest extends BaseIntegrationTest {
                         .withStatus(503)
                         .withHeader("Retry-After", "30")
                         .withHeader("Content-Type", "application/problem+json")
-                        .withBody("""
+                        .withBody(
+                                """
                                 {"type":"about:blank","title":"Service unavailable","status":503}
                                 """)));
 
@@ -167,7 +170,8 @@ class VirtualLearningViewIntegrationTest extends BaseIntegrationTest {
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
-                        .withBody("""
+                        .withBody(
+                                """
                                 {
                                   "lesson": {
                                     "lessonId": "lesson-1",
@@ -189,7 +193,8 @@ class VirtualLearningViewIntegrationTest extends BaseIntegrationTest {
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
-                        .withBody("""
+                        .withBody(
+                                """
                                 {
                                   "stream": {
                                     "url": "%s",
@@ -245,7 +250,8 @@ class VirtualLearningViewIntegrationTest extends BaseIntegrationTest {
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withHeader("X-Refresh-Token", "refresh-token-abc")
-                        .withBody("""
+                        .withBody(
+                                """
                                 {
                                   "access_token": "%s",
                                   "token_type": "Bearer",
@@ -271,7 +277,8 @@ class VirtualLearningViewIntegrationTest extends BaseIntegrationTest {
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
-                        .withBody("""
+                        .withBody(
+                                """
                                 {
                                   "lesson": {
                                     "lessonId": "lesson-2",
@@ -293,7 +300,8 @@ class VirtualLearningViewIntegrationTest extends BaseIntegrationTest {
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
-                        .withBody("""
+                        .withBody(
+                                """
                                 {
                                   "stream": {
                                     "url": "%s",
@@ -321,7 +329,8 @@ class VirtualLearningViewIntegrationTest extends BaseIntegrationTest {
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
-                        .withBody("""
+                        .withBody(
+                                """
                                 {
                                   "lesson": {
                                     "lessonId": "lesson-1",
@@ -344,7 +353,8 @@ class VirtualLearningViewIntegrationTest extends BaseIntegrationTest {
                         .withStatus(503)
                         .withHeader("Retry-After", "30")
                         .withHeader("Content-Type", "application/problem+json")
-                        .withBody("""
+                        .withBody(
+                                """
                                 {"type":"about:blank","title":"Service unavailable","status":503}
                                 """)));
 
@@ -376,7 +386,8 @@ class VirtualLearningViewIntegrationTest extends BaseIntegrationTest {
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withHeader("X-Refresh-Token", "refresh-token-abc")
-                        .withBody("""
+                        .withBody(
+                                """
                                 {
                                   "access_token": "%s",
                                   "token_type": "Bearer",
@@ -402,7 +413,8 @@ class VirtualLearningViewIntegrationTest extends BaseIntegrationTest {
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
-                        .withBody("""
+                        .withBody(
+                                """
                                 {
                                   "courseId": "course-1",
                                   "completedLessons": 1,
@@ -443,7 +455,8 @@ class VirtualLearningViewIntegrationTest extends BaseIntegrationTest {
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
-                        .withBody("""
+                        .withBody(
+                                """
                                 {
                                   "courseId": "course-1",
                                   "completedLessons": 0,
@@ -506,7 +519,8 @@ class VirtualLearningViewIntegrationTest extends BaseIntegrationTest {
                         .withStatus(503)
                         .withHeader("Retry-After", "30")
                         .withHeader("Content-Type", "application/problem+json")
-                        .withBody("""
+                        .withBody(
+                                """
                                 {"type":"about:blank","title":"Service unavailable","status":503}
                                 """)));
 

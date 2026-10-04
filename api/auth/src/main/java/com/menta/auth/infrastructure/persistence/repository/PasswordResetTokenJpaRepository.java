@@ -24,7 +24,8 @@ public interface PasswordResetTokenJpaRepository
     Optional<PasswordResetTokenJpaEntity> findByTokenHash(String tokenHash);
 
     @Modifying(clearAutomatically = true)
-    @Query("""
+    @Query(
+        """
         UPDATE PasswordResetTokenJpaEntity token
            SET token.invalidatedAt = :now
          WHERE token.userId = :userId
@@ -39,7 +40,8 @@ public interface PasswordResetTokenJpaRepository
      * so the check and the write cannot be split by a concurrent request.
      */
     @Modifying(clearAutomatically = true)
-    @Query("""
+    @Query(
+        """
         UPDATE PasswordResetTokenJpaEntity token
            SET token.usedAt = :usedAt
          WHERE token.id = :id
@@ -52,7 +54,8 @@ public interface PasswordResetTokenJpaRepository
     );
 
     @Modifying(clearAutomatically = true)
-    @Query("""
+    @Query(
+        """
         UPDATE PasswordResetTokenJpaEntity token
            SET token.deliveryCiphertext = NULL,
                token.deliveryNonce = NULL,

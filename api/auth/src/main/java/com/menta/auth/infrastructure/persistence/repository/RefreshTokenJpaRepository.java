@@ -39,7 +39,8 @@ public interface RefreshTokenJpaRepository extends JpaRepository<RefreshTokenJpa
      * semantics when this slice uses H2 spring.test profile).
      */
     @Modifying
-    @Query("""
+    @Query(
+        """
         UPDATE RefreshTokenJpaEntity r
            SET r.status = :status,
                r.revokedAt = :revokedAt
@@ -59,7 +60,8 @@ public interface RefreshTokenJpaRepository extends JpaRepository<RefreshTokenJpa
      * a password reset must close every session, on every device).
      */
     @Modifying
-    @Query("""
+    @Query(
+        """
         UPDATE RefreshTokenJpaEntity r
            SET r.status = :status,
                r.revokedAt = :revokedAt

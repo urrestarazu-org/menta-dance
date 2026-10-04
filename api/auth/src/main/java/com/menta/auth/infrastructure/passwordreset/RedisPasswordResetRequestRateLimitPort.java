@@ -22,7 +22,8 @@ public final class RedisPasswordResetRequestRateLimitPort
     private static final String EMAIL_KEY_PREFIX = "rate:auth-password-reset-request:email:";
     private static final String CLIENT_KEY_PREFIX = "rate:auth-password-reset-request:client:";
 
-    private static final RedisScript<List> CONSUME_SCRIPT = new DefaultRedisScript<>("""
+    private static final RedisScript<List> CONSUME_SCRIPT = new DefaultRedisScript<>(
+        """
         local emailCount = redis.call('INCR', KEYS[1])
         if emailCount == 1 then redis.call('EXPIRE', KEYS[1], ARGV[3]) end
         local clientCount = redis.call('INCR', KEYS[2])
