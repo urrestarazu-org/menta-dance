@@ -10,6 +10,8 @@ import java.util.UUID;
 public interface PhysicalDeviceAuditRepository {
 
     /**
+     * Appends one immutable audit row describing a device management action.
+     *
      * @param previousValue a {@code status=...;secretHashPrefix=<8 hex>} snapshot before the
      *     change, or {@code null} for a registration (there is no "before"). Never the raw secret
      *     or a full hash (design C4).

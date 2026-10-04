@@ -12,6 +12,7 @@ public final class SessionId {
         this.value = value;
     }
 
+    /** Wraps an existing UUID; {@code null} is rejected with {@link IllegalArgumentException}. */
     public static SessionId of(UUID value) {
         if (value == null) {
             throw new IllegalArgumentException("SessionId cannot be null");
@@ -19,6 +20,12 @@ public final class SessionId {
         return new SessionId(value);
     }
 
+    /**
+     * Parses the canonical UUID text of a session id.
+     *
+     * <p>{@code null}, blank and malformed input are all rejected with {@link
+     * IllegalArgumentException}.
+     */
     public static SessionId of(String value) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException("SessionId cannot be null or empty");
@@ -30,6 +37,7 @@ public final class SessionId {
         }
     }
 
+    /** Creates an id backed by a fresh random UUID. */
     public static SessionId generate() {
         return new SessionId(UUID.randomUUID());
     }

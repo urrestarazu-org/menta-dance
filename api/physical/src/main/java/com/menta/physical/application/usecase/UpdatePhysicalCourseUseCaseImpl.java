@@ -13,6 +13,12 @@ import com.menta.physical.domain.model.CourseStatus;
 import com.menta.physical.domain.model.PhysicalCourse;
 import java.util.UUID;
 
+/**
+ * Applies a partial update to a course, with ownership and deactivation guards.
+ *
+ * <p>The deactivation guard runs after the patch is built and before anything is saved, so a
+ * rejected update never persists. Absent fields are left as they were.
+ */
 public class UpdatePhysicalCourseUseCaseImpl implements UpdatePhysicalCourseUseCase {
 
     private final PhysicalCourseRepository courseRepository;

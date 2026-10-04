@@ -95,7 +95,7 @@ public class ProcessPhysicalCheckInUseCaseImpl implements ProcessPhysicalCheckIn
     public CheckInResult checkIn(CheckInCommand command) {
         // Step 1: reject an unauthorized reader before it learns anything else. The registry
         // lookup is a database PK read, never Redis, so this gate stays Redis-free.
-        DeviceId authenticatedDevice =
+        final DeviceId authenticatedDevice =
             deviceAuthenticator.authenticate(command.deviceId(), command.deviceToken());
 
         // Step 2: format + type validation, delegated to the helper.

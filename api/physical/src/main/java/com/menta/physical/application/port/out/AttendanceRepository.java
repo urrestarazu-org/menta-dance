@@ -17,6 +17,12 @@ import java.util.UUID;
  */
 public interface AttendanceRepository {
 
+    /**
+     * Looks up the attendance already recorded for a user in a session.
+     *
+     * <p>Backs the read-through idempotency check of the check-in flow: a present result means the
+     * check-in was already processed and must be replayed rather than inserted again.
+     */
     Optional<Attendance> findBySessionIdAndUserId(SessionId sessionId, UUID userId);
 
     /**

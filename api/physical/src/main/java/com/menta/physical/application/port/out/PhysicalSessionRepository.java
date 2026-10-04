@@ -30,11 +30,19 @@ public interface PhysicalSessionRepository {
      */
     List<PhysicalSession> findManaged(CourseId courseId, Instant from, Instant to);
 
+    /** Finds a session by id, whatever its status, with live availability counts. */
     Optional<PhysicalSession> findById(SessionId sessionId);
 
     /** Creates a new session or updates an existing one (matched by {@link PhysicalSession#getId()}). */
     PhysicalSession save(PhysicalSession session);
 
+    /**
+     * Persists a batch of brand-new sessions in one transaction.
+     *
+     * <p>Meant for batch creation only: the returned sessions report zero assigned spots and zero
+     * active holds without re-reading each row, so it must not be used for sessions that may
+     * already carry assignments.
+     */
     List<PhysicalSession> saveAll(List<PhysicalSession> sessions);
 
     /**

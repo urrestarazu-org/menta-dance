@@ -19,6 +19,13 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * Read-only catalog view of active courses and scheduled sessions, served to other modules.
+ *
+ * <p>Application-layer implementation of {@code PhysicalCourseAvailabilityPort}, wired as a bean by
+ * {@code PhysicalConfiguration}. It reads through the course and session repository ports and maps
+ * domain objects to the summaries other modules consume; it never writes.
+ */
 public class PhysicalCourseAvailabilityPortImpl implements PhysicalCourseAvailabilityPort {
 
     private final PhysicalCourseRepository courseRepository;

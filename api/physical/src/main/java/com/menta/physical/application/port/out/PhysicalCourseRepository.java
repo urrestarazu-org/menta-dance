@@ -22,6 +22,8 @@ public interface PhysicalCourseRepository {
     List<PhysicalCourse> findActive(CourseId afterCursor, int pageSize);
 
     /**
+     * Looks up one course by id, visible only while it is {@code ACTIVE}.
+     *
      * @param courseId the course to look up.
      * @return the course if it exists and is {@code ACTIVE}; {@code
      *     Optional.empty()} otherwise (not found or inactive).

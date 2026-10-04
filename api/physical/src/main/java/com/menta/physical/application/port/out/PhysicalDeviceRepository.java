@@ -11,6 +11,12 @@ public interface PhysicalDeviceRepository {
     /** Inserts a new device or updates an existing one, matched by {@link PhysicalDevice#getId()}. */
     PhysicalDevice save(PhysicalDevice device);
 
+    /**
+     * Finds a device by id regardless of its status.
+     *
+     * <p>A {@code REVOKED} device is still returned; deciding what that status allows is the
+     * caller's job.
+     */
     Optional<PhysicalDevice> findById(DeviceId deviceId);
 
     /**

@@ -46,8 +46,6 @@ val moduleCoverageFloor = mapOf(
 val checkstyleWarningCeiling = mapOf(
     ":api:billing:checkstyleMain" to 143,
     ":api:billing:checkstyleTest" to 5,
-    ":api:physical:checkstyleMain" to 123,
-    ":api:physical:checkstyleTest" to 5,
     ":api:virtual:checkstyleMain" to 170,
     ":api:virtual:checkstyleTest" to 5,
 )
@@ -58,7 +56,7 @@ val checkstyleWarningCeiling = mapOf(
 // `:api` is the aggregator project of the api modules: it has no sources (its
 // Checkstyle tasks are NO-SOURCE) but `./gradlew build` realizes them, so it
 // starts strict with zero findings.
-val checkstyleStrictModules = setOf(":api", ":api:app", ":api:auth", ":api:shared", ":bff")
+val checkstyleStrictModules = setOf(":api", ":api:app", ":api:auth", ":api:physical", ":api:shared", ":bff")
 
 // Modules whose coverage feeds the aggregated report below.
 val jvmCoverageModules = listOf(

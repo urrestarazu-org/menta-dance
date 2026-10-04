@@ -70,13 +70,13 @@ class RotatePhysicalDeviceSecretUseCaseImplTest {
     @Test
     void appends_one_audit_row_with_old_and_new_secret_hash_prefixes() {
         DeviceId deviceId = DeviceId.generate();
-        UUID actorId = UUID.randomUUID();
         when(deviceRepository.findById(deviceId)).thenReturn(Optional.of(activeDevice(deviceId)));
         when(clock.now()).thenReturn(NOW);
         when(secretGenerator.generate()).thenReturn("new-raw-secret");
         when(secretHasher.hash("new-raw-secret")).thenReturn(NEW_HASH);
         when(deviceRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
+        UUID actorId = UUID.randomUUID();
         useCase.rotate(deviceId.getValue().toString(), actorId);
 
         ArgumentCaptor<String> previousValueCaptor = ArgumentCaptor.forClass(String.class);

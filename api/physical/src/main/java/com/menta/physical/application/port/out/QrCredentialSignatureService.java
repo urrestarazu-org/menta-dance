@@ -19,6 +19,8 @@ package com.menta.physical.application.port.out;
 public interface QrCredentialSignatureService {
 
     /**
+     * Produces the opaque credential string that a QR payload carries for the given claims.
+     *
      * @param studentId the acting student's UUID — must match the JWT
      *                  principal used to issue the token.
      * @param sessionId the target session's UUID.

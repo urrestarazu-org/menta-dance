@@ -76,7 +76,7 @@ public class AssignCapacityUseCase implements PhysicalCapacityAssignmentPort {
         );
 
         assignAll(singleton);
-        return AssignmentOutcome.ASSIGNED.INSTANCE;
+        return AssignmentOutcome.Assigned.INSTANCE;
     }
 
     @Override

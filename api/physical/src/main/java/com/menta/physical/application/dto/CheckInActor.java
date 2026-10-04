@@ -22,10 +22,20 @@ public record CheckInActor(UUID userId, Set<String> roleNames) {
         }
     }
 
+    /**
+     * Returns the shared anonymous actor: no user id and no roles.
+     *
+     * <p>Used for QR scans, where the caller is a door reader and not a person.
+     */
     public static CheckInActor anonymous() {
         return ANONYMOUS;
     }
 
+    /**
+     * Tells whether this actor holds at least one of the given role names.
+     *
+     * <p>Names are compared as exact strings; an anonymous actor never matches.
+     */
     public boolean hasAnyRoleOf(Set<String> allowed) {
         return roleNames.stream().anyMatch(allowed::contains);
     }

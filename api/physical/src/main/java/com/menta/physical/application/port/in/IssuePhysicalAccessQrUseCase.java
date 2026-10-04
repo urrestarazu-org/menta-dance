@@ -13,6 +13,11 @@ import java.util.UUID;
 public interface IssuePhysicalAccessQrUseCase {
 
     /**
+     * Issues a short-lived QR credential for a session the student is assigned to.
+     *
+     * <p>Fails when the session does not exist or is cancelled, when it is outside its check-in
+     * window, or when the student holds no confirmed assignment for it.
+     *
      * @param sessionId the target session's opaque id.
      * @param studentId the acting, authenticated student's id — never taken
      *     from the request body, always the JWT principal.

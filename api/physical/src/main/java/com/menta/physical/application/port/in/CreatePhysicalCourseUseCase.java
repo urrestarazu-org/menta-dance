@@ -8,6 +8,12 @@ import java.util.UUID;
 public interface CreatePhysicalCourseUseCase {
 
     /**
+     * Creates a recurring course that starts {@code ACTIVE}.
+     *
+     * <p>Administrators may name any professor, defaulting to themselves; an instructor may only
+     * create courses for themselves and is rejected with {@code ProfessorMismatchException}
+     * otherwise.
+     *
      * @param actingUserId the authenticated caller's user id.
      * @param actingAsAdmin {@code true} when the caller holds ADMIN; {@code
      *     false} for INSTRUCTOR. This module has no visibility into {@code

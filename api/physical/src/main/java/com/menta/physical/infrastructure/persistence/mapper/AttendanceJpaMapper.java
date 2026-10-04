@@ -12,6 +12,12 @@ public final class AttendanceJpaMapper {
     private AttendanceJpaMapper() {
     }
 
+    /**
+     * Rebuilds the domain attendance from a stored row.
+     *
+     * <p>The stored kind must be a valid {@code AttendanceKind} name, otherwise {@link
+     * IllegalArgumentException} is thrown.
+     */
     public static Attendance toDomain(AttendanceJpaEntity entity) {
         return new Attendance(
             AttendanceId.of(entity.getId()),
@@ -23,6 +29,7 @@ public final class AttendanceJpaMapper {
         );
     }
 
+    /** Flattens the domain attendance into a row, keeping ids as raw UUIDs and the kind as its name. */
     public static AttendanceJpaEntity toEntity(Attendance attendance) {
         return new AttendanceJpaEntity(
             attendance.getId().value(),

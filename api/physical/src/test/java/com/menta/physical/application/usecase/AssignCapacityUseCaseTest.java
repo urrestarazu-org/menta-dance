@@ -67,7 +67,7 @@ class AssignCapacityUseCaseTest {
         void delegates_the_claim_to_the_writer_and_reports_assigned() {
             AssignmentOutcome result = useCase.assign(cmd());
 
-            assertThat(result).isEqualTo(AssignmentOutcome.ASSIGNED.INSTANCE);
+            assertThat(result).isEqualTo(AssignmentOutcome.Assigned.INSTANCE);
             verify(assignmentWriter).assertAssignment(SESSION_UUID, STUDENT_UUID);
         }
     }

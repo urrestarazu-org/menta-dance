@@ -16,6 +16,11 @@ public record AttendanceHistoryRow(
     UUID sessionId, Instant scheduledAt, String courseName, String instructorName, Instant recordedAt
 ) {
 
+    /**
+     * Tells whether the student has an attendance record for this session.
+     *
+     * <p>Derived from {@code recordedAt} being present; no status is stored anywhere.
+     */
     public boolean attended() {
         return recordedAt != null;
     }

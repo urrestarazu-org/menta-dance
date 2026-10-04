@@ -63,6 +63,11 @@ public final class PhysicalCourse {
         );
     }
 
+    /**
+     * Tells whether the given professor owns this course.
+     *
+     * <p>Compares against the stored professor id; {@code null} never matches.
+     */
     public boolean isOwnedBy(UUID candidateProfessorId) {
         return professorId.equals(candidateProfessorId);
     }
@@ -71,6 +76,7 @@ public final class PhysicalCourse {
         return status == CourseStatus.ACTIVE;
     }
 
+    /** Returns a copy with a new title; a {@code null} title is rejected with {@link NullPointerException}. */
     public PhysicalCourse withTitle(String newTitle) {
         return new PhysicalCourse(
             id, newTitle, description, professorId, professorName, dayOfWeek, startTime, durationMinutes,
@@ -78,6 +84,10 @@ public final class PhysicalCourse {
         );
     }
 
+    /**
+     * Returns a copy with a new description; a {@code null} description is rejected with {@link
+     * NullPointerException}.
+     */
     public PhysicalCourse withDescription(String newDescription) {
         return new PhysicalCourse(
             id, title, newDescription, professorId, professorName, dayOfWeek, startTime, durationMinutes,
@@ -96,6 +106,7 @@ public final class PhysicalCourse {
         );
     }
 
+    /** Returns a copy at the given level; a {@code null} level is rejected with {@link NullPointerException}. */
     public PhysicalCourse withLevel(PhysicalCourseLevel newLevel) {
         return new PhysicalCourse(
             id, title, description, professorId, professorName, dayOfWeek, startTime, durationMinutes,
@@ -115,6 +126,12 @@ public final class PhysicalCourse {
         );
     }
 
+    /**
+     * Returns a copy in the given status.
+     *
+     * <p>The transition itself is unrestricted here; the rule that a course with future assigned
+     * sessions cannot be deactivated lives in the update use case.
+     */
     public PhysicalCourse withStatus(CourseStatus newStatus) {
         return new PhysicalCourse(
             id, title, description, professorId, professorName, dayOfWeek, startTime, durationMinutes,

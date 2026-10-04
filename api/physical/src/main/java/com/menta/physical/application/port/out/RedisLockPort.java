@@ -24,6 +24,8 @@ import java.util.Optional;
 public interface RedisLockPort {
 
     /**
+     * Tries to take the lock for {@code key} for {@code ttl}, without waiting.
+     *
      * @return the lock nonce (the holder token) when the slot
      *         was free and is now owned by this caller; {@link Optional#empty()}
      *         when another caller already holds it.

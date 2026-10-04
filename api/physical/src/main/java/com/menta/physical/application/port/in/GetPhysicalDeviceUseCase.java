@@ -9,5 +9,11 @@ import com.menta.physical.application.dto.PhysicalDeviceView;
  */
 public interface GetPhysicalDeviceUseCase {
 
+    /**
+     * Returns the metadata of one device.
+     *
+     * <p>Fails with {@code DeviceNotFoundException} when no device has that id, and with {@link
+     * IllegalArgumentException} when the id is malformed.
+     */
     PhysicalDeviceView get(String deviceId);
 }

@@ -12,6 +12,7 @@ public final class DeviceId {
         this.value = value;
     }
 
+    /** Wraps an existing UUID; {@code null} is rejected with {@link IllegalArgumentException}. */
     public static DeviceId of(UUID value) {
         if (value == null) {
             throw new IllegalArgumentException("DeviceId cannot be null");
@@ -19,6 +20,12 @@ public final class DeviceId {
         return new DeviceId(value);
     }
 
+    /**
+     * Parses the canonical UUID text of a device id.
+     *
+     * <p>{@code null}, blank and malformed input are all rejected with {@link
+     * IllegalArgumentException}.
+     */
     public static DeviceId of(String value) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException("DeviceId cannot be null or empty");
@@ -30,6 +37,7 @@ public final class DeviceId {
         }
     }
 
+    /** Creates an id backed by a fresh random UUID. */
     public static DeviceId generate() {
         return new DeviceId(UUID.randomUUID());
     }

@@ -15,14 +15,22 @@ public record AttendanceId(java.util.UUID value) {
         }
     }
 
+    /** Creates an id backed by a fresh random UUID. */
     public static AttendanceId generate() {
         return new AttendanceId(java.util.UUID.randomUUID());
     }
 
+    /** Wraps an existing UUID; {@code null} is rejected with {@link IllegalArgumentException}. */
     public static AttendanceId of(java.util.UUID value) {
         return new AttendanceId(value);
     }
 
+    /**
+     * Parses the canonical UUID text of an attendance id.
+     *
+     * <p>{@code null}, blank and malformed input are all rejected with {@link
+     * IllegalArgumentException}.
+     */
     public static AttendanceId of(String value) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException("AttendanceId cannot be null or empty");

@@ -81,7 +81,7 @@ class AssignCapacityAdapterIntegrationTest extends CapacityAdapterMocksIntegrati
 
         AssignmentOutcome result = capacityPort.assign(cmd(sessionId, UUID.randomUUID()));
 
-        assertThat(result).isEqualTo(AssignmentOutcome.ASSIGNED.INSTANCE);
+        assertThat(result).isEqualTo(AssignmentOutcome.Assigned.INSTANCE);
         assertThat(assignmentRepository.findAll()).hasSize(1);
     }
 

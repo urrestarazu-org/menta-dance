@@ -9,6 +9,13 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+/**
+ * Spring Data repository over the {@code physical_sessions} table.
+ *
+ * <p>Besides plain CRUD it exposes native queries that compute availability live, and the locking
+ * capacity read used by the capacity-assignment claim path. Used only through the persistence
+ * adapters; it never leaves the infrastructure layer.
+ */
 public interface PhysicalSessionJpaRepository extends JpaRepository<PhysicalSessionJpaEntity, UUID> {
 
     /**

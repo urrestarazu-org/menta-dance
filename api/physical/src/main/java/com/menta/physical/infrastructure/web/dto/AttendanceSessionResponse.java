@@ -10,6 +10,7 @@ public record AttendanceSessionResponse(
     String status, Instant recordedAt
 ) {
 
+    /** Maps one session view, rendering its status by enum name. */
     public static AttendanceSessionResponse from(AttendanceSessionView view) {
         return new AttendanceSessionResponse(
             view.sessionId(), view.scheduledAt(), view.courseName(), view.instructorName(),

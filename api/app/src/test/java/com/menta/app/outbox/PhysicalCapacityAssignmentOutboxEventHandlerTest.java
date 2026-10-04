@@ -184,11 +184,11 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
         CapacityAssignmentCommand command = new CapacityAssignmentCommand(
             SESSION_UUID, STUDENT_UUID, PAYMENT_UUID
         );
-        when(physicalCapacityAssignmentPort.assign(command)).thenReturn(AssignmentOutcome.ASSIGNED.INSTANCE);
+        when(physicalCapacityAssignmentPort.assign(command)).thenReturn(AssignmentOutcome.Assigned.INSTANCE);
 
         AssignmentOutcome outcome = capacityAdapter.assign(command);
 
-        assertThat(outcome).isEqualTo(AssignmentOutcome.ASSIGNED.INSTANCE);
+        assertThat(outcome).isEqualTo(AssignmentOutcome.Assigned.INSTANCE);
         verify(physicalCapacityAssignmentPort).assign(command);
     }
 

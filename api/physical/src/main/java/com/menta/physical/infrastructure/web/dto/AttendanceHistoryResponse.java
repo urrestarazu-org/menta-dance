@@ -15,6 +15,7 @@ public record AttendanceHistoryResponse(
     BigDecimal attendanceRate, List<AttendanceSessionResponse> sessions
 ) {
 
+    /** Maps the application view to the wire shape, keeping every value as is. */
     public static AttendanceHistoryResponse from(AttendanceHistoryView view) {
         return new AttendanceHistoryResponse(
             view.period(), view.scheduledSessionCount(), view.attended(), view.absent(), view.attendanceRate(),

@@ -15,6 +15,12 @@ public final class PhysicalSessionJpaMapper {
     private PhysicalSessionJpaMapper() {
     }
 
+    /**
+     * Rebuilds a session from the native availability projection.
+     *
+     * <p>The live assigned and held counts come from the query itself, and the {@code BINARY(16)}
+     * ids are decoded by hand.
+     */
     public static PhysicalSession toDomain(PhysicalSessionAvailabilityProjection projection) {
         return new PhysicalSession(
             SessionId.of(toUuid(projection.getId())),
@@ -51,6 +57,12 @@ public final class PhysicalSessionJpaMapper {
         );
     }
 
+    /**
+     * Flattens a session into its row.
+     *
+     * <p>Only persisted columns are written: the assigned and held counts are derived at read time
+     * and never stored.
+     */
     public static PhysicalSessionJpaEntity toEntity(PhysicalSession session) {
         return new PhysicalSessionJpaEntity(
             session.getId().getValue(),

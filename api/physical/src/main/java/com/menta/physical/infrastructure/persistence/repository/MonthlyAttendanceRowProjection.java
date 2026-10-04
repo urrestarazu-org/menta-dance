@@ -12,13 +12,18 @@ import java.util.UUID;
  */
 public interface MonthlyAttendanceRowProjection {
 
+    /** Id of the assigned session. */
     UUID getSessionId();
 
+    /** Instant at which the session starts. */
     Instant getScheduledAt();
 
+    /** Title of the session's course. */
     String getCourseName();
 
+    /** Display name of the professor who owns the session's course. */
     String getInstructorName();
 
+    /** Instant the check-in was recorded; {@code null} when the student has no attendance for the session. */
     Instant getRecordedAt();
 }

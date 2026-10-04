@@ -16,6 +16,13 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
 
+/**
+ * Applies a partial update to a session, authorizing through its parent course.
+ *
+ * <p>Fails when the session or its course is unknown, when the caller does not own the course, and
+ * when the session has already occurred. Fields are applied through the domain's copy-on-write
+ * methods, so the capacity invariant is enforced by the aggregate.
+ */
 public class UpdatePhysicalSessionUseCaseImpl implements UpdatePhysicalSessionUseCase {
 
     private final PhysicalCourseRepository courseRepository;

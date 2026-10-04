@@ -21,8 +21,10 @@ import com.menta.shared.physical.MultiSessionCapacityAssignmentCommand;
 public interface PhysicalCapacityAssignmentPort {
 
     /**
-     * @return {@link AssignmentOutcome#ASSIGNED} when the row was inserted,
-     *         {@link AssignmentOutcome#RACE_LOST} when the read-time invariant
+     * Assigns one session spot to a student in a single transaction.
+     *
+     * @return {@link AssignmentOutcome#Assigned} when the row was inserted,
+     *         {@link AssignmentOutcome#RaceLost} when the read-time invariant
      *         trip happened but no INSERT was attempted (read-only trip —
      *         the {@code api:app} handler treats this as EXCEPTION-routable
      *         but does NOT propagate it as the live exception type).

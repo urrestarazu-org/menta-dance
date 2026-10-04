@@ -10,6 +10,7 @@ import java.util.List;
  */
 public record PhysicalDeviceListResponse(List<PhysicalDeviceResponse> devices) {
 
+    /** Wraps the views in order, as the {@code devices} array. */
     public static PhysicalDeviceListResponse from(List<PhysicalDeviceView> views) {
         return new PhysicalDeviceListResponse(views.stream().map(PhysicalDeviceResponse::from).toList());
     }

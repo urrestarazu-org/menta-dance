@@ -59,6 +59,10 @@ public final class PhysicalDevice {
     }
 
     /**
+     * Returns a copy carrying a new secret hash and a refreshed update timestamp.
+     *
+     * <p>The previous hash stops being valid for this device as soon as the copy is saved.
+     *
      * @throws DeviceRevokedException if this device is {@code REVOKED} (D5).
      */
     public PhysicalDevice rotateSecret(String newSecretHash, Instant now) {
@@ -69,6 +73,8 @@ public final class PhysicalDevice {
     }
 
     /**
+     * Returns a copy in the terminal {@code REVOKED} state, with the update timestamp refreshed.
+     *
      * @throws DeviceAlreadyRevokedException if this device is already {@code REVOKED} (D5).
      */
     public PhysicalDevice revoke(Instant now) {

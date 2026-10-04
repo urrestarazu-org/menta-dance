@@ -11,6 +11,12 @@ public final class PhysicalDeviceJpaMapper {
     private PhysicalDeviceJpaMapper() {
     }
 
+    /**
+     * Rebuilds the domain device from a stored row, including the secret hash.
+     *
+     * <p>The stored status must be a valid {@code DeviceStatus} name, otherwise {@link
+     * IllegalArgumentException} is thrown.
+     */
     public static PhysicalDevice toDomain(PhysicalDeviceJpaEntity entity) {
         return new PhysicalDevice(
             DeviceId.of(entity.getId()),
@@ -24,6 +30,7 @@ public final class PhysicalDeviceJpaMapper {
         );
     }
 
+    /** Flattens the domain device into a row, storing the status by name. */
     public static PhysicalDeviceJpaEntity toEntity(PhysicalDevice device) {
         return new PhysicalDeviceJpaEntity(
             device.getId().getValue(),

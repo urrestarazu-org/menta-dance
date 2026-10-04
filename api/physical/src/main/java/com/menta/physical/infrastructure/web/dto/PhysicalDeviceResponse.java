@@ -20,6 +20,7 @@ public record PhysicalDeviceResponse(
     Instant updatedAt
 ) {
 
+    /** Maps a device view field by field; the view holds no secret material, so neither does the response. */
     public static PhysicalDeviceResponse from(PhysicalDeviceView view) {
         return new PhysicalDeviceResponse(
             view.id(), view.name(), view.location(), view.status(),

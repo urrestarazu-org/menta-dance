@@ -8,6 +8,13 @@ import com.menta.physical.domain.exception.ProfessorMismatchException;
 import com.menta.physical.domain.model.PhysicalCourse;
 import java.util.UUID;
 
+/**
+ * Creates a recurring physical course owned by the caller or, for administrators, by a chosen
+ * professor.
+ *
+ * <p>An instructor may only create courses for themselves; naming another professor fails with
+ * {@code ProfessorMismatchException}. The new course always starts {@code ACTIVE}.
+ */
 public class CreatePhysicalCourseUseCaseImpl implements CreatePhysicalCourseUseCase {
 
     private final PhysicalCourseRepository courseRepository;

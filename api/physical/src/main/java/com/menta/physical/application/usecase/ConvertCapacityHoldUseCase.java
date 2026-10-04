@@ -47,6 +47,14 @@ public class ConvertCapacityHoldUseCase {
         this.assignmentWriter = assignmentWriter;
     }
 
+    /**
+     * Converts every hold of a payment into confirmed assignments, in the hold's own claim order.
+     *
+     * <p>Returns {@code HoldNotFound} when the payment has no hold rows, {@code AlreadyConverted}
+     * when every row is already converted (a redelivered webhook), and {@code Converted} with the
+     * session ids otherwise. A unique-index collision surfaces as {@code
+     * CapacityBelowAssignedException} and rolls back the whole conversion.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public ConvertOutcome convertAll(UUID paymentId, UUID studentId) {
         List<HeldSessionRow> rows = holdWriter.findByPaymentIdOrdered(paymentId);

@@ -10,6 +10,13 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Lists the sessions of a course for its manager, whatever their status.
+ *
+ * <p>Ownership is checked through {@code CourseOwnershipGuard}. Omitted bounds default to a very
+ * wide window around the current instant, so callers can read the full history without supplying a
+ * range.
+ */
 public class ListManagedPhysicalSessionsUseCaseImpl implements ListManagedPhysicalSessionsUseCase {
 
     /**
