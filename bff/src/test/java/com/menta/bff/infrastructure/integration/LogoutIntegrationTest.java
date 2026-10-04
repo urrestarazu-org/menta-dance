@@ -31,7 +31,7 @@ class LogoutIntegrationTest extends BaseIntegrationTest {
     @DisplayName("POST /logout debe revocar refresh token y limpiar sesión")
     void logout_shouldRevokeTokenAndClearSession() throws Exception {
         // Given: User is logged in
-        String accessToken = "access_token_abc123";
+        String accessToken = TestAccessTokens.withRole("STUDENT");
         String refreshToken = "refresh_token_xyz789";
 
         // Mock Auth API login
@@ -92,7 +92,7 @@ class LogoutIntegrationTest extends BaseIntegrationTest {
     @DisplayName("POST /logout sin CSRF token debe retornar 403 Forbidden")
     void logout_withoutCsrfToken_shouldReturnForbidden() throws Exception {
         // Given: User is logged in
-        String accessToken = "access_token";
+        String accessToken = TestAccessTokens.withRole("STUDENT");
         String refreshToken = "refresh_token";
 
         WIRE_MOCK_SERVER.stubFor(WireMock.post(urlEqualTo("/api/v1/auth/login"))
@@ -130,7 +130,7 @@ class LogoutIntegrationTest extends BaseIntegrationTest {
     @DisplayName("POST /logout cuando Auth API falla debe igual limpiar sesión local (fail-open)")
     void logout_whenAuthApiFailsToRevoke_shouldStillClearSession() throws Exception {
         // Given: User is logged in
-        String accessToken = "access_token";
+        String accessToken = TestAccessTokens.withRole("STUDENT");
         String refreshToken = "refresh_token";
 
         WIRE_MOCK_SERVER.stubFor(WireMock.post(urlEqualTo("/api/v1/auth/login"))

@@ -24,7 +24,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * - Form-based login (custom login page)
  * - Custom LogoutHandler (revokes refresh token BEFORE session invalidation)
  * - Custom LogoutSuccessHandler (redirects AFTER session invalidation)
- * - CSRF protection (disabled for local testing - TODO: enable in production)
+ * - CSRF protection (session-stored tokens; only /actuator/health is exempt)
  * - Session management (CREATE_IF_REQUIRED)
  * - Public endpoints (/login, /actuator/health, /error)
  * - Protected endpoints (all others require authentication)
@@ -100,9 +100,9 @@ public class BffSecurityConfig {
                         .permitAll()
                 )
 
-                // CSRF protection
-                // Enabled by default for security
-                // Local testing with curl/Bruno can include CSRF token or use -X OPTIONS first
+                // CSRF protection: every state-changing request (including /login
+                // and /logout) needs the token Thymeleaf injects into th:action forms.
+                // Local testing with curl/Bruno must GET /login first and send the token back.
                 .csrf(csrf -> csrf.ignoringRequestMatchers("/actuator/health"))
 
                 // Session management

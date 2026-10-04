@@ -1,7 +1,9 @@
 package com.menta.bff.application.usecase;
 
 import com.menta.bff.application.dto.LoginCommand;
+import com.menta.bff.application.dto.LoginResult;
 import com.menta.bff.application.dto.TokenPairResponse;
+import com.menta.bff.application.port.out.AccessTokenClaimsReader;
 import com.menta.bff.application.port.out.AuthApiClient;
 import com.menta.bff.application.port.out.SessionTokenRepository;
 import com.menta.bff.domain.model.SessionTokens;
@@ -20,30 +22,39 @@ public class LoginUseCaseImpl implements LoginUseCase {
 
     private final AuthApiClient authApiClient;
     private final SessionTokenRepository sessionTokenRepository;
+    private final AccessTokenClaimsReader accessTokenClaimsReader;
 
     /**
      * Constructor for dependency injection.
      *
      * @param authApiClient HTTP client for Auth API
      * @param sessionTokenRepository Session storage for tokens
+     * @param accessTokenClaimsReader Reads the role carried by the access token
      */
     public LoginUseCaseImpl(
             AuthApiClient authApiClient,
-            SessionTokenRepository sessionTokenRepository
+            SessionTokenRepository sessionTokenRepository,
+            AccessTokenClaimsReader accessTokenClaimsReader
     ) {
         this.authApiClient = Objects.requireNonNull(authApiClient, "authApiClient cannot be null");
         this.sessionTokenRepository =
             Objects.requireNonNull(sessionTokenRepository, "sessionTokenRepository cannot be null");
+        this.accessTokenClaimsReader =
+            Objects.requireNonNull(accessTokenClaimsReader, "accessTokenClaimsReader cannot be null");
     }
 
     @Override
-    public void execute(LoginCommand command) {
+    public LoginResult execute(LoginCommand command) {
         Objects.requireNonNull(command, "command cannot be null");
 
         // Call Auth API to exchange credentials for tokens
         // Throws AuthenticationException if credentials invalid
         // Throws ServiceUnavailableException if Auth API unreachable
         TokenPairResponse response = authApiClient.login(command);
+
+        // Read the role before storing anything: a token without a usable
+        // role must fail the login, not leave a half-authenticated session
+        String role = accessTokenClaimsReader.roleOf(response.accessToken());
 
         // Calculate absolute expiration time
         Instant expiresAt = Instant.now().plusSeconds(response.expiresIn());
@@ -58,5 +69,7 @@ public class LoginUseCaseImpl implements LoginUseCase {
         // Store in server-side session (Redis)
         // Browser will receive opaque SESSION cookie, never the tokens
         sessionTokenRepository.store(tokens);
+
+        return new LoginResult(role);
     }
 }
