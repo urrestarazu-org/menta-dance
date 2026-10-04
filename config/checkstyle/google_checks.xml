@@ -20,7 +20,9 @@
 
   <property name="charset" value="UTF-8"/>
 
-  <property name="severity" value="${org.checkstyle.google.severity}" default="warning"/>
+  <!-- Every finding is an error and fails the build (ADR-0043). No rule may override this
+       with a weaker severity, and no per-rule "error" lock is needed: the default is the lock. -->
+  <property name="severity" value="${org.checkstyle.google.severity}" default="error"/>
 
   <property name="fileExtensions" value="java, properties, xml"/>
   <!-- Excludes all 'module-info.java' files              -->
@@ -57,7 +59,6 @@
     <property name="max" value="120"/>
     <property name="ignorePattern"
              value="^package.*|^import.*|href\s*=\s*&quot;[^&quot;]*&quot;|http://|https://|ftp://"/>
-    <property name="severity" value="error"/>
   </module>
   <!--  Suppression to prevent LineLength Check from flagging lines in Text-blocks -->
   <module name="SuppressWithPlainTextCommentFilter">
@@ -92,9 +93,7 @@
       <property name="allowByTailComment" value="true"/>
       <property name="allowNonPrintableEscapes" value="true"/>
     </module>
-    <module name="AvoidStarImport">
-      <property name="severity" value="error"/>
-    </module>
+    <module name="AvoidStarImport"/>
     <module name="OneTopLevelClass"/>
     <module name="NoLineWrap">
       <property name="tokens" value="PACKAGE_DEF, IMPORT, STATIC_IMPORT"/>
@@ -105,7 +104,6 @@
     </module>
     <module name="LeftCurly">
       <property name="id" value="LeftCurlyEol"/>
-      <property name="severity" value="error"/>
       <property name="tokens"
                 value="ANNOTATION_DEF, CLASS_DEF, CTOR_DEF, ENUM_CONSTANT_DEF, ENUM_DEF,
                     INTERFACE_DEF, LAMBDA, LITERAL_CATCH,
@@ -137,7 +135,6 @@
     </module>
     <module name="RightCurly">
       <property name="id" value="RightCurlyAlone"/>
-      <property name="severity" value="error"/>
       <property name="option" value="alone"/>
       <property name="tokens"
                value="CLASS_DEF, METHOD_DEF, CTOR_DEF, LITERAL_FOR, LITERAL_WHILE, STATIC_INIT,
@@ -198,23 +195,18 @@
       <property name="message" value="Empty blocks should have no spaces. Empty blocks
                                    may only be represented as '{}' when not part of a
                                    multi-block statement (4.1.3)"/>
-      <property name="severity" value="error"/>
     </module>
     <module name="OneStatementPerLine"/>
     <module name="MultipleVariableDeclarations"/>
     <module name="ArrayTypeStyle"/>
     <module name="JavadocLeadingAsteriskAlign"/>
     <module name="JavadocMissingLeadingAsterisk"/>
-    <module name="JavadocContentLocation">
-      <property name="severity" value="error"/>
-    </module>
+    <module name="JavadocContentLocation"/>
     <module name="MissingSwitchDefault"/>
     <module name="FallThrough"/>
     <module name="UpperEll"/>
     <module name="ModifierOrder"/>
-    <module name="TextBlockGoogleStyleFormatting">
-      <property name="severity" value="error"/>
-    </module>
+    <module name="TextBlockGoogleStyleFormatting"/>
     <module name="EmptyLineSeparator">
       <property name="tokens"
                value="PACKAGE_DEF, IMPORT, STATIC_IMPORT, CLASS_DEF, INTERFACE_DEF, ENUM_DEF,
@@ -222,7 +214,6 @@
                     COMPACT_CTOR_DEF"/>
       <property name="allowNoEmptyLineBetweenFields" value="true"/>
       <property name="allowMultipleEmptyLines" value="false"/>
-      <property name="severity" value="error"/>
     </module>
     <module name="SeparatorWrap">
       <property name="id" value="SeparatorWrapDot"/>
@@ -259,14 +250,12 @@
     <module name="TypeName">
       <property name="format" value="^[A-Z][a-zA-Z0-9]*(?:[0-9](?:_[0-9]+)*)?$"/>
       <property name="tokens" value="CLASS_DEF"/>
-      <property name="severity" value="error"/>
       <message key="name.invalidPattern"
              value="Type name ''{0}'' must match pattern ''{1}''."/>
     </module>
     <module name="TypeName">
       <property name="tokens" value="INTERFACE_DEF, ENUM_DEF,
                     ANNOTATION_DEF, RECORD_DEF"/>
-      <property name="severity" value="error"/>
       <message key="name.invalidPattern"
              value="Type name ''{0}'' must match pattern ''{1}''."/>
     </module>
@@ -351,7 +340,6 @@
       <property name="throwsIndent" value="4"/>
       <property name="lineWrappingIndentation" value="4"/>
       <property name="arrayInitIndent" value="4"/>
-      <property name="severity" value="error"/>
     </module>
 
     <module name="AbbreviationAsWordInName">
@@ -361,21 +349,15 @@
                value="CLASS_DEF, INTERFACE_DEF, ENUM_DEF, ANNOTATION_DEF, ANNOTATION_FIELD_DEF,
                     PARAMETER_DEF, VARIABLE_DEF, METHOD_DEF, PATTERN_VARIABLE_DEF, RECORD_DEF,
                     RECORD_COMPONENT_DEF"/>
-      <property name="severity" value="error"/>
     </module>
     <module name="NoWhitespaceBeforeCaseDefaultColon"/>
-    <module name="OverloadMethodsDeclarationOrder">
-      <property name="severity" value="error"/>
-    </module>
+    <module name="OverloadMethodsDeclarationOrder"/>
     <module name="ConstructorsDeclarationGrouping"/>
-    <module name="VariableDeclarationUsageDistance">
-      <property name="severity" value="error"/>
-    </module>
+    <module name="VariableDeclarationUsageDistance"/>
     <module name="CustomImportOrder">
       <property name="sortImportsInGroupAlphabetically" value="true"/>
       <property name="separateLineBetweenGroups" value="true"/>
       <property name="customImportOrderRules" value="STATIC###THIRD_PARTY_PACKAGE"/>
-      <property name="severity" value="error"/>
     </module>
     <module name="MethodParamPad">
       <property name="tokens"
@@ -434,21 +416,15 @@
     <module name="MissingOverrideOnRecordAccessor"/>
     <module name="NonEmptyAtclauseDescription"/>
     <module name="InvalidJavadocPosition"/>
-    <module name="JavadocTagContinuationIndentation">
-      <property name="severity" value="error"/>
-    </module>
+    <module name="JavadocTagContinuationIndentation"/>
     <module name="SummaryJavadoc">
       <property name="forbiddenSummaryFragments"
         value="^@return the *|^This method returns |^A [{]@code [a-zA-Z0-9]+[}]( is a )|^[a-z]"/>
-      <property name="severity" value="error"/>
     </module>
     <module name="JavadocParagraph">
       <property name="allowNewlineParagraph" value="false"/>
-      <property name="severity" value="error"/>
     </module>
-    <module name="RequireEmptyLineBeforeBlockTagGroup">
-      <property name="severity" value="error"/>
-    </module>
+    <module name="RequireEmptyLineBeforeBlockTagGroup"/>
     <module name="AtclauseOrder">
       <property name="tagOrder" value="@param, @return, @throws, @deprecated"/>
       <property name="target" value="CLASS_DEF, INTERFACE_DEF, ENUM_DEF, METHOD_DEF, CTOR_DEF,
@@ -471,7 +447,6 @@
                 value="Override, Test, Bean, GetMapping, PostMapping, PutMapping, PatchMapping,
                        DeleteMapping, RequestMapping, ExceptionHandler, Scheduled"/>
       <property name="tokens" value="METHOD_DEF, ANNOTATION_FIELD_DEF"/>
-      <property name="severity" value="error"/>
     </module>
     <module name="SuppressionXpathSingleFilter">
       <property name="checks" value="MissingJavadocMethod"/>
@@ -487,7 +462,6 @@
                 value="CLASS_DEF, INTERFACE_DEF, ENUM_DEF,
                       RECORD_DEF, ANNOTATION_DEF"/>
       <property name="excludeScope" value="nothing"/>
-      <property name="severity" value="error"/>
     </module>
     <!-- MentaDance customization: nested types (inside another type's body)
          are exempt from MissingJavadocType; only top-level types need it. -->
@@ -502,7 +476,6 @@
           value="^(?![a-z]$)(?![a-z][A-Z])[a-z][a-z0-9]*(?:[A-Z][a-z0-9]*)*(?:_[0-9]+)*$"/>
       <message key="name.invalidPattern"
              value="Method name ''{0}'' must match pattern ''{1}''."/>
-      <property name="severity" value="error"/>
     </module>
     <!-- MentaDance customization: snake_case names are tolerated (not endorsed)
          on @Test methods; a camelCase migration is deferred (ADR-0043).
@@ -525,9 +498,7 @@
                                      ./MODIFIERS/ANNOTATION//IDENT[contains(@text, 'Test')]
                                    ]/IDENT"/>
     </module>
-    <module name="SingleLineJavadoc">
-      <property name="severity" value="error"/>
-    </module>
+    <module name="SingleLineJavadoc"/>
     <module name="TodoComment">
       <property name="id" value="TodoFormat"/>
       <property name="format" value="^[ \t]*(?!TODO:)(?i:TODO)\b:?"/>

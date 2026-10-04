@@ -22,8 +22,7 @@ Estado verificado en fuente al momento de esta decisión:
 El riesgo de esta configuración no es la ausencia de herramientas: es que
 la abundancia de análisis estático **aparenta** una cobertura de seguridad
 que no existe. Checkstyle corre sobre los 7 módulos JVM (14 tareas) en los
-dos workflows y sólo falla el build cuando una tarea supera su techo de
-advertencias (ver ADR-0043); es razonable asumir que algo tan visible cubre
+dos workflows y cualquier hallazgo falla el build (ver ADR-0043); es razonable asumir que algo tan visible cubre
 algo más que indentación. No lo hace. Hadolint aprueba un `FROM` impecable
 hacia una imagen base con CVEs críticos publicados: la sintaxis es correcta
 y el contenido es vulnerable.
@@ -32,8 +31,10 @@ y el contenido es vulnerable.
 > que Checkstyle corría sobre 8 módulos JVM y que "falla el build". Ambas
 > afirmaciones eran erróneas: los módulos JVM con Checkstyle son 7 (el
 > proyecto raíz sólo tiene tareas sin fuentes) y, con severidad `warning` y
-> sin umbral, ninguna cantidad de hallazgos rompía el build. Desde ADR-0043
-> cada tarea falla únicamente por encima de su techo de advertencias.
+> sin umbral, ninguna cantidad de hallazgos rompía el build. ADR-0043 lo
+> corrigió con un trinquete de techos por tarea y, desde #332 (cierre de
+> #298), la severidad por defecto es `error`: cualquier hallazgo falla el
+> build.
 
 Gaps concretos, todos verificados por ausencia en el árbol de fuentes:
 
