@@ -65,6 +65,44 @@ se borre después: el objeto sigue en el historial, en los forks y en los mirror
 4. Confirmar con `gitleaks git . --redact` que el historial queda limpio.
 5. Revisar los logs de uso de la credencial vieja en busca de accesos ajenos.
 
+## Análisis de dependencias (SCA)
+
+El análisis de composición de software es responsabilidad de **Dependabot**
+(ADR-0042). `.github/dependabot.yml` cubre:
+
+| Ecosistema | Directorio | Qué vigila |
+|---|---|---|
+| `gradle` | `/` | Subproyectos (`api:*`, `bff`, `android`) y `gradle/libs.versions.toml` |
+| `gradle` | `/buildSrc` | El build incluido `buildSrc`, que Dependabot no ve desde la raíz |
+| `github-actions` | `/` | Las actions de `.github/workflows/`; actualiza el SHA completo y su comentario `# vX.Y.Z`, por lo que se conserva el pinning de ADR-0024 |
+
+`npm` no está configurado porque no hay un `package.json` versionado en el
+repositorio.
+
+Dependabot corre los lunes y abre PRs contra `develop`. Los bumps *minor* y
+*patch* llegan agrupados por ecosistema para no inundar la cola de revisión; los
+*major* llegan como PRs individuales a propósito. Dependabot no corre dentro del
+pipeline de PR, así que no afecta el presupuesto de `pr-develop.yml`.
+
+### Criterio de triage de los PRs de Dependabot
+
+1. **Seguridad primero:** un PR que corrige una vulnerabilidad publicada se
+   revisa antes que cualquier otro.
+2. **Nada se mergea automáticamente.** Todo PR pasa por el mismo CI que el
+   resto; sin CI verde no se integra (ADR-0024).
+3. **Grupos *minor/patch*:** se integran cuando el CI está verde, tras mirar las
+   notas de versión de lo que cambia el BOM de Spring Boot.
+4. **Bumps *major*:** se leen las notas de migración y se evalúa el impacto antes
+   de integrar. Si hay trabajo de adaptación, se abre un issue en el tablero y
+   se cierra el PR.
+5. **Si el bump cambia una versión que ADR-0024 fija como baseline**, se
+   actualiza el ADR en el mismo PR.
+6. Un PR que no se va a integrar se cierra con un comentario que explique el
+   motivo; `@dependabot ignore` evita que reaparezca.
+
+Las alertas de Dependabot (*Dependabot alerts*) están habilitadas en la
+configuración del repositorio y son gratuitas en repositorios públicos.
+
 ## Git Flow y releases
 
 - `feature/*` nace de `develop`.

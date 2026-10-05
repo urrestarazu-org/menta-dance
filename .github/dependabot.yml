@@ -1,0 +1,74 @@
+# Dependabot version updates (ADR-0042, #189).
+#
+# Every bump arrives as a PR and goes through the normal CI gates: nothing is
+# merged automatically (ADR-0024 requires exact versions and green CI).
+# Minor and patch bumps are grouped per ecosystem to keep the review queue
+# short; major bumps are intentionally left ungrouped so each one gets its own
+# PR and its own risk assessment.
+#
+# npm is not configured on purpose: there is no versioned package.json in the
+# repository, so there is nothing for Dependabot to scan.
+version: 2
+updates:
+  # Root Gradle build: all subprojects (api:*, bff, android) and the version
+  # catalog gradle/libs.versions.toml.
+  - package-ecosystem: gradle
+    directory: "/"
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: America/Argentina/Buenos_Aires
+    open-pull-requests-limit: 5
+    labels:
+      - chore
+      - module:infra
+    commit-message:
+      prefix: "build(deps)"
+    groups:
+      gradle-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  # buildSrc is an included build with its own build.gradle.kts, so Dependabot
+  # does not see it from the root directory.
+  - package-ecosystem: gradle
+    directory: "/buildSrc"
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: America/Argentina/Buenos_Aires
+    open-pull-requests-limit: 3
+    labels:
+      - chore
+      - module:infra
+    commit-message:
+      prefix: "build(deps)"
+    groups:
+      buildsrc-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  # GitHub Actions: updates the full commit SHA and its "# vX.Y.Z" comment, so
+  # the SHA pinning required by ADR-0024 is kept instead of drifting into debt.
+  - package-ecosystem: github-actions
+    directory: "/"
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: America/Argentina/Buenos_Aires
+    open-pull-requests-limit: 5
+    labels:
+      - chore
+      - module:infra
+    commit-message:
+      prefix: "ci(deps)"
+    groups:
+      github-actions-minor-patch:
+        update-types:
+          - minor
+          - patch
