@@ -78,6 +78,68 @@ se borre después: el objeto sigue en el historial, en los forks y en los mirror
 4. Confirmar con `gitleaks git . --redact` que el historial queda limpio.
 5. Revisar los logs de uso de la credencial vieja en busca de accesos ajenos.
 
+## Análisis estático: estilo vs. seguridad
+
+Checkstyle y SpotBugs no se solapan, y Checkstyle **no** cubre seguridad
+(ADR-0042, ADR-0043):
+
+| Herramienta | Qué mira | Qué detecta | Qué NO detecta |
+|---|---|---|---|
+| **Checkstyle** (`config/checkstyle/google_checks.xml`) | Código fuente | Estilo: indentación, nombres, Javadoc, longitud de línea | Ninguna vulnerabilidad. Aprueba un `"... WHERE id = '" + id + "'"` bien indentado |
+| **SpotBugs + Find Security Bugs** (`config/spotbugs/exclude.xml`) | Bytecode de producción (`src/main`) | Bugs y patrones vulnerables: inyección SQL, criptografía débil (MD5, SHA-1), deserialización insegura, path traversal, XSS en plantillas, CSRF deshabilitado | Estilo, vulnerabilidades en dependencias (SCA, ver Dependabot) ni secretos (Gitleaks) |
+
+Checkstyle responde "¿está bien escrito?"; SpotBugs responde "¿es explotable?".
+Un build con Checkstyle en verde no dice nada sobre seguridad.
+
+### SpotBugs
+
+* **Dónde corre:** el job `spotbugs` de `pr-main.yml` (gate de release, ADR-0042),
+  en paralelo con `full-build-and-test`. No corre en `pr-develop.yml`: mantiene
+  su presupuesto de feedback rápido (<5 min). Sube los reportes como artefacto
+  `spotbugs-reports` aunque falle. El módulo `android` no participa: no usa el
+  plugin `java` estándar y no hay una configuración equivalente.
+* **Configuración:** una sola vez en el `build.gradle.kts` raíz, aplicada a los 7
+  módulos JVM (`api:*` y `bff`). Versiones fijadas en `gradle/libs.versions.toml`
+  (`spotbugs-gradle-plugin`, `spotbugs-tool`, `findsecbugs`); Find Security Bugs
+  se registra en la configuración `spotbugsPlugins`. `effort = MAX`.
+* **Qué falla el build:** `reportLevel = HIGH`, es decir, hallazgos de prioridad 1
+  (la confianza más alta de SpotBugs). Los de prioridad 2 y 3 existen pero no
+  bloquean. Los de prioridad 2 son ruido (p. ej. `EI_EXPOSE_REP`, que salta en
+  cada constructor con inyección de dependencias). Los de categoría `SECURITY`
+  son todos de prioridad 3 y **no se descartaron**: incluyen
+  `CRLF_INJECTION_LOGS` y `SERVLET_HEADER`, que pueden ser reales y esperan su
+  triage (#437). Se analiza sólo `src/main`; los tests no se analizan
+  (`spotbugsTest` está deshabilitada).
+* **Fuera de `check`:** el plugin de SpotBugs engancha sus tareas a `check`, y
+  por tanto a `./gradlew build`, que corre `pr-develop.yml`. El `build.gradle.kts`
+  raíz quita esa dependencia a propósito para que el análisis sólo corra donde
+  ADR-0042 lo ubica; se invoca con `spotbugsMain`.
+* **Correr localmente:**
+
+  ```bash
+  ./gradlew spotbugsMain                 # todos los módulos JVM
+  ./gradlew :api:auth:spotbugsMain       # un módulo
+  # Reporte: <módulo>/build/reports/spotbugs/main.html (y main.xml)
+  ```
+
+### Cómo triar un hallazgo
+
+1. Abrí `main.html` del módulo y leé la descripción del patrón y la traza.
+2. **Si es real, corregilo** respetando las capas: `domain` no incorpora
+   dependencias de frameworks para contentar al analizador. La corrección lleva
+   sus tests y no baja los umbrales de cobertura. Si toca lógica de negocio y
+   es grande, abrí un issue propio.
+3. **Si es un falso positivo**, suprimilo en `config/spotbugs/exclude.xml` con un
+   `<Match>` acotado a la clase (y al método si se puede) y a **un** patrón, con
+   un comentario XML que explique por qué no es explotable. No se aceptan
+   supresiones globales, por patrón en todo el proyecto ni sin justificación.
+4. No uses `@SuppressFBWarnings` ni `ignoreFailures = true` para poner el build
+   en verde.
+
+Que el job bloquee el merge depende de que `spotbugs` figure entre los *required
+status checks* de la protección de `main` (misma salvedad que `gitleaks`); el
+workflow por sí solo no lo garantiza.
+
 ## Análisis de dependencias (SCA)
 
 El análisis de composición de software es responsabilidad de **Dependabot**
