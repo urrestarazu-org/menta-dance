@@ -42,6 +42,19 @@ La detección se hace en tres capas complementarias (ADR-0042):
    secrets de Actions, por lo que el job fallaría en ellos.
    El job también falla si no se escaneó ningún commit, para que un error de
    git no se confunda con "sin hallazgos".
+
+   **Que bloquee el merge depende de la configuración del repositorio, no del
+   workflow:** `gitleaks` debe figurar entre los *required status checks* de la
+   protección de `develop` y de `main`. Un job que falla pero no es requerido
+   no impide mergear. Para verificarlo:
+
+   ```bash
+   gh api repos/urrestarazu-org/menta-dance/branches/develop/protection/required_status_checks --jq '.contexts'
+   gh api repos/urrestarazu-org/menta-dance/branches/main/protection/required_status_checks --jq '.contexts'
+   ```
+
+   Si `gitleaks` no aparece en alguna de las dos listas, esta capa dejó de ser
+   bloqueante.
 3. **GitHub Secret Scanning con push protection:** capa gratuita en
    repositorios públicos, habilitada en *Settings → Code security*.
 
