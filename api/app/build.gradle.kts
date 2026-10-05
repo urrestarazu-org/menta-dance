@@ -47,7 +47,7 @@ dependencies {
     implementation("org.flywaydb:flyway-mysql")
 
     // Logging
-    implementation("net.logstash.logback:logstash-logback-encoder:8.0")
+    implementation("net.logstash.logback:logstash-logback-encoder:9.0")
 
     // Annotations
     compileOnly(libs.lombok)
