@@ -80,9 +80,38 @@ El análisis de composición de software es responsabilidad de **Dependabot**
 repositorio.
 
 Dependabot corre los lunes y abre PRs contra `develop`. Los bumps *minor* y
-*patch* llegan agrupados por ecosistema para no inundar la cola de revisión; los
-*major* llegan como PRs individuales a propósito. Dependabot no corre dentro del
-pipeline de PR, así que no afecta el presupuesto de `pr-develop.yml`.
+*patch* llegan agrupados para no inundar la cola de revisión; los *major* llegan
+como PRs individuales a propósito. Dependabot no corre dentro del pipeline de PR,
+así que no afecta el presupuesto de `pr-develop.yml`.
+
+Un grupo único bloquea todo lo que contiene si un solo miembro falla, por lo que
+el build `gradle` de la raíz se divide en tres grupos. Una dependencia cae en el
+**primer** grupo cuyo patrón coincide, de modo que el orden en el archivo importa:
+
+| Grupo | Contenido | Por qué separado |
+|---|---|---|
+| `android-toolchain` | AGP, Kotlin, KSP, Hilt, AndroidX y Compose | Deben moverse juntos y un bump puede exigir cambiar `compileSdk` (#425) |
+| `jvm-test-tooling` | ArchUnit, WireMock y Testcontainers | Sólo afectan a los tests |
+| `gradle-minor-patch` | El resto | Todo lo demás |
+
+El grupo de Android puede quedar rojo hasta resolver #425. Se acepta a
+propósito: ignorarlo ocultaría también parches de seguridad.
+
+### Actualizaciones ignoradas
+
+Estas dependencias dependen de una generación de Spring Boot y no de la cadencia
+de Dependabot, por lo que `dependabot.yml` las ignora hasta decidir la
+migración (#426):
+
+* `org.junit.platform:*`: `build.gradle.kts` las fija a la plataforma que
+  corresponde al Jupiter administrado por el BOM de Spring Boot; moverlas solas
+  rompe esa alineación.
+* `org.testcontainers:*` (sólo *major*): la rama 2.x renombra los módulos.
+* `net.logstash.logback:logstash-logback-encoder` (sólo *major*): la 9.x migra a
+  Jackson 3 y exige Java 17, mientras Spring Boot 3.5 usa Jackson 2.
+
+Al agregar una exclusión nueva, dejá el motivo como comentario en
+`dependabot.yml` y enlazá el issue que decide su levantamiento.
 
 ### Criterio de triage de los PRs de Dependabot
 
