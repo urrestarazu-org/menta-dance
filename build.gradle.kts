@@ -130,9 +130,9 @@ subprojects {
             add("testImplementation", "org.springframework.boot:spring-boot-starter-test")
 
             // Force JUnit Platform 1.12.2 to override Gradle's bundled 1.8.2
-            add("testRuntimeOnly", "org.junit.platform:junit-platform-engine:1.12.2")
-            add("testRuntimeOnly", "org.junit.platform:junit-platform-launcher:1.12.2")
-            add("testRuntimeOnly", "org.junit.platform:junit-platform-commons:1.12.2")
+            add("testRuntimeOnly", "org.junit.platform:junit-platform-engine:6.1.3")
+            add("testRuntimeOnly", "org.junit.platform:junit-platform-launcher:6.1.3")
+            add("testRuntimeOnly", "org.junit.platform:junit-platform-commons:6.1.3")
 
             // Only add ArchUnit to modules that have architecture tests
             if (project.name != "shared" && project.parent?.name == "api") {
