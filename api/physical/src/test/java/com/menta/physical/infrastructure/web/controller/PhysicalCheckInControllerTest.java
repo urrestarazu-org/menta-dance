@@ -21,6 +21,7 @@ import com.menta.physical.domain.model.SessionId;
 import com.menta.physical.infrastructure.web.dto.AccessQrResponse;
 import com.menta.physical.infrastructure.web.dto.CheckInRequest;
 import com.menta.physical.infrastructure.web.dto.CheckInResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
@@ -29,6 +30,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -38,13 +40,19 @@ class PhysicalCheckInControllerTest {
 
     private IssuePhysicalAccessQrUseCase issueUseCase;
     private ProcessPhysicalCheckInUseCase checkInUseCase;
+    private PhysicalClientFingerprint fingerprint;
+    private HttpServletRequest httpRequest;
     private PhysicalCheckInController controller;
 
     @BeforeEach
     void setUp() {
         issueUseCase = mock(IssuePhysicalAccessQrUseCase.class);
         checkInUseCase = mock(ProcessPhysicalCheckInUseCase.class);
-        controller = new PhysicalCheckInController(issueUseCase, checkInUseCase);
+        fingerprint = new PhysicalClientFingerprint("172.16.0.0/12");
+        MockHttpServletRequest mockRequest = new MockHttpServletRequest();
+        mockRequest.setRemoteAddr("203.0.113.9");
+        httpRequest = mockRequest;
+        controller = new PhysicalCheckInController(issueUseCase, checkInUseCase, fingerprint);
     }
 
     private static Authentication authOf(UUID userId) {
@@ -96,12 +104,13 @@ class PhysicalCheckInControllerTest {
         when(checkInUseCase.checkIn(any())).thenReturn(new CheckInResult(view, true));
 
         ResponseEntity<CheckInResponse> response =
-            controller.checkIn(sessionId.toString(), request, authOf(UUID.randomUUID()));
+            controller.checkIn(sessionId.toString(), request, authOf(UUID.randomUUID()), httpRequest);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(response.getBody().attendanceId()).isEqualTo(view.attendanceId().toString());
         verify(checkInUseCase).checkIn(eq(CheckInCommand.qr(
-            sessionId, "qr:payload", "reader-1", "device-secret"
+            sessionId, "qr:payload", "reader-1", "device-secret",
+            fingerprint.client(httpRequest), fingerprint.device("reader-1")
         )));
         verify(checkInUseCase, never()).checkInManually(any());
     }
@@ -115,7 +124,7 @@ class PhysicalCheckInControllerTest {
         when(checkInUseCase.checkIn(any())).thenReturn(new CheckInResult(view, false));
 
         ResponseEntity<CheckInResponse> response =
-            controller.checkIn(sessionId.toString(), request, null);
+            controller.checkIn(sessionId.toString(), request, null, httpRequest);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     }
@@ -131,7 +140,7 @@ class PhysicalCheckInControllerTest {
         when(checkInUseCase.checkInManually(any())).thenReturn(new CheckInResult(view, true));
 
         ResponseEntity<CheckInResponse> response = controller.checkIn(
-            sessionId.toString(), request, receptionistAuthOf(receptionistId)
+            sessionId.toString(), request, receptionistAuthOf(receptionistId), httpRequest
         );
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
@@ -150,7 +159,7 @@ class PhysicalCheckInControllerTest {
         AttendanceView view = attendanceView(sessionId, studentId, AttendanceKind.MANUAL);
         when(checkInUseCase.checkInManually(any())).thenReturn(new CheckInResult(view, true));
 
-        controller.checkIn(sessionId.toString(), request, null);
+        controller.checkIn(sessionId.toString(), request, null, httpRequest);
 
         verify(checkInUseCase).checkInManually(
             eq(CheckInCommand.manual(sessionId, studentId, CheckInActor.anonymous()))
@@ -169,7 +178,7 @@ class PhysicalCheckInControllerTest {
             "key", "anonymousUser", List.of(new SimpleGrantedAuthority("ROLE_ANONYMOUS"))
         );
 
-        controller.checkIn(sessionId.toString(), request, anonymous);
+        controller.checkIn(sessionId.toString(), request, anonymous, httpRequest);
 
         verify(checkInUseCase).checkInManually(
             eq(CheckInCommand.manual(sessionId, studentId, CheckInActor.anonymous()))

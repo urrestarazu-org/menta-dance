@@ -20,6 +20,7 @@ import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.auth.infrastructure.persistence.repository.OutboxRowJpaRepository;
+import com.menta.physical.application.port.out.CheckInRateLimitPort;
 import com.menta.shared.domain.vo.Email;
 import java.time.Duration;
 import java.util.Map;
@@ -131,6 +132,8 @@ class AuthRevocationIntegrationTest extends AbstractAuthMySqlIntegrationTest {
     @MockBean
     private com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase
         processPhysicalCheckInUseCase;
+    // ADR-0044: backed by a RedisTemplate this Redis-less context does not have.
+    @MockBean private CheckInRateLimitPort checkInRateLimitPort;
 
     private final Map<String, Long> projectedVersions = new ConcurrentHashMap<>();
     private final Set<String> blacklistedJtis = ConcurrentHashMap.newKeySet();

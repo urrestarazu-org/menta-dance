@@ -27,6 +27,7 @@ import com.menta.billing.infrastructure.persistence.repository.SubscriptionCours
 import com.menta.billing.infrastructure.persistence.repository.SubscriptionJpaRepository;
 import com.menta.billing.infrastructure.scheduling.SubscriptionExpiryReconciler;
 import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
+import com.menta.physical.application.port.out.CheckInRateLimitPort;
 import com.menta.shared.domain.vo.Email;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -98,6 +99,8 @@ class SubscriptionStatusIntegrationTest extends AbstractBillingMySqlIntegrationT
     @MockBean private PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort;
     @MockBean private PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
     @MockBean private ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
+    // ADR-0044: backed by a RedisTemplate this Redis-less context does not have.
+    @MockBean private CheckInRateLimitPort checkInRateLimitPort;
 
     @BeforeEach
     void stubDefensively() {

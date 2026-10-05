@@ -3,6 +3,7 @@ package com.menta.physical.infrastructure.web.dto;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 
 /**
  * Body of {@code POST /api/v1/physical/sessions/{sessionId}/check-ins}, a
@@ -19,14 +20,30 @@ import jakarta.validation.constraints.Pattern;
  * {@code MethodArgumentNotValidException}, mapped by {@code
  * PhysicalCheckInExceptionHandler} to {@code 400 INVALID_REQUEST} before
  * either use case runs.</p>
+ *
+ * <p>ADR-0044: the QR-only fields are length-capped so the device token hash and the
+ * rate-limit fingerprint are only ever computed over bounded input. {@code null} stays valid
+ * for {@code @Size}; presence is still decided by the predicates above.</p>
  */
 public record CheckInRequest(
     @NotBlank @Pattern(regexp = "QR|MANUAL") String type,
-    String qrCredentials,
-    String deviceId,
-    String deviceToken,
+    @Size(max = QR_CREDENTIALS_MAX_LENGTH) String qrCredentials,
+    @Size(max = DEVICE_ID_MAX_LENGTH) String deviceId,
+    @Size(max = DEVICE_TOKEN_MAX_LENGTH) String deviceToken,
     String studentId
 ) {
+
+    /** Length of a canonical UUID, the format of {@code deviceId} (ADR-0044). */
+    public static final int DEVICE_ID_MAX_LENGTH = 36;
+
+    /**
+     * 32 random bytes in unpadded Base64 URL. Coupled to {@code
+     * SecureRandomDeviceSecretGenerator}; a test keeps both in sync (ADR-0044).
+     */
+    public static final int DEVICE_TOKEN_MAX_LENGTH = 43;
+
+    /** Deliberately generous: the current QR format is a placeholder for a real HMAC (ADR-0044). */
+    public static final int QR_CREDENTIALS_MAX_LENGTH = 512;
 
     /** #45: a QR body must carry the reader triple and must NOT carry studentId. */
     @AssertTrue(message = "Invalid QR check-in body")

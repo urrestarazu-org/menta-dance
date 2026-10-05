@@ -29,6 +29,7 @@ import com.menta.auth.domain.repository.UserRepository;
 import com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity;
 import com.menta.auth.infrastructure.persistence.repository.ActivationTokenJpaRepository;
 import com.menta.auth.infrastructure.persistence.repository.OutboxRowJpaRepository;
+import com.menta.physical.application.port.out.CheckInRateLimitPort;
 import com.menta.shared.domain.vo.Email;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -93,6 +94,8 @@ class AccountActivationIntegrationTest extends AbstractAuthMySqlIntegrationTest 
     @MockBean
     private com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase
         processPhysicalCheckInUseCase;
+    // ADR-0044: backed by a RedisTemplate this Redis-less context does not have.
+    @MockBean private CheckInRateLimitPort checkInRateLimitPort;
 
     @AfterEach
     void cleanUp() {

@@ -24,6 +24,8 @@ import com.menta.auth.domain.repository.UserRepository;
 import com.menta.billing.application.port.out.BankTransferRateLimitPort;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.port.out.CourseCatalogPort;
+import com.menta.physical.application.dto.RateLimitDecision;
+import com.menta.physical.application.port.out.CheckInRateLimitPort;
 import com.menta.physical.domain.model.CourseStatus;
 import com.menta.physical.infrastructure.device.Sha256DeviceSecretHasher;
 import com.menta.physical.infrastructure.persistence.entity.AttendanceJpaEntity;
@@ -112,6 +114,8 @@ class PhysicalCheckInIntegrationTest extends AbstractPhysicalMySqlIntegrationTes
     @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
     @MockBean private BankTransferRateLimitPort bankTransferRateLimitPort;
     @MockBean private CourseCatalogPort courseCatalogPort;
+    // ADR-0044: an unmocked port would sit on the mocked RedisTemplate, get null and fail closed.
+    @MockBean private CheckInRateLimitPort checkInRateLimitPort;
 
     @SuppressWarnings("rawtypes")
     @MockBean
@@ -122,6 +126,7 @@ class PhysicalCheckInIntegrationTest extends AbstractPhysicalMySqlIntegrationTes
     /** #266: QR check-ins authenticate against the device registry, so seed an ACTIVE reader. */
     @BeforeEach
     void seedReader() {
+        when(checkInRateLimitPort.consume(any(), any())).thenReturn(RateLimitDecision.allowed());
         readerId = UUID.randomUUID();
         Instant now = Instant.now();
         deviceRepository.save(new PhysicalDeviceJpaEntity(

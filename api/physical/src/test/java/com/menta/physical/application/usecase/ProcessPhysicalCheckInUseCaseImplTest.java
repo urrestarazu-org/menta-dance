@@ -17,7 +17,11 @@ import static org.mockito.Mockito.when;
 import com.menta.physical.application.dto.CheckInActor;
 import com.menta.physical.application.dto.CheckInCommand;
 import com.menta.physical.application.dto.CheckInResult;
+import com.menta.physical.application.dto.RateLimitDecision;
+import com.menta.physical.application.dto.RateLimitDimension;
 import com.menta.physical.application.port.out.AttendanceRepository;
+import com.menta.physical.application.port.out.CheckInRateLimitPort;
+import com.menta.physical.application.port.out.CheckInRateLimitRejectionPort;
 import com.menta.physical.application.port.out.Clock;
 import com.menta.physical.application.port.out.PhysicalCapacityAssignmentRepository;
 import com.menta.physical.application.port.out.PhysicalSessionRepository;
@@ -27,6 +31,7 @@ import com.menta.physical.domain.exception.CapacityAssignmentRequiredException;
 import com.menta.physical.domain.exception.CheckInAlreadyProcessingException;
 import com.menta.physical.domain.exception.CheckInDegradedException;
 import com.menta.physical.domain.exception.CheckInDeviceRevokedException;
+import com.menta.physical.domain.exception.CheckInRateLimitedException;
 import com.menta.physical.domain.exception.DeviceExpiredException;
 import com.menta.physical.domain.exception.ExpiredQrCredentialException;
 import com.menta.physical.domain.exception.InsufficientRoleException;
@@ -69,6 +74,8 @@ class ProcessPhysicalCheckInUseCaseImplTest {
     private static final DeviceId AUTHENTICATED_DEVICE = DeviceId.generate();
     private static final String DEVICE_ID = AUTHENTICATED_DEVICE.toString().toUpperCase();
     private static final String JTI = "jti-1";
+    private static final String CLIENT_FINGERPRINT = "c".repeat(64);
+    private static final String DEVICE_FINGERPRINT = "d".repeat(64);
 
     private final PhysicalSessionRepository sessionRepository =
         mock(PhysicalSessionRepository.class);
@@ -83,6 +90,9 @@ class ProcessPhysicalCheckInUseCaseImplTest {
     private final UserExistencePort userExistencePort = mock(UserExistencePort.class);
     private final PhysicalDeviceAuthenticator deviceAuthenticator =
         mock(PhysicalDeviceAuthenticator.class);
+    private final CheckInRateLimitPort rateLimitPort = mock(CheckInRateLimitPort.class);
+    private final CheckInRateLimitRejectionPort rateLimitRejectionPort =
+        mock(CheckInRateLimitRejectionPort.class);
 
     private SessionId sessionId;
     private UUID studentId;
@@ -91,6 +101,8 @@ class ProcessPhysicalCheckInUseCaseImplTest {
     @BeforeEach
     void setUp() {
         when(clock.now()).thenReturn(NOW);
+        when(rateLimitPort.consume(CLIENT_FINGERPRINT, DEVICE_FINGERPRINT))
+            .thenReturn(RateLimitDecision.allowed());
         when(deviceAuthenticator.authenticate(DEVICE_ID, READER_SECRET))
             .thenReturn(AUTHENTICATED_DEVICE);
         sessionId = SessionId.generate();
@@ -98,7 +110,8 @@ class ProcessPhysicalCheckInUseCaseImplTest {
         useCase = new ProcessPhysicalCheckInUseCaseImpl(
             sessionRepository, assignmentRepository, attendanceRepository,
             signatureService, lockPort, clock,
-            deviceAuthenticator, WINDOW_BEFORE, WINDOW_AFTER, LOCK_TTL, userExistencePort
+            deviceAuthenticator, WINDOW_BEFORE, WINDOW_AFTER, LOCK_TTL, userExistencePort,
+            rateLimitPort, rateLimitRejectionPort
         );
     }
 
@@ -121,7 +134,9 @@ class ProcessPhysicalCheckInUseCaseImplTest {
     }
 
     private CheckInCommand command(String qrCredentials) {
-        return CheckInCommand.qr(sessionId, qrCredentials, DEVICE_ID, READER_SECRET);
+        return CheckInCommand.qr(
+            sessionId, qrCredentials, DEVICE_ID, READER_SECRET, CLIENT_FINGERPRINT, DEVICE_FINGERPRINT
+        );
     }
 
     private void allowHappyPathUpToLocks() {
@@ -178,6 +193,51 @@ class ProcessPhysicalCheckInUseCaseImplTest {
         verify(attendanceRepository, never()).save(any());
     }
 
+    @Test
+    void consumes_the_rate_limit_before_authenticating_the_device() {
+        String token = validToken();
+        stubMatchingSignature(token);
+        allowHappyPathUpToLocks();
+        when(lockPort.acquireIfAbsent(anyString(), eq(LOCK_TTL))).thenReturn(Optional.of("nonce"));
+        when(attendanceRepository.save(any(Attendance.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+
+        useCase.checkIn(command(token));
+
+        var order = org.mockito.Mockito.inOrder(rateLimitPort, deviceAuthenticator);
+        order.verify(rateLimitPort).consume(CLIENT_FINGERPRINT, DEVICE_FINGERPRINT);
+        order.verify(deviceAuthenticator).authenticate(DEVICE_ID, READER_SECRET);
+        verifyNoInteractions(rateLimitRejectionPort);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"IP", "DEVICE"})
+    void a_rate_limited_scan_is_reported_and_rejected_before_any_device_lookup(String dimension) {
+        RateLimitDimension tripped = RateLimitDimension.valueOf(dimension);
+        when(rateLimitPort.consume(CLIENT_FINGERPRINT, DEVICE_FINGERPRINT))
+            .thenReturn(RateLimitDecision.limited(tripped, Duration.ofSeconds(17)));
+
+        assertThatThrownBy(() -> useCase.checkIn(command(validToken())))
+            .isInstanceOfSatisfying(CheckInRateLimitedException.class, exception ->
+                assertThat(exception.getRetryAfter()).isEqualTo(Duration.ofSeconds(17)));
+
+        verify(rateLimitRejectionPort).report(tripped);
+        verifyNoInteractions(
+            deviceAuthenticator, sessionRepository, assignmentRepository, attendanceRepository,
+            signatureService, lockPort, userExistencePort
+        );
+    }
+
+    @Test
+    void a_degraded_rate_limiter_fails_closed_before_any_device_lookup() {
+        CheckInDegradedException degraded = new CheckInDegradedException();
+        when(rateLimitPort.consume(CLIENT_FINGERPRINT, DEVICE_FINGERPRINT)).thenThrow(degraded);
+
+        assertThatThrownBy(() -> useCase.checkIn(command(validToken()))).isSameAs(degraded);
+
+        verifyNoInteractions(deviceAuthenticator, rateLimitRejectionPort);
+    }
+
     static Stream<RuntimeException> deviceRejections() {
         return Stream.of(
             new InvalidDeviceTokenException(),
@@ -193,7 +253,10 @@ class ProcessPhysicalCheckInUseCaseImplTest {
     ) {
         when(deviceAuthenticator.authenticate(DEVICE_ID, "wrong-secret")).thenThrow(rejection);
         CheckInCommand command =
-            CheckInCommand.qr(sessionId, "irrelevant", DEVICE_ID, "wrong-secret");
+            CheckInCommand.qr(
+                sessionId, "irrelevant", DEVICE_ID, "wrong-secret", CLIENT_FINGERPRINT,
+                DEVICE_FINGERPRINT
+            );
 
         assertThatThrownBy(() -> useCase.checkIn(command)).isSameAs(rejection);
         verifyNoInteractions(
@@ -386,6 +449,7 @@ class ProcessPhysicalCheckInUseCaseImplTest {
 
             assertThat(result.newlyRecorded()).isTrue();
             verifyNoInteractions(deviceAuthenticator);
+            verifyNoInteractions(rateLimitPort, rateLimitRejectionPort);
         }
 
         @Test

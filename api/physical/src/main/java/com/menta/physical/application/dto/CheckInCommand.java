@@ -25,7 +25,9 @@ public record CheckInCommand(
     String qrCredentials,
     String deviceId,
     String deviceToken,
-    CheckInActor actor
+    CheckInActor actor,
+    String clientFingerprint,
+    String deviceFingerprint
 ) {
 
     /**
@@ -34,13 +36,17 @@ public record CheckInCommand(
      * <p>Always tagged {@link AttendanceKind#QR} and carrying {@link CheckInActor#anonymous()}: the
      * reader authenticates with its device token rather than a user identity, and the student comes
      * from the signed QR credential, so {@code studentId} stays {@code null}.
+     *
+     * <p>The two fingerprints are opaque, bounded rate-limit keys derived by the web adapter
+     * (client IP and device id); the application layer never sees the HTTP request (ADR-0044).
      */
     public static CheckInCommand qr(
-        SessionId sessionId, String qrCredentials, String deviceId, String deviceToken
+        SessionId sessionId, String qrCredentials, String deviceId, String deviceToken,
+        String clientFingerprint, String deviceFingerprint
     ) {
         return new CheckInCommand(
             sessionId, AttendanceKind.QR, null, qrCredentials, deviceId, deviceToken,
-            CheckInActor.anonymous()
+            CheckInActor.anonymous(), clientFingerprint, deviceFingerprint
         );
     }
 
@@ -53,7 +59,7 @@ public record CheckInCommand(
      */
     public static CheckInCommand manual(SessionId sessionId, UUID studentId, CheckInActor actor) {
         return new CheckInCommand(
-            sessionId, AttendanceKind.MANUAL, studentId, null, null, null, actor
+            sessionId, AttendanceKind.MANUAL, studentId, null, null, null, actor, null, null
         );
     }
 }

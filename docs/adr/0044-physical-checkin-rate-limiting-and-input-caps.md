@@ -2,7 +2,7 @@
 
 **Estado:** Aceptado
 **Fecha:** 2026-10-05
-**Implementado:** Pendiente (#309)
+**Implementado:** 2026-10-05 (#309)
 **Decisores:** Arquitectura y equipo de Physical
 
 ## Contexto y Problema
@@ -92,8 +92,11 @@ El diseño completo es:
    | `qrCredentials` | 512 | Holgado a propósito: el formato actual es un placeholder y será reemplazado por HMAC real |
 
 2. **Dos presupuestos independientes**, uno por IP del cliente y otro por
-   `deviceId`, consumidos por separado. No se reutiliza el script de `auth`
-   porque incrementa ambos contadores aunque uno ya haya superado su límite.
+   `deviceId`, cada uno con su propia clave y su propia llamada atómica. Se
+   consume primero el de IP; si ya está agotado, el de `deviceId` no se toca, de
+   modo que un origen limitado no puede gastar el presupuesto de un dispositivo
+   ajeno falsificando su id. No se reutiliza el script de `auth` porque
+   incrementa ambos contadores aunque uno ya haya superado su límite.
 3. **Puerto propio** `CheckInRateLimitPort` en `application/port/out`. Recibe
    fingerprints opacos (`String`); derivarlos del request HTTP es tarea de
    `infrastructure/web`.
@@ -163,6 +166,14 @@ dispositivo (o a alguien que lo suplanta) sin depender de la IP.
 * **Plan de Mitigación:** los valores son configurables y los defaults son
   provisorios, porque el issue pide medir tráfico real y hoy no existe. Se
   deben revisar con el contador del punto 9 una vez que haya tráfico.
+* **Riesgo aceptado en la primera versión:** el `deviceId` es un UUID **no
+  secreto**. Quien lo conozca puede consumir su presupuesto (60 requests por
+  minuto por defecto) y hacer que un lector legítimo reciba `429`. Es inherente a
+  limitar por `deviceId` sin autenticar. La alternativa, contar sólo los fallos
+  de autenticación, obligaría a calcular el hash antes de limitar, que es
+  justamente el costo que este ADR busca acotar. Se acepta y se revisará si
+  aparece abuso real; el contador `physical.checkin.rate.limited` con la
+  dimensión `device` permite detectarlo.
 * **Riesgo secundario:** `trusted-proxy-cidrs` demasiado amplio permite
   falsificar la IP. El default de desarrollo (`172.16.0.0/12`) confía en toda la
   red Docker y debe acotarse por entorno.

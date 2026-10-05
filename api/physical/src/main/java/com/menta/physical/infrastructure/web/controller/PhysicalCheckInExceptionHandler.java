@@ -4,6 +4,7 @@ import com.menta.physical.domain.exception.CapacityAssignmentRequiredException;
 import com.menta.physical.domain.exception.CheckInAlreadyProcessingException;
 import com.menta.physical.domain.exception.CheckInDegradedException;
 import com.menta.physical.domain.exception.CheckInDeviceRevokedException;
+import com.menta.physical.domain.exception.CheckInRateLimitedException;
 import com.menta.physical.domain.exception.DeviceExpiredException;
 import com.menta.physical.domain.exception.ExpiredQrCredentialException;
 import com.menta.physical.domain.exception.InsufficientRoleException;
@@ -125,6 +126,20 @@ public class PhysicalCheckInExceptionHandler {
             .body(ProblemDetails.body(
                 HttpStatus.SERVICE_UNAVAILABLE,
                 "Check-in is temporarily unavailable; retry after 30s.",
+                exception.getErrorCode()
+            ));
+    }
+
+    /** ADR-0044: a QR check-in refused by a rate-limit budget; {@code Retry-After} in whole seconds. */
+    @ExceptionHandler(CheckInRateLimitedException.class)
+    ResponseEntity<ProblemDetail> checkInRateLimited(CheckInRateLimitedException exception) {
+        long seconds = Math.max(1, exception.getRetryAfter().toSeconds());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+            .header(HttpHeaders.RETRY_AFTER, Long.toString(seconds))
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(ProblemDetails.body(
+                HttpStatus.TOO_MANY_REQUESTS,
+                "Demasiados intentos de check-in; reintentá más tarde.",
                 exception.getErrorCode()
             ));
     }
