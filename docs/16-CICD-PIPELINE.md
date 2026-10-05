@@ -42,6 +42,19 @@ La detección se hace en tres capas complementarias (ADR-0042):
    secrets de Actions, por lo que el job fallaría en ellos.
    El job también falla si no se escaneó ningún commit, para que un error de
    git no se confunda con "sin hallazgos".
+
+   **Que bloquee el merge depende de la configuración del repositorio, no del
+   workflow:** `gitleaks` debe figurar entre los *required status checks* de la
+   protección de `develop` y de `main`. Un job que falla pero no es requerido
+   no impide mergear. Para verificarlo:
+
+   ```bash
+   gh api repos/urrestarazu-org/menta-dance/branches/develop/protection/required_status_checks --jq '.contexts'
+   gh api repos/urrestarazu-org/menta-dance/branches/main/protection/required_status_checks --jq '.contexts'
+   ```
+
+   Si `gitleaks` no aparece en alguna de las dos listas, esta capa dejó de ser
+   bloqueante.
 3. **GitHub Secret Scanning con push protection:** capa gratuita en
    repositorios públicos, habilitada en *Settings → Code security*.
 
@@ -80,9 +93,47 @@ El análisis de composición de software es responsabilidad de **Dependabot**
 repositorio.
 
 Dependabot corre los lunes y abre PRs contra `develop`. Los bumps *minor* y
-*patch* llegan agrupados por ecosistema para no inundar la cola de revisión; los
-*major* llegan como PRs individuales a propósito. Dependabot no corre dentro del
-pipeline de PR, así que no afecta el presupuesto de `pr-develop.yml`.
+*patch* llegan agrupados para no inundar la cola de revisión; los *major* llegan
+como PRs individuales a propósito. Dependabot no corre dentro del pipeline de PR,
+así que no afecta el presupuesto de `pr-develop.yml`.
+
+Un grupo único bloquea todo lo que contiene si un solo miembro falla, por lo que
+el build `gradle` de la raíz se divide en tres grupos. Una dependencia cae en el
+grupo **más específico** cuyo patrón coincide; el orden en el archivo no importa
+(el log de Dependabot lo dice: *"belongs to more specific group"*). El grupo
+comodín `*` sólo recibe lo que ningún otro grupo reclama:
+
+| Grupo | Contenido | Por qué separado |
+|---|---|---|
+| `android-toolchain` | AGP, Kotlin, KSP, Hilt, AndroidX y Compose | Deben moverse juntos y un bump puede exigir cambiar `compileSdk` (#425) |
+| `jvm-test-tooling` | ArchUnit, WireMock y Testcontainers | Sólo afectan a los tests |
+| `gradle-minor-patch` | El resto | Todo lo demás |
+
+El grupo de Android puede quedar rojo hasta resolver #425. Se acepta a
+propósito: ignorarlo ocultaría también parches de seguridad.
+
+Al **reorganizar grupos mientras hay un PR de grupo abierto**, Dependabot lo
+trata como dueño de sus dependencias durante esa pasada (`already handled by a
+previous group`) y cierra ese PR después ("updatable in another way"). Los PRs de
+los grupos nuevos aparecen en la pasada siguiente, es decir, la próxima corrida
+semanal o un *Check for updates* manual (*Insights → Dependency graph →
+Dependabot*). No indica un error de patrones.
+
+### Actualizaciones ignoradas
+
+Estas dependencias dependen de una generación de Spring Boot y no de la cadencia
+de Dependabot, por lo que `dependabot.yml` las ignora hasta decidir la
+migración (#426):
+
+* `org.junit.platform:*`: `build.gradle.kts` las fija a la plataforma que
+  corresponde al Jupiter administrado por el BOM de Spring Boot; moverlas solas
+  rompe esa alineación.
+* `org.testcontainers:*` (sólo *major*): la rama 2.x renombra los módulos.
+* `net.logstash.logback:logstash-logback-encoder` (sólo *major*): la 9.x migra a
+  Jackson 3 y exige Java 17, mientras Spring Boot 3.5 usa Jackson 2.
+
+Al agregar una exclusión nueva, dejá el motivo como comentario en
+`dependabot.yml` y enlazá el issue que decide su levantamiento.
 
 ### Criterio de triage de los PRs de Dependabot
 
