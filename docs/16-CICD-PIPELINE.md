@@ -86,7 +86,9 @@ así que no afecta el presupuesto de `pr-develop.yml`.
 
 Un grupo único bloquea todo lo que contiene si un solo miembro falla, por lo que
 el build `gradle` de la raíz se divide en tres grupos. Una dependencia cae en el
-**primer** grupo cuyo patrón coincide, de modo que el orden en el archivo importa:
+grupo **más específico** cuyo patrón coincide; el orden en el archivo no importa
+(el log de Dependabot lo dice: *"belongs to more specific group"*). El grupo
+comodín `*` sólo recibe lo que ningún otro grupo reclama:
 
 | Grupo | Contenido | Por qué separado |
 |---|---|---|
@@ -96,6 +98,13 @@ el build `gradle` de la raíz se divide en tres grupos. Una dependencia cae en e
 
 El grupo de Android puede quedar rojo hasta resolver #425. Se acepta a
 propósito: ignorarlo ocultaría también parches de seguridad.
+
+Al **reorganizar grupos mientras hay un PR de grupo abierto**, Dependabot lo
+trata como dueño de sus dependencias durante esa pasada (`already handled by a
+previous group`) y cierra ese PR después ("updatable in another way"). Los PRs de
+los grupos nuevos aparecen en la pasada siguiente, es decir, la próxima corrida
+semanal o un *Check for updates* manual (*Insights → Dependency graph →
+Dependabot*). No indica un error de patrones.
 
 ### Actualizaciones ignoradas
 
