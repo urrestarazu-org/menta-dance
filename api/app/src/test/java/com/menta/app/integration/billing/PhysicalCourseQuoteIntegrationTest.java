@@ -25,6 +25,7 @@ import com.menta.billing.infrastructure.persistence.entity.PhysicalCoursePricing
 import com.menta.billing.infrastructure.persistence.repository.PhysicalCoursePricingJpaRepository;
 import com.menta.billing.infrastructure.persistence.repository.PhysicalCourseQuoteJpaRepository;
 import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
+import com.menta.physical.application.port.out.CheckInRateLimitPort;
 import com.menta.physical.domain.model.CourseStatus;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalCourseJpaEntity;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalSessionJpaEntity;
@@ -101,6 +102,8 @@ class PhysicalCourseQuoteIntegrationTest extends AbstractBillingMySqlIntegration
     // US-PHYSICAL-001: ProcessPhysicalCheckInUseCaseImpl needs a RedisTemplate
     // its bean factory would otherwise fail to resolve in this Redis-less context.
     @MockBean private ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
+    // ADR-0044: backed by a RedisTemplate this Redis-less context does not have.
+    @MockBean private CheckInRateLimitPort checkInRateLimitPort;
 
     @AfterEach
     void cleanUp() {

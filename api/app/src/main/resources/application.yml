@@ -205,6 +205,18 @@ physical:
         enabled: ${PHYSICAL_CAPACITY_HOLD_EXPIRY_ENABLED:true}
         rate-ms: ${PHYSICAL_CAPACITY_HOLD_EXPIRY_RATE_MS:60000}
         batch-size: ${PHYSICAL_CAPACITY_HOLD_EXPIRY_BATCH_SIZE:100}
+  checkin:
+    # ADR-0044: peers allowed to vouch for X-Forwarded-For on the QR check-in. Falls back to the
+    # auth module's list so one value serves both; narrow it per environment, since a range wider
+    # than the real proxies lets a client spoof its address.
+    trusted-proxy-cidrs: ${PHYSICAL_CHECKIN_TRUSTED_PROXY_CIDRS:${auth.trusted-proxy-cidrs}}
+    # ADR-0044: fixed-window budgets for the unauthenticated QR check-in, consumed independently.
+    # PROVISIONAL defaults: there is no real traffic to calibrate against yet. Review them with
+    # the physical.checkin.rate.limited counter (tag dimension=ip|device) once there is.
+    rate-limit:
+      ip-max-requests: ${PHYSICAL_CHECKIN_RATE_LIMIT_IP_MAX_REQUESTS:120}
+      device-max-requests: ${PHYSICAL_CHECKIN_RATE_LIMIT_DEVICE_MAX_REQUESTS:60}
+      window-seconds: ${PHYSICAL_CHECKIN_RATE_LIMIT_WINDOW_SECONDS:60}
 
 # Public catalog composition (#107)
 catalog:

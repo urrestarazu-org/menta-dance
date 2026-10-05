@@ -10,6 +10,7 @@ import com.menta.billing.application.port.out.BankTransferRateLimitPort;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.port.out.CourseCatalogPort;
 import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
+import com.menta.physical.application.port.out.CheckInRateLimitPort;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.ActiveProfiles;
@@ -40,4 +41,6 @@ public abstract class PhysicalVirtualCatalogPortMocksIntegrationTestBase extends
     @MockBean protected BankTransferRateLimitPort bankTransferRateLimitPort;
     @MockBean protected CourseCatalogPort courseCatalogPort;
     @MockBean protected ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
+    // ADR-0044: backed by a RedisTemplate this Redis-less context does not have.
+    @MockBean protected CheckInRateLimitPort checkInRateLimitPort;
 }

@@ -18,6 +18,8 @@ import com.menta.physical.application.port.in.RotatePhysicalDeviceSecretUseCase;
 import com.menta.physical.application.port.in.UpdatePhysicalCourseUseCase;
 import com.menta.physical.application.port.in.UpdatePhysicalSessionUseCase;
 import com.menta.physical.application.port.out.AttendanceRepository;
+import com.menta.physical.application.port.out.CheckInRateLimitPort;
+import com.menta.physical.application.port.out.CheckInRateLimitRejectionPort;
 import com.menta.physical.application.port.out.Clock;
 import com.menta.physical.application.port.out.DeviceAuthenticationRejectionPort;
 import com.menta.physical.application.port.out.DeviceSecretGenerator;
@@ -50,6 +52,7 @@ import com.menta.physical.infrastructure.device.Sha256DeviceSecretHasher;
 import com.menta.physical.infrastructure.qr.FormatQrCredentialSignatureService;
 import com.menta.physical.infrastructure.qr.QrProperties;
 import com.menta.physical.infrastructure.redis.RedisCheckInLockPort;
+import com.menta.physical.infrastructure.redis.RedisCheckInRateLimitPort;
 import com.menta.physical.infrastructure.transaction.TransactionalRegisterPhysicalDeviceUseCase;
 import com.menta.physical.infrastructure.transaction.TransactionalRevokePhysicalDeviceUseCase;
 import com.menta.physical.infrastructure.transaction.TransactionalRotatePhysicalDeviceSecretUseCase;
@@ -150,13 +153,32 @@ public class PhysicalConfiguration {
         PhysicalCapacityAssignmentRepository assignmentRepository,
         AttendanceRepository attendanceRepository, RedisTemplate<String, String> redisTemplate,
         Clock clock, QrProperties qrProperties, UserExistencePort userExistencePort,
-        PhysicalDeviceAuthenticator deviceAuthenticator
+        PhysicalDeviceAuthenticator deviceAuthenticator, CheckInRateLimitPort rateLimitPort,
+        CheckInRateLimitRejectionPort rateLimitRejectionPort
     ) {
         return new ProcessPhysicalCheckInUseCaseImpl(
             sessionRepository, assignmentRepository, attendanceRepository,
             new FormatQrCredentialSignatureService(), new RedisCheckInLockPort(redisTemplate),
             clock, deviceAuthenticator, qrProperties.getSessionWindowBefore(),
-            qrProperties.getSessionWindowAfter(), qrProperties.getLockTtl(), userExistencePort
+            qrProperties.getSessionWindowAfter(), qrProperties.getLockTtl(), userExistencePort,
+            rateLimitPort, rateLimitRejectionPort
+        );
+    }
+
+    /**
+     * ADR-0044 -- QR check-in throttle: independent per-IP and per-device budgets over one fixed
+     * window. The defaults are provisional (no real traffic to calibrate against yet) and
+     * non-positive values fail startup through the adapter's constructor.
+     */
+    @Bean
+    public CheckInRateLimitPort physicalCheckInRateLimitPort(
+        RedisTemplate<String, String> redisTemplate,
+        @Value("${physical.checkin.rate-limit.ip-max-requests:120}") long ipMaxRequests,
+        @Value("${physical.checkin.rate-limit.device-max-requests:60}") long deviceMaxRequests,
+        @Value("${physical.checkin.rate-limit.window-seconds:60}") long windowSeconds
+    ) {
+        return new RedisCheckInRateLimitPort(
+            redisTemplate, ipMaxRequests, deviceMaxRequests, Duration.ofSeconds(windowSeconds)
         );
     }
 

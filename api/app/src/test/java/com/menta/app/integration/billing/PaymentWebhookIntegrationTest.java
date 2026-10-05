@@ -45,6 +45,7 @@ import com.menta.billing.infrastructure.persistence.repository.SubscriptionJpaRe
 import com.menta.billing.infrastructure.persistence.repository.WebhookInboxJpaRepository;
 import com.menta.billing.infrastructure.webhook.WebhookVerificationWorker;
 import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
+import com.menta.physical.application.port.out.CheckInRateLimitPort;
 import com.menta.physical.domain.model.CourseStatus;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalCapacityAssignmentJpaEntity;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalCourseJpaEntity;
@@ -122,6 +123,8 @@ class PaymentWebhookIntegrationTest extends AbstractBillingMySqlIntegrationTest 
     // US-PHYSICAL-001: ProcessPhysicalCheckInUseCaseImpl needs a RedisTemplate
     // its bean factory would otherwise fail to resolve in this Redis-less context.
     @MockBean private ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
+    // ADR-0044: backed by a RedisTemplate this Redis-less context does not have.
+    @MockBean private CheckInRateLimitPort checkInRateLimitPort;
     @MockBean private AuthDegradedGuard authDegradedGuard;
     @MockBean private TokenBlacklistPort tokenBlacklistPort;
     @MockBean private LoginRateLimitPort loginRateLimitPort;

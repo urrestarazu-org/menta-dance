@@ -27,6 +27,8 @@ import com.menta.auth.domain.repository.UserRepository;
 import com.menta.billing.application.port.out.BankTransferRateLimitPort;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.port.out.CourseCatalogPort;
+import com.menta.physical.application.dto.RateLimitDecision;
+import com.menta.physical.application.port.out.CheckInRateLimitPort;
 import com.menta.physical.application.port.out.Clock;
 import com.menta.physical.application.port.out.PhysicalDeviceRepository;
 import com.menta.physical.domain.model.CourseStatus;
@@ -139,6 +141,8 @@ class PhysicalCheckInDeviceAuthIntegrationTest extends AbstractPhysicalMySqlInte
     @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
     @MockBean private BankTransferRateLimitPort bankTransferRateLimitPort;
     @MockBean private CourseCatalogPort courseCatalogPort;
+    // ADR-0044: an unmocked port would sit on the mocked RedisTemplate, get null and fail closed.
+    @MockBean private CheckInRateLimitPort checkInRateLimitPort;
 
     @SuppressWarnings("rawtypes")
     @MockBean
@@ -156,6 +160,7 @@ class PhysicalCheckInDeviceAuthIntegrationTest extends AbstractPhysicalMySqlInte
 
     @BeforeEach
     void captureLogsAndSnapshotCounters() {
+        when(checkInRateLimitPort.consume(any(), any())).thenReturn(RateLimitDecision.allowed());
         Logger root = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
         logCapture = new AppenderBase<>() {
             @Override
@@ -190,7 +195,7 @@ class PhysicalCheckInDeviceAuthIntegrationTest extends AbstractPhysicalMySqlInte
 
     private Reader seedReader(String status, Instant expiresAt) {
         UUID id = UUID.randomUUID();
-        String secret = "reader-secret-" + UUID.randomUUID();
+        String secret = "rs-" + UUID.randomUUID();
         Instant now = Instant.now();
         deviceRepository.save(new PhysicalDeviceJpaEntity(
             id, "Door reader", "Main entrance", HASHER.hash(secret), status, expiresAt, now, now
@@ -292,7 +297,7 @@ class PhysicalCheckInDeviceAuthIntegrationTest extends AbstractPhysicalMySqlInte
     // --- Indistinguishable INVALID_DEVICE_TOKEN ---------------------------
 
     @Test
-    void unknown_uuid_non_uuid_id_wrong_secret_and_legacy_secret_return_identical_401_bodies() {
+    void unknown_uuid_non_uuid_id_and_wrong_secret_return_identical_401_bodies() {
         Reader reader = seedReader("ACTIVE", null);
         Scan scan = seedValidScan();
 
@@ -300,9 +305,6 @@ class PhysicalCheckInDeviceAuthIntegrationTest extends AbstractPhysicalMySqlInte
         responses.put("wrong secret", checkIn(scan, reader.id().toString(), "not-the-secret"));
         responses.put("unknown uuid", checkIn(scan, UUID.randomUUID().toString(), reader.secret()));
         responses.put("non-uuid id", checkIn(scan, "reader-1", reader.secret()));
-        responses.put("legacy secret", checkIn(scan, "reader-1", LEGACY_SHARED_SECRET));
-        responses.put("legacy secret on a registered id",
-            checkIn(scan, reader.id().toString(), LEGACY_SHARED_SECRET));
 
         Map<?, ?> reference = responses.get("wrong secret").getBody();
         assertThat(reference.get("code")).isEqualTo("INVALID_DEVICE_TOKEN");
@@ -313,6 +315,27 @@ class PhysicalCheckInDeviceAuthIntegrationTest extends AbstractPhysicalMySqlInte
         verifyNoInteractions(redisTemplate);
         assertThat(attendanceRepository.count()).isZero();
         assertThat(rejectionsSinceTestStart("unknown_or_invalid")).isEqualTo(responses.size());
+    }
+
+    /**
+     * ADR-0044: the legacy shared secret is 72 characters, over the 43-character token cap, so it
+     * is now refused at validation (400) before any device lookup. It still authenticates nothing.
+     */
+    @Test
+    void the_legacy_shared_secret_is_refused_at_validation_before_any_lookup() {
+        Reader reader = seedReader("ACTIVE", null);
+        Scan scan = seedValidScan();
+
+        ResponseEntity<Map> anyId = checkIn(scan, "reader-1", LEGACY_SHARED_SECRET);
+        ResponseEntity<Map> registeredId =
+            checkIn(scan, reader.id().toString(), LEGACY_SHARED_SECRET);
+
+        for (ResponseEntity<Map> response : List.of(anyId, registeredId)) {
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(response.getBody().get("code")).isEqualTo("INVALID_REQUEST");
+        }
+        verifyNoInteractions(redisTemplate, deviceRegistry, checkInRateLimitPort);
+        assertThat(attendanceRepository.count()).isZero();
     }
 
     @ParameterizedTest
@@ -441,7 +464,7 @@ class PhysicalCheckInDeviceAuthIntegrationTest extends AbstractPhysicalMySqlInte
     @Test
     void a_non_uuid_rejection_logs_no_device_id_and_neither_the_raw_id_nor_the_secret_leak() {
         Scan scan = seedValidScan();
-        String secret = "super-secret-" + UUID.randomUUID();
+        String secret = "ss-" + UUID.randomUUID();
 
         checkIn(scan, "reader-1", secret);
 
@@ -461,7 +484,7 @@ class PhysicalCheckInDeviceAuthIntegrationTest extends AbstractPhysicalMySqlInte
     void a_wrong_secret_on_a_registered_device_logs_its_uuid_but_never_the_secret() {
         Reader reader = seedReader("ACTIVE", null);
         Scan scan = seedValidScan();
-        String wrongSecret = "wrong-secret-" + UUID.randomUUID();
+        String wrongSecret = "ws-" + UUID.randomUUID();
 
         checkIn(scan, reader.id().toString(), wrongSecret);
 

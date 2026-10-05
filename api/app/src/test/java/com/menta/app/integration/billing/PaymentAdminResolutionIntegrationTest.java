@@ -41,6 +41,7 @@ import com.menta.billing.infrastructure.persistence.repository.PlanPaymentMethod
 import com.menta.billing.infrastructure.persistence.repository.SubscriptionCourseJpaRepository;
 import com.menta.billing.infrastructure.persistence.repository.SubscriptionJpaRepository;
 import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
+import com.menta.physical.application.port.out.CheckInRateLimitPort;
 import com.menta.shared.domain.vo.Email;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -106,6 +107,8 @@ class PaymentAdminResolutionIntegrationTest extends AbstractBillingMySqlIntegrat
     // US-PHYSICAL-001: ProcessPhysicalCheckInUseCaseImpl needs a RedisTemplate its bean factory
     // would otherwise fail to resolve in this Redis-less context.
     @MockBean private ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
+    // ADR-0044: backed by a RedisTemplate this Redis-less context does not have.
+    @MockBean private CheckInRateLimitPort checkInRateLimitPort;
 
     @BeforeEach
     void stubCollaborators() {

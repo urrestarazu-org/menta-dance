@@ -431,11 +431,20 @@ paths:
         deliberado: autenticación del dispositivo, forma del QR,
         coincidencia de `sessionId`, firma, expiración, existencia/ventana
         de la sesión y asignación de cupo se resuelven TODOS antes de tocar
-        Redis (escenario 4) — sólo un request que pasó todas esas puertas
+        los locks de Redis (escenario 4) — sólo un request que pasó todas esas puertas
         llega a los locks que producen `409 ALREADY_PROCESSING` o
         `503 CHECK_IN_DEGRADED`. Una autenticación de dispositivo fallida
         corta todas las puertas siguientes (un dispositivo inválido con una
         credencial QR malformada responde el error del dispositivo).
+
+        Antes de la autenticación del dispositivo (#309, ADR-0044) se
+        aplican dos puertas sólo a esta variante: los topes de longitud de
+        `deviceId` (36), `deviceToken` (43) y `qrCredentials` (512), que
+        responden `400 INVALID_REQUEST`; y un rate limit con dos
+        presupuestos independientes (por IP del cliente y por `deviceId`)
+        que responde `429 CHECK_IN_RATE_LIMITED` con `Retry-After`. Si Redis
+        no puede evaluar el límite responde `503 CHECK_IN_DEGRADED`
+        (falla cerrada). La variante MANUAL no se limita.
 
         La autenticación del dispositivo (#266) valida `deviceId` y
         `deviceToken` contra el registro: un `deviceId` desconocido, que no
@@ -633,8 +642,31 @@ paths:
                     status: 410
                     detail: The QR credential has expired.
                     code: EXPIRED_QR_CREDENTIAL
+        '429':
+          description: |
+            Sólo variante QR — se agotó el presupuesto de intentos por IP del
+            cliente o por `deviceId` (#309, ADR-0044). Se evalúa antes de
+            consultar el registro de dispositivos. Incluye `Retry-After`.
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Segundos hasta que el presupuesto agotado se renueve.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                demasiados_intentos:
+                  value:
+                    type: https://menta.dance/problems/check_in_rate_limited
+                    title: Too Many Requests
+                    status: 429
+                    detail: "Demasiados intentos de check-in; reintentá más tarde."
+                    code: CHECK_IN_RATE_LIMITED
         '503':
-          description: Redis no disponible; fail-closed (`CHECK_IN_DEGRADED`). Incluye `Retry-After`.
+          description: Redis no disponible, ya sea en el rate limit o en los locks; fail-closed (`CHECK_IN_DEGRADED`). Incluye `Retry-After`.
           headers:
             Retry-After:
               schema:
@@ -1199,21 +1231,28 @@ components:
           enum: [QR]
         qrCredentials:
           type: string
+          maxLength: 512
+          description: Más de 512 caracteres responde `400 INVALID_REQUEST` (ADR-0044).
         deviceId:
           type: string
           format: uuid
+          maxLength: 36
           description: |
             UUID del dispositivo registrado (`id` devuelto por
             `POST /api/v1/admin/physical/devices`). Un valor que no es un
-            UUID responde `401 INVALID_DEVICE_TOKEN`, no `400`; en blanco
-            o ausente responde `400 INVALID_REQUEST`.
+            UUID de hasta 36 caracteres responde `401 INVALID_DEVICE_TOKEN`,
+            no `400`; en blanco, ausente o de más de 36 caracteres
+            responde `400 INVALID_REQUEST`.
         deviceToken:
           type: string
+          maxLength: 43
           description: |
             Secreto propio de ese dispositivo, el mismo que se muestra una
             sola vez al registrarlo o rotarlo (`secret`). Se verifica
             dentro del caso de uso contra el hash almacenado; el secreto
-            compartido anterior ya no se acepta.
+            compartido anterior ya no se acepta. Hasta 43 caracteres (32
+            bytes en Base64 URL sin padding, el formato del secreto
+            emitido); más responde `400 INVALID_REQUEST`.
 
     CheckInManualRequest:
       description: |

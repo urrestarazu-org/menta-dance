@@ -2,8 +2,11 @@ package com.menta.physical.application.usecase;
 
 import com.menta.physical.application.dto.CheckInCommand;
 import com.menta.physical.application.dto.CheckInResult;
+import com.menta.physical.application.dto.RateLimitDecision;
 import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
 import com.menta.physical.application.port.out.AttendanceRepository;
+import com.menta.physical.application.port.out.CheckInRateLimitPort;
+import com.menta.physical.application.port.out.CheckInRateLimitRejectionPort;
 import com.menta.physical.application.port.out.Clock;
 import com.menta.physical.application.port.out.PhysicalCapacityAssignmentRepository;
 import com.menta.physical.application.port.out.PhysicalSessionRepository;
@@ -12,6 +15,7 @@ import com.menta.physical.application.port.out.RedisLockPort;
 import com.menta.physical.application.usecase.QrCredentialParser.ParsedQrCredential;
 import com.menta.physical.domain.exception.CapacityAssignmentRequiredException;
 import com.menta.physical.domain.exception.CheckInAlreadyProcessingException;
+import com.menta.physical.domain.exception.CheckInRateLimitedException;
 import com.menta.physical.domain.exception.ExpiredQrCredentialException;
 import com.menta.physical.domain.exception.InsufficientRoleException;
 import com.menta.physical.domain.exception.InvalidQrCredentialException;
@@ -37,7 +41,8 @@ import java.util.UUID;
 
 /**
  * Redeems a scanned QR for a confirmed attendance row (US-PHYSICAL-001
- * escenario 2). The eleven-step validation order below is deliberate and
+ * escenario 2). A rate-limit gate (step 0, ADR-0044) runs ahead of everything else, then the
+ * eleven-step validation order below is deliberate and
  * load-bearing, not incidental: every rejection reason that can be decided
  * WITHOUT talking to Redis (device authentication, QR shape, session existence,
  * cancellation, window, assignment, idempotent replay) runs first, so a
@@ -64,6 +69,8 @@ public class ProcessPhysicalCheckInUseCaseImpl implements ProcessPhysicalCheckIn
     private final Duration sessionWindowAfter;
     private final Duration lockTtl;
     private final UserExistencePort userExistencePort;
+    private final CheckInRateLimitPort rateLimitPort;
+    private final CheckInRateLimitRejectionPort rateLimitRejectionPort;
 
     public ProcessPhysicalCheckInUseCaseImpl(
         PhysicalSessionRepository sessionRepository,
@@ -76,7 +83,9 @@ public class ProcessPhysicalCheckInUseCaseImpl implements ProcessPhysicalCheckIn
         Duration sessionWindowBefore,
         Duration sessionWindowAfter,
         Duration lockTtl,
-        UserExistencePort userExistencePort
+        UserExistencePort userExistencePort,
+        CheckInRateLimitPort rateLimitPort,
+        CheckInRateLimitRejectionPort rateLimitRejectionPort
     ) {
         this.sessionRepository = sessionRepository;
         this.assignmentRepository = assignmentRepository;
@@ -89,10 +98,16 @@ public class ProcessPhysicalCheckInUseCaseImpl implements ProcessPhysicalCheckIn
         this.sessionWindowAfter = sessionWindowAfter;
         this.lockTtl = lockTtl;
         this.userExistencePort = userExistencePort;
+        this.rateLimitPort = rateLimitPort;
+        this.rateLimitRejectionPort = rateLimitRejectionPort;
     }
 
     @Override
     public CheckInResult checkIn(CheckInCommand command) {
+        // Step 0 (ADR-0044): throttle BEFORE the registry lookup and the token hash. Redis
+        // only; QR flow only (MANUAL is authenticated and never reaches this method).
+        consumeRateLimitOrThrow(command);
+
         // Step 1: reject an unauthorized reader before it learns anything else. The registry
         // lookup is a database PK read, never Redis, so this gate stays Redis-free.
         final DeviceId authenticatedDevice =
@@ -206,6 +221,15 @@ public class ProcessPhysicalCheckInUseCaseImpl implements ProcessPhysicalCheckIn
             command.actor().userId().toString(), AttendanceKind.MANUAL
         );
         return new CheckInResult(AttendanceViewMapper.toView(attendanceRepository.save(attendance)), true);
+    }
+
+    private void consumeRateLimitOrThrow(CheckInCommand command) {
+        RateLimitDecision decision =
+            rateLimitPort.consume(command.clientFingerprint(), command.deviceFingerprint());
+        if (!decision.isAllowed()) {
+            rateLimitRejectionPort.report(decision.getDimension());
+            throw new CheckInRateLimitedException(decision.getRetryAfter());
+        }
     }
 
     private void acquireLockOrThrow(String key) {

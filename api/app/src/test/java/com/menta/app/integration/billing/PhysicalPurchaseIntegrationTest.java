@@ -52,6 +52,7 @@ import com.menta.billing.infrastructure.persistence.repository.WebhookInboxJpaRe
 import com.menta.billing.infrastructure.webhook.WebhookInboxStatus;
 import com.menta.billing.infrastructure.webhook.WebhookVerificationWorker;
 import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
+import com.menta.physical.application.port.out.CheckInRateLimitPort;
 import com.menta.physical.domain.model.CourseStatus;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalCapacityAssignmentJpaEntity;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalCourseJpaEntity;
@@ -181,6 +182,8 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
     // context would otherwise fail to resolve (same rationale as
     // SubscriptionCheckoutIntegrationTest).
     @MockBean private ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
+    // ADR-0044: backed by a RedisTemplate this Redis-less context does not have.
+    @MockBean private CheckInRateLimitPort checkInRateLimitPort;
     /**
      * Phase D (#209): replaces the real Spring Mail bean so {@code
      * SpringMailPurchaseExceptionNotificationAdapter} still runs for real

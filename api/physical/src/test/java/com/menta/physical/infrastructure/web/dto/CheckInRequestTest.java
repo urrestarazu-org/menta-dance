@@ -139,4 +139,45 @@ class CheckInRequestTest {
 
         assertThat(validator.validate(request)).isNotEmpty();
     }
+
+    @Test
+    void qr_fields_at_their_caps_are_accepted() {
+        CheckInRequest request = new CheckInRequest(
+            "QR", "q".repeat(512), "d".repeat(36), "t".repeat(43), null
+        );
+
+        assertThat(validator.validate(request)).isEmpty();
+    }
+
+    @Test
+    void a_device_id_over_36_characters_is_rejected() {
+        CheckInRequest request =
+            new CheckInRequest("QR", "qr:payload", "d".repeat(37), "secret", null);
+
+        assertThat(validator.validate(request)).hasSize(1);
+    }
+
+    @Test
+    void a_device_token_over_43_characters_is_rejected() {
+        CheckInRequest request =
+            new CheckInRequest("QR", "qr:payload", "reader-1", "t".repeat(44), null);
+
+        assertThat(validator.validate(request)).hasSize(1);
+    }
+
+    @Test
+    void qr_credentials_over_512_characters_are_rejected() {
+        CheckInRequest request =
+            new CheckInRequest("QR", "q".repeat(513), "reader-1", "secret", null);
+
+        assertThat(validator.validate(request)).hasSize(1);
+    }
+
+    @Test
+    void an_oversized_qr_field_on_a_manual_request_is_rejected() {
+        CheckInRequest request =
+            new CheckInRequest("MANUAL", null, "d".repeat(37), null, randomStudentId());
+
+        assertThat(validator.validate(request)).isNotEmpty();
+    }
 }

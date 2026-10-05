@@ -24,6 +24,8 @@ import com.menta.physical.application.port.in.RotatePhysicalDeviceSecretUseCase;
 import com.menta.physical.application.port.in.UpdatePhysicalCourseUseCase;
 import com.menta.physical.application.port.in.UpdatePhysicalSessionUseCase;
 import com.menta.physical.application.port.out.AttendanceRepository;
+import com.menta.physical.application.port.out.CheckInRateLimitPort;
+import com.menta.physical.application.port.out.CheckInRateLimitRejectionPort;
 import com.menta.physical.application.port.out.Clock;
 import com.menta.physical.application.port.out.DeviceAuthenticationRejectionPort;
 import com.menta.physical.application.port.out.DeviceSecretGenerator;
@@ -51,6 +53,7 @@ import com.menta.physical.domain.model.DeviceId;
 import com.menta.physical.infrastructure.device.SecureRandomDeviceSecretGenerator;
 import com.menta.physical.infrastructure.device.Sha256DeviceSecretHasher;
 import com.menta.physical.infrastructure.qr.QrProperties;
+import com.menta.physical.infrastructure.redis.RedisCheckInRateLimitPort;
 import com.menta.physical.infrastructure.transaction.TransactionalRegisterPhysicalDeviceUseCase;
 import com.menta.physical.infrastructure.transaction.TransactionalRevokePhysicalDeviceUseCase;
 import com.menta.physical.infrastructure.transaction.TransactionalRotatePhysicalDeviceSecretUseCase;
@@ -161,10 +164,35 @@ class PhysicalConfigurationTest {
         ProcessPhysicalCheckInUseCase useCase = configuration.processPhysicalCheckInUseCase(
             mock(PhysicalSessionRepository.class), mock(PhysicalCapacityAssignmentRepository.class),
             mock(AttendanceRepository.class), redisTemplate, mock(Clock.class), new QrProperties(),
-            mock(UserExistencePort.class), mock(PhysicalDeviceAuthenticator.class)
+            mock(UserExistencePort.class), mock(PhysicalDeviceAuthenticator.class),
+            mock(CheckInRateLimitPort.class), mock(CheckInRateLimitRejectionPort.class)
         );
 
         assertThat(useCase).isInstanceOf(ProcessPhysicalCheckInUseCaseImpl.class);
+    }
+
+    @Test
+    void wires_the_check_in_rate_limit_port_bean_backed_by_redis() {
+        @SuppressWarnings("unchecked")
+        RedisTemplate<String, String> redisTemplate = mock(RedisTemplate.class);
+
+        CheckInRateLimitPort port =
+            configuration.physicalCheckInRateLimitPort(redisTemplate, 120, 60, 60);
+
+        assertThat(port).isInstanceOf(RedisCheckInRateLimitPort.class);
+    }
+
+    @Test
+    void a_non_positive_rate_limit_setting_stops_the_context_at_startup() {
+        @SuppressWarnings("unchecked")
+        RedisTemplate<String, String> redisTemplate = mock(RedisTemplate.class);
+
+        assertThatThrownBy(() -> configuration.physicalCheckInRateLimitPort(redisTemplate, 0, 60, 60))
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> configuration.physicalCheckInRateLimitPort(redisTemplate, 120, 0, 60))
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> configuration.physicalCheckInRateLimitPort(redisTemplate, 120, 60, 0))
+            .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

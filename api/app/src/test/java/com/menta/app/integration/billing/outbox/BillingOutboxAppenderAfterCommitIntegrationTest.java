@@ -26,6 +26,7 @@ import com.menta.billing.infrastructure.persistence.repository.ReconciliationTas
 import com.menta.billing.infrastructure.persistence.repository.WebhookInboxJpaRepository;
 import com.menta.billing.infrastructure.webhook.WebhookInboxStatus;
 import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
+import com.menta.physical.application.port.out.CheckInRateLimitPort;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
@@ -74,6 +75,8 @@ class BillingOutboxAppenderAfterCommitIntegrationTest extends AbstractBillingMyS
     @MockBean private BankTransferRateLimitPort bankTransferRateLimitPort;
     @MockBean private CourseCatalogPort courseCatalogPort;
     @MockBean private ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
+    // ADR-0044: backed by a RedisTemplate this Redis-less context does not have.
+    @MockBean private CheckInRateLimitPort checkInRateLimitPort;
     @MockBean private AuthDegradedGuard authDegradedGuard;
     @MockBean private TokenBlacklistPort tokenBlacklistPort;
     @MockBean private LoginRateLimitPort loginRateLimitPort;

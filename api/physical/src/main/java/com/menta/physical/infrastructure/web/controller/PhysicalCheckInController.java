@@ -10,10 +10,12 @@ import com.menta.physical.domain.model.SessionId;
 import com.menta.physical.infrastructure.web.dto.AccessQrResponse;
 import com.menta.physical.infrastructure.web.dto.CheckInRequest;
 import com.menta.physical.infrastructure.web.dto.CheckInResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
@@ -55,13 +57,16 @@ public class PhysicalCheckInController {
 
     private final IssuePhysicalAccessQrUseCase issuePhysicalAccessQrUseCase;
     private final ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
+    private final PhysicalClientFingerprint fingerprint;
 
-    public PhysicalCheckInController(
+    PhysicalCheckInController(
         IssuePhysicalAccessQrUseCase issuePhysicalAccessQrUseCase,
-        ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase
+        ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase,
+        PhysicalClientFingerprint fingerprint
     ) {
         this.issuePhysicalAccessQrUseCase = issuePhysicalAccessQrUseCase;
         this.processPhysicalCheckInUseCase = processPhysicalCheckInUseCase;
+        this.fingerprint = fingerprint;
     }
 
     @PostMapping("/api/v1/physical/sessions/{sessionId}/access-qr")
@@ -76,9 +81,10 @@ public class PhysicalCheckInController {
     @PostMapping("/api/v1/physical/sessions/{sessionId}/check-ins")
     public ResponseEntity<CheckInResponse> checkIn(
         @PathVariable String sessionId, @Valid @RequestBody CheckInRequest request,
-        Authentication authentication
+        Authentication authentication, HttpServletRequest httpRequest
     ) {
-        CheckInCommand command = command(SessionId.of(sessionId), request, authentication);
+        CheckInCommand command =
+            command(SessionId.of(sessionId), request, authentication, httpRequest);
         CheckInResult result = switch (command.type()) {
             case QR -> processPhysicalCheckInUseCase.checkIn(command);
             case MANUAL -> processPhysicalCheckInUseCase.checkInManually(command);
@@ -87,8 +93,9 @@ public class PhysicalCheckInController {
         return ResponseEntity.status(status).body(CheckInResponse.from(result.attendance()));
     }
 
-    private static CheckInCommand command(
-        SessionId sessionId, CheckInRequest request, Authentication authentication
+    private CheckInCommand command(
+        SessionId sessionId, CheckInRequest request, Authentication authentication,
+        HttpServletRequest httpRequest
     ) {
         if ("MANUAL".equals(request.type())) {
             return CheckInCommand.manual(
@@ -96,7 +103,8 @@ public class PhysicalCheckInController {
             );
         }
         return CheckInCommand.qr(
-            sessionId, request.qrCredentials(), request.deviceId(), request.deviceToken()
+            sessionId, request.qrCredentials(), request.deviceId(), request.deviceToken(),
+            fingerprint.client(httpRequest), fingerprint.device(request.deviceId())
         );
     }
 

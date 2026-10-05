@@ -90,6 +90,9 @@ compartido anterior (`app.physical.checkin.device-token`) ya no autentica nada.
 | Dispositivo `REVOKED`, secreto correcto | `401 DEVICE_REVOKED` |
 | Dispositivo vencido (`expiresAt <= ahora`), secreto correcto | `401 DEVICE_EXPIRED` |
 | `deviceId` o `deviceToken` en blanco o ausentes | `400 INVALID_REQUEST` |
+| `deviceId`, `deviceToken` o `qrCredentials` por encima del tope de longitud (ver abajo) | `400 INVALID_REQUEST` |
+| Presupuesto de intentos agotado (por IP o por `deviceId`) | `429 CHECK_IN_RATE_LIMITED` con `Retry-After` |
+| Redis no disponible al evaluar el límite | `503 CHECK_IN_DEGRADED` con `Retry-After: 30` |
 
 - Un `deviceId` que no es UUID se rechaza antes de consultar la base de datos.
 - `DEVICE_REVOKED` y `DEVICE_EXPIRED` sólo se informan con el secreto correcto;
@@ -98,13 +101,61 @@ compartido anterior (`app.physical.checkin.device-token`) ya no autentica nada.
 - Un dispositivo vencido no se recupera rotando su secreto: debe registrarse de
   nuevo. `DEVICE_REVOKED` también existe como `409` al rotar el secreto de un
   dispositivo revocado (endpoint de administración); en el check-in es `401`.
-- Una autenticación fallida corta las validaciones siguientes y nunca toca Redis.
+- Una autenticación fallida corta las validaciones siguientes y no llega a los locks de Redis del check-in. El único acceso a Redis previo a la autenticación es el contador de rate limit descrito abajo.
 - La asistencia guarda el UUID del dispositivo autenticado en `device_id`. Las
   filas históricas conservan su valor de texto libre.
 - Observabilidad: cada rechazo escribe una línea `WARN` que empieza con
   `alarm=physical_checkin_device_rejected reason=<motivo> deviceId=<uuid|none>` e
   incrementa el contador `physical.checkin.device.rejected` con el tag `reason`
   (`unknown_or_invalid`, `revoked`, `expired`). Nunca se registra el secreto.
+
+#### Topes de longitud y rate limiting del check-in QR (#309, ADR-0044)
+
+Antes de autenticar al lector, el check-in `QR` acota sus entradas y limita la
+frecuencia de intentos. Nada de esto aplica al check-in `MANUAL`.
+
+**Topes de longitud** (una violación responde `400 INVALID_REQUEST`, sin log ni
+métrica; `null` sigue siendo válido y la presencia se sigue decidiendo por la
+variante):
+
+| Campo | Máximo | Razón |
+|---|---|---|
+| `deviceId` | 36 caracteres | Largo de un UUID canónico |
+| `deviceToken` | 43 caracteres | 32 bytes en Base64 URL sin padding, el formato del secreto emitido |
+| `qrCredentials` | 512 caracteres | Holgado a propósito: el formato actual es un placeholder |
+
+Un secreto emitido por el registro siempre cabe en el tope. Un `deviceToken` más
+largo (por ejemplo el secreto compartido anterior, de 72 caracteres) ya no llega
+a la autenticación: responde `400 INVALID_REQUEST`.
+
+**Rate limiting.** Dos presupuestos independientes de ventana fija, evaluados en
+Redis antes de consultar el registro de dispositivos ni calcular el hash del
+secreto:
+
+| Presupuesto | Clave | Default provisorio |
+|---|---|---|
+| Por IP del cliente | huella SHA-256 de la IP | 120 solicitudes / 60 s |
+| Por `deviceId` | huella SHA-256 del `deviceId` | 60 solicitudes / 60 s |
+
+- El presupuesto por IP se consume primero; si ya está agotado, el de `deviceId`
+  no se toca, de modo que un origen limitado no puede gastar el presupuesto de un
+  dispositivo ajeno falsificando su id.
+- Ninguna clave de Redis contiene el valor crudo: sólo huellas SHA-256.
+- La IP es `request.getRemoteAddr()`. Sólo si ese peer pertenece a
+  `physical.checkin.trusted-proxy-cidrs` (con fallback a `auth.trusted-proxy-cidrs`)
+  se usa la **última** entrada de `X-Forwarded-For`, la agregada por Nginx. Un
+  rango demasiado amplio permite falsificar la IP: acotarlo por entorno.
+- Al agotarse un presupuesto: `429` con `Retry-After` (segundos, mínimo 1) y
+  `application/problem+json` con `code: CHECK_IN_RATE_LIMITED`.
+- Falla cerrada: si Redis no responde o devuelve algo inválido, el check-in
+  responde `503 CHECK_IN_DEGRADED` (mismo código y `Retry-After: 30` que los locks).
+- Configuración (`application.yml`, bajo `physical.checkin`):
+  `rate-limit.ip-max-requests`, `rate-limit.device-max-requests`,
+  `rate-limit.window-seconds` y `trusted-proxy-cidrs`. Los valores son
+  provisorios: revisarlos con el contador de abajo cuando haya tráfico real.
+- Observabilidad: cada rechazo escribe una línea `WARN`
+  `alarm=physical_checkin_rate_limited dimension=<ip|device>` (sin `deviceId`) e
+  incrementa el contador `physical.checkin.rate.limited` con el tag `dimension`.
 
 **Runbook de despliegue (corte directo, sin ventana de convivencia):**
 

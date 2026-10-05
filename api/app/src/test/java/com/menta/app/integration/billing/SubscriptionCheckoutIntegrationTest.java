@@ -44,6 +44,7 @@ import com.menta.billing.infrastructure.persistence.repository.WebhookInboxJpaRe
 import com.menta.billing.infrastructure.webhook.WebhookInboxStatus;
 import com.menta.billing.infrastructure.webhook.WebhookVerificationWorker;
 import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
+import com.menta.physical.application.port.out.CheckInRateLimitPort;
 import com.menta.shared.domain.vo.Email;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -129,6 +130,8 @@ class SubscriptionCheckoutIntegrationTest extends AbstractBillingMySqlIntegratio
     // US-PHYSICAL-001: ProcessPhysicalCheckInUseCaseImpl needs a RedisTemplate
     // its bean factory would otherwise fail to resolve in this Redis-less context.
     @MockBean private ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
+    // ADR-0044: backed by a RedisTemplate this Redis-less context does not have.
+    @MockBean private CheckInRateLimitPort checkInRateLimitPort;
 
     private final AtomicInteger preferenceSequence = new AtomicInteger();
 

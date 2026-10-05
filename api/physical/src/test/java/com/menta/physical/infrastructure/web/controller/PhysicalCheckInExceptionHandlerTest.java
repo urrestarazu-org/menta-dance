@@ -7,6 +7,7 @@ import com.menta.physical.domain.exception.CapacityAssignmentRequiredException;
 import com.menta.physical.domain.exception.CheckInAlreadyProcessingException;
 import com.menta.physical.domain.exception.CheckInDegradedException;
 import com.menta.physical.domain.exception.CheckInDeviceRevokedException;
+import com.menta.physical.domain.exception.CheckInRateLimitedException;
 import com.menta.physical.domain.exception.DeviceExpiredException;
 import com.menta.physical.domain.exception.ExpiredQrCredentialException;
 import com.menta.physical.domain.exception.InsufficientRoleException;
@@ -17,9 +18,11 @@ import com.menta.physical.domain.exception.SessionCancelledException;
 import com.menta.physical.domain.exception.SessionNotActiveException;
 import com.menta.physical.domain.exception.SessionNotFoundException;
 import com.menta.physical.domain.exception.StudentNotFoundException;
+import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -186,6 +189,27 @@ class PhysicalCheckInExceptionHandlerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(codeOf(response)).isEqualTo("INVALID_REQUEST");
+    }
+
+    @Test
+    void maps_rate_limited_to_429_with_retry_after_and_problem_json() {
+        ResponseEntity<ProblemDetail> response =
+            handler.checkInRateLimited(new CheckInRateLimitedException(Duration.ofSeconds(42)));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        assertThat(response.getHeaders().getFirst(HttpHeaders.RETRY_AFTER)).isEqualTo("42");
+        assertThat(response.getHeaders().getContentType())
+            .isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+        assertThat(codeOf(response)).isEqualTo("CHECK_IN_RATE_LIMITED");
+        assertThat(response.getBody().getProperties()).containsOnlyKeys("code");
+    }
+
+    @Test
+    void rate_limited_retry_after_is_never_below_one_second() {
+        ResponseEntity<ProblemDetail> response =
+            handler.checkInRateLimited(new CheckInRateLimitedException(Duration.ZERO));
+
+        assertThat(response.getHeaders().getFirst(HttpHeaders.RETRY_AFTER)).isEqualTo("1");
     }
 
     private static Object codeOf(ResponseEntity<ProblemDetail> response) {
