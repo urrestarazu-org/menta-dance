@@ -20,3 +20,10 @@ repos:
     rev: v5.0.0
     hooks:
       - id: check-executables-have-shebangs
+
+  # Secret detection (ADR-0042, #190). Scans the staged diff; the CI job
+  # `gitleaks` scans the full history and is the layer that cannot be skipped.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks

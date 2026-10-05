@@ -21,8 +21,49 @@ En cada PR contra `develop` o `master`:
 4. ejecutar Playwright, Gatling acordado y Trivy;
 5. publicar resultados sin publicar artefactos ni desplegar.
 
+Además, el job `gitleaks` corre en `pr-develop.yml` y en `pr-main.yml` (ver
+[Detección de secretos](#detección-de-secretos)).
+
 CI verde es obligatorio para mergear. Los PR son registro de trabajo individual:
 no requieren aprobación humana y se integran con **squash merge**.
+
+## Detección de secretos
+
+La detección se hace en tres capas complementarias (ADR-0042):
+
+1. **Pre-commit (local):** el hook `gitleaks` de `.pre-commit-config.yaml`
+   (`rev` fijado a un tag exacto) revisa el diff staged. Es una comodidad: se
+   saltea con `--no-verify` o desde un cliente sin `pre-commit`.
+2. **CI (bloqueante):** el job `gitleaks` de `pr-develop.yml` y `pr-main.yml`
+   escanea **todo el historial** alcanzable (`fetch-depth: 0`) y falla el build
+   ante un hallazgo. Usa la imagen oficial con versión exacta: la action
+   `gitleaks/gitleaks-action` exige una `GITLEAKS_LICENSE` (gratuita) en
+   repositorios de organización, y los PRs de Dependabot y de forks no reciben
+   secrets de Actions, por lo que el job fallaría en ellos.
+   El job también falla si no se escaneó ningún commit, para que un error de
+   git no se confunda con "sin hallazgos".
+3. **GitHub Secret Scanning con push protection:** capa gratuita en
+   repositorios públicos, habilitada en *Settings → Code security*.
+
+Las supresiones viven en `.gitleaks.toml`. Cada una acota el **valor** exacto y
+la **ruta**, y lleva un comentario que explica por qué es un falso positivo.
+Nunca se suprime un directorio entero. Antes de agregar una, comprobá que el
+valor no sea una credencial real (si es base64, decodificalo).
+
+### Si el escaneo detecta un secreto real
+
+Un secreto en un repositorio público debe considerarse **comprometido** aunque
+se borre después: el objeto sigue en el historial, en los forks y en los mirrors.
+
+1. **Rotar primero.** Revocar la credencial en el proveedor (Mercado Pago,
+   Bunny.net, Google Calendar, MySQL) y emitir una nueva. No reescribas el
+   historial antes de este paso.
+2. Reemplazar el valor por configuración externa (variable de entorno o GitHub
+   Secret) en un commit nuevo.
+3. Recién después, limpiar el historial si hace falta (`git filter-repo`),
+   coordinando el force-push con quien tenga clones o forks abiertos.
+4. Confirmar con `gitleaks git . --redact` que el historial queda limpio.
+5. Revisar los logs de uso de la credencial vieja en busca de accesos ajenos.
 
 ## Git Flow y releases
 

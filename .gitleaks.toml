@@ -1,0 +1,93 @@
+# Gitleaks configuration (ADR-0042, #190)
+#
+# Extends the default ruleset and only adds allowlists for verified false
+# positives. Every suppression is narrow on purpose: it matches the exact
+# placeholder value AND the path where it lives, so a real secret pasted next
+# to a fixture is still reported. Never allowlist a whole directory.
+#
+# Adding an entry: first confirm the value is NOT a real credential (decode it
+# if it is base64). If it is real, rotate it first - see docs/16-CICD-PIPELINE.md.
+
+title = "Menta Dance gitleaks config"
+
+[extend]
+useDefault = true
+
+# Dev-only Mercado Pago webhook HMAC secret. Base64 of the literal text
+# "dev-only-webhook-secret-not-for-production-use"; it signs requests against
+# the local simulator and is not accepted by any real Mercado Pago account.
+[[allowlists]]
+description = "Dev-only Mercado Pago webhook secret used by local e2e scripts and Bruno"
+condition = "AND"
+paths = [
+  '''^scripts/e2e/.*\.sh$''',
+  '''^bruno/.*\.bru$''',
+]
+regexes = [
+  '''^ZGV2LW9ubHktd2ViaG9vay1zZWNyZXQtbm90LWZvci1wcm9kdWN0aW9uLXVzZQ==$''',
+]
+
+# Throwaway HS256 signing key for the integration-test profile. The plain text
+# is "test-secret-for-integration-tests-must-be-64-bytes-long-for-HS256";
+# the profile is never activated outside Testcontainers-based tests.
+[[allowlists]]
+description = "Integration-test profile JWT signing key (plain text and base64 form)"
+condition = "AND"
+paths = [
+  '''^api/app/src/main/resources/application-integration-test\.yml$''',
+]
+regexes = [
+  '''^test-secret-for-integration-tests-must-be-64-bytes-long-for-HS256$''',
+  '''^dGVzdC1zZWNyZXQtZm9yLWludGVncmF0aW9uLXRlc3RzLW11c3QtYmUtNjQtYnl0ZXMtbG9uZy1mb3ItSFMyNTY=$''',
+]
+
+# Truncated or signature-less JWT shapes used as test fixtures and API doc
+# examples. The pattern accepts the standard header followed only by "...",
+# nothing, or a payload ending in the literal ".signature" - a real JWT has a
+# real signature, so it does not match.
+[[allowlists]]
+description = "Placeholder JWTs in BFF tests and API docs (no real signature)"
+condition = "AND"
+paths = [
+  '''^bff/src/test/.*\.java$''',
+  '''^docs/.*\.md$''',
+]
+regexes = [
+  '''^eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9(\.\.\.|\.?|\.[A-Za-z0-9_-]+\.signature)$''',
+  # Header cut short by an ellipsis, as in the auth API examples.
+  '''^eyJhbGciOiJIUzI1NiIs\.\.\.$''',
+]
+
+# Placeholder device token shown in the physical API documentation.
+[[allowlists]]
+description = "Truncated example device token in the physical API docs"
+condition = "AND"
+paths = [
+  '''^docs/05-PHYSICAL-API\.md$''',
+]
+regexes = [
+  '''^dvc_abc123xyz\.\.\.$''',
+]
+
+# Random UUID used as a fake refresh token by the Android encrypted-store test.
+[[allowlists]]
+description = "Fake refresh token in the Android EncryptedRefreshTokenStore test"
+condition = "AND"
+paths = [
+  '''^android/src/androidTest/.*EncryptedRefreshTokenStoreTest\.kt$''',
+]
+regexes = [
+  '''^1eb290ea-c132-42eb-869f-fd57c44c0f54$''',
+]
+
+# Second signing key used only to prove that a token signed with a different
+# secret is rejected. Base64 of "pipe-secret-nunk-for-testing-secrets...".
+[[allowlists]]
+description = "Throwaway alternative signing key in JwtServiceTest"
+condition = "AND"
+paths = [
+  '''^api/auth/src/test/.*JwtServiceTest\.java$''',
+]
+regexes = [
+  '''^cGlwZS1zZWNyZXQtbnVuay1mb3ItdGVzdGluZy1zZWNyZXRzLW''',
+]
