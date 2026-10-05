@@ -25,11 +25,51 @@ updates:
       - module:infra
     commit-message:
       prefix: "build(deps)"
+    # A dependency lands in the MOST SPECIFIC group whose patterns match it; the order in
+    # this file does not matter. Dependabot's log shows it: "Skipping ... for group
+    # 'gradle-minor-patch' - belongs to more specific group 'jvm-test-tooling'".
+    # The "*" group is therefore only a catch-all for whatever no other group claims.
     groups:
-      gradle-minor-patch:
+      # Kotlin, KSP, Hilt, AGP and Compose must move together, and a bump here can need a
+      # compileSdk change (#425). Isolated so one broken member cannot block unrelated bumps.
+      # It is deliberately NOT ignored: that would also hide security patches.
+      android-toolchain:
+        patterns:
+          - "com.android*"
+          - "androidx*"
+          - "org.jetbrains.kotlin*"
+          - "com.google.devtools.ksp*"
+          - "com.google.dagger*"
         update-types:
           - minor
           - patch
+      jvm-test-tooling:
+        patterns:
+          - "com.tngtech.archunit*"
+          - "org.wiremock*"
+          - "org.testcontainers*"
+        update-types:
+          - minor
+          - patch
+      gradle-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    # These are tied to a Spring Boot generation, not to a Dependabot cadence (#426).
+    ignore:
+      # Pinned in build.gradle.kts to the Jupiter version managed by Spring Boot's BOM;
+      # moving only the platform breaks that alignment. Revisit with the Boot migration.
+      - dependency-name: "org.junit.platform:*"
+      # 2.x renames the modules (e.g. org.testcontainers:junit-jupiter is gone).
+      - dependency-name: "org.testcontainers:*"
+        update-types:
+          - "version-update:semver-major"
+      # 9.x migrates to Jackson 3 and requires Java 17; Spring Boot 3.5 uses Jackson 2.
+      - dependency-name: "net.logstash.logback:logstash-logback-encoder"
+        update-types:
+          - "version-update:semver-major"
 
   # buildSrc is an included build with its own build.gradle.kts, so Dependabot
   # does not see it from the root directory.
