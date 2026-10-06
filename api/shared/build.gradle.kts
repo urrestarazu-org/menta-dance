@@ -12,7 +12,7 @@ dependencies {
     annotationProcessor(libs.lombok)
 
     // Validation API
-    implementation("jakarta.validation:jakarta.validation-api:3.1.0")
+    implementation("jakarta.validation:jakarta.validation-api:3.1.1")
 }
 
 tasks.jar {
