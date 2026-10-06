@@ -14,6 +14,7 @@ plugins {
     alias(libs.plugins.hilt.android) apply false
     alias(libs.plugins.spring.boot) apply false
     alias(libs.plugins.spring.dependency.management) apply false
+    alias(libs.plugins.spotbugs) apply false
     jacoco
     checkstyle
 }
@@ -23,6 +24,8 @@ version = "0.1.0-SNAPSHOT"
 
 val springBootVersion = libs.versions.spring.boot.get()
 val checkstyleVersion = libs.versions.checkstyle.get()
+val spotbugsToolVersion = libs.versions.spotbugs.tool.get()
+val findsecbugsDependency = libs.findsecbugs.plugin
 val jacocoVersion = libs.versions.jacoco.get()
 
 // Whole-module LINE coverage floors, for the modules that do NOT declare
@@ -118,6 +121,7 @@ subprojects {
         apply(plugin = "io.spring.dependency-management")
         apply(plugin = "jacoco")
         apply(plugin = "checkstyle")
+        apply(plugin = "com.github.spotbugs")
 
         extensions.configure<JavaPluginExtension> {
             toolchain {
@@ -136,7 +140,7 @@ subprojects {
 
             // Only add ArchUnit to modules that have architecture tests
             if (project.name != "shared" && project.parent?.name == "api") {
-                add("testImplementation", "com.tngtech.archunit:archunit-junit5:1.3.0")
+                add("testImplementation", "com.tngtech.archunit:archunit-junit5:1.5.1")
             }
         }
 
@@ -166,6 +170,42 @@ subprojects {
             toolVersion = checkstyleVersion
             configFile = rootProject.file("config/checkstyle/google_checks.xml")
             maxWarnings = 0
+        }
+
+        // SAST: SpotBugs + Find Security Bugs (#191, ADR-0042).
+        extensions.configure<com.github.spotbugs.snom.SpotBugsExtension> {
+            toolVersion = spotbugsToolVersion
+            effort = com.github.spotbugs.snom.Effort.MAX
+            // HIGH = priority-1 findings only. Any such finding fails the build.
+            reportLevel = com.github.spotbugs.snom.Confidence.HIGH
+            ignoreFailures = false
+            excludeFilter = rootProject.file("config/spotbugs/exclude.xml")
+        }
+
+        dependencies {
+            add("spotbugsPlugins", findsecbugsDependency)
+        }
+
+        // The Spring Boot BOM (applied by io.spring.dependency-management to every
+        // configuration) downgrades the analyzer's own transitive libraries
+        // (commons-lang3, log4j, gson, ...) below what SpotBugs needs, which crashes
+        // the analysis with NoClassDefFoundError. The analyzer classpath is tooling,
+        // not application code: keep the versions its own POM requests.
+        configurations.matching { it.name.startsWith("spotbugs") }.configureEach {
+            resolutionStrategy.eachDependency {
+                requested.version?.let { useVersion(it) }
+            }
+        }
+
+        tasks.withType<com.github.spotbugs.snom.SpotBugsTask>().configureEach {
+            reports.create("xml") { required = true }
+            reports.create("html") { required = true }
+        }
+
+        // Production code only: the gate targets what ships. Test sources are not
+        // analyzed (see docs/16-CICD-PIPELINE.md, section "SpotBugs").
+        tasks.named("spotbugsTest") {
+            enabled = false
         }
 
         jacoco {
@@ -210,6 +250,22 @@ subprojects {
 
         tasks.check {
             dependsOn(tasks.jacocoTestCoverageVerification)
+        }
+
+        // The SpotBugs plugin wires spotbugsMain/Test into `check`, which would make
+        // pr-develop.yml's `./gradlew clean build` run the analysis. ADR-0042 places
+        // SAST in pr-main.yml only (the develop job has a 5 min budget, #424), so the
+        // dependency is removed; SpotBugs runs through its own `spotbugsMain` task.
+        afterEvaluate {
+            tasks.check {
+                setDependsOn(
+                    dependsOn.filterNot { dep ->
+                        dep is TaskCollection<*> &&
+                            dep.isNotEmpty() &&
+                            (dep as Iterable<*>).all { it is com.github.spotbugs.snom.SpotBugsTask }
+                    }
+                )
+            }
         }
     }
 }
