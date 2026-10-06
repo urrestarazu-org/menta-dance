@@ -18,7 +18,7 @@ jobs:
   # El hook de pre-commit es sólo conveniencia local (se saltea con --no-verify);
   # este job es el que realmente cierra la puerta. Ver docs/16-CICD-PIPELINE.md.
   gitleaks:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -52,7 +52,7 @@ jobs:
           fi
 
   quick-build-and-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         # SHA pinning: fija una revisión inmutable de la acción y mitiga el retargeting de tags
@@ -86,7 +86,7 @@ jobs:
 
   # Job independiente que corre en paralelo con quick-build-and-test
   nginx-validation:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -145,7 +145,7 @@ jobs:
           fi
 
   docker-compose-validation:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -192,7 +192,7 @@ jobs:
   # así que el lint automático es lo que impide que un YAML roto o un $ref
   # colgado lleguen a develop sin que nadie lo note.
   openapi-validation:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -207,7 +207,7 @@ jobs:
             lint /spec/auth-v1.yaml /spec/billing-v1.yaml /spec/catalog-v1.yaml
 
   shellcheck:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -223,7 +223,7 @@ jobs:
 
   # Hadolint: Dockerfile linter (best practices + security)
   hadolint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
