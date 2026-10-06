@@ -43,7 +43,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class PhysicalCapacityHoldMigrationIntegrationTest {
 
     @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
+    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.46")
         .withDatabaseName("menta_migration_test")
         .withUsername("test")
         .withPassword("test");
