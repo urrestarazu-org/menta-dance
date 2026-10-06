@@ -140,7 +140,7 @@ subprojects {
 
             // Only add ArchUnit to modules that have architecture tests
             if (project.name != "shared" && project.parent?.name == "api") {
-                add("testImplementation", "com.tngtech.archunit:archunit-junit5:1.3.0")
+                add("testImplementation", "com.tngtech.archunit:archunit-junit5:1.5.1")
             }
         }
 

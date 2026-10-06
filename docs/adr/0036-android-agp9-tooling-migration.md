@@ -118,6 +118,24 @@ error duro al aplicar el plugin, no sólo warning.
   ejemplo, para desarrolladores o entornos de CI sin Android Studio instalado, donde
   provisionar un JDK con vendor específico de JetBrains es una dependencia extra que un
   OpenJDK estándar no impondría. **Revisar antes de que el equipo crezca.**
+
+  **Actualización (2026-10-06, #440): el riesgo se materializó.** El catálogo de Foojay dejó
+  de ofrecer un JDK 25 de JetBrains (0 paquetes GA; `updateDaemonJvm --jvm-vendor=JETBRAINS`
+  falla para las 12 plataformas) y los ids de paquete que guardaba el archivo vencieron
+  (`400` en Linux x64, `404` en el resto). Un build con cache fría, en CI o en una máquina
+  limpia, fallaba al descargar el JDK del daemon; solo lo ocultaba un JDK ya en cache. Se
+  regeneró el archivo **sin `toolchainVendor`** (`./gradlew updateDaemonJvm --jvm-version=25`):
+  el daemon exige JDK 25 de cualquier vendor y Foojay resuelve Azul Zulu 25 (verificado en un
+  Linux limpio). El JBR 25 de Android Studio debería seguir cumpliendo el criterio, porque ya
+  no se restringe el vendor, **pero no se verificó en Android Studio**.
+
+  *Cómo regenerar.* Los `toolchainUrl.*` apuntan a **ids de build concretos**, así que vuelven
+  a vencer cuando el proveedor reemplaza esa build. Si un build en frío falla con
+  `Unable to download toolchain ... Received status code 400/404`, ejecutar
+  `./gradlew updateDaemonJvm --jvm-version=25`, comprobar que cada URL responde `2xx/3xx` y
+  verificar un build en frío (`docker run --rm -v "$PWD:/work" -w /work eclipse-temurin:21-jdk
+  ./gradlew help --no-daemon`). No agregar `--jvm-vendor` sin comprobar antes que Foojay
+  ofrezca esa distribución.
 * **Ningún test de Android corre en CI.** `quick-build-and-test` excluye explícitamente
   `:android:testDebugUnitTest` por lentitud, y no existe ningún job con emulador para
   tests instrumentados. Esto ya causó al menos un incidente real: la dependencia
