@@ -79,7 +79,7 @@ class PaymentProofIntegrationTest {
     private static final byte[] PROOF_CONTENT = {(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A};
 
     @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
+    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.46")
         .withDatabaseName("menta_test")
         .withUsername("test")
         .withPassword("test");

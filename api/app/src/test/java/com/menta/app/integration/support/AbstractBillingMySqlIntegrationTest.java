@@ -28,7 +28,7 @@ import org.testcontainers.utility.MountableFile;
  */
 public abstract class AbstractBillingMySqlIntegrationTest {
 
-    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
+    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.46")
         .withDatabaseName("menta_test")
         .withUsername("test")
         .withPassword("test")

@@ -27,6 +27,35 @@ Además, el job `gitleaks` corre en `pr-develop.yml` y en `pr-main.yml` (ver
 CI verde es obligatorio para mergear. Los PR son registro de trabajo individual:
 no requieren aprobación humana y se integran con **squash merge**.
 
+## Imágenes de contenedor
+
+Las imágenes que se **descargan** de un registro se fijan a un **tag de versión
+exacta** (`mysql:8.0.46`, `redis:7.4.11-alpine`,
+`eclipse-temurin:21.0.12.1_1-jre-alpine-3.24`), no a una línea flotante
+(`mysql:8.0`, `redis:7-alpine`, `21-jre-alpine`) ni a `latest`. Rige en todos los
+lugares donde aparece una imagen: los `docker-compose*.yml`, los `FROM` de los
+Dockerfiles, los workflows y las imágenes de **Testcontainers** en los tests
+Java. Se eligió el tag exacto y no el digest (`@sha256:`) porque es la
+convención que el repo ya seguía (`nginx:1.27.3-alpine`, `grafana/grafana:11.5.2`,
+`otel/opentelemetry-collector-contrib:0.131.0`) y se lee sin herramientas; el
+digest puede sumarse más adelante como endurecimiento.
+
+Al fijar un tag hay que comprobar que **apunta al mismo contenido** que reemplaza.
+Al migrar las líneas flotantes se verificó con la API del registro que
+`mysql:8.0.46` y `redis:7.4.11-alpine` tienen el mismo digest que `mysql:8.0` y
+`redis:7.4-alpine`, y que `eclipse-temurin:21.0.12.1_1-jre-alpine-3.24` coincide
+con `21-jre-alpine` (la variante `21.0.12_8-…` es otra build, más vieja).
+
+**Excepción:** `menta-api` y `menta-bff` pueden usar `latest` en los compose
+porque son imágenes que **se construyen localmente** y no se descargan de un
+registro. En producción se despliega el **digest inmutable** de la imagen
+publicada, nunca un tag (ver "Release a producción").
+
+**Deuda conocida:** `mysql:8.0.46` es la última versión de una línea que llegó a
+fin de vida el 2026-04-30 (#449). El tag exacto solo da reproducibilidad; no
+resuelve el soporte. Además, el literal de la imagen de MySQL está repetido en
+15 tests de integración y Dependabot no lo ve (#409).
+
 ## Detección de secretos
 
 La detección se hace en tres capas complementarias (ADR-0042):

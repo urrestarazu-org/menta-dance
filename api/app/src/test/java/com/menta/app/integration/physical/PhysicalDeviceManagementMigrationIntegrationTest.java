@@ -31,7 +31,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class PhysicalDeviceManagementMigrationIntegrationTest {
 
     @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
+    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.46")
         .withDatabaseName("menta_device_migration_test")
         .withUsername("test")
         .withPassword("test");

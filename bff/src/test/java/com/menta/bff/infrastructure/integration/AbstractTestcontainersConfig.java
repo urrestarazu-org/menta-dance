@@ -33,7 +33,7 @@ public abstract class AbstractTestcontainersConfig {
      * - Stopped when JVM exits (Testcontainers Ryuk cleanup)
      * </p>
      *
-     * <p>Using same image as production (docker-compose: redis:7.4-alpine)
+     * <p>Using same image as production (docker-compose: redis:7.4.11-alpine)
      * </p>
      */
     protected static final GenericContainer<?> REDIS_CONTAINER;
@@ -51,7 +51,7 @@ public abstract class AbstractTestcontainersConfig {
 
     static {
         // Start Redis container
-        REDIS_CONTAINER = new GenericContainer<>(DockerImageName.parse("redis:7.4-alpine"))
+        REDIS_CONTAINER = new GenericContainer<>(DockerImageName.parse("redis:7.4.11-alpine"))
                 .withExposedPorts(6379);
         REDIS_CONTAINER.start();
 

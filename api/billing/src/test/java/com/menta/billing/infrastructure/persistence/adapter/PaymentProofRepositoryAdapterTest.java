@@ -37,7 +37,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class PaymentProofRepositoryAdapterTest {
 
     @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
+    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.46")
         .withDatabaseName("menta_billing_payment_proofs_test")
         .withUsername("test")
         .withPassword("test");
