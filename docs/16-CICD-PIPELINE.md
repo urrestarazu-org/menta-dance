@@ -213,18 +213,25 @@ como PRs individuales a propósito. Dependabot no corre dentro del pipeline de P
 así que no afecta el presupuesto de `pr-develop.yml`.
 
 Un grupo único bloquea todo lo que contiene si un solo miembro falla, por lo que
-el build `gradle` de la raíz se divide en tres grupos. Una dependencia cae en el
+el build `gradle` de la raíz se divide en cuatro grupos. Una dependencia cae en el
 grupo **más específico** cuyo patrón coincide; el orden en el archivo no importa
 (el log de Dependabot lo dice: *"belongs to more specific group"*). El grupo
 comodín `*` sólo recibe lo que ningún otro grupo reclama:
 
 | Grupo | Contenido | Por qué separado |
 |---|---|---|
-| `android-toolchain` | AGP, Kotlin, KSP, Hilt, AndroidX y Compose | Deben moverse juntos y un bump puede exigir cambiar `compileSdk` (#425) |
+| `android-build-tooling` | AGP, Kotlin, KSP y Hilt | Deben moverse juntos, pero un bump aquí no exige por sí solo un `compileSdk` mayor (#425) |
+| `androidx-libraries` | Compose BOM, `core-ktx` y el resto de AndroidX | Son las que suben el `compileSdk` mínimo (#425, #451) |
 | `jvm-test-tooling` | ArchUnit, WireMock y Testcontainers | Sólo afectan a los tests |
 | `gradle-minor-patch` | El resto | Todo lo demás |
 
-El grupo de Android puede quedar rojo hasta resolver #425. Se acepta a
+**Por qué Android se divide en dos:** en el CI del PR #434, 13 dependencias exigían
+API 37 y el proyecto compila contra 36. Las 13 venían de AndroidX: 11 de Compose
+1.12.1 (`compose-bom` 2026.09.00) y 2 de Core 1.19.1 (`core-ktx`). Ninguna era del
+compilador ni de los plugins. Con un solo grupo, un cambio que probablemente
+funcione quedaba bloqueado por otro que depende de `compileSdk`.
+
+El grupo `androidx-libraries` puede quedar rojo hasta resolver #425. Se acepta a
 propósito: ignorarlo ocultaría también parches de seguridad.
 
 Al **reorganizar grupos mientras hay un PR de grupo abierto**, Dependabot lo
