@@ -40,7 +40,7 @@ dependencies {
 
     // Testing
     testImplementation("org.springframework.boot:spring-boot-starter-test")
-    testImplementation("com.tngtech.archunit:archunit-junit5:1.3.0")
+    testImplementation("com.tngtech.archunit:archunit-junit5:1.5.1")
     // #39, US-PHYSICAL-002: PhysicalCapacityAssignmentRepositoryAdapterTest is this module's
     // first @DataJpaTest against real MySQL 8.0 (mirrors :api:virtual's
     // LessonProgressRepositoryAdapterProjectionTest — same rationale: half-open Instant bounds
