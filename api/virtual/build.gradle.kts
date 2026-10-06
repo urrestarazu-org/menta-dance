@@ -33,7 +33,7 @@ dependencies {
 
     // Testing
     testImplementation("org.springframework.boot:spring-boot-starter-test")
-    testImplementation("com.tngtech.archunit:archunit-junit5:1.3.0")
+    testImplementation("com.tngtech.archunit:archunit-junit5:1.5.1")
     // Testcontainers — the ONE deliberate container-backed test in this module (US-VIRTUAL-005,
     // Slice 3): the course-progress projection's real-MySQL NULL-ordering semantics. Versions are
     // unversioned here — resolved via the root io.spring.dependency-management BOM, same as
