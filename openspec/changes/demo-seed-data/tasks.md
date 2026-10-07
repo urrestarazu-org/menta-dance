@@ -71,15 +71,15 @@ Manual: bootRun `demo`; list published courses (2, 2 modules each); request a fr
 
 ## Slice 3 (PR 3, ~380 lines): Physical catalog, sessions, rolling session, seats
 
-- [ ] 3.1 RED `api/physical/src/test/java/com/menta/physical/infrastructure/demo/DemoPhysicalCatalogFixtureTest.java` (courses): absent -> `save(new PhysicalCourse(...))` with `professorId = INSTRUCTOR` for Sensual (TUESDAY 19:00, cap 12) and Tradicional (SATURDAY 11:00, cap 15); present -> no save. Covers: Physical catalog.
-- [ ] 3.2 GREEN `.../DemoPhysicalCatalogFixture.java` course upsert via `PhysicalCourseRepository.findById`.
-- [ ] 3.3 RED regular sessions: `findManaged(course, today, today+28d)` empty creates Tue+Thu (Sensual) and Sat (Tradicional) slots in UTC for 4 weeks via `saveAll`; partial existing creates only missing slots; full -> no save. Covers: Four weeks of sessions, Partially seeded.
-- [ ] 3.4 GREEN session generation keyed by `(courseId, scheduledAt)`.
-- [ ] 3.5 RED rolling session (D1): absent -> save `(ROLLING_ID, SENSUAL, now+10m, cap 12, SCHEDULED)`; `now` inside `[scheduledAt - before, scheduledAt + after - 30m]` -> reuse, no save; outside -> `save(withSchedule(now+10m))` with the same id; `QrProperties` defaults 30m/2h. Covers: Rolling session is current, Restart does not accumulate.
-- [ ] 3.6 GREEN rolling-session logic using an injected `Clock`.
-- [ ] 3.7 RED seats: `existsConfirmedAssignment` false -> `assign(new CapacityAssignmentCommand(session, STUDENT, SEAT_PAYMENT_ID))` for the rolling session and the next regular Sensual session; true -> no `assign`; no dependency on subscriptions; `getOrder() == CONTENT`. Covers: Student seat (both scenarios), Seat independent of subscription.
-- [ ] 3.8 GREEN seat assignment via `PhysicalCapacityAssignmentPort`; fixture NOT `@Transactional` (`AssignCapacityUseCase` uses `REQUIRES_NEW`).
-- [ ] 3.9 REFACTOR: Checkstyle/SpotBugs; split helper methods if the class is too long.
+- [x] 3.1 RED `api/physical/src/test/java/com/menta/physical/infrastructure/demo/DemoPhysicalCatalogFixtureTest.java` (courses): absent -> `save(new PhysicalCourse(...))` with `professorId = INSTRUCTOR` for Sensual (TUESDAY 19:00, cap 12) and Tradicional (SATURDAY 11:00, cap 15); present -> no save. Covers: Physical catalog.
+- [x] 3.2 GREEN `.../DemoPhysicalCatalogFixture.java` course upsert via `PhysicalCourseRepository.findById`.
+- [x] 3.3 RED regular sessions: `findManaged(course, today, today+28d)` empty creates Tue+Thu (Sensual) and Sat (Tradicional) slots in UTC for 4 weeks via `saveAll`; partial existing creates only missing slots; full -> no save. Covers: Four weeks of sessions, Partially seeded.
+- [x] 3.4 GREEN session generation keyed by `(courseId, scheduledAt)`.
+- [x] 3.5 RED rolling session (D1): absent -> save `(ROLLING_ID, SENSUAL, now+10m, cap 12, SCHEDULED)`; `now` inside `[scheduledAt - before, scheduledAt + after - 30m]` -> reuse, no save; outside -> `save(withSchedule(now+10m))` with the same id; `QrProperties` defaults 30m/2h. Covers: Rolling session is current, Restart does not accumulate.
+- [x] 3.6 GREEN rolling-session logic using an injected `Clock`.
+- [x] 3.7 RED seats: `existsConfirmedAssignment` false -> `assign(new CapacityAssignmentCommand(session, STUDENT, SEAT_PAYMENT_ID))` for the rolling session and the next regular Sensual session; true -> no `assign`; no dependency on subscriptions; `getOrder() == CONTENT`. Covers: Student seat (both scenarios), Seat independent of subscription.
+- [x] 3.8 GREEN seat assignment via `PhysicalCapacityAssignmentPort`; fixture NOT `@Transactional` (`AssignCapacityUseCase` uses `REQUIRES_NEW`).
+- [x] 3.9 REFACTOR: Checkstyle/SpotBugs; split helper methods if the class is too long.
 
 Exit gate: `./gradlew :api:physical:check` (floors 95/90) and `:api:app:check`; line count of the PR <= 400, else split before opening.
 Manual: bootRun `demo` twice; sessions for 4 weeks, exactly one rolling session ~10 min ahead, student seat present, counts unchanged on the second run.
