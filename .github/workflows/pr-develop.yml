@@ -201,9 +201,9 @@ jobs:
         run: |
           # redocly lint: valida estructura OpenAPI 3.1, referencias y esquemas.
           # Sale distinto de cero ante errores; los warnings quedan visibles
-          # pero no bloquean.
+          # pero no bloquean. Versión exacta de la imagen: no se permite `latest`.
           docker run --rm -v "$(pwd)/api/openapi:/spec:ro" \
-            redocly/cli:latest \
+            redocly/cli:2.59.0 \
             lint /spec/auth-v1.yaml /spec/billing-v1.yaml /spec/catalog-v1.yaml
 
   shellcheck:
@@ -212,14 +212,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install ShellCheck
-        run: sudo apt-get install -y shellcheck
-
       - name: Validate shell scripts
+        # ShellCheck oficial con versión exacta, en vez de la que traiga la imagen del runner
+        # (0.9.0 en ubuntu-24.04): el resultado no depende del sistema operativo del job.
         run: |
-          shellcheck infra/docker/manage.sh
-          shellcheck infra/docker/deploy.sh
-          shellcheck infra/docker/quick-deploy.sh
+          docker run --rm -v "$(pwd):/mnt:ro" -w /mnt \
+            koalaman/shellcheck:v0.11.0 \
+            infra/docker/manage.sh infra/docker/deploy.sh infra/docker/quick-deploy.sh
 
   # Hadolint: Dockerfile linter (best practices + security)
   hadolint:
