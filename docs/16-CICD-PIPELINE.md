@@ -253,6 +253,9 @@ migración (#426):
 * `org.testcontainers:*` (sólo *major*): la rama 2.x renombra los módulos.
 * `net.logstash.logback:logstash-logback-encoder` (sólo *major*): la 9.x migra a
   Jackson 3 y exige Java 17, mientras Spring Boot 3.5 usa Jackson 2.
+* `org.springframework.boot` (sólo *major*): la 4.x migra a Jackson 3, JUnit 6 y
+  Testcontainers 2 y elimina `@MockBean`; la migración se decide en #426 (requiere
+  antes #405). Los *minor* y *patch* de la 3.5.x siguen entrando.
 
 Al agregar una exclusión nueva, dejá el motivo como comentario en
 `dependabot.yml` y enlazá el issue que decide su levantamiento.

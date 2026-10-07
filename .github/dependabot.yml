@@ -78,6 +78,11 @@ updates:
       - dependency-name: "net.logstash.logback:logstash-logback-encoder"
         update-types:
           - "version-update:semver-major"
+      # 4.x moves to Jackson 3, JUnit 6 and Testcontainers 2, and removes @MockBean;
+      # the migration is tracked in #426 (prerequisite: #405). Minor/patch of 3.5.x still flow.
+      - dependency-name: "org.springframework.boot"
+        update-types:
+          - "version-update:semver-major"
 
   # buildSrc is an included build with its own build.gradle.kts, so Dependabot
   # does not see it from the root directory.
