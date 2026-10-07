@@ -30,16 +30,24 @@ updates:
     # 'gradle-minor-patch' - belongs to more specific group 'jvm-test-tooling'".
     # The "*" group is therefore only a catch-all for whatever no other group claims.
     groups:
-      # Kotlin, KSP, Hilt, AGP and Compose must move together, and a bump here can need a
-      # compileSdk change (#425). Isolated so one broken member cannot block unrelated bumps.
-      # It is deliberately NOT ignored: that would also hide security patches.
-      android-toolchain:
+      # AGP, Kotlin, KSP and Hilt are the compiler and plugins: they must move together, but a
+      # bump here does not by itself require a newer compileSdk (#425).
+      android-build-tooling:
         patterns:
           - "com.android*"
-          - "androidx*"
           - "org.jetbrains.kotlin*"
           - "com.google.devtools.ksp*"
           - "com.google.dagger*"
+        update-types:
+          - minor
+          - patch
+      # AndroidX libraries are what raises the minimum compileSdk: compose-bom 2026.09.00 and
+      # core-ktx 1.19.1 both require API 37 while the project compiles against 36 (#425, #451).
+      # Kept apart so they can wait for that decision without blocking the build tooling above.
+      # Neither group is ignored: that would also hide security patches.
+      androidx-libraries:
+        patterns:
+          - "androidx*"
         update-types:
           - minor
           - patch
