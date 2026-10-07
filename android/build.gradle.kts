@@ -8,7 +8,7 @@ plugins {
 
 android {
     namespace = "com.menta.android"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.menta.android"
