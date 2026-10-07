@@ -23,7 +23,7 @@ COPY scripts scripts/
 RUN ./gradlew :bff:bootJar --no-daemon --parallel
 
 # Stage 2: Runtime
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:21.0.12.1_1-jre-alpine-3.24
 
 WORKDIR /app
 

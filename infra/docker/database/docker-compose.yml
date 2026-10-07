@@ -1,6 +1,6 @@
 services:
   mysql:
-    image: mysql:8.0
+    image: mysql:8.0.46
     container_name: ${MENTA_CONTAINER_PREFIX:-menta}-mysql
     restart: unless-stopped
     environment:
@@ -22,7 +22,7 @@ services:
       - menta-network
 
   redis:
-    image: redis:7.4-alpine
+    image: redis:7.4.11-alpine
     container_name: ${MENTA_CONTAINER_PREFIX:-menta}-redis
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
