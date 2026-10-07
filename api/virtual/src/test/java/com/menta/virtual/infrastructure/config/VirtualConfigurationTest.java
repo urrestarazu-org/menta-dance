@@ -55,6 +55,8 @@ import com.menta.virtual.infrastructure.transaction.TransactionalUpdateVirtualMo
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.BeanCreationException;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -300,6 +302,32 @@ class VirtualConfigurationTest {
             assertThat(context.getBeanNamesForType(BunnyNetSignatureService.class)).hasSize(1);
             assertThat(context.getBean(BunnyNetSignatureService.class))
                 .isInstanceOf(LocalBunnyNetSignatureService.class);
+        }
+
+        @Test
+        void demo_profile_resolves_to_the_local_adapter_as_the_sole_candidate() {
+            context = bootContext("demo");
+
+            assertThat(context.getBeanNamesForType(BunnyNetSignatureService.class)).hasSize(1);
+            assertThat(context.getBean(BunnyNetSignatureService.class))
+                .isInstanceOf(LocalBunnyNetSignatureService.class);
+        }
+
+        @Test
+        void demo_combined_with_e2e_bunny_net_resolves_to_a_single_local_adapter() {
+            context = bootContext("demo", "e2e-bunny-net");
+
+            assertThat(context.getBeanNamesForType(BunnyNetSignatureService.class)).hasSize(1);
+            assertThat(context.getBean(BunnyNetSignatureService.class))
+                .isInstanceOf(LocalBunnyNetSignatureService.class);
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"prod", "production", "staging", "PROD", "Staging"})
+        void demo_combined_with_a_production_like_profile_fails_the_context_refresh(String profile) {
+            assertThatThrownBy(() -> bootContext("demo", profile))
+                .isInstanceOf(BeanCreationException.class)
+                .hasStackTraceContaining("SECURITY");
         }
 
         @Test

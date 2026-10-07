@@ -60,11 +60,11 @@ Manual: `SPRING_PROFILES_ACTIVE=demo ./gradlew :api:app:bootRun` on an empty DB,
 
 ## Slice 2 (PR 2, ~300 lines): Virtual catalog + Bunny profile
 
-- [ ] 2.1 RED `api/virtual/src/test/java/com/menta/virtual/.../VirtualConfigurationTest.java`: `demo` resolves `LocalBunnyNetSignatureService` (one bean); `demo+e2e-bunny-net` one local bean; no profile resolves `StringFormatBunnyNetSignatureService`; `demo+prod|production|staging` fails (case-insensitive). Covers: local-bunny-net delta (all 5 scenarios).
-- [ ] 2.2 GREEN `api/virtual/src/main/java/com/menta/virtual/.../VirtualConfiguration.java`: `@Profile("e2e-bunny-net | demo")` / `"!e2e-bunny-net & !demo"`; generic guard message.
-- [ ] 2.3 RED `api/virtual/src/test/java/com/menta/virtual/infrastructure/demo/DemoVirtualCatalogFixtureTest.java`: first run saves 2 PUBLISHED courses, 2 modules each (module 1 `preview=true` with a free lesson, module 2 restricted), fixed ids from `DemoIds`; second run `never().save` (`existsById` per entity); partial DB creates only missing; `getOrder() == CONTENT`; video refs resolve with the local adapter. Covers: Virtual catalog, Per-entity idempotency (second start, partial).
-- [ ] 2.4 GREEN `api/virtual/src/main/java/com/menta/virtual/infrastructure/demo/DemoVirtualCatalogFixture.java`: `@Profile("demo")`, Virtual JPA repositories (style of `E2eBunnyNetVirtualFixture`), private fixed module/lesson ids.
-- [ ] 2.5 REFACTOR: Checkstyle/SpotBugs clean.
+- [x] 2.1 RED `api/virtual/src/test/java/com/menta/virtual/.../VirtualConfigurationTest.java`: `demo` resolves `LocalBunnyNetSignatureService` (one bean); `demo+e2e-bunny-net` one local bean; no profile resolves `StringFormatBunnyNetSignatureService`; `demo+prod|production|staging` fails (case-insensitive). Covers: local-bunny-net delta (all 5 scenarios).
+- [x] 2.2 GREEN `api/virtual/src/main/java/com/menta/virtual/.../VirtualConfiguration.java`: `@Profile("e2e-bunny-net | demo")` / `"!e2e-bunny-net & !demo"`; generic guard message.
+- [x] 2.3 RED `api/virtual/src/test/java/com/menta/virtual/infrastructure/demo/DemoVirtualCatalogFixtureTest.java`: first run saves 2 PUBLISHED courses, 2 modules each (module 1 `preview=true` with a free lesson, module 2 restricted), fixed ids from `DemoIds`; second run `never().save` (`existsById` per entity); partial DB creates only missing; `getOrder() == CONTENT`; video refs resolve with the local adapter. Covers: Virtual catalog, Per-entity idempotency (second start, partial).
+- [x] 2.4 GREEN `api/virtual/src/main/java/com/menta/virtual/infrastructure/demo/DemoVirtualCatalogFixture.java`: `@Profile("demo")`, Virtual JPA repositories (style of `E2eBunnyNetVirtualFixture`), private fixed module/lesson ids.
+- [x] 2.5 REFACTOR: Checkstyle/SpotBugs clean.
 
 Exit gate: `./gradlew :api:virtual:check` (floors 95/90) and `:api:app:check`.
 Manual: bootRun `demo`; list published courses (2, 2 modules each); request a free lesson stream and get a local signed URL with no Bunny credential.
