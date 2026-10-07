@@ -11,6 +11,30 @@ Todas las actions se fijan a un **SHA de commit completo**; dependencias,
 plugins e imágenes se fijan a versiones exactas. No se permiten `latest`,
 `master` ni rangos de versión.
 
+### Imagen del runner
+
+Todos los jobs usan `runs-on: ubuntu-24.04` y **no** `ubuntu-latest`. La etiqueta
+`latest` es flotante: GitHub la migra a Ubuntu 26.04 de forma gradual entre el
+2026-10-19 y el 2026-11-19 ([actions/runner-images#14748](https://github.com/actions/runner-images/issues/14748)),
+y durante ese período el mismo workflow podría ejecutarse en dos sistemas
+operativos distintos, con fallos intermitentes difíciles de diagnosticar.
+
+**Estado de la prueba en 26.04 (2026-10-06, #439):** los 7 jobs de
+`pr-develop.yml` pasaron en `ubuntu-26.04` (ShellCheck con su `apt-get install`,
+Hadolint, Gitleaks, los jobs con Docker y el build de Gradle con Testcontainers),
+sin diferencias. **No se probaron** los jobs de `pr-main.yml` (`full-build-and-test`,
+`spotbugs`, `nginx-integration`, construcción de imágenes) ni `project-sync.yml`:
+un PR contra `develop` no los ejecuta. Por eso la imagen sigue fijada en 24.04.
+
+**Cómo actualizar la imagen:** cambiar el `runs-on` de los tres workflows a la
+etiqueta nueva en un PR de prueba, revisar cada job y, en especial, los de
+`pr-main.yml`, que solo se ejercitan contra `main`. Recién entonces mergear. Para
+verificar que no quedó ninguna etiqueta flotante:
+
+```bash
+rg -n "ubuntu-latest" .github/workflows   # no debe devolver nada
+```
+
 ## CI de Pull Request
 
 En cada PR contra `develop` o `master`:
