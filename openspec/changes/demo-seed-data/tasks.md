@@ -110,12 +110,12 @@ Manual: full bootRun `demo` on an empty DB: plans with links, prices, ACTIVE TRI
 
 ## Slice 6 (PR 6, ~130 lines): ArchUnit + docs
 
-- [ ] 6.1 RED `api/app/src/test/java/com/menta/app/ArchitectureTest.java`: rules (a) `com.menta.shared.demo..` used only from `..infrastructure.demo..`; (b) nothing outside `..demo..` depends on `..infrastructure.demo..`; (c) no `infrastructure.demo` class depends on another business module. Prove (c) fails with a temporary violating fixture, then remove it. Covers: ArchUnit rule.
-- [ ] 6.2 GREEN make the rules pass (no production change expected).
-- [ ] 6.3 RED/verify no seed migrations: test or grep-based check that no module `db/migration` file inserts demo data. Covers: No seed migrations.
-- [ ] 6.4 GREEN `README.md`: `demo` profile, role credentials, env vars (`DEMO_*_PASSWORD`, `DEMO_QR_READER_SECRET`, `BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET`), real Mercado Pago adapters stay active, guard behavior. Covers: Documentation.
-- [ ] 6.5 GREEN `docs/26-LOCAL-DEV-SETUP-HOWTO.md`: same content in Spanish, with run commands.
-- [ ] 6.6 Verify the open question "rolling session attendance replay after restart" is documented as accepted behavior (fresh check-in requires recreating the DB).
+- [x] 6.1 RED `api/app/src/test/java/com/menta/app/ArchitectureTest.java`: rules (a) `com.menta.shared.demo..` used only from `..infrastructure.demo..`; (b) nothing outside `..demo..` depends on `..infrastructure.demo..`; (c) no `infrastructure.demo` class depends on another business module. Prove (c) fails with a temporary violating fixture, then remove it. Covers: ArchUnit rule.
+- [x] 6.2 GREEN make the rules pass (no production change expected).
+- [x] 6.3 RED/verify no seed migrations: test or grep-based check that no module `db/migration` file inserts demo data. Covers: No seed migrations.
+- [x] 6.4 GREEN `README.md`: `demo` profile, role credentials, env vars (`DEMO_*_PASSWORD`, `DEMO_QR_READER_SECRET`, `BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET`), real Mercado Pago adapters stay active, guard behavior. Covers: Documentation.
+- [x] 6.5 GREEN `docs/26-LOCAL-DEV-SETUP-HOWTO.md`: same content in Spanish, with run commands.
+- [x] 6.6 Verify the open question "rolling session attendance replay after restart" is documented as accepted behavior (fresh check-in requires recreating the DB).
 
 Exit gate: `./gradlew build` (all modules, Checkstyle, SpotBugs, JaCoCo) green; `./gradlew :api:app:test --tests "*ArchitectureTest"`.
 Manual: follow the README steps verbatim on an empty DB (4 users, catalog, QR, plans, trial).

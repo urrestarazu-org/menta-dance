@@ -185,11 +185,12 @@ escenarios de aceptación del issue #129:
 
 **Cómo funciona el adaptador local (ADR-0040):**
 - `VirtualConfiguration` registra `LocalBunnyNetSignatureService` únicamente
-  bajo `@Profile("e2e-bunny-net")`; el adaptador real
-  (`StringFormatBunnyNetSignatureService`) usa `@Profile("!e2e-bunny-net")`
-  — son mutuamente excluyentes, nunca coexisten. El propio factory `@Bean`
-  falla el arranque si `e2e-bunny-net` se combina con `prod`/`production`/
-  `staging`, antes de que el servidor acepte ningún request.
+  bajo `@Profile("e2e-bunny-net | demo")`; el adaptador real
+  (`StringFormatBunnyNetSignatureService`) usa
+  `@Profile("!e2e-bunny-net & !demo")` — son mutuamente excluyentes, nunca
+  coexisten. El propio factory `@Bean` falla el arranque si `e2e-bunny-net`
+  o `demo` se combinan con `prod`/`production`/`staging`, antes de que el
+  servidor acepte ningún request.
 - La firma (`sig`) es SHA-256 de un salt público + `videoLibraryId` +
   `videoId` + `exp` — determinística, sin credencial real y sin uso posible
   contra la CDN de producción.
@@ -383,6 +384,70 @@ Si preferís ejecutar cada servicio en terminales separadas:
 ```
 
 > **Nota**: Gradle lee automáticamente el archivo `.env` de la raíz y pasa las variables a Spring Boot.
+
+### Perfil `demo` (datos de prueba)
+
+El perfil `demo` siembra datos de prueba al arrancar la API. Cada módulo tiene sus propios runners
+(`com.menta.<módulo>.infrastructure.demo`), que se ejecutan en orden Auth, luego Virtual y Physical, y por
+último Billing. Ningún dato demo se crea con migraciones de Flyway (lo verifica `NoDemoSeedMigrationTest`).
+
+**Cómo ejecutarlo** (con la infraestructura levantada):
+
+```bash
+./gradlew :api:app:bootRun --args='--spring.profiles.active=demo'
+```
+
+**Usuarios sembrados** (las contraseñas se pueden sobrescribir con variables de entorno, por ejemplo en
+`.env`; los valores por defecto están en `api/app/src/main/resources/application-demo.yml`):
+
+| Rol | Email | Contraseña por defecto | Variable de entorno |
+|-----|-------|------------------------|---------------------|
+| Admin | `admin@menta.dance` | `Admin123!` | `DEMO_ADMIN_PASSWORD` |
+| Profesor | `profesor@menta.dance` | `Prof123!` | `DEMO_INSTRUCTOR_PASSWORD` |
+| Alumno | `alumno@menta.dance` | `Alumno123!` | `DEMO_STUDENT_PASSWORD` |
+| Recepcionista | `recepcion@menta.dance` | `Recep123!` | `DEMO_RECEPTIONIST_PASSWORD` |
+
+**Otras variables:**
+
+- `DEMO_QR_READER_SECRET`: secreto del lector QR demo ("Demo QR reader"). Solo se guarda su hash. Si no
+  está definida, el lector no se siembra, se registra un WARN y el arranque continúa. Si cambia entre
+  arranques, el hash se rota; un lector `REVOKED` no se modifica.
+- `BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET`: obligatoria fuera de `demo`; el perfil `demo` define un
+  valor por defecto exclusivo para demo, que nunca debe reutilizarse en otro entorno.
+
+**Datos sembrados:**
+
+- Virtual: "Bachata Sensual" y "Bachata Tradicional", publicados, con 2 módulos cada uno (el primero de
+  preview con una lección gratuita, el segundo restringido). Los videos usan el adaptador local de
+  Bunny.net, sin credenciales reales.
+- Physical: "Bachata Sensual Presencial" (martes y jueves 19:00, cupo 12) y "Bachata Tradicional
+  Presencial" (sábados 11:00, cupo 15), a cargo del profesor demo, con sesiones para las próximas 4
+  semanas. Los horarios están en **UTC**, igual que la creación de sesiones en lote.
+- Sesión rolling: una sesión de Sensual unos 10 minutos en el futuro, para probar el check-in QR. El
+  alumno tiene cupo confirmado en ella y en la próxima sesión regular de Sensual.
+- Billing: precio presencial de 25000 ARS (Sensual) y 20000 ARS (Tradicional), con 20% de recargo
+  individual; "Plan Virtual" (30000 ARS, 30 días, los 2 cursos virtuales) y "Plan Completo" (60000 ARS,
+  30 días, los 4 cursos), ambos con Mercado Pago y transferencia bancaria; y un TRIAL de 90 días sobre
+  "Plan Completo" para el alumno, solo si no tiene una suscripción vigente.
+
+**Comportamiento esperado:**
+
+- **Guarda de arranque**: `DemoProfileGuard` aborta el arranque si `demo` se combina con `prod`,
+  `production` o `staging` (sin distinguir mayúsculas), antes de que corra cualquier runner.
+- **Mercado Pago**: los adaptadores reales de Mercado Pago siguen activos con `demo`; usar credenciales
+  sandbox. Para el simulador local, ver la sección "Simulador local de Mercado Pago".
+- **Idempotencia**: reiniciar con `demo` no duplica datos. Cada entidad se busca por una clave estable
+  antes de crearla; las contraseñas de usuarios existentes no se restablecen.
+- **Sesión rolling tras reiniciar**: se reutiliza mientras su ventana de check-in siga abierta; si no,
+  se reprograma a unos 10 minutos del nuevo arranque (mismo id y mismo cupo), sin acumular sesiones.
+- **Check-in tras reiniciar (comportamiento aceptado)**: la asistencia no se vuelve a sembrar ni se
+  borra. Si el alumno ya hizo check-in en la sesión rolling, un check-in posterior devuelve la asistencia
+  existente. Para probar un check-in nuevo hay que recrear la base de datos:
+
+  ```bash
+  docker compose down -v && ./scripts/start-infra.sh
+  ./gradlew :api:app:bootRun --args='--spring.profiles.active=demo'
+  ```
 
 ### Verificar que los servicios estén funcionando
 
