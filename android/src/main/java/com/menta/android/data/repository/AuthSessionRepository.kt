@@ -2,6 +2,7 @@ package com.menta.android.data.repository
 
 import com.menta.android.data.remote.AuthRemoteDataSource
 import com.menta.android.data.remote.AuthRemoteResult
+import com.menta.android.data.remote.JwtRoleReader
 import com.menta.android.domain.model.AuthFailure
 import com.menta.android.domain.model.SessionState
 import com.menta.android.domain.repository.RefreshTokenStore
@@ -20,20 +21,24 @@ class AuthSessionRepository @Inject constructor(
     override fun login(email: String, password: String): SessionState =
         when (val response = remote.login(email, password)) {
             is AuthRemoteResult.Success -> storeRotatedSession(response)
-            is AuthRemoteResult.Problem -> SessionState.Failed(
-                AuthFailure(response.code, response.retryAfterSeconds),
-            )
-            AuthRemoteResult.Unavailable -> SessionState.Failed(AuthFailure("AUTH_UNAVAILABLE"))
+            is AuthRemoteResult.Problem -> SessionState.Failed(response.toLoginFailure())
+            AuthRemoteResult.Unavailable -> SessionState.Failed(AuthFailure.Unavailable)
         }
 
     override fun refresh(): SessionState {
         val previousRefresh = refreshTokenStore.read() ?: return SessionState.SignedOut
         return when (val response = remote.refresh(previousRefresh)) {
             is AuthRemoteResult.Success -> storeRotatedSession(response)
-            is AuthRemoteResult.Problem -> SessionState.Failed(
-                AuthFailure(response.code, response.retryAfterSeconds),
-            )
-            AuthRemoteResult.Unavailable -> SessionState.Failed(AuthFailure("AUTH_UNAVAILABLE"))
+            is AuthRemoteResult.Problem ->
+                if (response.isRefreshRejection()) {
+                    // The server will never accept this token again: drop it locally.
+                    clearLocalSession()
+                    SessionState.Failed(AuthFailure.SessionRejected)
+                } else {
+                    // Anything else may be transient: keep the token so a later launch can retry.
+                    SessionState.Failed(AuthFailure.Unavailable)
+                }
+            AuthRemoteResult.Unavailable -> SessionState.Failed(AuthFailure.Unavailable)
         }
     }
 
@@ -55,7 +60,7 @@ class AuthSessionRepository @Inject constructor(
         val expiresIn = response.expiresInSeconds
         if (newRefresh.isNullOrBlank() || newAccess.isNullOrBlank() || expiresIn == null) {
             clearLocalSession()
-            return SessionState.Failed(AuthFailure("INVALID_AUTH_RESPONSE"))
+            return SessionState.Failed(AuthFailure.InvalidResponse)
         }
 
         return try {
@@ -63,15 +68,38 @@ class AuthSessionRepository @Inject constructor(
             // before retaining the new access token; otherwise fail closed.
             refreshTokenStore.replace(newRefresh)
             accessToken = newAccess
-            SessionState.Authenticated(expiresIn)
+            SessionState.Authenticated(expiresIn, JwtRoleReader.roleOf(newAccess))
         } catch (_: Exception) {
             clearLocalSession()
-            SessionState.Failed(AuthFailure("LOCAL_TOKEN_STORAGE_FAILED"))
+            SessionState.Failed(AuthFailure.LocalStorageFailed)
         }
     }
 
     private fun clearLocalSession() {
         accessToken = null
         refreshTokenStore.clear()
+    }
+
+    private fun AuthRemoteResult.Problem.toLoginFailure(): AuthFailure = when {
+        code == "INVALID_CREDENTIALS" || status == HTTP_UNAUTHORIZED -> AuthFailure.InvalidCredentials
+        code == "ACCOUNT_NOT_ACTIVATED" || status == HTTP_FORBIDDEN -> AuthFailure.AccountNotActivated
+        code == "USER_LOCKED" || status == HTTP_LOCKED -> AuthFailure.AccountLocked
+        status == HTTP_TOO_MANY_REQUESTS -> AuthFailure.RateLimited(retryAfterSeconds)
+        code == "AUTH_DEGRADED" || status == HTTP_UNAVAILABLE -> AuthFailure.Unavailable
+        else -> AuthFailure.Unexpected(code)
+    }
+
+    private fun AuthRemoteResult.Problem.isRefreshRejection(): Boolean =
+        status == HTTP_UNAUTHORIZED ||
+            code == "REFRESH_TOKEN_COMPROMISED" ||
+            (status == HTTP_BAD_REQUEST && code == "INVALID_AUTH_REQUEST")
+
+    private companion object {
+        const val HTTP_BAD_REQUEST = 400
+        const val HTTP_UNAUTHORIZED = 401
+        const val HTTP_FORBIDDEN = 403
+        const val HTTP_LOCKED = 423
+        const val HTTP_TOO_MANY_REQUESTS = 429
+        const val HTTP_UNAVAILABLE = 503
     }
 }
