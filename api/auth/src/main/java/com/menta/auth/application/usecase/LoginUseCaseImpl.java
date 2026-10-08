@@ -16,6 +16,7 @@ import com.menta.auth.application.port.out.RateLimitDecision;
 import com.menta.auth.application.port.out.RefreshTokenRepository;
 import com.menta.auth.application.port.out.TokenHasher;
 import com.menta.auth.domain.crypto.Sha256Hex;
+import com.menta.auth.domain.exception.AccountNotActivatedException;
 import com.menta.auth.domain.exception.AuthDegradedException;
 import com.menta.auth.domain.exception.InvalidCredentialsException;
 import com.menta.auth.domain.exception.LockedUserException;
@@ -40,9 +41,13 @@ import java.util.UUID;
  *   1. Degraded guard blocks everything (ADR-0026 → 503 upstream).
  *   2. Failure budget already spent → LoginRateLimitedException (429 upstream).
  *   3. Unknown email → InvalidCredentialsException (no discrimination).
- *   4. LOCKED user → LockedUserException, no outbox emit.
- *   5. Wrong password → InvalidCredentialsException (no discrimination).
- *   6. Otherwise: issue access, mint refresh in new family, append outbox.
+ *   4. Wrong password (any account status) → InvalidCredentialsException (no
+ *      discrimination); counted as a failure.
+ *   5. Correct password, decision by status (revealed only now, never without the password):
+ *      PENDING_ACTIVATION → AccountNotActivatedException (403); LOCKED →
+ *      LockedUserException (423); INACTIVE / SUSPENDED → InvalidCredentialsException (401).
+ *      None of these consume the failure budget and none emit an outbox event.
+ *   6. ACTIVE: issue access, mint refresh in new family, append outbox.
  *
  * <p>Budgets count failures, never attempts (ADR-0035). Step 2 only reads, so a
  * successful login costs nothing; the counters move in the failure branches.
@@ -125,25 +130,14 @@ public class LoginUseCaseImpl implements LoginUseCase {
         }
         User user = maybeUser.get();
 
-        // LOCKED is a dedicated signal — distinct from generic 401 — so the
-        // controller can return 423 Locked. Reaching this branch is always an
-        // administrative decision: this throttle never sets that status.
-        if (user.getStatus() == UserStatus.LOCKED) {
-            countFailure(LoginAttemptOutcome.LOCKED, emailFingerprint, clientFingerprint);
-            throw new LockedUserException(user.getId().getValue());
-        }
-
-        // Pending, inactive, and suspended accounts receive the same generic
-        // response as invalid credentials to avoid leaking account state.
-        if (!user.isActive()) {
-            countFailure(LoginAttemptOutcome.INVALID_CREDENTIALS, emailFingerprint, clientFingerprint);
-            throw new InvalidCredentialsException();
-        }
-
+        // Password first: everything below this line is only reachable by someone who
+        // knows the credentials, so revealing the account state cannot enumerate accounts.
         if (!passwordEncoder.matches(command.password(), user.getPasswordHash())) {
             countFailure(LoginAttemptOutcome.INVALID_CREDENTIALS, emailFingerprint, clientFingerprint);
             throw new InvalidCredentialsException();
         }
+
+        rejectNonOperationalAccount(user, emailFingerprint, clientFingerprint);
 
         IssuedAccessToken access = accessTokenIssuer.issue(user);
 
@@ -181,6 +175,32 @@ public class LoginUseCaseImpl implements LoginUseCase {
             TokenPair.TOKEN_TYPE_BEARER,
             access.ttl()
         );
+    }
+
+    /**
+     * Decides by account status once the password is known to be correct. These rejections
+     * are audited but NOT charged to the failure budget: the caller proved knowledge of the
+     * credentials, so this is not guessing (ADR-0035 counts failures to credentials).
+     */
+    private void rejectNonOperationalAccount(
+        User user, String emailFingerprint, String clientFingerprint
+    ) {
+        UserStatus status = user.getStatus();
+        if (status == UserStatus.ACTIVE) {
+            return;
+        }
+        if (status == UserStatus.PENDING_ACTIVATION) {
+            audit(LoginAttemptOutcome.ACCOUNT_NOT_ACTIVATED, emailFingerprint, clientFingerprint);
+            throw new AccountNotActivatedException(user.getId().getValue());
+        }
+        if (status == UserStatus.LOCKED) {
+            audit(LoginAttemptOutcome.LOCKED, emailFingerprint, clientFingerprint);
+            throw new LockedUserException(user.getId().getValue());
+        }
+        // INACTIVE and SUSPENDED: generic 401 even with the right password. Revealing an
+        // administrative suspension is a separate product decision (issue #477).
+        audit(LoginAttemptOutcome.ACCOUNT_NOT_OPERATIONAL, emailFingerprint, clientFingerprint);
+        throw new InvalidCredentialsException();
     }
 
     /**

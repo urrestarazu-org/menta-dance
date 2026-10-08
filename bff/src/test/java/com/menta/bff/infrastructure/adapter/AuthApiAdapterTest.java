@@ -103,6 +103,23 @@ class AuthApiAdapterTest {
     }
 
     @Test
+    @DisplayName("should throw AuthenticationException when login returns 403 ACCOUNT_NOT_ACTIVATED")
+    void shouldThrowAuthenticationExceptionWhenLoginReturns403AccountNotActivated() {
+        // Given
+        LoginCommand command = new LoginCommand("user@example.com", "ValidPass123!", CLIENT_ADDRESS);
+
+        stubFor(post(urlEqualTo("/api/v1/auth/login"))
+                .willReturn(aResponse()
+                        .withStatus(403)
+                        .withHeader("Content-Type", "application/problem+json")
+                        .withBody("{\"code\":\"ACCOUNT_NOT_ACTIVATED\",\"status\":403}")));
+
+        // When / Then: the BFF keeps showing the generic invalid-credentials result
+        assertThatThrownBy(() -> authApiAdapter.login(command))
+                .isInstanceOf(AuthApiClient.AuthenticationException.class);
+    }
+
+    @Test
     @DisplayName("should throw ServiceUnavailableException when login returns 503")
     void shouldThrowServiceUnavailableExceptionWhenLoginReturns503() {
         // Given

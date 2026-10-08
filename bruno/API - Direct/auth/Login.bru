@@ -42,9 +42,15 @@ docs {
   The refresh token is NEVER returned in the JSON body.
 
   Error contract:
-    401 INVALID_CREDENTIALS → wrong or unknown email
-    423 USER_LOCKED          → account locked via /admin
+    401 INVALID_CREDENTIALS    → wrong password or unknown email (any account
+                                 status), or correct password on an INACTIVE /
+                                 SUSPENDED account
+    403 ACCOUNT_NOT_ACTIVATED  → correct password, account still pending activation
+    423 USER_LOCKED            → correct password, account locked via /admin
     503 AUTH_DEGRADED        + Retry-After: 30 → outbox reconciler lagging
+
+  Account status is revealed ONLY after the password is verified: a wrong
+  password never returns 403 or 423, whatever the account status.
 
   Prerequisite: configure an existing active account in the selected
   environment. Public registration is temporarily unavailable while

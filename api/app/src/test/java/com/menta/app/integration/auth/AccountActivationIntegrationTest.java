@@ -21,8 +21,8 @@ import com.menta.auth.application.port.out.ActivationTokenHasher;
 import com.menta.auth.application.port.out.AuthDegradedGuard;
 import com.menta.auth.application.port.out.RateLimitDecision;
 import com.menta.auth.application.port.out.TokenBlacklistPort;
+import com.menta.auth.domain.exception.AccountNotActivatedException;
 import com.menta.auth.domain.exception.ActivationTokenInvalidException;
-import com.menta.auth.domain.exception.InvalidCredentialsException;
 import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.UserStatus;
 import com.menta.auth.domain.repository.UserRepository;
@@ -119,7 +119,7 @@ class AccountActivationIntegrationTest extends AbstractAuthMySqlIntegrationTest 
         verify(activationNotificationPort).sendActivationEmail(any());
 
         assertThatThrownBy(() -> loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD, CLIENT_FINGERPRINT)))
-            .isInstanceOf(InvalidCredentialsException.class);
+            .isInstanceOf(AccountNotActivatedException.class);
         activateAccountUseCase.activate(new ActivateAccountCommand(RAW_TOKEN));
         assertThat(loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD, CLIENT_FINGERPRINT)).accessToken())
             .isNotBlank();
