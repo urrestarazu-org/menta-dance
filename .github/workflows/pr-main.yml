@@ -70,7 +70,13 @@ jobs:
         with:
           java-version: '21'
           distribution: 'temurin'
-          cache: 'gradle'
+
+      - name: Set up Gradle
+        # GitHub Actions reusable: caché de Gradle User Home (reemplaza `cache: 'gradle'` de setup-java).
+        # Solo lectura en ramas que no son la default; develop escribe la caché. También valida los wrapper JAR.
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          validate-wrappers: true
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
@@ -95,37 +101,34 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up JDK 21
-        # GitHub Actions reusable: configura JDK + cachea dependencias Gradle
+        # GitHub Actions reusable: configura el JDK (la caché de Gradle la maneja setup-gradle)
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           java-version: '21'
           distribution: 'temurin'
-          cache: 'gradle'
+
+      - name: Set up Gradle
+        # GitHub Actions reusable: caché de Gradle User Home (reemplaza `cache: 'gradle'` de setup-java).
+        # Solo lectura en ramas que no son la default; develop escribe la caché. También valida los wrapper JAR.
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          validate-wrappers: true
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build with Gradle
-        run: ./gradlew clean build
-
-      - name: Run tests
-        run: ./gradlew test -x :android:testDebugUnitTest
-
-      - name: Run architecture tests
-        run: ./gradlew :api:auth:test :api:billing:test :api:physical:test :api:virtual:test --tests "*ArchitectureTest"
-
-      - name: Generate JaCoCo report
-        # JaCoCo: genera reporte de cobertura de código
-        run: ./gradlew jacocoTestReport -x :android:testDebugUnitTest
-
-      - name: Check code coverage
-        # jacocoTestCoverageVerification: valida umbrales de cobertura por capa
-        # (BUNDLE, ver docs/14-TEST-STRATEGY.md) — auth/billing 100% domain+app,
-        # virtual/physical 95% domain+app; el resto tiene su propio piso.
-        run: ./gradlew jacocoTestCoverageVerification -x :android:testDebugUnitTest
-
       - name: Run Checkstyle
-        run: ./gradlew :api:auth:checkstyleMain :api:auth:checkstyleTest :api:billing:checkstyleMain :api:billing:checkstyleTest :api:physical:checkstyleMain :api:physical:checkstyleTest :api:virtual:checkstyleMain :api:virtual:checkstyleTest :api:shared:checkstyleMain :api:shared:checkstyleTest :api:app:checkstyleMain :api:app:checkstyleTest :bff:checkstyleMain :bff:checkstyleTest
+        # Checkstyle primero: un error de estilo falla en segundos, antes del build completo.
+        # Luego `build` las encuentra UP-TO-DATE.
+        run: ./gradlew --no-build-cache :api:auth:checkstyleMain :api:auth:checkstyleTest :api:billing:checkstyleMain :api:billing:checkstyleTest :api:physical:checkstyleMain :api:physical:checkstyleTest :api:virtual:checkstyleMain :api:virtual:checkstyleTest :api:shared:checkstyleMain :api:shared:checkstyleTest :api:app:checkstyleMain :api:app:checkstyleTest :bff:checkstyleMain :bff:checkstyleTest
+
+      - name: Build with Gradle
+        # `build` ya ejecuta tests, ArchUnit, Checkstyle, jacocoTestReport (reporte HTML/XML)
+        # y jacocoTestCoverageVerification (umbrales por capa, ver docs/14-TEST-STRATEGY.md)
+        # en los 7 módulos JVM; por eso no hay pasos aparte para esas tareas.
+        # --no-build-cache: el gate de release compila y testea siempre desde las fuentes,
+        # sin reutilizar salidas cacheadas. Sin `clean`: no hace falta en un runner efímero.
+        run: ./gradlew build --no-build-cache
 
       - name: Upload test results
         # if: always() → ejecuta siempre (éxito o fallo) para preservar evidencia

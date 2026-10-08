@@ -65,26 +65,74 @@ con `security: []` en las operaciones públicas.
 
 El job `quick-build-and-test` de `pr-develop.yml` declara un presupuesto de
 **<15 min**. El objetivo original (<5 min) dejó de ser realista: en 7 corridas
-exitosas recientes el job tardó entre 5,6 y 12,2 min.
+exitosas recientes, con el flujo anterior (`./gradlew clean build` sin caché de
+build), el job tardó entre 5,6 y 12,2 min, casi todo en el paso de Gradle
+(336–733 s, ≈95 % del job).
 
-| Paso | Duración medida |
+Flujo actual del job:
+
+| Paso | Qué hace |
 |---|---|
-| `Build with Gradle` (`./gradlew clean build`) | 336–733 s (≈95 % del job) |
-| `Run unit tests` | 3–6 s |
-| `Run architecture tests` | 5–9 s |
-| `Run Checkstyle` | 2–4 s |
-| `Set up JDK 21` | 2–19 s |
+| `Set up JDK 21` | `actions/setup-java` (solo JDK, sin `cache`) |
+| `Set up Gradle` | `gradle/actions/setup-gradle`: caché de Gradle User Home y validación del wrapper |
+| `Run Checkstyle` | Las 14 tareas `checkstyleMain`/`checkstyleTest`, primero, para fallar rápido por estilo |
+| `Build with Gradle` | `./gradlew build` (sin `clean`) |
 
-Los pasos posteriores a `build` no duplican trabajo: las tareas de test, ArchUnit
-y Checkstyle figuran `UP-TO-DATE` porque ya corrieron dentro de `build`. Se
-conservan como pasos separados solo para que el fallo quede rotulado en la UI.
+`build` ya ejecuta tests unitarios, ArchUnit (corre dentro de `test`), Checkstyle
+y los umbrales de cobertura JaCoCo, así que se eliminaron los pasos separados
+`Run unit tests` y `Run architecture tests`. El segundo, además, usaba
+`--tests "*ArchitectureTest"`, que cambia las entradas de la tarea `test` y la
+volvía a ejecutar. Checkstyle se conserva **antes** de `build` y no se duplica:
+`build` encuentra esas tareas `UP-TO-DATE`.
 
-`clean build` compila también las variantes debug y release de Android (la
-corrida más larga ejecutó 188 de 202 tareas y tardó 9 min 43 s). Se decidió
-**subir el presupuesto en vez de recortar verificación**: el job sigue cubriendo
-build, tests unitarios, ArchUnit y Checkstyle de todos los módulos. Si el tiempo
-vuelve a exceder los 15 min, las opciones son cachear mejor Gradle en CI (#351)
-o mover la verificación de la variante release de Android a `pr-main.yml`.
+`build` compila también las variantes debug y release de Android (la corrida más
+larga con el flujo anterior ejecutó 188 de 202 tareas y tardó 9 min 43 s). Se
+decidió **subir el presupuesto en vez de recortar verificación**: el job sigue
+cubriendo build, tests unitarios, ArchUnit y Checkstyle de todos los módulos.
+
+**Pendiente de medir:** el presupuesto sigue en <15 min hasta tener datos con la
+caché activa. No hay cifras "después" todavía (ver [Caché de Gradle en CI](#caché-de-gradle-en-ci)).
+Si el tiempo vuelve a exceder los 15 min, la opción restante es mover la
+verificación de la variante release de Android a `pr-main.yml`.
+
+En `pr-main.yml`, el job `full-build-and-test` sigue la misma lógica: Checkstyle
+y un único `./gradlew build --no-build-cache`. En los 7 módulos JVM `build`
+incluye `test`, `jacocoTestReport` (reporte HTML/XML que se sube como artefacto)
+y `jacocoTestCoverageVerification` con las verificaciones por capa, por lo que se
+quitaron los pasos separados de tests, ArchUnit, reporte y verificación de cobertura.
+
+### Caché de Gradle en CI
+
+- **`setup-gradle` reemplaza a la caché de `setup-java`.** `actions/setup-java`
+  queda solo para instalar el JDK (sin `cache: 'gradle'`) y
+  `gradle/actions/setup-gradle` (fijada por SHA, con comentario de versión para
+  Dependabot) gestiona la caché de Gradle User Home. Aplica a los tres jobs que
+  ejecutan Gradle: `quick-build-and-test`, `spotbugs` y `full-build-and-test`.
+- **Solo lectura en PRs, escritura desde `develop`.** Por defecto la acción
+  escribe la caché únicamente en la rama default (`develop`) y la deja en solo
+  lectura en las demás. Consecuencia: tras el merge, las primeras corridas serán
+  en frío hasta que un push a `develop` publique la caché. Los tiempos
+  antes/después **solo se pueden comparar después del merge**, midiendo corridas
+  reales; no se documentan cifras estimadas.
+- **El gate de `main` no usa la caché de build.** `full-build-and-test` corre
+  `./gradlew build --no-build-cache` para que lo que llega a producción se compile
+  y pruebe siempre desde las fuentes. `pr-develop.yml` sí usa la caché de build.
+  Ninguno de los dos usa `clean`: el runner es efímero y `clean` anulaba el
+  trabajo incremental.
+- **Checksum y validación del wrapper.** `gradle-wrapper.properties` fija
+  `distributionSha256Sum`: el wrapper rechaza una distribución cuyo hash no
+  coincida. Además, `setup-gradle` valida los JAR del wrapper contra los
+  checksums oficiales de Gradle (`validate-wrappers: true`, que es el valor por
+  defecto; se declara explícito) y falla si no coinciden.
+- **Actualizar Gradle.** Obtener el SHA-256 oficial en
+  `https://services.gradle.org/distributions/gradle-X-bin.zip.sha256` y ejecutar:
+
+  ```bash
+  ./gradlew wrapper --gradle-version X --gradle-distribution-sha256-sum <sha>
+  ```
+
+  Esto actualiza `distributionUrl` y `distributionSha256Sum` juntos; no cambiar
+  uno sin el otro.
 
 CI verde es obligatorio para mergear. Los PR son registro de trabajo individual:
 no requieren aprobación humana y se integran con **squash merge**.
