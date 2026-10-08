@@ -136,14 +136,20 @@ error duro al aplicar el plugin, no sólo warning.
   verificar un build en frío (`docker run --rm -v "$PWD:/work" -w /work eclipse-temurin:21-jdk
   ./gradlew help --no-daemon`). No agregar `--jvm-vendor` sin comprobar antes que Foojay
   ofrezca esa distribución.
-* **Ningún test de Android corre en CI.** `quick-build-and-test` excluye explícitamente
-  `:android:testDebugUnitTest` por lentitud, y no existe ningún job con emulador para
-  tests instrumentados. Esto ya causó al menos un incidente real: la dependencia
-  `androidx.test:runner` faltaba pese a estar declarado el
-  `testInstrumentationRunner`, y nadie lo notó porque los tests instrumentados
-  jamás se habían ejecutado. Al menos los unit tests (`testDebugUnitTest`) deberían
-  habilitarse en CI; los instrumentados requieren decidir estrategia de emulador
-  (GitHub Actions con `reactivecircus/android-emulator-runner` u otra).
+* **Los tests unitarios de Android corren en CI; los instrumentados no se ejecutan.**
+  `./gradlew build` incluye `:android:testDebugUnitTest`, `:android:lint`,
+  `:android:assembleDebug` y `:android:assembleRelease` (verificado en los logs de
+  `quick-build-and-test`; ver [docs/16-CICD-PIPELINE.md](../16-CICD-PIPELINE.md),
+  "Qué verifica el CI del módulo Android"). Los tests instrumentados
+  (`androidTest`) no se ejecutan porque no existe ningún job con emulador. Esto ya
+  causó un incidente real: la dependencia `androidx.test:runner` faltaba pese a estar
+  declarado el `testInstrumentationRunner`, y nadie lo notó porque esos tests jamás
+  se habían ejecutado. **Decisión (#442):** no montar emulador por ahora; el CI
+  compila y empaqueta `androidTest` con `:android:assembleDebugAndroidTest`, lo que
+  detecta código roto o dependencias que no resuelven, y se acepta como riesgo
+  que un fallo solo visible en ejecución llegue sin detectar. Si ese riesgo se
+  materializa, la opción es un job con `reactivecircus/android-emulator-runner`,
+  con su costo en tiempo y flakiness.
 * **`docs/24-LOCAL-DEV-SETUP-REQUIREMENTS.md` no fija una versión mínima de Android
   Studio.** Se confirmó empíricamente que Android Studio Quail 1 (build de mayo 2026, previo
   al release de AGP 9.3 en julio 2026) falla el sync sin razón obvia; Quail 3 (agosto 2026)
