@@ -97,13 +97,13 @@ Manual: bootRun `demo` without the variable (WARN, starts); with `DEMO_QR_READER
 
 Prices (approved): Plan Virtual 30000 ARS / 30 days; Plan Completo 60000 ARS / 30 days; physical individual surcharge 20%; physical prices 25000 (Sensual) / 20000 (Tradicional).
 
-- [ ] 5.1 RED `.../DemoBillingFixtureTest.java` (plans): absent plan (`existsById` false) -> save with the approved price/duration; present -> none; payment-method links (MERCADO_PAGO, BANK_TRANSFER) and course links checked with `findByPlanId` before each save; Plan Virtual links exactly the 2 virtual courses, Plan Completo all 4. Covers: Billing prices and plans, Second start.
-- [ ] 5.2 GREEN `api/billing/src/main/java/com/menta/billing/infrastructure/demo/DemoBillingFixture.java` plan/link upserts via `PlanJpaRepository`, `PlanPaymentMethodJpaEntity`, `PlanCourseJpaEntity`.
-- [ ] 5.3 RED physical pricing: `findByCourseId` absent -> `UpdatePhysicalCoursePricingUseCase.update(..., ADMIN, true)` with 25000 / 20000 ARS and the 20% individual surcharge; present -> none. Covers: Plans and prices.
-- [ ] 5.4 GREEN pricing step.
-- [ ] 5.5 RED trial: `findCurrentByUserId(STUDENT)` empty -> `AssignTrialSubscriptionUseCase.assign(new AssignTrialCommand(STUDENT, completoId, ADMIN, true, "Demo seed", 90))`; current subscription exists -> no assign; `getOrder() == BILLING`. Covers: Student trial subscription (both scenarios).
-- [ ] 5.6 GREEN trial step; not `@Transactional`; any exception aborts startup (no swallowing).
-- [ ] 5.7 REFACTOR: Checkstyle/SpotBugs; extract private methods if over complexity limits.
+- [x] 5.1 RED `.../DemoBillingFixtureTest.java` (plans): absent plan (`existsById` false) -> save with the approved price/duration; present -> none; payment-method links (MERCADO_PAGO, BANK_TRANSFER) and course links checked with `findByPlanId` before each save; Plan Virtual links exactly the 2 virtual courses, Plan Completo all 4. Covers: Billing prices and plans, Second start.
+- [x] 5.2 GREEN `api/billing/src/main/java/com/menta/billing/infrastructure/demo/DemoBillingFixture.java` plan/link upserts via `PlanJpaRepository`, `PlanPaymentMethodJpaEntity`, `PlanCourseJpaEntity`.
+- [x] 5.3 RED physical pricing: `findByCourseId` absent -> `UpdatePhysicalCoursePricingUseCase.update(..., ADMIN, true)` with 25000 / 20000 ARS and the 20% individual surcharge; present -> none. Covers: Plans and prices.
+- [x] 5.4 GREEN pricing step.
+- [x] 5.5 RED trial: `findCurrentByUserId(STUDENT)` empty -> `AssignTrialSubscriptionUseCase.assign(new AssignTrialCommand(STUDENT, completoId, ADMIN, true, "Demo seed", 90))`; current subscription exists -> no assign; `getOrder() == BILLING`. Covers: Student trial subscription (both scenarios).
+- [x] 5.6 GREEN trial step; not `@Transactional`; any exception aborts startup (no swallowing).
+- [x] 5.7 REFACTOR: Checkstyle/SpotBugs; extract private methods if over complexity limits.
 
 Exit gate: `./gradlew :api:billing:check` (floors 85/85) and `:api:app:check`.
 Manual: full bootRun `demo` on an empty DB: plans with links, prices, ACTIVE TRIAL on Plan Completo expiring in 90 days; restart: no duplicates, no second subscription.
