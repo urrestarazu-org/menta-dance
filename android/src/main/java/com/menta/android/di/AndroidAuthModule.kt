@@ -6,6 +6,7 @@ import com.menta.android.data.local.EncryptedRefreshTokenStore
 import com.menta.android.data.remote.AuthRemoteDataSource
 import com.menta.android.data.remote.OkHttpAuthRemoteDataSource
 import com.menta.android.data.repository.AuthSessionRepository
+import com.menta.android.data.session.AccessTokenSource
 import com.menta.android.domain.repository.RefreshTokenStore
 import com.menta.android.domain.repository.SessionRepository
 import dagger.Module
@@ -26,7 +27,11 @@ object AndroidAuthModule {
     fun authRemoteDataSource(@AuthHttpClient client: OkHttpClient): AuthRemoteDataSource =
         OkHttpAuthRemoteDataSource(client, BuildConfig.AUTH_API_BASE_URL)
 
-    @Provides @Singleton
-    fun sessionRepository(store: RefreshTokenStore, remote: AuthRemoteDataSource): SessionRepository =
-        AuthSessionRepository(store, remote)
+    // AuthSessionRepository is @Singleton with an @Inject constructor: both views below
+    // resolve to the same instance, so the HTTP stack and the use cases share one lock.
+    @Provides
+    fun sessionRepository(repository: AuthSessionRepository): SessionRepository = repository
+
+    @Provides
+    fun accessTokenSource(repository: AuthSessionRepository): AccessTokenSource = repository
 }
