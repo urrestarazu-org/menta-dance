@@ -7,6 +7,6 @@ package com.menta.android.domain.model
  */
 sealed interface SessionState {
     data object SignedOut : SessionState
-    data class Authenticated(val expiresInSeconds: Long) : SessionState
+    data class Authenticated(val expiresInSeconds: Long, val role: Role?) : SessionState
     data class Failed(val failure: AuthFailure) : SessionState
 }
