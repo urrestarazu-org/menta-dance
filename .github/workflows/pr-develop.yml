@@ -202,9 +202,13 @@ jobs:
           # redocly lint: valida estructura OpenAPI 3.1, referencias y esquemas.
           # Sale distinto de cero ante errores; los warnings quedan visibles
           # pero no bloquean. Versión exacta de la imagen: no se permite `latest`.
+          # La lista es explícita a propósito (el contenedor no tiene shell para
+          # expandir globs): un spec nuevo en api/openapi/ DEBE agregarse aquí,
+          # o queda sin validar.
           docker run --rm -v "$(pwd)/api/openapi:/spec:ro" \
             redocly/cli:2.59.0 \
-            lint /spec/auth-v1.yaml /spec/billing-v1.yaml /spec/catalog-v1.yaml
+            lint /spec/auth-v1.yaml /spec/billing-v1.yaml /spec/catalog-v1.yaml \
+                 /spec/physical-v1.yaml /spec/virtual-v1.yaml
 
   shellcheck:
     runs-on: ubuntu-24.04

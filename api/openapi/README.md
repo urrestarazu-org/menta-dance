@@ -23,14 +23,17 @@ El costo aceptado es el mantenimiento manual. La mitigación es doble:
 
 - `AGENTS.md` exige actualizar este contrato en el **mismo cambio** que modifique una
   ruta, método, parámetro, autenticación, respuesta, error o rate limit.
-- El job `openapi-validation` del workflow de PR corre `redocly lint` y falla ante
-  errores estructurales.
+- El job `openapi-validation` del workflow de PR corre `redocly lint` sobre los 5
+  contratos (`auth`, `billing`, `catalog`, `physical`, `virtual`) y falla ante
+  errores estructurales. La lista es explícita: un contrato nuevo se agrega en
+  `.github/workflows/pr-develop.yml`, o queda sin validar.
 
 ## Validación local
 
 ```bash
 docker run --rm -v "$(pwd)/api/openapi:/spec:ro" \
-  redocly/cli:latest lint /spec/auth-v1.yaml /spec/billing-v1.yaml
+  redocly/cli:2.59.0 lint /spec/auth-v1.yaml /spec/billing-v1.yaml \
+  /spec/catalog-v1.yaml /spec/physical-v1.yaml /spec/virtual-v1.yaml
 ```
 
 Dos warnings son esperados y aceptados:

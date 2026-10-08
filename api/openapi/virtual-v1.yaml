@@ -61,6 +61,9 @@ paths:
         El detalle nunca contiene una URL de streaming. Una lección protegida
         sin entitlement actual responde 403 RFC 9457 y no expone `videoId`.
       operationId: getPublicVirtualLesson
+      security:
+        - {}
+        - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/LessonId'
       responses:
@@ -102,6 +105,9 @@ paths:
         200 contiene `stream.url`; los 403 son `application/problem+json` y
         nunca contienen URL, `videoId` ni otra capacidad de media.
       operationId: getPublicVirtualLessonStream
+      security:
+        - {}
+        - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/LessonId'
       responses:
@@ -476,6 +482,21 @@ paths:
                     code: LESSON_NOT_FOUND
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Access token JWT de 15 minutos, emitido por `POST /api/v1/auth/login`
+        (ver auth-v1.yaml). Claims: `sub`, `roles`, `jti`, `tokenVersion`,
+        `iat`, `exp`, `iss`, `aud`.
+
+        El rol (`ADMIN`/`INSTRUCTOR`) se verifica en el filtro de seguridad y no
+        es expresable en este esquema. Las rutas públicas de lecciones aceptan
+        el token de forma opcional (`security: [{}, {bearerAuth: []}]`): sin
+        token se resuelven como visitante anónimo.
+
   parameters:
     CourseId:
       name: courseId
@@ -932,3 +953,6 @@ components:
           type: boolean
         order:
           type: integer
+
+security:
+  - bearerAuth: []

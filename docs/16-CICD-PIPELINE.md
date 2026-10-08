@@ -48,6 +48,19 @@ En cada PR contra `develop` o `master`:
 Además, el job `gitleaks` corre en `pr-develop.yml` y en `pr-main.yml` (ver
 [Detección de secretos](#detección-de-secretos)).
 
+### Validación de contratos OpenAPI
+
+El job `openapi-validation` de `pr-develop.yml` corre `redocly lint` (imagen
+`redocly/cli` con versión fijada, nunca `latest`) sobre los 5 contratos de
+`api/openapi/`: `auth-v1`, `billing-v1`, `catalog-v1`, `physical-v1` y
+`virtual-v1`. Los errores rompen el job; los warnings (`info-license`,
+`no-server-example.com`) quedan visibles pero no bloquean.
+
+La lista de archivos es **explícita**: para validar un contrato nuevo hay que
+agregarlo al comando `lint` del job. Si no, queda sin validar aunque el job
+pase. Todo contrato debe declarar su `securitySchemes` y su `security` raíz,
+con `security: []` en las operaciones públicas.
+
 CI verde es obligatorio para mergear. Los PR son registro de trabajo individual:
 no requieren aprobación humana y se integran con **squash merge**.
 
