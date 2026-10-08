@@ -42,7 +42,7 @@ class AuthSessionRepositoryTest {
     fun refresh_preserves_problem_code_and_retry_after_without_exposing_response_detail() {
         val repository = AuthSessionRepository(
             FakeRefreshTokenStore("refresh"),
-            FakeRemote(AuthRemoteResult.Problem("LOGIN_RATE_LIMITED", 45)),
+            FakeRemote(AuthRemoteResult.Problem("LOGIN_RATE_LIMITED", 429, 45)),
         )
 
         assertEquals(

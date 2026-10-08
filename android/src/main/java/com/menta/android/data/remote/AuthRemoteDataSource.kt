@@ -21,6 +21,7 @@ sealed interface AuthRemoteResult {
 
     data class Problem(
         val code: String,
+        val status: Int,
         val retryAfterSeconds: Long? = null,
     ) : AuthRemoteResult
 
