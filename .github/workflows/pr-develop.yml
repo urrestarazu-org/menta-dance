@@ -1,7 +1,8 @@
 name: PR to Develop (Fast Feedback)
 
 # Workflow optimizado para PRs a develop: solo checks rápidos
-# Objetivo: feedback inmediato (<5 min) para iterar rápido
+# Objetivo: feedback rápido para iterar. Presupuesto del job quick-build-and-test:
+# <15 min (medido: 5,6–12,2 min; ver docs/16-CICD-PIPELINE.md, "Presupuesto de tiempo").
 on:
   pull_request:
     branches: [develop]
