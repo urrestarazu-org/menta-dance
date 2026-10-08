@@ -85,7 +85,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -98,6 +97,7 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
  * End-to-end coverage for #41 (US-PHYSICAL-004): real HTTP checkout (through
@@ -119,7 +119,7 @@ import org.springframework.test.context.DynamicPropertySource;
  * this Testcontainers context (PR7 only proved the checkout endpoint in
  * isolation with Mockito).</p>
  */
-// #209 Phase D: management.health.mail.enabled=false — @MockBean JavaMailSender
+// #209 Phase D: management.health.mail.enabled=false — @MockitoBean JavaMailSender
 // replaces the real bean with a Mockito mock that isn't a JavaMailSenderImpl,
 // so Spring Boot's MailHealthContributorAutoConfiguration finds an empty
 // "beans" map and fails context startup with IllegalArgumentException
@@ -167,30 +167,30 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
     @Autowired private OutboxReconciliationWorker outboxWorker;
     @Autowired private PurchaseCreationFromEventPort purchaseCreationFromEventPort;
 
-    @MockBean private PaymentPreferencePort paymentPreferencePort;
-    @MockBean private PaymentProviderPort paymentProviderPort;
-    @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
-    @MockBean private BankTransferRateLimitPort bankTransferRateLimitPort;
-    @MockBean private CourseCatalogPort courseCatalogPort;
-    @MockBean private AuthDegradedGuard authDegradedGuard;
-    @MockBean private TokenBlacklistPort tokenBlacklistPort;
-    @MockBean private LoginRateLimitPort loginRateLimitPort;
-    @MockBean private ActivationRateLimitPort activationRateLimitPort;
-    @MockBean private PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort;
-    @MockBean private PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
+    @MockitoBean private PaymentPreferencePort paymentPreferencePort;
+    @MockitoBean private PaymentProviderPort paymentProviderPort;
+    @MockitoBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
+    @MockitoBean private BankTransferRateLimitPort bankTransferRateLimitPort;
+    @MockitoBean private CourseCatalogPort courseCatalogPort;
+    @MockitoBean private AuthDegradedGuard authDegradedGuard;
+    @MockitoBean private TokenBlacklistPort tokenBlacklistPort;
+    @MockitoBean private LoginRateLimitPort loginRateLimitPort;
+    @MockitoBean private ActivationRateLimitPort activationRateLimitPort;
+    @MockitoBean private PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort;
+    @MockitoBean private PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
     // ProcessPhysicalCheckInUseCaseImpl needs a RedisTemplate this Redis-less
     // context would otherwise fail to resolve (same rationale as
     // SubscriptionCheckoutIntegrationTest).
-    @MockBean private ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
+    @MockitoBean private ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
     // ADR-0044: backed by a RedisTemplate this Redis-less context does not have.
-    @MockBean private CheckInRateLimitPort checkInRateLimitPort;
+    @MockitoBean private CheckInRateLimitPort checkInRateLimitPort;
     /**
      * Phase D (#209): replaces the real Spring Mail bean so {@code
      * SpringMailPurchaseExceptionNotificationAdapter} still runs for real
      * (real Spring wiring, real {@code SimpleMailMessage} construction) while
      * this test captures what would otherwise leave the JVM over SMTP.
      */
-    @MockBean private JavaMailSender mailSender;
+    @MockitoBean private JavaMailSender mailSender;
 
     private final AtomicInteger preferenceSequence = new AtomicInteger();
 

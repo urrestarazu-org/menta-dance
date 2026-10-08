@@ -67,8 +67,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
@@ -81,6 +79,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 /**
  * #266: QR check-in authenticates the reader against the device registry, over real HTTP with a
@@ -130,22 +130,22 @@ class PhysicalCheckInDeviceAuthIntegrationTest extends AbstractPhysicalMySqlInte
     @Autowired private AttendanceJpaRepository attendanceRepository;
     @Autowired private PhysicalDeviceJpaRepository deviceRepository;
 
-    @SpyBean private PhysicalDeviceRepository deviceRegistry;
+    @MockitoSpyBean private PhysicalDeviceRepository deviceRegistry;
 
-    @MockBean private AuthDegradedGuard authDegradedGuard;
-    @MockBean private TokenBlacklistPort tokenBlacklistPort;
-    @MockBean private LoginRateLimitPort loginRateLimitPort;
-    @MockBean private ActivationRateLimitPort activationRateLimitPort;
-    @MockBean private PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort;
-    @MockBean private PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
-    @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
-    @MockBean private BankTransferRateLimitPort bankTransferRateLimitPort;
-    @MockBean private CourseCatalogPort courseCatalogPort;
+    @MockitoBean private AuthDegradedGuard authDegradedGuard;
+    @MockitoBean private TokenBlacklistPort tokenBlacklistPort;
+    @MockitoBean private LoginRateLimitPort loginRateLimitPort;
+    @MockitoBean private ActivationRateLimitPort activationRateLimitPort;
+    @MockitoBean private PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort;
+    @MockitoBean private PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
+    @MockitoBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
+    @MockitoBean private BankTransferRateLimitPort bankTransferRateLimitPort;
+    @MockitoBean private CourseCatalogPort courseCatalogPort;
     // ADR-0044: an unmocked port would sit on the mocked RedisTemplate, get null and fail closed.
-    @MockBean private CheckInRateLimitPort checkInRateLimitPort;
+    @MockitoBean private CheckInRateLimitPort checkInRateLimitPort;
 
     @SuppressWarnings("rawtypes")
-    @MockBean
+    @MockitoBean
     private RedisTemplate redisTemplate;
 
     private final List<ILoggingEvent> logEvents = new CopyOnWriteArrayList<>();

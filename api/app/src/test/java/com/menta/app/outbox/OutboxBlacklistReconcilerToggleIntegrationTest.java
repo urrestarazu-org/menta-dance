@@ -12,12 +12,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.ApplicationContext;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
  * The {@code auth.outbox.reconcile.enabled} off switch keeps {@link OutboxBlacklistReconcilerTrigger}
@@ -29,7 +29,7 @@ import org.springframework.test.context.DynamicPropertySource;
  * {@code auth.outbox.reconcile-rate-ms}. That tick calls the void
  * {@code TokenBlacklistPort.writeHeartbeat()}, and since Mockito's ongoing-stubbing state is
  * per-mock rather than per-thread, a scheduler thread landing between a test's own invocation on
- * that {@code @MockBean} and the {@code when(...)} wrapping it makes Mockito believe the void
+ * that {@code @MockitoBean} and the {@code when(...)} wrapping it makes Mockito believe the void
  * method is the one being stubbed — surfacing as {@code CannotStubVoidMethodWithReturnValue} in a
  * {@code @BeforeEach} that never mentioned the reconciler.</p>
  *
@@ -52,10 +52,10 @@ class OutboxBlacklistReconcilerToggleIntegrationTest extends AbstractAuthMySqlIn
 
     @Autowired private ApplicationContext context;
 
-    @MockBean private AuthDegradedGuard authDegradedGuard;
-    @MockBean private TokenBlacklistPort tokenBlacklistPort;
-    @MockBean private RedisTemplate<String, String> redisTemplate;
-    @MockBean private LoginRateLimitPort loginRateLimitPort;
+    @MockitoBean private AuthDegradedGuard authDegradedGuard;
+    @MockitoBean private TokenBlacklistPort tokenBlacklistPort;
+    @MockitoBean private RedisTemplate<String, String> redisTemplate;
+    @MockitoBean private LoginRateLimitPort loginRateLimitPort;
 
     @BeforeEach
     void setUp() {

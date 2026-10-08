@@ -54,7 +54,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -63,6 +62,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
  * End-to-end coverage for admin resolution of a bank-transfer payment (#31, US-BILLING-003,
@@ -92,23 +92,23 @@ class PaymentAdminResolutionIntegrationTest extends AbstractBillingMySqlIntegrat
     @Autowired private PlanCourseJpaRepository planCourseRepository;
     @Autowired private PlanPaymentMethodJpaRepository planPaymentMethodRepository;
 
-    @MockBean private PaymentPreferencePort paymentPreferencePort;
-    @MockBean private PaymentProviderPort paymentProviderPort;
-    @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
-    @MockBean private BankTransferRateLimitPort bankTransferRateLimitPort;
-    @MockBean private PaymentProofNotificationPort paymentProofNotificationPort;
-    @MockBean private CourseCatalogPort courseCatalogPort;
-    @MockBean private AuthDegradedGuard authDegradedGuard;
-    @MockBean private TokenBlacklistPort tokenBlacklistPort;
-    @MockBean private LoginRateLimitPort loginRateLimitPort;
-    @MockBean private ActivationRateLimitPort activationRateLimitPort;
-    @MockBean private PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort;
-    @MockBean private PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
+    @MockitoBean private PaymentPreferencePort paymentPreferencePort;
+    @MockitoBean private PaymentProviderPort paymentProviderPort;
+    @MockitoBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
+    @MockitoBean private BankTransferRateLimitPort bankTransferRateLimitPort;
+    @MockitoBean private PaymentProofNotificationPort paymentProofNotificationPort;
+    @MockitoBean private CourseCatalogPort courseCatalogPort;
+    @MockitoBean private AuthDegradedGuard authDegradedGuard;
+    @MockitoBean private TokenBlacklistPort tokenBlacklistPort;
+    @MockitoBean private LoginRateLimitPort loginRateLimitPort;
+    @MockitoBean private ActivationRateLimitPort activationRateLimitPort;
+    @MockitoBean private PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort;
+    @MockitoBean private PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
     // US-PHYSICAL-001: ProcessPhysicalCheckInUseCaseImpl needs a RedisTemplate its bean factory
     // would otherwise fail to resolve in this Redis-less context.
-    @MockBean private ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
+    @MockitoBean private ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
     // ADR-0044: backed by a RedisTemplate this Redis-less context does not have.
-    @MockBean private CheckInRateLimitPort checkInRateLimitPort;
+    @MockitoBean private CheckInRateLimitPort checkInRateLimitPort;
 
     @BeforeEach
     void stubCollaborators() {

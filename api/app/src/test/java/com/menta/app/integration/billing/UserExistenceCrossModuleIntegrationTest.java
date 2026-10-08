@@ -19,9 +19,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
  * Proves the D8 cross-module wiring (US-BILLING-012, design.md A8/A9/A10) for real: {@code
@@ -44,10 +44,10 @@ class UserExistenceCrossModuleIntegrationTest extends AbstractBillingMySqlIntegr
     @Autowired private UserExistencePort userExistencePort;
     @Autowired private UserRepository userRepository;
 
-    @MockBean private AuthDegradedGuard authDegradedGuard;
-    @MockBean private TokenBlacklistPort tokenBlacklistPort;
-    @MockBean private RedisTemplate<String, String> redisTemplate;
-    @MockBean private LoginRateLimitPort loginRateLimitPort;
+    @MockitoBean private AuthDegradedGuard authDegradedGuard;
+    @MockitoBean private TokenBlacklistPort tokenBlacklistPort;
+    @MockitoBean private RedisTemplate<String, String> redisTemplate;
+    @MockitoBean private LoginRateLimitPort loginRateLimitPort;
 
     private User seededUser;
 

@@ -65,7 +65,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -75,6 +74,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
  * MySQL-backed HTTP + worker integration coverage for the Mercado Pago
@@ -115,22 +115,22 @@ class PaymentWebhookIntegrationTest extends AbstractBillingMySqlIntegrationTest 
     @Autowired private PhysicalSessionJpaRepository physicalSessionRepository;
     @Autowired private PhysicalCourseQuoteJpaRepository physicalCourseQuoteRepository;
 
-    @MockBean private PaymentProviderPort paymentProviderPort;
-    @MockBean private PaymentPreferencePort paymentPreferencePort;
-    @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
-    @MockBean private BankTransferRateLimitPort bankTransferRateLimitPort;
-    @MockBean private CourseCatalogPort courseCatalogPort;
+    @MockitoBean private PaymentProviderPort paymentProviderPort;
+    @MockitoBean private PaymentPreferencePort paymentPreferencePort;
+    @MockitoBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
+    @MockitoBean private BankTransferRateLimitPort bankTransferRateLimitPort;
+    @MockitoBean private CourseCatalogPort courseCatalogPort;
     // US-PHYSICAL-001: ProcessPhysicalCheckInUseCaseImpl needs a RedisTemplate
     // its bean factory would otherwise fail to resolve in this Redis-less context.
-    @MockBean private ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
+    @MockitoBean private ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
     // ADR-0044: backed by a RedisTemplate this Redis-less context does not have.
-    @MockBean private CheckInRateLimitPort checkInRateLimitPort;
-    @MockBean private AuthDegradedGuard authDegradedGuard;
-    @MockBean private TokenBlacklistPort tokenBlacklistPort;
-    @MockBean private LoginRateLimitPort loginRateLimitPort;
-    @MockBean private ActivationRateLimitPort activationRateLimitPort;
-    @MockBean private PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort;
-    @MockBean private PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
+    @MockitoBean private CheckInRateLimitPort checkInRateLimitPort;
+    @MockitoBean private AuthDegradedGuard authDegradedGuard;
+    @MockitoBean private TokenBlacklistPort tokenBlacklistPort;
+    @MockitoBean private LoginRateLimitPort loginRateLimitPort;
+    @MockitoBean private ActivationRateLimitPort activationRateLimitPort;
+    @MockitoBean private PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort;
+    @MockitoBean private PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
 
     @AfterEach
     void cleanUp() {

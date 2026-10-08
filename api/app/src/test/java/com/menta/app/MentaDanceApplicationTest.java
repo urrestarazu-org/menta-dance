@@ -3,9 +3,9 @@ package com.menta.app;
 import com.menta.auth.application.port.out.TokenBlacklistPort;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
  * Integration smoke test: verifies the Spring Boot application context loads.
@@ -20,12 +20,12 @@ import org.springframework.test.context.ActiveProfiles;
 @ActiveProfiles("test")
 class MentaDanceApplicationTest {
 
-    @MockBean private RedisTemplate<String, String> redisTemplate;
-    @MockBean private TokenBlacklistPort tokenBlacklistPort;
-    @MockBean private com.menta.auth.infrastructure.outbox.persistence.UlidGenerator ulidGenerator;
-    @MockBean private com.menta.auth.infrastructure.outbox.persistence.OutboxClock outboxClock;
-    @MockBean private com.menta.auth.application.port.out.AccessTokenIssuer accessTokenIssuer;
-    @MockBean private com.menta.auth.application.port.out.AuthDegradedGuard authDegradedGuard;
+    @MockitoBean private RedisTemplate<String, String> redisTemplate;
+    @MockitoBean private TokenBlacklistPort tokenBlacklistPort;
+    @MockitoBean private com.menta.auth.infrastructure.outbox.persistence.UlidGenerator ulidGenerator;
+    @MockitoBean private com.menta.auth.infrastructure.outbox.persistence.OutboxClock outboxClock;
+    @MockitoBean private com.menta.auth.application.port.out.AccessTokenIssuer accessTokenIssuer;
+    @MockitoBean private com.menta.auth.application.port.out.AuthDegradedGuard authDegradedGuard;
 
     @Test
     void contextLoads() {

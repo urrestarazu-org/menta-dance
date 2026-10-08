@@ -100,7 +100,7 @@ class AuthenticatedRequestIntegrationTest extends BaseIntegrationTest {
      * with Spring Session + Redis + MockHttpSession due to architectural limitations.
      *
      * <p>1. MockHttpSession doesn't persist to Redis (it's mock-only)
-     * 2. @MockBean SessionTokenRepository breaks other tests
+     * 2. @MockitoBean SessionTokenRepository breaks other tests
      * 3. Cannot manipulate session state after login in integration tests
      *
      * <p>✅ These scenarios ARE covered by TokenRefreshFilterTest unit tests:
