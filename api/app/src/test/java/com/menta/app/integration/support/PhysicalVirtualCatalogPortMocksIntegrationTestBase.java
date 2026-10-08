@@ -12,11 +12,11 @@ import com.menta.billing.application.port.out.CourseCatalogPort;
 import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
 import com.menta.physical.application.port.out.CheckInRateLimitPort;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
- * Base test class providing the {@code @MockBean} set and Spring profile shared by
+ * Base test class providing the {@code @MockitoBean} set and Spring profile shared by
  * {@code PhysicalCourseAvailabilityIntegrationTest} and {@code VirtualCourseCatalogIntegrationTest}
  * — previously duplicated verbatim in each class. See {@code CapacityAdapterMocksIntegrationTestBase}
  * for why a shared base (not just a matching mock list) is what actually makes Spring treat these
@@ -31,16 +31,16 @@ import org.springframework.test.context.ActiveProfiles;
 @ActiveProfiles("integration-test")
 public abstract class PhysicalVirtualCatalogPortMocksIntegrationTestBase extends AbstractVirtualMySqlIntegrationTest {
 
-    @MockBean protected AuthDegradedGuard authDegradedGuard;
-    @MockBean protected TokenBlacklistPort tokenBlacklistPort;
-    @MockBean protected LoginRateLimitPort loginRateLimitPort;
-    @MockBean protected ActivationRateLimitPort activationRateLimitPort;
-    @MockBean protected PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort;
-    @MockBean protected PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
-    @MockBean protected BillingPlansRateLimitPort billingPlansRateLimitPort;
-    @MockBean protected BankTransferRateLimitPort bankTransferRateLimitPort;
-    @MockBean protected CourseCatalogPort courseCatalogPort;
-    @MockBean protected ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
+    @MockitoBean protected AuthDegradedGuard authDegradedGuard;
+    @MockitoBean protected TokenBlacklistPort tokenBlacklistPort;
+    @MockitoBean protected LoginRateLimitPort loginRateLimitPort;
+    @MockitoBean protected ActivationRateLimitPort activationRateLimitPort;
+    @MockitoBean protected PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort;
+    @MockitoBean protected PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
+    @MockitoBean protected BillingPlansRateLimitPort billingPlansRateLimitPort;
+    @MockitoBean protected BankTransferRateLimitPort bankTransferRateLimitPort;
+    @MockitoBean protected CourseCatalogPort courseCatalogPort;
+    @MockitoBean protected ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
     // ADR-0044: backed by a RedisTemplate this Redis-less context does not have.
-    @MockBean protected CheckInRateLimitPort checkInRateLimitPort;
+    @MockitoBean protected CheckInRateLimitPort checkInRateLimitPort;
 }

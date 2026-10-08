@@ -34,8 +34,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpEntity;
@@ -45,6 +43,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 /**
  * ADR-0044 over real HTTP: the input caps on the QR check-in body and the rate-limit gate that
@@ -64,21 +64,21 @@ class PhysicalCheckInRateLimitIntegrationTest extends AbstractPhysicalMySqlInteg
     @Autowired private TestRestTemplate http;
     @Autowired private MeterRegistry meterRegistry;
 
-    @SpyBean private PhysicalDeviceRepository deviceRegistry;
+    @MockitoSpyBean private PhysicalDeviceRepository deviceRegistry;
 
-    @MockBean private AuthDegradedGuard authDegradedGuard;
-    @MockBean private TokenBlacklistPort tokenBlacklistPort;
-    @MockBean private LoginRateLimitPort loginRateLimitPort;
-    @MockBean private ActivationRateLimitPort activationRateLimitPort;
-    @MockBean private PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort;
-    @MockBean private PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
-    @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
-    @MockBean private BankTransferRateLimitPort bankTransferRateLimitPort;
-    @MockBean private CourseCatalogPort courseCatalogPort;
-    @MockBean private CheckInRateLimitPort checkInRateLimitPort;
+    @MockitoBean private AuthDegradedGuard authDegradedGuard;
+    @MockitoBean private TokenBlacklistPort tokenBlacklistPort;
+    @MockitoBean private LoginRateLimitPort loginRateLimitPort;
+    @MockitoBean private ActivationRateLimitPort activationRateLimitPort;
+    @MockitoBean private PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort;
+    @MockitoBean private PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
+    @MockitoBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
+    @MockitoBean private BankTransferRateLimitPort bankTransferRateLimitPort;
+    @MockitoBean private CourseCatalogPort courseCatalogPort;
+    @MockitoBean private CheckInRateLimitPort checkInRateLimitPort;
 
     @SuppressWarnings("rawtypes")
-    @MockBean
+    @MockitoBean
     private RedisTemplate redisTemplate;
 
     private ResponseEntity<Map> post(Map<String, Object> body) {

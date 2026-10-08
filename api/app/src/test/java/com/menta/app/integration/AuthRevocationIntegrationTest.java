@@ -31,7 +31,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -42,6 +41,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
  * End-to-end coverage for #88's revocation mechanism: refresh-reuse detection
@@ -90,13 +90,13 @@ class AuthRevocationIntegrationTest extends AbstractAuthMySqlIntegrationTest {
     @Autowired
     private OutboxRowJpaRepository outboxRowJpaRepository;
 
-    @MockBean
+    @MockitoBean
     private AuthDegradedGuard authDegradedGuard;
 
-    @MockBean
+    @MockitoBean
     private TokenBlacklistPort tokenBlacklistPort;
 
-    @MockBean
+    @MockitoBean
     private LoginRateLimitPort loginRateLimitPort;
 
     /**
@@ -106,13 +106,13 @@ class AuthRevocationIntegrationTest extends AbstractAuthMySqlIntegrationTest {
      * construct their real implementations at context startup for lack of a
      * {@code RedisTemplate} bean. Mirrors {@code AccountActivationIntegrationTest}.
      */
-    @MockBean
+    @MockitoBean
     private ActivationRateLimitPort activationRateLimitPort;
 
-    @MockBean
+    @MockitoBean
     private PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort;
 
-    @MockBean
+    @MockitoBean
     private PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
 
     /**
@@ -120,20 +120,20 @@ class AuthRevocationIntegrationTest extends AbstractAuthMySqlIntegrationTest {
      * api:billing, whose plans rate limiter needs a RedisTemplate this
      * profile does not provide.
      */
-    @MockBean
+    @MockitoBean
     private com.menta.billing.application.port.out.BillingPlansRateLimitPort billingPlansRateLimitPort;
-    @MockBean
+    @MockitoBean
     private com.menta.billing.application.port.out.BankTransferRateLimitPort bankTransferRateLimitPort;
 
     /**
      * US-PHYSICAL-001: ProcessPhysicalCheckInUseCaseImpl needs a RedisTemplate
      * its bean factory would otherwise fail to resolve in this Redis-less profile.
      */
-    @MockBean
+    @MockitoBean
     private com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase
         processPhysicalCheckInUseCase;
     // ADR-0044: backed by a RedisTemplate this Redis-less context does not have.
-    @MockBean private CheckInRateLimitPort checkInRateLimitPort;
+    @MockitoBean private CheckInRateLimitPort checkInRateLimitPort;
 
     private final Map<String, Long> projectedVersions = new ConcurrentHashMap<>();
     private final Set<String> blacklistedJtis = ConcurrentHashMap.newKeySet();

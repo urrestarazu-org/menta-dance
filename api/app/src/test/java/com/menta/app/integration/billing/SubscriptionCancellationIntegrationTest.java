@@ -55,7 +55,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -66,6 +65,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
  * End-to-end coverage for US-BILLING-011 (#130): self-service and admin subscription
@@ -102,20 +102,20 @@ class SubscriptionCancellationIntegrationTest extends AbstractBillingMySqlIntegr
     @Autowired private WebhookInboxJpaRepository inboxRepository;
     @Autowired private WebhookVerificationWorker worker;
 
-    @MockBean private PaymentPreferencePort paymentPreferencePort;
-    @MockBean private PaymentProviderPort paymentProviderPort;
-    @MockBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
-    @MockBean private BankTransferRateLimitPort bankTransferRateLimitPort;
-    @MockBean private CourseCatalogPort courseCatalogPort;
-    @MockBean private AuthDegradedGuard authDegradedGuard;
-    @MockBean private TokenBlacklistPort tokenBlacklistPort;
-    @MockBean private LoginRateLimitPort loginRateLimitPort;
-    @MockBean private ActivationRateLimitPort activationRateLimitPort;
-    @MockBean private PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort;
-    @MockBean private PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
-    @MockBean private ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
+    @MockitoBean private PaymentPreferencePort paymentPreferencePort;
+    @MockitoBean private PaymentProviderPort paymentProviderPort;
+    @MockitoBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
+    @MockitoBean private BankTransferRateLimitPort bankTransferRateLimitPort;
+    @MockitoBean private CourseCatalogPort courseCatalogPort;
+    @MockitoBean private AuthDegradedGuard authDegradedGuard;
+    @MockitoBean private TokenBlacklistPort tokenBlacklistPort;
+    @MockitoBean private LoginRateLimitPort loginRateLimitPort;
+    @MockitoBean private ActivationRateLimitPort activationRateLimitPort;
+    @MockitoBean private PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort;
+    @MockitoBean private PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
+    @MockitoBean private ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
     // ADR-0044: backed by a RedisTemplate this Redis-less context does not have.
-    @MockBean private CheckInRateLimitPort checkInRateLimitPort;
+    @MockitoBean private CheckInRateLimitPort checkInRateLimitPort;
 
     private final AtomicInteger preferenceSequence = new AtomicInteger();
 

@@ -41,8 +41,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /** MySQL-backed integration coverage for the public account-activation flow. */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
@@ -61,41 +61,41 @@ class AccountActivationIntegrationTest extends AbstractAuthMySqlIntegrationTest 
     @Autowired private ActivationTokenJpaRepository activationTokenRepository;
     @Autowired private OutboxRowJpaRepository outboxRowJpaRepository;
 
-    @MockBean private ActivationTokenGenerator activationTokenGenerator;
-    @MockBean private ActivationTokenHasher activationTokenHasher;
-    @MockBean private ActivationRateLimitPort activationRateLimitPort;
-    @MockBean private com.menta.auth.application.port.out.LoginRateLimitPort loginRateLimitPort;
-    @MockBean private ActivationNotificationPort activationNotificationPort;
+    @MockitoBean private ActivationTokenGenerator activationTokenGenerator;
+    @MockitoBean private ActivationTokenHasher activationTokenHasher;
+    @MockitoBean private ActivationRateLimitPort activationRateLimitPort;
+    @MockitoBean private com.menta.auth.application.port.out.LoginRateLimitPort loginRateLimitPort;
+    @MockitoBean private ActivationNotificationPort activationNotificationPort;
     /**
      * The real password-reset limiters sit on RedisTemplate, which this slice
      * does not provide. Password reset has its own dedicated coverage; mocking
      * the ports keeps this test about the activation lifecycle.
      */
-    @MockBean
+    @MockitoBean
     private com.menta.auth.application.port.out.PasswordResetRequestRateLimitPort
         passwordResetRequestRateLimitPort;
-    @MockBean
+    @MockitoBean
     private com.menta.auth.application.port.out.PasswordResetAttemptRateLimitPort
         passwordResetAttemptRateLimitPort;
-    @MockBean private AuthDegradedGuard authDegradedGuard;
-    @MockBean private TokenBlacklistPort tokenBlacklistPort;
+    @MockitoBean private AuthDegradedGuard authDegradedGuard;
+    @MockitoBean private TokenBlacklistPort tokenBlacklistPort;
     /**
      * The api:app module now also assembles api:billing, whose plans rate limiter needs
      * a RedisTemplate this slice does not provide.
      */
-    @MockBean
+    @MockitoBean
     private com.menta.billing.application.port.out.BillingPlansRateLimitPort billingPlansRateLimitPort;
-    @MockBean
+    @MockitoBean
     private com.menta.billing.application.port.out.BankTransferRateLimitPort bankTransferRateLimitPort;
     /**
      * US-PHYSICAL-001: ProcessPhysicalCheckInUseCaseImpl needs a RedisTemplate
      * its bean factory would otherwise fail to resolve in this Redis-less slice.
      */
-    @MockBean
+    @MockitoBean
     private com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase
         processPhysicalCheckInUseCase;
     // ADR-0044: backed by a RedisTemplate this Redis-less context does not have.
-    @MockBean private CheckInRateLimitPort checkInRateLimitPort;
+    @MockitoBean private CheckInRateLimitPort checkInRateLimitPort;
 
     @AfterEach
     void cleanUp() {

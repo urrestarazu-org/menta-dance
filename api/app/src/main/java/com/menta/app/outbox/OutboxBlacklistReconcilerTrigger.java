@@ -18,7 +18,7 @@ import org.springframework.stereotype.Component;
  *
  * <p>Why that matters beyond tidiness (#172): {@link OutboxBlacklistReconciler#processBatch()}
  * calls the <em>void</em> {@code TokenBlacklistPort.writeHeartbeat()}, and that port is a
- * {@code @MockBean} in nearly every integration context. Mockito's ongoing-stubbing state is
+ * {@code @MockitoBean} in nearly every integration context. Mockito's ongoing-stubbing state is
  * per-mock rather than per-thread, so a scheduler thread landing between a test's own invocation
  * on that mock and the {@code when(...)} wrapping it makes Mockito believe the void method is the
  * one being stubbed — surfacing as {@code CannotStubVoidMethodWithReturnValue} from a

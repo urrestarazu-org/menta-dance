@@ -26,7 +26,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpEntity;
@@ -37,6 +36,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
  * Integration test for the auth flow: login → refresh → logout through the
@@ -79,16 +79,16 @@ class AuthFlowIntegrationTest {
     @Autowired
     private TestRestTemplate http;
 
-    @MockBean
+    @MockitoBean
     private AuthDegradedGuard authDegradedGuard;
 
-    @MockBean
+    @MockitoBean
     private OutboxAppender outboxAppender;
 
-    @MockBean
+    @MockitoBean
     private TokenBlacklistPort tokenBlacklistPort;
 
-    @MockBean
+    @MockitoBean
     @SuppressWarnings("rawtypes")
     private RedisTemplate redisTemplate;
 
@@ -98,7 +98,7 @@ class AuthFlowIntegrationTest {
      * own dedicated coverage; here the budget stays open so these tests remain
      * about wiring, persistence, and status mapping.
      */
-    @MockBean
+    @MockitoBean
     private LoginRateLimitPort loginRateLimitPort;
 
     @BeforeEach

@@ -12,20 +12,20 @@ import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.port.out.CourseCatalogPort;
 import com.menta.billing.application.port.out.PaymentProviderPort;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
- * Base test class providing the {@code @MockBean} set and Spring profile shared by
+ * Base test class providing the {@code @MockitoBean} set and Spring profile shared by
  * {@link AssignCapacityAdapterIntegrationTest} and {@link HoldCapacityAdapterIntegrationTest}.
  *
  * <p><b>Why this class exists — not just DRY.</b> Before it, both classes redeclared the exact
- * same 11 {@code @MockBean} fields plus the exact same {@code @SpringBootTest}/
+ * same 11 {@code @MockitoBean} fields plus the exact same {@code @SpringBootTest}/
  * {@code @ActiveProfiles}.
  * Spring's {@code TestContext} framework caches a live {@code ApplicationContext} keyed on
  * everything that could change its shape — active profile, {@code @DynamicPropertySource}
- * customizers, and every {@code @MockBean}. Crucially, a {@code @MockBean} is identified by the
+ * customizers, and every {@code @MockitoBean}. Crucially, a {@code @MockitoBean} is identified by the
  * {@link java.lang.reflect.Field} that declares it, not by its type: two mock fields of the exact
  * same type in two different classes are two different cache-key entries unless both classes
  * inherit the field from the same declaring class. So even though these two test classes'
@@ -35,7 +35,7 @@ import org.springframework.test.context.ActiveProfiles;
  * creation (see {@link com.menta.app.integration.support.MySqlSchemas}), and everything else that
  * scales with live context count.</p>
  *
- * <p>Moving the 11 {@code @MockBean} fields here means both subclasses inherit the exact same
+ * <p>Moving the 11 {@code @MockitoBean} fields here means both subclasses inherit the exact same
  * {@link java.lang.reflect.Field} objects — at that point Spring's cache key genuinely matches,
  * one {@code ApplicationContext} is built once and reused for every test in both classes, and the
  * two classes run in a fraction of the time. This mirrors, at the mock layer, the same structural
@@ -55,18 +55,18 @@ import org.springframework.test.context.ActiveProfiles;
 abstract class CapacityAdapterMocksIntegrationTestBase
     extends AbstractPhysicalMySqlIntegrationTest {
 
-    @MockBean protected AuthDegradedGuard authDegradedGuard;
-    @MockBean protected TokenBlacklistPort tokenBlacklistPort;
-    @MockBean protected LoginRateLimitPort loginRateLimitPort;
-    @MockBean protected ActivationRateLimitPort activationRateLimitPort;
-    @MockBean protected PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort;
-    @MockBean protected PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
-    @MockBean protected BillingPlansRateLimitPort billingPlansRateLimitPort;
-    @MockBean protected BankTransferRateLimitPort bankTransferRateLimitPort;
-    @MockBean protected CourseCatalogPort courseCatalogPort;
-    @MockBean protected PaymentProviderPort paymentProviderPort;
+    @MockitoBean protected AuthDegradedGuard authDegradedGuard;
+    @MockitoBean protected TokenBlacklistPort tokenBlacklistPort;
+    @MockitoBean protected LoginRateLimitPort loginRateLimitPort;
+    @MockitoBean protected ActivationRateLimitPort activationRateLimitPort;
+    @MockitoBean protected PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort;
+    @MockitoBean protected PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
+    @MockitoBean protected BillingPlansRateLimitPort billingPlansRateLimitPort;
+    @MockitoBean protected BankTransferRateLimitPort bankTransferRateLimitPort;
+    @MockitoBean protected CourseCatalogPort courseCatalogPort;
+    @MockitoBean protected PaymentProviderPort paymentProviderPort;
 
     @SuppressWarnings("rawtypes")
-    @MockBean
+    @MockitoBean
     protected RedisTemplate redisTemplate;
 }

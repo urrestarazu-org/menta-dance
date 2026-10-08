@@ -33,12 +33,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.ApplicationContext;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
  * Real {@code tick()} coverage for {@link PaymentExpiryReconciler}/{@link PaymentExpiryWorker}
@@ -76,10 +76,10 @@ class PaymentExpirySweepIntegrationTest extends AbstractBillingMySqlIntegrationT
     @Autowired private PaymentExpiryReconciler reconciler;
     @Autowired private ApplicationContext context;
 
-    @MockBean private AuthDegradedGuard authDegradedGuard;
-    @MockBean private TokenBlacklistPort tokenBlacklistPort;
-    @MockBean private RedisTemplate<String, String> redisTemplate;
-    @MockBean private LoginRateLimitPort loginRateLimitPort;
+    @MockitoBean private AuthDegradedGuard authDegradedGuard;
+    @MockitoBean private TokenBlacklistPort tokenBlacklistPort;
+    @MockitoBean private RedisTemplate<String, String> redisTemplate;
+    @MockitoBean private LoginRateLimitPort loginRateLimitPort;
 
     @BeforeEach
     void stubDefensively() {

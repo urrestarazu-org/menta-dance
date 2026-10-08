@@ -37,10 +37,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 /**
  * Integration test for atomic auth mutations with outbox.
@@ -85,13 +85,13 @@ class TransactionalAuthIntegrationTest extends AbstractAuthMySqlIntegrationTest 
     @Autowired
     private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
-    @MockBean
+    @MockitoBean
     private AuthDegradedGuard authDegradedGuard;
 
-    @MockBean
+    @MockitoBean
     private TokenBlacklistPort tokenBlacklistPort;
 
-    @MockBean
+    @MockitoBean
     private org.springframework.data.redis.core.RedisTemplate<String, String> redisTemplate;
 
     /**
@@ -99,10 +99,10 @@ class TransactionalAuthIntegrationTest extends AbstractAuthMySqlIntegrationTest 
      * every login. Failure budgets have their own dedicated coverage; here the
      * budget stays open so these tests remain about transactional atomicity.
      */
-    @MockBean
+    @MockitoBean
     private com.menta.auth.application.port.out.LoginRateLimitPort loginRateLimitPort;
 
-    @SpyBean
+    @MockitoSpyBean
     private OutboxAppender outboxAppender;
 
     private static final String EMAIL = "student@example.com";

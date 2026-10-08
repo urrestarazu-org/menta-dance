@@ -23,12 +23,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -55,7 +55,7 @@ class SubscriptionOptimisticLockingIntegrationTest extends AbstractBillingMySqlI
         registry.add("billing.webhook.mercadopago.hmac-secret", () -> HMAC_SECRET);
         registry.add("billing.webhook.reconcile-rate-ms", () -> "999999999");
         // OutboxBlacklistReconciler's real @Scheduled tick (default 5s) calls
-        // tokenBlacklistPort.writeHeartbeat() — a void method — on this class's @MockBean.
+        // tokenBlacklistPort.writeHeartbeat() — a void method — on this class's @MockitoBean.
         // Left at its default, a background tick can fire mid-@BeforeEach while Mockito is
         // still recording when(tokenBlacklistPort.isBlacklisted(...)), corrupting Mockito's
         // stubbing state and throwing CannotStubVoidMethodWithReturnValue nondeterministically.
@@ -67,10 +67,10 @@ class SubscriptionOptimisticLockingIntegrationTest extends AbstractBillingMySqlI
     @Autowired private SubscriptionRepository subscriptionRepository;
     @Autowired private PlatformTransactionManager transactionManager;
 
-    @MockBean private AuthDegradedGuard authDegradedGuard;
-    @MockBean private TokenBlacklistPort tokenBlacklistPort;
-    @MockBean private RedisTemplate<String, String> redisTemplate;
-    @MockBean private LoginRateLimitPort loginRateLimitPort;
+    @MockitoBean private AuthDegradedGuard authDegradedGuard;
+    @MockitoBean private TokenBlacklistPort tokenBlacklistPort;
+    @MockitoBean private RedisTemplate<String, String> redisTemplate;
+    @MockitoBean private LoginRateLimitPort loginRateLimitPort;
 
     private TransactionTemplate requiresNew;
 
