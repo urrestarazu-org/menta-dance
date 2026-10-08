@@ -61,6 +61,31 @@ agregarlo al comando `lint` del job. Si no, queda sin validar aunque el job
 pase. Todo contrato debe declarar su `securitySchemes` y su `security` raíz,
 con `security: []` en las operaciones públicas.
 
+### Presupuesto de tiempo
+
+El job `quick-build-and-test` de `pr-develop.yml` declara un presupuesto de
+**<15 min**. El objetivo original (<5 min) dejó de ser realista: en 7 corridas
+exitosas recientes el job tardó entre 5,6 y 12,2 min.
+
+| Paso | Duración medida |
+|---|---|
+| `Build with Gradle` (`./gradlew clean build`) | 336–733 s (≈95 % del job) |
+| `Run unit tests` | 3–6 s |
+| `Run architecture tests` | 5–9 s |
+| `Run Checkstyle` | 2–4 s |
+| `Set up JDK 21` | 2–19 s |
+
+Los pasos posteriores a `build` no duplican trabajo: las tareas de test, ArchUnit
+y Checkstyle figuran `UP-TO-DATE` porque ya corrieron dentro de `build`. Se
+conservan como pasos separados solo para que el fallo quede rotulado en la UI.
+
+`clean build` compila también las variantes debug y release de Android (la
+corrida más larga ejecutó 188 de 202 tareas y tardó 9 min 43 s). Se decidió
+**subir el presupuesto en vez de recortar verificación**: el job sigue cubriendo
+build, tests unitarios, ArchUnit y Checkstyle de todos los módulos. Si el tiempo
+vuelve a exceder los 15 min, las opciones son cachear mejor Gradle en CI (#351)
+o mover la verificación de la variante release de Android a `pr-main.yml`.
+
 CI verde es obligatorio para mergear. Los PR son registro de trabajo individual:
 no requieren aprobación humana y se integran con **squash merge**.
 
@@ -161,7 +186,7 @@ Un build con Checkstyle en verde no dice nada sobre seguridad.
 
 * **Dónde corre:** el job `spotbugs` de `pr-main.yml` (gate de release, ADR-0042),
   en paralelo con `full-build-and-test`. No corre en `pr-develop.yml`: mantiene
-  su presupuesto de feedback rápido (<5 min). Sube los reportes como artefacto
+  su presupuesto de feedback rápido (<15 min). Sube los reportes como artefacto
   `spotbugs-reports` aunque falle. El módulo `android` no participa: no usa el
   plugin `java` estándar y no hay una configuración equivalente.
 * **Configuración:** una sola vez en el `build.gradle.kts` raíz, aplicada a los 7
