@@ -86,9 +86,9 @@ Manual: bootRun `demo` twice; sessions for 4 weeks, exactly one rolling session 
 
 ## Slice 4 (PR 4, ~190 lines): QR reader device
 
-- [ ] 4.1 RED `.../DemoQrReaderFixtureTest.java`: blank secret -> WARN logged, zero repository calls; set + absent -> `save(new PhysicalDevice(..., hash, ACTIVE, ...))`, no plaintext stored; same hash -> no save; different hash + ACTIVE -> `rotateSecret`; REVOKED -> WARN, no change; `getOrder() == CONTENT`. Covers: QR reader secret (3 scenarios).
-- [ ] 4.2 GREEN `api/physical/src/main/java/com/menta/physical/infrastructure/demo/DemoQrReaderFixture.java`: `@Value("${demo.qr-reader.secret:}")`, private fixed `DeviceId`, `PhysicalDeviceRepository`, hasher; the secret is never logged.
-- [ ] 4.3 REFACTOR: SpotBugs (no secret in logs), Checkstyle.
+- [x] 4.1 RED `.../DemoQrReaderFixtureTest.java`: blank secret -> WARN logged, zero repository calls; set + absent -> `save(new PhysicalDevice(..., hash, ACTIVE, ...))`, no plaintext stored; same hash -> no save; different hash + ACTIVE -> `rotateSecret`; REVOKED -> WARN, no change; `getOrder() == CONTENT`. Covers: QR reader secret (3 scenarios).
+- [x] 4.2 GREEN `api/physical/src/main/java/com/menta/physical/infrastructure/demo/DemoQrReaderFixture.java`: `@Value("${demo.qr-reader.secret:}")`, private fixed `DeviceId`, `PhysicalDeviceRepository`, hasher; the secret is never logged.
+- [x] 4.3 REFACTOR: SpotBugs (no secret in logs), Checkstyle.
 
 Exit gate: `./gradlew :api:physical:check` and `:api:app:check`.
 Manual: bootRun `demo` without the variable (WARN, starts); with `DEMO_QR_READER_SECRET=s1`, then `s2` (hash rotates, `s1` no longer verifies).
