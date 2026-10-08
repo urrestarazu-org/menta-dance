@@ -485,6 +485,9 @@ paths:
         antes que la asignación. Un consumidor de esta API no debe asumir
         que ambas variantes responden igual ante un `sessionId` inválido.
       operationId: processPhysicalCheckIn
+      security:
+        - {}
+        - bearerAuth: []
       parameters:
         - name: sessionId
           in: path
@@ -979,6 +982,21 @@ paths:
                     code: DEVICE_ALREADY_REVOKED
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Access token JWT de 15 minutos, emitido por `POST /api/v1/auth/login`
+        (ver auth-v1.yaml). Claims: `sub`, `roles`, `jti`, `tokenVersion`,
+        `iat`, `exp`, `iss`, `aud`.
+
+        El rol (`ADMIN`/`INSTRUCTOR`/`RECEPTIONIST`) no es expresable en este
+        esquema. `POST .../check-ins` acepta el token de forma opcional
+        (`security: [{}, {bearerAuth: []}]`): la variante QR no lo envía y la
+        variante MANUAL sí.
+
   responses:
     InvalidRequest:
       description: Body inválido (bean validation) o `professorId` no coincide con el actor.
@@ -1257,10 +1275,10 @@ components:
     CheckInManualRequest:
       description: |
         #45, US-PHYSICAL-008. Requiere un Bearer token autenticado con rol
-        `RECEPTIONIST` o `ADMIN` — no documentado vía `securitySchemes`
-        (este contrato no declara ese bloque; ver la descripción del
-        endpoint), verificado dentro del caso de uso, no en el filtro de
-        seguridad (D5). NO debe incluir ningún campo de la variante QR
+        `RECEPTIONIST` o `ADMIN`. El Bearer se declara con el esquema
+        `bearerAuth`, pero el rol no es expresable en `securitySchemes`: se
+        verifica dentro del caso de uso, no en el filtro de seguridad (D5). NO debe
+        incluir ningún campo de la variante QR
         (`qrCredentials`, `deviceId`, `deviceToken`).
       type: object
       required: [type, studentId]
@@ -1399,3 +1417,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PhysicalDeviceResponse'
+
+security:
+  - bearerAuth: []
