@@ -128,7 +128,10 @@ jobs:
         # en los 7 módulos JVM; por eso no hay pasos aparte para esas tareas.
         # --no-build-cache: el gate de release compila y testea siempre desde las fuentes,
         # sin reutilizar salidas cacheadas. Sin `clean`: no hace falta en un runner efímero.
-        run: ./gradlew build --no-build-cache
+        # :android:assembleDebugAndroidTest compila y empaqueta los tests instrumentados, que
+        # `build` no toca (no hay emulador en CI para ejecutarlos; ver docs/16-CICD-PIPELINE.md,
+        # "Qué verifica el CI del módulo Android").
+        run: ./gradlew build :android:assembleDebugAndroidTest --no-build-cache
 
       - name: Upload test results
         # if: always() → ejecuta siempre (éxito o fallo) para preservar evidencia
@@ -136,7 +139,10 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: test-results
-          path: '**/build/test-results/test/*.xml'
+          # Los módulos JVM escriben en test/; Android (AGP) en testDebugUnitTest/.
+          path: |
+            **/build/test-results/test/*.xml
+            android/build/test-results/testDebugUnitTest/*.xml
 
       - name: Upload coverage reports
         if: always()

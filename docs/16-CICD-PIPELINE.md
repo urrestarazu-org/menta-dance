@@ -90,8 +90,11 @@ larga con el flujo anterior ejecutó 188 de 202 tareas y tardó 9 min 43 s). Se
 decidió **subir el presupuesto en vez de recortar verificación**: el job sigue
 cubriendo build, tests unitarios, ArchUnit y Checkstyle de todos los módulos.
 
-**Pendiente de medir:** el presupuesto sigue en <15 min hasta tener datos con la
-caché activa. No hay cifras "después" todavía (ver [Caché de Gradle en CI](#caché-de-gradle-en-ci)).
+**Medición con la caché activa** (run posterior al merge de #475, mismo commit,
+una muestra por caso): corrida en frío 12 min 17 s; re-run con la caché que dejó
+`develop` 1 min 15 s (`build`: 192 tareas, 63 ejecutadas, 95 `FROM-CACHE`, 34
+`UP-TO-DATE`). El re-run es el mejor caso; en un PR real cambian algunos módulos.
+El presupuesto se mantiene en <15 min (ver [Caché de Gradle en CI](#caché-de-gradle-en-ci)).
 Si el tiempo vuelve a exceder los 15 min, la opción restante es mover la
 verificación de la variante release de Android a `pr-main.yml`.
 
@@ -100,6 +103,27 @@ y un único `./gradlew build --no-build-cache`. En los 7 módulos JVM `build`
 incluye `test`, `jacocoTestReport` (reporte HTML/XML que se sube como artefacto)
 y `jacocoTestCoverageVerification` con las verificaciones por capa, por lo que se
 quitaron los pasos separados de tests, ArchUnit, reporte y verificación de cobertura.
+
+### Qué verifica el CI del módulo Android
+
+Evidencia: logs de `quick-build-and-test` (run 37829415387).
+
+| Verificación | ¿Corre en CI? | Cómo |
+|---|---|---|
+| Tests unitarios (`android/src/test`, 5 tests) | Sí | `:android:testDebugUnitTest`, dentro de `build` (`FROM-CACHE` si las entradas no cambian; una tarea fallida nunca se cachea) |
+| Lint | Sí | `:android:lint` |
+| Compilación debug y release | Sí | `:android:assembleDebug`, `:android:assembleRelease` |
+| Compilación de los tests instrumentados | Sí | `:android:assembleDebugAndroidTest`, agregado explícito a `build` |
+| **Ejecución** de los tests instrumentados (`androidTest`) | **No** | No hay emulador en CI |
+
+Decisión (#442, [ADR-0036](adr/0036-android-agp9-tooling-migration.md)): no se
+agrega un job con emulador por ahora. Compilar y empaquetar `androidTest` detecta
+código roto y dependencias que no resuelven; la brecha aceptada es un fallo que
+solo aparezca al ejecutar en un dispositivo.
+
+Reportes: `pr-main.yml` sube los XML de `**/build/test-results/test/` (módulos
+JVM) y de `android/build/test-results/testDebugUnitTest/` (convención de AGP). El
+patrón original solo cubría el primero y los reportes de Android se perdían.
 
 ### Caché de Gradle en CI
 

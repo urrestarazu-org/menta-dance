@@ -87,7 +87,10 @@ jobs:
         # y los umbrales de cobertura JaCoCo. No hay pasos aparte para esas tareas: repetirlos
         # con otro filtro (p. ej. --tests) cambia las entradas de `test` y lo vuelve a correr.
         # Sin `clean`: se reutilizan las salidas incrementales y la caché de build de Gradle.
-        run: ./gradlew build
+        # :android:assembleDebugAndroidTest compila y empaqueta los tests instrumentados, que
+        # `build` no toca (no hay emulador en CI para ejecutarlos; ver docs/16-CICD-PIPELINE.md,
+        # "Qué verifica el CI del módulo Android").
+        run: ./gradlew build :android:assembleDebugAndroidTest
 
   # Job independiente que corre en paralelo con quick-build-and-test
   nginx-validation:
