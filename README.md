@@ -313,16 +313,51 @@ menta-dance/
 
 ---
 
-## Credenciales de Prueba
+## Datos Demo y Credenciales de Prueba
 
-> **Nota**: Las credenciales estarán disponibles una vez desplegado el proyecto.
+El perfil `demo` siembra, al arrancar la API, usuarios por rol, catálogo, sesiones, planes y una
+suscripción de prueba, para recorrer la aplicación con datos realistas. Solo para desarrollo local:
 
-| Rol | Email | Contraseña |
-|-----|-------|------------|
-| Admin | `admin@menta.dance` | `Admin123!` |
-| Profesor | `profesor@menta.dance` | `Prof123!` |
-| Alumno | `alumno@menta.dance` | `Alumno123!` |
-| Recepcionista | `recepcion@menta.dance` | `Recep123!` |
+```bash
+./gradlew :api:app:bootRun --args='--spring.profiles.active=demo'
+```
+
+| Rol | Email | Contraseña por defecto | Variable de entorno |
+|-----|-------|------------------------|---------------------|
+| Admin | `admin@menta.dance` | `Admin123!` | `DEMO_ADMIN_PASSWORD` |
+| Profesor | `profesor@menta.dance` | `Prof123!` | `DEMO_INSTRUCTOR_PASSWORD` |
+| Alumno | `alumno@menta.dance` | `Alumno123!` | `DEMO_STUDENT_PASSWORD` |
+| Recepcionista | `recepcion@menta.dance` | `Recep123!` | `DEMO_RECEPTIONIST_PASSWORD` |
+
+Otras variables del perfil (definidas en `api/app/src/main/resources/application-demo.yml`):
+
+- `DEMO_QR_READER_SECRET`: secreto del lector QR demo. Sin valor, el lector no se siembra (se registra un
+  WARN y el arranque continúa); si cambia entre arranques, se rota el hash guardado.
+- `BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET`: el perfil `demo` trae un valor por defecto solo para demo;
+  nunca reutilizarlo en otro entorno.
+
+Datos sembrados: los cursos virtuales "Bachata Sensual" y "Bachata Tradicional" (2 módulos cada uno, con
+lecciones gratuitas y restringidas, servidas por el adaptador local de Bunny.net); los cursos presenciales
+"Bachata Sensual Presencial" (martes y jueves 19:00, cupo 12) y "Bachata Tradicional Presencial" (sábados
+11:00, cupo 15), con sesiones para las próximas 4 semanas y una sesión "rolling" unos 10 minutos en el
+futuro; precios presenciales de 25000 y 20000 ARS (recargo individual del 20%); "Plan Virtual"
+(30000 ARS, 30 días, ambos cursos virtuales) y "Plan Completo" (60000 ARS, 30 días, los 4 cursos); y un
+TRIAL de 90 días sobre "Plan Completo" para el alumno, que además tiene cupo confirmado en la próxima
+sesión de Sensual y en la sesión rolling. Los horarios se expresan en UTC.
+
+Comportamiento a tener en cuenta:
+
+- **Guarda de arranque**: combinar `demo` con `prod`, `production` o `staging` (sin distinguir
+  mayúsculas) aborta el arranque antes de sembrar nada.
+- **Mercado Pago real**: el perfil no reemplaza los adaptadores de Mercado Pago; usar credenciales sandbox.
+- **Re-ejecuciones idempotentes**: reiniciar no duplica datos ni restablece contraseñas existentes; la
+  sesión rolling se reutiliza o se reprograma, nunca se acumula.
+- **Check-in tras reiniciar**: si ya existe asistencia en la sesión rolling, un nuevo check-in devuelve
+  la asistencia existente. Para un check-in nuevo hay que recrear la base de datos
+  (`docker compose down -v`). Es un comportamiento aceptado.
+
+Ver [docs/26-LOCAL-DEV-SETUP-HOWTO.md](docs/26-LOCAL-DEV-SETUP-HOWTO.md#perfil-demo-datos-de-prueba) para el
+paso a paso.
 
 ---
 
