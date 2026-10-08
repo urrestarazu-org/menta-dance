@@ -7,6 +7,7 @@ import com.menta.auth.application.dto.TokenPair;
 import com.menta.auth.application.port.in.LoginUseCase;
 import com.menta.auth.application.port.in.LogoutUseCase;
 import com.menta.auth.application.port.in.RefreshTokenUseCase;
+import com.menta.auth.domain.exception.AccountNotActivatedException;
 import com.menta.auth.domain.exception.AuthDegradedException;
 import com.menta.auth.domain.exception.InvalidCredentialsException;
 import com.menta.auth.domain.exception.LockedUserException;
@@ -135,6 +136,15 @@ public class AuthController {
     @ExceptionHandler(LockedUserException.class)
     public ResponseEntity<ProblemDetail> handleLockedUser(LockedUserException ex) {
         return ProblemDetails.response(HttpStatus.LOCKED, "The user account is locked.", ex.getErrorCode());
+    }
+
+    /**
+     * 403 — the password was correct but the account is still awaiting activation. Only
+     * reachable after the password check, so it does not enumerate accounts.
+     */
+    @ExceptionHandler(AccountNotActivatedException.class)
+    public ResponseEntity<ProblemDetail> handleAccountNotActivated(AccountNotActivatedException ex) {
+        return ProblemDetails.response(HttpStatus.FORBIDDEN, "The user account is not activated.", ex.getErrorCode());
     }
 
     /**

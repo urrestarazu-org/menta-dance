@@ -42,7 +42,7 @@ que la ruta canónica.
 
 | Endpoint | Autenticación de entrada | Respuesta exitosa |
 | --- | --- | --- |
-| `POST /login` | JSON `{ "email", "password" }` | `200` con el par de tokens para el cliente de confianza (BFF o Android) |
+| `POST /login` | JSON `{ "email", "password" }` | `200` con el par de tokens para el cliente de confianza (BFF o Android). El estado de la cuenta se revela sólo con la contraseña correcta: `403 ACCOUNT_NOT_ACTIVATED` (pendiente), `423 USER_LOCKED` (bloqueada); `INACTIVE`/`SUSPENDED` y toda contraseña incorrecta responden `401 INVALID_CREDENTIALS` |
 | `POST /refresh` | `X-Refresh-Token` obligatorio; nunca body JSON | `200` con el par rotado |
 | `POST /logout` | `Authorization: Bearer <access>` y `X-Refresh-Token` obligatorios | `204 No Content` |
 | `POST /register` | JSON `{ "email", "password", "role": "STUDENT" }` | `202 Accepted`, sin cuerpo y siempre genérico |

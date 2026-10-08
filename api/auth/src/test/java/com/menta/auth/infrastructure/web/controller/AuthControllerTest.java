@@ -23,6 +23,7 @@ import com.menta.auth.application.dto.TokenPair;
 import com.menta.auth.application.port.in.LoginUseCase;
 import com.menta.auth.application.port.in.LogoutUseCase;
 import com.menta.auth.application.port.in.RefreshTokenUseCase;
+import com.menta.auth.domain.exception.AccountNotActivatedException;
 import com.menta.auth.domain.exception.AuthDegradedException;
 import com.menta.auth.domain.exception.InvalidCredentialsException;
 import com.menta.auth.domain.exception.LockedUserException;
@@ -148,6 +149,27 @@ class AuthControllerTest {
             .andExpect(status().isLocked())
             .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
             .andExpect(jsonPath("$.code", is("USER_LOCKED")));
+    }
+
+    @Test
+    void login_returns_403_account_not_activated_with_correct_credentials_on_pending_account() throws Exception {
+        when(loginUseCase.execute(any(LoginCommand.class)))
+            .thenThrow(new AccountNotActivatedException(UUID.randomUUID()));
+
+        String body = objectMapper.writeValueAsString(
+            new LoginRequest("pending@example.com", "CorrectPass!")
+        );
+
+        mockMvc.perform(post(LOGIN_URL)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+            .andExpect(status().isForbidden())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.type", is("https://menta.dance/problems/account_not_activated")))
+            .andExpect(jsonPath("$.title", is("Forbidden")))
+            .andExpect(jsonPath("$.status", is(403)))
+            .andExpect(jsonPath("$.detail", is("The user account is not activated.")))
+            .andExpect(jsonPath("$.code", is("ACCOUNT_NOT_ACTIVATED")));
     }
 
     @Test

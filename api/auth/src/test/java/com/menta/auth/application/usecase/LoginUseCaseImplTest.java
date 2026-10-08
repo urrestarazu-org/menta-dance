@@ -26,6 +26,7 @@ import com.menta.auth.application.port.out.RateLimitDecision;
 import com.menta.auth.application.port.out.RefreshTokenRepository;
 import com.menta.auth.application.port.out.TokenHasher;
 import com.menta.auth.domain.crypto.Sha256Hex;
+import com.menta.auth.domain.exception.AccountNotActivatedException;
 import com.menta.auth.domain.exception.AuthDegradedException;
 import com.menta.auth.domain.exception.InvalidCredentialsException;
 import com.menta.auth.domain.exception.LockedUserException;
@@ -46,6 +47,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -149,14 +152,15 @@ class LoginUseCaseImplTest {
     }
 
     @Nested
-    @DisplayName("Spec: Cuenta LOCKED rechaza login")
+    @DisplayName("Spec: Cuenta LOCKED rechaza login solo con la contraseña correcta")
     class LockedUserScenario {
 
         @Test
-        void rejects_locked_with_dedicated_exception_and_no_outbox() {
+        void correct_password_on_locked_account_raises_dedicated_exception_and_no_outbox() {
             User locked = lockedUser(USER_ID, HASHED_PASSWORD);
 
             when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(locked));
+            when(passwordEncoder.matches(RAW_PASSWORD, HASHED_PASSWORD)).thenReturn(true);
 
             assertThatThrownBy(() ->
                 useCase.execute(new LoginCommand(EMAIL.getValue(), RAW_PASSWORD, CLIENT_FP))
@@ -167,39 +171,124 @@ class LoginUseCaseImplTest {
             verify(outboxAppender, never()).append(anyString(), anyString(), anyString());
             verify(refreshTokenRepository, never()).save(any());
             verify(accessTokenIssuer, never()).issue(any());
-            // LOCKED path checks status BEFORE password match (defense in
-            // depth — even a known password on a locked account MUST be
-            // refused).
-            verify(passwordEncoder, never()).matches(anyString(), anyString());
+        }
+    }
+
+    @Nested
+    @DisplayName("Issue #477: el estado de la cuenta se revela solo tras verificar la contraseña")
+    class StatusAfterPasswordScenario {
+
+        @ParameterizedTest
+        @EnumSource(UserStatus.class)
+        void wrong_password_is_a_generic_counted_failure_for_every_status(UserStatus status) {
+            givenUser(status);
+            when(passwordEncoder.matches(RAW_PASSWORD, HASHED_PASSWORD)).thenReturn(false);
+
+            assertThatThrownBy(() -> login())
+                .isExactlyInstanceOf(InvalidCredentialsException.class);
+
+            verify(loginRateLimitPort).recordFailure(EMAIL_FP, CLIENT_FP);
+            verify(loginAttemptAuditPort)
+                .record(LoginAttemptOutcome.INVALID_CREDENTIALS, EMAIL_FP, CLIENT_FP);
+            verifyNothingIssuedOrEmitted();
+        }
+
+        @Test
+        void unknown_email_is_a_generic_counted_failure() {
+            when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> login())
+                .isExactlyInstanceOf(InvalidCredentialsException.class);
+
+            verify(loginRateLimitPort).recordFailure(EMAIL_FP, CLIENT_FP);
+            verify(loginAttemptAuditPort)
+                .record(LoginAttemptOutcome.INVALID_CREDENTIALS, EMAIL_FP, CLIENT_FP);
+            verifyNothingIssuedOrEmitted();
+        }
+
+        @Test
+        void correct_password_on_pending_activation_raises_account_not_activated() {
+            givenUser(UserStatus.PENDING_ACTIVATION);
+            when(passwordEncoder.matches(RAW_PASSWORD, HASHED_PASSWORD)).thenReturn(true);
+
+            assertThatThrownBy(() -> login())
+                .isExactlyInstanceOf(AccountNotActivatedException.class)
+                .hasMessageContaining(USER_ID.toString());
+
+            verify(loginRateLimitPort, never()).recordFailure(anyString(), anyString());
+            verify(loginAttemptAuditPort)
+                .record(LoginAttemptOutcome.ACCOUNT_NOT_ACTIVATED, EMAIL_FP, CLIENT_FP);
+            verifyNothingIssuedOrEmitted();
+        }
+
+        @Test
+        void correct_password_on_locked_does_not_consume_the_failure_budget() {
+            givenUser(UserStatus.LOCKED);
+            when(passwordEncoder.matches(RAW_PASSWORD, HASHED_PASSWORD)).thenReturn(true);
+
+            assertThatThrownBy(() -> login())
+                .isExactlyInstanceOf(LockedUserException.class);
+
+            verify(loginRateLimitPort, never()).recordFailure(anyString(), anyString());
+            verify(loginAttemptAuditPort).record(LoginAttemptOutcome.LOCKED, EMAIL_FP, CLIENT_FP);
+            verifyNothingIssuedOrEmitted();
+        }
+
+        @ParameterizedTest
+        @EnumSource(value = UserStatus.class, names = {"INACTIVE", "SUSPENDED"})
+        void correct_password_on_inactive_or_suspended_stays_generic_and_uncounted(UserStatus status) {
+            givenUser(status);
+            when(passwordEncoder.matches(RAW_PASSWORD, HASHED_PASSWORD)).thenReturn(true);
+
+            assertThatThrownBy(() -> login())
+                .isExactlyInstanceOf(InvalidCredentialsException.class);
+
+            verify(loginRateLimitPort, never()).recordFailure(anyString(), anyString());
+            verify(loginAttemptAuditPort)
+                .record(LoginAttemptOutcome.ACCOUNT_NOT_OPERATIONAL, EMAIL_FP, CLIENT_FP);
+            verifyNothingIssuedOrEmitted();
+        }
+
+        @Test
+        void correct_password_on_active_account_issues_tokens() {
+            successfulLoginFixtures();
+
+            TokenPair pair = login();
+
+            assertThat(pair.accessToken()).isEqualTo("jwt.compact.string");
+            verify(loginAttemptAuditPort).record(LoginAttemptOutcome.SUCCESS, EMAIL_FP, CLIENT_FP);
+        }
+
+        @ParameterizedTest
+        @EnumSource(value = UserStatus.class, names = {"PENDING_ACTIVATION", "INACTIVE", "SUSPENDED", "LOCKED"})
+        void the_password_is_always_compared_before_the_status_is_judged(UserStatus status) {
+            givenUser(status);
+            when(passwordEncoder.matches(RAW_PASSWORD, HASHED_PASSWORD)).thenReturn(false);
+
+            assertThatThrownBy(() -> login()).isInstanceOf(InvalidCredentialsException.class);
+
+            verify(passwordEncoder).matches(RAW_PASSWORD, HASHED_PASSWORD);
+        }
+
+        private void givenUser(UserStatus status) {
+            when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(
+                userWithStatus(USER_ID, Role.STUDENT, HASHED_PASSWORD, 1L, status)));
+        }
+
+        private TokenPair login() {
+            return useCase.execute(new LoginCommand(EMAIL.getValue(), RAW_PASSWORD, CLIENT_FP));
+        }
+
+        private void verifyNothingIssuedOrEmitted() {
+            verify(outboxAppender, never()).append(anyString(), anyString(), anyString());
+            verify(accessTokenIssuer, never()).issue(any());
+            verify(refreshTokenRepository, never()).save(any());
         }
     }
 
     @Nested
     @DisplayName("Spec: Credenciales inválidas responde 401 sin discriminar")
     class InvalidCredentialsScenario {
-
-        @Test
-        void pending_activation_uses_generic_invalid_credentials_without_side_effects() {
-            User pending = userWithStatus(
-                USER_ID,
-                Role.STUDENT,
-                HASHED_PASSWORD,
-                1L,
-                UserStatus.PENDING_ACTIVATION
-            );
-
-            when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(pending));
-
-            assertThatThrownBy(() ->
-                useCase.execute(new LoginCommand(EMAIL.getValue(), RAW_PASSWORD, CLIENT_FP))
-            )
-                .isInstanceOf(InvalidCredentialsException.class);
-
-            verify(passwordEncoder, never()).matches(anyString(), anyString());
-            verify(outboxAppender, never()).append(anyString(), anyString(), anyString());
-            verify(accessTokenIssuer, never()).issue(any());
-            verify(refreshTokenRepository, never()).save(any());
-        }
 
         @Test
         void wrong_password_throws_invalid_credentials_without_outbox() {
@@ -372,14 +461,15 @@ class LoginUseCaseImplTest {
         }
 
         @Test
-        void a_locked_account_charges_both_budgets() {
+        void a_wrong_password_on_a_locked_account_charges_both_budgets() {
             when(userRepository.findByEmail(EMAIL))
                 .thenReturn(Optional.of(lockedUser(USER_ID, HASHED_PASSWORD)));
+            when(passwordEncoder.matches(RAW_PASSWORD, HASHED_PASSWORD)).thenReturn(false);
 
             assertThatThrownBy(() ->
                 useCase.execute(new LoginCommand(EMAIL.getValue(), RAW_PASSWORD, CLIENT_FP))
             )
-                .isInstanceOf(LockedUserException.class);
+                .isInstanceOf(InvalidCredentialsException.class);
 
             verify(loginRateLimitPort).recordFailure(EMAIL_FP, CLIENT_FP);
         }
@@ -494,8 +584,9 @@ class LoginUseCaseImplTest {
         }
 
         @Test
-        void records_locked_attempts() {
+        void records_locked_attempts_only_when_the_password_was_correct() {
             when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(lockedUser(USER_ID, HASHED_PASSWORD)));
+            when(passwordEncoder.matches(RAW_PASSWORD, HASHED_PASSWORD)).thenReturn(true);
 
             assertThatThrownBy(() ->
                 useCase.execute(new LoginCommand(EMAIL.getValue(), RAW_PASSWORD, CLIENT_FP))
@@ -554,6 +645,17 @@ class LoginUseCaseImplTest {
     }
 
     // ---- domain fixtures ----
+
+    private void successfulLoginFixtures() {
+        User user = activeUser(USER_ID, Role.STUDENT, HASHED_PASSWORD, 1L);
+        IssuedAccessToken access = new IssuedAccessToken("jwt.compact.string", JTI.toString(), ACCESS_TTL);
+        when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches(RAW_PASSWORD, HASHED_PASSWORD)).thenReturn(true);
+        when(accessTokenIssuer.issue(user)).thenReturn(access);
+        when(refreshTokenRepository.save(any(RefreshToken.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+        when(tokenHasher.hash(anyString())).thenReturn(REFRESH_HASH);
+    }
 
     private User activeUser(UUID id, Role role, String passwordHash, long tokenVersion) {
         return userWithStatus(id, role, passwordHash, tokenVersion, UserStatus.ACTIVE);

@@ -206,6 +206,39 @@ class AuthFlowIntegrationTest {
     }
 
     @Test
+    void login_before_activation_reveals_the_state_only_with_the_correct_password() {
+        when(authDegradedGuard.isDegraded()).thenReturn(false);
+
+        userRepository.findByEmail(Email.of(EMAIL))
+            .ifPresent(existing -> userRepository.deleteById(existing.getId()));
+        userRepository.save(User.register(
+            Email.of(EMAIL),
+            passwordEncoder.encode(RAW_PASSWORD),
+            Role.STUDENT
+        ));
+
+        ResponseEntity<Map> wrongPassword = http.exchange(
+            "/api/v1/auth/login",
+            HttpMethod.POST,
+            jsonEntity(Map.of("email", EMAIL, "password", "WrongPass!")),
+            Map.class
+        );
+        assertThat(wrongPassword.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat((String) wrongPassword.getBody().get("code")).isEqualTo("INVALID_CREDENTIALS");
+
+        ResponseEntity<Map> correctPassword = http.exchange(
+            "/api/v1/auth/login",
+            HttpMethod.POST,
+            jsonEntity(Map.of("email", EMAIL, "password", RAW_PASSWORD)),
+            Map.class
+        );
+        assertThat(correctPassword.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(correctPassword.getHeaders().getContentType())
+            .isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+        assertThat((String) correctPassword.getBody().get("code")).isEqualTo("ACCOUNT_NOT_ACTIVATED");
+    }
+
+    @Test
     void login_returns_401_for_unknown_email_without_discrimination() {
         when(authDegradedGuard.isDegraded()).thenReturn(false);
 

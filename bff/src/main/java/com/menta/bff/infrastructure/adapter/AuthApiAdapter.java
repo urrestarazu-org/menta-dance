@@ -207,6 +207,12 @@ public class AuthApiAdapter implements AuthApiClient {
             throw new AuthenticationException("Invalid credentials or refresh token: " + errorBody);
         }
 
+        // 403 ACCOUNT_NOT_ACTIVATED: correct password but the account awaits activation.
+        // The web login keeps the generic invalid-credentials result for now.
+        if (status == HttpStatus.FORBIDDEN) {
+            throw new AuthenticationException("Invalid credentials or refresh token: " + errorBody);
+        }
+
         if (status == HttpStatus.LOCKED) {
             throw new RefreshTokenRevokedException("Token family revoked: " + errorBody);
         }

@@ -41,8 +41,13 @@ info:
     Varios endpoints responden de forma deliberadamente indistinguible para no
     revelar si una cuenta existe:
 
-    - `POST /login` colapsa email desconocido, contraseña incorrecta y cuenta no
-      activa en el mismo `401 INVALID_CREDENTIALS`.
+    - `POST /login` colapsa email desconocido y contraseña incorrecta (para
+      cualquier estado de cuenta) en el mismo `401 INVALID_CREDENTIALS`. El
+      estado de la cuenta se revela **solo después de verificar la contraseña**:
+      con credenciales correctas, `PENDING_ACTIVATION` devuelve `403
+      ACCOUNT_NOT_ACTIVATED` y `LOCKED` devuelve `423 USER_LOCKED`; `INACTIVE` y
+      `SUSPENDED` siguen siendo `401` genérico. Quien recibe ese dato ya conoce
+      la contraseña, así que no hay enumeración de cuentas.
     - `POST /register` responde `202` vacío tanto para alta nueva como para email
       ya registrado o rol no permitido.
     - `POST /resend-activation` responde `202` vacío para email inexistente,
@@ -76,7 +81,17 @@ paths:
       tags: [Sesión]
       summary: Iniciar sesión
       description: |
-        Valida credenciales y estado de cuenta sin revelar cuál dato falló.
+        Valida credenciales y, solo cuando la contraseña es correcta, el estado de
+        la cuenta. Orden de decisión: guarda de degradación, presupuesto de fallos,
+        búsqueda del usuario, comparación de contraseña y, por último, decisión por
+        estado. Email desconocido y contraseña incorrecta son indistinguibles
+        (`401 INVALID_CREDENTIALS`), sea cual sea el estado de la cuenta.
+
+        Con credenciales correctas: `PENDING_ACTIVATION` responde `403
+        ACCOUNT_NOT_ACTIVATED`; `LOCKED` responde `423 USER_LOCKED`; `INACTIVE` y
+        `SUSPENDED` siguen respondiendo `401 INVALID_CREDENTIALS` (revelar una
+        suspensión administrativa es una decisión de producto aparte). Estos
+        rechazos no consumen el presupuesto de fallos, pero quedan auditados.
 
         El refresh token se devuelve en el header `X-Refresh-Token`, nunca en el
         cuerpo.
@@ -108,7 +123,8 @@ paths:
         '401':
           description: |
             Credenciales inválidas. Idéntica para email desconocido, contraseña
-            incorrecta y cuenta no activa.
+            incorrecta (con cualquier estado de cuenta) y, con la contraseña
+            correcta, cuenta `INACTIVE` o `SUSPENDED`.
           content:
             application/problem+json:
               schema:
@@ -119,11 +135,29 @@ paths:
                 status: 401
                 detail: Authentication failed.
                 code: INVALID_CREDENTIALS
+        '403':
+          description: |
+            La contraseña es correcta pero la cuenta sigue `PENDING_ACTIVATION`.
+            Solo se devuelve tras verificar la contraseña; con una contraseña
+            incorrecta la respuesta es el `401` genérico. El cliente puede
+            ofrecer el reenvío de activación (`POST /resend-activation`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://menta.dance/problems/account_not_activated
+                title: Forbidden
+                status: 403
+                detail: The user account is not activated.
+                code: ACCOUNT_NOT_ACTIVATED
         '423':
           description: |
-            Cuenta bloqueada administrativamente. Distinto de `429`: este estado
-            es persistente y requiere intervención; el rate limiting nunca lo
-            provoca.
+            La contraseña es correcta pero la cuenta está bloqueada
+            administrativamente. Solo se devuelve tras verificar la contraseña;
+            con una contraseña incorrecta la respuesta es el `401` genérico.
+            Distinto de `429`: este estado es persistente y requiere
+            intervención; el rate limiting nunca lo provoca.
           content:
             application/problem+json:
               schema:
@@ -695,6 +729,7 @@ components:
       type: string
       enum:
         - INVALID_CREDENTIALS
+        - ACCOUNT_NOT_ACTIVATED
         - USER_LOCKED
         - LOGIN_RATE_LIMITED
         - REFRESH_TOKEN_COMPROMISED
