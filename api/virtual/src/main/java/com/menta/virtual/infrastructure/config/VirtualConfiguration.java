@@ -108,7 +108,7 @@ public class VirtualConfiguration {
 
     /**
      * Production-like profiles that MUST NEVER combine with {@code
-     * e2e-bunny-net} (ADR-0040, issue #129). Mirrors {@code
+     * e2e-bunny-net} or {@code demo} (ADR-0040, issue #129). Mirrors {@code
      * BillingConfiguration}'s {@code PRODUCTION_PROFILES} set — same
      * production/staging vocabulary across modules.
      */
@@ -121,12 +121,14 @@ public class VirtualConfiguration {
      * a separate {@code @PostConstruct} or {@code ApplicationRunner}: a
      * {@code @Bean} factory throw aborts context refresh before the web
      * server starts accepting requests, and this method only runs at all
-     * when {@code e2e-bunny-net} is active (its own {@code @Profile}
-     * guards registration), so the check only has to defend against that
-     * one profile combining with a production-like one.
+     * when {@code e2e-bunny-net} or {@code demo} is active (its own
+     * {@code @Profile} guards registration), so the check only has to defend
+     * against those profiles combining with a production-like one. The
+     * {@code demo} profile seeds Bunny-less video references that only this
+     * adapter can sign.
      */
     @Bean
-    @Profile("e2e-bunny-net")
+    @Profile("e2e-bunny-net | demo")
     public BunnyNetSignatureService localBunnyNetSignatureService(
         BunnyNetProperties properties, Environment environment
     ) {
@@ -141,11 +143,11 @@ public class VirtualConfiguration {
      * (or the official Bunny.net SDK, once accepted onto the dep tree)
      * can replace THIS BEAN without touching the use case or the wire
      * contract. ADR-0040 is the architectural note behind that
-     * isolation. Active whenever {@code e2e-bunny-net} is NOT — i.e. by
+     * isolation. Active whenever neither {@code e2e-bunny-net} nor {@code demo} is active — i.e. by
      * default, including every production-like profile.
      */
     @Bean
-    @Profile("!e2e-bunny-net")
+    @Profile("!e2e-bunny-net & !demo")
     public BunnyNetSignatureService defaultBunnyNetSignatureService(BunnyNetProperties properties) {
         return new StringFormatBunnyNetSignatureService(properties);
     }
@@ -154,7 +156,7 @@ public class VirtualConfiguration {
         for (String profile : environment.getActiveProfiles()) {
             if (PRODUCTION_LIKE_PROFILES.contains(profile.toLowerCase(Locale.ROOT))) {
                 throw new IllegalStateException(
-                    "SECURITY: local Bunny.net signature adapter (profile e2e-bunny-net) cannot run "
+                    "SECURITY: local Bunny.net signature adapter (profiles e2e-bunny-net, demo) cannot run "
                         + "alongside a production-like profile. Active profiles: "
                         + String.join(", ", environment.getActiveProfiles())
                 );
