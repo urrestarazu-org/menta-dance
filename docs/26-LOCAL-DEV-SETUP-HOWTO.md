@@ -16,6 +16,9 @@ cp .env.example .env
 # 2. Levantar TODO (infraestructura + API + BFF) en un solo comando
 ./scripts/dev.sh start
 
+#    Con datos de demo (usuarios, catálogo, sesiones y planes sembrados):
+SPRING_PROFILES_ACTIVE=demo ./scripts/dev.sh start
+
 # 3. Verificar que todo esté corriendo
 ./scripts/dev.sh status
 
@@ -27,6 +30,11 @@ curl -i -X POST "http://localhost:8081/api/v1/auth/register" \
 # 5. (Opcional) Ejecutar tests de Bruno CLI
 cd bruno/BFF-Session-Custody && npx @usebruno/cli run --env Local .
 ```
+
+El script valida antes de arrancar que exista `BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET` (en `.env` o en el
+entorno), salvo que el perfil `demo` esté activo. Si el API falla durante el arranque, el script corta de
+inmediato y muestra la causa raíz y las últimas líneas del log, en lugar de esperar los 120 segundos.
+`./scripts/dev-test.sh` prueba esas validaciones sin levantar ningún servicio.
 
 **URLs:**
 - API: http://localhost:8081

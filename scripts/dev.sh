@@ -8,7 +8,7 @@ set -euo pipefail
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 readonly SCRIPT_PATH="${SCRIPT_DIR}/$(basename "${BASH_SOURCE[0]}")"
-readonly ENV_FILE="${PROJECT_ROOT}/.env"
+readonly ENV_FILE="${DEV_ENV_FILE:-${PROJECT_ROOT}/.env}"
 readonly INFRA_COMPOSE_FILE="${PROJECT_ROOT}/infra/docker/database/docker-compose.yml"
 readonly INFRA_COMPOSE_PROJECT="menta-dance"
 readonly GRADLEW="${PROJECT_ROOT}/gradlew"
@@ -154,6 +154,62 @@ validate_environment() {
             return 1
         fi
     done
+
+    # The API refuses to start without this secret unless the demo profile
+    # (which ships its own demo-only value) is active.
+    if ! demo_profile_active && [[ -z "$(env_setting BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET)" ]]; then
+        log_error "BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET is required and has no default; the API would fail to start."
+        log_error "Fix it in one of two ways:"
+        log_error "  1. Set it in ${ENV_FILE} to any long random local value (see .env.example)."
+        log_error "  2. Start with the demo profile, which seeds demo data and brings its own value:"
+        log_error "     SPRING_PROFILES_ACTIVE=demo ${SCRIPT_PATH} start"
+        return 1
+    fi
+}
+
+# Effective value of a setting: the shell environment wins, then the last
+# assignment in the .env file. Prints nothing when it is unset or empty.
+env_setting() {
+    local key=$1
+    local value=${!key:-}
+
+    if [[ -z "$value" && -r "$ENV_FILE" ]]; then
+        value=$(sed -n "s/^[[:space:]]*${key}=//p" "$ENV_FILE" | tail -n 1)
+    fi
+    printf '%s' "$value"
+}
+
+demo_profile_active() {
+    local profiles
+    profiles=$(env_setting SPRING_PROFILES_ACTIVE)
+    case ",${profiles// /}," in
+        *,demo,*) return 0 ;;
+    esac
+    return 1
+}
+
+# True when a service log already shows a fatal startup failure, so waiting for
+# the health endpoint any longer is pointless.
+startup_failure_in_log() {
+    local log_file=$1
+
+    [[ -r "$log_file" ]] || return 1
+    grep -Eq 'BUILD FAILED|APPLICATION FAILED TO START|Application run failed' "$log_file"
+}
+
+report_startup_failure() {
+    local display_name=$1
+    local log_file=$2
+    local root_cause
+
+    log_error "${display_name} failed during startup."
+    root_cause=$(grep 'Caused by:' "$log_file" | tail -n 1 || true)
+    if [[ -n "$root_cause" ]]; then
+        log_error "Root cause: ${root_cause}"
+    fi
+    log_error "Last log lines:"
+    tail -n 15 "$log_file" >&2 || true
+    log_error "Full log: ${log_file}"
 }
 
 preflight_start() {
@@ -369,6 +425,11 @@ wait_for_http_service() {
         if health_is_up "$health_url"; then
             log_success "${display_name} is healthy"
             return 0
+        fi
+        if startup_failure_in_log "$log_file"; then
+            printf '\n'
+            report_startup_failure "$display_name" "$log_file"
+            return 1
         fi
         if ! owned_process_is_running "$pid_file" "$task"; then
             clear_process_state "$pid_file"
@@ -727,4 +788,7 @@ main() {
     esac
 }
 
-main "$@"
+# Run only when executed directly so tests can source the helpers.
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi
