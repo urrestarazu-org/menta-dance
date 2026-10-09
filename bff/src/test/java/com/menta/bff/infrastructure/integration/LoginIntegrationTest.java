@@ -56,7 +56,7 @@ class LoginIntegrationTest extends BaseIntegrationTest {
 
         // When: POST /login with valid credentials
         var result = mockMvc.perform(post("/login")
-                        .param("username", "user@example.com")
+                        .param("email", "user@example.com")
                         .param("password", "password123")
                         .with(csrf()))
 
@@ -133,7 +133,7 @@ class LoginIntegrationTest extends BaseIntegrationTest {
 
         // When: POST /login with invalid credentials
         mockMvc.perform(post("/login")
-                        .param("username", "user@example.com")
+                        .param("email", "user@example.com")
                         .param("password", "wrong_password")
                         .with(csrf()))
 
@@ -150,7 +150,7 @@ class LoginIntegrationTest extends BaseIntegrationTest {
     void loginWithoutCsrfToken_shouldReturnForbidden() throws Exception {
         // When: POST /login without CSRF token
         mockMvc.perform(post("/login")
-                        .param("username", "user@example.com")
+                        .param("email", "user@example.com")
                         .param("password", "password123"))
 
                 // Then: Should return 403 Forbidden
@@ -177,7 +177,7 @@ class LoginIntegrationTest extends BaseIntegrationTest {
 
         // When: POST /login
         mockMvc.perform(post("/login")
-                        .param("username", "user@example.com")
+                        .param("email", "user@example.com")
                         .param("password", "password123")
                         .with(csrf()))
 

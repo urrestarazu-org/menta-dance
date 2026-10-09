@@ -26,7 +26,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * - Custom LogoutSuccessHandler (redirects AFTER session invalidation)
  * - CSRF protection (session-stored tokens; only /actuator/health is exempt)
  * - Session management (CREATE_IF_REQUIRED)
- * - Public endpoints (/login, /actuator/health, /error)
+ * - Public endpoints (/, /login, /actuator/health, /error)
  * - Protected endpoints (all others require authentication)
  * </p>
  *
@@ -70,6 +70,9 @@ public class BffSecurityConfig {
                         // wildcard would also permit a future /plans/{id}
                         // that this change never intended to open.
                         .requestMatchers(HttpMethod.GET, "/plans").permitAll()
+                        // Home page is the public course catalog (#358): exact "/" only,
+                        // GET-only, so nothing beneath it or any mutating verb opens up.
+                        .requestMatchers(HttpMethod.GET, "/").permitAll()
                         // All other endpoints require authentication
                         .anyRequest().authenticated()
                 )
@@ -77,6 +80,10 @@ public class BffSecurityConfig {
                 // Form login configuration
                 .formLogin(form -> form
                         .loginPage("/login")
+                        // login.html submits the credential as "email"; Spring's
+                        // default parameter is "username", which left the
+                        // provider an empty email and made every browser login a 500 (#490).
+                        .usernameParameter("email")
                         // ADR-0035: capture the canonical client origin while
                         // the request is still in hand, so the provider never
                         // has to reach for it out of band.
