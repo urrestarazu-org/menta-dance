@@ -18,6 +18,7 @@ import com.github.tomakehurst.wiremock.http.Fault;
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import com.menta.bff.application.dto.RegisterCommand;
+import com.menta.bff.application.dto.ResendActivationCommand;
 import com.menta.bff.application.port.out.AuthApiClient;
 import com.menta.bff.infrastructure.config.AuthProperties;
 import java.time.Duration;
@@ -37,6 +38,7 @@ class AuthApiAdapterAccountTest {
     private static final String CLIENT_ADDRESS = "203.0.113.9";
     private static final String REGISTER = "/api/v1/auth/register";
     private static final String ACTIVATE = "/api/v1/auth/activate";
+    private static final String RESEND = "/api/v1/auth/resend-activation";
     private static final String TOKEN = "activation-token-abc";
 
     private AuthApiAdapter adapter;
@@ -188,5 +190,59 @@ class AuthApiAdapterAccountTest {
         assertThatThrownBy(() -> adapter.validateActivationToken(TOKEN))
                 .isInstanceOf(AuthApiClient.ServiceUnavailableException.class)
                 .hasMessageNotContaining(TOKEN);
+    }
+
+    private static ResendActivationCommand resend() {
+        return new ResendActivationCommand("user@example.com", CLIENT_ADDRESS);
+    }
+
+    @Test
+    @DisplayName("resendActivation posts the email as JSON, forwarding the client origin, and accepts 202")
+    void resendAccepts202() {
+        stubStatus(RESEND, 202);
+
+        adapter.resendActivation(resend());
+
+        verify(postRequestedFor(urlEqualTo(RESEND))
+                .withHeader("X-Forwarded-For", equalTo(CLIENT_ADDRESS))
+                .withRequestBody(matchingJsonPath("$.email", equalTo("user@example.com"))));
+    }
+
+    @Test
+    @DisplayName("resendActivation maps 400 to InvalidRequestException")
+    void resendMaps400() {
+        stubStatus(RESEND, 400);
+
+        assertThatThrownBy(() -> adapter.resendActivation(resend()))
+                .isInstanceOf(AuthApiClient.InvalidRequestException.class);
+    }
+
+    @Test
+    @DisplayName("resendActivation maps 429 to RateLimitedException carrying Retry-After")
+    void resendMaps429() {
+        stubFor(post(urlEqualTo(RESEND)).willReturn(aResponse().withStatus(429).withHeader("Retry-After", "45")));
+
+        assertThatThrownBy(() -> adapter.resendActivation(resend()))
+                .isInstanceOfSatisfying(AuthApiClient.RateLimitedException.class,
+                        e -> assertThat(e.retryAfter()).isEqualTo(Duration.ofSeconds(45)));
+    }
+
+    @Test
+    @DisplayName("resendActivation maps 503 to ServiceUnavailableException")
+    void resendMaps503() {
+        stubStatus(RESEND, 503);
+
+        assertThatThrownBy(() -> adapter.resendActivation(resend()))
+                .isInstanceOf(AuthApiClient.ServiceUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("resendActivation reports a transport fault as unavailable, without echoing the email")
+    void resendMapsTransportFault() {
+        stubFor(post(urlEqualTo(RESEND)).willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)));
+
+        assertThatThrownBy(() -> adapter.resendActivation(resend()))
+                .isInstanceOf(AuthApiClient.ServiceUnavailableException.class)
+                .hasMessageNotContaining("user@example.com");
     }
 }

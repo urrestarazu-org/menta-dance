@@ -2,6 +2,7 @@ package com.menta.bff.infrastructure.web.controller;
 
 import com.menta.bff.application.port.out.AuthApiClient;
 import jakarta.servlet.http.HttpServletResponse;
+import java.time.Duration;
 import org.springframework.http.HttpStatus;
 import org.springframework.ui.Model;
 
@@ -16,6 +17,7 @@ import org.springframework.ui.Model;
 final class AuthFlowErrors {
 
     static final String RATE_LIMITED = "Hiciste demasiados intentos. Esperá unos minutos e intentá de nuevo.";
+    private static final long SECONDS_PER_MINUTE = 60;
     static final String INVALID_REQUEST = "No pudimos procesar los datos ingresados. Revisalos e intentá de nuevo.";
     static final String UNAVAILABLE =
             "No pudimos completar la operación en este momento. Intentá nuevamente en unos minutos.";
@@ -32,7 +34,8 @@ final class AuthFlowErrors {
      */
     static void apply(RuntimeException failure, Model model, HttpServletResponse response) {
         if (failure instanceof AuthApiClient.RateLimitedException) {
-            model.addAttribute("formError", RATE_LIMITED);
+            model.addAttribute("formError", rateLimitedMessage(
+                    ((AuthApiClient.RateLimitedException) failure).retryAfter()));
             response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
         } else if (failure instanceof AuthApiClient.InvalidRequestException) {
             model.addAttribute("formError", INVALID_REQUEST);
@@ -41,5 +44,20 @@ final class AuthFlowErrors {
             model.addAttribute("formError", UNAVAILABLE);
             response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
         }
+    }
+
+    private static String rateLimitedMessage(Duration retryAfter) {
+        if (retryAfter == null || retryAfter.isZero() || retryAfter.isNegative()) {
+            return RATE_LIMITED;
+        }
+        long seconds = retryAfter.toSeconds();
+        String wait;
+        if (seconds < SECONDS_PER_MINUTE) {
+            wait = seconds + (seconds == 1 ? " segundo" : " segundos");
+        } else {
+            long minutes = (seconds + SECONDS_PER_MINUTE - 1) / SECONDS_PER_MINUTE;
+            wait = minutes + (minutes == 1 ? " minuto" : " minutos");
+        }
+        return "Hiciste demasiados intentos. Esperá " + wait + " e intentá de nuevo.";
     }
 }

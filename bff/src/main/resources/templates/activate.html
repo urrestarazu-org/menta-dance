@@ -13,6 +13,7 @@
 
 <div th:if="${invalidToken}">
     <p role="alert">El enlace de activación es inválido, venció o ya fue utilizado.</p>
+    <p>Si venció, podés pedir uno nuevo: <a th:href="@{/reenviar-activacion}">Reenviar activación</a>.</p>
     <p>Si ya activaste tu cuenta, podés <a th:href="@{/login}">iniciar sesión</a>.</p>
 </div>
 
