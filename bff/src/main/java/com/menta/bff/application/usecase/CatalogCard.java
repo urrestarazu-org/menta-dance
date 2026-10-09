@@ -32,13 +32,11 @@ public record CatalogCard(
     }
 
     /**
-     * Path of the course's detail page, or {@code null} when it has none yet.
-     * Single decision point for linking: physical courses stay unlinked until
-     * their detail view exists (issue #383) — enable it by returning
-     * {@code "/classes/" + courseId} for {@link CourseModality#PHYSICAL}.
+     * Path of the course's detail page. Single decision point for linking:
+     * virtual courses live under {@code /courses}, physical ones under {@code /classes}.
      */
     public String detailPath() {
-        return modality == CourseModality.VIRTUAL ? "/courses/" + courseId : null;
+        return (modality == CourseModality.VIRTUAL ? "/courses/" : "/classes/") + courseId;
     }
 
     static String levelLabel(String level) {

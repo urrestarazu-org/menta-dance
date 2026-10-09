@@ -15,4 +15,9 @@ public record ClassCard(
         String levelLabel,
         String professorName,
         String scheduleLabel) {
+
+    /** Path of the class's detail page. */
+    public String detailPath() {
+        return "/classes/" + courseId;
+    }
 }

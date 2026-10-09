@@ -13,10 +13,12 @@ import com.github.tomakehurst.wiremock.http.Fault;
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import com.menta.bff.application.dto.CatalogCourse;
+import com.menta.bff.application.dto.PhysicalCourseDetail;
 import com.menta.bff.application.port.out.CatalogApiClient;
 import com.menta.bff.domain.model.CourseModality;
 import com.menta.bff.infrastructure.config.VirtualApiProperties;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -176,6 +178,97 @@ class CatalogApiAdapterTest {
         CatalogApiAdapter shortTimeoutAdapter = adapterWithTimeout(Duration.ofMillis(50));
 
         assertThatThrownBy(shortTimeoutAdapter::listCourses)
+                .isInstanceOf(CatalogApiClient.ServiceUnavailableException.class);
+    }
+
+    private static final String DETAIL_PATH = "/api/v1/catalog/courses/p-1";
+
+    private static final String PHYSICAL_DETAIL_BODY =
+            """
+            {"courseId": "p-1", "modality": "PHYSICAL", "title": "Salsa en vivo", "level": "ADVANCED",
+             "physical": {"professorName": "María García", "dayOfWeek": "MONDAY", "startTime": "18:00",
+                          "capacity": 12,
+                          "sessions": [
+                            {"sessionId": "s-1", "scheduledAt": "2026-10-12T21:00:00Z", "capacity": 12,
+                             "availableSpots": 5},
+                            {"sessionId": "s-2", "scheduledAt": "2026-10-19T21:00:00Z", "capacity": 12,
+                             "availableSpots": 0}]}}
+            """;
+
+    private static final String NO_SESSIONS_BODY =
+            """
+            {"courseId": "p-1", "modality": "PHYSICAL", "title": "Salsa", "level": "ADVANCED",
+             "physical": {"professorName": "A", "dayOfWeek": "MONDAY", "startTime": "18:00"}}
+            """;
+
+    private static final String VIRTUAL_SHAPE_BODY =
+            """
+            {"courseId": "p-1", "title": "Ballet", "level": "BEGINNER", "isPremium": false,
+             "modules": [], "stats": {"moduleCount": 0, "lessonCount": 0, "totalDuration": "0m"}}
+            """;
+
+    private void stubDetail(int status, String body) {
+        stubFor(get(urlEqualTo(DETAIL_PATH))
+                .willReturn(aResponse()
+                        .withStatus(status)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(body)));
+    }
+
+    @Test
+    @DisplayName("maps a physical course detail with its sessions in upstream order")
+    void mapsPhysicalDetail() {
+        stubDetail(200, PHYSICAL_DETAIL_BODY);
+
+        PhysicalCourseDetail detail = adapter.getPhysicalCourse("p-1");
+
+        assertThat(detail.courseId()).isEqualTo("p-1");
+        assertThat(detail.title()).isEqualTo("Salsa en vivo");
+        assertThat(detail.level()).isEqualTo("ADVANCED");
+        assertThat(detail.professorName()).isEqualTo("María García");
+        assertThat(detail.dayOfWeek()).isEqualTo("MONDAY");
+        assertThat(detail.startTime()).isEqualTo("18:00");
+        assertThat(detail.sessions()).containsExactly(
+                new PhysicalCourseDetail.Session("s-1", Instant.parse("2026-10-12T21:00:00Z"), 12, 5),
+                new PhysicalCourseDetail.Session("s-2", Instant.parse("2026-10-19T21:00:00Z"), 12, 0));
+        verify(getRequestedFor(urlEqualTo(DETAIL_PATH)).withoutHeader("Authorization"));
+    }
+
+    @Test
+    @DisplayName("treats a missing sessions array as no sessions")
+    void missingSessionsMeansNone() {
+        stubDetail(200, NO_SESSIONS_BODY);
+
+        assertThat(adapter.getPhysicalCourse("p-1").sessions()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("throws NotFoundException on 404 and for a virtual course shape")
+    void throwsNotFound() {
+        stubDetail(404, "{\"detail\":\"secret upstream detail\"}");
+        assertThatThrownBy(() -> adapter.getPhysicalCourse("p-1"))
+                .isInstanceOf(CatalogApiClient.NotFoundException.class)
+                .hasMessageNotContaining("secret");
+
+        stubDetail(200, VIRTUAL_SHAPE_BODY);
+        assertThatThrownBy(() -> adapter.getPhysicalCourse("p-1"))
+                .isInstanceOf(CatalogApiClient.NotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("throws ServiceUnavailableException on 503, an empty body and a connection fault")
+    void detailThrowsUnavailable() {
+        stubDetail(503, "{\"detail\":\"secret upstream detail\"}");
+        assertThatThrownBy(() -> adapter.getPhysicalCourse("p-1"))
+                .isInstanceOf(CatalogApiClient.ServiceUnavailableException.class);
+
+        stubFor(get(urlEqualTo(DETAIL_PATH)).willReturn(aResponse().withStatus(200)));
+        assertThatThrownBy(() -> adapter.getPhysicalCourse("p-1"))
+                .isInstanceOf(CatalogApiClient.ServiceUnavailableException.class);
+
+        stubFor(get(urlEqualTo(DETAIL_PATH))
+                .willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)));
+        assertThatThrownBy(() -> adapter.getPhysicalCourse("p-1"))
                 .isInstanceOf(CatalogApiClient.ServiceUnavailableException.class);
     }
 }

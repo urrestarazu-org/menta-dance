@@ -42,6 +42,7 @@ class GetClassesViewUseCaseImplTest {
         assertThat(view.empty()).isFalse();
         assertThat(view.classes()).containsExactly(new ClassCard(
                 "p-1", "Salsa en vivo", "Avanzado", "María García", "Lunes 18:00"));
+        assertThat(view.classes().get(0).detailPath()).isEqualTo("/classes/p-1");
     }
 
     @Test
