@@ -247,4 +247,26 @@ class VirtualLearningSecurityIntegrationTest extends BaseIntegrationTest {
         mockMvc.perform(post("/plans"))
                 .andExpect(status().isForbidden());
     }
+
+    // --- Home catalog route (#358) -----------------------------------------
+
+    @Test
+    @DisplayName("anonymous GET / returns 200 with no redirect to /login")
+    void anonymousHomeRequest_shouldReturn200_withNoLoginRedirect() throws Exception {
+        WIRE_MOCK_SERVER.stubFor(WireMock.get(urlEqualTo("/api/v1/catalog/courses"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"courses\": []}")));
+
+        mockMvc.perform(get("/"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("POST / is not permitted — the matcher is GET-only")
+    void postToHomeRoute_shouldRemainAuthenticatedOnly() throws Exception {
+        mockMvc.perform(post("/"))
+                .andExpect(status().isForbidden());
+    }
 }
