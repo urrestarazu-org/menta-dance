@@ -1,5 +1,8 @@
 package com.menta.android.di
 
+import com.menta.android.data.remote.BearerTokenInterceptor
+import com.menta.android.data.remote.TokenRefreshAuthenticator
+import com.menta.android.data.session.AccessTokenSource
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -25,4 +28,15 @@ object NetworkModule {
         .writeTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .retryOnConnectionFailure(false)
         .build()
+
+    /**
+     * Derived from the auth client so it shares its connection pool, timeouts and the
+     * no-replay rule: a connection failure during `/refresh` is never retried transparently.
+     */
+    @Provides @Singleton @ApiHttpClient
+    fun apiHttpClient(@AuthHttpClient authClient: OkHttpClient, tokens: AccessTokenSource): OkHttpClient =
+        authClient.newBuilder()
+            .addInterceptor(BearerTokenInterceptor(tokens))
+            .authenticator(TokenRefreshAuthenticator(tokens))
+            .build()
 }
