@@ -19,9 +19,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class GetCatalogViewUseCaseImplTest {
 
     private static final CatalogCourse VIRTUAL_COURSE =
-            new CatalogCourse("v-1", CourseModality.VIRTUAL, "Ballet Básico", "BEGINNER", null);
+            new CatalogCourse("v-1", CourseModality.VIRTUAL, "Ballet Básico", "BEGINNER", null, null, null);
     private static final CatalogCourse PHYSICAL_COURSE =
-            new CatalogCourse("p-1", CourseModality.PHYSICAL, "Salsa en vivo", "ADVANCED", "María García");
+            new CatalogCourse("p-1", CourseModality.PHYSICAL, "Salsa en vivo", "ADVANCED",
+                    "María García", "MONDAY", "18:00");
 
     @Mock
     private CatalogApiClient catalogApiClient;
@@ -70,9 +71,9 @@ class GetCatalogViewUseCaseImplTest {
     @DisplayName("maps intermediate level and tolerates unknown or missing levels")
     void mapsLevelLabels() {
         when(catalogApiClient.listCourses()).thenReturn(List.of(
-                new CatalogCourse("a", CourseModality.VIRTUAL, "A", "intermediate", null),
-                new CatalogCourse("b", CourseModality.VIRTUAL, "B", "EXPERT", null),
-                new CatalogCourse("c", CourseModality.VIRTUAL, "C", null, null)));
+                new CatalogCourse("a", CourseModality.VIRTUAL, "A", "intermediate", null, null, null),
+                new CatalogCourse("b", CourseModality.VIRTUAL, "B", "EXPERT", null, null, null),
+                new CatalogCourse("c", CourseModality.VIRTUAL, "C", null, null, null, null)));
 
         CatalogView view = useCase.execute(null);
 

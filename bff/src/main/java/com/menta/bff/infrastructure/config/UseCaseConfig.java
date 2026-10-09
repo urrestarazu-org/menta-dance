@@ -10,6 +10,8 @@ import com.menta.bff.application.usecase.AccountActivationUseCase;
 import com.menta.bff.application.usecase.AccountActivationUseCaseImpl;
 import com.menta.bff.application.usecase.GetCatalogViewUseCase;
 import com.menta.bff.application.usecase.GetCatalogViewUseCaseImpl;
+import com.menta.bff.application.usecase.GetClassesViewUseCase;
+import com.menta.bff.application.usecase.GetClassesViewUseCaseImpl;
 import com.menta.bff.application.usecase.GetCourseDetailViewUseCase;
 import com.menta.bff.application.usecase.GetCourseDetailViewUseCaseImpl;
 import com.menta.bff.application.usecase.GetLessonViewUseCase;
@@ -102,5 +104,10 @@ public class UseCaseConfig {
     @Bean
     public GetCatalogViewUseCase getCatalogViewUseCase(CatalogApiClient catalogApiClient) {
         return new GetCatalogViewUseCaseImpl(catalogApiClient);
+    }
+
+    @Bean
+    public GetClassesViewUseCase getClassesViewUseCase(CatalogApiClient catalogApiClient) {
+        return new GetClassesViewUseCaseImpl(catalogApiClient);
     }
 }

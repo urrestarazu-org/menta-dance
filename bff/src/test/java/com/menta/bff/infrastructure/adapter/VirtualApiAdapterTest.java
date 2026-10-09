@@ -33,6 +33,11 @@ class VirtualApiAdapterTest {
 
     private static final String COURSE_ID = "course-1";
     private static final String COURSE_DETAIL_PATH = "/api/v1/catalog/courses/" + COURSE_ID;
+    private static final String PHYSICAL_SHAPE_BODY =
+            """
+            {"courseId": "course-1", "modality": "PHYSICAL", "title": "Salsa", "level": "ADVANCED",
+             "physical": {"professorName": "A", "sessions": []}}
+            """;
     private static final String LESSON_ID = "lesson-1";
     private static final String LESSON_PATH = "/api/v1/virtual/lessons/" + LESSON_ID;
     private static final String LESSON_STREAM_PATH = LESSON_PATH + "/stream";
@@ -81,6 +86,19 @@ class VirtualApiAdapterTest {
         assertThat(result.modules().get(0).lessons().get(0).lessonId()).isEqualTo("lesson-1");
         assertThat(result.stats().moduleCount()).isEqualTo(1);
         assertThat(result.stats().totalDuration()).isEqualTo("5m");
+    }
+
+    @Test
+    @DisplayName("should throw NotFoundException when the catalog answers a physical course shape")
+    void shouldThrowNotFoundExceptionWhenCatalogAnswersPhysicalShape() {
+        stubFor(get(urlEqualTo(COURSE_DETAIL_PATH))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(PHYSICAL_SHAPE_BODY)));
+
+        assertThatThrownBy(() -> virtualApiAdapter.getCourseDetail(COURSE_ID))
+                .isInstanceOf(VirtualApiClient.NotFoundException.class);
     }
 
     @Test
