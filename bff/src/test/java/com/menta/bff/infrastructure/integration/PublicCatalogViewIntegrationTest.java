@@ -115,18 +115,18 @@ class PublicCatalogViewIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("anonymous visitor sees the login link and no dashboard link")
+    @DisplayName("anonymous visitor sees the login and register links and no dashboard link")
     void anonymousSeesLoginLink() throws Exception {
         stubCatalog(200, MIXED_BODY);
 
         String body = anonymousHome("/");
 
-        assertThat(body).contains("href=\"/login\"");
-        assertThat(body).doesNotContain("href=\"/dashboard\"").doesNotContain("/register");
+        assertThat(body).contains("href=\"/login\"").contains("href=\"/registro\"");
+        assertThat(body).doesNotContain("href=\"/dashboard\"");
     }
 
     @Test
-    @DisplayName("authenticated user sees the dashboard link and no login link")
+    @DisplayName("authenticated user sees the dashboard link and no login or register link")
     void authenticatedSeesDashboardLink() throws Exception {
         stubCatalog(200, MIXED_BODY);
 
@@ -137,7 +137,7 @@ class PublicCatalogViewIntegrationTest extends BaseIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
 
         assertThat(body).contains("href=\"/dashboard\"");
-        assertThat(body).doesNotContain("href=\"/login\"");
+        assertThat(body).doesNotContain("href=\"/login\"").doesNotContain("href=\"/registro\"");
     }
 
     private Cookie loginAndGetSessionCookie() throws Exception {
