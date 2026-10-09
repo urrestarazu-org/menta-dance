@@ -20,6 +20,8 @@ import com.menta.bff.application.usecase.LoginUseCase;
 import com.menta.bff.application.usecase.LoginUseCaseImpl;
 import com.menta.bff.application.usecase.LogoutUseCase;
 import com.menta.bff.application.usecase.LogoutUseCaseImpl;
+import com.menta.bff.application.usecase.RegisterAccountUseCase;
+import com.menta.bff.application.usecase.RegisterAccountUseCaseImpl;
 import com.menta.bff.infrastructure.web.filter.TokenRefreshFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -48,6 +50,11 @@ public class UseCaseConfig {
             SessionTokenRepository sessionTokenRepository
     ) {
         return new LogoutUseCaseImpl(authApiClient, sessionTokenRepository);
+    }
+
+    @Bean
+    public RegisterAccountUseCase registerAccountUseCase(AuthApiClient authApiClient) {
+        return new RegisterAccountUseCaseImpl(authApiClient);
     }
 
     @Bean

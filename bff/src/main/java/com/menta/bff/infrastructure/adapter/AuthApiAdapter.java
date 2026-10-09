@@ -1,9 +1,11 @@
 package com.menta.bff.infrastructure.adapter;
 
 import com.menta.bff.application.dto.LoginCommand;
+import com.menta.bff.application.dto.RegisterCommand;
 import com.menta.bff.application.dto.TokenPairResponse;
 import com.menta.bff.application.port.out.AuthApiClient;
 import com.menta.bff.infrastructure.config.AuthProperties;
+import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +38,7 @@ public class AuthApiAdapter implements AuthApiClient {
     private static final String LOGIN_ENDPOINT = "/api/v1/auth/login";
     private static final String REFRESH_ENDPOINT = "/api/v1/auth/refresh";
     private static final String LOGOUT_ENDPOINT = "/api/v1/auth/logout";
+    private static final String REGISTER_ENDPOINT = "/api/v1/auth/register";
 
     private static final String FORWARDED_FOR_HEADER = "X-Forwarded-For";
 
@@ -167,6 +170,89 @@ public class AuthApiAdapter implements AuthApiClient {
             log.error("Auth API logout failed: {}", e.getMessage());
             throw new ServiceUnavailableException("Auth API unavailable: " + e.getMessage(), e);
         }
+    }
+
+    @Override
+    public void register(RegisterCommand command) {
+        Objects.requireNonNull(command, "command cannot be null");
+
+        log.debug("Calling Auth API register endpoint");
+
+        Map<String, String> requestBody = Map.of(
+                "email", command.email(),
+                "password", command.password(),
+                "role", command.role()
+        );
+
+        ApiReply reply = send(webClient.post()
+                .uri(REGISTER_ENDPOINT)
+                .contentType(MediaType.APPLICATION_JSON)
+                .headers(headers -> applyClientOrigin(headers, command.clientAddress()))
+                .bodyValue(requestBody), "register");
+
+        if (reply.status() != HttpStatus.ACCEPTED.value()) {
+            throw failure(reply, "register");
+        }
+    }
+
+    /**
+     * Sends a request and keeps only what the callers need: status and Retry-After.
+     *
+     * <p>The body is released unread — the public account endpoints answer with empty
+     * bodies on success and RFC 9457 problems on failure, and neither is ever shown to
+     * the browser. Transport errors are reported by class only: their message can carry
+     * the request URI, which for activation contains the single-use token.
+     * </p>
+     */
+    private ApiReply send(WebClient.RequestHeadersSpec<?> request, String operation) {
+        ApiReply reply;
+        try {
+            reply = request
+                    .exchangeToMono(response -> response.releaseBody().thenReturn(new ApiReply(
+                            response.statusCode().value(),
+                            response.headers().asHttpHeaders().getFirst(HttpHeaders.RETRY_AFTER))))
+                    .timeout(authProperties.getTimeout())
+                    .block();
+        } catch (RuntimeException e) {
+            log.error("Auth API {} failed: {}", operation, e.getClass().getSimpleName());
+            throw new ServiceUnavailableException("Auth API unavailable: " + e.getClass().getSimpleName(), e);
+        }
+        if (reply == null) {
+            throw new ServiceUnavailableException("Auth API returned null response");
+        }
+        return reply;
+    }
+
+    /**
+     * Maps an unsuccessful reply of the public account endpoints to a domain exception.
+     * Any status the contract does not list degrades to "unavailable" rather than a 500.
+     */
+    private static RuntimeException failure(ApiReply reply, String operation) {
+        int status = reply.status();
+        log.warn("Auth API {} returned status {}", operation, status);
+        if (status == HttpStatus.TOO_MANY_REQUESTS.value()) {
+            return new RateLimitedException("Auth API rate limit hit", parseRetryAfter(reply.retryAfter()));
+        }
+        if (status == HttpStatus.BAD_REQUEST.value()) {
+            return new InvalidRequestException("Auth API rejected the " + operation + " request");
+        }
+        return new ServiceUnavailableException("Auth API unavailable: " + status);
+    }
+
+    private static Duration parseRetryAfter(String value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            long seconds = Long.parseLong(value.trim());
+            return seconds < 0 ? null : Duration.ofSeconds(seconds);
+        } catch (NumberFormatException e) {
+            // Retry-After may also be an HTTP date; the UI only needs a coarse hint.
+            return null;
+        }
+    }
+
+    private record ApiReply(int status, String retryAfter) {
     }
 
     /**
