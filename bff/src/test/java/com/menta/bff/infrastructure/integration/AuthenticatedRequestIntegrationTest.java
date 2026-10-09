@@ -51,7 +51,7 @@ class AuthenticatedRequestIntegrationTest extends BaseIntegrationTest {
 
         // Perform login to get SESSION cookie
         var loginResult = mockMvc.perform(post("/login")
-                        .param("username", "user@example.com")
+                        .param("email", "user@example.com")
                         .param("password", "password123")
                         .with(csrf()))
                 .andExpect(status().is3xxRedirection())
