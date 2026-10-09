@@ -80,6 +80,10 @@ public class BffSecurityConfig {
                 // Form login configuration
                 .formLogin(form -> form
                         .loginPage("/login")
+                        // login.html submits the credential as "email"; Spring's
+                        // default parameter is "username", which left the
+                        // provider an empty email and made every browser login a 500 (#490).
+                        .usernameParameter("email")
                         // ADR-0035: capture the canonical client origin while
                         // the request is still in hand, so the provider never
                         // has to reach for it out of band.
