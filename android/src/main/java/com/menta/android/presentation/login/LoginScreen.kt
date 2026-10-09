@@ -27,10 +27,12 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.menta.android.R
+import com.menta.android.presentation.session.SessionNotice
 
 /** Stateful entry point: owns the ViewModel and forwards the signed-in event to [onSignedIn]. */
 @Composable
 fun LoginRoute(
+    notice: SessionNotice?,
     onSignedIn: () -> Unit,
     viewModel: LoginViewModel = hiltViewModel(),
 ) {
@@ -39,6 +41,7 @@ fun LoginRoute(
 
     LoginScreen(
         uiState = uiState,
+        notice = notice,
         onEmailChange = viewModel::onEmailChange,
         onPasswordChange = viewModel::onPasswordChange,
         onSubmit = viewModel::onSubmit,
@@ -48,6 +51,7 @@ fun LoginRoute(
 @Composable
 fun LoginScreen(
     uiState: LoginUiState,
+    notice: SessionNotice?,
     onEmailChange: (String) -> Unit,
     onPasswordChange: (String) -> Unit,
     onSubmit: () -> Unit,
@@ -62,6 +66,10 @@ fun LoginScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(text = stringResource(R.string.login_title), style = MaterialTheme.typography.headlineMedium)
+            notice?.let {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(text = it.message(), style = MaterialTheme.typography.bodyMedium)
+            }
             Spacer(modifier = Modifier.height(24.dp))
 
             OutlinedTextField(
@@ -132,4 +140,12 @@ private fun LoginError.message(): String = when (this) {
         }
     LoginError.Unavailable -> stringResource(R.string.login_error_unavailable)
     LoginError.StudentsOnly -> stringResource(R.string.login_error_students_only)
+}
+
+@Composable
+private fun SessionNotice.message(): String = when (this) {
+    SessionNotice.SessionExpired -> stringResource(R.string.notice_session_expired)
+    SessionNotice.ResumeRejected -> stringResource(R.string.notice_resume_rejected)
+    SessionNotice.ResumeUnavailable -> stringResource(R.string.notice_resume_unavailable)
+    SessionNotice.StudentsOnly -> stringResource(R.string.login_error_students_only)
 }
