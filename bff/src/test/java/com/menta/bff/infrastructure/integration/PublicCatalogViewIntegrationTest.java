@@ -149,7 +149,7 @@ class PublicCatalogViewIntegrationTest extends BaseIntegrationTest {
                         .withBody(LOGIN_BODY.formatted(TestAccessTokens.withRole("STUDENT")))));
 
         return mockMvc.perform(post("/login")
-                        .param("username", "student@example.com")
+                        .param("email", "student@example.com")
                         .param("password", "password123")
                         .with(csrf()))
                 .andExpect(status().is3xxRedirection())
