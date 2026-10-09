@@ -75,6 +75,8 @@ auth:
     # (design.md decision #3: 24h default, configurable).
     token-ttl: ${AUTH_ACTIVATION_TOKEN_TTL:PT24H}
     public-base-url: ${AUTH_ACTIVATION_PUBLIC_BASE_URL:http://localhost:8080}
+    # Path of the BFF page the activation email links to (#359); the token is appended.
+    link-path: ${AUTH_ACTIVATION_LINK_PATH:/activar/}
     from-address: ${AUTH_ACTIVATION_FROM_ADDRESS:no-reply@menta.local}
     # Dedicated AES-256-GCM key for the short-lived activation delivery envelope.
     # The fallback is development-only; production profiles reject it at startup.

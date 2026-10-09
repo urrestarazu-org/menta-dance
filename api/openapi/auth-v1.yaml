@@ -323,9 +323,10 @@ paths:
       summary: Validar token de activación
       description: |
         Comprueba que el token de activación está vigente y puede consumirse, sin
-        modificar la cuenta ni consumir/inutilizar el token. Hasta que exista una
-        pantalla intermedia en el BFF, el token sigue en la URI y los access logs
-        deben redactarlo.
+        modificar la cuenta ni consumir/inutilizar el token. Lo llama la pantalla del
+        BFF `GET /activar/{token}` a la que apunta el enlace del correo; el token
+        sigue en la URI de esta llamada, por lo que los access logs deben
+        redactarlo.
       operationId: validateActivationToken
       security: []
       parameters:
@@ -362,8 +363,9 @@ paths:
         Consume el token de activación y pasa la cuenta a `ACTIVE`.
 
         El token se recibe sólo en el cuerpo JSON y nunca se registra en claro.
-        La futura pantalla intermedia del BFF retirará el token del enlace de
-        correo; mientras tanto, el endpoint GET de validación redacciona su URI.
+        La pantalla intermedia del BFF (`POST /activar`) retira el token de la URL
+        del navegador: el enlace del correo apunta al BFF y éste llama a este
+        endpoint con el token en el cuerpo.
 
         Un token inválido, expirado o ya usado devuelve el mismo `400`; el motivo
         no es distinguible.

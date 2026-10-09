@@ -1,6 +1,7 @@
 package com.menta.auth.infrastructure.activation;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -16,6 +17,8 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -38,7 +41,7 @@ class SpringMailActivationNotificationAdapterTest {
         when(deliveryCipher.decrypt(any(DeliveryEnvelope.class)))
             .thenReturn("student@example.com|raw-activation-token");
         SpringMailActivationNotificationAdapter adapter = new SpringMailActivationNotificationAdapter(
-            repository, deliveryCipher, mailSender, "https://menta.example", "no-reply@menta.example"
+            repository, deliveryCipher, mailSender, "https://menta.example", "/activar/", "no-reply@menta.example"
         );
 
         adapter.sendActivationEmail(TOKEN_ID);
@@ -48,8 +51,33 @@ class SpringMailActivationNotificationAdapterTest {
         assertThat(message.getValue().getTo()).containsExactly("student@example.com");
         assertThat(message.getValue().getFrom()).isEqualTo("no-reply@menta.example");
         assertThat(message.getValue().getText())
-            .contains("https://menta.example/api/v1/auth/activate/raw-activation-token");
+            .contains("https://menta.example/activar/raw-activation-token")
+            .doesNotContain("/api/v1/auth/activate");
         verify(repository).clearDeliveryEnvelope(TOKEN_ID);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/cuenta/activar/", "/cuenta/activar", "cuenta/activar/"})
+    void builds_the_link_from_the_configured_path_whatever_its_slashes(String linkPath) {
+        when(repository.findById(TOKEN_ID)).thenReturn(Optional.of(tokenWithDeliveryEnvelope()));
+        when(deliveryCipher.decrypt(any(DeliveryEnvelope.class)))
+            .thenReturn("student@example.com|raw-activation-token");
+        SpringMailActivationNotificationAdapter adapter = new SpringMailActivationNotificationAdapter(
+            repository, deliveryCipher, mailSender, "https://menta.example/", linkPath, "no-reply@menta.example"
+        );
+
+        adapter.sendActivationEmail(TOKEN_ID);
+
+        ArgumentCaptor<SimpleMailMessage> message = ArgumentCaptor.forClass(SimpleMailMessage.class);
+        verify(mailSender).send(message.capture());
+        assertThat(message.getValue().getText()).contains("https://menta.example/cuenta/activar/raw-activation-token");
+    }
+
+    @Test
+    void rejects_a_blank_link_path() {
+        assertThatThrownBy(() -> new SpringMailActivationNotificationAdapter(
+            repository, deliveryCipher, mailSender, "https://menta.example", " ", "no-reply@menta.example"
+        )).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("link path");
     }
 
     @Test
@@ -59,10 +87,10 @@ class SpringMailActivationNotificationAdapterTest {
             .thenReturn("student@example.com|raw-activation-token");
         doThrow(new RuntimeException("smtp unavailable")).when(mailSender).send(any(SimpleMailMessage.class));
         SpringMailActivationNotificationAdapter adapter = new SpringMailActivationNotificationAdapter(
-            repository, deliveryCipher, mailSender, "https://menta.example", "no-reply@menta.example"
+            repository, deliveryCipher, mailSender, "https://menta.example", "/activar/", "no-reply@menta.example"
         );
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> adapter.sendActivationEmail(TOKEN_ID))
+        assertThatThrownBy(() -> adapter.sendActivationEmail(TOKEN_ID))
             .isInstanceOf(RuntimeException.class)
             .hasMessage("smtp unavailable");
 

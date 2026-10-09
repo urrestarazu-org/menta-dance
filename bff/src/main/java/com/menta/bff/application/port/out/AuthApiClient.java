@@ -13,6 +13,7 @@ import java.time.Duration;
  * - Refresh (exchange refresh token for new access token)
  * - Logout (revoke refresh token)
  * - Registration (public account sign-up)
+ * - Account activation (token validation and consumption)
  * </p>
  *
  * <p>Part of Clean Architecture application layer - abstracts HTTP/REST details.
@@ -76,6 +77,33 @@ public interface AuthApiClient {
     void register(RegisterCommand command);
 
     /**
+     * Checks that an activation token is still usable, without consuming it.
+     *
+     * <p>Calls GET /api/v1/auth/activate/{token}. The token is a credential: it travels in
+     * the path of this single call and must never be logged.
+     * </p>
+     *
+     * @param token Opaque activation token received by email
+     * @throws InvalidActivationTokenException if the token is invalid, expired or already used (400)
+     * @throws RateLimitedException            if the API rate limit was hit (429)
+     * @throws ServiceUnavailableException     if Auth API is unreachable or degraded (503)
+     */
+    void validateActivationToken(String token);
+
+    /**
+     * Consumes an activation token and activates its account.
+     *
+     * <p>Calls POST /api/v1/auth/activate with the token in the JSON body, never in the URL.
+     * </p>
+     *
+     * @param token Opaque activation token received by email
+     * @throws InvalidActivationTokenException if the token is invalid, expired or already used (400)
+     * @throws RateLimitedException            if the API rate limit was hit (429)
+     * @throws ServiceUnavailableException     if Auth API is unreachable or degraded (503)
+     */
+    void activate(String token);
+
+    /**
      * Exception thrown when credentials or refresh token are invalid.
      */
     class AuthenticationException extends RuntimeException {
@@ -119,6 +147,16 @@ public interface AuthApiClient {
      */
     class InvalidRequestException extends RuntimeException {
         public InvalidRequestException(String message) {
+            super(message);
+        }
+    }
+
+    /**
+     * Exception thrown when an activation token is invalid, expired or already used (400).
+     * The API does not tell these apart, and neither does this exception: it carries no token.
+     */
+    class InvalidActivationTokenException extends RuntimeException {
+        public InvalidActivationTokenException(String message) {
             super(message);
         }
     }

@@ -3,6 +3,7 @@ package com.menta.bff.infrastructure.adapter;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
@@ -13,6 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.github.tomakehurst.wiremock.http.Fault;
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import com.menta.bff.application.dto.RegisterCommand;
@@ -34,6 +36,8 @@ class AuthApiAdapterAccountTest {
 
     private static final String CLIENT_ADDRESS = "203.0.113.9";
     private static final String REGISTER = "/api/v1/auth/register";
+    private static final String ACTIVATE = "/api/v1/auth/activate";
+    private static final String TOKEN = "activation-token-abc";
 
     private AuthApiAdapter adapter;
 
@@ -104,5 +108,85 @@ class AuthApiAdapterAccountTest {
 
         assertThatThrownBy(() -> adapter.register(registration()))
                 .isInstanceOf(AuthApiClient.ServiceUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("validateActivationToken calls GET with the token in the path and accepts 204")
+    void validateAccepts204() {
+        stubFor(get(urlEqualTo(ACTIVATE + "/" + TOKEN)).willReturn(aResponse().withStatus(204)));
+
+        assertThatCode(() -> adapter.validateActivationToken(TOKEN)).doesNotThrowAnyException();
+
+        verify(getRequestedFor(urlEqualTo(ACTIVATE + "/" + TOKEN)));
+    }
+
+    @Test
+    @DisplayName("validateActivationToken maps 400 to InvalidActivationTokenException without echoing the token")
+    void validateMaps400() {
+        stubFor(get(urlEqualTo(ACTIVATE + "/" + TOKEN)).willReturn(aResponse().withStatus(400)));
+
+        assertThatThrownBy(() -> adapter.validateActivationToken(TOKEN))
+                .isInstanceOf(AuthApiClient.InvalidActivationTokenException.class)
+                .hasMessageNotContaining(TOKEN);
+    }
+
+    @Test
+    @DisplayName("validateActivationToken maps 503 to ServiceUnavailableException")
+    void validateMaps503() {
+        stubFor(get(urlEqualTo(ACTIVATE + "/" + TOKEN)).willReturn(aResponse().withStatus(503)));
+
+        assertThatThrownBy(() -> adapter.validateActivationToken(TOKEN))
+                .isInstanceOf(AuthApiClient.ServiceUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("activate posts the token in the JSON body, never in the URL, and accepts 204")
+    void activateAccepts204() {
+        stubStatus(ACTIVATE, 204);
+
+        adapter.activate(TOKEN);
+
+        verify(postRequestedFor(urlEqualTo(ACTIVATE))
+                .withRequestBody(matchingJsonPath("$.token", equalTo(TOKEN))));
+    }
+
+    @Test
+    @DisplayName("activate maps 400 to InvalidActivationTokenException without echoing the token")
+    void activateMaps400() {
+        stubStatus(ACTIVATE, 400);
+
+        assertThatThrownBy(() -> adapter.activate(TOKEN))
+                .isInstanceOf(AuthApiClient.InvalidActivationTokenException.class)
+                .hasMessageNotContaining(TOKEN);
+    }
+
+    @Test
+    @DisplayName("activate maps 429 to RateLimitedException carrying Retry-After")
+    void activateMaps429() {
+        stubFor(post(urlEqualTo(ACTIVATE)).willReturn(aResponse().withStatus(429).withHeader("Retry-After", "15")));
+
+        assertThatThrownBy(() -> adapter.activate(TOKEN))
+                .isInstanceOfSatisfying(AuthApiClient.RateLimitedException.class,
+                        e -> assertThat(e.retryAfter()).isEqualTo(Duration.ofSeconds(15)));
+    }
+
+    @Test
+    @DisplayName("activate maps 503 to ServiceUnavailableException")
+    void activateMaps503() {
+        stubStatus(ACTIVATE, 503);
+
+        assertThatThrownBy(() -> adapter.activate(TOKEN))
+                .isInstanceOf(AuthApiClient.ServiceUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("a transport failure while validating reports unavailable without the token in the message")
+    void transportFailureDoesNotLeakTheToken() {
+        stubFor(get(urlEqualTo(ACTIVATE + "/" + TOKEN))
+                .willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)));
+
+        assertThatThrownBy(() -> adapter.validateActivationToken(TOKEN))
+                .isInstanceOf(AuthApiClient.ServiceUnavailableException.class)
+                .hasMessageNotContaining(TOKEN);
     }
 }

@@ -9,8 +9,12 @@ correo para poder iniciar sesión.
 - `GET /api/v1/auth/activate/{token}` sólo valida un token de un solo uso y
   expiración; no modifica `auth_users` ni consume el token.
 - `POST /api/v1/auth/activate` recibe JSON `{ "token" }`, activa `auth_users`
-  e invalida el token. Una pantalla intermedia en el BFF para retirar el token
-  de la URI queda fuera de alcance.
+  e invalida el token.
+- El enlace del correo apunta al BFF (`GET /activar/{token}`), que valida el
+  token, muestra el botón «Activar cuenta» y, al confirmar (`POST /activar`),
+  llama a la API con el token en el cuerpo y redirige a `/cuenta-activada`. Un
+  token inválido, vencido o usado muestra un mensaje en español; 429 y 503
+  permiten reintentar. El reenvío desde esa pantalla se agrega en #359 (paso 3).
 - `POST /api/v1/auth/resend-activation` emite un token nuevo sin revelar si el
   email existe.
 - `POST /api/v1/auth/register` crea el usuario pendiente y responde `202` sin

@@ -53,10 +53,13 @@ que la ruta canónica.
 | `POST /reset-password` | JSON `{ "token", "newPassword" }` | `200 OK`, sin cuerpo |
 
 Registro público crea una cuenta `PENDING_ACTIVATION`, un token de un uso y un
-evento durable de correo en una sola transacción. Hasta que exista una pantalla
-intermedia en el BFF, el enlace de correo usa `GET /activate/{token}` sólo para
-validar el token; la activación efectiva requiere `POST /activate` con el token
-en el cuerpo. Registro duplicado conserva
+evento durable de correo en una sola transacción. El enlace del correo no apunta
+a la API sino a la pantalla del BFF `GET /activar/{token}`
+(`auth.activation.link-path`, por defecto `/activar/`): esa pantalla valida el
+token con `GET /activate/{token}` y muestra el botón «Activar cuenta», que hace
+`POST /activar` al BFF; el BFF llama a `POST /activate` con el token en el cuerpo
+y redirige a `/cuenta-activada`, de modo que el token deja de estar en la URL.
+Registro duplicado conserva
 el mismo `202` vacío; nunca se devuelve el email, ID o estado de la cuenta.
 `resend-activation` también responde idénticamente para email inexistente,
 activo o pendiente. Registro y reenvío limitados devuelven `429` con
@@ -148,10 +151,14 @@ Un lector QR se autentica como dispositivo técnico y no es un rol.
 ## Seguridad y auditoría
 
 Nunca se registran passwords, JWT, refresh tokens, cookies ni encabezados de
-autorización. Tampoco se registra el token de activación. Mientras el enlace de correo contenga
-el token en su URI, los access logs lo redaccionan como
-`/api/v1/auth/activate/[REDACTED]`; eliminarlo de la URI requiere una pantalla
-intermedia en el BFF y queda fuera del alcance de este cambio. Los eventos
+autorización. Tampoco se registra el token de activación. La API redacciona su URI en los
+access logs como `/api/v1/auth/activate/[REDACTED]`. El BFF no registra URIs de
+petición y sus páginas con el token (`/activar/{token}` y el reintento de
+`POST /activar`) responden `Cache-Control: no-store` y `Referrer-Policy:
+no-referrer`. Los access logs de NGINX sí registran la línea de petición del
+enlace del correo (`GET /activar/{token}`), igual que antes registraban el
+`GET /api/v1/auth/activate/{token}` de la API; redactarlos en el proxy es un
+seguimiento pendiente. Los eventos
 de login, refresh, revocación, reutilización y denegación incluyen
 `correlationId`, usuario/dispositivo cuando corresponda y resultado.
 
