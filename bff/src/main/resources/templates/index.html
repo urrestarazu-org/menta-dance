@@ -1,37 +1,44 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security" lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title th:text="${appName}">Menta Dance</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-        .container {
-            text-align: center;
-        }
-        h1 {
-            font-size: 3em;
-            margin-bottom: 0.5em;
-        }
-        p {
-            font-size: 1.2em;
-        }
-    </style>
+    <title>Menta Dance</title>
 </head>
 <body>
-    <div class="container">
-        <h1 th:text="${appName}">Menta Dance</h1>
-        <p>Backend for Frontend - Scaffolding Complete</p>
-        <p>🎉 Welcome to Menta Dance Academy Management System!</p>
-    </div>
+<h1>Menta Dance</h1>
+
+<nav>
+    <a sec:authorize="isAuthenticated()" th:href="@{/dashboard}">Ir a mi panel</a>
+    <a sec:authorize="!isAuthenticated()" th:href="@{/login}">Iniciar sesión</a>
+</nav>
+
+<h2>Cursos</h2>
+
+<nav aria-label="Filtrar por modalidad">
+    <a th:href="@{/}" th:unless="${catalog.selected() == null}">Todos</a>
+    <strong th:if="${catalog.selected() == null}">Todos</strong>
+    <a th:href="@{/(modality=virtual)}" th:unless="${catalog.selected() != null and catalog.selected().name() == 'VIRTUAL'}">Virtuales</a>
+    <strong th:if="${catalog.selected() != null and catalog.selected().name() == 'VIRTUAL'}">Virtuales</strong>
+    <a th:href="@{/(modality=physical)}" th:unless="${catalog.selected() != null and catalog.selected().name() == 'PHYSICAL'}">Presenciales</a>
+    <strong th:if="${catalog.selected() != null and catalog.selected().name() == 'PHYSICAL'}">Presenciales</strong>
+</nav>
+
+<p th:if="${catalog.unavailable()}">No pudimos cargar el catálogo de cursos en este momento. Intentá nuevamente en unos minutos.</p>
+<p th:if="${catalog.empty()}">Todavía no hay cursos disponibles.</p>
+
+<ul th:unless="${catalog.courses().isEmpty()}">
+    <li th:each="course : ${catalog.courses()}">
+        <h3>
+            <a th:if="${course.detailPath() != null}" th:href="@{${course.detailPath()}}" th:text="${course.title()}">Curso</a>
+            <span th:if="${course.detailPath() == null}" th:text="${course.title()}">Curso</span>
+        </h3>
+        <p>
+            <span th:text="${course.modalityLabel()}">Virtual</span>
+            <span th:if="${course.levelLabel() != null}">· <span th:text="${course.levelLabel()}">Principiante</span></span>
+            <span th:if="${course.professorName() != null}">· Profesor/a: <span th:text="${course.professorName()}">Nombre</span></span>
+        </p>
+    </li>
+</ul>
 </body>
 </html>
