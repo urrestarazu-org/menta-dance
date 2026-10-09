@@ -1,7 +1,9 @@
 package com.menta.bff.application.port.out;
 
 import com.menta.bff.application.dto.LoginCommand;
+import com.menta.bff.application.dto.RegisterCommand;
 import com.menta.bff.application.dto.TokenPairResponse;
+import java.time.Duration;
 
 /**
  * Port for communicating with the Auth API.
@@ -10,6 +12,7 @@ import com.menta.bff.application.dto.TokenPairResponse;
  * - Login (exchange credentials for tokens)
  * - Refresh (exchange refresh token for new access token)
  * - Logout (revoke refresh token)
+ * - Registration (public account sign-up)
  * </p>
  *
  * <p>Part of Clean Architecture application layer - abstracts HTTP/REST details.
@@ -58,6 +61,21 @@ public interface AuthApiClient {
     void logout(String refreshToken);
 
     /**
+     * Submits a public account registration.
+     *
+     * <p>Calls POST /api/v1/auth/register. The API answers 202 with an empty body for a
+     * new account, an already registered email and a disallowed role alike, so success
+     * carries no information about the account.
+     * </p>
+     *
+     * @param command Email, password, role and originating client address
+     * @throws InvalidRequestException     if the API rejects the input (400)
+     * @throws RateLimitedException        if the API rate limit was hit (429)
+     * @throws ServiceUnavailableException if Auth API is unreachable or degraded (503)
+     */
+    void register(RegisterCommand command);
+
+    /**
      * Exception thrown when credentials or refresh token are invalid.
      */
     class AuthenticationException extends RuntimeException {
@@ -93,6 +111,42 @@ public interface AuthApiClient {
 
         public ServiceUnavailableException(String message, Throwable cause) {
             super(message, cause);
+        }
+    }
+
+    /**
+     * Exception thrown when the Auth API rejects a request body as invalid (400).
+     */
+    class InvalidRequestException extends RuntimeException {
+        public InvalidRequestException(String message) {
+            super(message);
+        }
+    }
+
+    /**
+     * Exception thrown when the Auth API rate limit was hit (429).
+     */
+    class RateLimitedException extends RuntimeException {
+        private final transient Duration retryAfter;
+
+        /**
+         * Creates the exception.
+         *
+         * @param message    Description of the failure
+         * @param retryAfter Delay announced by the API's Retry-After header, or null when absent
+         */
+        public RateLimitedException(String message, Duration retryAfter) {
+            super(message);
+            this.retryAfter = retryAfter;
+        }
+
+        /**
+         * Returns the delay announced by the API.
+         *
+         * @return the Retry-After delay, or null when the API sent none
+         */
+        public Duration retryAfter() {
+            return retryAfter;
         }
     }
 }
