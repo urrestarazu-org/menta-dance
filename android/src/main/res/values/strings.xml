@@ -19,5 +19,12 @@
     <string name="login_error_unavailable">El servicio no está disponible. Intentalo más tarde.</string>
     <string name="login_error_students_only">Esta app es para alumnos.</string>
 
+    <string name="notice_session_expired">Tu sesión expiró. Ingresá de nuevo.</string>
+    <string name="notice_resume_rejected">No pudimos restaurar tu sesión.</string>
+    <string name="notice_resume_unavailable">Sin conexión: ingresá cuando vuelvas a estar en línea.</string>
+
     <string name="home_greeting">¡Hola!</string>
+    <string name="menu_open">Menú</string>
+    <string name="menu_section_home">Inicio</string>
+    <string name="menu_logout">Cerrar sesión</string>
 </resources>

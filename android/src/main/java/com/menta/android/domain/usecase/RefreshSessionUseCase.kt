@@ -1,11 +1,12 @@
 package com.menta.android.domain.usecase
 
-import com.menta.android.domain.model.SessionState
+import com.menta.android.domain.model.StudentSessionResult
 import com.menta.android.domain.repository.SessionRepository
 import javax.inject.Inject
 
 class RefreshSessionUseCase @Inject constructor(
     private val sessionRepository: SessionRepository,
 ) {
-    operator fun invoke(): SessionState = sessionRepository.refresh()
+    /** Blocking: call off the main thread. A non-student session is revoked before returning. */
+    operator fun invoke(): StudentSessionResult = sessionRepository.gateStudent(sessionRepository.refresh())
 }
