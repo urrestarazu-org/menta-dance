@@ -41,7 +41,7 @@ public record CatalogCard(
         return modality == CourseModality.VIRTUAL ? "/courses/" + courseId : null;
     }
 
-    private static String levelLabel(String level) {
+    static String levelLabel(String level) {
         if (level == null) {
             return null;
         }

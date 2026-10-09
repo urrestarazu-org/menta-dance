@@ -187,6 +187,12 @@ public class VirtualApiAdapter implements VirtualApiClient {
             if (body == null) {
                 throw new ServiceUnavailableException("Virtual API returned empty response body");
             }
+            if (body.modules() == null || body.stats() == null) {
+                // The catalog resolves the modality from the id and answers a physical
+                // course with its own shape (no modules/stats). It is not a virtual
+                // course, so this page treats it as not found instead of rendering nulls.
+                throw new NotFoundException("Catalog answered a non-virtual course shape");
+            }
             return body;
         }
 

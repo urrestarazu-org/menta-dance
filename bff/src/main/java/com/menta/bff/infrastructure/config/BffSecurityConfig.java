@@ -26,7 +26,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * - Custom LogoutSuccessHandler (redirects AFTER session invalidation)
  * - CSRF protection (session-stored tokens; only /actuator/health is exempt)
  * - Session management (CREATE_IF_REQUIRED)
- * - Public endpoints (/, /login, /registro, /activar, /reenviar-activacion, /actuator/health, /error)
+ * - Public endpoints (/, /login, /registro, /activar, /reenviar-activacion, /classes, /actuator/health,
+ *   /error)
  * - Protected endpoints (all others require authentication)
  * </p>
  *
@@ -73,6 +74,9 @@ public class BffSecurityConfig {
                         // Home page is the public course catalog (#358): exact "/" only,
                         // GET-only, so nothing beneath it or any mutating verb opens up.
                         .requestMatchers(HttpMethod.GET, "/").permitAll()
+                        // Physical classes list (#383): exact path, GET-only, so nothing
+                        // beneath it and no mutating verb opens up.
+                        .requestMatchers(HttpMethod.GET, "/classes").permitAll()
                         // Self-service account onboarding (#359): exact paths with explicit
                         // verbs, so nothing beneath them and no other verb opens up.
                         .requestMatchers(HttpMethod.GET, "/registro", "/registro/pendiente").permitAll()

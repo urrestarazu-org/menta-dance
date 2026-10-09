@@ -75,8 +75,9 @@ class CatalogApiAdapterTest {
         List<CatalogCourse> result = adapter.listCourses();
 
         assertThat(result).containsExactly(
-                new CatalogCourse("v-1", CourseModality.VIRTUAL, "Ballet Básico", "BEGINNER", null),
-                new CatalogCourse("p-1", CourseModality.PHYSICAL, "Salsa en vivo", "ADVANCED", "María García"));
+                new CatalogCourse("v-1", CourseModality.VIRTUAL, "Ballet Básico", "BEGINNER", null, null, null),
+                new CatalogCourse("p-1", CourseModality.PHYSICAL, "Salsa en vivo", "ADVANCED",
+                        "María García", "MONDAY", "18:00"));
     }
 
     @Test

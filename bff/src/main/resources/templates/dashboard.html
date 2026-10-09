@@ -10,6 +10,8 @@
 
 <p>Welcome, <span th:text="${username}">User</span>!</p>
 
+<p><a th:href="@{/classes}">Clases presenciales</a></p>
+
 <form th:action="@{/logout}" method="post">
     <button type="submit">Logout</button>
 </form>

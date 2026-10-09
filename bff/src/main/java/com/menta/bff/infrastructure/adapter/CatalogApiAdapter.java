@@ -76,7 +76,7 @@ public class CatalogApiAdapter implements CatalogApiClient {
     /**
      * Wire shape for one entry. The modality-specific {@code virtual} block is
      * left unbound (the home page needs nothing from it); only the professor
-     * name is read from the {@code physical} block.
+     * schedule fields are read from the {@code physical} block.
      */
     private record CatalogCourseWire(
             String courseId,
@@ -92,10 +92,13 @@ public class CatalogApiAdapter implements CatalogApiClient {
             }
             return CourseModality.fromFilter(modality)
                     .map(parsed -> new CatalogCourse(
-                            courseId, parsed, title, level, physical == null ? null : physical.professorName()));
+                            courseId, parsed, title, level,
+                            physical == null ? null : physical.professorName(),
+                            physical == null ? null : physical.dayOfWeek(),
+                            physical == null ? null : physical.startTime()));
         }
     }
 
-    private record PhysicalBlockWire(String professorName) {
+    private record PhysicalBlockWire(String professorName, String dayOfWeek, String startTime) {
     }
 }

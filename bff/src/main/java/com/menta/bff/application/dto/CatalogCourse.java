@@ -11,11 +11,15 @@ import com.menta.bff.domain.model.CourseModality;
  * @param title         course title
  * @param level         upstream level code (e.g. {@code BEGINNER}), may be {@code null}
  * @param professorName professor name; present only for physical courses
+ * @param dayOfWeek     upstream weekday code (e.g. {@code MONDAY}); physical courses only
+ * @param startTime     start time as {@code HH:mm}; physical courses only
  */
 public record CatalogCourse(
         String courseId,
         CourseModality modality,
         String title,
         String level,
-        String professorName) {
+        String professorName,
+        String dayOfWeek,
+        String startTime) {
 }
