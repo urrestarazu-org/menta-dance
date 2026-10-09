@@ -96,7 +96,7 @@ class ActivationIntegrationTest extends BaseIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
 
         assertThat(body).contains("inválido").doesNotContain("<form").doesNotContain(TOKEN)
-                .doesNotContain("reenviar");
+                .contains("href=\"/reenviar-activacion\"");
     }
 
     @Test

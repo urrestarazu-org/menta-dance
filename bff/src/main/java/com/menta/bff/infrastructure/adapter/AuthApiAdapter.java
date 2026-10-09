@@ -2,6 +2,7 @@ package com.menta.bff.infrastructure.adapter;
 
 import com.menta.bff.application.dto.LoginCommand;
 import com.menta.bff.application.dto.RegisterCommand;
+import com.menta.bff.application.dto.ResendActivationCommand;
 import com.menta.bff.application.dto.TokenPairResponse;
 import com.menta.bff.application.port.out.AuthApiClient;
 import com.menta.bff.infrastructure.config.AuthProperties;
@@ -40,6 +41,7 @@ public class AuthApiAdapter implements AuthApiClient {
     private static final String LOGOUT_ENDPOINT = "/api/v1/auth/logout";
     private static final String REGISTER_ENDPOINT = "/api/v1/auth/register";
     private static final String ACTIVATE_ENDPOINT = "/api/v1/auth/activate";
+    private static final String RESEND_ACTIVATION_ENDPOINT = "/api/v1/auth/resend-activation";
 
     private static final String FORWARDED_FOR_HEADER = "X-Forwarded-For";
 
@@ -223,6 +225,23 @@ public class AuthApiAdapter implements AuthApiClient {
 
         if (reply.status() != HttpStatus.NO_CONTENT.value()) {
             throw activationFailure(reply, "activate");
+        }
+    }
+
+    @Override
+    public void resendActivation(ResendActivationCommand command) {
+        Objects.requireNonNull(command, "command cannot be null");
+
+        log.debug("Calling Auth API resend-activation endpoint");
+
+        ApiReply reply = send(webClient.post()
+                .uri(RESEND_ACTIVATION_ENDPOINT)
+                .contentType(MediaType.APPLICATION_JSON)
+                .headers(headers -> applyClientOrigin(headers, command.clientAddress()))
+                .bodyValue(Map.of("email", command.email())), "resend-activation");
+
+        if (reply.status() != HttpStatus.ACCEPTED.value()) {
+            throw failure(reply, "resend-activation");
         }
     }
 

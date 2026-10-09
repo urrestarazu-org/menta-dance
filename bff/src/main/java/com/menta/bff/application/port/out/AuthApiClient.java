@@ -2,6 +2,7 @@ package com.menta.bff.application.port.out;
 
 import com.menta.bff.application.dto.LoginCommand;
 import com.menta.bff.application.dto.RegisterCommand;
+import com.menta.bff.application.dto.ResendActivationCommand;
 import com.menta.bff.application.dto.TokenPairResponse;
 import java.time.Duration;
 
@@ -14,6 +15,7 @@ import java.time.Duration;
  * - Logout (revoke refresh token)
  * - Registration (public account sign-up)
  * - Account activation (token validation and consumption)
+ * - Resend of the activation email
  * </p>
  *
  * <p>Part of Clean Architecture application layer - abstracts HTTP/REST details.
@@ -102,6 +104,21 @@ public interface AuthApiClient {
      * @throws ServiceUnavailableException     if Auth API is unreachable or degraded (503)
      */
     void activate(String token);
+
+    /**
+     * Asks for a new activation email.
+     *
+     * <p>Calls POST /api/v1/auth/resend-activation. The API answers 202 with an empty body
+     * for an unknown, pending or already active email alike, so success carries no
+     * information about the account.
+     * </p>
+     *
+     * @param command Email and originating client address
+     * @throws InvalidRequestException     if the API rejects the input (400)
+     * @throws RateLimitedException        if the API rate limit was hit (429)
+     * @throws ServiceUnavailableException if Auth API is unreachable or degraded (503)
+     */
+    void resendActivation(ResendActivationCommand command);
 
     /**
      * Exception thrown when credentials or refresh token are invalid.
