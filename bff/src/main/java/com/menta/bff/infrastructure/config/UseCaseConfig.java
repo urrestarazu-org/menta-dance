@@ -6,6 +6,8 @@ import com.menta.bff.application.port.out.BillingApiClient;
 import com.menta.bff.application.port.out.CatalogApiClient;
 import com.menta.bff.application.port.out.SessionTokenRepository;
 import com.menta.bff.application.port.out.VirtualApiClient;
+import com.menta.bff.application.usecase.AccountActivationUseCase;
+import com.menta.bff.application.usecase.AccountActivationUseCaseImpl;
 import com.menta.bff.application.usecase.GetCatalogViewUseCase;
 import com.menta.bff.application.usecase.GetCatalogViewUseCaseImpl;
 import com.menta.bff.application.usecase.GetCourseDetailViewUseCase;
@@ -55,6 +57,11 @@ public class UseCaseConfig {
     @Bean
     public RegisterAccountUseCase registerAccountUseCase(AuthApiClient authApiClient) {
         return new RegisterAccountUseCaseImpl(authApiClient);
+    }
+
+    @Bean
+    public AccountActivationUseCase accountActivationUseCase(AuthApiClient authApiClient) {
+        return new AccountActivationUseCaseImpl(authApiClient);
     }
 
     @Bean

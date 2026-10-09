@@ -116,7 +116,7 @@ await_activation_token() {
             message_body="$(curl --fail --silent --show-error --max-time 2 \
                 "http://localhost:${MAILPIT_PORT}/api/v1/message/${message_id}")" || message_body=""
             token="$(jq -r '.Text // .text // .HTML // .html // ""' <<<"$message_body" \
-                | grep -Eo '/api/v1/auth/activate/[A-Za-z0-9_-]+' | head -n 1 | sed 's#.*/##')"
+                | grep -Eo '/activar/[A-Za-z0-9_-]+' | head -n 1 | sed 's#.*/##')"
             if [[ -n "$token" ]]; then
                 printf '%s' "$token"
                 return 0

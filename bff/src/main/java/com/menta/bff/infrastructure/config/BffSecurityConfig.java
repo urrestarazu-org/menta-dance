@@ -26,7 +26,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * - Custom LogoutSuccessHandler (redirects AFTER session invalidation)
  * - CSRF protection (session-stored tokens; only /actuator/health is exempt)
  * - Session management (CREATE_IF_REQUIRED)
- * - Public endpoints (/, /login, /registro, /actuator/health, /error)
+ * - Public endpoints (/, /login, /registro, /activar, /actuator/health, /error)
  * - Protected endpoints (all others require authentication)
  * </p>
  *
@@ -77,6 +77,11 @@ public class BffSecurityConfig {
                         // verbs, so nothing beneath them and no other verb opens up.
                         .requestMatchers(HttpMethod.GET, "/registro", "/registro/pendiente").permitAll()
                         .requestMatchers(HttpMethod.POST, "/registro").permitAll()
+                        // Activation link (#359): a single path segment for the token, so
+                        // "/activar/a/b" and the bare "/activar" via GET stay authenticated;
+                        // the token goes back in the body of POST /activar (PRG).
+                        .requestMatchers(HttpMethod.GET, "/activar/*", "/cuenta-activada").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/activar").permitAll()
                         // All other endpoints require authentication
                         .anyRequest().authenticated()
                 )

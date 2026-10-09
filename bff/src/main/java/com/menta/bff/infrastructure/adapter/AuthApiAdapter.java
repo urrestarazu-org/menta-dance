@@ -39,6 +39,7 @@ public class AuthApiAdapter implements AuthApiClient {
     private static final String REFRESH_ENDPOINT = "/api/v1/auth/refresh";
     private static final String LOGOUT_ENDPOINT = "/api/v1/auth/logout";
     private static final String REGISTER_ENDPOINT = "/api/v1/auth/register";
+    private static final String ACTIVATE_ENDPOINT = "/api/v1/auth/activate";
 
     private static final String FORWARDED_FOR_HEADER = "X-Forwarded-For";
 
@@ -195,6 +196,36 @@ public class AuthApiAdapter implements AuthApiClient {
         }
     }
 
+    @Override
+    public void validateActivationToken(String token) {
+        Objects.requireNonNull(token, "token cannot be null");
+
+        log.debug("Calling Auth API activation token validation endpoint");
+
+        // The token is a URI template variable, so it is percent-encoded as one path segment.
+        ApiReply reply = send(webClient.get().uri(ACTIVATE_ENDPOINT + "/{token}", token), "validate-activation");
+
+        if (reply.status() != HttpStatus.NO_CONTENT.value()) {
+            throw activationFailure(reply, "validate-activation");
+        }
+    }
+
+    @Override
+    public void activate(String token) {
+        Objects.requireNonNull(token, "token cannot be null");
+
+        log.debug("Calling Auth API activate endpoint");
+
+        ApiReply reply = send(webClient.post()
+                .uri(ACTIVATE_ENDPOINT)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("token", token)), "activate");
+
+        if (reply.status() != HttpStatus.NO_CONTENT.value()) {
+            throw activationFailure(reply, "activate");
+        }
+    }
+
     /**
      * Sends a request and keeps only what the callers need: status and Retry-After.
      *
@@ -237,6 +268,18 @@ public class AuthApiAdapter implements AuthApiClient {
             return new InvalidRequestException("Auth API rejected the " + operation + " request");
         }
         return new ServiceUnavailableException("Auth API unavailable: " + status);
+    }
+
+    /**
+     * Activation answers 400 for an invalid, expired or used token, which is a verdict on the
+     * token rather than on the request shape; everything else follows {@link #failure}.
+     */
+    private static RuntimeException activationFailure(ApiReply reply, String operation) {
+        if (reply.status() == HttpStatus.BAD_REQUEST.value()) {
+            log.warn("Auth API {} rejected the activation token", operation);
+            return new InvalidActivationTokenException("Auth API rejected the activation token");
+        }
+        return failure(reply, operation);
     }
 
     private static Duration parseRetryAfter(String value) {

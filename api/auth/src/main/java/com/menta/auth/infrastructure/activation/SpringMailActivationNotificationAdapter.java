@@ -11,16 +11,22 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Component;
 
-/** Spring Mail adapter that sends encrypted durable activation deliveries. */
+/**
+ * Spring Mail adapter that sends encrypted durable activation deliveries.
+ *
+ * <p>The link points to the BFF page that validates the token and asks for confirmation
+ * ({@code auth.activation.link-path}, default {@code /activar/}), so the token leaves the URL
+ * once the user confirms. The API's own {@code /api/v1/auth/activate} endpoints are what that
+ * page calls; they are not the link.</p>
+ */
 @Component
 public class SpringMailActivationNotificationAdapter implements ActivationNotificationPort {
-
-    private static final String ACTIVATION_PATH = "/api/v1/auth/activate/";
 
     private final ActivationTokenJpaRepository tokenRepository;
     private final ActivationDeliveryCipher deliveryCipher;
     private final JavaMailSender mailSender;
     private final String publicBaseUrl;
+    private final String linkPath;
     private final String fromAddress;
 
     public SpringMailActivationNotificationAdapter(
@@ -28,12 +34,14 @@ public class SpringMailActivationNotificationAdapter implements ActivationNotifi
         ActivationDeliveryCipher deliveryCipher,
         JavaMailSender mailSender,
         @Value("${auth.activation.public-base-url:http://localhost:8080}") String publicBaseUrl,
+        @Value("${auth.activation.link-path:/activar/}") String linkPath,
         @Value("${auth.activation.from-address:no-reply@menta.local}") String fromAddress
     ) {
         this.tokenRepository = tokenRepository;
         this.deliveryCipher = deliveryCipher;
         this.mailSender = mailSender;
         this.publicBaseUrl = stripTrailingSlash(publicBaseUrl);
+        this.linkPath = normalizeLinkPath(linkPath);
         this.fromAddress = requiredValue(fromAddress, "activation from address");
     }
 
@@ -51,7 +59,7 @@ public class SpringMailActivationNotificationAdapter implements ActivationNotifi
         message.setFrom(fromAddress);
         message.setTo(delivery[0]);
         message.setSubject("Activate your Menta Dance account");
-        message.setText("Activate your account: " + publicBaseUrl + ACTIVATION_PATH + delivery[1]);
+        message.setText("Activate your account: " + publicBaseUrl + linkPath + delivery[1]);
         mailSender.send(message);
         tokenRepository.clearDeliveryEnvelope(activationTokenId);
     }
@@ -69,6 +77,12 @@ public class SpringMailActivationNotificationAdapter implements ActivationNotifi
     private static String stripTrailingSlash(String value) {
         value = requiredValue(value, "activation public base URL");
         return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
+    }
+
+    private static String normalizeLinkPath(String value) {
+        String path = requiredValue(value, "activation link path").trim();
+        path = path.startsWith("/") ? path : "/" + path;
+        return path.endsWith("/") ? path : path + "/";
     }
 
     private static String requiredValue(String value, String name) {
