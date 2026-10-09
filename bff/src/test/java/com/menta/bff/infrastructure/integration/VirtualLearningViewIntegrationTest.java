@@ -303,7 +303,7 @@ class VirtualLearningViewIntegrationTest extends BaseIntegrationTest {
                                 """.formatted(PREMIUM_STREAM_URL))));
 
         var loginResult = mockMvc.perform(post("/login")
-                        .param("username", "student@example.com")
+                        .param("email", "student@example.com")
                         .param("password", "password123")
                         .with(csrf()))
                 .andExpect(status().is3xxRedirection())
@@ -395,7 +395,7 @@ class VirtualLearningViewIntegrationTest extends BaseIntegrationTest {
                                 """.formatted(accessToken))));
 
         var loginResult = mockMvc.perform(post("/login")
-                        .param("username", "student@example.com")
+                        .param("email", "student@example.com")
                         .param("password", "password123")
                         .with(csrf()))
                 .andExpect(status().is3xxRedirection())
