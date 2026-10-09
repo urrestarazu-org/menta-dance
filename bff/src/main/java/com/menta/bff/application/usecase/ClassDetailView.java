@@ -1,0 +1,54 @@
+package com.menta.bff.application.usecase;
+
+import java.util.List;
+
+/**
+ * View model for the public page of one physical class.
+ *
+ * @param title         course title ({@code null} when unavailable)
+ * @param levelLabel    Spanish level label, {@code null} when unknown
+ * @param professorName professor name
+ * @param scheduleLabel weekday and start time, {@code null} when not provided
+ * @param sessions      upcoming sessions already in the academy's time zone
+ * @param unavailable   whether the upstream catalog could not be obtained
+ */
+public record ClassDetailView(
+        String title,
+        String levelLabel,
+        String professorName,
+        String scheduleLabel,
+        List<SessionRow> sessions,
+        boolean unavailable) {
+
+    /** The degraded view shown while the catalog is down. */
+    public static ClassDetailView unavailableView() {
+        return new ClassDetailView(null, null, null, null, List.of(), true);
+    }
+
+    /** Whether there is any upcoming session to list. */
+    public boolean hasSessions() {
+        return !sessions.isEmpty();
+    }
+
+    /**
+     * One upcoming session.
+     *
+     * @param whenLabel      readable Spanish date and time in the academy's zone
+     * @param availableSpots free spots, 0 when full
+     */
+    public record SessionRow(String whenLabel, int availableSpots) {
+
+        /** Whether the session has no free spot left. */
+        public boolean full() {
+            return availableSpots <= 0;
+        }
+
+        /** Free spots in Spanish, or {@code "Completo"}. */
+        public String spotsLabel() {
+            if (full()) {
+                return "Completo";
+            }
+            return availableSpots + (availableSpots == 1 ? " lugar libre" : " lugares libres");
+        }
+    }
+}

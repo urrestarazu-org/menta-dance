@@ -15,7 +15,7 @@
 
 <ul th:unless="${classes.classes().isEmpty()}">
     <li th:each="item : ${classes.classes()}">
-        <h2 th:text="${item.title()}">Clase</h2>
+        <h2><a th:href="@{${item.detailPath()}}" th:text="${item.title()}">Clase</a></h2>
         <p>
             <span th:if="${item.levelLabel() != null}" th:text="${item.levelLabel()}">Principiante</span>
             <span th:if="${item.professorName() != null}">· Profesor/a: <span th:text="${item.professorName()}">Nombre</span></span>

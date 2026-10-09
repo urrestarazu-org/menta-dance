@@ -57,14 +57,14 @@ class GetCatalogViewUseCaseImplTest {
     }
 
     @Test
-    @DisplayName("links virtual courses to their detail page and leaves physical courses unlinked")
-    void linksOnlyVirtualCourses() {
+    @DisplayName("links each course to the detail page of its own modality")
+    void linksEachModalityToItsDetailPage() {
         when(catalogApiClient.listCourses()).thenReturn(List.of(VIRTUAL_COURSE, PHYSICAL_COURSE));
 
         CatalogView view = useCase.execute(null);
 
         assertThat(view.courses().get(0).detailPath()).isEqualTo("/courses/v-1");
-        assertThat(view.courses().get(1).detailPath()).isNull();
+        assertThat(view.courses().get(1).detailPath()).isEqualTo("/classes/p-1");
     }
 
     @Test

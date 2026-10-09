@@ -6,7 +6,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
+import com.menta.bff.application.port.out.CatalogApiClient;
+import com.menta.bff.application.usecase.ClassDetailView;
 import com.menta.bff.application.usecase.ClassesView;
+import com.menta.bff.application.usecase.GetClassDetailViewUseCase;
 import com.menta.bff.application.usecase.GetClassesViewUseCase;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,13 +30,16 @@ class ClassesControllerTest {
     @Mock
     private GetClassesViewUseCase getClassesViewUseCase;
 
+    @Mock
+    private GetClassDetailViewUseCase getClassDetailViewUseCase;
+
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         View noOpView = (model, request, response) -> {};
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new ClassesController(getClassesViewUseCase))
+                .standaloneSetup(new ClassesController(getClassesViewUseCase, getClassDetailViewUseCase))
                 .setSingleView(noOpView)
                 .build();
     }
@@ -56,5 +62,37 @@ class ClassesControllerTest {
         when(getClassesViewUseCase.execute()).thenReturn(ClassesView.unavailableView());
 
         mockMvc.perform(get("/classes")).andExpect(status().isServiceUnavailable());
+    }
+
+    @Test
+    @DisplayName("renders the class detail view")
+    void rendersDetail() throws Exception {
+        ClassDetailView detail = new ClassDetailView(
+                "Salsa", "Avanzado", "María", "Lunes 18:00", List.of(), false);
+        when(getClassDetailViewUseCase.execute("p-1")).thenReturn(detail);
+
+        mockMvc.perform(get("/classes/p-1"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("class-detail"))
+                .andExpect(model().attribute("course", detail));
+    }
+
+    @Test
+    @DisplayName("answers 503 with the degraded detail when the catalog is down")
+    void detailAnswers503WhenUnavailable() throws Exception {
+        when(getClassDetailViewUseCase.execute("p-1")).thenReturn(ClassDetailView.unavailableView());
+
+        mockMvc.perform(get("/classes/p-1"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(view().name("class-detail"));
+    }
+
+    @Test
+    @DisplayName("answers 404 for a course that is not a published physical class")
+    void detailAnswers404() throws Exception {
+        when(getClassDetailViewUseCase.execute("v-1"))
+                .thenThrow(new CatalogApiClient.NotFoundException("nope"));
+
+        mockMvc.perform(get("/classes/v-1")).andExpect(status().isNotFound());
     }
 }

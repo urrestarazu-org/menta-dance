@@ -65,14 +65,14 @@ class PublicCatalogViewIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("virtual course links to its detail page and physical course renders no link")
-    void linksOnlyVirtualCourse() throws Exception {
+    @DisplayName("each course links to the detail page of its own modality")
+    void linksEachModalityToItsDetailPage() throws Exception {
         stubCatalog(200, MIXED_BODY);
 
         String body = anonymousHome("/");
 
         assertThat(body).contains("href=\"/courses/v-1\"");
-        assertThat(body).doesNotContain("/courses/p-1").doesNotContain("/classes/");
+        assertThat(body).contains("href=\"/classes/p-1\"").doesNotContain("/courses/p-1");
     }
 
     @Test
