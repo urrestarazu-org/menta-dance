@@ -42,6 +42,7 @@ import com.menta.physical.application.usecase.AssignmentOutcome;
 import com.menta.physical.application.usecase.CapacityAssignments;
 import com.menta.physical.application.usecase.ConvertOutcome;
 import com.menta.physical.domain.exception.CapacityBelowAssignedException;
+import com.menta.physical.domain.exception.StudentAlreadyAssignedException;
 import com.menta.shared.billing.PaymentCompletedOutboxPayload;
 import com.menta.shared.physical.CapacityAssignmentCommand;
 import com.menta.shared.physical.MultiSessionCapacityAssignmentCommand;
@@ -381,6 +382,24 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
             verify(markAssignedAdapter, never()).markAssigned(any());
             verify(publishPaymentFulfillmentFailedAdapter, never()).publish(any(), any(), any());
         }
+
+        @Test
+        void markException_called_with_ALREADY_ASSIGNED_when_assignAll_throws_StudentAlreadyAssigned()
+            throws Exception {
+            when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
+            when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.of(individualQuote(SESSION_ID_STR)));
+            when(courseAvailabilityPort.findScheduledSessions(eq(COURSE_ID), any(), any()))
+                .thenReturn(List.of(new ScheduledSessionSnapshot(SESSION_ID_STR, NOW.plusSeconds(3600), 5)));
+            doThrow(new StudentAlreadyAssignedException())
+                .when(physicalCapacityAssignmentPort).assignAll(any());
+
+            handler.handle(rowWithPayload(payload()));
+
+            verify(markExceptionAdapter, times(1)).markException(eq(PAYMENT_ID), eq(Reason.ALREADY_ASSIGNED));
+            verify(markExceptionAdapter, never()).markException(any(), eq(Reason.CAPACITY_BELOW_ASSIGNED));
+            verify(markAssignedAdapter, never()).markAssigned(any());
+            verify(publishPaymentFulfillmentFailedAdapter, never()).publish(any(), any(), any());
+        }
     }
 
     @Nested
@@ -398,6 +417,27 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
             doThrow(new IllegalPurchaseStateTransitionException(
                 PAYMENT_ID, FulfillmentStatus.ASSIGNED, FulfillmentStatus.EXCEPTION
             )).when(markExceptionAdapter).markException(eq(PAYMENT_ID), eq(Reason.CAPACITY_BELOW_ASSIGNED));
+
+            assertThatCode(() -> handler.handle(rowWithPayload(payload()))).doesNotThrowAnyException();
+        }
+
+        /**
+         * The realistic redelivery: the second pass re-attempts the same claims, so the unique
+         * index trips on the rows the first pass already wrote and the writer reports the student
+         * as already assigned. The refused ASSIGNED -> EXCEPTION transition is the correct outcome.
+         */
+        @Test
+        void swallows_the_refused_transition_when_the_redelivery_trips_the_student_already_assigned()
+            throws Exception {
+            when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
+            when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.of(individualQuote(SESSION_ID_STR)));
+            when(courseAvailabilityPort.findScheduledSessions(eq(COURSE_ID), any(), any()))
+                .thenReturn(List.of(new ScheduledSessionSnapshot(SESSION_ID_STR, NOW.plusSeconds(3600), 5)));
+            doThrow(new StudentAlreadyAssignedException())
+                .when(physicalCapacityAssignmentPort).assignAll(any());
+            doThrow(new IllegalPurchaseStateTransitionException(
+                PAYMENT_ID, FulfillmentStatus.ASSIGNED, FulfillmentStatus.EXCEPTION
+            )).when(markExceptionAdapter).markException(eq(PAYMENT_ID), eq(Reason.ALREADY_ASSIGNED));
 
             assertThatCode(() -> handler.handle(rowWithPayload(payload()))).doesNotThrowAnyException();
         }
@@ -546,6 +586,38 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
             doThrow(new IllegalPurchaseStateTransitionException(
                 PAYMENT_ID, FulfillmentStatus.ASSIGNED, FulfillmentStatus.EXCEPTION
             )).when(markExceptionAdapter).markException(eq(PAYMENT_ID), eq(Reason.CAPACITY_BELOW_ASSIGNED));
+
+            assertThatCode(() -> handler.handle(rowWithPayload(payload()))).doesNotThrowAnyException();
+        }
+
+        @Test
+        void student_already_assigned_during_conversion_routes_to_exception_with_the_already_assigned_reason()
+            throws Exception {
+            when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
+            when(physicalCapacityHoldPort.convertAll(PAYMENT_UUID, STUDENT_UUID))
+                .thenThrow(new StudentAlreadyAssignedException());
+            when(physicalCapacityHoldPort.heldSessionIds(PAYMENT_UUID)).thenReturn(List.of(SESSION_UUID));
+
+            handler.handle(rowWithPayload(payload()));
+
+            verify(purchaseCreationFromEventPort, times(1))
+                .createPurchaseFromPaymentEvent(any(), eq(List.of(SESSION_UUID.toString())));
+            verify(markExceptionAdapter, times(1)).markException(eq(PAYMENT_ID), eq(Reason.ALREADY_ASSIGNED));
+            verify(markExceptionAdapter, never()).markException(any(), eq(Reason.CAPACITY_BELOW_ASSIGNED));
+            verify(markAssignedAdapter, never()).markAssigned(any());
+            verify(physicalCapacityAssignmentPort, never()).assignAll(any());
+        }
+
+        @Test
+        void redelivery_after_a_student_already_assigned_conversion_on_an_ASSIGNED_purchase_is_a_safe_noop()
+            throws Exception {
+            when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
+            when(physicalCapacityHoldPort.convertAll(PAYMENT_UUID, STUDENT_UUID))
+                .thenThrow(new StudentAlreadyAssignedException());
+            when(physicalCapacityHoldPort.heldSessionIds(PAYMENT_UUID)).thenReturn(List.of(SESSION_UUID));
+            doThrow(new IllegalPurchaseStateTransitionException(
+                PAYMENT_ID, FulfillmentStatus.ASSIGNED, FulfillmentStatus.EXCEPTION
+            )).when(markExceptionAdapter).markException(eq(PAYMENT_ID), eq(Reason.ALREADY_ASSIGNED));
 
             assertThatCode(() -> handler.handle(rowWithPayload(payload()))).doesNotThrowAnyException();
         }

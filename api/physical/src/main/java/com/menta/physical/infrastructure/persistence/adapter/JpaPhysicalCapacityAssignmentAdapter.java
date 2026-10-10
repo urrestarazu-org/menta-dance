@@ -3,11 +3,13 @@ package com.menta.physical.infrastructure.persistence.adapter;
 import com.menta.physical.application.port.out.Clock;
 import com.menta.physical.application.port.out.PhysicalCapacityAssignmentWriter;
 import com.menta.physical.domain.exception.CapacityBelowAssignedException;
+import com.menta.physical.domain.exception.StudentAlreadyAssignedException;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityAssignmentJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityHoldJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
 import java.time.Instant;
 import java.util.UUID;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -63,11 +65,14 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>The decision is taken BEFORE the INSERT, so there is no
  * insert-then-delete compensation any more: a claim that loses the race
- * writes nothing at all. A V7 {@code UNIQUE} collision still surfaces as
- * {@code DataIntegrityViolationException} from the explicit flush, which
- * {@code AssignCapacityUseCase} maps to
- * {@link CapacityBelowAssignedException} — the single exception type the
- * handler side recovers from.</p>
+ * writes nothing at all. A V7 {@code UNIQUE (session_id, student_id)}
+ * collision means the student already holds the session — the session may
+ * well have spare capacity — so the explicit flush's
+ * {@code DataIntegrityViolationException} is translated here to
+ * {@link StudentAlreadyAssignedException}, never to
+ * {@link CapacityBelowAssignedException} (issue #532). The row lock on the
+ * session makes that unique index the only integrity constraint a claim can
+ * trip.</p>
  */
 @Component
 public class JpaPhysicalCapacityAssignmentAdapter implements PhysicalCapacityAssignmentWriter {
@@ -122,7 +127,11 @@ public class JpaPhysicalCapacityAssignmentAdapter implements PhysicalCapacityAss
         ));
         // Force flush so a V7 UNIQUE (session_id, student_id) collision is
         // raised here, attributed to this claim, and not at commit time.
-        jpaRepository.flush();
+        try {
+            jpaRepository.flush();
+        } catch (DataIntegrityViolationException uniqueCollision) {
+            throw new StudentAlreadyAssignedException();
+        }
 
         return now;
     }

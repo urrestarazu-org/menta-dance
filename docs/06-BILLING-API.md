@@ -116,6 +116,14 @@ al consultar al proveedor. Un pago confirmado que no logra asignar capacidad que
 `PENDING_FULFILLMENT` y sólo luego pasa a `ASSIGNED` o `EXCEPTION`; no se habilita
 asistencia hasta `ASSIGNED`. `EXPIRED` no habilita suscripción ni asigna cupo.
 
+Cuando una Purchase presencial pasa a `EXCEPTION`, el evento `billing.PurchaseExceptioned`
+(y la notificación operativa) lleva el campo `reason` con el motivo codificado:
+`CAPACITY_BELOW_ASSIGNED` (la capacidad real de una sesión no alcanza para asignar al
+alumno), `ALREADY_ASSIGNED` (el alumno ya tiene confirmada una de las sesiones a asignar,
+aunque sobre cupo; lo detecta la unicidad `(session_id, student_id)`), `HOLD_EXPIRED`,
+`COVERAGE_CHANGED`, `TARGET_NOT_SCHEDULED` y `UNIQUE_COLLISION`. Quien investiga una compra
+en `EXCEPTION` debe usar ese motivo: `ALREADY_ASSIGNED` no indica falta de capacidad.
+
 Las transiciones originadas por proveedor son monotónicas: un webhook tardío o
 duplicado nunca puede retroceder ni reemplazar un estado ya aplicado. Sólo
 `POST /api/v1/billing/admin/payments/{paymentId}/corrections` puede aplicar una

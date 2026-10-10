@@ -54,8 +54,11 @@ public interface PhysicalCapacityHoldPort {
      *     the held session ids on the first successful conversion.
      * @throws com.menta.physical.domain.exception.CapacityBelowAssignedException
      *     on the first session that trips the (now hold-excluding) assignment
-     *     invariant OR a {@code uq_physical_assignment_session_student} row
-     *     collision; every earlier write in this call is rolled back with it.
+     *     invariant.
+     * @throws com.menta.physical.domain.exception.StudentAlreadyAssignedException
+     *     on the first session whose {@code uq_physical_assignment_session_student}
+     *     row collision shows the student already holds it; every earlier write
+     *     in this call is rolled back with either failure.
      */
     ConvertOutcome convertAll(UUID paymentId, UUID studentId);
 

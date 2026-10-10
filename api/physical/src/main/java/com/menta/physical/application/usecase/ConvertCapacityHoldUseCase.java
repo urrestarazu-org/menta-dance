@@ -3,10 +3,8 @@ package com.menta.physical.application.usecase;
 import com.menta.physical.application.port.out.HeldSessionRow;
 import com.menta.physical.application.port.out.PhysicalCapacityAssignmentWriter;
 import com.menta.physical.application.port.out.PhysicalCapacityHoldWriter;
-import com.menta.physical.domain.exception.CapacityBelowAssignedException;
 import java.util.List;
 import java.util.UUID;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,8 +50,10 @@ public class ConvertCapacityHoldUseCase {
      *
      * <p>Returns {@code HoldNotFound} when the payment has no hold rows, {@code AlreadyConverted}
      * when every row is already converted (a redelivered webhook), and {@code Converted} with the
-     * session ids otherwise. A unique-index collision surfaces as {@code
-     * CapacityBelowAssignedException} and rolls back the whole conversion.
+     * session ids otherwise. A capacity refusal surfaces as {@code
+     * CapacityBelowAssignedException} and a unique-index collision (the student already holds
+     * the session) as {@code StudentAlreadyAssignedException}; either rolls back the whole
+     * conversion.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public ConvertOutcome convertAll(UUID paymentId, UUID studentId) {
@@ -82,15 +82,9 @@ public class ConvertCapacityHoldUseCase {
      */
     private void convertOne(UUID paymentId, UUID sessionId, UUID studentId) {
         holdWriter.markConverted(paymentId, sessionId);
-        try {
-            assignmentWriter.assertAssignment(sessionId, studentId);
-        } catch (DataIntegrityViolationException uniqueRace) {
-            // V7 UNIQUE (session_id, student_id) — same discipline as
-            // AssignCapacityUseCase#claimOne: route as CapacityBelowAssigned
-            // so api:app funnels it into the EXCEPTION residual. The
-            // surrounding REQUIRES_NEW transaction rolls back the
-            // markConverted call too — all-or-nothing.
-            throw new CapacityBelowAssignedException();
-        }
+        // Any refusal (capacity, or the student already holding the session)
+        // propagates unchanged; the surrounding REQUIRES_NEW transaction rolls
+        // back the markConverted call too — all-or-nothing.
+        assignmentWriter.assertAssignment(sessionId, studentId);
     }
 }

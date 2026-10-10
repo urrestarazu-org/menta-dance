@@ -53,7 +53,9 @@ proveedor marca Payment `COMPLETED` de inmediato como liquidación financiera y
 la Purchase pasa a `PENDING_FULFILLMENT`. Sólo después de crear todas las
 asignaciones la Purchase queda `ASSIGNED` y se habilita asistencia. Si no se puede
 asignar todo el conjunto real, Payment permanece `COMPLETED`, la Purchase queda
-`EXCEPTION` y no se habilita asistencia hasta una resolución administrativa.
+`EXCEPTION` y no se habilita asistencia hasta una resolución administrativa. El
+motivo distingue la capacidad insuficiente (`CAPACITY_BELOW_ASSIGNED`) de que el alumno
+ya tenga la sesión (`ALREADY_ASSIGNED`); ver `docs/06-BILLING-API.md`.
 
 Un mensual cubre las próximas N sesiones **que el alumno todavía no tiene**: se
 saltean las sesiones donde ya tiene una asignación confirmada (por ejemplo, de una

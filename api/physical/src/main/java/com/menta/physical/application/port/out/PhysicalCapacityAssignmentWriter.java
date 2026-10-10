@@ -16,8 +16,8 @@ public interface PhysicalCapacityAssignmentWriter {
      *
      * <p>The write is refused with {@code CapacityBelowAssignedException} when assigned spots plus
      * active holds plus this assignment would exceed the session capacity, and a duplicate
-     * (session, student) pair surfaces as a {@code DataIntegrityViolationException} for the caller
-     * to translate.
+     * (session, student) pair is refused with {@code StudentAlreadyAssignedException}: the student
+     * already holds the session, whatever the remaining capacity.
      *
      * @return the {@link Instant} the row was persisted (use the clock,
      *     not {@link Instant#now()}, for testability).

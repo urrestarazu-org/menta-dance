@@ -89,8 +89,10 @@ public class CreateCapacityHoldUseCase implements PhysicalCapacityHoldPort {
             holdWriter.assertHold(sessionId, paymentId, expiresAt);
         } catch (DataIntegrityViolationException uniqueRace) {
             // uq_physical_holds_payment_session — the second concurrent
-            // INSERT lost. Route as CapacityBelowAssigned, same discipline
-            // as AssignCapacityUseCase's own UNIQUE race handling.
+            // INSERT lost. Route as CapacityBelowAssigned. Unlike the
+            // assignment unique index, this one is keyed by payment+session,
+            // not student: it is a repeated claim, not a student who already
+            // holds the session (#532), so no StudentAlreadyAssigned here.
             throw new CapacityBelowAssignedException();
         }
     }

@@ -9,11 +9,13 @@ import com.menta.shared.physical.MultiSessionCapacityAssignmentCommand;
  * Entry port Physical exposes for {@code api:app}'s outbox handler
  * (proposal §4; design §4.3).
  *
- * <p>The assign is fail-closed: both the read-time capacity check AND the
- * V7 {@code UNIQUE (session_id, student_id)} race trip the same
+ * <p>The assign is fail-closed: the read-time capacity check trips
  * {@link com.menta.physical.domain.exception.CapacityBelowAssignedException}
- * which {@code api:app}'s handler routes to the {@code EXCEPTION} residual
- * terminal state. {@link AssignmentOutcome} carries the success / race-lost
+ * and the V7 {@code UNIQUE (session_id, student_id)} collision (the student
+ * already holds the session) trips
+ * {@link com.menta.physical.domain.exception.StudentAlreadyAssignedException};
+ * {@code api:app}'s handler routes each to the {@code EXCEPTION} residual
+ * terminal state with its own reason. {@link AssignmentOutcome} carries the success / race-lost
  * verdict for callers that prefer a non-throwing shape; we still throw for
  * the fail-closed path so the in-port signature is uniform with the rest
  * of Physical's ports.</p>
@@ -29,8 +31,9 @@ public interface PhysicalCapacityAssignmentPort {
      *         the {@code api:app} handler treats this as EXCEPTION-routable
      *         but does NOT propagate it as the live exception type).
      * @throws com.menta.physical.domain.exception.CapacityBelowAssignedException
-     *         on capacity trip OR V7 UNIQUE row collision (consistent with
-     *         design §5.3 — "the SOLE exception type").
+     *         on capacity trip.
+     * @throws com.menta.physical.domain.exception.StudentAlreadyAssignedException
+     *         on V7 UNIQUE row collision (the student already holds the session).
      */
     AssignmentOutcome assign(CapacityAssignmentCommand command);
 
@@ -43,9 +46,11 @@ public interface PhysicalCapacityAssignmentPort {
      * @return the assigned session ids, in claim order, when every claim
      *         succeeded.
      * @throws com.menta.physical.domain.exception.CapacityBelowAssignedException
-     *         on the first claim that trips the capacity invariant OR a V7
-     *         UNIQUE row collision; every earlier insert in this call is
-     *         rolled back with it.
+     *         on the first claim that trips the capacity invariant.
+     * @throws com.menta.physical.domain.exception.StudentAlreadyAssignedException
+     *         on the first claim whose V7 UNIQUE row collision shows the
+     *         student already holds the session; every earlier insert in
+     *         this call is rolled back with either failure.
      */
     CapacityAssignments assignAll(MultiSessionCapacityAssignmentCommand command);
 }

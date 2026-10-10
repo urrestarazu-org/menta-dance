@@ -44,8 +44,10 @@ import org.springframework.transaction.annotation.Transactional;
  * refuses with {@link CapacityBelowAssignedException} and writes nothing. A
  * V7-style {@code uq_physical_holds_payment_session} collision still
  * surfaces as {@code DataIntegrityViolationException} from the explicit
- * flush, mapped by {@code CreateCapacityHoldUseCase} the same way
- * {@code AssignCapacityUseCase} maps its own UNIQUE race.</p>
+ * flush, mapped to {@link CapacityBelowAssignedException} by
+ * {@code CreateCapacityHoldUseCase}: a hold is keyed by payment and session,
+ * not by student, so that collision is a repeated claim, not a student who
+ * already holds the session.</p>
  */
 @Component
 public class JpaPhysicalCapacityHoldAdapter implements PhysicalCapacityHoldWriter {

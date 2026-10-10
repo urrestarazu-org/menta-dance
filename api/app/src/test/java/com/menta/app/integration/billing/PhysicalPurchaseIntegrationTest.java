@@ -443,6 +443,18 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
                 () -> new IllegalStateException("No billing.PhysicalPaymentCompleted outbox row was produced"));
     }
 
+    /** The single {@code billing.PurchaseExceptioned} row of the payment carries exactly this {@code reason}. */
+    private void assertExceptionedWithReason(UUID paymentId, String reason) {
+        List<OutboxRowJpaEntity> rows = outboxRowsFor(BillingOutboxEventTypes.PURCHASE_EXCEPTIONED, paymentId);
+        assertThat(rows).hasSize(1);
+        try {
+            assertThat(new com.fasterxml.jackson.databind.ObjectMapper().readTree(rows.get(0).getPayload())
+                .get("reason").asText()).isEqualTo(reason);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException("Unreadable PurchaseExceptioned payload", e);
+        }
+    }
+
     private List<OutboxRowJpaEntity> outboxRowsFor(String eventType, UUID paymentId) {
         return outboxRepository.findAll().stream()
             .filter(row -> row.getEventType().equals(eventType))
@@ -707,6 +719,65 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         assertThat(assignmentRepository.countBySessionId(contestedSession)).isEqualTo(1);
         assertThat(assignmentRepository.countBySessionId(sessionIds.get(1))).isEqualTo(0);
         assertThat(assignmentRepository.existsBySessionIdAndStudentId(sessionIds.get(1), userId)).isFalse();
+        // Real capacity keeps its own reason (#532).
+        assertExceptionedWithReason(paymentId, "CAPACITY_BELOW_ASSIGNED");
+    }
+
+    // --- #532: the student already holds the session, capacity is not the problem ---
+
+    /**
+     * Hold path. The student gets the selected session through another route between the checkout
+     * (the hold knows no student) and the confirmation, so converting the hold trips {@code
+     * uq_physical_assignment_session_student} on a session with plenty of spare capacity. The
+     * purchase must go to EXCEPTION with {@code ALREADY_ASSIGNED}, not {@code CAPACITY_BELOW_ASSIGNED}.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void a_student_already_assigned_at_hold_conversion_leaves_the_purchase_in_exception_with_already_assigned() {
+        UUID userId = seedStudent();
+        UUID courseId = seedCourse();
+        UUID session = seedScheduledSessions(courseId, 1, 12).get(0);
+        String quoteId = seedIndividualQuote(courseId, session, INDIVIDUAL_PRICE);
+
+        ResponseEntity<Map> checkout = checkout(userId, quoteId, "idem-already-assigned-hold-1");
+        assertThat(checkout.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        String externalReference = (String) checkout.getBody().get("externalReference");
+        UUID paymentId = UUID.fromString((String) checkout.getBody().get("paymentId"));
+
+        assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
+            UUID.randomUUID(), session, userId, Instant.now()
+        ));
+
+        OutboxRowJpaEntity event = confirmPayment("mp-already-assigned-hold-1", externalReference, INDIVIDUAL_PRICE);
+        assertThat(outboxWorker.process(event)).isFalse();
+
+        assertThat(paymentRepository.findById(paymentId).orElseThrow().getStatusType()).isEqualTo("COMPLETED");
+        assertThat(purchaseRepository.findByPaymentId(paymentId).orElseThrow().getStatus()).isEqualTo("EXCEPTION");
+        assertThat(assignmentRepository.countBySessionId(session)).isEqualTo(1);
+        assertExceptionedWithReason(paymentId, "ALREADY_ASSIGNED");
+    }
+
+    /** Legacy (no hold) path: bank transfer approved while the student already holds the selected session. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void an_approved_bank_transfer_for_a_session_the_student_already_holds_reaches_exception_with_already_assigned() {
+        UUID userId = seedStudent();
+        UUID courseId = seedCourse();
+        UUID session = seedScheduledSessions(courseId, 1, 12).get(0);
+        String quoteId = seedIndividualQuote(courseId, session, INDIVIDUAL_PRICE);
+        UUID admin = seedAdmin();
+        PaymentId paymentId = seedAwaitingManualVerificationPhysicalPayment(userId, quoteId, INDIVIDUAL_PRICE);
+        assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
+            UUID.randomUUID(), session, userId, Instant.now()
+        ));
+
+        assertThat(approve(admin, paymentId).getStatusCode()).isEqualTo(HttpStatus.OK);
+        processPhysicalPaymentCompletedFor(paymentId.getValue());
+
+        assertThat(purchaseRepository.findByPaymentId(paymentId.getValue()).orElseThrow().getStatus())
+            .isEqualTo("EXCEPTION");
+        assertThat(assignmentRepository.countBySessionId(session)).isEqualTo(1);
+        assertExceptionedWithReason(paymentId.getValue(), "ALREADY_ASSIGNED");
     }
 
     // --- D5/A6: best-effort 409 on a visibly-full quote -----------------------
@@ -1302,6 +1373,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         List<OutboxRowJpaEntity> exceptionedRows =
             outboxRowsFor(BillingOutboxEventTypes.PURCHASE_EXCEPTIONED, paymentId.getValue());
         assertThat(exceptionedRows).hasSize(1);
+        assertExceptionedWithReason(paymentId.getValue(), "CAPACITY_BELOW_ASSIGNED");
         assertThat(outboxWorker.process(exceptionedRows.get(0))).isFalse();
         // 3 total: the admin-approve decision email to the student (ResolvePaymentProofUseCaseImpl,
         // unmodified) PLUS the #209 EXCEPTION pair (student + ops) this assertion targets.

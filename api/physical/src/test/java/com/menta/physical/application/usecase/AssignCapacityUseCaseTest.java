@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import com.menta.physical.application.port.out.PhysicalCapacityAssignmentWriter;
 import com.menta.physical.domain.exception.CapacityBelowAssignedException;
 import com.menta.physical.domain.exception.SessionNotFoundException;
+import com.menta.physical.domain.exception.StudentAlreadyAssignedException;
 import com.menta.shared.physical.CapacityAssignmentCommand;
 import com.menta.shared.physical.MultiSessionCapacityAssignmentCommand;
 import com.menta.shared.physical.SessionClaim;
@@ -87,17 +88,25 @@ class AssignCapacityUseCaseTest {
     }
 
     @Nested
-    @DisplayName("Spec scenario: UNIQUE race on (sessionId, studentId) routes to EXCEPTION")
+    @DisplayName("The student already holding the session is not reclassified as a capacity refusal")
     class UniqueRace {
 
         @Test
-        void rethrows_DataIntegrityViolation_as_CapacityBelowAssigned() {
-            doThrow(new DataIntegrityViolationException(
-                "Duplicate entry for key 'uq_physical_assignment_session_student'"))
+        void propagates_the_writers_StudentAlreadyAssigned_unchanged() {
+            doThrow(new StudentAlreadyAssignedException())
                 .when(assignmentWriter).assertAssignment(SESSION_UUID, STUDENT_UUID);
 
             assertThatThrownBy(() -> useCase.assign(cmd()))
-                .isInstanceOf(CapacityBelowAssignedException.class);
+                .isInstanceOf(StudentAlreadyAssignedException.class);
+        }
+
+        @Test
+        void does_not_reclassify_a_raw_DataIntegrityViolation_as_a_capacity_refusal() {
+            doThrow(new DataIntegrityViolationException("unrelated integrity failure"))
+                .when(assignmentWriter).assertAssignment(SESSION_UUID, STUDENT_UUID);
+
+            assertThatThrownBy(() -> useCase.assign(cmd()))
+                .isInstanceOf(DataIntegrityViolationException.class);
         }
     }
 
