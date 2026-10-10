@@ -1,13 +1,30 @@
 package com.menta.bff.application.usecase;
 
 import java.time.DayOfWeek;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.stream.Stream;
 
 /** Spanish display labels for the physical classes pages. */
 final class ClassLabels {
 
+    private static final DateTimeFormatter MOMENT_FORMAT =
+            DateTimeFormatter.ofPattern("EEEE d 'de' MMMM 'a las' HH:mm", Locale.forLanguageTag("es-AR"));
+
     private ClassLabels() {
+    }
+
+    /**
+     * Words an instant in the academy's zone, e.g. {@code "lunes 12 de octubre a las 18:00"}.
+     *
+     * @param instant moment to word
+     * @param zone    academy display zone
+     * @return the Spanish label
+     */
+    static String moment(Instant instant, ZoneId zone) {
+        return MOMENT_FORMAT.format(instant.atZone(zone));
     }
 
     /**
