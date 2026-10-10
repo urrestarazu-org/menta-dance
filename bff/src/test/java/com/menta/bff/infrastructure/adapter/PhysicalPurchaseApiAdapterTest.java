@@ -2,6 +2,8 @@ package com.menta.bff.infrastructure.adapter;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
@@ -17,6 +19,7 @@ import ch.qos.logback.core.read.ListAppender;
 import com.github.tomakehurst.wiremock.http.Fault;
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
+import com.menta.bff.application.dto.PaymentProgress;
 import com.menta.bff.application.dto.PhysicalCheckout;
 import com.menta.bff.application.dto.PhysicalPurchaseType;
 import com.menta.bff.application.dto.PhysicalQuote;
@@ -42,6 +45,7 @@ class PhysicalPurchaseApiAdapterTest {
     private static final String QUOTES = "/api/v1/billing/physical/quotes";
     private static final String PURCHASES = "/api/v1/billing/physical/purchases";
     private static final String PAYMENT_ID = "00000000-0000-0000-0000-0000000000a1";
+    private static final String PAYMENT = "/api/v1/billing/payments/" + PAYMENT_ID;
     private static final String QUOTE_ID = "00000000-0000-0000-0000-0000000000b1";
     private static final String TOKEN = "access-token-abc";
     private static final String BEARER = "Bearer " + TOKEN;
@@ -175,6 +179,42 @@ class PhysicalPurchaseApiAdapterTest {
                 .satisfies(e -> assertThat(e.getClass().getSimpleName()).isEqualTo(expected));
     }
 
+    @ParameterizedTest(name = "payment status {0} -> {1}")
+    @CsvSource({
+        "COMPLETED, COMPLETED", "REJECTED, REJECTED", "CANCELLED, CANCELLED", "EXPIRED, EXPIRED",
+        "AWAITING_PROVIDER, PENDING", "AWAITING_MANUAL_VERIFICATION, PENDING",
+        "RECONCILIATION_REQUIRED, PENDING", "SOMETHING_NEW, PENDING"})
+    void paymentStatus(String upstream, PaymentProgress expected) {
+        stubFor(get(urlEqualTo(PAYMENT)).willReturn(aResponse().withStatus(200)
+                .withHeader("Content-Type", "application/json")
+                .withBody("{\"status\":\"" + upstream
+                        + "\",\"createdAt\":\"2026-10-10T12:00:00Z\",\"updatedAt\":\"2026-10-10T12:01:00Z\"}")));
+
+        assertThat(adapter.getPaymentProgress(TOKEN, PAYMENT_ID)).isEqualTo(expected);
+        verify(getRequestedFor(urlEqualTo(PAYMENT)).withHeader("Authorization", equalTo(BEARER)));
+    }
+
+    @Test
+    @DisplayName("a payment that is not the caller's (404) surfaces as not found")
+    void paymentNotFound() {
+        stubStatus(get(urlEqualTo(PAYMENT)), 404, "PAYMENT_NOT_FOUND");
+
+        assertThatThrownBy(() -> adapter.getPaymentProgress(TOKEN, PAYMENT_ID))
+                .isInstanceOf(BillingApiClient.NotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("a payment status outage (5xx) and a dropped connection are unavailable")
+    void paymentOutage() {
+        stubFor(get(urlEqualTo(PAYMENT)).willReturn(aResponse().withStatus(503)));
+        assertThatThrownBy(() -> adapter.getPaymentProgress(TOKEN, PAYMENT_ID))
+                .isInstanceOf(BillingApiClient.ServiceUnavailableException.class);
+
+        stubFor(get(urlEqualTo(PAYMENT)).willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)));
+        assertThatThrownBy(() -> adapter.getPaymentProgress(TOKEN, PAYMENT_ID))
+                .isInstanceOf(BillingApiClient.ServiceUnavailableException.class).hasMessageNotContaining(TOKEN);
+    }
+
     @Test
     @DisplayName("429 carries the Retry-After seconds, and an unparsable value is dropped")
     void rateLimited() {
@@ -220,6 +260,9 @@ class PhysicalPurchaseApiAdapterTest {
 
         stubStatus(post(urlEqualTo(PURCHASES)), 418, "TEAPOT");
         assertThatThrownBy(() -> adapter.createCheckout(TOKEN, QUOTE_ID, "k")).isInstanceOf(RuntimeException.class);
+
+        stubFor(get(urlEqualTo(PAYMENT)).willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)));
+        assertThatThrownBy(() -> adapter.getPaymentProgress(TOKEN, PAYMENT_ID)).isInstanceOf(RuntimeException.class);
 
         assertThat(logs.list).isNotEmpty().allSatisfy(event -> assertThat(event.getFormattedMessage())
                 .doesNotContain(TOKEN).doesNotContain("Authorization"));

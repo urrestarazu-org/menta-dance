@@ -63,5 +63,9 @@ autómatas separados.
 - **Implementado (BFF web, #365):** cotizar y pagar con Mercado Pago desde la web: el alumno pide la cotización,
   el BFF inicia el checkout con una clave de idempotencia, guarda el `paymentId` en la sesión y redirige al
   proveedor. Ver [06-BILLING-API.md](../06-BILLING-API.md#cotizar-y-pagar-clases-presenciales-desde-la-web-bff-365).
-- **Pendiente (slices siguientes):** la página de retorno `/compras/retorno`, mostrar las sesiones asignadas tras el
-  pago (Purchase `ASSIGNED`) y el pago por transferencia bancaria desde la web.
+- **Implementado (BFF web, #365):** la página de retorno `GET /compras/retorno` lee el `paymentId` de la sesión,
+  consulta el estado a la API y muestra "Pago confirmado, estamos asignando tus lugares" (`COMPLETED`), "Estamos
+  confirmando tu pago" (pendiente o desconocido) o un mensaje por pago rechazado, cancelado o vencido. Ignora los
+  parámetros de la URL y nunca decide el pago; **no** afirma que las sesiones ya estén asignadas.
+- **Pendiente (corte B):** mostrar las sesiones asignadas tras el pago (Purchase `ASSIGNED`) y el pago por
+  transferencia bancaria desde la web.

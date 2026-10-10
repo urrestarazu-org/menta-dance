@@ -98,9 +98,9 @@ public class BffSecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/recuperar-contrasena").permitAll()
                         .requestMatchers(HttpMethod.GET, "/restablecer-contrasena/*").permitAll()
                         .requestMatchers(HttpMethod.POST, "/restablecer-contrasena").permitAll()
-                        // Physical class purchase (#365): POST /classes/{id}/cotizar is deliberately not
-                        // listed above, so it falls under anyRequest().authenticated();
-                        // PhysicalPurchaseIntegrationTest pins that.
+                        // Physical class purchase (#365): POST /classes/{id}/cotizar, POST /compras and
+                        // GET /compras/retorno are deliberately not listed above, so they fall under
+                        // anyRequest().authenticated();
                         // All other endpoints require authentication
                         .anyRequest().authenticated()
                 )

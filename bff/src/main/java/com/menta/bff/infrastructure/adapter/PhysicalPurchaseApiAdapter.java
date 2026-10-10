@@ -1,6 +1,7 @@
 package com.menta.bff.infrastructure.adapter;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.menta.bff.application.dto.PaymentProgress;
 import com.menta.bff.application.dto.PhysicalCheckout;
 import com.menta.bff.application.dto.PhysicalPurchaseType;
 import com.menta.bff.application.dto.PhysicalQuote;
@@ -20,7 +21,7 @@ import reactor.core.publisher.Mono;
 
 /**
  * WebClient adapter for the authenticated physical-class purchase endpoints of
- * the Billing API (quote and Mercado Pago checkout).
+ * the Billing API (quote, Mercado Pago checkout and payment status).
  *
  * <p>Each call sends {@code Authorization: Bearer <token>}. The token only ever
  * travels in that header: it is never put in a log line or an exception message,
@@ -40,6 +41,7 @@ public class PhysicalPurchaseApiAdapter implements PhysicalPurchaseApiClient {
 
     private static final String QUOTES = "/api/v1/billing/physical/quotes";
     private static final String PURCHASES = "/api/v1/billing/physical/purchases";
+    private static final String PAYMENTS = "/api/v1/billing/payments/{paymentId}";
     private static final String PAYMENT_METHOD = "MERCADO_PAGO";
     private static final String NO_SCHEDULED_SESSIONS = "NO_SCHEDULED_SESSIONS";
 
@@ -77,6 +79,14 @@ public class PhysicalPurchaseApiAdapter implements PhysicalPurchaseApiClient {
             throw unavailable("checkout response is incomplete");
         }
         return new PhysicalCheckout(checkout.paymentId(), checkout.checkoutUrl());
+    }
+
+    @Override
+    public PaymentProgress getPaymentProgress(String accessToken, String paymentId) {
+        PaymentWire payment = execute("payment status",
+                webClient.get().uri(PAYMENTS, paymentId).header(HttpHeaders.AUTHORIZATION, bearer(accessToken)),
+                PaymentWire.class);
+        return PaymentProgress.fromUpstream(payment.status());
     }
 
     private <T> T execute(String operation, WebClient.RequestHeadersSpec<?> request, Class<T> bodyType) {
@@ -161,6 +171,9 @@ public class PhysicalPurchaseApiAdapter implements PhysicalPurchaseApiClient {
     }
 
     private record CheckoutWire(String paymentId, String checkoutUrl) {
+    }
+
+    private record PaymentWire(String status) {
     }
 
     private record ProblemWire(String code) {

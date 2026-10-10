@@ -58,11 +58,16 @@ final class PurchaseFlowErrors {
             title = "Servicio no disponible";
             message = AuthFlowErrors.UNAVAILABLE;
         }
+        response.setStatus(status.value());
+        return notice(model, title, message, linkHref, linkLabel);
+    }
+
+    /** Fills the notice model without touching the response status. */
+    static String notice(Model model, String title, String message, String linkHref, String linkLabel) {
         model.addAttribute("title", title);
         model.addAttribute("message", message);
         model.addAttribute("linkHref", linkHref);
         model.addAttribute("linkLabel", linkLabel);
-        response.setStatus(status.value());
         return NOTICE_VIEW;
     }
 }
