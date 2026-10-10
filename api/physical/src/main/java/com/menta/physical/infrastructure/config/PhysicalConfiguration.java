@@ -8,6 +8,7 @@ import com.menta.physical.application.port.in.GetPhysicalDeviceUseCase;
 import com.menta.physical.application.port.in.IssuePhysicalAccessQrUseCase;
 import com.menta.physical.application.port.in.ListManagedPhysicalCoursesUseCase;
 import com.menta.physical.application.port.in.ListManagedPhysicalSessionsUseCase;
+import com.menta.physical.application.port.in.ListMyPhysicalSessionsUseCase;
 import com.menta.physical.application.port.in.ListPhysicalDevicesUseCase;
 import com.menta.physical.application.port.in.PhysicalCourseAvailabilityPort;
 import com.menta.physical.application.port.in.PhysicalCourseOwnershipPort;
@@ -37,6 +38,7 @@ import com.menta.physical.application.usecase.GetPhysicalDeviceUseCaseImpl;
 import com.menta.physical.application.usecase.IssuePhysicalAccessQrUseCaseImpl;
 import com.menta.physical.application.usecase.ListManagedPhysicalCoursesUseCaseImpl;
 import com.menta.physical.application.usecase.ListManagedPhysicalSessionsUseCaseImpl;
+import com.menta.physical.application.usecase.ListMyPhysicalSessionsUseCaseImpl;
 import com.menta.physical.application.usecase.ListPhysicalDevicesUseCaseImpl;
 import com.menta.physical.application.usecase.PhysicalCourseAvailabilityPortImpl;
 import com.menta.physical.application.usecase.PhysicalCourseOwnershipPortImpl;
@@ -47,6 +49,7 @@ import com.menta.physical.application.usecase.RevokePhysicalDeviceUseCaseImpl;
 import com.menta.physical.application.usecase.RotatePhysicalDeviceSecretUseCaseImpl;
 import com.menta.physical.application.usecase.UpdatePhysicalCourseUseCaseImpl;
 import com.menta.physical.application.usecase.UpdatePhysicalSessionUseCaseImpl;
+import com.menta.physical.domain.model.CheckInWindow;
 import com.menta.physical.infrastructure.device.SecureRandomDeviceSecretGenerator;
 import com.menta.physical.infrastructure.device.Sha256DeviceSecretHasher;
 import com.menta.physical.infrastructure.qr.FormatQrCredentialSignatureService;
@@ -267,6 +270,23 @@ public class PhysicalConfiguration {
         @Value("${physical.attendance.zone-id:America/Argentina/Buenos_Aires}") String zoneId
     ) {
         return new GetPhysicalAttendanceHistoryUseCaseImpl(assignmentRepository, ZoneId.of(zoneId));
+    }
+
+    /**
+     * #356 -- the listing's check-in flag uses the same {@code app.qr.session-window-*} bounds the QR
+     * flow enforces, and the same academy zone as the attendance history. {@code
+     * physical.sessions.window-days} bounds how far ahead the listing looks (default 60).
+     */
+    @Bean
+    public ListMyPhysicalSessionsUseCase listMyPhysicalSessionsUseCase(
+        PhysicalCapacityAssignmentRepository assignmentRepository, Clock clock, QrProperties qrProperties,
+        @Value("${physical.attendance.zone-id:America/Argentina/Buenos_Aires}") String zoneId,
+        @Value("${physical.sessions.window-days:60}") int windowDays
+    ) {
+        return new ListMyPhysicalSessionsUseCaseImpl(
+            assignmentRepository, clock, ZoneId.of(zoneId), windowDays,
+            new CheckInWindow(qrProperties.getSessionWindowBefore(), qrProperties.getSessionWindowAfter())
+        );
     }
 
     /**

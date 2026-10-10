@@ -198,6 +198,10 @@ physical:
   # deployment-time configuration is required.
   attendance:
     zone-id: ${PHYSICAL_ATTENDANCE_ZONE_ID:America/Argentina/Buenos_Aires}
+  # #356: how many days ahead GET /api/v1/physical/sessions/me looks, counted from the start of
+  # today in the zone above. Working default, so no deployment-time configuration is required.
+  sessions:
+    window-days: ${PHYSICAL_SESSIONS_WINDOW_DAYS:60}
   capacity:
     hold:
       # The hold's own lifetime — see PhysicalConfiguration.physicalCapacityHoldTtl. Consumed only
