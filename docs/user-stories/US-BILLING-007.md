@@ -47,6 +47,20 @@
   idempotente.
 - **Entonces** se devuelve el mismo resultado sin consumir capacidad adicional.
 
+**Escenario 5: asignación del alumno entre el checkout y la confirmación**
+
+- **Dado** una mensualidad con checkout hecho (holds creados sobre N sesiones) y un pago aún
+  pendiente.
+- **Cuando** el alumno recibe, por otra vía, una asignación en una de las sesiones retenidas
+  (por ejemplo, una compra individual de esa sesión) y luego se confirma el pago.
+- **Entonces** la conversión del hold choca con la unicidad `(session_id, student_id)`:
+  Payment queda `COMPLETED`, Purchase queda `EXCEPTION` con `reason = ALREADY_ASSIGNED`, no se
+  asigna ninguna sesión de la compra (todo o nada, los holds no se convierten) y no se habilita
+  asistencia. No se reabre el conjunto de sesiones: queda fijo desde el checkout (decisión de
+  #533). Operaciones recibe el aviso y la compra figura en el inventario administrativo de sólo
+  lectura (`GET /api/v1/admin/billing/purchases?status=EXCEPTION`); el tratamiento del caso es
+  manual y fuera del producto. Ver [28-PHYSICAL-CLASS-PAYMENTS.md](../28-PHYSICAL-CLASS-PAYMENTS.md).
+
 ## 3. Requisitos No Funcionales y Restricciones
 
 - Solo una transacción puede tomar el último cupo.

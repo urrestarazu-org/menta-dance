@@ -757,6 +757,51 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         assertExceptionedWithReason(paymentId, "ALREADY_ASSIGNED");
     }
 
+    /**
+     * #533: the monthly checkout window. The held session set is fixed at checkout (#523 skips the
+     * sessions the student owns only at that moment), so an assignment that lands on one of the held
+     * sessions before the payment is confirmed makes the conversion trip the unique index. Decision
+     * (c): the purchase stays in EXCEPTION with {@code ALREADY_ASSIGNED} (paid, no sessions) and is
+     * resolved operationally. The owned session is the LAST one in claim order, so the two earlier
+     * sessions are converted inside the conversion transaction before it trips: the assertions on
+     * them prove the rollback really is all-or-nothing, not merely that the loop stopped early.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void a_monthly_hold_whose_last_session_is_assigned_before_confirmation_rolls_back_every_session() {
+        UUID userId = seedStudent();
+        UUID courseId = seedCourse();
+        List<UUID> sessionIds = seedScheduledSessions(courseId, 3, 12);
+        String quoteId = seedMonthlyQuote(courseId, 3, MONTHLY_PRICE);
+
+        ResponseEntity<Map> checkout = checkout(userId, quoteId, "idem-monthly-window-1");
+        assertThat(checkout.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        String externalReference = (String) checkout.getBody().get("externalReference");
+        UUID paymentId = UUID.fromString((String) checkout.getBody().get("paymentId"));
+        assertThat(holdRepository.findByPaymentIdOrdered(paymentId)).hasSize(3);
+
+        // Between checkout and confirmation the student gets the last held session by another route.
+        UUID lateAssigned = sessionIds.get(2);
+        assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
+            UUID.randomUUID(), lateAssigned, userId, Instant.now()
+        ));
+
+        OutboxRowJpaEntity event = confirmPayment("mp-monthly-window-1", externalReference, MONTHLY_PRICE);
+        assertThat(outboxWorker.process(event)).isFalse();
+
+        assertThat(paymentRepository.findById(paymentId).orElseThrow().getStatusType()).isEqualTo("COMPLETED");
+        assertThat(purchaseRepository.findByPaymentId(paymentId).orElseThrow().getStatus()).isEqualTo("EXCEPTION");
+        assertExceptionedWithReason(paymentId, "ALREADY_ASSIGNED");
+        // All-or-nothing: the student keeps only the assignment that caused the trip.
+        assertThat(assignmentRepository.existsBySessionIdAndStudentId(sessionIds.get(0), userId)).isFalse();
+        assertThat(assignmentRepository.existsBySessionIdAndStudentId(sessionIds.get(1), userId)).isFalse();
+        assertThat(assignmentRepository.countBySessionId(lateAssigned)).isEqualTo(1);
+        // The conversion rolled back with its assignments: no hold row was marked converted.
+        assertThat(holdRepository.findByPaymentIdOrdered(paymentId)).hasSize(3).allSatisfy(
+            hold -> assertThat(hold.getConvertedAt()).isNull()
+        );
+    }
+
     /** Legacy (no hold) path: bank transfer approved while the student already holds the selected session. */
     @Test
     @SuppressWarnings("unchecked")
