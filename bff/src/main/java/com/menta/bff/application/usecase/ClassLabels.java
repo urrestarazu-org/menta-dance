@@ -1,9 +1,12 @@
 package com.menta.bff.application.usecase;
 
+import java.math.BigDecimal;
+import java.text.NumberFormat;
 import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Currency;
 import java.util.Locale;
 import java.util.stream.Stream;
 
@@ -13,7 +16,22 @@ final class ClassLabels {
     private static final DateTimeFormatter MOMENT_FORMAT =
             DateTimeFormatter.ofPattern("EEEE d 'de' MMMM 'a las' HH:mm", Locale.forLanguageTag("es-AR"));
 
+    private static final Locale AR = Locale.forLanguageTag("es-AR");
+
     private ClassLabels() {
+    }
+
+    /**
+     * Formats an amount for es-AR with its currency, e.g. {@code "$ 25.000,00"}.
+     *
+     * @param amount   amount to format
+     * @param currency ISO 4217 currency code
+     * @return the Spanish label
+     */
+    static String amount(BigDecimal amount, String currency) {
+        NumberFormat format = NumberFormat.getCurrencyInstance(AR);
+        format.setCurrency(Currency.getInstance(currency));
+        return format.format(amount);
     }
 
     /**

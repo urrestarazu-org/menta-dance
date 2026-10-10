@@ -2,10 +2,15 @@ package com.menta.bff.application.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.menta.bff.application.dto.PhysicalCourseDetail;
+import com.menta.bff.application.dto.PhysicalCoursePricing;
+import com.menta.bff.application.port.out.BillingApiClient;
 import com.menta.bff.application.port.out.CatalogApiClient;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.List;
@@ -25,11 +30,16 @@ class GetClassDetailViewUseCaseImplTest {
     @Mock
     private CatalogApiClient catalogApiClient;
 
+    @Mock
+    private BillingApiClient billingApiClient;
+
     private GetClassDetailViewUseCase useCase;
 
     @BeforeEach
     void setUp() {
-        useCase = new GetClassDetailViewUseCaseImpl(catalogApiClient, ACADEMY_ZONE);
+        useCase = new GetClassDetailViewUseCaseImpl(catalogApiClient, billingApiClient, ACADEMY_ZONE);
+        lenient().when(billingApiClient.getPhysicalCoursePricing("p-1")).thenReturn(
+                new PhysicalCoursePricing("p-1", new BigDecimal("25000.00"), "ARS"));
     }
 
     private static PhysicalCourseDetail detail(List<PhysicalCourseDetail.Session> sessions) {
@@ -69,7 +79,7 @@ class GetClassDetailViewUseCaseImplTest {
     @Test
     @DisplayName("honours a different configured display zone")
     void honoursConfiguredZone() {
-        useCase = new GetClassDetailViewUseCaseImpl(catalogApiClient, ZoneId.of("UTC"));
+        useCase = new GetClassDetailViewUseCaseImpl(catalogApiClient, billingApiClient, ZoneId.of("UTC"));
         when(catalogApiClient.getPhysicalCourse("p-1")).thenReturn(detail(List.of(
                 new PhysicalCourseDetail.Session("s-1", Instant.parse("2026-10-12T21:00:00Z"), 12, 5))));
 
@@ -106,5 +116,48 @@ class GetClassDetailViewUseCaseImplTest {
         assertThat(view.unavailable()).isTrue();
         assertThat(view.hasSessions()).isFalse();
         assertThat(view.title()).isNull();
+        verifyNoInteractions(billingApiClient);
+    }
+
+    @Test
+    @DisplayName("shows the published monthly price in es-AR with its currency")
+    void showsPublishedPrice() {
+        when(catalogApiClient.getPhysicalCourse("p-1")).thenReturn(detail(List.of()));
+
+        ClassDetailView view = useCase.execute("p-1");
+
+        assertThat(view.priceState()).isEqualTo(ClassDetailView.PriceState.PUBLISHED);
+        assertThat(view.priceLabel()).startsWith("$").contains("25.000,00").endsWith(" por mes");
+        assertThat(view.canQuote()).isTrue();
+    }
+
+    @Test
+    @DisplayName("reports no published price on a billing 404, without failing the page")
+    void noPublishedPrice() {
+        when(catalogApiClient.getPhysicalCourse("p-1")).thenReturn(detail(List.of()));
+        when(billingApiClient.getPhysicalCoursePricing("p-1"))
+                .thenThrow(new BillingApiClient.NotFoundException("none"));
+
+        ClassDetailView view = useCase.execute("p-1");
+
+        assertThat(view.unavailable()).isFalse();
+        assertThat(view.title()).isEqualTo("Salsa en vivo");
+        assertThat(view.priceState()).isEqualTo(ClassDetailView.PriceState.NOT_PUBLISHED);
+        assertThat(view.priceLabel()).isNull();
+        assertThat(view.canQuote()).isFalse();
+    }
+
+    @Test
+    @DisplayName("reports the price as unavailable when billing is down, without failing the page")
+    void priceUnavailableWhenBillingDown() {
+        when(catalogApiClient.getPhysicalCourse("p-1")).thenReturn(detail(List.of()));
+        when(billingApiClient.getPhysicalCoursePricing("p-1"))
+                .thenThrow(new BillingApiClient.ServiceUnavailableException("down"));
+
+        ClassDetailView view = useCase.execute("p-1");
+
+        assertThat(view.unavailable()).isFalse();
+        assertThat(view.priceState()).isEqualTo(ClassDetailView.PriceState.UNAVAILABLE);
+        assertThat(view.canQuote()).isFalse();
     }
 }

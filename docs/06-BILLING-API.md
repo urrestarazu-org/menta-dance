@@ -203,9 +203,18 @@ checkout (fuera de esta historia) es quien reserva o rechaza cupo de verdad.
 
 Un alumno autenticado cotiza y paga desde el BFF (plantillas Thymeleaf, sin JavaScript):
 
-1. En `/classes/{courseId}` ve "Cotizar clases del mes" y, por cada sesión con lugares, "Cotizar
-   solo esta clase" (una sesión llena no tiene botón). Un visitante anónimo ve el enlace
-   "Ingresá para comprar" hacia `/login`.
+1. `/classes/{courseId}` consulta el precio con `GET /api/v1/billing/physical/courses/{courseId}/pricing`
+   (público: no envía token y no se cachea, porque el precio es por curso y un admin puede
+   editarlo) y muestra el precio mensual en es-AR con su moneda ("$ 25.000,00 por mes"). No
+   muestra un precio individual: depende de las sesiones del período y lo calcula Billing al
+   cotizar. Con precio publicado, el alumno ve "Cotizar clases del mes" y, por cada sesión con
+   lugares, "Cotizar solo esta clase" (una sesión llena no tiene botón); un visitante anónimo ve
+   el enlace "Ingresá para comprar" hacia `/login`. Sin precio publicado (`404
+   PHYSICAL_COURSE_PRICING_NOT_FOUND`) la página se muestra igual con el aviso "Todavía no hay un
+   precio publicado para esta clase." y sin botones de cotizar (tampoco "Ingresá para comprar");
+   si el precio no se puede consultar (`429`, `5xx`, cuerpo ilegible o error de red) se muestra
+   un aviso breve, también sin botones. En ningún caso se rompe el detalle ni se muestra el
+   cuerpo del error de Billing.
 2. `POST /classes/{courseId}/cotizar` (`purchaseType`, y `selectedSessionId` si es individual)
    llama a `POST /api/v1/billing/physical/quotes` con el access token del alumno y muestra la
    cotización: importe en formato es-AR, sesiones del período y vencimiento (zona

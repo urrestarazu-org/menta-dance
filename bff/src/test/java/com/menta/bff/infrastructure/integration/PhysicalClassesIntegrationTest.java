@@ -151,10 +151,13 @@ class PhysicalClassesIntegrationTest extends BaseIntegrationTest {
     void detailRendersSessionsInAcademyZone() throws Exception {
         stub(LIST_URL, 200, LIST_BODY);
         stub(DETAIL_URL, 200, PHYSICAL_DETAIL_BODY);
+        stub("/api/v1/billing/physical/courses/" + PHYSICAL_ID + "/pricing", 200,
+                "{\"courseId\": \"" + PHYSICAL_ID + "\", \"monthlyPrice\": 25000.00, \"currency\": \"ARS\"}");
 
         String body = page("/classes/" + PHYSICAL_ID, 200);
 
         assertThat(body).contains("Salsa en vivo", "Avanzado", "María García", "Lunes 18:00");
+        assertThat(body).containsPattern("\\$\\p{Z}25\\.000,00 por mes");
         assertThat(body).contains("lunes 12 de octubre a las 18:00", "5 lugares libres");
         assertThat(body).contains("lunes 12 de octubre a las 22:30", "Completo");
         assertThat(body).doesNotContain("Cotizar");

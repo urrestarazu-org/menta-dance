@@ -137,8 +137,10 @@ public class UseCaseConfig {
 
     @Bean
     public GetClassDetailViewUseCase getClassDetailViewUseCase(
-            CatalogApiClient catalogApiClient, ClassesProperties classesProperties) {
-        return new GetClassDetailViewUseCaseImpl(catalogApiClient, classesProperties.getDisplayZone());
+            CatalogApiClient catalogApiClient, BillingApiClient billingApiClient,
+            ClassesProperties classesProperties) {
+        return new GetClassDetailViewUseCaseImpl(
+                catalogApiClient, billingApiClient, classesProperties.getDisplayZone());
     }
 
     @Bean

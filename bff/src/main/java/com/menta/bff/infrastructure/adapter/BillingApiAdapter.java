@@ -1,5 +1,6 @@
 package com.menta.bff.infrastructure.adapter;
 
+import com.menta.bff.application.dto.PhysicalCoursePricing;
 import com.menta.bff.application.dto.PlanSummary;
 import com.menta.bff.application.port.out.BillingApiClient;
 import com.menta.bff.infrastructure.config.BillingApiProperties;
@@ -11,10 +12,12 @@ import java.util.concurrent.locks.ReentrantLock;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
+import reactor.core.publisher.Mono;
 
 /**
  * WebClient adapter for the upstream billing plans endpoint.
@@ -46,6 +49,7 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 public class BillingApiAdapter implements BillingApiClient {
 
     private static final String PLANS_ENDPOINT = "/api/v1/billing/plans";
+    private static final String PRICING_ENDPOINT = "/api/v1/billing/physical/courses/{courseId}/pricing";
     private static final String RETRY_AFTER_HEADER = "Retry-After";
 
     private final WebClient webClient;
@@ -82,6 +86,40 @@ public class BillingApiAdapter implements BillingApiClient {
         } finally {
             refreshLock.unlock();
         }
+    }
+
+    @Override
+    public PhysicalCoursePricing getPhysicalCoursePricing(String courseId) {
+        try {
+            // Public endpoint, no Authorization header, and deliberately no cache.
+            PricingWire pricing = webClient.get()
+                    .uri(PRICING_ENDPOINT, courseId)
+                    .exchangeToMono(response -> handlePricingResponse(response))
+                    .timeout(billingApiProperties.getTimeout())
+                    .block();
+            if (pricing == null || pricing.monthlyPrice() == null || pricing.currency() == null) {
+                throw new ServiceUnavailableException("Billing API returned an incomplete pricing body");
+            }
+            return new PhysicalCoursePricing(pricing.courseId(), pricing.monthlyPrice(), pricing.currency());
+        } catch (NotFoundException | ServiceUnavailableException e) {
+            throw e;
+        } catch (Exception e) {
+            // Class name only: nothing from the upstream body may reach a log or the browser.
+            log.error("Billing API pricing call failed: {}", e.getClass().getSimpleName());
+            throw new ServiceUnavailableException("Billing API unavailable", e);
+        }
+    }
+
+    private Mono<PricingWire> handlePricingResponse(ClientResponse response) {
+        HttpStatusCode status = response.statusCode();
+        if (status.is2xxSuccessful()) {
+            return response.bodyToMono(PricingWire.class);
+        }
+        if (status.value() == HttpStatus.NOT_FOUND.value()) {
+            return Mono.error(new NotFoundException("No price published for the course"));
+        }
+        Long retryAfter = parseRetryAfter(response.headers().asHttpHeaders().getFirst(RETRY_AFTER_HEADER));
+        return Mono.error(new ServiceUnavailableException("Pricing unavailable: " + status.value(), retryAfter));
     }
 
     private boolean isFresh(Entry entry) {
@@ -193,6 +231,10 @@ public class BillingApiAdapter implements BillingApiClient {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    /** Wire shape for the pricing endpoint; only what the class page needs. */
+    private record PricingWire(String courseId, BigDecimal monthlyPrice, String currency) {
     }
 
     /**

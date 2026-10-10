@@ -45,6 +45,7 @@ class PhysicalPurchaseIntegrationTest extends BaseIntegrationTest {
     private static final String CHECKOUT_URL = "https://pay.example.com/checkout/1";
     private static final String QUOTES = "/api/v1/billing/physical/quotes";
     private static final String PAYMENT = "/api/v1/billing/payments/" + PAYMENT_ID;
+    private static final String PRICING = "/api/v1/billing/physical/courses/" + COURSE_ID + "/pricing";
     private static final String RETURN_PAGE = "/compras/retorno";
     private static final String PURCHASES = "/api/v1/billing/physical/purchases";
 
@@ -69,6 +70,12 @@ class PhysicalPurchaseIntegrationTest extends BaseIntegrationTest {
                "virtual": null}]}
             """.formatted(COURSE_ID);
 
+    private static final String PRICING_BODY =
+            """
+            {"courseId": "%s", "monthlyPrice": 25000.00, "currency": "ARS", "individualSurchargePercent": 20,
+             "version": 3, "updatedAt": "2026-10-10T12:00:00Z"}
+            """.formatted(COURSE_ID);
+
     private static final Pattern FORM = Pattern.compile("<form[^>]*action=\"([^\"]+)\"[^>]*>(.*?)</form>",
             Pattern.DOTALL);
     private static final Pattern INPUT = Pattern.compile("<input[^>]*>");
@@ -91,6 +98,7 @@ class PhysicalPurchaseIntegrationTest extends BaseIntegrationTest {
         assertThat(session).isNotNull();
         stubGet(CATALOG, 200, DETAIL_BODY);
         stubGet("/api/v1/catalog/courses", 200, LIST_BODY);
+        stubGet(PRICING, 200, PRICING_BODY);
     }
 
     private static void stubGet(String url, int status, String body) {
@@ -223,6 +231,51 @@ class PhysicalPurchaseIntegrationTest extends BaseIntegrationTest {
         assertThat(monthlyForm(html)).containsEntry("purchaseType", "MONTHLY");
         assertThat(html).contains("name=\"_csrf\"");
         assertLinksWork(html);
+    }
+
+    @Test
+    @DisplayName("the class page shows the monthly price to a student and to an anonymous visitor, from a public call")
+    void detailShowsTheMonthlyPrice() throws Exception {
+        String student = body(mockMvc.perform(withSession(get("/classes/" + COURSE_ID))).andExpect(status().isOk()));
+        String anonymous = body(mockMvc.perform(get("/classes/" + COURSE_ID)).andExpect(status().isOk()));
+
+        assertThat(student).containsPattern("\\$\\p{Z}25\\.000,00 por mes").contains("Cotizar clases del mes");
+        assertThat(anonymous).containsPattern("\\$\\p{Z}25\\.000,00 por mes").contains("Ingresá para comprar");
+        assertThat(student + anonymous).doesNotContain("precio individual");
+        assertThat(WIRE_MOCK_SERVER.findAll(getRequestedFor(urlEqualTo(PRICING)))).hasSize(2)
+                .allSatisfy(request -> assertThat(request.header("Authorization").isPresent()).isFalse());
+    }
+
+    @Test
+    @DisplayName("without a published price (404) the page still renders, with a notice and no purchase entry points")
+    void detailWithoutPublishedPrice() throws Exception {
+        stubProblemGet(PRICING, 404, "PHYSICAL_COURSE_PRICING_NOT_FOUND");
+
+        for (String html : List.of(
+                body(mockMvc.perform(withSession(get("/classes/" + COURSE_ID))).andExpect(status().isOk())),
+                body(mockMvc.perform(get("/classes/" + COURSE_ID)).andExpect(status().isOk())))) {
+            assertThat(html).contains("Salsa en vivo", "5 lugares libres")
+                    .contains("Todavía no hay un precio publicado para esta clase.")
+                    .doesNotContain("por mes").doesNotContain("Cotizar").doesNotContain("Ingresá para comprar")
+                    .doesNotContain("<form").doesNotContain("PHYSICAL_COURSE_PRICING");
+            assertLinksWork(html);
+        }
+    }
+
+    @Test
+    @DisplayName("when the price cannot be read (503) the page still renders, with a notice and no purchase buttons")
+    void detailWithUnavailablePrice() throws Exception {
+        stubProblemGet(PRICING, 503, "UNAVAILABLE");
+
+        for (String html : List.of(
+                body(mockMvc.perform(withSession(get("/classes/" + COURSE_ID))).andExpect(status().isOk())),
+                body(mockMvc.perform(get("/classes/" + COURSE_ID)).andExpect(status().isOk())))) {
+            assertThat(html).contains("Salsa en vivo", "5 lugares libres")
+                    .contains("No pudimos consultar el precio en este momento.")
+                    .doesNotContain("por mes").doesNotContain("Cotizar").doesNotContain("Ingresá para comprar")
+                    .doesNotContain("<form").doesNotContain("UNAVAILABLE");
+            assertLinksWork(html);
+        }
     }
 
     @Test
