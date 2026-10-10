@@ -162,10 +162,11 @@ autorización. Tampoco se registra el token de activación. La API redacciona su
 access logs como `/api/v1/auth/activate/[REDACTED]`. El BFF no registra URIs de
 petición y sus páginas con el token (`/activar/{token}`, `/restablecer-contrasena/{token}`
 y el reintento de sus `POST`) responden `Cache-Control: no-store` y `Referrer-Policy:
-no-referrer`. Los access logs de NGINX sí registran la línea de petición del
-enlace del correo (`GET /activar/{token}` y `GET /restablecer-contrasena/{token}`),
-igual que antes registraban el `GET /api/v1/auth/activate/{token}` de la API;
-redactarlos en el proxy es un seguimiento pendiente (#501). Los eventos
+no-referrer`. Los access logs de NGINX redactan el token
+de los enlaces del correo: `GET /activar/{token}` y
+`GET /restablecer-contrasena/{token}` quedan como `/activar/[REDACTED]` y
+`/restablecer-contrasena/[REDACTED]`, también en el Referer (`log_format main`
+en `nginx.conf` y en `nginx.production.conf.example`). Los eventos
 de login, refresh, revocación, reutilización y denegación incluyen
 `correlationId`, usuario/dispositivo cuando corresponda y resultado.
 
