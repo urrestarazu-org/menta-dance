@@ -84,7 +84,7 @@ class DemoPhysicalCatalogFixtureTest {
     }
 
     @Test
-    void empty_database_creates_four_weeks_of_slots_in_utc() {
+    void empty_database_creates_eight_weeks_of_slots_in_utc() {
         fixture.run(mock());
 
         ArgumentCaptor<List<PhysicalSession>> captor = ArgumentCaptor.forClass(List.class);
@@ -95,10 +95,16 @@ class DemoPhysicalCatalogFixtureTest {
             Instant.parse("2026-10-08T19:00:00Z"), Instant.parse("2026-10-13T19:00:00Z"),
             Instant.parse("2026-10-15T19:00:00Z"), Instant.parse("2026-10-20T19:00:00Z"),
             Instant.parse("2026-10-22T19:00:00Z"), Instant.parse("2026-10-27T19:00:00Z"),
-            Instant.parse("2026-10-29T19:00:00Z"), Instant.parse("2026-11-03T19:00:00Z"));
+            Instant.parse("2026-10-29T19:00:00Z"), Instant.parse("2026-11-03T19:00:00Z"),
+            Instant.parse("2026-11-05T19:00:00Z"), Instant.parse("2026-11-10T19:00:00Z"),
+            Instant.parse("2026-11-12T19:00:00Z"), Instant.parse("2026-11-17T19:00:00Z"),
+            Instant.parse("2026-11-19T19:00:00Z"), Instant.parse("2026-11-24T19:00:00Z"),
+            Instant.parse("2026-11-26T19:00:00Z"), Instant.parse("2026-12-01T19:00:00Z"));
         assertThat(traditional).extracting(PhysicalSession::getScheduledAt).containsExactly(
             Instant.parse("2026-10-10T11:00:00Z"), Instant.parse("2026-10-17T11:00:00Z"),
-            Instant.parse("2026-10-24T11:00:00Z"), Instant.parse("2026-10-31T11:00:00Z"));
+            Instant.parse("2026-10-24T11:00:00Z"), Instant.parse("2026-10-31T11:00:00Z"),
+            Instant.parse("2026-11-07T11:00:00Z"), Instant.parse("2026-11-14T11:00:00Z"),
+            Instant.parse("2026-11-21T11:00:00Z"), Instant.parse("2026-11-28T11:00:00Z"));
         assertThat(sensual).allSatisfy(session -> {
             assertThat(session.getCourseId()).isEqualTo(SENSUAL);
             assertThat(session.getCapacity()).isEqualTo(12);
@@ -130,7 +136,7 @@ class DemoPhysicalCatalogFixtureTest {
 
         ArgumentCaptor<List<PhysicalSession>> captor = ArgumentCaptor.forClass(List.class);
         verify(sessions, times(2)).saveAll(captor.capture());
-        assertThat(captor.getAllValues().get(0)).hasSize(7)
+        assertThat(captor.getAllValues().get(0)).hasSize(15)
             .extracting(PhysicalSession::getScheduledAt).doesNotContain(NEXT_SENSUAL);
     }
 
@@ -206,7 +212,7 @@ class DemoPhysicalCatalogFixtureTest {
 
         ArgumentCaptor<List<PhysicalSession>> captor = ArgumentCaptor.forClass(List.class);
         verify(sessions, times(2)).saveAll(captor.capture());
-        assertThat(captor.getAllValues().get(0)).hasSize(8);
+        assertThat(captor.getAllValues().get(0)).hasSize(16);
         ArgumentCaptor<CapacityAssignmentCommand> seats = ArgumentCaptor.forClass(CapacityAssignmentCommand.class);
         verify(assignmentPort, times(2)).assign(seats.capture());
         assertThat(seats.getAllValues()).extracting(CapacityAssignmentCommand::sessionId)
