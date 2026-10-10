@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.menta.billing.application.dto.PaymentPreferenceRequest;
+import com.menta.billing.application.dto.PaymentPreferenceResult;
 import com.menta.billing.application.dto.ProviderPaymentResult;
 import com.menta.billing.domain.model.Money;
 import java.math.BigDecimal;
@@ -20,6 +21,42 @@ class LocalMercadoPagoPaymentStoreTest {
         );
 
         assertThat(store.createPreference(request)).isEqualTo(store.createPreference(request));
+    }
+
+    @Test
+    void keeps_the_local_checkout_url_when_no_back_url_is_configured() {
+        PaymentPreferenceRequest request = new PaymentPreferenceRequest(
+            "payment-1", "Monthly plan", Money.of(new BigDecimal("1000.00"), "ARS")
+        );
+
+        assertThat(store.createPreference(request).checkoutUrl())
+            .isEqualTo("http://local.mercadopago/checkout/local-preference-payment-1");
+    }
+
+    @Test
+    void sends_the_buyer_to_the_configured_back_url_so_the_web_can_follow_it() {
+        LocalMercadoPagoPaymentStore withBackUrl =
+            new LocalMercadoPagoPaymentStore("http://localhost:8080/compras/retorno");
+        PaymentPreferenceRequest request = new PaymentPreferenceRequest(
+            "payment-1", "Monthly plan", Money.of(new BigDecimal("1000.00"), "ARS")
+        );
+
+        PaymentPreferenceResult first = withBackUrl.createPreference(request);
+
+        assertThat(first.checkoutUrl()).isEqualTo("http://localhost:8080/compras/retorno");
+        assertThat(first.preferenceId()).isEqualTo("local-preference-payment-1");
+        assertThat(withBackUrl.createPreference(request)).isEqualTo(first);
+    }
+
+    @Test
+    void treats_a_blank_back_url_as_not_configured() {
+        LocalMercadoPagoPaymentStore blank = new LocalMercadoPagoPaymentStore("  ");
+        PaymentPreferenceRequest request = new PaymentPreferenceRequest(
+            "payment-1", "Monthly plan", Money.of(new BigDecimal("1000.00"), "ARS")
+        );
+
+        assertThat(blank.createPreference(request).checkoutUrl())
+            .isEqualTo("http://local.mercadopago/checkout/local-preference-payment-1");
     }
 
     @Test

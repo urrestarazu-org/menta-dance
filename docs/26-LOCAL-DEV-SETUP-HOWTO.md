@@ -155,6 +155,26 @@ locales guardados por perfil, sin llamar nunca a `api.mercadopago.com`.
    aprobado/duplicado y otro exclusivo para el camino de mismatch, en vez de
    reutilizar la misma cuenta.
 
+**Probar la compra web de clases presenciales con el simulador (#365, #512):**
+el simulador devuelve como `checkoutUrl` la `back_url` configurada, de modo que el
+navegador "paga" y vuelve de inmediato al BFF. Para usarlo hay que levantar el stack
+con ambos perfiles y apuntar la `back_url` al retorno del BFF:
+
+```bash
+SPRING_PROFILES_ACTIVE=demo,e2e-mercadopago \
+BILLING_WEBHOOK_MERCADOPAGO_HMAC_SECRET=<secreto de desarrollo del script e2e> \
+BILLING_MERCADOPAGO_MERCHANT_ACCOUNT_ID=local-merchant \
+BILLING_MERCADOPAGO_CHECKOUT_BACK_URL=http://localhost:8080/compras/retorno \
+./scripts/dev.sh start
+```
+
+Con el alumno demo: cotizar en `/classes/{id}`, pagar, y la página `/compras/retorno`
+muestra "pendiente" hasta que se prepare y envíe el webhook aprobado
+(`/api/v1/e2e/mercadopago/approved-webhook`, como hace el recorrido Bruno); al
+refrescar pasa a "Pago confirmado". Sin `BILLING_MERCADOPAGO_CHECKOUT_BACK_URL` el
+simulador conserva la URL `http://local.mercadopago/...`, que la web rechaza a
+propósito (no es `https` ni loopback).
+
 **Cómo ejecutarlo:** no requiere un comando separado — corre automáticamente
 al final de `scripts/e2e/catalog-content.sh` (ver arriba). Usa Bruno CLI sobre
 `bruno/E2E/mercadopago/01-registration` y `02-journey`, con el mismo
