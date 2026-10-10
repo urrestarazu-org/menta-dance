@@ -168,7 +168,6 @@ class PhysicalMySessionsIntegrationTest extends AbstractPhysicalMySqlIntegration
     @Test
     void lists_only_the_confirmed_upcoming_sessions_in_ascending_order() {
         UUID student = issueUser(Role.STUDENT);
-        UUID other = issueUser(Role.STUDENT);
         UUID salsa = seedCourse("Salsa Intermedio");
         UUID bachata = seedCourse("Bachata Inicial");
         Instant now = Instant.now();
@@ -185,6 +184,7 @@ class PhysicalMySessionsIntegrationTest extends AbstractPhysicalMySqlIntegration
         seedAssignment(seedSession(salsa, now.plus(90, ChronoUnit.DAYS), "SCHEDULED"), student);
         seedAssignment(seedSession(salsa, now.plus(4, ChronoUnit.DAYS), "CANCELLED"), student);
         // Someone else's assignment.
+        UUID other = issueUser(Role.STUDENT);
         seedAssignment(seedSession(salsa, now.plus(5, ChronoUnit.DAYS), "SCHEDULED"), other);
 
         @SuppressWarnings("rawtypes")
@@ -208,7 +208,8 @@ class PhysicalMySessionsIntegrationTest extends AbstractPhysicalMySqlIntegration
     @Test
     void a_session_inside_its_check_in_window_is_flagged_open() {
         UUID student = issueUser(Role.STUDENT);
-        UUID inWindow = seedSession(seedCourse("Salsa Intermedio"), Instant.now().plus(10, ChronoUnit.MINUTES), "SCHEDULED");
+        UUID inWindow = seedSession(
+            seedCourse("Salsa Intermedio"), Instant.now().plus(10, ChronoUnit.MINUTES), "SCHEDULED");
         seedAssignment(inWindow, student);
 
         @SuppressWarnings("rawtypes")
@@ -222,7 +223,9 @@ class PhysicalMySessionsIntegrationTest extends AbstractPhysicalMySqlIntegration
     void another_student_does_not_see_the_first_students_sessions() {
         UUID student = issueUser(Role.STUDENT);
         UUID other = issueUser(Role.STUDENT);
-        seedAssignment(seedSession(seedCourse("Salsa Intermedio"), Instant.now().plus(2, ChronoUnit.DAYS), "SCHEDULED"), student);
+        UUID session = seedSession(
+            seedCourse("Salsa Intermedio"), Instant.now().plus(2, ChronoUnit.DAYS), "SCHEDULED");
+        seedAssignment(session, student);
 
         @SuppressWarnings("rawtypes")
         ResponseEntity<Map> response = getAs(other, Role.STUDENT, URL + "?studentId=" + student);
