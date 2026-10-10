@@ -12,6 +12,7 @@ package com.menta.bff.application.usecase;
  * @param sessionLabel  the chosen session of an individual quote, {@code null} when unknown or monthly
  * @param expiresLabel  when the quote stops being payable, in the academy's zone
  * @param unavailable   whether the capacity projection says there is no room (informative)
+ * @param idempotencyKey key that identifies this rendering of the page; reposting the same form reuses it
  */
 public record PurchaseQuoteView(
         String quoteId,
@@ -22,5 +23,6 @@ public record PurchaseQuoteView(
         int sessionCount,
         String sessionLabel,
         String expiresLabel,
-        boolean unavailable) {
+        boolean unavailable,
+        String idempotencyKey) {
 }

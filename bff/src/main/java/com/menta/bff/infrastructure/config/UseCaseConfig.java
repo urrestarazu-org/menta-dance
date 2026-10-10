@@ -27,6 +27,8 @@ import com.menta.bff.application.usecase.LoginUseCase;
 import com.menta.bff.application.usecase.LoginUseCaseImpl;
 import com.menta.bff.application.usecase.LogoutUseCase;
 import com.menta.bff.application.usecase.LogoutUseCaseImpl;
+import com.menta.bff.application.usecase.PayPhysicalPurchaseUseCase;
+import com.menta.bff.application.usecase.PayPhysicalPurchaseUseCaseImpl;
 import com.menta.bff.application.usecase.QuotePhysicalPurchaseUseCase;
 import com.menta.bff.application.usecase.QuotePhysicalPurchaseUseCaseImpl;
 import com.menta.bff.application.usecase.RegisterAccountUseCase;
@@ -38,6 +40,7 @@ import com.menta.bff.application.usecase.ResendActivationUseCaseImpl;
 import com.menta.bff.application.usecase.ResetPasswordUseCase;
 import com.menta.bff.application.usecase.ResetPasswordUseCaseImpl;
 import com.menta.bff.infrastructure.web.filter.TokenRefreshFilter;
+import java.util.UUID;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -140,7 +143,12 @@ public class UseCaseConfig {
     public QuotePhysicalPurchaseUseCase quotePhysicalPurchaseUseCase(
             PhysicalPurchaseApiClient purchaseApiClient, CatalogApiClient catalogApiClient,
             ClassesProperties classesProperties) {
-        return new QuotePhysicalPurchaseUseCaseImpl(
-                purchaseApiClient, catalogApiClient, classesProperties.getDisplayZone());
+        return new QuotePhysicalPurchaseUseCaseImpl(purchaseApiClient, catalogApiClient,
+                classesProperties.getDisplayZone(), () -> UUID.randomUUID().toString());
+    }
+
+    @Bean
+    public PayPhysicalPurchaseUseCase payPhysicalPurchaseUseCase(PhysicalPurchaseApiClient purchaseApiClient) {
+        return new PayPhysicalPurchaseUseCaseImpl(purchaseApiClient);
     }
 }

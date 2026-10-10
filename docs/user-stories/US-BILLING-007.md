@@ -42,7 +42,8 @@
 - Solo una transacción puede tomar el último cupo.
 - No existen reservas manuales ni listas de espera.
 - Un hold técnico es interno, breve y expirable.
-- El callback del BFF usa `purchaseId` y un `state` firmado; nunca decide el pago.
+- El retorno del BFF no usa un `state` firmado: el BFF guarda el `paymentId` en la sesión del servidor antes de
+  redirigir a Mercado Pago, lee ese id (nunca parámetros de la URL) y nunca decide el pago.
 
 ## 4. Notas Técnicas
 
@@ -54,4 +55,13 @@ autómatas separados.
 
 - [ ] Pruebas concurrentes del último cupo y compra multi-sesión.
 - [ ] Webhook duplicado e idempotencia end-to-end.
-- [ ] Contratos OpenAPI y pruebas de callback firmado.
+- [ ] Contratos OpenAPI y pruebas del retorno del BFF (el `paymentId` sale de la sesión; los parámetros de la
+      URL se ignoran).
+
+## 6. Estado de implementación
+
+- **Implementado (BFF web, #365):** cotizar y pagar con Mercado Pago desde la web: el alumno pide la cotización,
+  el BFF inicia el checkout con una clave de idempotencia, guarda el `paymentId` en la sesión y redirige al
+  proveedor. Ver [06-BILLING-API.md](../06-BILLING-API.md#cotizar-y-pagar-clases-presenciales-desde-la-web-bff-365).
+- **Pendiente (slices siguientes):** la página de retorno `/compras/retorno`, mostrar las sesiones asignadas tras el
+  pago (Purchase `ASSIGNED`) y el pago por transferencia bancaria desde la web.

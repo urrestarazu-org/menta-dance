@@ -37,6 +37,14 @@ final class PurchaseFlowErrors {
             status = HttpStatus.UNPROCESSABLE_ENTITY;
             title = "Sin clases en el período";
             message = "No hay clases programadas en este período, así que no podemos cotizar.";
+        } else if (failure instanceof PhysicalPurchaseApiClient.CapacityUnavailableException) {
+            status = HttpStatus.CONFLICT;
+            title = "Sin lugares";
+            message = "Ya no hay lugares disponibles para esta cotización. No se realizó ningún cobro.";
+        } else if (failure instanceof PhysicalPurchaseApiClient.QuoteExpiredException) {
+            status = HttpStatus.GONE;
+            title = "Cotización vencida";
+            message = "La cotización venció, pedí una nueva.";
         } else if (failure instanceof BillingApiClient.NotFoundException) {
             status = HttpStatus.NOT_FOUND;
             title = "No se pudo cotizar";
