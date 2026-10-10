@@ -28,6 +28,8 @@ import com.menta.bff.application.usecase.LogoutUseCase;
 import com.menta.bff.application.usecase.LogoutUseCaseImpl;
 import com.menta.bff.application.usecase.RegisterAccountUseCase;
 import com.menta.bff.application.usecase.RegisterAccountUseCaseImpl;
+import com.menta.bff.application.usecase.RequestPasswordResetUseCase;
+import com.menta.bff.application.usecase.RequestPasswordResetUseCaseImpl;
 import com.menta.bff.application.usecase.ResendActivationUseCase;
 import com.menta.bff.application.usecase.ResendActivationUseCaseImpl;
 import com.menta.bff.infrastructure.web.filter.TokenRefreshFilter;
@@ -68,6 +70,11 @@ public class UseCaseConfig {
     @Bean
     public ResendActivationUseCase resendActivationUseCase(AuthApiClient authApiClient) {
         return new ResendActivationUseCaseImpl(authApiClient);
+    }
+
+    @Bean
+    public RequestPasswordResetUseCase requestPasswordResetUseCase(AuthApiClient authApiClient) {
+        return new RequestPasswordResetUseCaseImpl(authApiClient);
     }
 
     @Bean
