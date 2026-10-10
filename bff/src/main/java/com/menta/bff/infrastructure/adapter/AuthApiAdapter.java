@@ -2,6 +2,7 @@ package com.menta.bff.infrastructure.adapter;
 
 import com.menta.bff.application.dto.LoginCommand;
 import com.menta.bff.application.dto.RegisterCommand;
+import com.menta.bff.application.dto.RequestPasswordResetCommand;
 import com.menta.bff.application.dto.ResendActivationCommand;
 import com.menta.bff.application.dto.TokenPairResponse;
 import com.menta.bff.application.port.out.AuthApiClient;
@@ -42,6 +43,8 @@ public class AuthApiAdapter implements AuthApiClient {
     private static final String REGISTER_ENDPOINT = "/api/v1/auth/register";
     private static final String ACTIVATE_ENDPOINT = "/api/v1/auth/activate";
     private static final String RESEND_ACTIVATION_ENDPOINT = "/api/v1/auth/resend-activation";
+
+    private static final String FORGOT_PASSWORD_ENDPOINT = "/api/v1/auth/forgot-password";
 
     private static final String FORWARDED_FOR_HEADER = "X-Forwarded-For";
 
@@ -242,6 +245,23 @@ public class AuthApiAdapter implements AuthApiClient {
 
         if (reply.status() != HttpStatus.ACCEPTED.value()) {
             throw failure(reply, "resend-activation");
+        }
+    }
+
+    @Override
+    public void requestPasswordReset(RequestPasswordResetCommand command) {
+        Objects.requireNonNull(command, "command cannot be null");
+
+        log.debug("Calling Auth API forgot-password endpoint");
+
+        ApiReply reply = send(webClient.post()
+                .uri(FORGOT_PASSWORD_ENDPOINT)
+                .contentType(MediaType.APPLICATION_JSON)
+                .headers(headers -> applyClientOrigin(headers, command.clientAddress()))
+                .bodyValue(Map.of("email", command.email())), "forgot-password");
+
+        if (reply.status() != HttpStatus.ACCEPTED.value()) {
+            throw failure(reply, "forgot-password");
         }
     }
 
