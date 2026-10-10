@@ -4,6 +4,7 @@ import com.menta.bff.application.port.out.AccessTokenClaimsReader;
 import com.menta.bff.application.port.out.AuthApiClient;
 import com.menta.bff.application.port.out.BillingApiClient;
 import com.menta.bff.application.port.out.CatalogApiClient;
+import com.menta.bff.application.port.out.PhysicalPurchaseApiClient;
 import com.menta.bff.application.port.out.SessionTokenRepository;
 import com.menta.bff.application.port.out.VirtualApiClient;
 import com.menta.bff.application.usecase.AccountActivationUseCase;
@@ -26,6 +27,8 @@ import com.menta.bff.application.usecase.LoginUseCase;
 import com.menta.bff.application.usecase.LoginUseCaseImpl;
 import com.menta.bff.application.usecase.LogoutUseCase;
 import com.menta.bff.application.usecase.LogoutUseCaseImpl;
+import com.menta.bff.application.usecase.QuotePhysicalPurchaseUseCase;
+import com.menta.bff.application.usecase.QuotePhysicalPurchaseUseCaseImpl;
 import com.menta.bff.application.usecase.RegisterAccountUseCase;
 import com.menta.bff.application.usecase.RegisterAccountUseCaseImpl;
 import com.menta.bff.application.usecase.RequestPasswordResetUseCase;
@@ -131,5 +134,13 @@ public class UseCaseConfig {
     public GetClassDetailViewUseCase getClassDetailViewUseCase(
             CatalogApiClient catalogApiClient, ClassesProperties classesProperties) {
         return new GetClassDetailViewUseCaseImpl(catalogApiClient, classesProperties.getDisplayZone());
+    }
+
+    @Bean
+    public QuotePhysicalPurchaseUseCase quotePhysicalPurchaseUseCase(
+            PhysicalPurchaseApiClient purchaseApiClient, CatalogApiClient catalogApiClient,
+            ClassesProperties classesProperties) {
+        return new QuotePhysicalPurchaseUseCaseImpl(
+                purchaseApiClient, catalogApiClient, classesProperties.getDisplayZone());
     }
 }
