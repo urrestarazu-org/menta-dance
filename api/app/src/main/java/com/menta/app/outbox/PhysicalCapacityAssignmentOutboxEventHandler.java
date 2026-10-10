@@ -263,7 +263,13 @@ public class PhysicalCapacityAssignmentOutboxEventHandler implements OutboxEvent
 
         CoveragePlanner.Plan plan = switch (quote.getPurchaseType()) {
             case MONTHLY -> CoveragePlanner.planMonthly(
-                scheduledSessions, payload.confirmedAt(), quote.getScheduledSessionCount(), false
+                scheduledSessions, payload.confirmedAt(), quote.getScheduledSessionCount(), false,
+                // Sessions the student already owns cannot be assigned again (unique
+                // student/session), so the monthly window skips them and extends forward.
+                courseAvailabilityPort.findSessionIdsAssignedTo(
+                    quote.getCourseId(), payment.getUserId(), payload.confirmedAt(),
+                    payload.confirmedAt().plus(CoveragePlanner.COVERAGE_LOOKAHEAD)
+                )
             );
             case INDIVIDUAL -> CoveragePlanner.planIndividual(
                 scheduledSessions, quote.getSelectedSessionId(), false

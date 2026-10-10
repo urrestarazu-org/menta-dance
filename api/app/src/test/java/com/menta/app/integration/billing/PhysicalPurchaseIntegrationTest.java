@@ -485,6 +485,71 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         }
     }
 
+    // --- Scenario 1b: MONTHLY skips the sessions the student already owns (#523) ---
+
+    /**
+     * The student already holds a confirmed assignment on the first of four upcoming sessions.
+     * A 3-session monthly purchase must cover the next three sessions the student does NOT own,
+     * not the first three: re-assigning the owned one would trip {@code
+     * uq_physical_assignment_session_student} and leave a paid purchase in EXCEPTION.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void monthly_purchase_skips_a_session_the_student_already_owns_and_extends_forward() {
+        UUID userId = seedStudent();
+        UUID courseId = seedCourse();
+        List<UUID> sessionIds = seedScheduledSessions(courseId, 4, 5);
+        UUID owned = sessionIds.get(0);
+        assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
+            UUID.randomUUID(), owned, userId, Instant.now()
+        ));
+        String quoteId = seedMonthlyQuote(courseId, 3, MONTHLY_PRICE);
+
+        ResponseEntity<Map> checkout = checkout(userId, quoteId, "idem-monthly-owned-1");
+        assertThat(checkout.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        String externalReference = (String) checkout.getBody().get("externalReference");
+        UUID paymentId = UUID.fromString((String) checkout.getBody().get("paymentId"));
+
+        OutboxRowJpaEntity event = confirmPayment("mp-monthly-owned-1", externalReference, MONTHLY_PRICE);
+        assertThat(outboxWorker.process(event)).isFalse();
+
+        var purchase = purchaseRepository.findByPaymentId(paymentId).orElseThrow();
+        assertThat(purchase.getStatus()).isEqualTo("ASSIGNED");
+        assertThat(purchaseSessionRepository.findByPurchaseIdOrderByPositionAsc(purchase.getId()))
+            .extracting(s -> UUID.fromString(s.getPhysicalSessionId()))
+            .containsExactlyElementsOf(sessionIds.subList(1, 4));
+        assertThat(assignmentRepository.countBySessionId(owned)).isEqualTo(1);
+        for (UUID sessionId : sessionIds) {
+            assertThat(assignmentRepository.existsBySessionIdAndStudentId(sessionId, userId)).isTrue();
+        }
+    }
+
+    /** Same rule on the no-hold (legacy) path: bank transfer, resolved at approval time. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void an_approved_bank_transfer_monthly_purchase_skips_a_session_the_student_already_owns() {
+        UUID userId = seedStudent();
+        UUID courseId = seedCourse();
+        List<UUID> sessionIds = seedScheduledSessions(courseId, 3, 5);
+        UUID owned = sessionIds.get(0);
+        assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
+            UUID.randomUUID(), owned, userId, Instant.now()
+        ));
+        String quoteId = seedMonthlyQuote(courseId, 2, MONTHLY_PRICE);
+        UUID admin = seedAdmin();
+        PaymentId paymentId = seedAwaitingManualVerificationPhysicalPayment(userId, quoteId, MONTHLY_PRICE);
+
+        assertThat(approve(admin, paymentId).getStatusCode()).isEqualTo(HttpStatus.OK);
+        processPhysicalPaymentCompletedFor(paymentId.getValue());
+
+        var purchase = purchaseRepository.findByPaymentId(paymentId.getValue()).orElseThrow();
+        assertThat(purchase.getStatus()).isEqualTo("ASSIGNED");
+        assertThat(purchaseSessionRepository.findByPurchaseIdOrderByPositionAsc(purchase.getId()))
+            .extracting(s -> UUID.fromString(s.getPhysicalSessionId()))
+            .containsExactlyElementsOf(sessionIds.subList(1, 3));
+        assertThat(assignmentRepository.countBySessionId(owned)).isEqualTo(1);
+    }
+
     // --- Scenario 2: INDIVIDUAL (N=1) -----------------------------------------
 
     @Test

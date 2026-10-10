@@ -7,6 +7,8 @@ import com.menta.billing.domain.model.PhysicalCourseQuote;
 import com.menta.billing.domain.model.PurchaseType;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 
 /**
  * D7: shared, best-effort/non-binding coverage-availability check used by
@@ -29,10 +31,11 @@ final class PhysicalCoverageAvailability {
      * outbox handler resolves, but with {@code clock.now()} instead of
      * {@code confirmedAt} and {@code requireAvailable = true} — a session
      * with zero visible spots is treated as not found here, ahead of the
-     * real reserving hold call.
+     * real reserving hold call. For MONTHLY, sessions {@code studentId} already
+     * owns are skipped (see {@link CoveragePlanner#planMonthly}).
      */
     static CoveragePlanner.Plan.Complete requireComplete(
-        PhysicalCourseAvailabilityPort availabilityPort, PhysicalCourseQuote quote, Instant now
+        PhysicalCourseAvailabilityPort availabilityPort, PhysicalCourseQuote quote, UUID studentId, Instant now
     ) {
         // INDIVIDUAL's selectedSessionId was picked at quote time and may sit
         // before `now` for a same-day class — same periodStart reasoning the
@@ -43,7 +46,10 @@ final class PhysicalCoverageAvailability {
         );
 
         CoveragePlanner.Plan plan = switch (quote.getPurchaseType()) {
-            case MONTHLY -> CoveragePlanner.planMonthly(scheduledSessions, now, quote.getScheduledSessionCount(), true);
+            case MONTHLY -> CoveragePlanner.planMonthly(
+                scheduledSessions, now, quote.getScheduledSessionCount(), true,
+                ownedSessionIds(availabilityPort, quote, studentId, now)
+            );
             case INDIVIDUAL -> CoveragePlanner.planIndividual(scheduledSessions, quote.getSelectedSessionId(), true);
         };
 
@@ -51,5 +57,18 @@ final class PhysicalCoverageAvailability {
             throw new PhysicalCapacityUnavailableException();
         }
         return complete;
+    }
+
+    /**
+     * Sessions the student already holds a confirmed assignment for inside the
+     * planner's own window: a MONTHLY purchase skips them, because assigning
+     * the same student to the same session twice is rejected by the database.
+     */
+    private static Set<String> ownedSessionIds(
+        PhysicalCourseAvailabilityPort availabilityPort, PhysicalCourseQuote quote, UUID studentId, Instant now
+    ) {
+        return availabilityPort.findSessionIdsAssignedTo(
+            quote.getCourseId(), studentId, now, now.plus(CoveragePlanner.COVERAGE_LOOKAHEAD)
+        );
     }
 }

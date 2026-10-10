@@ -50,6 +50,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -278,6 +279,55 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
             verify(markExceptionAdapter, never()).markException(any(), any());
             verify(markAssignedAdapter, times(1)).markAssigned(PAYMENT_ID);
             verify(publishPaymentFulfillmentFailedAdapter, never()).publish(any(), any(), any());
+        }
+    }
+
+    @Nested
+    @DisplayName("Monthly coverage skips the sessions the student already owns")
+    class MonthlyCoverageSkipsOwned {
+
+        @Test
+        void legacy_path_assigns_the_next_n_sessions_the_student_does_not_own_yet() throws Exception {
+            UUID session3 = UUID.fromString("77777777-7777-7777-7777-777777777777");
+            when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
+            when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.of(monthlyQuote(2)));
+            when(courseAvailabilityPort.findScheduledSessions(
+                eq(COURSE_ID), eq(NOW), eq(NOW.plus(CoveragePlanner.COVERAGE_LOOKAHEAD))
+            )).thenReturn(List.of(
+                new ScheduledSessionSnapshot(SESSION_ID_STR, NOW.plusSeconds(3600), 5),
+                new ScheduledSessionSnapshot(SESSION_UUID_2.toString(), NOW.plusSeconds(7200), 5),
+                new ScheduledSessionSnapshot(session3.toString(), NOW.plusSeconds(10800), 5)
+            ));
+            when(courseAvailabilityPort.findSessionIdsAssignedTo(
+                COURSE_ID, STUDENT_UUID, NOW, NOW.plus(CoveragePlanner.COVERAGE_LOOKAHEAD)
+            )).thenReturn(Set.of(SESSION_ID_STR));
+            when(physicalCapacityAssignmentPort.assignAll(any()))
+                .thenReturn(new CapacityAssignments(List.of(SESSION_UUID_2, session3)));
+
+            handler.handle(rowWithPayload(payload()));
+
+            verify(physicalCapacityAssignmentPort, times(1)).assignAll(new MultiSessionCapacityAssignmentCommand(
+                List.of(
+                    new SessionClaim(SESSION_UUID_2, NOW.plusSeconds(7200)),
+                    new SessionClaim(session3, NOW.plusSeconds(10800))
+                ),
+                STUDENT_UUID, PAYMENT_UUID
+            ));
+            verify(markAssignedAdapter, times(1)).markAssigned(PAYMENT_ID);
+        }
+
+        @Test
+        void individual_coverage_never_consults_the_owned_sessions() throws Exception {
+            when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
+            when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.of(individualQuote(SESSION_ID_STR)));
+            when(courseAvailabilityPort.findScheduledSessions(eq(COURSE_ID), any(), any()))
+                .thenReturn(List.of(new ScheduledSessionSnapshot(SESSION_ID_STR, NOW.plusSeconds(3600), 5)));
+            when(physicalCapacityAssignmentPort.assignAll(any()))
+                .thenReturn(new CapacityAssignments(List.of(SESSION_UUID)));
+
+            handler.handle(rowWithPayload(payload()));
+
+            verify(courseAvailabilityPort, never()).findSessionIdsAssignedTo(any(), any(), any(), any());
         }
     }
 

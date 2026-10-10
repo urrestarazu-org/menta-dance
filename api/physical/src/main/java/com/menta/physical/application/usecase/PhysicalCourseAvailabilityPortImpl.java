@@ -3,6 +3,7 @@ package com.menta.physical.application.usecase;
 import com.menta.physical.application.dto.PhysicalCourseSummary;
 import com.menta.physical.application.dto.PhysicalSessionAvailability;
 import com.menta.physical.application.port.in.PhysicalCourseAvailabilityPort;
+import com.menta.physical.application.port.out.PhysicalCapacityAssignmentRepository;
 import com.menta.physical.application.port.out.PhysicalCourseRepository;
 import com.menta.physical.application.port.out.PhysicalSessionRepository;
 import com.menta.physical.domain.model.CourseId;
@@ -17,6 +18,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -30,12 +32,15 @@ public class PhysicalCourseAvailabilityPortImpl implements PhysicalCourseAvailab
 
     private final PhysicalCourseRepository courseRepository;
     private final PhysicalSessionRepository sessionRepository;
+    private final PhysicalCapacityAssignmentRepository assignmentRepository;
 
     public PhysicalCourseAvailabilityPortImpl(
-        PhysicalCourseRepository courseRepository, PhysicalSessionRepository sessionRepository
+        PhysicalCourseRepository courseRepository, PhysicalSessionRepository sessionRepository,
+        PhysicalCapacityAssignmentRepository assignmentRepository
     ) {
         this.courseRepository = courseRepository;
         this.sessionRepository = sessionRepository;
+        this.assignmentRepository = assignmentRepository;
     }
 
     @Override
@@ -87,6 +92,15 @@ public class PhysicalCourseAvailabilityPortImpl implements PhysicalCourseAvailab
     public List<PhysicalSessionAvailability> listSessions(String courseId, Instant from, Instant to) {
         List<PhysicalSession> sessions = sessionRepository.findScheduled(CourseId.of(courseId), from, to);
         return sessions.stream().map(PhysicalCourseAvailabilityPortImpl::toAvailability).toList();
+    }
+
+    @Override
+    public Set<String> findSessionIdsAssignedTo(String courseId, UUID studentId, Instant from, Instant to) {
+        String course = CourseId.of(courseId).toString();
+        return assignmentRepository.findAssignedSessions(studentId, from, to).stream()
+            .filter(row -> row.courseId().toString().equals(course))
+            .map(row -> row.sessionId().toString())
+            .collect(Collectors.toUnmodifiableSet());
     }
 
     private static PhysicalCourseSummary toSummary(PhysicalCourse course) {

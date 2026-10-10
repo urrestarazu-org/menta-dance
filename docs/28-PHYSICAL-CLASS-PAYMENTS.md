@@ -55,6 +55,13 @@ asignaciones la Purchase queda `ASSIGNED` y se habilita asistencia. Si no se pue
 asignar todo el conjunto real, Payment permanece `COMPLETED`, la Purchase queda
 `EXCEPTION` y no se habilita asistencia hasta una resolución administrativa.
 
+Un mensual cubre las próximas N sesiones **que el alumno todavía no tiene**: se
+saltean las sesiones donde ya tiene una asignación confirmada (por ejemplo, de una
+compra individual) y la búsqueda se extiende hacia adelante, hasta 120 días desde el
+instante de referencia, para completar N. El importe del quote no cambia. Si no hay N
+sesiones sin asignar dentro de ese horizonte, el checkout responde
+`409 CAPACITY_UNAVAILABLE`. Un individual no se ve afectado.
+
 La compra debe iniciarse antes del vencimiento del quote. La confirmación posterior
 conserva el precio snapshot, pero cobertura y sesiones elegibles se derivan del
 timestamp confirmado y se revalidan; no quedan congelados por el quote ni por su

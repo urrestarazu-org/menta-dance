@@ -3,6 +3,8 @@ package com.menta.billing.application.port.out;
 import com.menta.billing.application.dto.ScheduledSessionSnapshot;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 
 /**
  * Cross-module read port toward Physical's scheduled-session availability
@@ -27,4 +29,18 @@ public interface PhysicalCourseAvailabilityPort {
     List<ScheduledSessionSnapshot> findScheduledSessions(
         String courseId, Instant periodStart, Instant periodEndExclusive
     );
+
+    /**
+     * Ids of the sessions of a course the student already holds a confirmed
+     * assignment for, within the half-open range {@code [from, to)}. A
+     * MONTHLY purchase must not cover them again: assigning the same student
+     * to the same session twice is rejected by the database.
+     *
+     * @param courseId the opaque course id to look up.
+     * @param studentId the student whose assignments are read.
+     * @param from lower bound (inclusive) of the range.
+     * @param to upper bound (exclusive) of the range.
+     * @return the owned session ids, or an empty set if none.
+     */
+    Set<String> findSessionIdsAssignedTo(String courseId, UUID studentId, Instant from, Instant to);
 }

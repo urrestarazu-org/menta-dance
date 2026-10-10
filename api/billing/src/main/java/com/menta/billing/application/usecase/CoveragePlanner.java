@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Pure function that resolves the eligible session set a physical purchase
@@ -52,6 +53,13 @@ public final class CoveragePlanner {
      * calendar is simply skipped; sessions beyond it still count toward the
      * total.
      *
+     * <p>Sessions whose id is in {@code excludedSessionIds} (the ones the
+     * student already holds a confirmed assignment for) never count: they are
+     * dropped <em>before</em> the {@code scheduledSessionCount} limit, so the
+     * search extends forward past them and the purchase still covers that
+     * many <em>new</em> sessions — a duplicate would violate {@code
+     * uq_physical_assignment_session_student} at assignment time.</p>
+     *
      * <p>{@code scheduledSessions} must already cover at least {@code
      * [referenceInstant, referenceInstant + COVERAGE_LOOKAHEAD)} — this
      * function only filters and orders what it is given, it never queries
@@ -63,6 +71,8 @@ public final class CoveragePlanner {
      *     best-effort {@code 409}); when {@code false}, availability is
      *     ignored here and the real assignment attempt is the actual gate
      *     (A4).
+     * @param excludedSessionIds ids of sessions the student already owns;
+     *     pass an empty set when none apply.
      * @return {@link Plan.Complete} carrying exactly {@code
      *     scheduledSessionCount} sessions ordered {@code (scheduledAt ASC,
      *     sessionId ASC)}, or {@link Plan.Insufficient} when fewer than that
@@ -70,10 +80,11 @@ public final class CoveragePlanner {
      */
     public static Plan planMonthly(
         List<ScheduledSessionSnapshot> scheduledSessions, Instant referenceInstant, int scheduledSessionCount,
-        boolean requireAvailable
+        boolean requireAvailable, Set<String> excludedSessionIds
     ) {
         Objects.requireNonNull(scheduledSessions, "scheduledSessions cannot be null");
         Objects.requireNonNull(referenceInstant, "referenceInstant cannot be null");
+        Objects.requireNonNull(excludedSessionIds, "excludedSessionIds cannot be null");
         if (scheduledSessionCount <= 0) {
             throw new IllegalArgumentException("scheduledSessionCount must be greater than zero");
         }
@@ -84,6 +95,7 @@ public final class CoveragePlanner {
             .filter(session -> !session.scheduledAt().isBefore(referenceInstant))
             .filter(session -> session.scheduledAt().isBefore(horizonEnd))
             .filter(session -> !requireAvailable || session.availableSpots() > 0)
+            .filter(session -> !excludedSessionIds.contains(session.sessionId()))
             .sorted(CLAIM_ORDER)
             .limit(scheduledSessionCount)
             .map(session -> new EligibleSession(session.sessionId(), session.scheduledAt()))

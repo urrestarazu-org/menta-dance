@@ -97,7 +97,9 @@ public class CreateBankTransferPhysicalPurchaseUseCaseImpl implements CreateBank
 
         // D7: best-effort, non-binding — the plan is read and discarded, never followed by a hold.
         // The real capacity decision happens later, at approval, through the no-hold branch (D1).
-        PhysicalCoverageAvailability.requireComplete(availabilityPort, quote, now);
+        PhysicalCoverageAvailability.requireComplete(
+            availabilityPort, quote, command.userId(), now
+        );
 
         PaymentId paymentId = PaymentId.generate();
         Payment payment = paymentRepository.save(Payment.awaitingManualVerification(

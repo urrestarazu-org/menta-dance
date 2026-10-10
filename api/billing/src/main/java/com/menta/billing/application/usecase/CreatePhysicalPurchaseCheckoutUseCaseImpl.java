@@ -114,7 +114,9 @@ public class CreatePhysicalPurchaseCheckoutUseCaseImpl implements CreatePhysical
 
         // A7: validity is checked before availability, and 410 for an expired
         // quote is thrown before this planner call ever runs.
-        CoveragePlanner.Plan.Complete plan = PhysicalCoverageAvailability.requireComplete(availabilityPort, quote, now);
+        CoveragePlanner.Plan.Complete plan = PhysicalCoverageAvailability.requireComplete(
+            availabilityPort, quote, command.userId(), now
+        );
 
         // #208 D2/B1: paymentId must exist before the hold call — the hold's
         // payment_id correlation column is NOT NULL — even though the Payment
