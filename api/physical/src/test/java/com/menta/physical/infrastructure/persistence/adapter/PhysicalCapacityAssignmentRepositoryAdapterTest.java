@@ -2,6 +2,7 @@ package com.menta.physical.infrastructure.persistence.adapter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.menta.physical.application.dto.AssignedSessionRow;
 import com.menta.physical.application.dto.AttendanceHistoryRow;
 import com.menta.physical.domain.model.CourseStatus;
 import com.menta.physical.infrastructure.persistence.entity.AttendanceJpaEntity;
@@ -200,5 +201,56 @@ class PhysicalCapacityAssignmentRepositoryAdapterTest {
         assertThat(scopedToOtherProfessor).hasSize(1);
         assertThat(scopedToOtherProfessor.get(0).sessionId()).isEqualTo(otherSession);
         assertThat(unrestricted).hasSize(2);
+    }
+
+    private UUID seedSessionWithStatus(UUID courseId, Instant scheduledAt, String status) {
+        UUID sessionId = UUID.randomUUID();
+        sessionRepository.saveAndFlush(
+            new PhysicalSessionJpaEntity(sessionId, courseId, scheduledAt, 20, status, null)
+        );
+        return sessionId;
+    }
+
+    @Test
+    void assigned_sessions_are_ordered_ascending_with_course_display_fields_and_half_open_bounds() {
+        UUID studentId = UUID.randomUUID();
+        UUID courseId = seedCourse(UUID.randomUUID());
+        UUID atFrom = seedSession(courseId, Instant.parse("2026-10-10T03:00:00Z"));
+        UUID later = seedSession(courseId, Instant.parse("2026-11-20T22:00:00Z"));
+        UUID atTo = seedSession(courseId, Instant.parse("2026-12-09T03:00:00Z"));
+        seedAssignment(later, studentId);
+        seedAssignment(atTo, studentId);
+        seedAssignment(atFrom, studentId);
+        seedAssignment(seedSession(courseId, Instant.parse("2026-10-10T02:59:59Z")), studentId);
+
+        List<AssignedSessionRow> rows = adapter().findAssignedSessions(
+            studentId, Instant.parse("2026-10-10T03:00:00Z"), Instant.parse("2026-12-09T03:00:00Z")
+        );
+
+        assertThat(rows).extracting(AssignedSessionRow::sessionId).containsExactly(atFrom, later);
+        assertThat(rows.get(0).courseId()).isEqualTo(courseId);
+        assertThat(rows.get(0).courseName()).isEqualTo("Salsa Intermedio");
+        assertThat(rows.get(0).instructorName()).isEqualTo("Ana Perez");
+        assertThat(rows.get(0).scheduledAt()).isEqualTo(Instant.parse("2026-10-10T03:00:00Z"));
+    }
+
+    @Test
+    void assigned_sessions_exclude_sessions_without_the_students_assignment_and_cancelled_ones() {
+        UUID studentId = UUID.randomUUID();
+        UUID courseId = seedCourse(UUID.randomUUID());
+        UUID mine = seedSession(courseId, Instant.parse("2026-10-15T22:00:00Z"));
+        UUID someoneElses = seedSession(courseId, Instant.parse("2026-10-16T22:00:00Z"));
+        UUID cancelled = seedSessionWithStatus(courseId, Instant.parse("2026-10-17T22:00:00Z"), "CANCELLED");
+        seedAssignment(mine, studentId);
+        seedAssignment(someoneElses, UUID.randomUUID());
+        seedAssignment(cancelled, studentId);
+        // A session with no assignment at all (e.g. only a hold) has no row to list.
+        seedSession(courseId, Instant.parse("2026-10-18T22:00:00Z"));
+
+        List<AssignedSessionRow> rows = adapter().findAssignedSessions(
+            studentId, Instant.parse("2026-10-10T03:00:00Z"), Instant.parse("2026-12-09T03:00:00Z")
+        );
+
+        assertThat(rows).extracting(AssignedSessionRow::sessionId).containsExactly(mine);
     }
 }

@@ -115,4 +115,24 @@ public interface PhysicalCapacityAssignmentJpaRepository
         @Param("studentId") UUID studentId, @Param("monthStart") Instant monthStart,
         @Param("monthNext") Instant monthNext, @Param("professorId") UUID professorId
     );
+
+    /**
+     * A student's confirmed sessions in {@code [from, to)} (#356), driven from the assignments
+     * table so a hold or a pending purchase can never surface. Cancelled sessions are filtered
+     * here, in the query, not afterwards.
+     */
+    @Query(
+        "SELECT s.id AS sessionId, c.id AS courseId, c.title AS courseName, "
+            + "c.professorName AS instructorName, s.scheduledAt AS scheduledAt "
+            + "FROM PhysicalCapacityAssignmentJpaEntity asg "
+            + "JOIN PhysicalSessionJpaEntity s ON s.id = asg.sessionId "
+            + "JOIN PhysicalCourseJpaEntity c ON c.id = s.courseId "
+            + "WHERE asg.studentId = :studentId "
+            + "AND s.scheduledAt >= :from AND s.scheduledAt < :to "
+            + "AND s.status <> 'CANCELLED' "
+            + "ORDER BY s.scheduledAt ASC, s.id ASC"
+    )
+    List<AssignedSessionRowProjection> findAssignedSessions(
+        @Param("studentId") UUID studentId, @Param("from") Instant from, @Param("to") Instant to
+    );
 }

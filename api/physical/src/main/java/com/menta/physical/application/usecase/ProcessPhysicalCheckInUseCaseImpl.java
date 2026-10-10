@@ -26,6 +26,7 @@ import com.menta.physical.domain.exception.SessionNotFoundException;
 import com.menta.physical.domain.exception.StudentNotFoundException;
 import com.menta.physical.domain.model.Attendance;
 import com.menta.physical.domain.model.AttendanceKind;
+import com.menta.physical.domain.model.CheckInWindow;
 import com.menta.physical.domain.model.DeviceId;
 import com.menta.physical.domain.model.PhysicalSession;
 import com.menta.physical.domain.model.SessionId;
@@ -34,7 +35,6 @@ import com.menta.shared.auth.UserExistencePort;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -65,8 +65,7 @@ public class ProcessPhysicalCheckInUseCaseImpl implements ProcessPhysicalCheckIn
     private final RedisLockPort lockPort;
     private final Clock clock;
     private final PhysicalDeviceAuthenticator deviceAuthenticator;
-    private final Duration sessionWindowBefore;
-    private final Duration sessionWindowAfter;
+    private final CheckInWindow checkInWindow;
     private final Duration lockTtl;
     private final UserExistencePort userExistencePort;
     private final CheckInRateLimitPort rateLimitPort;
@@ -94,8 +93,7 @@ public class ProcessPhysicalCheckInUseCaseImpl implements ProcessPhysicalCheckIn
         this.lockPort = lockPort;
         this.clock = clock;
         this.deviceAuthenticator = deviceAuthenticator;
-        this.sessionWindowBefore = sessionWindowBefore;
-        this.sessionWindowAfter = sessionWindowAfter;
+        this.checkInWindow = new CheckInWindow(sessionWindowBefore, sessionWindowAfter);
         this.lockTtl = lockTtl;
         this.userExistencePort = userExistencePort;
         this.rateLimitPort = rateLimitPort;
@@ -237,10 +235,7 @@ public class ProcessPhysicalCheckInUseCaseImpl implements ProcessPhysicalCheckIn
     }
 
     private void verifyWithinCheckInWindow(PhysicalSession session) {
-        Instant now = clock.now();
-        Instant windowStart = session.getScheduledAt().minus(sessionWindowBefore);
-        Instant windowEnd = session.getScheduledAt().plus(sessionWindowAfter);
-        if (now.isBefore(windowStart) || now.isAfter(windowEnd)) {
+        if (!checkInWindow.isOpenAt(session.getScheduledAt(), clock.now())) {
             throw new OutsideCheckInWindowException();
         }
     }

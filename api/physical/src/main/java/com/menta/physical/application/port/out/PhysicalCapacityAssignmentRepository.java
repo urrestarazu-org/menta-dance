@@ -1,5 +1,6 @@
 package com.menta.physical.application.port.out;
 
+import com.menta.physical.application.dto.AssignedSessionRow;
 import com.menta.physical.application.dto.AttendanceHistoryRow;
 import com.menta.physical.domain.model.SessionId;
 import java.time.Instant;
@@ -44,4 +45,11 @@ public interface PhysicalCapacityAssignmentRepository {
     List<AttendanceHistoryRow> findMonthlyAttendanceInCoursesOwnedBy(
         UUID studentId, Instant monthStart, Instant monthNext, UUID professorId
     );
+
+    /**
+     * Sessions the student holds a confirmed assignment for (#356), whose {@code scheduled_at}
+     * falls in the half-open {@code [from, to)} range, ordered by start ascending. Cancelled
+     * sessions are excluded; holds are never consulted, only the assignments table.
+     */
+    List<AssignedSessionRow> findAssignedSessions(UUID studentId, Instant from, Instant to);
 }

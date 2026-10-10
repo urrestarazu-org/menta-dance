@@ -10,6 +10,7 @@ import com.menta.physical.domain.exception.CapacityAssignmentRequiredException;
 import com.menta.physical.domain.exception.OutsideCheckInWindowException;
 import com.menta.physical.domain.exception.SessionCancelledException;
 import com.menta.physical.domain.exception.SessionNotFoundException;
+import com.menta.physical.domain.model.CheckInWindow;
 import com.menta.physical.domain.model.PhysicalSession;
 import com.menta.physical.domain.model.SessionId;
 import com.menta.physical.domain.model.SessionStatus;
@@ -44,8 +45,7 @@ public class IssuePhysicalAccessQrUseCaseImpl implements IssuePhysicalAccessQrUs
     private final QrCredentialSignatureService signatureService;
     private final Clock clock;
     private final Duration credentialTtl;
-    private final Duration sessionWindowBefore;
-    private final Duration sessionWindowAfter;
+    private final CheckInWindow checkInWindow;
 
     public IssuePhysicalAccessQrUseCaseImpl(
         PhysicalSessionRepository sessionRepository,
@@ -61,8 +61,7 @@ public class IssuePhysicalAccessQrUseCaseImpl implements IssuePhysicalAccessQrUs
         this.signatureService = signatureService;
         this.clock = clock;
         this.credentialTtl = credentialTtl;
-        this.sessionWindowBefore = sessionWindowBefore;
-        this.sessionWindowAfter = sessionWindowAfter;
+        this.checkInWindow = new CheckInWindow(sessionWindowBefore, sessionWindowAfter);
     }
 
     @Override
@@ -86,10 +85,7 @@ public class IssuePhysicalAccessQrUseCaseImpl implements IssuePhysicalAccessQrUs
     }
 
     private void verifyWithinCheckInWindow(PhysicalSession session) {
-        Instant now = clock.now();
-        Instant windowStart = session.getScheduledAt().minus(sessionWindowBefore);
-        Instant windowEnd = session.getScheduledAt().plus(sessionWindowAfter);
-        if (now.isBefore(windowStart) || now.isAfter(windowEnd)) {
+        if (!checkInWindow.isOpenAt(session.getScheduledAt(), clock.now())) {
             throw new OutsideCheckInWindowException();
         }
     }

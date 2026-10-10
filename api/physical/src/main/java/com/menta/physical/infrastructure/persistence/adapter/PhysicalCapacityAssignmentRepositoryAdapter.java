@@ -1,8 +1,10 @@
 package com.menta.physical.infrastructure.persistence.adapter;
 
+import com.menta.physical.application.dto.AssignedSessionRow;
 import com.menta.physical.application.dto.AttendanceHistoryRow;
 import com.menta.physical.application.port.out.PhysicalCapacityAssignmentRepository;
 import com.menta.physical.domain.model.SessionId;
+import com.menta.physical.infrastructure.persistence.repository.AssignedSessionRowProjection;
 import com.menta.physical.infrastructure.persistence.repository.MonthlyAttendanceRowProjection;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityAssignmentJpaRepository;
 import java.time.Instant;
@@ -44,6 +46,21 @@ public class PhysicalCapacityAssignmentRepositoryAdapter
     ) {
         return toRows(
             assignmentRepository.findMonthlyAttendance(studentId, monthStart, monthNext, professorId)
+        );
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public List<AssignedSessionRow> findAssignedSessions(UUID studentId, Instant from, Instant to) {
+        return assignmentRepository.findAssignedSessions(studentId, from, to).stream()
+            .map(PhysicalCapacityAssignmentRepositoryAdapter::toAssignedSessionRow)
+            .toList();
+    }
+
+    private static AssignedSessionRow toAssignedSessionRow(AssignedSessionRowProjection row) {
+        return new AssignedSessionRow(
+            row.getSessionId(), row.getCourseId(), row.getCourseName(), row.getInstructorName(),
+            row.getScheduledAt()
         );
     }
 
