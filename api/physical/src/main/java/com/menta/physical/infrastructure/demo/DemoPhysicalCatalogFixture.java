@@ -36,7 +36,7 @@ import org.springframework.core.Ordered;
 import org.springframework.stereotype.Component;
 
 /**
- * Seeds the two demo Physical courses, their regular sessions for the next four weeks, one rolling session
+ * Seeds the two demo Physical courses, their regular sessions for the next eight weeks, one rolling session
  * about ten minutes in the future, and the student's confirmed seats.
  *
  * <p>Courses are upserted by the fixed ids in {@link DemoIds}. A {@link PhysicalCourse} stores a single weekday,
@@ -63,7 +63,7 @@ public final class DemoPhysicalCatalogFixture implements ApplicationRunner, Orde
 
     private static final String PROFESSOR_NAME = "Demo Instructor";
     private static final int DURATION_MINUTES = 60;
-    private static final int WEEKS = 4;
+    private static final int WEEKS = 8;
     private static final Duration ROLLING_LEAD = Duration.ofMinutes(10);
     private static final Duration ROLLING_CLOSING_MARGIN = Duration.ofMinutes(30);
     private static final LocalTime EVENING = LocalTime.of(19, 0);
