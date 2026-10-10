@@ -18,6 +18,10 @@
         <span th:if="${course.scheduleLabel() != null}">· <span th:text="${course.scheduleLabel()}">Lunes 18:00</span></span>
     </p>
 
+    <p th:if="${course.priceState().name() == 'PUBLISHED'}">Precio: <strong th:text="${course.priceLabel()}">$ 25.000,00 por mes</strong></p>
+    <p th:if="${course.priceState().name() == 'NOT_PUBLISHED'}">Todavía no hay un precio publicado para esta clase.</p>
+    <p th:if="${course.priceState().name() == 'UNAVAILABLE'}">No pudimos consultar el precio en este momento. Intentá nuevamente en unos minutos.</p>
+
     <h2>Próximas sesiones</h2>
     <p th:unless="${course.hasSessions()}">Por ahora no hay próximas sesiones programadas.</p>
     <ul th:if="${course.hasSessions()}">
@@ -25,7 +29,7 @@
             <span th:text="${slot.whenLabel()}">lunes 12 de octubre a las 18:00</span> ·
             <strong th:if="${slot.full()}" th:text="${slot.spotsLabel()}">Completo</strong>
             <span th:unless="${slot.full()}" th:text="${slot.spotsLabel()}">5 lugares libres</span>
-            <form sec:authorize="isAuthenticated()" th:unless="${slot.full()}"
+            <form sec:authorize="isAuthenticated()" th:if="${course.canQuote() and !slot.full()}"
                   th:action="@{/classes/{id}/cotizar(id=${course.courseId()})}" method="post">
                 <input type="hidden" name="purchaseType" value="INDIVIDUAL">
                 <input type="hidden" name="selectedSessionId" th:value="${slot.sessionId()}">
@@ -34,11 +38,12 @@
         </li>
     </ul>
 
-    <form sec:authorize="isAuthenticated()" th:action="@{/classes/{id}/cotizar(id=${course.courseId()})}" method="post">
+    <form sec:authorize="isAuthenticated()" th:if="${course.canQuote()}"
+          th:action="@{/classes/{id}/cotizar(id=${course.courseId()})}" method="post">
         <input type="hidden" name="purchaseType" value="MONTHLY">
         <button type="submit">Cotizar clases del mes</button>
     </form>
-    <p sec:authorize="!isAuthenticated()"><a th:href="@{/login}">Ingresá para comprar</a></p>
+    <p sec:authorize="!isAuthenticated()" th:if="${course.canQuote()}"><a th:href="@{/login}">Ingresá para comprar</a></p>
 </div>
 </body>
 </html>

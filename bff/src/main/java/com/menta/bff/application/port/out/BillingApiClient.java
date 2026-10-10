@@ -1,5 +1,6 @@
 package com.menta.bff.application.port.out;
 
+import com.menta.bff.application.dto.PhysicalCoursePricing;
 import com.menta.bff.application.dto.PlanSummary;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -27,6 +28,22 @@ public interface BillingApiClient {
      * @throws ServiceUnavailableException if the upstream is unreachable, rate-limited, or errors (429/503)
      */
     List<PlanSummary> getPlans();
+
+    /**
+     * Retrieves the published monthly price of a physical course.
+     *
+     * <p>Calls GET /api/v1/billing/physical/courses/{courseId}/pricing, a public endpoint: like
+     * {@link #getPlans()} this method takes no access-token parameter, so no token can be sent.
+     * The result is never cached: the price differs per course and an admin can edit it at any time.
+     * </p>
+     *
+     * @param courseId course whose price is wanted (encoded as one path segment)
+     * @return the published price
+     * @throws NotFoundException           if no price is published for the course (404)
+     * @throws ServiceUnavailableException if the upstream is unreachable, rate-limited, errors or
+     *                                     answers something unreadable or unexpected
+     */
+    PhysicalCoursePricing getPhysicalCoursePricing(String courseId);
 
     /**
      * Exception thrown when the requested resource does not exist upstream (404).

@@ -5,10 +5,7 @@ import com.menta.bff.application.dto.PhysicalPurchaseType;
 import com.menta.bff.application.dto.PhysicalQuote;
 import com.menta.bff.application.port.out.CatalogApiClient;
 import com.menta.bff.application.port.out.PhysicalPurchaseApiClient;
-import java.text.NumberFormat;
 import java.time.ZoneId;
-import java.util.Currency;
-import java.util.Locale;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 
@@ -19,8 +16,6 @@ import lombok.RequiredArgsConstructor;
  */
 @RequiredArgsConstructor
 public class QuotePhysicalPurchaseUseCaseImpl implements QuotePhysicalPurchaseUseCase {
-
-    private static final Locale AR = Locale.forLanguageTag("es-AR");
 
     private final PhysicalPurchaseApiClient purchaseApiClient;
     private final CatalogApiClient catalogApiClient;
@@ -35,19 +30,14 @@ public class QuotePhysicalPurchaseUseCaseImpl implements QuotePhysicalPurchaseUs
         PhysicalQuote quote = purchaseApiClient.createQuote(accessToken, courseId, purchaseType, selectedSessionId);
         return new PurchaseQuoteView(
                 quote.id(), courseId, course.title(), modality(quote.purchaseType()),
-                amount(quote), quote.scheduledSessionCount(), sessionLabel(course, quote),
+                ClassLabels.amount(quote.amount(), quote.currency()), quote.scheduledSessionCount(),
+                sessionLabel(course, quote),
                 ClassLabels.moment(quote.expiresAt(), displayZone), quote.unavailable(),
                 idempotencyKeys.get());
     }
 
     private static String modality(PhysicalPurchaseType type) {
         return type == PhysicalPurchaseType.MONTHLY ? "Mensualidad: todas las clases del mes" : "Clase individual";
-    }
-
-    private static String amount(PhysicalQuote quote) {
-        NumberFormat format = NumberFormat.getCurrencyInstance(AR);
-        format.setCurrency(Currency.getInstance(quote.currency()));
-        return format.format(quote.amount());
     }
 
     private String sessionLabel(PhysicalCourseDetail course, PhysicalQuote quote) {

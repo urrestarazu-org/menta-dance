@@ -68,7 +68,8 @@ class ClassesControllerTest {
     @DisplayName("renders the class detail view")
     void rendersDetail() throws Exception {
         ClassDetailView detail = new ClassDetailView(
-                "p-1", "Salsa", "Avanzado", "María", "Lunes 18:00", List.of(), false);
+                "p-1", "Salsa", "Avanzado", "María", "Lunes 18:00", ClassDetailView.PriceState.PUBLISHED,
+                "$ 25.000,00 por mes", List.of(), false);
         when(getClassDetailViewUseCase.execute("p-1")).thenReturn(detail);
 
         mockMvc.perform(get("/classes/p-1"))

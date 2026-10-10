@@ -10,6 +10,8 @@ import java.util.List;
  * @param levelLabel    Spanish level label, {@code null} when unknown
  * @param professorName professor name
  * @param scheduleLabel weekday and start time, {@code null} when not provided
+ * @param priceState    whether the monthly price is published, missing or could not be read
+ * @param priceLabel    monthly price in Spanish ("$ 25.000,00 por mes"), {@code null} unless published
  * @param sessions      upcoming sessions already in the academy's time zone
  * @param unavailable   whether the upstream catalog could not be obtained
  */
@@ -19,17 +21,34 @@ public record ClassDetailView(
         String levelLabel,
         String professorName,
         String scheduleLabel,
+        PriceState priceState,
+        String priceLabel,
         List<SessionRow> sessions,
         boolean unavailable) {
 
     /** The degraded view shown while the catalog is down. */
     public static ClassDetailView unavailableView() {
-        return new ClassDetailView(null, null, null, null, null, List.of(), true);
+        return new ClassDetailView(null, null, null, null, null, PriceState.UNAVAILABLE, null, List.of(), true);
+    }
+
+    /** Whether the student may ask for a quote: only when a monthly price is published. */
+    public boolean canQuote() {
+        return priceState == PriceState.PUBLISHED;
     }
 
     /** Whether there is any upcoming session to list. */
     public boolean hasSessions() {
         return !sessions.isEmpty();
+    }
+
+    /** State of the course's monthly price. */
+    public enum PriceState {
+        /** A monthly price is published. */
+        PUBLISHED,
+        /** Billing answered that no price is published. */
+        NOT_PUBLISHED,
+        /** The price could not be read (billing down or unreadable). */
+        UNAVAILABLE
     }
 
     /**
