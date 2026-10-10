@@ -5,6 +5,7 @@ import java.util.List;
 /**
  * View model for the public page of one physical class.
  *
+ * @param courseId      course identifier, used to post a quote request ({@code null} when unavailable)
  * @param title         course title ({@code null} when unavailable)
  * @param levelLabel    Spanish level label, {@code null} when unknown
  * @param professorName professor name
@@ -13,6 +14,7 @@ import java.util.List;
  * @param unavailable   whether the upstream catalog could not be obtained
  */
 public record ClassDetailView(
+        String courseId,
         String title,
         String levelLabel,
         String professorName,
@@ -22,7 +24,7 @@ public record ClassDetailView(
 
     /** The degraded view shown while the catalog is down. */
     public static ClassDetailView unavailableView() {
-        return new ClassDetailView(null, null, null, null, List.of(), true);
+        return new ClassDetailView(null, null, null, null, null, List.of(), true);
     }
 
     /** Whether there is any upcoming session to list. */
@@ -33,10 +35,11 @@ public record ClassDetailView(
     /**
      * One upcoming session.
      *
+     * @param sessionId      session identifier, sent back to quote this single class
      * @param whenLabel      readable Spanish date and time in the academy's zone
      * @param availableSpots free spots, 0 when full
      */
-    public record SessionRow(String whenLabel, int availableSpots) {
+    public record SessionRow(String sessionId, String whenLabel, int availableSpots) {
 
         /** Whether the session has no free spot left. */
         public boolean full() {

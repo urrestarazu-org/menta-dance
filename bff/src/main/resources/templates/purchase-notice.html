@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${title} + ' - Menta Dance'">Compra - Menta Dance</title>
+</head>
+<body>
+<nav><a th:href="@{/classes}">Clases presenciales</a></nav>
+
+<h1 th:text="${title}">Compra</h1>
+<p th:text="${message}">Mensaje</p>
+
+<p><a th:href="@{${linkHref}}" th:text="${linkLabel}">Volver</a></p>
+</body>
+</html>

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tu cotización - Menta Dance</title>
+</head>
+<body>
+<nav><a th:href="@{/classes}">Clases presenciales</a></nav>
+
+<h1>Tu cotización</h1>
+<h2 th:text="${quote.courseTitle()}">Clase</h2>
+
+<ul>
+    <li th:text="${quote.modalityLabel()}">Mensualidad: todas las clases del mes</li>
+    <li th:if="${quote.sessionLabel() != null}">Clase: <span th:text="${quote.sessionLabel()}">lunes 12 de octubre a las 18:00</span></li>
+    <li th:text="'Sesiones del período: ' + ${quote.sessionCount()}">Sesiones del período: 4</li>
+    <li>Importe: <strong th:text="${quote.amountLabel()}">$ 12.500,00</strong></li>
+    <li>Válida hasta: <span th:text="${quote.expiresLabel()}">sábado 10 de octubre a las 10:00</span></li>
+</ul>
+
+<p th:if="${quote.unavailable()}">Sin lugares disponibles: por ahora no podés pagar esta cotización.</p>
+<p th:unless="${quote.unavailable()}">El pago online todavía no está disponible.</p>
+
+<p><a th:href="@{/classes/{id}(id=${quote.courseId()})}">Volver a la clase</a></p>
+</body>
+</html>

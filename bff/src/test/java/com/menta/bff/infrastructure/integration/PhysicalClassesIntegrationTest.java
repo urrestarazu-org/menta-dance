@@ -157,7 +157,7 @@ class PhysicalClassesIntegrationTest extends BaseIntegrationTest {
         assertThat(body).contains("Salsa en vivo", "Avanzado", "María García", "Lunes 18:00");
         assertThat(body).contains("lunes 12 de octubre a las 18:00", "5 lugares libres");
         assertThat(body).contains("lunes 12 de octubre a las 22:30", "Completo");
-        assertThat(body).doesNotContain("comprar").doesNotContain("Comprar");
+        assertThat(body).doesNotContain("Cotizar");
         assertNoBrokenLinks(body);
     }
 
