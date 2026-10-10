@@ -5,6 +5,8 @@ import com.menta.billing.application.dto.PaymentPreferenceResult;
 import com.menta.billing.application.dto.ProviderPaymentResult;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
@@ -21,9 +23,26 @@ public final class LocalMercadoPagoPaymentStore {
 
     private static final String LOCAL_CHECKOUT_BASE_URL = "http://local.mercadopago/checkout/";
 
+    private final String checkoutBackUrl;
     private final Map<String, PaymentPreferenceResult> preferences = new ConcurrentHashMap<>();
     private final Map<String, PaymentPreferenceRequest> preferenceRequests = new ConcurrentHashMap<>();
     private final Map<String, ProviderPaymentResult> payments = new ConcurrentHashMap<>();
+
+    public LocalMercadoPagoPaymentStore() {
+        this("");
+    }
+
+    /**
+     * Creates the store with the buyer's return URL, when there is one.
+     *
+     * @param checkoutBackUrl the buyer's return URL ({@code billing.mercadopago.checkout-back-url}). When
+     *     set, the local checkout URL is that URL, so a browser "pays" and lands straight back on the web
+     *     client; when blank, the unresolvable {@value #LOCAL_CHECKOUT_BASE_URL} URL is kept.
+     */
+    @Autowired
+    public LocalMercadoPagoPaymentStore(@Value("${billing.mercadopago.checkout-back-url:}") String checkoutBackUrl) {
+        this.checkoutBackUrl = checkoutBackUrl == null ? "" : checkoutBackUrl.trim();
+    }
 
     /**
      * Registers a fake preference for the request and returns it.
@@ -35,8 +54,12 @@ public final class LocalMercadoPagoPaymentStore {
     public PaymentPreferenceResult createPreference(PaymentPreferenceRequest request) {
         preferenceRequests.putIfAbsent(request.externalReference(), request);
         return preferences.computeIfAbsent(request.externalReference(), reference -> new PaymentPreferenceResult(
-            "local-preference-" + reference, LOCAL_CHECKOUT_BASE_URL + "local-preference-" + reference
+            "local-preference-" + reference, checkoutUrl("local-preference-" + reference)
         ));
+    }
+
+    private String checkoutUrl(String preferenceId) {
+        return checkoutBackUrl.isEmpty() ? LOCAL_CHECKOUT_BASE_URL + preferenceId : checkoutBackUrl;
     }
 
     PaymentPreferenceRequest preferenceRequest(String externalReference) {
