@@ -221,14 +221,27 @@ Un alumno autenticado cotiza y paga desde el BFF (plantillas Thymeleaf, sin Java
    `idempotencyKey` devuelve el checkout original.
 4. El BFF **guarda el `paymentId` en la sesión del servidor (Redis/Spring Session)** y redirige
    (302) a `checkoutUrl`.
+5. Mercado Pago devuelve al alumno a `GET /compras/retorno`. El BFF lee el `paymentId` **de la
+   sesión** (nunca de la URL), consulta `GET /api/v1/billing/payments/{paymentId}` con el token
+   del alumno y muestra el estado: `COMPLETED` "¡Pago confirmado! Estamos asignando tus
+   lugares" (no afirma que las sesiones ya estén asignadas); `AWAITING_PROVIDER`,
+   `AWAITING_MANUAL_VERIFICATION`, `RECONCILIATION_REQUIRED` o cualquier estado desconocido
+   "Estamos confirmando tu pago" con el enlace "Actualizar" a la misma URL (un estado
+   desconocido nunca se muestra como éxito); `REJECTED`, `CANCELLED` y `EXPIRED` con mensajes
+   propios y enlace a `/classes`. Un estado final borra el `paymentId` de la sesión; uno
+   pendiente lo conserva. Sin `paymentId` en la sesión se redirige a `/classes`, y un `5xx` o
+   `429` de la API muestra un aviso en español sin tocar la sesión. Las respuestas llevan
+   `Cache-Control: no-store`.
 
 Decisiones:
 
 - **Sesión en vez de `state` firmado.** El BFF ya custodia una sesión de servidor por alumno,
   así que el vínculo "este navegador pagó este id" no necesita un parámetro firmado en la URL.
-  La página de retorno (próximo corte) leerá el `paymentId` de la sesión, le preguntará el
-  estado a la API, y nunca decidirá el pago ni confiará en los parámetros de la URL. El control
-  de propiedad lo da la API (pedir el pago de otro usuario responde 404). Limitación: una sola
+  El retorno **nunca decide el pago**: solo navega y muestra lo que informa la API, e ignora
+  `status`, `payment_id` y cualquier otro parámetro que agregue Mercado Pago (la confirmación
+  real llega por el webhook). El control de propiedad lo da la API: pedir el pago de otro
+  usuario responde siempre 404 (nunca 403); el BFF entonces limpia la sesión y redirige a
+  `/classes`. Limitación: una sola
   compra en curso por sesión; iniciar otra reemplaza el `paymentId` guardado.
 - **Política de `checkoutUrl`.** El navegador se redirige a lo que informe la API, así que solo
   se sigue una URL absoluta `https` con host, o `http` si el host es `localhost`, `127.0.0.1`
@@ -241,8 +254,8 @@ Configuración: `billing.mercadopago.checkout-back-url` (variable
 `http://localhost:8080/compras/retorno` (ver `.env.example`). Vacía, la preferencia no lleva
 `back_urls`. En producción debe ser el origen público `https` del BFF.
 
-Fuera de este corte: la página `/compras/retorno` (próximo corte), mostrar las sesiones
-asignadas tras el pago y el pago por transferencia bancaria.
+Fuera de este corte: mostrar las sesiones asignadas tras el pago y el pago por transferencia
+bancaria.
 
 ## Transferencias bancarias
 

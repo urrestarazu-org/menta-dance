@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.menta.bff.application.dto.PaymentProgress;
 import com.menta.bff.application.dto.PhysicalCheckout;
 import com.menta.bff.application.dto.PhysicalCourseDetail;
 import com.menta.bff.application.dto.PhysicalPurchaseType;
@@ -115,5 +116,23 @@ class QuotePhysicalPurchaseUseCaseImplTest {
 
         assertThat(new PayPhysicalPurchaseUseCaseImpl(purchaseApi).execute(TOKEN, QUOTE_ID, "key-1"))
                 .isEqualTo(checkout);
+    }
+
+    @Test
+    @DisplayName("reading the payment progress delegates to the Billing port with the caller's token")
+    void paymentProgress() {
+        when(purchaseApi.getPaymentProgress(TOKEN, "pay-1")).thenReturn(PaymentProgress.COMPLETED);
+
+        assertThat(new GetPaymentProgressUseCaseImpl(purchaseApi).execute(TOKEN, "pay-1"))
+                .isEqualTo(PaymentProgress.COMPLETED);
+    }
+
+    @Test
+    @DisplayName("only non-pending progress is final, and unknown upstream names read as pending")
+    void progressMapping() {
+        assertThat(PaymentProgress.PENDING.isFinal()).isFalse();
+        assertThat(PaymentProgress.COMPLETED.isFinal()).isTrue();
+        assertThat(PaymentProgress.fromUpstream(null)).isEqualTo(PaymentProgress.PENDING);
+        assertThat(PaymentProgress.fromUpstream("SOMETHING_NEW")).isEqualTo(PaymentProgress.PENDING);
     }
 }

@@ -19,6 +19,8 @@ import com.menta.bff.application.usecase.GetCourseDetailViewUseCase;
 import com.menta.bff.application.usecase.GetCourseDetailViewUseCaseImpl;
 import com.menta.bff.application.usecase.GetLessonViewUseCase;
 import com.menta.bff.application.usecase.GetLessonViewUseCaseImpl;
+import com.menta.bff.application.usecase.GetPaymentProgressUseCase;
+import com.menta.bff.application.usecase.GetPaymentProgressUseCaseImpl;
 import com.menta.bff.application.usecase.GetPlansViewUseCase;
 import com.menta.bff.application.usecase.GetPlansViewUseCaseImpl;
 import com.menta.bff.application.usecase.GetValidAccessTokenUseCase;
@@ -150,5 +152,10 @@ public class UseCaseConfig {
     @Bean
     public PayPhysicalPurchaseUseCase payPhysicalPurchaseUseCase(PhysicalPurchaseApiClient purchaseApiClient) {
         return new PayPhysicalPurchaseUseCaseImpl(purchaseApiClient);
+    }
+
+    @Bean
+    public GetPaymentProgressUseCase getPaymentProgressUseCase(PhysicalPurchaseApiClient purchaseApiClient) {
+        return new GetPaymentProgressUseCaseImpl(purchaseApiClient);
     }
 }

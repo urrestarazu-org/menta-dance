@@ -2,6 +2,7 @@ package com.menta.bff.infrastructure.integration;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
@@ -43,6 +44,8 @@ class PhysicalPurchaseIntegrationTest extends BaseIntegrationTest {
     private static final String PAYMENT_ID = "00000000-0000-0000-0000-0000000000a1";
     private static final String CHECKOUT_URL = "https://pay.example.com/checkout/1";
     private static final String QUOTES = "/api/v1/billing/physical/quotes";
+    private static final String PAYMENT = "/api/v1/billing/payments/" + PAYMENT_ID;
+    private static final String RETURN_PAGE = "/compras/retorno";
     private static final String PURCHASES = "/api/v1/billing/physical/purchases";
 
     private static final String DETAIL_BODY =
@@ -120,6 +123,11 @@ class PhysicalPurchaseIntegrationTest extends BaseIntegrationTest {
                 {"paymentId": "%s", "quoteId": "%s", "status": "PENDING", "providerPreferenceId": "pref-1",
                  "checkoutUrl": "%s", "externalReference": "ref-1", "bankTransferInstructions": null}
                 """.formatted(PAYMENT_ID, QUOTE_ID, checkoutUrl));
+    }
+
+    private static void stubPayment(String status) {
+        stubGet(PAYMENT, 200, "{\"status\":\"" + status
+                + "\",\"createdAt\":\"2026-10-10T12:00:00Z\",\"updatedAt\":\"2026-10-10T12:01:00Z\"}");
     }
 
     private static String body(ResultActions result) throws Exception {
@@ -370,11 +378,91 @@ class PhysicalPurchaseIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("the return page without a payment in the session goes to the classes")
+    void returnWithoutPayment() throws Exception {
+        mockMvc.perform(withSession(get(RETURN_PAGE))).andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/classes")).andExpect(header().string("Cache-Control", "no-store"));
+    }
+
+    @Test
+    @DisplayName("the return page words each final status, never says places are assigned, and forgets the payment")
+    void returnFinalStatuses() throws Exception {
+        for (Map.Entry<String, String> expected : Map.of(
+                "COMPLETED", "¡Pago confirmado! Estamos asignando tus lugares",
+                "REJECTED", "El pago fue rechazado",
+                "CANCELLED", "El pago fue cancelado",
+                "EXPIRED", "El pago venció").entrySet()) {
+            stubCheckout(CHECKOUT_URL);
+            payFromQuotePage(monthlyQuotePage()).andExpect(status().is3xxRedirection());
+            stubPayment(expected.getKey());
+
+            String html = body(mockMvc.perform(withSession(get(RETURN_PAGE))).andExpect(status().isOk())
+                    .andExpect(header().string("Cache-Control", "no-store")));
+
+            assertThat(html).contains(expected.getValue()).contains("href=\"/classes\"")
+                    .doesNotContain("ya están asignados");
+            assertLinksWork(html);
+            mockMvc.perform(withSession(get(RETURN_PAGE))).andExpect(redirectedUrl("/classes"));
+        }
+    }
+
+    @Test
+    @DisplayName("the return page ignores whatever the URL says and a pending payment is kept for the next refresh")
+    void returnIgnoresUrlParametersAndKeepsPending() throws Exception {
+        stubCheckout(CHECKOUT_URL);
+        stubPayment("AWAITING_PROVIDER");
+        payFromQuotePage(monthlyQuotePage());
+
+        for (int i = 0; i < 2; i++) {
+            String html = body(mockMvc.perform(withSession(get(RETURN_PAGE)
+                            .param("status", "approved").param("payment_id", "99999").param("paymentId", "99999")))
+                    .andExpect(status().isOk()));
+            assertThat(html).contains("Estamos confirmando tu pago").doesNotContain("Pago confirmado");
+        }
+        assertThat(WIRE_MOCK_SERVER.findAll(getRequestedFor(urlEqualTo("/api/v1/billing/payments/99999")))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a payment that is not the caller's (404) clears the session and goes to the classes")
+    void returnForeignPayment() throws Exception {
+        stubCheckout(CHECKOUT_URL);
+        payFromQuotePage(monthlyQuotePage());
+        stubProblemGet(PAYMENT, 404, "PAYMENT_NOT_FOUND");
+
+        mockMvc.perform(withSession(get(RETURN_PAGE))).andExpect(redirectedUrl("/classes"));
+
+        stubPayment("COMPLETED");
+        mockMvc.perform(withSession(get(RETURN_PAGE))).andExpect(redirectedUrl("/classes"));
+    }
+
+    @Test
+    @DisplayName("an outage while checking the payment shows a retry notice and keeps the payment")
+    void returnWhileApiIsDown() throws Exception {
+        stubCheckout(CHECKOUT_URL);
+        payFromQuotePage(monthlyQuotePage());
+        stubProblemGet(PAYMENT, 503, "UNAVAILABLE");
+
+        String html = body(mockMvc.perform(withSession(get(RETURN_PAGE))).andExpect(status().isServiceUnavailable())
+                .andExpect(header().string("Cache-Control", "no-store")));
+        assertThat(html).contains("No pudimos completar la operación").contains("href=\"" + RETURN_PAGE + "\"");
+
+        stubPayment("COMPLETED");
+        assertThat(body(mockMvc.perform(withSession(get(RETURN_PAGE))).andExpect(status().isOk())))
+                .contains("¡Pago confirmado!");
+    }
+
+    private static void stubProblemGet(String url, int status, String code) {
+        stubGet(url, status, "{\"status\":" + status + ",\"code\":\"" + code + "\"}");
+    }
+
+    @Test
     @DisplayName("anonymous visitors are sent to the login when they post a quote")
     void anonymousIsRedirectedToLogin() throws Exception {
         mockMvc.perform(post("/classes/" + COURSE_ID + "/cotizar").param("purchaseType", "MONTHLY").with(csrf()))
                 .andExpect(status().is3xxRedirection()).andExpect(redirectedUrlPattern("**/login"));
         mockMvc.perform(post("/compras").with(csrf())).andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrlPattern("**/login"));
+        mockMvc.perform(get(RETURN_PAGE)).andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrlPattern("**/login"));
         assertThat(WIRE_MOCK_SERVER.findAll(postRequestedFor(urlEqualTo(QUOTES)))).isEmpty();
     }

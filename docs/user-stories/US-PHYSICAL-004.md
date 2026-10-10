@@ -94,5 +94,7 @@ aplica unicidad por Payment/sesión y devuelve CapacityAssignments tipadas.
   Mercado Pago desde la web; los casos de falta de cupo (`409 CAPACITY_UNAVAILABLE`) y de cotización vencida
   (`410`) tienen aviso propio. Ver
   [06-BILLING-API.md](../06-BILLING-API.md#cotizar-y-pagar-clases-presenciales-desde-la-web-bff-365).
-- **Pendiente (slices siguientes):** la página de retorno, mostrar las sesiones asignadas después del pago y el
-  pago por transferencia bancaria.
+- **Implementado (BFF web, #365):** la página de retorno informa el estado del pago que devuelve la API (confirmado,
+  en proceso, rechazado, cancelado o vencido). Un pago confirmado se muestra como "estamos asignando tus lugares",
+  no como sesiones ya asignadas.
+- **Pendiente (corte B):** mostrar las sesiones asignadas después del pago y el pago por transferencia bancaria.
