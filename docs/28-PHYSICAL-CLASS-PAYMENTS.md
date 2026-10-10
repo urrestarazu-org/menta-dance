@@ -64,6 +64,39 @@ instante de referencia, para completar N. El importe del quote no cambia. Si no 
 sesiones sin asignar dentro de ese horizonte, el checkout responde
 `409 CAPACITY_UNAVAILABLE`. Un individual no se ve afectado.
 
+### Ventana entre checkout y confirmación
+
+El conjunto de sesiones de una mensualidad se fija en el checkout: allí se leen las
+sesiones que el alumno ya tiene y se crean los holds. Si **entre el checkout y la
+confirmación del pago** el alumno recibe una asignación sobre una de las sesiones
+retenidas (por ejemplo, una compra individual de esa sesión o una asignación
+administrativa), el conjunto ya no es válido. Al confirmar, la conversión del hold choca
+con la unicidad `(session_id, student_id)` y se reporta como `ALREADY_ASSIGNED`.
+
+La ventana es angosta: sólo existe mientras el pago está pendiente (el hold nunca supera
+el deadline del proveedor) y exige que el mismo alumno obtenga por otra vía una sesión
+que justo estaba retenida para él. Reabrir el conjunto al confirmar obligaría a reservar
+capacidad de reemplazo y rompería la regla de que el conjunto queda fijo en el checkout;
+por eso no se hace (decisión de #533, V0).
+
+Resultado, sin cambios de comportamiento:
+
+- Payment queda `COMPLETED`: el dinero fue acreditado.
+- Purchase queda `EXCEPTION` y `billing.PurchaseExceptioned` lleva `reason = ALREADY_ASSIGNED`.
+- No se crea ninguna asignación de la compra (todo o nada): las demás sesiones retenidas
+  tampoco se asignan y los holds no se convierten. El alumno conserva únicamente la
+  asignación previa que provocó el conflicto.
+- No se habilita asistencia por esta compra.
+
+Resolución: no se resuelve automáticamente. El pasaje a `EXCEPTION` envía el aviso al
+alumno y a la dirección operativa (esta última con el `reason`) y la compra aparece en
+`GET /api/v1/admin/billing/purchases?status=EXCEPTION`, inventario de sólo lectura para
+`ADMIN`. Hoy el sistema no ofrece un endpoint para reasignar ni para cerrar la compra:
+el equipo de operaciones decide el tratamiento (por ejemplo, devolución o compensación)
+fuera del producto, y el motivo `ALREADY_ASSIGNED` indica que el problema no es de
+capacidad. Ver `docs/06-BILLING-API.md` y la prueba de integración
+`PhysicalPurchaseIntegrationTest`.
+
 La compra debe iniciarse antes del vencimiento del quote. La confirmación posterior
 conserva el precio snapshot, pero cobertura y sesiones elegibles se derivan del
 timestamp confirmado y se revalidan; no quedan congelados por el quote ni por su
