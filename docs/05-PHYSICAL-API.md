@@ -14,6 +14,7 @@ POST   /api/v1/admin/physical/courses/{courseId}/sessions
 POST   /api/v1/admin/physical/courses/{courseId}/sessions/batch
 PATCH  /api/v1/admin/physical/sessions/{sessionId}
 GET    /api/v1/physical/attendance/me
+GET    /api/v1/physical/sessions/me
 POST   /api/v1/physical/sessions/{sessionId}/check-ins
 GET    /api/v1/physical/sessions/{sessionId}/check-ins
 POST   /api/v1/physical/sessions/{sessionId}/access-qr
@@ -30,6 +31,18 @@ Alumnos y visitantes consultan cursos y sesiones únicamente mediante
 `GET /physical/attendance/me` es autoservicio de `ALUMNO` y admite `month`
 (`YYYY-MM`) e `includeAbsent`; devuelve únicamente las sesiones asignadas al
 alumno y su resumen de asistencia del período.
+
+`GET /physical/sessions/me` es autoservicio exclusivo de `ALUMNO` (otros roles
+reciben `403`): lista las sesiones, ordenadas por fecha ascendente, donde el
+alumno del token tiene una `physical_capacity_assignment` confirmada. El rango
+va desde el inicio del día actual en la zona de la academia
+(`physical.attendance.zone-id`) hasta `physical.sessions.window-days` días
+después (60 por defecto), y se devuelve como `from`/`to`. Los holds técnicos, los
+pagos pendientes y las sesiones canceladas no aparecen. Cada ítem incluye
+`sessionId` (el que recibe `access-qr`), curso, instructor, `scheduledAt` y
+`checkInOpen`, calculado con la misma ventana que el check-in. No acepta
+`studentId`. La sala y el tipo de asignación (mensual/individual) no se
+exponen: el modelo actual no los persiste.
 
 Una **sesión** es la ocurrencia concreta de un curso: fecha, hora y cupo. No
 existen endpoints de reserva ni listas de espera: un pago confirmado crea las

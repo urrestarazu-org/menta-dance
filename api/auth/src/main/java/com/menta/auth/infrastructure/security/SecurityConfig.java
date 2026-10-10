@@ -112,6 +112,12 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *     (#39, US-PHYSICAL-002 P1; the acting student reads their OWN month —
  *     the student id comes from the JWT principal, this endpoint has no
  *     studentId parameter to abuse).
+ *   - GET /api/v1/physical/sessions/me          → STUDENT only
+ *     (#356; the acting student lists the upcoming sessions they hold a confirmed
+ *     assignment for — the student id comes from the JWT principal, there is no
+ *     studentId parameter. Unlike attendance/me above, any other role is a 403.
+ *     The single-segment wildcard in the access-qr/check-ins rules below cannot
+ *     match this two-segment path, so the rules stay mutually exclusive).
  *   - GET /api/v1/admin/physical/attendance/{studentId} → ADMIN or INSTRUCTOR
  *     (#39, US-PHYSICAL-002 P2; elevated read of ANOTHER student's month.
  *     Must be declared before the generic /api/v1/admin/** rule below — that
@@ -292,6 +298,10 @@ public class SecurityConfig {
                 // student id comes from the JWT principal; this endpoint has no studentId
                 // parameter to abuse.
                 .requestMatchers(HttpMethod.GET, "/api/v1/physical/attendance/me").authenticated()
+                // #356: the student's own upcoming sessions. STUDENT only — unlike attendance/me
+                // above, an ADMIN or INSTRUCTOR has no "own" assignments to list here. The
+                // student id comes from the JWT principal; no studentId parameter exists.
+                .requestMatchers(HttpMethod.GET, "/api/v1/physical/sessions/me").hasRole("STUDENT")
                 // #39, US-PHYSICAL-002 P2: elevated read of ANOTHER student's month. Must be
                 // declared before the generic /api/v1/admin/** rule below (hasRole("ADMIN")
                 // only) — that rule WOULD match this path (it's a prefix match) and would
