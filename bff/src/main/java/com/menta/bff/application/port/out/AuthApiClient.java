@@ -17,7 +17,7 @@ import java.time.Duration;
  * - Registration (public account sign-up)
  * - Account activation (token validation and consumption)
  * - Resend of the activation email
- * - Password recovery email request
+ * - Password recovery (request email, then reset with the emailed token)
  * </p>
  *
  * <p>Part of Clean Architecture application layer - abstracts HTTP/REST details.
@@ -138,6 +138,23 @@ public interface AuthApiClient {
     void requestPasswordReset(RequestPasswordResetCommand command);
 
     /**
+     * Consumes a password reset token and sets the new password.
+     *
+     * <p>Calls POST /api/v1/auth/reset-password with both values in the JSON body, never in
+     * the URL. Unlike the other public flows the API tells the causes apart here.
+     * </p>
+     *
+     * @param token       Opaque reset token received by email
+     * @param newPassword The new raw password
+     * @throws InvalidResetTokenException  if the token is unknown, expired or already used (404/410)
+     * @throws PasswordRejectedException   if the password is weak or equal to the current one (400)
+     * @throws InvalidRequestException     if the API rejects the input for another reason (400)
+     * @throws RateLimitedException        if the API rate limit was hit (429)
+     * @throws ServiceUnavailableException if Auth API is unreachable or degraded (503)
+     */
+    void resetPassword(String token, String newPassword);
+
+    /**
      * Exception thrown when credentials or refresh token are invalid.
      */
     class AuthenticationException extends RuntimeException {
@@ -192,6 +209,45 @@ public interface AuthApiClient {
     class InvalidActivationTokenException extends RuntimeException {
         public InvalidActivationTokenException(String message) {
             super(message);
+        }
+    }
+
+    /**
+     * Exception thrown when a password reset token is unknown, expired or already used (404/410).
+     * It carries no token.
+     */
+    class InvalidResetTokenException extends RuntimeException {
+        public InvalidResetTokenException(String message) {
+            super(message);
+        }
+    }
+
+    /**
+     * Exception thrown when the Auth API refuses the new password (400). It carries no password.
+     */
+    class PasswordRejectedException extends RuntimeException {
+        /** Why the password was refused. */
+        public enum Reason { WEAK, SAME_AS_CURRENT }
+
+        private final Reason reason;
+
+        /**
+         * Creates the exception.
+         *
+         * @param reason Why the API refused the password
+         */
+        public PasswordRejectedException(Reason reason) {
+            super("Auth API rejected the new password: " + reason);
+            this.reason = reason;
+        }
+
+        /**
+         * Returns why the password was refused.
+         *
+         * @return the reason
+         */
+        public Reason reason() {
+            return reason;
         }
     }
 

@@ -18,16 +18,20 @@ import org.springframework.stereotype.Component;
  * so a crash mid-send leaves the row intact for the outbox to retry — the raw
  * token exists nowhere else, so losing the envelope before delivery would
  * strand the user with a token they never received.</p>
+ *
+ * <p>The link points to the BFF page that shows the new-password form
+ * ({@code auth.password-reset.link-path}, default {@code /restablecer-contrasena/}); the token
+ * leaves the URL once the user submits it. The API's own reset endpoint is what that page
+ * calls; it is not the link.</p>
  */
 @Component
 public class SpringMailPasswordResetNotificationAdapter implements PasswordResetNotificationPort {
-
-    private static final String RESET_PATH = "/reset-password?token=";
 
     private final PasswordResetTokenJpaRepository tokenRepository;
     private final PasswordResetDeliveryCipher deliveryCipher;
     private final JavaMailSender mailSender;
     private final String publicBaseUrl;
+    private final String linkPath;
     private final String fromAddress;
 
     public SpringMailPasswordResetNotificationAdapter(
@@ -35,12 +39,14 @@ public class SpringMailPasswordResetNotificationAdapter implements PasswordReset
         PasswordResetDeliveryCipher deliveryCipher,
         JavaMailSender mailSender,
         @Value("${auth.password-reset.public-base-url:http://localhost:8080}") String publicBaseUrl,
+        @Value("${auth.password-reset.link-path:/restablecer-contrasena/}") String linkPath,
         @Value("${auth.password-reset.from-address:no-reply@menta.local}") String fromAddress
     ) {
         this.tokenRepository = tokenRepository;
         this.deliveryCipher = deliveryCipher;
         this.mailSender = mailSender;
         this.publicBaseUrl = stripTrailingSlash(publicBaseUrl);
+        this.linkPath = normalizeLinkPath(linkPath);
         this.fromAddress = requiredValue(fromAddress, "password reset from address");
     }
 
@@ -59,7 +65,7 @@ public class SpringMailPasswordResetNotificationAdapter implements PasswordReset
         message.setTo(delivery[0]);
         message.setSubject("Recuperación de contraseña - Menta Dance");
         message.setText(
-            "Restablecé tu contraseña: " + publicBaseUrl + RESET_PATH + delivery[1]
+            "Restablecé tu contraseña: " + publicBaseUrl + linkPath + delivery[1]
                 + "\n\nEl enlace vence en una hora. Si no pediste este cambio, ignorá este correo."
         );
         mailSender.send(message);
@@ -79,6 +85,12 @@ public class SpringMailPasswordResetNotificationAdapter implements PasswordReset
     private static String stripTrailingSlash(String value) {
         value = requiredValue(value, "password reset public base URL");
         return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
+    }
+
+    private static String normalizeLinkPath(String value) {
+        String path = requiredValue(value, "password reset link path").trim();
+        path = path.startsWith("/") ? path : "/" + path;
+        return path.endsWith("/") ? path : path + "/";
     }
 
     private static String requiredValue(String value, String name) {

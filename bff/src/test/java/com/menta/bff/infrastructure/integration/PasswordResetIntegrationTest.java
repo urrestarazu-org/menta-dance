@@ -30,18 +30,22 @@ import org.slf4j.LoggerFactory;
 import org.springframework.test.web.servlet.ResultActions;
 
 /**
- * Password recovery request through the rendered pages. Field names are read from the HTML,
+ * Password recovery through the rendered pages. Field names are read from the HTML,
  * never hard-coded, so a template/controller mismatch breaks the build (the class of
- * bug behind #490). The email is personal data: these tests also pin
+ * bug behind #490). Token, email and password are credentials: these tests also pin
  * where they may and may not appear.
  */
 @DisplayName("Password Reset Integration Tests")
 class PasswordResetIntegrationTest extends BaseIntegrationTest {
 
     private static final String FORGOT_URL = "/api/v1/auth/forgot-password";
+    private static final String RESET_URL = "/api/v1/auth/reset-password";
     private static final String REQUEST_PAGE = "/recuperar-contrasena";
     private static final String SENT_PAGE = "/recuperar-contrasena/enviado";
+    private static final String RESET_PAGE = "/restablecer-contrasena";
+    private static final String TOKEN = "reset-token-abc";
     private static final String EMAIL = "user@example.com";
+    private static final String PASSWORD = "Password1";
     private static final Pattern INPUT = Pattern.compile("<input[^>]*>");
     private static final Pattern NAME = Pattern.compile("name=\"([^\"]+)\"");
     private static final Pattern HREF = Pattern.compile("<a[^>]*href=\"([^\"]+)\"");
@@ -69,6 +73,21 @@ class PasswordResetIntegrationTest extends BaseIntegrationTest {
         return found;
     }
 
+    private String resetPage() throws Exception {
+        return page(mockMvc.perform(get(RESET_PAGE + "/" + TOKEN))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(header().string("Referrer-Policy", "no-referrer")));
+    }
+
+    private ResultActions submitReset(String html, String password, String confirmation) throws Exception {
+        List<String> passwords = inputs(html, "type=\"password\"");
+        assertThat(passwords).hasSize(2);
+        return mockMvc.perform(post(RESET_PAGE)
+                .param(inputs(html, "value=\"" + TOKEN + "\"").get(0), TOKEN)
+                .param(passwords.get(0), password).param(passwords.get(1), confirmation).with(csrf()));
+    }
+
     private ResultActions submitRequest(String email) throws Exception {
         String html = page(mockMvc.perform(get(REQUEST_PAGE)).andExpect(status().isOk()));
         assertThat(html).contains("name=\"_csrf\"");
@@ -76,9 +95,11 @@ class PasswordResetIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("login offers the recovery link")
-    void loginLinksToRecovery() throws Exception {
-        assertThat(page(mockMvc.perform(get("/login")))).contains("href=\"" + REQUEST_PAGE + "\"");
+    @DisplayName("login offers the recovery link, and the post-reset notice only after a reset")
+    void loginLinksToRecoveryAndShowsTheNotice() throws Exception {
+        assertThat(page(mockMvc.perform(get("/login")))).contains("href=\"" + REQUEST_PAGE + "\"")
+                .doesNotContain("contraseña fue actualizada");
+        assertThat(page(mockMvc.perform(get("/login").param("reset", "")))).contains("contraseña fue actualizada");
     }
 
     @Test
@@ -124,17 +145,104 @@ class PasswordResetIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("the reset page carries the token only in a hidden field and never in a cache or Referer")
+    void resetPageCarriesTheTokenOnlyInAHiddenField() throws Exception {
+        String html = resetPage();
+
+        assertThat(html).contains("name=\"_csrf\"").contains("action=\"/restablecer-contrasena\"")
+                .contains("Al menos 8 caracteres");
+        assertThat(inputs(html, "type=\"hidden\"")).containsAll(inputs(html, "value=\"" + TOKEN + "\""));
+        assertThat(html.replace("value=\"" + TOKEN + "\"", "")).doesNotContain(TOKEN);
+    }
+
+    @Test
+    @DisplayName("submitting the rendered form resets the password and redirects to the login with a notice")
+    void submittingTheRenderedFormResets() throws Exception {
+        stub(RESET_URL, 200, "");
+
+        submitReset(resetPage(), PASSWORD, PASSWORD)
+                .andExpect(status().is3xxRedirection()).andExpect(redirectedUrl("/login?reset"));
+
+        WIRE_MOCK_SERVER.verify(postRequestedFor(urlEqualTo(RESET_URL))
+                .withRequestBody(matchingJsonPath("$.token", equalTo(TOKEN)))
+                .withRequestBody(matchingJsonPath("$.newPassword", equalTo(PASSWORD))));
+    }
+
+    @Test
+    @DisplayName("a weak or unconfirmed password is rejected next to the field without calling the API")
+    void localPasswordRulesNeverReachTheApi() throws Exception {
+        String html = resetPage();
+
+        String weak = page(submitReset(html, "corta", "corta").andExpect(status().isOk()));
+        assertThat(weak).contains("al menos 8 caracteres").contains("al menos una mayúscula")
+                .contains("al menos un número").doesNotContain("value=\"corta\"");
+        String mismatch = page(submitReset(html, PASSWORD, "Password2").andExpect(status().isOk()));
+        assertThat(mismatch).contains("Las contraseñas no coinciden").doesNotContain(PASSWORD);
+        assertThat(inputs(mismatch, "value=\"" + TOKEN + "\"")).hasSize(1);
+        assertThat(WIRE_MOCK_SERVER.findAll(postRequestedFor(urlEqualTo(RESET_URL)))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("an API password rejection shows a Spanish error next to the field and keeps the token")
+    void apiPasswordRejectionIsShownNextToTheField() throws Exception {
+        String html = resetPage();
+
+        stub(RESET_URL, 400, "{\"code\":\"WEAK_PASSWORD\"}");
+        assertThat(page(submitReset(html, PASSWORD, PASSWORD).andExpect(status().isOk())))
+                .contains("no cumple los requisitos").doesNotContain("WEAK_PASSWORD");
+        stub(RESET_URL, 400, "{\"code\":\"SAME_PASSWORD\"}");
+        String same = page(submitReset(html, PASSWORD, PASSWORD).andExpect(status().isOk()));
+        assertThat(same).contains("debe ser diferente a la actual").doesNotContain(PASSWORD);
+        assertThat(inputs(same, "value=\"" + TOKEN + "\"")).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("an unknown, expired or used token shows the Spanish message with a link to ask for a new one")
+    void unusableTokenOffersANewRequest() throws Exception {
+        for (int status : new int[] {404, 410}) {
+            stub(RESET_URL, status, "{\"code\":\"PASSWORD_RESET_TOKEN_EXPIRED\"}");
+            String body = page(submitReset(resetPage(), PASSWORD, PASSWORD)
+                    .andExpect(status().isBadRequest())
+                    .andExpect(header().string("Cache-Control", "no-store"))
+                    .andExpect(header().string("Referrer-Policy", "no-referrer")));
+            assertThat(body).contains("inválido, venció o ya fue utilizado").doesNotContain("<form")
+                    .doesNotContain(TOKEN).contains("href=\"" + REQUEST_PAGE + "\"");
+        }
+    }
+
+    @Test
+    @DisplayName("reset failures: 400 and 429 in Spanish keeping the form, 503 and transport errors never a 500")
+    void resetFailuresKeepTheForm() throws Exception {
+        String html = resetPage();
+
+        stub(RESET_URL, 400, "{\"code\":\"INVALID_REQUEST\"}");
+        assertThat(page(submitReset(html, PASSWORD, PASSWORD).andExpect(status().isBadRequest())))
+                .contains("No pudimos procesar");
+        stub(RESET_URL, 429, "");
+        String limited = page(submitReset(html, PASSWORD, PASSWORD).andExpect(status().isTooManyRequests()));
+        assertThat(limited).contains("demasiados intentos");
+        assertThat(inputs(limited, "value=\"" + TOKEN + "\"")).hasSize(1);
+        stub(RESET_URL, 503, "");
+        submitReset(html, PASSWORD, PASSWORD).andExpect(status().isServiceUnavailable());
+        WIRE_MOCK_SERVER.stubFor(WireMock.post(urlEqualTo(RESET_URL))
+                .willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)));
+        submitReset(html, PASSWORD, PASSWORD).andExpect(status().isServiceUnavailable());
+    }
+
+    @Test
     @DisplayName("posting without a CSRF token is rejected")
     void postWithoutCsrfIsRejected() throws Exception {
         mockMvc.perform(post(REQUEST_PAGE).param("email", EMAIL)).andExpect(status().isForbidden());
+        mockMvc.perform(post(RESET_PAGE).param("token", TOKEN)).andExpect(status().isForbidden());
     }
 
     @Test
     @DisplayName("only the exact recovery routes and verbs are public: nothing around them opens up")
     void onlyTheRecoveryRoutesArePublic() throws Exception {
-        mockMvc.perform(get("/restablecer-contrasena")).andExpect(redirectedUrl(LOGIN_REDIRECT));
-        mockMvc.perform(get("/restablecer-contrasena/a-token")).andExpect(redirectedUrl(LOGIN_REDIRECT));
-        mockMvc.perform(put("/restablecer-contrasena").with(csrf())).andExpect(redirectedUrl(LOGIN_REDIRECT));
+        mockMvc.perform(get(RESET_PAGE)).andExpect(redirectedUrl(LOGIN_REDIRECT));
+        mockMvc.perform(get(RESET_PAGE + "/a/b")).andExpect(redirectedUrl(LOGIN_REDIRECT));
+        mockMvc.perform(post(RESET_PAGE + "/" + TOKEN).with(csrf())).andExpect(redirectedUrl(LOGIN_REDIRECT));
+        mockMvc.perform(put(RESET_PAGE).with(csrf())).andExpect(redirectedUrl(LOGIN_REDIRECT));
         mockMvc.perform(get(REQUEST_PAGE + "/otra-cosa")).andExpect(redirectedUrl(LOGIN_REDIRECT));
         mockMvc.perform(put(REQUEST_PAGE).with(csrf())).andExpect(redirectedUrl(LOGIN_REDIRECT));
         mockMvc.perform(post(SENT_PAGE).with(csrf())).andExpect(redirectedUrl(LOGIN_REDIRECT));
@@ -144,13 +252,14 @@ class PasswordResetIntegrationTest extends BaseIntegrationTest {
     @Test
     @DisplayName("no link of the recovery pages is dead")
     void recoveryLinksAreAlive() throws Exception {
+        stub(RESET_URL, 410, "");
         List<String> pages = List.of(page(mockMvc.perform(get("/login"))),
-                page(mockMvc.perform(get(REQUEST_PAGE))), page(mockMvc.perform(get(SENT_PAGE))));
+                page(mockMvc.perform(get(REQUEST_PAGE))), page(mockMvc.perform(get(SENT_PAGE))),
+                page(submitReset(resetPage(), PASSWORD, PASSWORD)), resetPage());
 
         for (String html : pages) {
             Matcher links = HREF.matcher(html);
             while (links.find()) {
-                assertThat(links.group(1)).doesNotContain("restablecer");
                 int httpStatus = mockMvc.perform(get(links.group(1))).andReturn().getResponse().getStatus();
                 assertThat(httpStatus).withFailMessage("Dead link %s -> %s", links.group(1), httpStatus)
                         .isLessThan(400);
@@ -159,26 +268,32 @@ class PasswordResetIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("the email never reaches the application logs")
+    @DisplayName("neither the token, the email nor the password ever reach the application logs")
     void secretsAreNeverLogged() throws Exception {
         Logger root = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
         appender.start();
         root.addAppender(appender);
         try {
-            for (int status : new int[] {202, 400, 429, 503}) {
-                stub(FORGOT_URL, status, "");
+            String html = resetPage();
+            for (int status : new int[] {200, 400, 404, 410, 429, 503}) {
+                stub(FORGOT_URL, status, "{\"code\":\"WEAK_PASSWORD\"}");
+                stub(RESET_URL, status, "{\"code\":\"WEAK_PASSWORD\"}");
                 submitRequest(EMAIL);
+                submitReset(html, PASSWORD, PASSWORD);
             }
             WIRE_MOCK_SERVER.stubFor(WireMock.post(urlEqualTo(FORGOT_URL))
                     .willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)));
+            WIRE_MOCK_SERVER.stubFor(WireMock.post(urlEqualTo(RESET_URL))
+                    .willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)));
             submitRequest(EMAIL);
+            submitReset(html, PASSWORD, PASSWORD);
         } finally {
             root.detachAppender(appender);
         }
 
         assertThat(appender.list).isNotEmpty();
-        for (String secret : List.of(EMAIL)) {
+        for (String secret : List.of(TOKEN, EMAIL, PASSWORD)) {
             assertThat(appender.list).noneMatch(event -> (event.getFormattedMessage()
                     + (event.getThrowableProxy() == null ? "" : ThrowableProxyUtil.asString(event.getThrowableProxy())))
                     .contains(secret));

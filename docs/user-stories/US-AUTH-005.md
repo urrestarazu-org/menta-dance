@@ -104,7 +104,7 @@
   * Servicio de email (MailService) para envío del enlace.
 * **Email Template:**
   * Asunto: "Recuperación de contraseña - Menta Academy"
-  * Enlace: `https://mentavirtual.com/reset-password?token={token}`
+  * Enlace: `https://mentavirtual.com/restablecer-contrasena/{token}` (pantalla del BFF; el prefijo sale de `auth.password-reset.link-path`)
 
 ---
 

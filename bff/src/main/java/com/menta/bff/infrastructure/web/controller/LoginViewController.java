@@ -19,6 +19,7 @@ public class LoginViewController {
     public String loginForm(
         @RequestParam(value = "error", required = false) String error,
         @RequestParam(value = "logout", required = false) String logout,
+        @RequestParam(value = "reset", required = false) String reset,
         Model model
     ) {
         if (error != null) {
@@ -26,6 +27,9 @@ public class LoginViewController {
         }
         if (logout != null) {
             model.addAttribute("logout", "Sesión cerrada exitosamente");
+        }
+        if (reset != null) {
+            model.addAttribute("resetNotice", "Tu contraseña fue actualizada. Iniciá sesión con la nueva.");
         }
         return "login";
     }
