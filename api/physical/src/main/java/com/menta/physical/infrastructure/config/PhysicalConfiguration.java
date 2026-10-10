@@ -202,9 +202,10 @@ public class PhysicalConfiguration {
 
     @Bean
     public PhysicalCourseAvailabilityPort physicalCourseAvailabilityPort(
-        PhysicalCourseRepository courseRepository, PhysicalSessionRepository sessionRepository
+        PhysicalCourseRepository courseRepository, PhysicalSessionRepository sessionRepository,
+        PhysicalCapacityAssignmentRepository assignmentRepository
     ) {
-        return new PhysicalCourseAvailabilityPortImpl(courseRepository, sessionRepository);
+        return new PhysicalCourseAvailabilityPortImpl(courseRepository, sessionRepository, assignmentRepository);
     }
 
     @Bean

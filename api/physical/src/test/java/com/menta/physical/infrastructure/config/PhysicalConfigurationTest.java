@@ -72,7 +72,8 @@ class PhysicalConfigurationTest {
         PhysicalSessionRepository sessionRepository = mock(PhysicalSessionRepository.class);
 
         PhysicalCourseAvailabilityPort port =
-            configuration.physicalCourseAvailabilityPort(courseRepository, sessionRepository);
+            configuration.physicalCourseAvailabilityPort(
+                courseRepository, sessionRepository, mock(PhysicalCapacityAssignmentRepository.class));
 
         assertThat(port).isInstanceOf(PhysicalCourseAvailabilityPortImpl.class);
     }

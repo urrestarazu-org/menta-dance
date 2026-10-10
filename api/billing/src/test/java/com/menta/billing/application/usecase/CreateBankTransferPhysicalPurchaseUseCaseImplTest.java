@@ -3,6 +3,7 @@ package com.menta.billing.application.usecase;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -39,6 +40,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
@@ -133,6 +135,22 @@ class CreateBankTransferPhysicalPurchaseUseCaseImplTest {
             com.menta.billing.application.dto.BankTransferInstructions.of(
                 ACCOUNT, quote.getAmount(), result.externalReference())
         );
+    }
+
+    /** The courtesy check must not promise a session the student already owns. */
+    @Test
+    void a_quote_that_the_students_owned_sessions_leave_short_is_rejected_as_unavailable() {
+        PhysicalCourseQuote quote = monthlyQuote(2, NOW.minusSeconds(60));
+        when(quoteRepository.findById(quote.getId().toString())).thenReturn(Optional.of(quote));
+        List<ScheduledSessionSnapshot> calendar = sessionsFrom(NOW, 2, 5);
+        when(availabilityPort.findScheduledSessions(any(), any(), any())).thenReturn(calendar);
+        when(availabilityPort.findSessionIdsAssignedTo(eq(COURSE_ID), eq(USER_ID), any(), any()))
+            .thenReturn(Set.of(calendar.get(0).sessionId()));
+
+        assertThatThrownBy(() -> useCase.create(command(quote.getId().toString(), "idem-1")))
+            .isInstanceOf(PhysicalCapacityUnavailableException.class);
+
+        verify(paymentRepository, never()).save(any());
     }
 
     // --- Scenario 3: exhausted daily budget (429) ---

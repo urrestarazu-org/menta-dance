@@ -30,7 +30,17 @@
 - **Entonces** Physical asigna exactamente `selectedSessionId` y ningún otro, y
   Billing deja la Purchase `ASSIGNED` después de esa asignación.
 
-**Escenario 3: idempotencia**
+**Escenario 3: mensualidad con sesiones que el alumno ya tiene**
+
+- **Dado** un quote mensual de N sesiones y un alumno que ya tiene asignación confirmada
+  en alguna de las próximas sesiones del curso (por ejemplo, por una compra individual).
+- **Cuando** compra la mensualidad (checkout y confirmación del pago).
+- **Entonces** la mensualidad saltea esas sesiones y busca hacia adelante (hasta 120 días)
+  hasta cubrir N sesiones que el alumno todavía no tiene: no se duplica ninguna asignación y
+  la Purchase queda `ASSIGNED`. El importe no cambia. Si en 120 días no hay N sesiones sin
+  asignar, el checkout responde `409 CAPACITY_UNAVAILABLE`.
+
+**Escenario 4: idempotencia**
 
 - **Dado** una Purchase ya iniciada o confirmada.
 - **Cuando** se repite la operación con el mismo `purchaseId`, `paymentId` o clave

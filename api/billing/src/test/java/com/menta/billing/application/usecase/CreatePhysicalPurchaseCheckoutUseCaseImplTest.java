@@ -3,6 +3,7 @@ package com.menta.billing.application.usecase;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -37,6 +38,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -255,6 +257,56 @@ class CreatePhysicalPurchaseCheckoutUseCaseImplTest {
         verify(physicalCapacityHoldPort).hold(holdCommand.capture(), expiresAt.capture());
         assertThat(holdCommand.getValue().claims()).hasSize(2);
         assertThat(expiresAt.getValue()).isEqualTo(NOW.plus(HOLD_TTL));
+    }
+
+    @Test
+    void a_monthly_purchase_holds_the_next_n_sessions_the_student_does_not_own_yet() {
+        PhysicalCourseQuote quote = monthlyQuote(2, NOW.minusSeconds(60));
+        when(quoteRepository.findById(quote.getId().toString())).thenReturn(Optional.of(quote));
+        List<ScheduledSessionSnapshot> calendar = sessionsFrom(NOW, 3, 5);
+        String owned = calendar.get(0).sessionId();
+        when(availabilityPort.findScheduledSessions(any(), any(), any())).thenReturn(calendar);
+        when(availabilityPort.findSessionIdsAssignedTo(eq(COURSE_ID), eq(USER_ID), any(), any()))
+            .thenReturn(Set.of(owned));
+
+        useCase.create(command(quote.getId().toString(), "idem-1"));
+
+        ArgumentCaptor<MultiSessionCapacityHoldCommand> holdCommand =
+            ArgumentCaptor.forClass(MultiSessionCapacityHoldCommand.class);
+        verify(physicalCapacityHoldPort).hold(holdCommand.capture(), any());
+        assertThat(holdCommand.getValue().claims()).extracting(claim -> claim.sessionId().toString())
+            .containsExactly(calendar.get(1).sessionId(), calendar.get(2).sessionId());
+    }
+
+    @Test
+    void a_monthly_purchase_is_rejected_when_the_owned_sessions_leave_fewer_than_n() {
+        PhysicalCourseQuote quote = monthlyQuote(2, NOW.minusSeconds(60));
+        when(quoteRepository.findById(quote.getId().toString())).thenReturn(Optional.of(quote));
+        List<ScheduledSessionSnapshot> calendar = sessionsFrom(NOW, 2, 5);
+        when(availabilityPort.findScheduledSessions(any(), any(), any())).thenReturn(calendar);
+        when(availabilityPort.findSessionIdsAssignedTo(eq(COURSE_ID), eq(USER_ID), any(), any()))
+            .thenReturn(Set.of(calendar.get(0).sessionId()));
+
+        assertThatThrownBy(() -> useCase.create(command(quote.getId().toString(), "idem-1")))
+            .isInstanceOf(PhysicalCapacityUnavailableException.class);
+
+        verify(physicalCapacityHoldPort, never()).hold(any(), any());
+    }
+
+    @Test
+    void an_individual_purchase_never_consults_the_owned_sessions() {
+        PhysicalCourseQuote quote = PhysicalCourseQuote.individual(
+            COURSE_ID, pricing(), 4, "11111111-1111-1111-1111-111111111111", QuoteAvailability.AVAILABLE,
+            NOW.minusSeconds(60)
+        );
+        when(quoteRepository.findById(quote.getId().toString())).thenReturn(Optional.of(quote));
+        when(availabilityPort.findScheduledSessions(any(), any(), any())).thenReturn(List.of(
+            new ScheduledSessionSnapshot("11111111-1111-1111-1111-111111111111", NOW.plusSeconds(3600), 5)
+        ));
+
+        useCase.create(command(quote.getId().toString(), "idem-1"));
+
+        verify(availabilityPort, never()).findSessionIdsAssignedTo(any(), any(), any(), any());
     }
 
     @Test

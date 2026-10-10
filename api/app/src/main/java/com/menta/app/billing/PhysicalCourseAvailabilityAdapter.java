@@ -3,6 +3,8 @@ package com.menta.app.billing;
 import com.menta.billing.application.dto.ScheduledSessionSnapshot;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 import org.springframework.stereotype.Component;
 
 /**
@@ -42,5 +44,10 @@ public class PhysicalCourseAvailabilityAdapter
                 session.sessionId(), Instant.parse(session.scheduledAt()), session.availableSpots()
             ))
             .toList();
+    }
+
+    @Override
+    public Set<String> findSessionIdsAssignedTo(String courseId, UUID studentId, Instant from, Instant to) {
+        return physicalCourseAvailabilityPort.findSessionIdsAssignedTo(courseId, studentId, from, to);
     }
 }

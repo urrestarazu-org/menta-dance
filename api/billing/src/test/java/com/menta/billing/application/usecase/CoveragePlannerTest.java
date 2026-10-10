@@ -9,6 +9,7 @@ import com.menta.billing.application.usecase.CoveragePlanner.Plan;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -34,7 +35,7 @@ class CoveragePlannerTest {
             new ScheduledSessionSnapshot(SESSION_4, CONFIRMED_AT.plus(Duration.ofDays(21)), 5)
         );
 
-        Plan plan = CoveragePlanner.planMonthly(calendar, CONFIRMED_AT, 3, false);
+        Plan plan = CoveragePlanner.planMonthly(calendar, CONFIRMED_AT, 3, false, Set.of());
 
         assertThat(plan).isInstanceOf(Plan.Complete.class);
         assertThat(((Plan.Complete) plan).sessions()).containsExactly(
@@ -54,7 +55,7 @@ class CoveragePlannerTest {
             new ScheduledSessionSnapshot(SESSION_4, CONFIRMED_AT.plus(Duration.ofDays(52)), 5)
         );
 
-        Plan plan = CoveragePlanner.planMonthly(calendar, CONFIRMED_AT, 4, false);
+        Plan plan = CoveragePlanner.planMonthly(calendar, CONFIRMED_AT, 4, false, Set.of());
 
         assertThat(plan).isInstanceOf(Plan.Complete.class);
         assertThat(((Plan.Complete) plan).sessions()).containsExactly(
@@ -73,7 +74,7 @@ class CoveragePlannerTest {
             new ScheduledSessionSnapshot(SESSION_3, CONFIRMED_AT.plus(Duration.ofDays(119)), 5)
         );
 
-        Plan plan = CoveragePlanner.planMonthly(calendar, CONFIRMED_AT, 4, false);
+        Plan plan = CoveragePlanner.planMonthly(calendar, CONFIRMED_AT, 4, false, Set.of());
 
         assertThat(plan).isEqualTo(new Plan.Insufficient());
     }
@@ -83,7 +84,7 @@ class CoveragePlannerTest {
         List<ScheduledSessionSnapshot> calendar =
             List.of(new ScheduledSessionSnapshot(SESSION_1, CONFIRMED_AT, 5));
 
-        Plan plan = CoveragePlanner.planMonthly(calendar, CONFIRMED_AT, 1, false);
+        Plan plan = CoveragePlanner.planMonthly(calendar, CONFIRMED_AT, 1, false, Set.of());
 
         assertThat(plan).isEqualTo(new Plan.Complete(List.of(new EligibleSession(SESSION_1, CONFIRMED_AT))));
     }
@@ -94,7 +95,7 @@ class CoveragePlannerTest {
         List<ScheduledSessionSnapshot> calendar =
             List.of(new ScheduledSessionSnapshot(SESSION_1, exactlyAtHorizon, 5));
 
-        Plan plan = CoveragePlanner.planMonthly(calendar, CONFIRMED_AT, 1, false);
+        Plan plan = CoveragePlanner.planMonthly(calendar, CONFIRMED_AT, 1, false, Set.of());
 
         assertThat(plan).isEqualTo(new Plan.Insufficient());
     }
@@ -106,7 +107,7 @@ class CoveragePlannerTest {
             new ScheduledSessionSnapshot(SESSION_2, CONFIRMED_AT.plus(Duration.ofDays(1)), 5)
         );
 
-        Plan plan = CoveragePlanner.planMonthly(calendar, CONFIRMED_AT, 1, false);
+        Plan plan = CoveragePlanner.planMonthly(calendar, CONFIRMED_AT, 1, false, Set.of());
 
         assertThat(plan)
             .isEqualTo(
@@ -120,7 +121,7 @@ class CoveragePlannerTest {
             new ScheduledSessionSnapshot(SESSION_2, CONFIRMED_AT.plus(Duration.ofDays(2)), 5)
         );
 
-        Plan plan = CoveragePlanner.planMonthly(calendar, CONFIRMED_AT, 1, true);
+        Plan plan = CoveragePlanner.planMonthly(calendar, CONFIRMED_AT, 1, true, Set.of());
 
         assertThat(plan)
             .isEqualTo(
@@ -132,11 +133,59 @@ class CoveragePlannerTest {
         List<ScheduledSessionSnapshot> calendar =
             List.of(new ScheduledSessionSnapshot(SESSION_1, CONFIRMED_AT.plus(Duration.ofDays(1)), 0));
 
-        Plan plan = CoveragePlanner.planMonthly(calendar, CONFIRMED_AT, 1, false);
+        Plan plan = CoveragePlanner.planMonthly(calendar, CONFIRMED_AT, 1, false, Set.of());
 
         assertThat(plan)
             .isEqualTo(
                 new Plan.Complete(List.of(new EligibleSession(SESSION_1, CONFIRMED_AT.plus(Duration.ofDays(1))))));
+    }
+
+    @Test
+    void monthly_excluded_sessions_are_skipped_and_the_search_extends_forward() {
+        List<ScheduledSessionSnapshot> calendar = List.of(
+            new ScheduledSessionSnapshot(SESSION_1, CONFIRMED_AT.plus(Duration.ofDays(1)), 5),
+            new ScheduledSessionSnapshot(SESSION_2, CONFIRMED_AT.plus(Duration.ofDays(8)), 5),
+            new ScheduledSessionSnapshot(SESSION_3, CONFIRMED_AT.plus(Duration.ofDays(15)), 5),
+            new ScheduledSessionSnapshot(SESSION_4, CONFIRMED_AT.plus(Duration.ofDays(22)), 5)
+        );
+
+        Plan plan = CoveragePlanner.planMonthly(calendar, CONFIRMED_AT, 3, false, Set.of(SESSION_1));
+
+        assertThat(plan).isEqualTo(new Plan.Complete(List.of(
+            new EligibleSession(SESSION_2, CONFIRMED_AT.plus(Duration.ofDays(8))),
+            new EligibleSession(SESSION_3, CONFIRMED_AT.plus(Duration.ofDays(15))),
+            new EligibleSession(SESSION_4, CONFIRMED_AT.plus(Duration.ofDays(22)))
+        )));
+    }
+
+    @Test
+    void monthly_is_insufficient_when_excluding_owned_sessions_leaves_fewer_than_n() {
+        List<ScheduledSessionSnapshot> calendar = List.of(
+            new ScheduledSessionSnapshot(SESSION_1, CONFIRMED_AT.plus(Duration.ofDays(1)), 5),
+            new ScheduledSessionSnapshot(SESSION_2, CONFIRMED_AT.plus(Duration.ofDays(8)), 5),
+            new ScheduledSessionSnapshot(SESSION_3, CONFIRMED_AT.plus(Duration.ofDays(15)), 5)
+        );
+
+        Plan plan = CoveragePlanner.planMonthly(calendar, CONFIRMED_AT, 3, false, Set.of(SESSION_2));
+
+        assertThat(plan).isEqualTo(new Plan.Insufficient());
+    }
+
+    @Test
+    void monthly_ignores_excluded_ids_that_are_not_in_the_calendar() {
+        List<ScheduledSessionSnapshot> calendar =
+            List.of(new ScheduledSessionSnapshot(SESSION_1, CONFIRMED_AT.plus(Duration.ofDays(1)), 5));
+
+        Plan plan = CoveragePlanner.planMonthly(calendar, CONFIRMED_AT, 1, false, Set.of(SESSION_4));
+
+        assertThat(plan).isEqualTo(
+            new Plan.Complete(List.of(new EligibleSession(SESSION_1, CONFIRMED_AT.plus(Duration.ofDays(1))))));
+    }
+
+    @Test
+    void monthly_rejects_null_excluded_session_ids() {
+        assertThatThrownBy(() -> CoveragePlanner.planMonthly(List.of(), CONFIRMED_AT, 1, false, null))
+            .isInstanceOf(NullPointerException.class);
     }
 
     @Test
@@ -147,7 +196,7 @@ class CoveragePlannerTest {
             new ScheduledSessionSnapshot(SESSION_1, sameInstant, 5)
         );
 
-        Plan plan = CoveragePlanner.planMonthly(calendar, CONFIRMED_AT, 2, false);
+        Plan plan = CoveragePlanner.planMonthly(calendar, CONFIRMED_AT, 2, false, Set.of());
 
         assertThat(plan).isEqualTo(new Plan.Complete(List.of(
             new EligibleSession(SESSION_1, sameInstant),
@@ -157,19 +206,19 @@ class CoveragePlannerTest {
 
     @Test
     void monthly_rejects_a_non_positive_scheduled_session_count() {
-        assertThatThrownBy(() -> CoveragePlanner.planMonthly(List.of(), CONFIRMED_AT, 0, false))
+        assertThatThrownBy(() -> CoveragePlanner.planMonthly(List.of(), CONFIRMED_AT, 0, false, Set.of()))
             .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void monthly_rejects_null_scheduled_sessions() {
-        assertThatThrownBy(() -> CoveragePlanner.planMonthly(null, CONFIRMED_AT, 1, false))
+        assertThatThrownBy(() -> CoveragePlanner.planMonthly(null, CONFIRMED_AT, 1, false, Set.of()))
             .isInstanceOf(NullPointerException.class);
     }
 
     @Test
     void monthly_rejects_null_reference_instant() {
-        assertThatThrownBy(() -> CoveragePlanner.planMonthly(List.of(), null, 1, false))
+        assertThatThrownBy(() -> CoveragePlanner.planMonthly(List.of(), null, 1, false, Set.of()))
             .isInstanceOf(NullPointerException.class);
     }
 

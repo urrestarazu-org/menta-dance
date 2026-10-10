@@ -159,7 +159,9 @@ El quote expone una proyección informativa de disponibilidad, sin reserva. Ante
 de crear un `Payment` o iniciar el proveedor, `api:app` solicita a Physical un
 `CapacityHold` atómico. Si no hay cupo, responde `409 CAPACITY_UNAVAILABLE` y no
 se crea pago. El hold reduce, pero no elimina, la excepción posterior si la
-cobertura mensual calculada al confirmar cambia o el hold expira.
+cobertura mensual calculada al confirmar cambia o el hold expira. La cobertura
+mensual saltea las sesiones donde el alumno ya tiene asignación confirmada y se
+extiende hacia adelante (hasta 120 días) para completar las N sesiones compradas.
 
 ## Pricing presencial
 

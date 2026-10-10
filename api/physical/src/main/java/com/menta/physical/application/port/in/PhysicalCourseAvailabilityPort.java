@@ -7,6 +7,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 
 /**
  * Entry point Physical exposes for other modules to read recurring courses
@@ -85,4 +87,18 @@ public interface PhysicalCourseAvailabilityPort {
      *     scheduled in that range.
      */
     List<PhysicalSessionAvailability> listSessions(String courseId, Instant from, Instant to);
+
+    /**
+     * Ids of the sessions of a course the student holds a confirmed assignment
+     * for, within the half-open range {@code [from, to)}. Billing uses it to
+     * keep a monthly purchase from covering a session twice. Holds are never
+     * consulted, only confirmed assignments.
+     *
+     * @param courseId the recurring course whose sessions to look at.
+     * @param studentId the student whose assignments are read.
+     * @param from lower bound (inclusive) of the schedule range.
+     * @param to upper bound (exclusive) of the schedule range.
+     * @return the owned session ids, or an empty set if none.
+     */
+    Set<String> findSessionIdsAssignedTo(String courseId, UUID studentId, Instant from, Instant to);
 }

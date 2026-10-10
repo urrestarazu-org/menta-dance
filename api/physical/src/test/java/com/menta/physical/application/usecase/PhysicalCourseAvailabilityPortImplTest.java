@@ -8,8 +8,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.menta.physical.application.dto.AssignedSessionRow;
 import com.menta.physical.application.dto.PhysicalCourseSummary;
 import com.menta.physical.application.dto.PhysicalSessionAvailability;
+import com.menta.physical.application.port.out.PhysicalCapacityAssignmentRepository;
 import com.menta.physical.application.port.out.PhysicalCourseRepository;
 import com.menta.physical.application.port.out.PhysicalSessionRepository;
 import com.menta.physical.domain.model.CourseId;
@@ -26,6 +28,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,12 +42,13 @@ class PhysicalCourseAvailabilityPortImplTest {
 
     @Mock private PhysicalCourseRepository courseRepository;
     @Mock private PhysicalSessionRepository sessionRepository;
+    @Mock private PhysicalCapacityAssignmentRepository assignmentRepository;
 
     private PhysicalCourseAvailabilityPortImpl port;
 
     @BeforeEach
     void setUp() {
-        port = new PhysicalCourseAvailabilityPortImpl(courseRepository, sessionRepository);
+        port = new PhysicalCourseAvailabilityPortImpl(courseRepository, sessionRepository, assignmentRepository);
     }
 
     @Test
@@ -218,6 +222,37 @@ class PhysicalCourseAvailabilityPortImplTest {
             port.findActiveByIds(List.of(id.toString())).get(id.toString());
 
         assertThat(batch).isEqualTo(single);
+    }
+
+    @Test
+    void finds_the_ids_of_the_course_sessions_the_student_is_assigned_to() {
+        CourseId course = CourseId.generate();
+        UUID student = UUID.randomUUID();
+        Instant from = Instant.parse("2026-08-01T00:00:00Z");
+        Instant to = Instant.parse("2026-12-01T00:00:00Z");
+        UUID owned = UUID.randomUUID();
+        UUID otherCourseSession = UUID.randomUUID();
+        when(assignmentRepository.findAssignedSessions(student, from, to)).thenReturn(List.of(
+            assigned(owned, UUID.fromString(course.toString())),
+            assigned(otherCourseSession, UUID.randomUUID())
+        ));
+
+        Set<String> result = port.findSessionIdsAssignedTo(course.toString(), student, from, to);
+
+        assertThat(result).containsExactly(owned.toString());
+    }
+
+    @Test
+    void finds_no_owned_sessions_when_the_student_has_no_assignments() {
+        CourseId course = CourseId.generate();
+        when(assignmentRepository.findAssignedSessions(any(), any(), any())).thenReturn(List.of());
+
+        assertThat(port.findSessionIdsAssignedTo(course.toString(), UUID.randomUUID(), Instant.EPOCH, Instant.MAX))
+            .isEmpty();
+    }
+
+    private static AssignedSessionRow assigned(UUID sessionId, UUID courseId) {
+        return new AssignedSessionRow(sessionId, courseId, "Salsa inicial", "María García", Instant.EPOCH);
     }
 
     private static PhysicalCourse activeCourse(CourseId id) {
