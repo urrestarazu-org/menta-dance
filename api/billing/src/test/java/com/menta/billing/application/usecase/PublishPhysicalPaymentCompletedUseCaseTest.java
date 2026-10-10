@@ -173,7 +173,7 @@ class PublishPhysicalPaymentCompletedUseCaseTest {
     }
 
     @Nested
-    @DisplayName("Reason enum codifies the three documented residual modes")
+    @DisplayName("Reason enum codifies the documented residual modes")
     class ReasonEnumCoverage {
 
         @Test
@@ -181,7 +181,7 @@ class PublishPhysicalPaymentCompletedUseCaseTest {
             assertThat(com.menta.billing.domain.model.Reason.values())
                 .extracting(Enum::name)
                 .containsExactlyInAnyOrder(
-                    "CAPACITY_BELOW_ASSIGNED", "UNIQUE_COLLISION",
+                    "CAPACITY_BELOW_ASSIGNED", "ALREADY_ASSIGNED", "UNIQUE_COLLISION",
                     "HOLD_EXPIRED", "COVERAGE_CHANGED", "TARGET_NOT_SCHEDULED"
                 );
         }

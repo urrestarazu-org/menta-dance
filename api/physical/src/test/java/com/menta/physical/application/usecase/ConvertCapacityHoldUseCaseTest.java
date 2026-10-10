@@ -14,6 +14,7 @@ import com.menta.physical.application.port.out.HeldSessionRow;
 import com.menta.physical.application.port.out.PhysicalCapacityAssignmentWriter;
 import com.menta.physical.application.port.out.PhysicalCapacityHoldWriter;
 import com.menta.physical.domain.exception.CapacityBelowAssignedException;
+import com.menta.physical.domain.exception.StudentAlreadyAssignedException;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -99,7 +100,25 @@ class ConvertCapacityHoldUseCaseTest {
     }
 
     @Test
-    void convertAll_maps_a_unique_row_collision_to_CapacityBelowAssigned() {
+    void convertAll_propagates_StudentAlreadyAssigned_unchanged() {
+        PhysicalCapacityHoldWriter holdWriter = mock(PhysicalCapacityHoldWriter.class);
+        PhysicalCapacityAssignmentWriter assignmentWriter = mock(PhysicalCapacityAssignmentWriter.class);
+        ConvertCapacityHoldUseCase useCase = new ConvertCapacityHoldUseCase(holdWriter, assignmentWriter);
+
+        UUID paymentId = UUID.randomUUID();
+        UUID studentId = UUID.randomUUID();
+        UUID session1 = UUID.randomUUID();
+        when(holdWriter.findByPaymentIdOrdered(paymentId)).thenReturn(List.of(new HeldSessionRow(session1, false)));
+        when(assignmentWriter.assertAssignment(session1, studentId)).thenThrow(new StudentAlreadyAssignedException());
+
+        assertThatThrownBy(() -> useCase.convertAll(paymentId, studentId))
+            .isInstanceOf(StudentAlreadyAssignedException.class);
+
+        verify(holdWriter).markConverted(paymentId, session1);
+    }
+
+    @Test
+    void convertAll_does_not_reclassify_a_raw_DataIntegrityViolation_as_a_capacity_refusal() {
         PhysicalCapacityHoldWriter holdWriter = mock(PhysicalCapacityHoldWriter.class);
         PhysicalCapacityAssignmentWriter assignmentWriter = mock(PhysicalCapacityAssignmentWriter.class);
         ConvertCapacityHoldUseCase useCase = new ConvertCapacityHoldUseCase(holdWriter, assignmentWriter);
@@ -109,12 +128,10 @@ class ConvertCapacityHoldUseCaseTest {
         UUID session1 = UUID.randomUUID();
         when(holdWriter.findByPaymentIdOrdered(paymentId)).thenReturn(List.of(new HeldSessionRow(session1, false)));
         when(assignmentWriter.assertAssignment(session1, studentId))
-            .thenThrow(new DataIntegrityViolationException("uq_physical_assignment_session_student"));
+            .thenThrow(new DataIntegrityViolationException("unrelated integrity failure"));
 
         assertThatThrownBy(() -> useCase.convertAll(paymentId, studentId))
-            .isInstanceOf(CapacityBelowAssignedException.class);
-
-        verify(holdWriter).markConverted(paymentId, session1);
+            .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test

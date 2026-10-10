@@ -32,7 +32,8 @@ import org.springframework.beans.factory.annotation.Autowired;
  * <p>{@code capacity_available_one_insert_succeeds} and
  * {@code capacity_full_zero_inserts_and_exception} are the deterministic
  * scenarios; the cross-thread race (TASK-005 AC4 reference to
- * {@code CapacityBelowAssignedException} on UNIQUE race) is covered in
+ * {@code StudentAlreadyAssignedException} on UNIQUE collision, exercised end to end by
+ * {@code PhysicalPurchaseIntegrationTest}) is covered in
  * design §2.4, and the broader CROSS-STUDENT race losing path is covered
  * in TASK-010. Both races rely on the project's broader row-locking
  * strategy (issue #41 owner), so this file keeps scope tight to the

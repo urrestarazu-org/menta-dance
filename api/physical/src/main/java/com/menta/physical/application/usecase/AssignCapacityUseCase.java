@@ -10,7 +10,6 @@ import com.menta.shared.physical.SessionClaim;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,10 +29,11 @@ import org.springframework.transaction.annotation.Transactional;
  * <ul>
  *   <li>Capacity trip — the writer refuses and throws
  *       {@link CapacityBelowAssignedException}; nothing is inserted.</li>
- *   <li>UNIQUE race trip — V7 {@code UNIQUE (session_id, student_id)}
- *       collision: caught and rethrown as
- *       {@link CapacityBelowAssignedException} so {@code api:app} can route
- *       to {@code EXCEPTION} via the same catch it already has.</li>
+ *   <li>Student already assigned — V7 {@code UNIQUE (session_id,
+ *       student_id)} collision: the writer throws
+ *       {@link com.menta.physical.domain.exception.StudentAlreadyAssignedException},
+ *       which propagates unchanged so {@code api:app} can route it to
+ *       {@code EXCEPTION} with its own reason instead of a capacity one.</li>
  *   <li>Missing session — the writer's locking capacity read finds no row
  *       and throws {@link SessionNotFoundException}, which propagates
  *       unchanged.</li>
@@ -119,13 +119,6 @@ public class AssignCapacityUseCase implements PhysicalCapacityAssignmentPort {
      * opened by {@link #assign} or {@link #assignAll}.</p>
      */
     private void claimOne(UUID sessionId, UUID studentId) {
-        try {
-            assignmentWriter.assertAssignment(sessionId, studentId);
-        } catch (DataIntegrityViolationException uniqueRace) {
-            // V7 UNIQUE (session_id, student_id) — the second concurrent
-            // INSERT lost. Per design §5.3, route as CapacityBelowAssigned
-            // so api:app funnels it into the EXCEPTION residual.
-            throw new CapacityBelowAssignedException();
-        }
+        assignmentWriter.assertAssignment(sessionId, studentId);
     }
 }

@@ -3,6 +3,7 @@ package com.menta.physical.infrastructure.persistence.adapter;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -11,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import com.menta.physical.domain.exception.CapacityBelowAssignedException;
 import com.menta.physical.domain.exception.SessionNotFoundException;
+import com.menta.physical.domain.exception.StudentAlreadyAssignedException;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalCapacityAssignmentJpaEntity;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityAssignmentJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityHoldJpaRepository;
@@ -24,6 +26,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
+import org.springframework.dao.DataIntegrityViolationException;
 
 /**
  * Validates the JPA adapter that owns the
@@ -179,6 +182,36 @@ class JpaPhysicalCapacityAssignmentAdapterTest {
             adapter.assertAssignment(SESSION_UUID, STUDENT_UUID);
 
             verify(holdRepository).countActiveBySessionIdForUpdate(SESSION_UUID, NOW);
+        }
+    }
+
+    /**
+     * The UNIQUE (session_id, student_id) collision means the student already holds the session,
+     * which is not a capacity problem: it must surface as its own error so the purchase is not
+     * diagnosed as "capacity below assigned" while the session has spare spots.
+     */
+    @Nested
+    @DisplayName("A UNIQUE (session_id, student_id) collision is reported as the student already holding the session")
+    class UniqueCollision {
+
+        @Test
+        void assertAssignment_throws_StudentAlreadyAssigned_when_the_flush_hits_the_unique_constraint() {
+            stubSessionWithCapacity(12, 1);
+            doThrow(new DataIntegrityViolationException(
+                "Duplicate entry for key 'uq_physical_assignment_session_student'"))
+                .when(assignmentRepository).flush();
+
+            assertThatThrownBy(() -> adapter.assertAssignment(SESSION_UUID, STUDENT_UUID))
+                .isInstanceOf(StudentAlreadyAssignedException.class)
+                .isNotInstanceOf(CapacityBelowAssignedException.class);
+        }
+
+        @Test
+        void a_real_capacity_refusal_is_still_reported_as_capacity() {
+            stubSessionWithCapacity(1, 1);
+
+            assertThatThrownBy(() -> adapter.assertAssignment(SESSION_UUID, STUDENT_UUID))
+                .isInstanceOf(CapacityBelowAssignedException.class);
         }
     }
 }

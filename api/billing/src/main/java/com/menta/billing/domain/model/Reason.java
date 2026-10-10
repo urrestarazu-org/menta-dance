@@ -14,9 +14,17 @@ public enum Reason {
 
     /**
      * {@link com.menta.physical.domain.exception.CapacityBelowAssignedException} — capacity was reduced below already
-     * assigned spots, or a new read-time check trips.
+     * assigned spots, or a new read-time check trips. Real capacity only: a student who already holds the session
+     * is {@link #ALREADY_ASSIGNED}.
      */
     CAPACITY_BELOW_ASSIGNED,
+
+    /**
+     * {@link com.menta.physical.domain.exception.StudentAlreadyAssignedException} — the student already holds a
+     * confirmed spot in a session the purchase tried to assign (V7 {@code UNIQUE (session_id, student_id)}); the
+     * session may have spare capacity.
+     */
+    ALREADY_ASSIGNED,
 
     /** V7 {@code UNIQUE (session_id, student_id)} collision — concurrent INSERT lost to another handler. */
     UNIQUE_COLLISION,

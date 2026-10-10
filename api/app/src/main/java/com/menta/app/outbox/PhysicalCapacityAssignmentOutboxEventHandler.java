@@ -18,6 +18,8 @@ import com.menta.billing.domain.model.PaymentTarget;
 import com.menta.billing.domain.model.PhysicalCourseQuote;
 import com.menta.billing.domain.model.PurchaseType;
 import com.menta.billing.domain.model.Reason;
+import com.menta.physical.domain.exception.CapacityBelowAssignedException;
+import com.menta.physical.domain.exception.StudentAlreadyAssignedException;
 import com.menta.shared.billing.PaymentCompletedOutboxPayload;
 import com.menta.shared.physical.MultiSessionCapacityAssignmentCommand;
 import com.menta.shared.physical.SessionClaim;
@@ -34,7 +36,10 @@ import org.springframework.stereotype.Component;
  * integration). Resolves {@code billing.PhysicalPaymentCompleted} events:
  * upserts a {@code Purchase(PENDING_FULFILLMENT)}, assigns capacity via
  * Physical's IN port, and routes any {@link
- * com.menta.physical.domain.exception.CapacityBelowAssignedException} to
+ * com.menta.physical.domain.exception.CapacityBelowAssignedException} (real
+ * capacity: {@link Reason#CAPACITY_BELOW_ASSIGNED}) or {@link
+ * com.menta.physical.domain.exception.StudentAlreadyAssignedException} (the
+ * student already holds the session: {@link Reason#ALREADY_ASSIGNED}) to
  * {@link MarkPurchaseExceptionAdapter} (the EXCEPTION residual).
  *
  * <p>Unexpected exceptions propagate so the worker keeps the
@@ -179,34 +184,11 @@ public class PhysicalCapacityAssignmentOutboxEventHandler implements OutboxEvent
         com.menta.physical.application.usecase.ConvertOutcome convertOutcome;
         try {
             convertOutcome = physicalCapacityHoldPort.convertAll(payload.paymentId(), payment.getUserId());
-        } catch (com.menta.physical.domain.exception.CapacityBelowAssignedException capacityTripped) {
-            // Spec scenario (8.7): a held session vanished/oversold before
-            // conversion — all-or-nothing, zero assignment rows survive the
-            // rolled-back REQUIRES_NEW transaction. Same EXCEPTION routing,
-            // same idempotent-redelivery discipline, as the legacy path.
-            //
-            // Unlike the legacy path, createPurchaseFromPaymentEvent has not
-            // run yet for a held purchase (it only runs after a successful
-            // conversion) — markException needs a PENDING_FULFILLMENT row to
-            // transition, so build it here from the hold's own (still
-            // unconverted, since the transaction above rolled back) session
-            // set. This also keeps the pattern that already exists in
-            // MarkPurchaseExceptionUseCase honest: without a Purchase row,
-            // markException throws PaymentNotFoundException, which is not
-            // covered by that method's noRollbackFor and would otherwise
-            // mark the ambient outbox-worker transaction rollback-only.
-            List<String> heldSessionIds = physicalCapacityHoldPort.heldSessionIds(payload.paymentId()).stream()
-                .map(UUID::toString)
-                .toList();
-            purchaseCreationFromEventPort.createPurchaseFromPaymentEvent(payload, heldSessionIds);
-            try {
-                exceptionAdapter.markException(paymentId, Reason.CAPACITY_BELOW_ASSIGNED);
-            } catch (com.menta.billing.domain.exception.IllegalPurchaseStateTransitionException alreadyAssigned) {
-                log.info(
-                    "Redelivered outbox event for an already-ASSIGNED purchase paymentId={}; no-op",
-                    payload.paymentId()
-                );
-            }
+        } catch (CapacityBelowAssignedException capacityTripped) {
+            routeHeldConversionFailure(payload, paymentId, Reason.CAPACITY_BELOW_ASSIGNED);
+            return;
+        } catch (StudentAlreadyAssignedException alreadyAssigned) {
+            routeHeldConversionFailure(payload, paymentId, Reason.ALREADY_ASSIGNED);
             return;
         }
 
@@ -308,28 +290,57 @@ public class PhysicalCapacityAssignmentOutboxEventHandler implements OutboxEvent
             capacityAdapter.assignAll(cmd);
             // design A3 Data Flow: "assignAll(ordered claims) -- ok --> purchase.assigned()".
             assignedAdapter.markAssigned(paymentId);
-        } catch (com.menta.physical.domain.exception.CapacityBelowAssignedException capacityTripped) {
+        } catch (CapacityBelowAssignedException capacityTripped) {
             // Spec scenario: capacity invariant trips — Purchase flips to EXCEPTION.
-            // V7 UNIQUE race on (session_id, student_id) also rolls up here
-            // — the adapter rethrows CapacityBelowAssignedException on a V7
-            // UNIQUE collision. All-or-nothing (design A3): every insert in
-            // this set is rolled back with it, so zero partial rows survive.
-            try {
-                exceptionAdapter.markException(paymentId, Reason.CAPACITY_BELOW_ASSIGNED);
-            } catch (com.menta.billing.domain.exception.IllegalPurchaseStateTransitionException alreadyAssigned) {
-                // Idempotent redelivery (spec scenario 5): assignAll already
-                // succeeded once and marked the Purchase ASSIGNED; this second
-                // delivery re-attempts the same claims, trips the same V7
-                // UNIQUE collision on the already-owned rows, and lands here.
-                // ADR-0028 refuses ASSIGNED -> EXCEPTION on purpose (once
-                // assigned, the residual path is unreachable) — that refusal
-                // itself IS the correct, terminal outcome for a duplicate
-                // delivery, not a failure to retry. Zero rows changed.
-                log.info(
-                    "Redelivered outbox event for an already-ASSIGNED purchase paymentId={}; no-op",
-                    payload.paymentId()
-                );
-            }
+            // All-or-nothing (design A3): every insert in this set is rolled back
+            // with it, so zero partial rows survive.
+            markExceptionIdempotently(paymentId, Reason.CAPACITY_BELOW_ASSIGNED);
+        } catch (StudentAlreadyAssignedException alreadyAssigned) {
+            // V7 UNIQUE (session_id, student_id): the student already holds one of the
+            // sessions, whatever the remaining capacity (#532). Same all-or-nothing
+            // rollback, but its own reason so the EXCEPTION is not misdiagnosed as capacity.
+            markExceptionIdempotently(paymentId, Reason.ALREADY_ASSIGNED);
+        }
+    }
+
+    /**
+     * Unlike the legacy path, {@code createPurchaseFromPaymentEvent} has not run yet for a held
+     * purchase (it only runs after a successful conversion) — {@code markException} needs a
+     * {@code PENDING_FULFILLMENT} row to transition, so build it here from the hold's own (still
+     * unconverted, since the conversion transaction rolled back) session set. Without a Purchase
+     * row, {@code markException} throws {@code PaymentNotFoundException}, which is not covered by
+     * that method's {@code noRollbackFor} and would otherwise mark the ambient outbox-worker
+     * transaction rollback-only.
+     *
+     * <p>Spec scenario (8.7): a held session vanished/oversold, or the student already holds it,
+     * before conversion — all-or-nothing, zero assignment rows survive the rolled-back
+     * {@code REQUIRES_NEW} transaction. Same EXCEPTION routing and idempotent-redelivery
+     * discipline as the legacy path.</p>
+     */
+    private void routeHeldConversionFailure(
+        PaymentCompletedOutboxPayload payload, com.menta.billing.domain.model.PaymentId paymentId, Reason reason
+    ) {
+        List<String> heldSessionIds = physicalCapacityHoldPort.heldSessionIds(payload.paymentId()).stream()
+            .map(UUID::toString)
+            .toList();
+        purchaseCreationFromEventPort.createPurchaseFromPaymentEvent(payload, heldSessionIds);
+        markExceptionIdempotently(paymentId, reason);
+    }
+
+    private void markExceptionIdempotently(com.menta.billing.domain.model.PaymentId paymentId, Reason reason) {
+        try {
+            exceptionAdapter.markException(paymentId, reason);
+        } catch (com.menta.billing.domain.exception.IllegalPurchaseStateTransitionException alreadyAssigned) {
+            // Idempotent redelivery (spec scenario 5): the first delivery already marked the
+            // Purchase ASSIGNED; this second delivery re-attempts the same claims, trips the
+            // refusal again on the already-owned rows, and lands here. ADR-0028 refuses
+            // ASSIGNED -> EXCEPTION on purpose (once assigned, the residual path is
+            // unreachable) — that refusal itself IS the correct, terminal outcome for a
+            // duplicate delivery, not a failure to retry. Zero rows changed.
+            log.info(
+                "Redelivered outbox event for an already-ASSIGNED purchase paymentId={}; no-op",
+                paymentId.getValue()
+            );
         }
     }
 
