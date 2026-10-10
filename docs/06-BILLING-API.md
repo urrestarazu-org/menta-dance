@@ -199,9 +199,9 @@ Errores: `404 PHYSICAL_COURSE_PRICING_NOT_FOUND` (sin pricing publicado),
 disponibilidad (`AVAILABLE`/`UNAVAILABLE`) es sólo informativa para la UI — el
 checkout (fuera de esta historia) es quien reserva o rechaza cupo de verdad.
 
-## Cotización de clases presenciales desde la web (BFF, #365)
+## Cotizar y pagar clases presenciales desde la web (BFF, #365)
 
-Un alumno autenticado cotiza desde el BFF (plantillas Thymeleaf, sin JavaScript):
+Un alumno autenticado cotiza y paga desde el BFF (plantillas Thymeleaf, sin JavaScript):
 
 1. En `/classes/{courseId}` ve "Cotizar clases del mes" y, por cada sesión con lugares, "Cotizar
    solo esta clase" (una sesión llena no tiene botón). Un visitante anónimo ve el enlace
@@ -210,12 +210,39 @@ Un alumno autenticado cotiza desde el BFF (plantillas Thymeleaf, sin JavaScript)
    llama a `POST /api/v1/billing/physical/quotes` con el access token del alumno y muestra la
    cotización: importe en formato es-AR, sesiones del período y vencimiento (zona
    `menta.classes.display-zone`). Si `availability` es `UNAVAILABLE` muestra "Sin lugares
-   disponibles"; si hay lugares, "El pago online todavía no está disponible." (el pago llega en
-   un corte posterior). `422 NO_SCHEDULED_SESSIONS`, los `404` de precio o sesión, los `400` y
-   los errores de servicio se muestran como avisos en español con el enlace de vuelta al detalle.
+   disponibles" y no hay botón de pago; si hay lugares, el botón "Pagar con Mercado Pago".
+   `422 NO_SCHEDULED_SESSIONS`, los `404` de precio o sesión, los `400` y los errores de
+   servicio se muestran como avisos en español con el enlace de vuelta al detalle.
+3. `POST /compras` (`quoteId`, `courseId` y un `idempotencyKey` UUID que el servidor genera al
+   renderizar la cotización) llama a `POST /api/v1/billing/physical/purchases` con
+   `MERCADO_PAGO`. `409 CAPACITY_UNAVAILABLE` ("Ya no hay lugares", no se creó ningún pago) y
+   `410 PHYSICAL_COURSE_QUOTE_EXPIRED` ("La cotización venció, pedí una nueva") tienen aviso
+   propio; `400`, `429` y `5xx` se muestran con un mensaje genérico. Repetir la misma
+   `idempotencyKey` devuelve el checkout original.
+4. El BFF **guarda el `paymentId` en la sesión del servidor (Redis/Spring Session)** y redirige
+   (302) a `checkoutUrl`.
 
-El access token viaja solo en el header `Authorization` y nunca se registra en logs. Pagar con
-Mercado Pago, la página de retorno y la transferencia bancaria no forman parte de este corte.
+Decisiones:
+
+- **Sesión en vez de `state` firmado.** El BFF ya custodia una sesión de servidor por alumno,
+  así que el vínculo "este navegador pagó este id" no necesita un parámetro firmado en la URL.
+  La página de retorno (próximo corte) leerá el `paymentId` de la sesión, le preguntará el
+  estado a la API, y nunca decidirá el pago ni confiará en los parámetros de la URL. El control
+  de propiedad lo da la API (pedir el pago de otro usuario responde 404). Limitación: una sola
+  compra en curso por sesión; iniciar otra reemplaza el `paymentId` guardado.
+- **Política de `checkoutUrl`.** El navegador se redirige a lo que informe la API, así que solo
+  se sigue una URL absoluta `https` con host, o `http` si el host es `localhost`, `127.0.0.1`
+  o `[::1]` (simulador local). Cualquier otra se rechaza como servicio no disponible y no se
+  guarda nada en la sesión.
+- El access token viaja solo en el header `Authorization` y nunca se registra en logs.
+
+Configuración: `billing.mercadopago.checkout-back-url` (variable
+`BILLING_MERCADOPAGO_CHECKOUT_BACK_URL`) debe apuntar a `/compras/retorno` del BFF; en local
+`http://localhost:8080/compras/retorno` (ver `.env.example`). Vacía, la preferencia no lleva
+`back_urls`. En producción debe ser el origen público `https` del BFF.
+
+Fuera de este corte: la página `/compras/retorno` (próximo corte), mostrar las sesiones
+asignadas tras el pago y el pago por transferencia bancaria.
 
 ## Transferencias bancarias
 

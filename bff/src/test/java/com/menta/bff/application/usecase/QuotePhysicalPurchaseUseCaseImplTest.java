@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.menta.bff.application.dto.PhysicalCheckout;
 import com.menta.bff.application.dto.PhysicalCourseDetail;
 import com.menta.bff.application.dto.PhysicalPurchaseType;
 import com.menta.bff.application.dto.PhysicalQuote;
@@ -35,7 +36,7 @@ class QuotePhysicalPurchaseUseCaseImplTest {
     void setUp() {
         purchaseApi = mock(PhysicalPurchaseApiClient.class);
         catalogApi = mock(CatalogApiClient.class);
-        quoteUseCase = new QuotePhysicalPurchaseUseCaseImpl(purchaseApi, catalogApi, ZONE);
+        quoteUseCase = new QuotePhysicalPurchaseUseCaseImpl(purchaseApi, catalogApi, ZONE, () -> "key-1");
         when(catalogApi.getPhysicalCourse(COURSE_ID)).thenReturn(new PhysicalCourseDetail(
                 COURSE_ID, "Salsa en vivo", "ADVANCED", "María García", "MONDAY", "18:00", 12, List.of(
                         new PhysicalCourseDetail.Session("s-1", Instant.parse("2026-10-12T21:00:00Z"), 12, 5))));
@@ -55,6 +56,7 @@ class QuotePhysicalPurchaseUseCaseImplTest {
         PurchaseQuoteView view = quoteUseCase.execute(TOKEN, COURSE_ID, PhysicalPurchaseType.MONTHLY, null);
 
         assertThat(view.quoteId()).isEqualTo(QUOTE_ID);
+        assertThat(view.idempotencyKey()).isEqualTo("key-1");
         assertThat(view.courseId()).isEqualTo(COURSE_ID);
         assertThat(view.courseTitle()).isEqualTo("Salsa en vivo");
         assertThat(view.modalityLabel()).isEqualTo("Mensualidad: todas las clases del mes");
@@ -103,5 +105,15 @@ class QuotePhysicalPurchaseUseCaseImplTest {
                 .thenThrow(new PhysicalPurchaseApiClient.NoScheduledSessionsException("none"));
         assertThatThrownBy(() -> quoteUseCase.execute(TOKEN, COURSE_ID, PhysicalPurchaseType.MONTHLY, null))
                 .isInstanceOf(PhysicalPurchaseApiClient.NoScheduledSessionsException.class);
+    }
+
+    @Test
+    @DisplayName("paying delegates to the Billing port with the caller's token")
+    void pay() {
+        PhysicalCheckout checkout = new PhysicalCheckout("pay-1", "https://pay.example.com/c/1");
+        when(purchaseApi.createCheckout(TOKEN, QUOTE_ID, "key-1")).thenReturn(checkout);
+
+        assertThat(new PayPhysicalPurchaseUseCaseImpl(purchaseApi).execute(TOKEN, QUOTE_ID, "key-1"))
+                .isEqualTo(checkout);
     }
 }

@@ -20,7 +20,13 @@
 </ul>
 
 <p th:if="${quote.unavailable()}">Sin lugares disponibles: por ahora no podés pagar esta cotización.</p>
-<p th:unless="${quote.unavailable()}">El pago online todavía no está disponible.</p>
+
+<form th:unless="${quote.unavailable()}" th:action="@{/compras}" method="post">
+    <input type="hidden" name="quoteId" th:value="${quote.quoteId()}">
+    <input type="hidden" name="courseId" th:value="${quote.courseId()}">
+    <input type="hidden" name="idempotencyKey" th:value="${quote.idempotencyKey()}">
+    <button type="submit">Pagar con Mercado Pago</button>
+</form>
 
 <p><a th:href="@{/classes/{id}(id=${quote.courseId()})}">Volver a la clase</a></p>
 </body>

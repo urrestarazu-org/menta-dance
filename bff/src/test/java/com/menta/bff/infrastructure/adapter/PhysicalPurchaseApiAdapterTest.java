@@ -17,6 +17,7 @@ import ch.qos.logback.core.read.ListAppender;
 import com.github.tomakehurst.wiremock.http.Fault;
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
+import com.menta.bff.application.dto.PhysicalCheckout;
 import com.menta.bff.application.dto.PhysicalPurchaseType;
 import com.menta.bff.application.dto.PhysicalQuote;
 import com.menta.bff.application.port.out.BillingApiClient;
@@ -39,6 +40,8 @@ import org.springframework.web.reactive.function.client.WebClient;
 class PhysicalPurchaseApiAdapterTest {
 
     private static final String QUOTES = "/api/v1/billing/physical/quotes";
+    private static final String PURCHASES = "/api/v1/billing/physical/purchases";
+    private static final String PAYMENT_ID = "00000000-0000-0000-0000-0000000000a1";
     private static final String QUOTE_ID = "00000000-0000-0000-0000-0000000000b1";
     private static final String TOKEN = "access-token-abc";
     private static final String BEARER = "Bearer " + TOKEN;
@@ -117,7 +120,6 @@ class PhysicalPurchaseApiAdapterTest {
         "400, INVALID_REQUEST, InvalidRequestException",
         "404, PHYSICAL_COURSE_PRICING_NOT_FOUND, NotFoundException",
         "401, UNAUTHORIZED, ServiceUnavailableException",
-        "409, CAPACITY_UNAVAILABLE, ServiceUnavailableException",
         "500, INTERNAL, ServiceUnavailableException",
         "418, TEAPOT, ServiceUnavailableException"})
     void quoteErrors(int status, String code, String expected) {
@@ -125,6 +127,51 @@ class PhysicalPurchaseApiAdapterTest {
 
         assertThatThrownBy(() -> adapter.createQuote(TOKEN, "course-1", PhysicalPurchaseType.MONTHLY, null))
                 .isInstanceOf(RuntimeException.class).hasMessageNotContaining(TOKEN)
+                .satisfies(e -> assertThat(e.getClass().getSimpleName()).isEqualTo(expected));
+    }
+
+    @Test
+    @DisplayName("a checkout sends the quote, Mercado Pago and the idempotency key, and returns the checkout")
+    void checkout() {
+        stubFor(post(urlEqualTo(PURCHASES)).willReturn(aResponse().withStatus(201)
+                .withHeader("Content-Type", "application/json")
+                .withBody(
+                        """
+                        {"paymentId": "%s", "quoteId": "%s", "status": "PENDING", "providerPreferenceId": "pref-1",
+                         "checkoutUrl": "https://pay.example.com/checkout/1", "externalReference": "ref-1",
+                         "bankTransferInstructions": null}
+                        """.formatted(PAYMENT_ID, QUOTE_ID))));
+
+        PhysicalCheckout checkout = adapter.createCheckout(TOKEN, QUOTE_ID, "key-1");
+
+        assertThat(checkout).isEqualTo(new PhysicalCheckout(PAYMENT_ID, "https://pay.example.com/checkout/1"));
+        verify(postRequestedFor(urlEqualTo(PURCHASES)).withHeader("Authorization", equalTo(BEARER))
+                .withRequestBody(matchingJsonPath("$.quoteId", equalTo(QUOTE_ID)))
+                .withRequestBody(matchingJsonPath("$.paymentMethod", equalTo("MERCADO_PAGO")))
+                .withRequestBody(matchingJsonPath("$.idempotencyKey", equalTo("key-1"))));
+    }
+
+    @Test
+    @DisplayName("a checkout answer without a checkout URL is treated as unavailable")
+    void checkoutWithoutUrl() {
+        stubFor(post(urlEqualTo(PURCHASES)).willReturn(aResponse().withStatus(201)
+                .withHeader("Content-Type", "application/json").withBody("{\"paymentId\": \"" + PAYMENT_ID + "\"}")));
+
+        assertThatThrownBy(() -> adapter.createCheckout(TOKEN, QUOTE_ID, "key-1"))
+                .isInstanceOf(BillingApiClient.ServiceUnavailableException.class);
+    }
+
+    @ParameterizedTest(name = "checkout {0} -> {2}")
+    @CsvSource({
+        "409, CAPACITY_UNAVAILABLE, CapacityUnavailableException",
+        "410, PHYSICAL_COURSE_QUOTE_EXPIRED, QuoteExpiredException",
+        "400, INVALID_REQUEST, InvalidRequestException",
+        "503, PAYMENT_PREFERENCE_UNAVAILABLE, ServiceUnavailableException",
+        "401, UNAUTHORIZED, ServiceUnavailableException"})
+    void checkoutErrors(int status, String code, String expected) {
+        stubStatus(post(urlEqualTo(PURCHASES)), status, code);
+
+        assertThatThrownBy(() -> adapter.createCheckout(TOKEN, QUOTE_ID, "key-1"))
                 .satisfies(e -> assertThat(e.getClass().getSimpleName()).isEqualTo(expected));
     }
 
@@ -170,6 +217,9 @@ class PhysicalPurchaseApiAdapterTest {
         stubFor(post(urlEqualTo(QUOTES)).willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)));
         assertThatThrownBy(() -> adapter.createQuote(TOKEN, "c", PhysicalPurchaseType.MONTHLY, null))
                 .isInstanceOf(RuntimeException.class);
+
+        stubStatus(post(urlEqualTo(PURCHASES)), 418, "TEAPOT");
+        assertThatThrownBy(() -> adapter.createCheckout(TOKEN, QUOTE_ID, "k")).isInstanceOf(RuntimeException.class);
 
         assertThat(logs.list).isNotEmpty().allSatisfy(event -> assertThat(event.getFormattedMessage())
                 .doesNotContain(TOKEN).doesNotContain("Authorization"));

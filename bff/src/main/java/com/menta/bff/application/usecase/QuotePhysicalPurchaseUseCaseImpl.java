@@ -9,6 +9,7 @@ import java.text.NumberFormat;
 import java.time.ZoneId;
 import java.util.Currency;
 import java.util.Locale;
+import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -24,6 +25,7 @@ public class QuotePhysicalPurchaseUseCaseImpl implements QuotePhysicalPurchaseUs
     private final PhysicalPurchaseApiClient purchaseApiClient;
     private final CatalogApiClient catalogApiClient;
     private final ZoneId displayZone;
+    private final Supplier<String> idempotencyKeys;
 
     @Override
     public PurchaseQuoteView execute(
@@ -34,7 +36,8 @@ public class QuotePhysicalPurchaseUseCaseImpl implements QuotePhysicalPurchaseUs
         return new PurchaseQuoteView(
                 quote.id(), courseId, course.title(), modality(quote.purchaseType()),
                 amount(quote), quote.scheduledSessionCount(), sessionLabel(course, quote),
-                ClassLabels.moment(quote.expiresAt(), displayZone), quote.unavailable());
+                ClassLabels.moment(quote.expiresAt(), displayZone), quote.unavailable(),
+                idempotencyKeys.get());
     }
 
     private static String modality(PhysicalPurchaseType type) {

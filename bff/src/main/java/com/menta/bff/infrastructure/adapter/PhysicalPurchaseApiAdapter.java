@@ -1,6 +1,7 @@
 package com.menta.bff.infrastructure.adapter;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.menta.bff.application.dto.PhysicalCheckout;
 import com.menta.bff.application.dto.PhysicalPurchaseType;
 import com.menta.bff.application.dto.PhysicalQuote;
 import com.menta.bff.application.port.out.BillingApiClient;
@@ -19,9 +20,9 @@ import reactor.core.publisher.Mono;
 
 /**
  * WebClient adapter for the authenticated physical-class purchase endpoints of
- * the Billing API (so far, the quote).
+ * the Billing API (quote and Mercado Pago checkout).
  *
- * <p>The call sends {@code Authorization: Bearer <token>}. The token only ever
+ * <p>Each call sends {@code Authorization: Bearer <token>}. The token only ever
  * travels in that header: it is never put in a log line or an exception message,
  * and neither are request or response bodies. Failures follow the other
  * adapters: the documented business statuses become typed exceptions, a 404 a
@@ -38,6 +39,8 @@ import reactor.core.publisher.Mono;
 public class PhysicalPurchaseApiAdapter implements PhysicalPurchaseApiClient {
 
     private static final String QUOTES = "/api/v1/billing/physical/quotes";
+    private static final String PURCHASES = "/api/v1/billing/physical/purchases";
+    private static final String PAYMENT_METHOD = "MERCADO_PAGO";
     private static final String NO_SCHEDULED_SESSIONS = "NO_SCHEDULED_SESSIONS";
 
     private final WebClient webClient;
@@ -62,6 +65,18 @@ public class PhysicalPurchaseApiAdapter implements PhysicalPurchaseApiClient {
         return new PhysicalQuote(quote.id(), purchaseType, quote.scheduledSessionCount(),
                 quote.selectedSessionId(), quote.amount(), quote.currency(),
                 "UNAVAILABLE".equals(quote.availability()), quote.expiresAt());
+    }
+
+    @Override
+    public PhysicalCheckout createCheckout(String accessToken, String quoteId, String idempotencyKey) {
+        CheckoutWire checkout = execute("checkout",
+                webClient.post().uri(PURCHASES).header(HttpHeaders.AUTHORIZATION, bearer(accessToken))
+                        .bodyValue(new CheckoutRequest(quoteId, PAYMENT_METHOD, idempotencyKey)),
+                CheckoutWire.class);
+        if (checkout.paymentId() == null || checkout.checkoutUrl() == null) {
+            throw unavailable("checkout response is incomplete");
+        }
+        return new PhysicalCheckout(checkout.paymentId(), checkout.checkoutUrl());
     }
 
     private <T> T execute(String operation, WebClient.RequestHeadersSpec<?> request, Class<T> bodyType) {
@@ -98,6 +113,8 @@ public class PhysicalPurchaseApiAdapter implements PhysicalPurchaseApiClient {
     private RuntimeException mapError(int status, String code, Long retryAfter) {
         return switch (status) {
             case 400 -> new InvalidRequestException("Billing API rejected the request");
+            case 409 -> new CapacityUnavailableException("No capacity for the quote");
+            case 410 -> new QuoteExpiredException("Quote expired or unknown");
             case 404 -> new BillingApiClient.NotFoundException("Billing resource not found");
             case 422 -> NO_SCHEDULED_SESSIONS.equals(code)
                     ? new NoScheduledSessionsException("No scheduled sessions in the quoted period")
@@ -130,6 +147,9 @@ public class PhysicalPurchaseApiAdapter implements PhysicalPurchaseApiClient {
     private record QuoteRequest(String courseId, String purchaseType, String selectedSessionId) {
     }
 
+    private record CheckoutRequest(String quoteId, String paymentMethod, String idempotencyKey) {
+    }
+
     private record QuoteWire(
             String id,
             int scheduledSessionCount,
@@ -138,6 +158,9 @@ public class PhysicalPurchaseApiAdapter implements PhysicalPurchaseApiClient {
             String currency,
             String availability,
             Instant expiresAt) {
+    }
+
+    private record CheckoutWire(String paymentId, String checkoutUrl) {
     }
 
     private record ProblemWire(String code) {

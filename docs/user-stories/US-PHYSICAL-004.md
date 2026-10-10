@@ -87,3 +87,12 @@ aplica unicidad por Payment/sesión y devuelve CapacityAssignments tipadas.
 - [ ] Pruebas de expiración y conversión idempotente del hold técnico.
 - [ ] Ninguna asistencia queda habilitada sin una Purchase `ASSIGNED`.
 - [ ] Contratos OpenAPI de Billing y Physical actualizados.
+
+## Estado de implementación
+
+- **Implementado (BFF web, #365):** el alumno puede cotizar la mensualidad o una sesión individual y pagar con
+  Mercado Pago desde la web; los casos de falta de cupo (`409 CAPACITY_UNAVAILABLE`) y de cotización vencida
+  (`410`) tienen aviso propio. Ver
+  [06-BILLING-API.md](../06-BILLING-API.md#cotizar-y-pagar-clases-presenciales-desde-la-web-bff-365).
+- **Pendiente (slices siguientes):** la página de retorno, mostrar las sesiones asignadas después del pago y el
+  pago por transferencia bancaria.
