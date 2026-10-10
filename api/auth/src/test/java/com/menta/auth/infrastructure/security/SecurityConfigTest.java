@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentMatchers;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -175,6 +176,39 @@ class SecurityConfigTest {
             "/api/v1/admin/physical/attendance/00000000-0000-0000-0000-000000000001"
         ).param("month", "2026-09").with(user("admin").roles("ADMIN")))
             .andExpect(status().isNotFound());
+    }
+
+    /**
+     * #356. Before this matcher existed, this path fell through to
+     * {@code anyRequest().access(roleAuthorizationManager)}, which grants unmapped paths by
+     * default (see the class Javadoc) — an anonymous caller would NOT have been rejected here.
+     */
+    @Test
+    void an_unauthenticated_get_of_the_own_physical_sessions_route_is_rejected() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get("/api/v1/physical/sessions/me"))
+            .andExpect(status().isUnauthorized());
+    }
+
+    /** #356. The listing is the student's own: STUDENT reaches the (unmapped) dispatcher, not 401/403. */
+    @Test
+    void an_authenticated_student_get_of_the_own_physical_sessions_route_passes_the_security_layer() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get("/api/v1/physical/sessions/me").with(user("student").roles("STUDENT")))
+            .andExpect(status().isNotFound());
+    }
+
+    /** #356. Every other role is authenticated but not allowed: {@code 403}, never {@code 401}. */
+    @ParameterizedTest
+    @ValueSource(strings = {"ADMIN", "INSTRUCTOR", "RECEPTIONIST"})
+    void an_authenticated_non_student_get_of_the_own_physical_sessions_route_is_forbidden(String role)
+        throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get("/api/v1/physical/sessions/me").with(user("someone").roles(role)))
+            .andExpect(status().isForbidden());
     }
 
     /**

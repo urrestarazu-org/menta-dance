@@ -71,6 +71,11 @@ tags:
       endpoint también acepta un check-in MANUAL iniciado por un
       RECEPTIONIST/ADMIN, con su propio orden de validación y su propia regla
       de "sesión vigente" (sólo `CANCELLED` bloquea, a diferencia de QR).
+  - name: Mis sesiones
+    description: |
+      Consulta self-service del alumno: las sesiones próximas a las que tiene
+      derecho (#356). Alimenta la pantalla desde la que se pide el QR de
+      acceso (US-PHYSICAL-001).
   - name: Historial de asistencia
     description: |
       Lectura del historial de asistencia mensual (#39, US-PHYSICAL-002).
@@ -373,6 +378,55 @@ paths:
                     status: 409
                     detail: Session has already occurred and cannot be modified.
                     code: SESSION_ALREADY_OCCURRED
+
+  /api/v1/physical/sessions/me:
+    get:
+      tags: [Mis sesiones]
+      summary: Listar las propias sesiones próximas con cupo confirmado
+      description: |
+        Sesiones donde el alumno autenticado tiene una asignación de cupo
+        confirmada (`physical_capacity_assignments`), ordenadas por
+        `scheduledAt` ascendente (#356, US-PHYSICAL-001). Sólo rol `STUDENT`:
+        cualquier otro rol recibe `403`.
+
+        **Rango acotado.** Desde el inicio del día actual en la zona horaria
+        de la academia (`physical.attendance.zone-id`, por defecto
+        `America/Argentina/Buenos_Aires`) —así la clase de hoy sigue
+        apareciendo aunque ya haya empezado— hasta `physical.sessions.window-days`
+        días después (por defecto **60**), intervalo semiabierto `[from, to)`.
+        El rango efectivo se devuelve en `from` y `to`. No hay paginación.
+        Una sesión fuera del rango no se lista aunque tenga asignación.
+
+        **Qué cuenta.** Sólo asignaciones confirmadas: los holds técnicos de
+        capacidad y las compras pendientes de pago no aparecen. Las sesiones
+        canceladas (`CANCELLED`) se omiten, porque el check-in las rechaza.
+        Sin sesiones responde `200` con `sessions: []`, nunca `404`.
+
+        **`checkInOpen`.** `true` si ahora mismo cae dentro de la ventana de
+        check-in de la sesión, la misma que exige `POST .../access-qr` y la
+        redención del QR (`app.qr.session-window-before`/`-after`, por defecto
+        30 min antes y 2 h después del inicio, extremos incluidos). Es una foto
+        del instante de la consulta; el cliente no debe cachearla.
+
+        El id del alumno sale siempre del token — este endpoint no tiene
+        parámetro `studentId`; si se envía uno, se ignora.
+
+        Pendiente: la sala o ubicación y el tipo de asignación
+        (mensual/individual) no se exponen porque el modelo de physical no los
+        persiste hoy (la sesión no tiene sala y la asignación no guarda el
+        tipo de compra).
+      operationId: listOwnPhysicalSessions
+      responses:
+        '200':
+          description: Sesiones próximas del alumno.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MySessionsResponse'
+        '401':
+          description: Sin credencial de autenticación.
+        '403':
+          description: El rol del token no es `STUDENT`.
 
   /api/v1/physical/sessions/{sessionId}/access-qr:
     post:
@@ -1304,6 +1358,47 @@ components:
         kind:
           type: string
           enum: [QR, MANUAL]
+
+    MySessionsResponse:
+      type: object
+      required: [from, to, sessions]
+      properties:
+        from:
+          type: string
+          format: date-time
+          description: Inicio del rango (inclusive), el comienzo del día actual en la zona de la academia.
+        to:
+          type: string
+          format: date-time
+          description: Fin del rango (exclusivo), `window-days` días después de `from`.
+        sessions:
+          type: array
+          description: Ordenadas por `scheduledAt` ascendente.
+          items:
+            $ref: '#/components/schemas/MySessionResponse'
+
+    MySessionResponse:
+      type: object
+      required: [sessionId, courseId, courseName, instructorName, scheduledAt, checkInOpen]
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+          description: Es el `{sessionId}` que espera `POST /api/v1/physical/sessions/{sessionId}/access-qr`.
+        courseId:
+          type: string
+          format: uuid
+        courseName:
+          type: string
+        instructorName:
+          type: string
+        scheduledAt:
+          type: string
+          format: date-time
+          description: Inicio de la sesión, en UTC.
+        checkInOpen:
+          type: boolean
+          description: Si la ventana de check-in está abierta en el instante de la consulta.
 
     AttendanceHistoryResponse:
       type: object
