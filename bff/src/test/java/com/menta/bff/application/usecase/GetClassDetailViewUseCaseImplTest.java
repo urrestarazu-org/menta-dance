@@ -48,6 +48,7 @@ class GetClassDetailViewUseCaseImplTest {
         ClassDetailView view = useCase.execute("p-1");
 
         assertThat(view.unavailable()).isFalse();
+        assertThat(view.courseId()).isEqualTo("p-1");
         assertThat(view.title()).isEqualTo("Salsa en vivo");
         assertThat(view.levelLabel()).isEqualTo("Avanzado");
         assertThat(view.professorName()).isEqualTo("María García");
@@ -57,6 +58,8 @@ class GetClassDetailViewUseCaseImplTest {
                 "lunes 12 de octubre a las 18:00",
                 "martes 13 de octubre a las 22:30",
                 "lunes 19 de octubre a las 18:00");
+        assertThat(view.sessions()).extracting(ClassDetailView.SessionRow::sessionId)
+                .containsExactly("s-1", "s-2", "s-3");
         assertThat(view.sessions()).extracting(ClassDetailView.SessionRow::spotsLabel)
                 .containsExactly("5 lugares libres", "1 lugar libre", "Completo");
         assertThat(view.sessions()).extracting(ClassDetailView.SessionRow::full)

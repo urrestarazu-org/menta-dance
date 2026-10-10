@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security" lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -25,8 +25,20 @@
             <span th:text="${slot.whenLabel()}">lunes 12 de octubre a las 18:00</span> ·
             <strong th:if="${slot.full()}" th:text="${slot.spotsLabel()}">Completo</strong>
             <span th:unless="${slot.full()}" th:text="${slot.spotsLabel()}">5 lugares libres</span>
+            <form sec:authorize="isAuthenticated()" th:unless="${slot.full()}"
+                  th:action="@{/classes/{id}/cotizar(id=${course.courseId()})}" method="post">
+                <input type="hidden" name="purchaseType" value="INDIVIDUAL">
+                <input type="hidden" name="selectedSessionId" th:value="${slot.sessionId()}">
+                <button type="submit">Cotizar solo esta clase</button>
+            </form>
         </li>
     </ul>
+
+    <form sec:authorize="isAuthenticated()" th:action="@{/classes/{id}/cotizar(id=${course.courseId()})}" method="post">
+        <input type="hidden" name="purchaseType" value="MONTHLY">
+        <button type="submit">Cotizar clases del mes</button>
+    </form>
+    <p sec:authorize="!isAuthenticated()"><a th:href="@{/login}">Ingresá para comprar</a></p>
 </div>
 </body>
 </html>

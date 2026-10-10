@@ -199,6 +199,24 @@ Errores: `404 PHYSICAL_COURSE_PRICING_NOT_FOUND` (sin pricing publicado),
 disponibilidad (`AVAILABLE`/`UNAVAILABLE`) es sólo informativa para la UI — el
 checkout (fuera de esta historia) es quien reserva o rechaza cupo de verdad.
 
+## Cotización de clases presenciales desde la web (BFF, #365)
+
+Un alumno autenticado cotiza desde el BFF (plantillas Thymeleaf, sin JavaScript):
+
+1. En `/classes/{courseId}` ve "Cotizar clases del mes" y, por cada sesión con lugares, "Cotizar
+   solo esta clase" (una sesión llena no tiene botón). Un visitante anónimo ve el enlace
+   "Ingresá para comprar" hacia `/login`.
+2. `POST /classes/{courseId}/cotizar` (`purchaseType`, y `selectedSessionId` si es individual)
+   llama a `POST /api/v1/billing/physical/quotes` con el access token del alumno y muestra la
+   cotización: importe en formato es-AR, sesiones del período y vencimiento (zona
+   `menta.classes.display-zone`). Si `availability` es `UNAVAILABLE` muestra "Sin lugares
+   disponibles"; si hay lugares, "El pago online todavía no está disponible." (el pago llega en
+   un corte posterior). `422 NO_SCHEDULED_SESSIONS`, los `404` de precio o sesión, los `400` y
+   los errores de servicio se muestran como avisos en español con el enlace de vuelta al detalle.
+
+El access token viaja solo en el header `Authorization` y nunca se registra en logs. Pagar con
+Mercado Pago, la página de retorno y la transferencia bancaria no forman parte de este corte.
+
 ## Transferencias bancarias
 
 Una transferencia crea `PENDING/AWAITING_MANUAL_VERIFICATION` y recibe un comprobante privado.
