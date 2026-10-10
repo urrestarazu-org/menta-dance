@@ -92,6 +92,7 @@
 
 * **Endpoints Involucrados:**
   * `POST /api/v1/auth/reset-password`
+* **Flujo web (BFF):** `GET /restablecer-contrasena/{token}` muestra el formulario, `POST /restablecer-contrasena` envía el token en el cuerpo y, tras el éxito, redirige a `/login?reset`. Un token vencido o ya usado muestra un mensaje con el enlace a `/recuperar-contrasena`.
 * **Request Body:**
 
   ```json

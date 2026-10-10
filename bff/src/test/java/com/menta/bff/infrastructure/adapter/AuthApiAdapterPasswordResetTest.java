@@ -11,6 +11,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.verify;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.github.tomakehurst.wiremock.http.Fault;
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import com.menta.bff.application.dto.RequestPasswordResetCommand;
@@ -20,17 +21,22 @@ import java.time.Duration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.web.reactive.function.client.WebClient;
 
 /**
- * Contract of the password recovery request endpoint as seen through {@link AuthApiAdapter}.
+ * Contract of the password recovery endpoints as seen through {@link AuthApiAdapter}.
  */
 @WireMockTest
-@DisplayName("AuthApiAdapter - password recovery request")
+@DisplayName("AuthApiAdapter - password recovery")
 class AuthApiAdapterPasswordResetTest {
 
     private static final String FORGOT = "/api/v1/auth/forgot-password";
+    private static final String RESET = "/api/v1/auth/reset-password";
     private static final String EMAIL = "user@example.com";
+    private static final String TOKEN = "reset-token-abc";
+    private static final String PASSWORD = "Password1";
     private static final RequestPasswordResetCommand COMMAND = new RequestPasswordResetCommand(EMAIL, "203.0.113.9");
 
     private AuthApiAdapter adapter;
@@ -78,13 +84,69 @@ class AuthApiAdapterPasswordResetTest {
     }
 
     @Test
-    @DisplayName("forgot-password degrades a transport error to unavailable without leaking the email")
-    void forgotTransportErrorIsUnavailable() {
-        stubFor(post(urlEqualTo(FORGOT)).willReturn(aResponse().withFault(
-                com.github.tomakehurst.wiremock.http.Fault.CONNECTION_RESET_BY_PEER)));
+    @DisplayName("reset-password sends the token and the new password in the JSON body")
+    void resetSendsTokenAndPasswordInTheBody() {
+        stub(RESET, 200, "");
 
-        assertThatThrownBy(() -> adapter.requestPasswordReset(COMMAND))
+        adapter.resetPassword(TOKEN, PASSWORD);
+
+        verify(postRequestedFor(urlEqualTo(RESET))
+                .withRequestBody(matchingJsonPath("$.token", equalTo(TOKEN)))
+                .withRequestBody(matchingJsonPath("$.newPassword", equalTo(PASSWORD))));
+    }
+
+    @ParameterizedTest(name = "{0} {1} is an unusable token")
+    @CsvSource({"404,PASSWORD_RESET_TOKEN_NOT_FOUND", "410,PASSWORD_RESET_TOKEN_EXPIRED",
+        "410,PASSWORD_RESET_TOKEN_ALREADY_USED"})
+    void resetMapsUnusableTokens(int status, String code) {
+        stub(RESET, status, "{\"code\":\"" + code + "\"}");
+
+        assertThatThrownBy(() -> adapter.resetPassword(TOKEN, PASSWORD))
+                .isInstanceOf(AuthApiClient.InvalidResetTokenException.class)
+                .hasMessageNotContaining(TOKEN);
+    }
+
+    @Test
+    @DisplayName("reset-password tells a weak password from the current one, and from a malformed request")
+    void resetMapsPasswordRejections() {
+        stub(RESET, 400, "{\"code\":\"WEAK_PASSWORD\",\"detail\":\"x\"}");
+        assertThatThrownBy(() -> adapter.resetPassword(TOKEN, PASSWORD))
+                .isInstanceOfSatisfying(AuthApiClient.PasswordRejectedException.class,
+                        e -> assertThat(e.reason()).isEqualTo(AuthApiClient.PasswordRejectedException.Reason.WEAK));
+
+        stub(RESET, 400, "{\"code\":\"SAME_PASSWORD\"}");
+        assertThatThrownBy(() -> adapter.resetPassword(TOKEN, PASSWORD))
+                .isInstanceOfSatisfying(AuthApiClient.PasswordRejectedException.class,
+                        e -> assertThat(e.reason()).isEqualTo(
+                                AuthApiClient.PasswordRejectedException.Reason.SAME_AS_CURRENT));
+
+        stub(RESET, 400, "{\"code\":\"INVALID_REQUEST\"}");
+        assertThatThrownBy(() -> adapter.resetPassword(TOKEN, PASSWORD))
+                .isInstanceOf(AuthApiClient.InvalidRequestException.class);
+
+        stub(RESET, 400, "not json");
+        assertThatThrownBy(() -> adapter.resetPassword(TOKEN, PASSWORD))
+                .isInstanceOf(AuthApiClient.InvalidRequestException.class);
+
+        stub(RESET, 400, "");
+        assertThatThrownBy(() -> adapter.resetPassword(TOKEN, PASSWORD))
+                .isInstanceOf(AuthApiClient.InvalidRequestException.class);
+    }
+
+    @Test
+    @DisplayName("reset-password maps 429 and degrades unknown statuses and transport errors to unavailable")
+    void resetMapsTheRest() {
+        stubFor(post(urlEqualTo(RESET)).willReturn(aResponse().withStatus(429).withHeader("Retry-After", "30")));
+        assertThatThrownBy(() -> adapter.resetPassword(TOKEN, PASSWORD))
+                .isInstanceOf(AuthApiClient.RateLimitedException.class);
+
+        stub(RESET, 500, "");
+        assertThatThrownBy(() -> adapter.resetPassword(TOKEN, PASSWORD))
+                .isInstanceOf(AuthApiClient.ServiceUnavailableException.class);
+
+        stubFor(post(urlEqualTo(RESET)).willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)));
+        assertThatThrownBy(() -> adapter.resetPassword(TOKEN, PASSWORD))
                 .isInstanceOf(AuthApiClient.ServiceUnavailableException.class)
-                .hasMessageNotContaining(EMAIL);
+                .hasMessageNotContaining(TOKEN).hasMessageNotContaining(PASSWORD);
     }
 }

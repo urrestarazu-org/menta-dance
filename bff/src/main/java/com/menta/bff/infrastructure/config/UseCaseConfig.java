@@ -32,6 +32,8 @@ import com.menta.bff.application.usecase.RequestPasswordResetUseCase;
 import com.menta.bff.application.usecase.RequestPasswordResetUseCaseImpl;
 import com.menta.bff.application.usecase.ResendActivationUseCase;
 import com.menta.bff.application.usecase.ResendActivationUseCaseImpl;
+import com.menta.bff.application.usecase.ResetPasswordUseCase;
+import com.menta.bff.application.usecase.ResetPasswordUseCaseImpl;
 import com.menta.bff.infrastructure.web.filter.TokenRefreshFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -75,6 +77,11 @@ public class UseCaseConfig {
     @Bean
     public RequestPasswordResetUseCase requestPasswordResetUseCase(AuthApiClient authApiClient) {
         return new RequestPasswordResetUseCaseImpl(authApiClient);
+    }
+
+    @Bean
+    public ResetPasswordUseCase resetPasswordUseCase(AuthApiClient authApiClient) {
+        return new ResetPasswordUseCaseImpl(authApiClient);
     }
 
     @Bean

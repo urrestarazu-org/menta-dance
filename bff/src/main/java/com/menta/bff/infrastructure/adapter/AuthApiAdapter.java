@@ -10,6 +10,8 @@ import com.menta.bff.infrastructure.config.AuthProperties;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
@@ -45,6 +47,8 @@ public class AuthApiAdapter implements AuthApiClient {
     private static final String RESEND_ACTIVATION_ENDPOINT = "/api/v1/auth/resend-activation";
 
     private static final String FORGOT_PASSWORD_ENDPOINT = "/api/v1/auth/forgot-password";
+    private static final String RESET_PASSWORD_ENDPOINT = "/api/v1/auth/reset-password";
+    private static final Pattern PROBLEM_CODE = Pattern.compile("\"code\"\\s*:\\s*\"([A-Z_]{1,64})\"");
 
     private static final String FORWARDED_FOR_HEADER = "X-Forwarded-For";
 
@@ -265,12 +269,31 @@ public class AuthApiAdapter implements AuthApiClient {
         }
     }
 
+    @Override
+    public void resetPassword(String token, String newPassword) {
+        Objects.requireNonNull(token, "token cannot be null");
+        Objects.requireNonNull(newPassword, "newPassword cannot be null");
+
+        log.debug("Calling Auth API reset-password endpoint");
+
+        ApiReply reply = send(webClient.post()
+                .uri(RESET_PASSWORD_ENDPOINT)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("token", token, "newPassword", newPassword)), "reset-password");
+
+        if (reply.status() != HttpStatus.OK.value()) {
+            throw resetFailure(reply);
+        }
+    }
+
     /**
-     * Sends a request and keeps only what the callers need: status and Retry-After.
+     * Sends a request and keeps only what the callers need: status, Retry-After and, for a 400,
+     * the problem {@code code}.
      *
      * <p>The body is released unread — the public account endpoints answer with empty
      * bodies on success and RFC 9457 problems on failure, and neither is ever shown to
-     * the browser. Transport errors are reported by class only: their message can carry
+     * the browser. Only the {@code code} of a 400 is read, so password recovery can tell a weak
+     * password from a malformed request. Transport errors are reported by class only: their message can carry
      * the request URI, which for activation contains the single-use token.
      * </p>
      */
@@ -278,9 +301,9 @@ public class AuthApiAdapter implements AuthApiClient {
         ApiReply reply;
         try {
             reply = request
-                    .exchangeToMono(response -> response.releaseBody().thenReturn(new ApiReply(
+                    .exchangeToMono(response -> problemCode(response).map(code -> new ApiReply(
                             response.statusCode().value(),
-                            response.headers().asHttpHeaders().getFirst(HttpHeaders.RETRY_AFTER))))
+                            response.headers().asHttpHeaders().getFirst(HttpHeaders.RETRY_AFTER), code)))
                     .timeout(authProperties.getTimeout())
                     .block();
         } catch (RuntimeException e) {
@@ -291,6 +314,19 @@ public class AuthApiAdapter implements AuthApiClient {
             throw new ServiceUnavailableException("Auth API returned null response");
         }
         return reply;
+    }
+
+    private static Mono<String> problemCode(ClientResponse response) {
+        if (response.statusCode().value() != HttpStatus.BAD_REQUEST.value()) {
+            return response.releaseBody().thenReturn("");
+        }
+        return response.bodyToMono(String.class)
+                .map(body -> {
+                    Matcher matcher = PROBLEM_CODE.matcher(body);
+                    return matcher.find() ? matcher.group(1) : "";
+                })
+                .defaultIfEmpty("")
+                .onErrorReturn("");
     }
 
     /**
@@ -321,6 +357,25 @@ public class AuthApiAdapter implements AuthApiClient {
         return failure(reply, operation);
     }
 
+    /**
+     * Password reset tells its causes apart: 404/410 are verdicts on the token and a 400 may be
+     * a verdict on the password; everything else follows {@link #failure}.
+     */
+    private static RuntimeException resetFailure(ApiReply reply) {
+        int status = reply.status();
+        if (status == HttpStatus.NOT_FOUND.value() || status == HttpStatus.GONE.value()) {
+            log.warn("Auth API reset-password rejected the reset token");
+            return new InvalidResetTokenException("Auth API rejected the password reset token");
+        }
+        if (status == HttpStatus.BAD_REQUEST.value() && "WEAK_PASSWORD".equals(reply.code())) {
+            return new PasswordRejectedException(PasswordRejectedException.Reason.WEAK);
+        }
+        if (status == HttpStatus.BAD_REQUEST.value() && "SAME_PASSWORD".equals(reply.code())) {
+            return new PasswordRejectedException(PasswordRejectedException.Reason.SAME_AS_CURRENT);
+        }
+        return failure(reply, "reset-password");
+    }
+
     private static Duration parseRetryAfter(String value) {
         if (value == null) {
             return null;
@@ -334,7 +389,7 @@ public class AuthApiAdapter implements AuthApiClient {
         }
     }
 
-    private record ApiReply(int status, String retryAfter) {
+    private record ApiReply(int status, String retryAfter, String code) {
     }
 
     /**

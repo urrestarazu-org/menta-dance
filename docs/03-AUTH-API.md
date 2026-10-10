@@ -59,6 +59,13 @@ a la API sino a la pantalla del BFF `GET /activar/{token}`
 token con `GET /activate/{token}` y muestra el botón «Activar cuenta», que hace
 `POST /activar` al BFF; el BFF llama a `POST /activate` con el token en el cuerpo
 y redirige a `/cuenta-activada`, de modo que el token deja de estar en la URL.
+La recuperación de contraseña sigue el mismo criterio: el correo enlaza a la
+pantalla del BFF `GET /restablecer-contrasena/{token}`
+(`auth.password-reset.link-path`, por defecto `/restablecer-contrasena/`), que
+muestra el formulario de nueva contraseña; el token viaja de vuelta en el cuerpo
+de `POST /restablecer-contrasena` y, si todo sale bien, el BFF redirige a
+`/login?reset`. La API no tiene un endpoint para validar el token de reset, así
+que la pantalla no lo comprueba antes de mostrar el formulario.
 Registro duplicado conserva
 el mismo `202` vacío; nunca se devuelve el email, ID o estado de la cuenta.
 `resend-activation` también responde idénticamente para email inexistente,
@@ -153,12 +160,12 @@ Un lector QR se autentica como dispositivo técnico y no es un rol.
 Nunca se registran passwords, JWT, refresh tokens, cookies ni encabezados de
 autorización. Tampoco se registra el token de activación. La API redacciona su URI en los
 access logs como `/api/v1/auth/activate/[REDACTED]`. El BFF no registra URIs de
-petición y sus páginas con el token (`/activar/{token}` y el reintento de
-`POST /activar`) responden `Cache-Control: no-store` y `Referrer-Policy:
+petición y sus páginas con el token (`/activar/{token}`, `/restablecer-contrasena/{token}`
+y el reintento de sus `POST`) responden `Cache-Control: no-store` y `Referrer-Policy:
 no-referrer`. Los access logs de NGINX sí registran la línea de petición del
-enlace del correo (`GET /activar/{token}`), igual que antes registraban el
-`GET /api/v1/auth/activate/{token}` de la API; redactarlos en el proxy es un
-seguimiento pendiente. Los eventos
+enlace del correo (`GET /activar/{token}` y `GET /restablecer-contrasena/{token}`),
+igual que antes registraban el `GET /api/v1/auth/activate/{token}` de la API;
+redactarlos en el proxy es un seguimiento pendiente (#501). Los eventos
 de login, refresh, revocación, reutilización y denegación incluyen
 `correlationId`, usuario/dispositivo cuando corresponda y resultado.
 

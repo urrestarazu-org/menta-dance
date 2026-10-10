@@ -17,6 +17,8 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -38,7 +40,7 @@ class SpringMailPasswordResetNotificationAdapterTest {
         when(deliveryCipher.decrypt(any(DeliveryEnvelope.class)))
             .thenReturn("student@example.com|raw-reset-token");
         SpringMailPasswordResetNotificationAdapter adapter = new SpringMailPasswordResetNotificationAdapter(
-            repository, deliveryCipher, mailSender, "https://menta.example", "no-reply@menta.example"
+            repository, deliveryCipher, mailSender, "https://menta.example", "/restablecer-contrasena/", "no-reply@menta.example"
         );
 
         adapter.sendPasswordResetEmail(TOKEN_ID);
@@ -48,7 +50,7 @@ class SpringMailPasswordResetNotificationAdapterTest {
         assertThat(message.getValue().getTo()).containsExactly("student@example.com");
         assertThat(message.getValue().getFrom()).isEqualTo("no-reply@menta.example");
         assertThat(message.getValue().getText())
-            .contains("https://menta.example/reset-password?token=raw-reset-token");
+            .contains("https://menta.example/restablecer-contrasena/raw-reset-token");
         verify(repository).clearDeliveryEnvelope(TOKEN_ID);
     }
 
@@ -58,7 +60,7 @@ class SpringMailPasswordResetNotificationAdapterTest {
         when(deliveryCipher.decrypt(any(DeliveryEnvelope.class)))
             .thenReturn("student@example.com|raw-reset-token");
         SpringMailPasswordResetNotificationAdapter adapter = new SpringMailPasswordResetNotificationAdapter(
-            repository, deliveryCipher, mailSender, "https://menta.example/", "no-reply@menta.example"
+            repository, deliveryCipher, mailSender, "https://menta.example/", "/restablecer-contrasena/", "no-reply@menta.example"
         );
 
         adapter.sendPasswordResetEmail(TOKEN_ID);
@@ -66,7 +68,7 @@ class SpringMailPasswordResetNotificationAdapterTest {
         ArgumentCaptor<SimpleMailMessage> message = ArgumentCaptor.forClass(SimpleMailMessage.class);
         verify(mailSender).send(message.capture());
         assertThat(message.getValue().getText())
-            .contains("https://menta.example/reset-password?token=raw-reset-token");
+            .contains("https://menta.example/restablecer-contrasena/raw-reset-token");
     }
 
     @Test
@@ -76,7 +78,7 @@ class SpringMailPasswordResetNotificationAdapterTest {
             .thenReturn("student@example.com|raw-reset-token");
         doThrow(new RuntimeException("smtp unavailable")).when(mailSender).send(any(SimpleMailMessage.class));
         SpringMailPasswordResetNotificationAdapter adapter = new SpringMailPasswordResetNotificationAdapter(
-            repository, deliveryCipher, mailSender, "https://menta.example", "no-reply@menta.example"
+            repository, deliveryCipher, mailSender, "https://menta.example", "/restablecer-contrasena/", "no-reply@menta.example"
         );
 
         assertThatThrownBy(() -> adapter.sendPasswordResetEmail(TOKEN_ID))
@@ -90,7 +92,7 @@ class SpringMailPasswordResetNotificationAdapterTest {
     void throws_when_the_token_is_not_found() {
         when(repository.findById(TOKEN_ID)).thenReturn(Optional.empty());
         SpringMailPasswordResetNotificationAdapter adapter = new SpringMailPasswordResetNotificationAdapter(
-            repository, deliveryCipher, mailSender, "https://menta.example", "no-reply@menta.example"
+            repository, deliveryCipher, mailSender, "https://menta.example", "/restablecer-contrasena/", "no-reply@menta.example"
         );
 
         assertThatThrownBy(() -> adapter.sendPasswordResetEmail(TOKEN_ID))
@@ -107,7 +109,7 @@ class SpringMailPasswordResetNotificationAdapterTest {
         );
         when(repository.findById(TOKEN_ID)).thenReturn(Optional.of(tokenWithoutEnvelope));
         SpringMailPasswordResetNotificationAdapter adapter = new SpringMailPasswordResetNotificationAdapter(
-            repository, deliveryCipher, mailSender, "https://menta.example", "no-reply@menta.example"
+            repository, deliveryCipher, mailSender, "https://menta.example", "/restablecer-contrasena/", "no-reply@menta.example"
         );
 
         assertThatThrownBy(() -> adapter.sendPasswordResetEmail(TOKEN_ID))
@@ -120,7 +122,7 @@ class SpringMailPasswordResetNotificationAdapterTest {
         when(repository.findById(TOKEN_ID)).thenReturn(Optional.of(tokenWithDeliveryEnvelope()));
         when(deliveryCipher.decrypt(any(DeliveryEnvelope.class))).thenReturn("not-a-valid-payload");
         SpringMailPasswordResetNotificationAdapter adapter = new SpringMailPasswordResetNotificationAdapter(
-            repository, deliveryCipher, mailSender, "https://menta.example", "no-reply@menta.example"
+            repository, deliveryCipher, mailSender, "https://menta.example", "/restablecer-contrasena/", "no-reply@menta.example"
         );
 
         assertThatThrownBy(() -> adapter.sendPasswordResetEmail(TOKEN_ID))
@@ -131,14 +133,39 @@ class SpringMailPasswordResetNotificationAdapterTest {
     @Test
     void rejects_a_blank_public_base_url() {
         assertThatThrownBy(() -> new SpringMailPasswordResetNotificationAdapter(
-            repository, deliveryCipher, mailSender, "  ", "no-reply@menta.example"
+            repository, deliveryCipher, mailSender, "  ", "/restablecer-contrasena/", "no-reply@menta.example"
         )).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/cuenta/restablecer/", "/cuenta/restablecer", "cuenta/restablecer/"})
+    void builds_the_link_from_the_configured_path_whatever_its_slashes(String linkPath) {
+        when(repository.findById(TOKEN_ID)).thenReturn(Optional.of(tokenWithDeliveryEnvelope()));
+        when(deliveryCipher.decrypt(any(DeliveryEnvelope.class)))
+            .thenReturn("student@example.com|raw-reset-token");
+        SpringMailPasswordResetNotificationAdapter adapter = new SpringMailPasswordResetNotificationAdapter(
+            repository, deliveryCipher, mailSender, "https://menta.example/", linkPath, "no-reply@menta.example"
+        );
+
+        adapter.sendPasswordResetEmail(TOKEN_ID);
+
+        ArgumentCaptor<SimpleMailMessage> message = ArgumentCaptor.forClass(SimpleMailMessage.class);
+        verify(mailSender).send(message.capture());
+        assertThat(message.getValue().getText())
+            .contains("https://menta.example/cuenta/restablecer/raw-reset-token");
+    }
+
+    @Test
+    void rejects_a_blank_link_path() {
+        assertThatThrownBy(() -> new SpringMailPasswordResetNotificationAdapter(
+            repository, deliveryCipher, mailSender, "https://menta.example", " ", "no-reply@menta.example"
+        )).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("link path");
     }
 
     @Test
     void rejects_a_blank_from_address() {
         assertThatThrownBy(() -> new SpringMailPasswordResetNotificationAdapter(
-            repository, deliveryCipher, mailSender, "https://menta.example", " "
+            repository, deliveryCipher, mailSender, "https://menta.example", "/restablecer-contrasena/", " "
         )).isInstanceOf(IllegalArgumentException.class);
     }
 

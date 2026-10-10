@@ -27,7 +27,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * - CSRF protection (session-stored tokens; only /actuator/health is exempt)
  * - Session management (CREATE_IF_REQUIRED)
  * - Public endpoints (/, /login, /registro, /activar, /reenviar-activacion,
- *   /recuperar-contrasena, /classes and one-segment
+ *   /recuperar-contrasena, /restablecer-contrasena, /classes and one-segment
  *   /classes/{id}, /actuator/health, /error)
  * - Protected endpoints (all others require authentication)
  * </p>
@@ -90,11 +90,14 @@ public class BffSecurityConfig {
                         // the token goes back in the body of POST /activar (PRG).
                         .requestMatchers(HttpMethod.GET, "/activar/*", "/cuenta-activada").permitAll()
                         .requestMatchers(HttpMethod.POST, "/activar").permitAll()
-                        // Password recovery request (#360): exact paths with explicit verbs, so
-                        // nothing beneath them and no other verb opens up.
+                        // Password recovery (#360): exact paths with explicit verbs. The reset
+                        // link takes one path segment for the token; the bare path via GET and
+                        // every other verb stay authenticated.
                         .requestMatchers(HttpMethod.GET, "/recuperar-contrasena", "/recuperar-contrasena/enviado")
                         .permitAll()
                         .requestMatchers(HttpMethod.POST, "/recuperar-contrasena").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/restablecer-contrasena/*").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/restablecer-contrasena").permitAll()
                         // All other endpoints require authentication
                         .anyRequest().authenticated()
                 )

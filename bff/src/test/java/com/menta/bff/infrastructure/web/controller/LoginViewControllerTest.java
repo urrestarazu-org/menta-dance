@@ -17,7 +17,7 @@ class LoginViewControllerTest {
     void returns_the_login_view_without_extra_attributes() {
         Model model = new ExtendedModelMap();
 
-        String view = controller.loginForm(null, null, model);
+        String view = controller.loginForm(null, null, null, model);
 
         assertThat(view).isEqualTo("login");
         assertThat(model.containsAttribute("error")).isFalse();
@@ -29,7 +29,7 @@ class LoginViewControllerTest {
     void adds_an_error_message_when_the_error_param_is_present() {
         Model model = new ExtendedModelMap();
 
-        String view = controller.loginForm("true", null, model);
+        String view = controller.loginForm("true", null, null, model);
 
         assertThat(view).isEqualTo("login");
         assertThat(model.getAttribute("error")).isEqualTo("Email o contraseña inválidos");
@@ -40,9 +40,21 @@ class LoginViewControllerTest {
     void adds_a_logout_message_when_the_logout_param_is_present() {
         Model model = new ExtendedModelMap();
 
-        String view = controller.loginForm(null, "true", model);
+        String view = controller.loginForm(null, "true", null, model);
 
         assertThat(view).isEqualTo("login");
         assertThat(model.getAttribute("logout")).isEqualTo("Sesión cerrada exitosamente");
+    }
+
+    @Test
+    @DisplayName("adds a neutral notice after a password reset")
+    void adds_a_notice_after_a_password_reset() {
+        Model model = new ExtendedModelMap();
+
+        String view = controller.loginForm(null, null, "", model);
+
+        assertThat(view).isEqualTo("login");
+        assertThat(model.getAttribute("resetNotice"))
+                .isEqualTo("Tu contraseña fue actualizada. Iniciá sesión con la nueva.");
     }
 }

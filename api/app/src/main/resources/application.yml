@@ -90,6 +90,8 @@ auth:
     # ISO-8601: el enlace vence a la hora (US-AUTH-005/006).
     token-ttl: ${AUTH_PASSWORD_RESET_TOKEN_TTL:PT1H}
     public-base-url: ${AUTH_PASSWORD_RESET_PUBLIC_BASE_URL:http://localhost:8080}
+    # Path of the BFF page the reset email links to (#360); the token is appended.
+    link-path: ${AUTH_PASSWORD_RESET_LINK_PATH:/restablecer-contrasena/}
     from-address: ${AUTH_PASSWORD_RESET_FROM_ADDRESS:no-reply@menta.local}
     # Clave AES-256-GCM DEDICADA, distinta de la de activación: rotar o
     # comprometer una no debe afectar al otro flujo. El fallback es sólo para
