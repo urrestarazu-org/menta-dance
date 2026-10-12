@@ -28,6 +28,8 @@ public interface PhysicalPurchaseApiClient {
      * @param selectedSessionId session of an individual quote, {@code null} for monthly
      * @return the created quote
      * @throws NoScheduledSessionsException if the period has no sessions (422)
+     * @throws NoNewSessionsException       if a monthly quote would add no session the student does not
+     *                                      already own (409 NO_NEW_SESSIONS, nothing was persisted)
      * @throws InvalidRequestException      if the upstream rejects the request (400, other 422)
      */
     PhysicalQuote createQuote(
@@ -42,6 +44,8 @@ public interface PhysicalPurchaseApiClient {
      * @param idempotencyKey caller-chosen key, 1 to 128 characters
      * @return the payment id and the provider checkout URL
      * @throws CapacityUnavailableException if no room is left (409, no payment was created)
+     * @throws NoNewSessionsException        if the purchase would add no session the student does not
+     *                                       already own (409 NO_NEW_SESSIONS, nothing was persisted)
      * @throws QuoteExpiredException        if the quote expired or does not exist (410)
      * @throws InvalidRequestException      if the upstream rejects the request (400)
      */
@@ -68,6 +72,16 @@ public interface PhysicalPurchaseApiClient {
     /** The quoted period has no scheduled sessions (422 {@code NO_SCHEDULED_SESSIONS}). */
     class NoScheduledSessionsException extends PurchaseFailureException {
         public NoScheduledSessionsException(String message) {
+            super(message);
+        }
+    }
+
+    /**
+     * A monthly purchase would add no session the student does not already own (409
+     * {@code NO_NEW_SESSIONS}); nothing was persisted, so no quote, hold or payment exists.
+     */
+    class NoNewSessionsException extends PurchaseFailureException {
+        public NoNewSessionsException(String message) {
             super(message);
         }
     }

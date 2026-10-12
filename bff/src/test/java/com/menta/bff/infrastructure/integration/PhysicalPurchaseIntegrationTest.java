@@ -345,6 +345,14 @@ class PhysicalPurchaseIntegrationTest extends BaseIntegrationTest {
                 .contains("href=\"/classes/" + COURSE_ID + "\"");
         assertLinksWork(noSessions);
 
+        stubProblem(QUOTES, 409, "NO_NEW_SESSIONS");
+        String noNewSessions = body(submit(action, monthly).andExpect(status().isConflict()));
+        assertThat(noNewSessions).contains("Ya tenés estas clases")
+                .contains("Ya tenés lugar en todas las sesiones que cubriría esta mensualidad")
+                .contains("No se realizó ningún cobro").contains("href=\"/classes/" + COURSE_ID + "\"")
+                .doesNotContain("Sin lugares").doesNotContain("NO_NEW_SESSIONS");
+        assertLinksWork(noNewSessions);
+
         stubProblem(QUOTES, 404, "PHYSICAL_COURSE_PRICING_NOT_FOUND");
         assertThat(body(submit(action, monthly).andExpect(status().isNotFound())))
                 .contains("Todavía no hay un precio publicado");
@@ -391,7 +399,7 @@ class PhysicalPurchaseIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("checkout failures: no room (409), expired quote (410), preference down (503), bad request (400)")
+    @DisplayName("checkout failures: no room or nothing new (409), expired (410), preference down (503), bad (400)")
     void payFailures() throws Exception {
         String quotePage = monthlyQuotePage();
         String backLink = "href=\"/classes/" + COURSE_ID + "\"";
@@ -400,6 +408,12 @@ class PhysicalPurchaseIntegrationTest extends BaseIntegrationTest {
         String full = body(payFromQuotePage(quotePage).andExpect(status().isConflict()));
         assertThat(full).contains("Ya no hay lugares").contains(backLink);
         assertLinksWork(full);
+
+        stubProblem(PURCHASES, 409, "NO_NEW_SESSIONS");
+        String alreadyOwned = body(payFromQuotePage(quotePage).andExpect(status().isConflict()));
+        assertThat(alreadyOwned).contains("Ya tenés estas clases").contains("No se realizó ningún cobro")
+                .contains(backLink).doesNotContain("Ya no hay lugares").doesNotContain("NO_NEW_SESSIONS");
+        assertLinksWork(alreadyOwned);
 
         stubProblem(PURCHASES, 410, "PHYSICAL_COURSE_QUOTE_EXPIRED");
         assertThat(body(payFromQuotePage(quotePage).andExpect(status().isGone())))
