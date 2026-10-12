@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import com.menta.billing.domain.exception.IndividualSurchargeTooSmallException;
+import com.menta.billing.domain.exception.NoNewSessionsToPurchaseException;
 import com.menta.billing.domain.exception.NoScheduledSessionsException;
 import com.menta.billing.domain.exception.PhysicalCoursePricingNotFoundException;
 import com.menta.billing.domain.exception.PhysicalSessionNotFoundException;
@@ -42,6 +43,14 @@ class PhysicalCourseQuoteExceptionHandlerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
         assertThat(response.getBody().getProperties().get("code")).isEqualTo("NO_SCHEDULED_SESSIONS");
+    }
+
+    @Test
+    void maps_no_new_sessions_to_409() {
+        ResponseEntity<ProblemDetail> response = handler.noNewSessions(new NoNewSessionsToPurchaseException());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody().getProperties().get("code")).isEqualTo("NO_NEW_SESSIONS");
     }
 
     @Test

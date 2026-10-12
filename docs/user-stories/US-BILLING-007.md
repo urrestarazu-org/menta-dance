@@ -40,6 +40,16 @@
   la Purchase queda `ASSIGNED`. El importe no cambia. Si en 120 días no hay N sesiones sin
   asignar, el checkout responde `409 CAPACITY_UNAVAILABLE`.
 
+**Escenario 3b: mensualidad sin ninguna sesión nueva (#541)**
+
+- **Dado** un quote mensual y un alumno que ya tiene asignación confirmada en todas las
+  sesiones que la mensualidad cubriría (las próximas N desde el instante de referencia).
+- **Cuando** inicia el checkout, por Mercado Pago o por transferencia bancaria.
+- **Entonces** responde `409 NO_NEW_SESSIONS` sin crear hold ni `Payment`: no se cobra una
+  mensualidad que no agrega nada. Si tiene sólo algunas de esas sesiones, el comportamiento y
+  el precio son los del Escenario 3. La cotización mensual aplica la misma regla y responde
+  el mismo error sin persistir el quote.
+
 **Escenario 4: idempotencia**
 
 - **Dado** una Purchase ya iniciada o confirmada.
