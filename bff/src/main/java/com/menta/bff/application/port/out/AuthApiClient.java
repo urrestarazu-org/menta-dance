@@ -56,14 +56,21 @@ public interface AuthApiClient {
     /**
      * Revokes a refresh token to prevent future use.
      *
-     * <p>Calls POST /api/v1/auth/logout with X-Refresh-Token header.
-     * Idempotent - revoking an already-revoked token is safe.
+     * <p>Calls POST /api/v1/auth/logout. The endpoint is authenticated, so the call carries
+     * {@code Authorization: Bearer <accessToken>} as well as the {@code X-Refresh-Token}
+     * header. Idempotent - revoking an already-revoked token is safe (404 counts as success).
      * </p>
      *
+     * <p>Both values are credentials: they must never be logged.
+     * </p>
+     *
+     * @param accessToken  Valid (non-expired) access token of the session
      * @param refreshToken Refresh token to revoke
-     * @throws ServiceUnavailableException if Auth API is unreachable (503)
+     * @throws AuthenticationException     if the API rejects the credentials (401/403)
+     * @throws ServiceUnavailableException if Auth API is unreachable, degraded (5xx) or
+     *                                     answers with an unexpected status
      */
-    void logout(String refreshToken);
+    void logout(String accessToken, String refreshToken);
 
     /**
      * Submits a public account registration.

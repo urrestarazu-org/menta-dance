@@ -67,9 +67,10 @@ public class UseCaseConfig {
     @Bean
     public LogoutUseCase logoutUseCase(
             AuthApiClient authApiClient,
-            SessionTokenRepository sessionTokenRepository
+            SessionTokenRepository sessionTokenRepository,
+            GetValidAccessTokenUseCase getValidAccessTokenUseCase
     ) {
-        return new LogoutUseCaseImpl(authApiClient, sessionTokenRepository);
+        return new LogoutUseCaseImpl(authApiClient, sessionTokenRepository, getValidAccessTokenUseCase);
     }
 
     @Bean

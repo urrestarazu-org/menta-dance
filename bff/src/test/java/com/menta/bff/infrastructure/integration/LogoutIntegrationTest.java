@@ -18,10 +18,10 @@ import org.junit.jupiter.api.Test;
  * Integration test for logout flow.
  *
  * <p>Verifies:
- * - POST /logout revokes refresh token in Auth API
+ * - POST /logout revokes refresh token in Auth API (bearer access token + X-Refresh-Token)
  * - POST /logout clears session (invalidates session)
  * - POST /logout redirects to /login?logout
- * - Fail-open: logout succeeds even if Auth API fails
+ * - Fail-open: logout succeeds even if Auth API fails or rejects the revocation
  * </p>
  */
 @DisplayName("Logout Integration Tests")
@@ -60,8 +60,9 @@ class LogoutIntegrationTest extends BaseIntegrationTest {
         var sessionCookie = loginResult.getResponse().getCookie("SESSION");
         assertThat(sessionCookie).isNotNull();
 
-        // Mock Auth API logout (should receive refresh token)
+        // Mock Auth API logout (authenticated endpoint: needs the bearer AND the refresh token)
         WIRE_MOCK_SERVER.stubFor(WireMock.post(urlEqualTo("/api/v1/auth/logout"))
+                .withHeader("Authorization", equalTo("Bearer " + accessToken))
                 .withHeader("X-Refresh-Token", equalTo(refreshToken))
                 .willReturn(aResponse()
                         .withStatus(204))); // 204 No Content - successful revocation
@@ -77,8 +78,9 @@ class LogoutIntegrationTest extends BaseIntegrationTest {
 
                 .andReturn();
 
-        // And: Verify Auth API logout was called with correct refresh token
+        // And: Verify Auth API logout was called with the session access token and refresh token
         WIRE_MOCK_SERVER.verify(postRequestedFor(urlEqualTo("/api/v1/auth/logout"))
+                .withHeader("Authorization", equalTo("Bearer " + accessToken))
                 .withHeader("X-Refresh-Token", equalTo(refreshToken)));
 
         // And: Verify session was invalidated (cookie should be expired/deleted)
@@ -189,6 +191,65 @@ class LogoutIntegrationTest extends BaseIntegrationTest {
 
         // And: Verify we attempted to call Auth API logout
         WIRE_MOCK_SERVER.verify(postRequestedFor(urlEqualTo("/api/v1/auth/logout")));
+    }
+
+    @Test
+    @DisplayName("POST /logout cuando Auth API responde 401 debe igual limpiar sesión y redirigir a /login?logout")
+    void logout_whenAuthApiRejectsCredentials_shouldStillClearSession() throws Exception {
+        // Given: User is logged in
+        String accessToken = TestAccessTokens.withRole("STUDENT");
+        String refreshToken = "refresh_token";
+
+        WIRE_MOCK_SERVER.stubFor(WireMock.post(urlEqualTo("/api/v1/auth/login"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withHeader("X-Refresh-Token", refreshToken)
+                        .withBody(
+                                """
+                                {
+                                  "access_token": "%s",
+                                  "token_type": "Bearer",
+                                  "expires_in": 3600
+                                }
+                                """.formatted(accessToken))));
+
+        var loginResult = mockMvc.perform(post("/login")
+                        .param("email", "user@example.com")
+                        .param("password", "password123")
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+
+        var sessionCookie = loginResult.getResponse().getCookie("SESSION");
+
+        // Mock Auth API logout rejecting the credentials (401 Unauthorized)
+        WIRE_MOCK_SERVER.stubFor(WireMock.post(urlEqualTo("/api/v1/auth/logout"))
+                .willReturn(aResponse()
+                        .withStatus(401)
+                        .withHeader("Content-Type", "application/problem+json")
+                        .withBody("{\"status\":401,\"title\":\"Unauthorized\"}")));
+
+        // When: POST /logout (the revocation fails but the user must still be logged out locally)
+        var logoutResult = mockMvc.perform(post("/logout")
+                        .cookie(sessionCookie)
+                        .with(csrf()))
+
+                // Then: Should STILL redirect to /login?logout
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login?logout"))
+
+                .andReturn();
+
+        // And: Verify session was invalidated despite the rejected revocation
+        var logoutCookie = logoutResult.getResponse().getCookie("SESSION");
+        assertThat(logoutCookie).isNotNull();
+        assertThat(logoutCookie.getMaxAge()).isEqualTo(0);
+
+        // And: Verify the Auth API was called with both credentials
+        WIRE_MOCK_SERVER.verify(postRequestedFor(urlEqualTo("/api/v1/auth/logout"))
+                .withHeader("Authorization", equalTo("Bearer " + accessToken))
+                .withHeader("X-Refresh-Token", equalTo(refreshToken)));
     }
 
     @Test

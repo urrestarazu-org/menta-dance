@@ -12,6 +12,9 @@ import static com.github.tomakehurst.wiremock.client.WireMock.verify;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
@@ -26,6 +29,7 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.web.reactive.function.client.WebClient;
 
 @WireMockTest
@@ -33,6 +37,8 @@ import org.springframework.web.reactive.function.client.WebClient;
 class AuthApiAdapterTest {
 
     private static final String CLIENT_ADDRESS = "203.0.113.9";
+    private static final String ACCESS_TOKEN = "access.jwt.value";
+    private static final String REFRESH_TOKEN = "refresh_token_123";
 
     private AuthApiAdapter authApiAdapter;
     private ObjectMapper objectMapper;
@@ -206,54 +212,102 @@ class AuthApiAdapterTest {
     }
 
     @Test
-    @DisplayName("should logout successfully with refresh token")
-    void shouldLogoutSuccessfullyWithRefreshToken() {
+    @DisplayName("should logout successfully sending both the bearer access token and the refresh token")
+    void shouldLogoutSuccessfullyWithBothTokens() {
         // Given
-        String refreshToken = "refresh_token_123";
-
         stubFor(post(urlEqualTo("/api/v1/auth/logout"))
-                .withHeader("X-Refresh-Token", equalTo(refreshToken))
+                .withHeader("Authorization", equalTo("Bearer " + ACCESS_TOKEN))
+                .withHeader("X-Refresh-Token", equalTo(REFRESH_TOKEN))
                 .willReturn(aResponse()
                         .withStatus(204)));
 
         // When / Then - Should not throw
-        authApiAdapter.logout(refreshToken);
+        authApiAdapter.logout(ACCESS_TOKEN, REFRESH_TOKEN);
 
-        // Verify request made
+        // Verify the request carried both credentials with their exact values
         verify(postRequestedFor(urlEqualTo("/api/v1/auth/logout"))
-                .withHeader("X-Refresh-Token", equalTo(refreshToken)));
+                .withHeader("Authorization", equalTo("Bearer " + ACCESS_TOKEN))
+                .withHeader("X-Refresh-Token", equalTo(REFRESH_TOKEN)));
     }
 
     @Test
     @DisplayName("should handle logout idempotently when returns 404 (already revoked)")
     void shouldHandleLogoutIdempotentlyWhenReturns404() {
         // Given
-        String refreshToken = "already_revoked_token";
-
         stubFor(post(urlEqualTo("/api/v1/auth/logout"))
-                .withHeader("X-Refresh-Token", equalTo(refreshToken))
                 .willReturn(aResponse()
                         .withStatus(404)
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"message\":\"Token not found\"}")));
 
         // When / Then - Should not throw (idempotent logout)
-        authApiAdapter.logout(refreshToken);
+        authApiAdapter.logout(ACCESS_TOKEN, REFRESH_TOKEN);
+    }
+
+    @Test
+    @DisplayName("should throw AuthenticationException when logout returns 401")
+    void shouldThrowAuthenticationExceptionWhenLogoutReturns401() {
+        // Given
+        stubFor(post(urlEqualTo("/api/v1/auth/logout"))
+                .willReturn(aResponse()
+                        .withStatus(401)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"message\":\"Unauthorized\"}")));
+
+        // When / Then - the refresh token was NOT revoked, so this must not look like success
+        assertThatThrownBy(() -> authApiAdapter.logout(ACCESS_TOKEN, REFRESH_TOKEN))
+                .isInstanceOf(AuthApiClient.AuthenticationException.class);
+    }
+
+    @Test
+    @DisplayName("should throw AuthenticationException when logout returns 403")
+    void shouldThrowAuthenticationExceptionWhenLogoutReturns403() {
+        // Given
+        stubFor(post(urlEqualTo("/api/v1/auth/logout"))
+                .willReturn(aResponse().withStatus(403)));
+
+        // When / Then
+        assertThatThrownBy(() -> authApiAdapter.logout(ACCESS_TOKEN, REFRESH_TOKEN))
+                .isInstanceOf(AuthApiClient.AuthenticationException.class);
     }
 
     @Test
     @DisplayName("should throw ServiceUnavailableException when logout returns 503")
     void shouldThrowServiceUnavailableExceptionWhenLogoutReturns503() {
         // Given
-        String refreshToken = "refresh_token_123";
-
         stubFor(post(urlEqualTo("/api/v1/auth/logout"))
-                .withHeader("X-Refresh-Token", equalTo(refreshToken))
                 .willReturn(aResponse()
                         .withStatus(503)));
 
         // When / Then
-        assertThatThrownBy(() -> authApiAdapter.logout(refreshToken))
+        assertThatThrownBy(() -> authApiAdapter.logout(ACCESS_TOKEN, REFRESH_TOKEN))
+                .isInstanceOf(AuthApiClient.ServiceUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("should throw ServiceUnavailableException when logout returns 500")
+    void shouldThrowServiceUnavailableExceptionWhenLogoutReturns500() {
+        // Given
+        stubFor(post(urlEqualTo("/api/v1/auth/logout"))
+                .willReturn(aResponse().withStatus(500)));
+
+        // When / Then
+        assertThatThrownBy(() -> authApiAdapter.logout(ACCESS_TOKEN, REFRESH_TOKEN))
+                .isInstanceOf(AuthApiClient.ServiceUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("should not silently ignore an unexpected logout status")
+    void shouldNotSilentlyIgnoreAnUnexpectedLogoutStatus() {
+        // Given
+        stubFor(post(urlEqualTo("/api/v1/auth/logout"))
+                .willReturn(aResponse()
+                        .withStatus(418)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"message\":\"I'm a teapot\"}")));
+
+        // When / Then - an unexpected status degrades to "unavailable", never to success
+        assertThatThrownBy(() -> authApiAdapter.logout(ACCESS_TOKEN, REFRESH_TOKEN))
                 .isInstanceOf(AuthApiClient.ServiceUnavailableException.class);
     }
 
@@ -430,20 +484,31 @@ class AuthApiAdapterTest {
     }
 
     @Test
-    @DisplayName("should log and ignore logout errors for unmapped statuses (fail-open)")
-    void shouldLogAndIgnoreLogoutErrorsForUnmappedStatuses() {
+    @DisplayName("should never log the access token or the refresh token when logout fails")
+    void shouldNeverLogTokensWhenLogoutFails() {
         // Given
-        String refreshToken = "refresh_token_123";
-
+        Logger adapterLogger = (Logger) LoggerFactory.getLogger(AuthApiAdapter.class);
+        ListAppender<ILoggingEvent> logs = new ListAppender<>();
+        logs.start();
+        adapterLogger.addAppender(logs);
         stubFor(post(urlEqualTo("/api/v1/auth/logout"))
-                .withHeader("X-Refresh-Token", equalTo(refreshToken))
-                .willReturn(aResponse()
-                        .withStatus(400)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("{\"message\":\"Bad request\"}")));
+                .willReturn(aResponse().withStatus(401)));
 
-        // When / Then - Should not throw (fail-open)
-        authApiAdapter.logout(refreshToken);
+        try {
+            // When
+            assertThatThrownBy(() -> authApiAdapter.logout(ACCESS_TOKEN, REFRESH_TOKEN))
+                    .isInstanceOf(AuthApiClient.AuthenticationException.class)
+                    .hasMessageNotContaining(ACCESS_TOKEN)
+                    .hasMessageNotContaining(REFRESH_TOKEN);
+
+            // Then
+            assertThat(logs.list).isNotEmpty();
+            assertThat(logs.list)
+                    .extracting(ILoggingEvent::getFormattedMessage)
+                    .noneMatch(message -> message.contains(ACCESS_TOKEN) || message.contains(REFRESH_TOKEN));
+        } finally {
+            adapterLogger.detachAppender(logs);
+        }
     }
 
     @Test
@@ -464,7 +529,7 @@ class AuthApiAdapterTest {
         AuthApiAdapter unreachableAdapter = new AuthApiAdapter(unreachableWebClient, unreachableProperties);
 
         // When / Then
-        assertThatThrownBy(() -> unreachableAdapter.logout("refresh_token_123"))
+        assertThatThrownBy(() -> unreachableAdapter.logout(ACCESS_TOKEN, REFRESH_TOKEN))
                 .isInstanceOf(AuthApiClient.ServiceUnavailableException.class);
     }
 
