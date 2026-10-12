@@ -135,51 +135,34 @@ public class AuthApiAdapter implements AuthApiClient {
     }
 
     @Override
-    public void logout(String refreshToken) {
+    public void logout(String accessToken, String refreshToken) {
+        Objects.requireNonNull(accessToken, "accessToken cannot be null");
         Objects.requireNonNull(refreshToken, "refreshToken cannot be null");
 
         log.debug("Calling Auth API logout endpoint");
 
-        try {
-            ClientResponse response = webClient.post()
-                    .uri(LOGOUT_ENDPOINT)
-                    .header(REFRESH_TOKEN_HEADER, refreshToken)
-                    .exchange()
-                    .timeout(authProperties.getTimeout())
-                    .block();
+        // The endpoint is authenticated: the bearer identifies the caller, the header names the token to revoke.
+        // Neither value is ever logged; send() reports transport errors by class only.
+        ApiReply reply = send(webClient.post()
+                .uri(LOGOUT_ENDPOINT)
+                .headers(headers -> headers.setBearerAuth(accessToken))
+                .header(REFRESH_TOKEN_HEADER, refreshToken), "logout");
 
-            if (response == null) {
-                throw new ServiceUnavailableException("Auth API returned null response");
-            }
+        int status = reply.status();
 
-            HttpStatus status = (HttpStatus) response.statusCode();
-
-            // Success cases: 204 No Content, 404 Not Found (idempotent)
-            if (status == HttpStatus.NO_CONTENT || status == HttpStatus.NOT_FOUND) {
-                return;
-            }
-
-            // Service unavailable
-            if (status.is5xxServerError()) {
-                throw new ServiceUnavailableException("Auth API unavailable: " + status);
-            }
-
-            // Other errors
-            String errorBody = response.bodyToMono(String.class).block();
-            log.warn("Auth API logout returned unexpected status {}: {}", status, errorBody);
-
-        } catch (WebClientResponseException e) {
-            if (e.getStatusCode() == HttpStatus.SERVICE_UNAVAILABLE) {
-                throw new ServiceUnavailableException("Auth API unavailable", e);
-            }
-            // Ignore other errors for logout (fail-open)
-            log.warn("Auth API logout failed (ignored): {}", e.getMessage());
-        } catch (ServiceUnavailableException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("Auth API logout failed: {}", e.getMessage());
-            throw new ServiceUnavailableException("Auth API unavailable: " + e.getMessage(), e);
+        // Success cases: 204 No Content, 404 Not Found (already revoked, idempotent)
+        if (status == HttpStatus.NO_CONTENT.value() || status == HttpStatus.NOT_FOUND.value()) {
+            return;
         }
+
+        log.warn("Auth API logout returned status {}", status);
+
+        if (status == HttpStatus.UNAUTHORIZED.value() || status == HttpStatus.FORBIDDEN.value()) {
+            throw new AuthenticationException("Auth API rejected the logout credentials: " + status);
+        }
+
+        // 5xx and any status the contract does not list: the revocation did NOT happen, so never look like success
+        throw new ServiceUnavailableException("Auth API unavailable: " + status);
     }
 
     @Override
