@@ -199,6 +199,23 @@ responsabilidades así:
 Los clientes directos, como Android, no atraviesan el BFF y nunca presentaron
 este colapso de identidad.
 
+### Errores de login en el BFF
+
+El formulario web traduce cada respuesta de error de `POST /login` en un mensaje
+en español (#479). Ninguna llega al usuario como error del servidor:
+
+| Respuesta de Auth | Mensaje en `/login` |
+| --- | --- |
+| `401` | «Email o contraseña inválidos» (genérico) |
+| `423 USER_LOCKED` | cuenta bloqueada; contactar a la academia |
+| `429` con `Retry-After` | demasiados intentos, con la espera en segundos o minutos redondeados hacia arriba; sin cabecera o con valor ilegible, «unos minutos» |
+| `403 ACCOUNT_NOT_ACTIVATED` | cuenta sin activar, con enlace a `/reenviar-activacion` |
+| `5xx`, caída o cualquier otro estado | «El servicio no está disponible por el momento» |
+
+El `423` y el `403` sólo llegan con la contraseña correcta, así que el mensaje no
+revela si un email existe. Nunca se muestran códigos ni cuerpos de la API. El
+refresh conserva su propio contrato (`423` es `RefreshTokenRevokedException`).
+
 ## Contrato OpenAPI
 
 El contrato formal y versionado de esta superficie vive en

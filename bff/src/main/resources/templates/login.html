@@ -17,11 +17,12 @@
 <h1>Iniciar Sesión</h1>
 
 <div th:if="${error}" class="error">
-    <p th:text="${errorMessage}">Error message</p>
+    <p th:text="${error}">Error message</p>
+    <p th:if="${resendActivationLink}"><a th:href="@{/reenviar-activacion}">Reenviar el correo de activación</a></p>
 </div>
 
 <div th:if="${logout}" class="info">
-    <p th:text="${logoutMessage}">Logout message</p>
+    <p th:text="${logout}">Logout message</p>
 </div>
 
 <div th:if="${resetNotice}" class="info">

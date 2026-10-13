@@ -96,7 +96,8 @@ public class AuthApiAdapter implements AuthApiClient {
 
             return handleTokenResponse(response, "login");
 
-        } catch (AuthenticationException | RefreshTokenRevokedException e) {
+        } catch (AuthenticationException | RefreshTokenRevokedException | AccountLockedException
+                 | AccountNotActivatedException | RateLimitedException | ServiceUnavailableException e) {
             // Re-throw domain exceptions without wrapping
             throw e;
         } catch (WebClientResponseException e) {
@@ -409,12 +410,15 @@ public class AuthApiAdapter implements AuthApiClient {
         String errorBody = response.bodyToMono(String.class).block();
         log.warn("Auth API {} returned status {}: {}", operation, status, errorBody);
 
+        if ("login".equals(operation)) {
+            throw loginFailure(status, response.headers().asHttpHeaders().getFirst(HttpHeaders.RETRY_AFTER),
+                    errorBody);
+        }
+
         if (status == HttpStatus.UNAUTHORIZED) {
             throw new AuthenticationException("Invalid credentials or refresh token: " + errorBody);
         }
 
-        // 403 ACCOUNT_NOT_ACTIVATED: correct password but the account awaits activation.
-        // The web login keeps the generic invalid-credentials result for now.
         if (status == HttpStatus.FORBIDDEN) {
             throw new AuthenticationException("Invalid credentials or refresh token: " + errorBody);
         }
@@ -428,6 +432,38 @@ public class AuthApiAdapter implements AuthApiClient {
         }
 
         throw new RuntimeException("Auth API " + operation + " failed with status " + status + ": " + errorBody);
+    }
+
+    /**
+     * Maps an unsuccessful login answer to a domain exception.
+     *
+     * <p>423, 429 and 403 ACCOUNT_NOT_ACTIVATED are only answered by the API after the password was
+     * verified (423, 403) or as a throttle (429), so each gets its own type. Any status the contract
+     * does not list degrades to "unavailable" rather than a server error.
+     * </p>
+     */
+    private static RuntimeException loginFailure(HttpStatus status, String retryAfter, String errorBody) {
+        if (status == HttpStatus.UNAUTHORIZED) {
+            return new AuthenticationException("Invalid credentials or refresh token: " + errorBody);
+        }
+        if (status == HttpStatus.LOCKED) {
+            return new AccountLockedException("Auth API reports the account as locked");
+        }
+        if (status == HttpStatus.TOO_MANY_REQUESTS) {
+            return new RateLimitedException("Auth API login rate limit hit", parseRetryAfter(retryAfter));
+        }
+        if (status == HttpStatus.FORBIDDEN && "ACCOUNT_NOT_ACTIVATED".equals(problemCodeOf(errorBody))) {
+            return new AccountNotActivatedException("Auth API reports the account as not activated");
+        }
+        return new ServiceUnavailableException("Auth API unavailable: " + status);
+    }
+
+    private static String problemCodeOf(String body) {
+        if (body == null) {
+            return "";
+        }
+        Matcher matcher = PROBLEM_CODE.matcher(body);
+        return matcher.find() ? matcher.group(1) : "";
     }
 
     /**

@@ -13,6 +13,7 @@ import com.menta.bff.application.dto.LoginResult;
 import com.menta.bff.application.port.out.AccessTokenClaimsReader;
 import com.menta.bff.application.port.out.AuthApiClient;
 import com.menta.bff.application.usecase.LoginUseCase;
+import java.time.Duration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,6 +24,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.InternalAuthenticationServiceException;
+import org.springframework.security.authentication.LockedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 
@@ -120,6 +122,48 @@ class BffAuthenticationProviderTest {
 
         assertThatThrownBy(() -> provider.authenticate(formLogin()))
             .isInstanceOf(InternalAuthenticationServiceException.class);
+    }
+
+    @Test
+    @DisplayName("Maps a locked account to LockedException")
+    void maps_a_locked_account_to_locked_exception() {
+        doThrow(new AuthApiClient.AccountLockedException("423"))
+            .when(loginUseCase).execute(any(LoginCommand.class));
+
+        assertThatThrownBy(() -> provider.authenticate(formLogin()))
+            .isInstanceOf(LockedException.class);
+    }
+
+    @Test
+    @DisplayName("Maps a throttled login to TooManyLoginAttemptsException carrying the wait")
+    void maps_a_rate_limited_login_carrying_the_wait() {
+        doThrow(new AuthApiClient.RateLimitedException("429", Duration.ofSeconds(90)))
+            .when(loginUseCase).execute(any(LoginCommand.class));
+
+        assertThatThrownBy(() -> provider.authenticate(formLogin()))
+            .isInstanceOfSatisfying(TooManyLoginAttemptsException.class,
+                e -> assertThat(e.retryAfter()).isEqualTo(Duration.ofSeconds(90)));
+    }
+
+    @Test
+    @DisplayName("Maps a throttled login without a wait to TooManyLoginAttemptsException with no wait")
+    void maps_a_rate_limited_login_without_a_wait() {
+        doThrow(new AuthApiClient.RateLimitedException("429", null))
+            .when(loginUseCase).execute(any(LoginCommand.class));
+
+        assertThatThrownBy(() -> provider.authenticate(formLogin()))
+            .isInstanceOfSatisfying(TooManyLoginAttemptsException.class,
+                e -> assertThat(e.retryAfter()).isNull());
+    }
+
+    @Test
+    @DisplayName("Maps a not activated account to PendingActivationException")
+    void maps_a_not_activated_account_to_pending_activation() {
+        doThrow(new AuthApiClient.AccountNotActivatedException("403"))
+            .when(loginUseCase).execute(any(LoginCommand.class));
+
+        assertThatThrownBy(() -> provider.authenticate(formLogin()))
+            .isInstanceOf(PendingActivationException.class);
     }
 
     @Test
