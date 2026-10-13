@@ -5,7 +5,8 @@ package com.menta.billing.domain.model;
  * {@link Subscription}.
  *
  * <p>docs/06-BILLING-API.md only specifies this state machine for {@code
- * Purchase} ("PENDING_FULFILLMENT... ASSIGNED o EXCEPTION"). {@code
+ * Purchase} ("PENDING_FULFILLMENT... ASSIGNED o EXCEPTION"), plus the admin-only terminal {@code RESOLVED}
+ * exit from {@code EXCEPTION} (#539). {@code
  * Subscription} is mentioned alongside it with no state machine of its own.
  * For subscriptions, {@code ASSIGNED} means Billing's immutable entitlement
  * snapshot is available for Virtual to read; it does not represent a
@@ -14,5 +15,8 @@ package com.menta.billing.domain.model;
 public enum FulfillmentStatus {
     PENDING_FULFILLMENT,
     ASSIGNED,
-    EXCEPTION
+    EXCEPTION,
+
+    /** Terminal: an admin closed an {@code EXCEPTION} purchase as refunded or compensated (#539). */
+    RESOLVED
 }

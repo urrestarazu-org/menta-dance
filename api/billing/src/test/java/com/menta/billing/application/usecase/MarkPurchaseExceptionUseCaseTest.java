@@ -23,6 +23,7 @@ import com.menta.billing.domain.model.PaymentId;
 import com.menta.billing.domain.model.PaymentStatus;
 import com.menta.billing.domain.model.PaymentTarget;
 import com.menta.billing.domain.model.Purchase;
+import com.menta.billing.domain.model.PurchaseResolutionType;
 import com.menta.billing.domain.model.Reason;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -132,6 +133,25 @@ class MarkPurchaseExceptionUseCaseTest {
         void assigned_purchase_refuses_to_move_to_EXCEPTION() {
             Purchase assigned = Purchase.pendingFulfillment(PAYMENT_ID, java.util.List.of(SESSION_ID)).assigned();
             when(purchaseRepository.findByPaymentIdForUpdate(PAYMENT_ID)).thenReturn(Optional.of(assigned));
+
+            assertThatThrownBy(() ->
+                useCase.markException(PAYMENT_ID, Reason.CAPACITY_BELOW_ASSIGNED)
+            ).isInstanceOf(IllegalPurchaseStateTransitionException.class);
+
+            verify(purchaseRepository, never()).save(any(Purchase.class));
+            verify(outboxAppender, never()).append(any(), any(), any());
+        }
+    }
+
+    @Nested
+    @DisplayName("RESOLVED is terminal — an admin resolution is never reopened (#539)")
+    class ResolvedCannotFlip {
+
+        @Test
+        void resolved_purchase_refuses_to_move_back_to_EXCEPTION() {
+            Purchase resolved = Purchase.exception(PAYMENT_ID, java.util.List.of(SESSION_ID))
+                .resolve(PurchaseResolutionType.REFUNDED, "Reembolsado", USER_ID, NOW);
+            when(purchaseRepository.findByPaymentIdForUpdate(PAYMENT_ID)).thenReturn(Optional.of(resolved));
 
             assertThatThrownBy(() ->
                 useCase.markException(PAYMENT_ID, Reason.CAPACITY_BELOW_ASSIGNED)

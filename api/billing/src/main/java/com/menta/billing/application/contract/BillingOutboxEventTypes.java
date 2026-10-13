@@ -37,6 +37,13 @@ public final class BillingOutboxEventTypes {
     public static final String PURCHASE_EXCEPTIONED = "billing.PurchaseExceptioned";
 
     /**
+     * Emitted after {@code ResolveExceptionPurchaseUseCaseImpl} moves a {@code Purchase} from
+     * {@code EXCEPTION} to {@code RESOLVED} (an admin closed it as refunded or compensated). The
+     * outbox row carries {@code com.menta.shared.billing.PurchaseResolvedOutboxPayload} as JSON.
+     */
+    public static final String PURCHASE_RESOLVED = "billing.PurchaseResolved";
+
+    /**
      * Emitted from {@code api:app}'s {@code
      * PhysicalCapacityAssignmentOutboxEventHandler} at the three
      * pre-{@code Purchase} sites where {@code markException} cannot record

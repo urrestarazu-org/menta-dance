@@ -39,6 +39,8 @@ import org.springframework.transaction.annotation.Transactional;
  *       appends {@code billing.PhysicalPaymentCompleted}.</li>
  *   <li>{@code EXCEPTION} → {@code EXCEPTION} — idempotent no-op (concurrent
  *       retry of the same handler call); no append (design D5).</li>
+ *   <li>{@code RESOLVED} → {@code EXCEPTION} — refused like {@code ASSIGNED}: an admin
+ *       resolution (#539) is terminal and never reopened; no append.</li>
  *   <li>{@code ASSIGNED} → {@code EXCEPTION} — refused; throws
  *       {@link IllegalPurchaseStateTransitionException}. Per ADR-0028
  *       §Decisión, once assigned, the residual path is no longer reachable;
@@ -101,9 +103,10 @@ public class MarkPurchaseExceptionUseCase implements MarkPurchaseExceptionPort {
             throw new PaymentNotFoundException(paymentId);
         }
         Purchase purchase = maybe.get();
-        if (purchase.getStatus() == FulfillmentStatus.ASSIGNED) {
+        if (purchase.getStatus() == FulfillmentStatus.ASSIGNED
+            || purchase.getStatus() == FulfillmentStatus.RESOLVED) {
             throw new IllegalPurchaseStateTransitionException(
-                paymentId, FulfillmentStatus.ASSIGNED, FulfillmentStatus.EXCEPTION
+                paymentId, purchase.getStatus(), FulfillmentStatus.EXCEPTION
             );
         }
         if (purchase.getStatus() == FulfillmentStatus.EXCEPTION) {

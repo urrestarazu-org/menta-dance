@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
  *       eligible session was successfully claimed (design A3).</li>
  *   <li>{@code ASSIGNED} → {@code ASSIGNED} — idempotent no-op (a redelivered
  *       outbox event whose {@code assignAll} somehow succeeded again).</li>
+ *   <li>{@code RESOLVED} → {@code ASSIGNED} — refused, same as {@code EXCEPTION}.</li>
  *   <li>{@code EXCEPTION} → {@code ASSIGNED} — refused; once the residual
  *       path settled, it never un-settles into a success (ADR-0028).</li>
  * </ul>
@@ -42,9 +43,10 @@ public class MarkPurchaseAssignedUseCase implements MarkPurchaseAssignedPort {
             throw new PaymentNotFoundException(paymentId);
         }
         Purchase purchase = maybe.get();
-        if (purchase.getStatus() == FulfillmentStatus.EXCEPTION) {
+        if (purchase.getStatus() == FulfillmentStatus.EXCEPTION
+            || purchase.getStatus() == FulfillmentStatus.RESOLVED) {
             throw new IllegalPurchaseStateTransitionException(
-                paymentId, FulfillmentStatus.EXCEPTION, FulfillmentStatus.ASSIGNED
+                paymentId, purchase.getStatus(), FulfillmentStatus.ASSIGNED
             );
         }
         if (purchase.getStatus() == FulfillmentStatus.ASSIGNED) {

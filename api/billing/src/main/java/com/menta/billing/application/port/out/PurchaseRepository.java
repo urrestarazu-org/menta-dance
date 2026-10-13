@@ -4,6 +4,7 @@ import com.menta.billing.application.dto.ExceptionPurchasePage;
 import com.menta.billing.domain.model.PaymentId;
 import com.menta.billing.domain.model.Purchase;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Out-port for persisting and querying {@link Purchase} aggregates, the physical fulfillment record
@@ -54,6 +55,9 @@ public interface PurchaseRepository {
      * index gap would self-block that insert.
      */
     Optional<Purchase> findByPaymentIdForUpdate(PaymentId paymentId);
+
+    /** A LOCKING read by purchase id (#539), same rationale as {@link #findByPaymentIdForUpdate(PaymentId)}. */
+    Optional<Purchase> findByIdForUpdate(UUID purchaseId);
 
     /**
      * The admin EXCEPTION-purchases inbox (#237, design C1): purchases stuck in {@link

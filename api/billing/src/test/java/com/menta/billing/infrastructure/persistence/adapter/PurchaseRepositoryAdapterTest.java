@@ -14,6 +14,7 @@ import com.menta.billing.application.dto.ExceptionPurchaseItem;
 import com.menta.billing.application.dto.ExceptionPurchasePage;
 import com.menta.billing.domain.model.PaymentId;
 import com.menta.billing.domain.model.Purchase;
+import com.menta.billing.domain.model.PurchaseResolutionType;
 import com.menta.billing.infrastructure.persistence.entity.PurchaseJpaEntity;
 import com.menta.billing.infrastructure.persistence.entity.PurchaseSessionJpaEntity;
 import com.menta.billing.infrastructure.persistence.mapper.PurchaseJpaMapper;
@@ -298,5 +299,49 @@ class PurchaseRepositoryAdapterTest {
         verify(sessionJpaRepository, times(1)).findByPurchaseIdInOrderByPurchaseIdAscPositionAsc(any());
         assertThat(page.items()).extracting(ExceptionPurchaseItem::physicalSessionIds)
             .containsExactly(List.of("session-a"), List.of("session-b"));
+    }
+
+    @Test
+    void save_persists_the_resolution_record_and_maps_it_back() {
+        PurchaseJpaRepository jpaRepository = mock(PurchaseJpaRepository.class);
+        PurchaseSessionJpaRepository sessionJpaRepository = mock(PurchaseSessionJpaRepository.class);
+        when(jpaRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(sessionJpaRepository.findByPurchaseIdOrderByPositionAsc(any())).thenReturn(List.of());
+        UUID adminId = UUID.randomUUID();
+        Instant now = Instant.parse("2026-10-13T12:00:00Z");
+        Purchase resolved = Purchase.exception(PaymentId.generate(), List.of("session-1"))
+            .resolve(PurchaseResolutionType.REFUNDED, "Reembolsado", adminId, now);
+
+        Purchase saved = new PurchaseRepositoryAdapter(jpaRepository, sessionJpaRepository, transactionManager())
+            .save(resolved);
+
+        org.mockito.ArgumentCaptor<PurchaseJpaEntity> entity =
+            org.mockito.ArgumentCaptor.forClass(PurchaseJpaEntity.class);
+        verify(jpaRepository).save(entity.capture());
+        assertThat(entity.getValue().getStatus()).isEqualTo("RESOLVED");
+        assertThat(entity.getValue().getResolution()).isEqualTo("REFUNDED");
+        assertThat(entity.getValue().getResolutionNote()).isEqualTo("Reembolsado");
+        assertThat(entity.getValue().getResolvedBy()).isEqualTo(adminId);
+        assertThat(entity.getValue().getResolvedAt()).isEqualTo(now);
+        assertThat(saved.getResolution()).contains(resolved.getResolution().orElseThrow());
+    }
+
+    @Test
+    void findByIdForUpdate_returns_the_locked_purchase_with_its_sessions() {
+        PurchaseJpaRepository jpaRepository = mock(PurchaseJpaRepository.class);
+        PurchaseSessionJpaRepository sessionJpaRepository = mock(PurchaseSessionJpaRepository.class);
+        UUID purchaseId = UUID.randomUUID();
+        when(jpaRepository.findByIdForUpdate(purchaseId))
+            .thenReturn(Optional.of(new PurchaseJpaEntity(purchaseId, UUID.randomUUID(), "EXCEPTION")));
+        when(sessionJpaRepository.findByPurchaseIdOrderByPositionAsc(purchaseId))
+            .thenReturn(List.of(new PurchaseSessionJpaEntity(purchaseId, 0, "session-1")));
+
+        Optional<Purchase> found =
+            new PurchaseRepositoryAdapter(jpaRepository, sessionJpaRepository, transactionManager())
+                .findByIdForUpdate(purchaseId);
+
+        assertThat(found).isPresent();
+        assertThat(found.get().getPhysicalSessionIds()).containsExactly("session-1");
+        assertThat(found.get().getResolution()).isEmpty();
     }
 }
