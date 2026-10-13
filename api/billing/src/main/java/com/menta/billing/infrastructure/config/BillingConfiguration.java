@@ -16,6 +16,7 @@ import com.menta.billing.application.port.in.GetPlanUseCase;
 import com.menta.billing.application.port.in.GetSubscriptionHistoryUseCase;
 import com.menta.billing.application.port.in.ListPlansUseCase;
 import com.menta.billing.application.port.in.ReceiveWebhookUseCase;
+import com.menta.billing.application.port.in.ResolveExceptionPurchaseUseCase;
 import com.menta.billing.application.port.in.ResolvePaymentProofUseCase;
 import com.menta.billing.application.port.in.SubmitPaymentProofUseCase;
 import com.menta.billing.application.port.in.UpdatePhysicalCoursePricingUseCase;
@@ -67,6 +68,7 @@ import com.menta.billing.application.usecase.PaymentVerificationService;
 import com.menta.billing.application.usecase.PublishPaymentFulfillmentFailedUseCase;
 import com.menta.billing.application.usecase.PublishPhysicalPaymentCompletedUseCase;
 import com.menta.billing.application.usecase.ReceiveWebhookUseCaseImpl;
+import com.menta.billing.application.usecase.ResolveExceptionPurchaseUseCaseImpl;
 import com.menta.billing.application.usecase.ResolvePaymentProofUseCaseImpl;
 import com.menta.billing.application.usecase.RoutingCreatePhysicalPurchaseCheckoutUseCase;
 import com.menta.billing.application.usecase.RoutingCreateSubscriptionCheckoutUseCase;
@@ -83,6 +85,7 @@ import com.menta.billing.infrastructure.transaction.TransactionalCreatePhysicalP
 import com.menta.billing.infrastructure.transaction.TransactionalCreateSubscriptionCheckoutUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalGetPaymentUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalReceiveWebhookUseCase;
+import com.menta.billing.infrastructure.transaction.TransactionalResolveExceptionPurchaseUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalResolvePaymentProofUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalSubmitPaymentProofUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalUpdatePhysicalCoursePricingUseCase;
@@ -557,6 +560,17 @@ public class BillingConfiguration {
         BillingOutboxAppenderPort outboxAppender, Clock clock
     ) {
         return new MarkPurchaseExceptionUseCase(purchaseRepository, paymentRepository, outboxAppender, clock);
+    }
+
+    /** #539: admin closure of an {@code EXCEPTION} purchase, committed with its outbox event. */
+    @Bean
+    public ResolveExceptionPurchaseUseCase resolveExceptionPurchaseUseCase(
+        PurchaseRepository purchaseRepository, PaymentRepository paymentRepository,
+        BillingOutboxAppenderPort outboxAppender, Clock clock
+    ) {
+        return new TransactionalResolveExceptionPurchaseUseCase(new ResolveExceptionPurchaseUseCaseImpl(
+            purchaseRepository, paymentRepository, outboxAppender, clock
+        ));
     }
 
     /** #41 PR8: the mirror image of {@code markPurchaseExceptionUseCase} for the success branch (design A3). */

@@ -5,12 +5,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.menta.billing.domain.exception.BankTransferRateLimitedException;
 import com.menta.billing.domain.exception.BillingDegradedException;
 import com.menta.billing.domain.exception.IllegalPaymentStateTransitionException;
+import com.menta.billing.domain.exception.IllegalPurchaseStateTransitionException;
 import com.menta.billing.domain.exception.PaymentNotFoundException;
 import com.menta.billing.domain.exception.PaymentProofRejectedException;
+import com.menta.billing.domain.exception.PurchaseNotFoundException;
+import com.menta.billing.domain.exception.PurchaseResolutionConflictException;
+import com.menta.billing.domain.model.FulfillmentStatus;
 import com.menta.billing.domain.model.ManualVerificationDecision;
 import com.menta.billing.domain.model.PaymentId;
 import com.menta.billing.domain.model.PaymentStatus;
+import com.menta.billing.domain.model.PurchaseResolutionType;
 import java.time.Duration;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -100,5 +106,48 @@ class PaymentExceptionHandlerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
         assertThat(response.getBody().getProperties().get("code")).isEqualTo("INVALID_REQUEST");
+    }
+
+    /** #539: an admin resolution on a purchase that does not exist. */
+    @Test
+    void maps_purchase_not_found_to_404() {
+        ResponseEntity<ProblemDetail> response =
+            handler.purchaseNotFound(new PurchaseNotFoundException(UUID.randomUUID()));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+        assertThat(response.getBody().getProperties().get("code")).isEqualTo("PURCHASE_NOT_FOUND");
+        assertThat(response.getBody().getDetail()).isEqualTo("No se encontró la compra indicada.");
+    }
+
+    /** #539: only a purchase in EXCEPTION can be resolved. */
+    @Test
+    void maps_illegal_purchase_state_transition_to_409() {
+        IllegalPurchaseStateTransitionException exception = new IllegalPurchaseStateTransitionException(
+            PaymentId.generate(),
+            FulfillmentStatus.ASSIGNED, FulfillmentStatus.RESOLVED
+        );
+
+        ResponseEntity<ProblemDetail> response = handler.illegalPurchaseStateTransition(exception);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+        assertThat(response.getBody().getProperties().get("code")).isEqualTo("ILLEGAL_PURCHASE_STATE_TRANSITION");
+        assertThat(response.getBody().getDetail())
+            .isEqualTo("La compra no está en un estado que admita esta operación.");
+    }
+
+    /** #539: a resolution is final; a different decision or note on a resolved purchase conflicts. */
+    @Test
+    void maps_purchase_resolution_conflict_to_409() {
+        PurchaseResolutionConflictException exception =
+            new PurchaseResolutionConflictException(UUID.randomUUID(), PurchaseResolutionType.REFUNDED);
+
+        ResponseEntity<ProblemDetail> response = handler.purchaseResolutionConflict(exception);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+        assertThat(response.getBody().getProperties().get("code")).isEqualTo("PURCHASE_ALREADY_RESOLVED");
+        assertThat(response.getBody().getDetail()).isEqualTo("La compra ya fue resuelta de otra forma.");
     }
 }
