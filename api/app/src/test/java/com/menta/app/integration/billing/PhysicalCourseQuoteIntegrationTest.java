@@ -27,8 +27,10 @@ import com.menta.billing.infrastructure.persistence.repository.PhysicalCourseQuo
 import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
 import com.menta.physical.application.port.out.CheckInRateLimitPort;
 import com.menta.physical.domain.model.CourseStatus;
+import com.menta.physical.infrastructure.persistence.entity.PhysicalCapacityAssignmentJpaEntity;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalCourseJpaEntity;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalSessionJpaEntity;
+import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityAssignmentJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
 import com.menta.shared.domain.vo.Email;
@@ -37,6 +39,7 @@ import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -83,6 +86,7 @@ class PhysicalCourseQuoteIntegrationTest extends AbstractBillingMySqlIntegration
     @Autowired private AccessTokenIssuer accessTokenIssuer;
     @Autowired private PhysicalCourseJpaRepository courseRepository;
     @Autowired private PhysicalSessionJpaRepository sessionRepository;
+    @Autowired private PhysicalCapacityAssignmentJpaRepository assignmentRepository;
     @Autowired private PhysicalCoursePricingJpaRepository pricingRepository;
     @Autowired private PhysicalCourseQuoteJpaRepository quoteRepository;
 
@@ -107,6 +111,7 @@ class PhysicalCourseQuoteIntegrationTest extends AbstractBillingMySqlIntegration
 
     @AfterEach
     void cleanUp() {
+        assignmentRepository.deleteAll();
         quoteRepository.deleteAll();
         pricingRepository.deleteAll();
         sessionRepository.deleteAll();
@@ -351,5 +356,105 @@ class PhysicalCourseQuoteIntegrationTest extends AbstractBillingMySqlIntegration
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(response.getBody().get("availability")).isEqualTo("UNAVAILABLE");
+    }
+
+    // --- #541: MONTHLY quote vs. the sessions the student already owns ---
+
+    /**
+     * September 2026 holds four sessions (two already past on the 15th). Counting from "now", the
+     * monthly would cover Sep 19, Sep 26, Oct 3 and Oct 10 — the next four.
+     */
+    private List<UUID> seedSeptemberCalendarWithTwoSessionsOfOctober(UUID courseId) {
+        return List.of(
+            seedSession(courseId, Instant.parse("2026-09-05T20:00:00Z"), 20),
+            seedSession(courseId, Instant.parse("2026-09-12T20:00:00Z"), 20),
+            seedSession(courseId, Instant.parse("2026-09-19T20:00:00Z"), 20),
+            seedSession(courseId, Instant.parse("2026-09-26T20:00:00Z"), 20),
+            seedSession(courseId, Instant.parse("2026-10-03T20:00:00Z"), 20),
+            seedSession(courseId, Instant.parse("2026-10-10T20:00:00Z"), 20)
+        );
+    }
+
+    private void assign(UUID sessionId, UUID studentId) {
+        assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
+            UUID.randomUUID(), sessionId, studentId, Instant.now()
+        ));
+    }
+
+    private ResponseEntity<Map> quoteMonthly(UUID courseId, UUID studentId) {
+        return http.exchange(
+            "/api/v1/billing/physical/quotes", HttpMethod.POST,
+            new HttpEntity<>(quoteBody(courseId.toString(), "MONTHLY", null), headersFor(studentId, Role.STUDENT)),
+            Map.class
+        );
+    }
+
+    @Test
+    void monthly_quote_is_issued_when_the_student_owns_no_session() {
+        when(clock.now()).thenReturn(SEPTEMBER_NOW);
+        UUID studentId = issueUser(Role.STUDENT);
+        UUID courseId = seedCourse();
+        seedPricing(courseId.toString(), "150.00", "10");
+        seedSeptemberCalendarWithTwoSessionsOfOctober(courseId);
+
+        ResponseEntity<Map> response = quoteMonthly(courseId, studentId);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(response.getBody().get("scheduledSessionCount")).isEqualTo(4);
+        assertThat(quoteRepository.findAll()).hasSize(1);
+    }
+
+    @Test
+    void monthly_quote_keeps_the_full_price_when_the_student_owns_only_some_of_the_covered_sessions() {
+        when(clock.now()).thenReturn(SEPTEMBER_NOW);
+        UUID studentId = issueUser(Role.STUDENT);
+        UUID courseId = seedCourse();
+        seedPricing(courseId.toString(), "150.00", "10");
+        List<UUID> sessions = seedSeptemberCalendarWithTwoSessionsOfOctober(courseId);
+        // Owns the two remaining sessions of September, but not the October ones the monthly also covers.
+        assign(sessions.get(2), studentId);
+        assign(sessions.get(3), studentId);
+
+        ResponseEntity<Map> response = quoteMonthly(courseId, studentId);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(response.getBody().get("amount")).isEqualTo(150.00);
+        assertThat(response.getBody().get("scheduledSessionCount")).isEqualTo(4);
+        assertThat(quoteRepository.findAll()).hasSize(1);
+    }
+
+    @Test
+    void monthly_quote_is_rejected_with_409_and_persists_nothing_when_the_student_owns_every_covered_session() {
+        when(clock.now()).thenReturn(SEPTEMBER_NOW);
+        UUID studentId = issueUser(Role.STUDENT);
+        UUID courseId = seedCourse();
+        seedPricing(courseId.toString(), "150.00", "10");
+        List<UUID> sessions = seedSeptemberCalendarWithTwoSessionsOfOctober(courseId);
+        for (UUID sessionId : sessions.subList(2, 6)) {
+            assign(sessionId, studentId);
+        }
+
+        ResponseEntity<Map> response = quoteMonthly(courseId, studentId);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody().get("code")).isEqualTo("NO_NEW_SESSIONS");
+        assertThat(quoteRepository.findAll()).isEmpty();
+    }
+
+    @Test
+    void sessions_owned_by_another_student_do_not_block_the_quote() {
+        when(clock.now()).thenReturn(SEPTEMBER_NOW);
+        UUID studentId = issueUser(Role.STUDENT);
+        UUID courseId = seedCourse();
+        seedPricing(courseId.toString(), "150.00", "10");
+        List<UUID> sessions = seedSeptemberCalendarWithTwoSessionsOfOctober(courseId);
+        UUID someoneElse = UUID.randomUUID();
+        for (UUID sessionId : sessions.subList(2, 6)) {
+            assign(sessionId, someoneElse);
+        }
+
+        ResponseEntity<Map> response = quoteMonthly(courseId, studentId);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     }
 }

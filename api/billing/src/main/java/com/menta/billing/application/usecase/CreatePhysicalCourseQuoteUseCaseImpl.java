@@ -102,6 +102,11 @@ public class CreatePhysicalCourseQuoteUseCaseImpl implements CreatePhysicalCours
             ? QuoteAvailability.AVAILABLE
             : QuoteAvailability.UNAVAILABLE;
 
+        // #541: a monthly that would add no session for this student is not worth quoting.
+        PhysicalCoverageAvailability.requireNewSessions(
+            availabilityPort, command.courseId(), command.userId(), sessions.size(), now
+        );
+
         return PhysicalCourseQuote.monthly(command.courseId(), pricing, sessions.size(), availability, now);
     }
 

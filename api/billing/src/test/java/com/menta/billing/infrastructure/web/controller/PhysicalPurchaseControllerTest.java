@@ -15,6 +15,7 @@ import com.menta.billing.application.dto.BankTransferInstructions;
 import com.menta.billing.application.dto.CreatePhysicalPurchaseCheckoutCommand;
 import com.menta.billing.application.dto.PhysicalPurchaseCheckoutResult;
 import com.menta.billing.application.port.in.CreatePhysicalPurchaseCheckoutUseCase;
+import com.menta.billing.domain.exception.NoNewSessionsToPurchaseException;
 import com.menta.billing.domain.exception.PaymentPreferenceUnavailableException;
 import com.menta.billing.domain.exception.PhysicalCapacityUnavailableException;
 import com.menta.billing.domain.exception.PhysicalCourseQuoteExpiredException;
@@ -241,6 +242,19 @@ class PhysicalPurchaseControllerTest {
                 .content(body(QUOTE_ID, "MERCADO_PAGO", "idem-1")))
             .andExpect(status().isConflict())
             .andExpect(jsonPath("$.code", is("CAPACITY_UNAVAILABLE")));
+    }
+
+    /** #541: the student already holds every session the monthly would cover. */
+    @Test
+    void nothing_new_to_purchase_maps_to_409_with_its_own_code() throws Exception {
+        when(useCase.create(any())).thenThrow(new NoNewSessionsToPurchaseException());
+
+        mockMvc.perform(post("/api/v1/billing/physical/purchases")
+                .with(authenticatedAs(USER_ID))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body(QUOTE_ID, "MERCADO_PAGO", "idem-1")))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.code", is("NO_NEW_SESSIONS")));
     }
 
     @Test

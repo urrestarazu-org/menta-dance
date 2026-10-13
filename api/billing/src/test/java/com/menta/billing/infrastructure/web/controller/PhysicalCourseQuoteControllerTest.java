@@ -15,6 +15,7 @@ import com.menta.billing.application.dto.CreatePhysicalCourseQuoteCommand;
 import com.menta.billing.application.dto.PhysicalCourseQuoteResult;
 import com.menta.billing.application.port.in.CreatePhysicalCourseQuoteUseCase;
 import com.menta.billing.domain.exception.IndividualSurchargeTooSmallException;
+import com.menta.billing.domain.exception.NoNewSessionsToPurchaseException;
 import com.menta.billing.domain.exception.NoScheduledSessionsException;
 import com.menta.billing.domain.exception.PhysicalCoursePricingNotFoundException;
 import com.menta.billing.domain.exception.PhysicalSessionNotFoundException;
@@ -27,12 +28,15 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class PhysicalCourseQuoteControllerTest {
 
     private static final String COURSE_ID = "course-1";
+    private static final UUID USER_ID = UUID.randomUUID();
 
     private CreatePhysicalCourseQuoteUseCase useCase;
     private MockMvc mockMvc;
@@ -44,6 +48,13 @@ class PhysicalCourseQuoteControllerTest {
         mockMvc = MockMvcBuilders.standaloneSetup(new PhysicalCourseQuoteController(useCase))
             .setControllerAdvice(new PhysicalCourseQuoteExceptionHandler())
             .build();
+    }
+
+    private static RequestPostProcessor authenticatedAs(UUID userId) {
+        return request -> {
+            request.setUserPrincipal(new UsernamePasswordAuthenticationToken(userId.toString(), "n/a"));
+            return request;
+        };
     }
 
     private static PhysicalCourseQuoteResult monthlyResult() {
@@ -77,6 +88,7 @@ class PhysicalCourseQuoteControllerTest {
         when(useCase.create(any(CreatePhysicalCourseQuoteCommand.class))).thenReturn(monthlyResult());
 
         mockMvc.perform(post("/api/v1/billing/physical/quotes")
+                .with(authenticatedAs(USER_ID))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(bodyOf("MONTHLY", null)))
             .andExpect(status().isCreated())
@@ -90,6 +102,7 @@ class PhysicalCourseQuoteControllerTest {
         when(useCase.create(any(CreatePhysicalCourseQuoteCommand.class))).thenReturn(individualResult());
 
         mockMvc.perform(post("/api/v1/billing/physical/quotes")
+                .with(authenticatedAs(USER_ID))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(bodyOf("INDIVIDUAL", "session-1")))
             .andExpect(status().isCreated())
@@ -97,7 +110,9 @@ class PhysicalCourseQuoteControllerTest {
             .andExpect(jsonPath("$.selectedSessionId", is("session-1")))
             .andExpect(jsonPath("$.amount", is(13.75)));
 
-        verify(useCase).create(new CreatePhysicalCourseQuoteCommand(COURSE_ID, PurchaseType.INDIVIDUAL, "session-1"));
+        verify(useCase).create(
+            new CreatePhysicalCourseQuoteCommand(USER_ID, COURSE_ID, PurchaseType.INDIVIDUAL, "session-1")
+        );
     }
 
     @Test
@@ -106,6 +121,7 @@ class PhysicalCourseQuoteControllerTest {
             .thenThrow(new PhysicalCoursePricingNotFoundException());
 
         mockMvc.perform(post("/api/v1/billing/physical/quotes")
+                .with(authenticatedAs(USER_ID))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(bodyOf("MONTHLY", null)))
             .andExpect(status().isNotFound())
@@ -119,6 +135,7 @@ class PhysicalCourseQuoteControllerTest {
             .thenThrow(new PhysicalSessionNotFoundException());
 
         mockMvc.perform(post("/api/v1/billing/physical/quotes")
+                .with(authenticatedAs(USER_ID))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(bodyOf("INDIVIDUAL", "unknown")))
             .andExpect(status().isNotFound())
@@ -131,10 +148,39 @@ class PhysicalCourseQuoteControllerTest {
             .thenThrow(new NoScheduledSessionsException());
 
         mockMvc.perform(post("/api/v1/billing/physical/quotes")
+                .with(authenticatedAs(USER_ID))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(bodyOf("MONTHLY", null)))
             .andExpect(status().isUnprocessableEntity())
             .andExpect(jsonPath("$.code", is("NO_SCHEDULED_SESSIONS")));
+    }
+
+    /** The student comes from the token, so the use case can tell which sessions they already own. */
+    @Test
+    void monthly_quote_binds_the_command_to_the_token_subject() throws Exception {
+        when(useCase.create(any(CreatePhysicalCourseQuoteCommand.class))).thenReturn(monthlyResult());
+
+        mockMvc.perform(post("/api/v1/billing/physical/quotes")
+                .with(authenticatedAs(USER_ID))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(bodyOf("MONTHLY", null)))
+            .andExpect(status().isCreated());
+
+        verify(useCase).create(new CreatePhysicalCourseQuoteCommand(USER_ID, COURSE_ID, PurchaseType.MONTHLY, null));
+    }
+
+    @Test
+    void nothing_new_to_purchase_returns_409_with_a_stable_code() throws Exception {
+        when(useCase.create(any(CreatePhysicalCourseQuoteCommand.class)))
+            .thenThrow(new NoNewSessionsToPurchaseException());
+
+        mockMvc.perform(post("/api/v1/billing/physical/quotes")
+                .with(authenticatedAs(USER_ID))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(bodyOf("MONTHLY", null)))
+            .andExpect(status().isConflict())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.code", is("NO_NEW_SESSIONS")));
     }
 
     @Test
@@ -143,6 +189,7 @@ class PhysicalCourseQuoteControllerTest {
             .thenThrow(new IndividualSurchargeTooSmallException());
 
         mockMvc.perform(post("/api/v1/billing/physical/quotes")
+                .with(authenticatedAs(USER_ID))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(bodyOf("INDIVIDUAL", "session-1")))
             .andExpect(status().isUnprocessableEntity())
@@ -155,6 +202,7 @@ class PhysicalCourseQuoteControllerTest {
             .thenThrow(new com.menta.billing.domain.exception.SelectedSessionRequiredException());
 
         mockMvc.perform(post("/api/v1/billing/physical/quotes")
+                .with(authenticatedAs(USER_ID))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(bodyOf("INDIVIDUAL", null)))
             .andExpect(status().isUnprocessableEntity())
@@ -167,6 +215,7 @@ class PhysicalCourseQuoteControllerTest {
             .thenThrow(new com.menta.billing.domain.exception.SelectedSessionNotAllowedException());
 
         mockMvc.perform(post("/api/v1/billing/physical/quotes")
+                .with(authenticatedAs(USER_ID))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(bodyOf("MONTHLY", "session-1")))
             .andExpect(status().isUnprocessableEntity())
@@ -176,6 +225,7 @@ class PhysicalCourseQuoteControllerTest {
     @Test
     void malformed_body_returns_400() throws Exception {
         mockMvc.perform(post("/api/v1/billing/physical/quotes")
+                .with(authenticatedAs(USER_ID))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"))
             .andExpect(status().isBadRequest());
