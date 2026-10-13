@@ -678,10 +678,11 @@ paths:
       summary: Listar compras presenciales en EXCEPTION (ADMIN)
       description: |
         Inventario de sólo lectura, paginado y ordenado por antigüedad (más antiguos primero,
-        según `Payment.createdAt`), de compras presenciales varadas en `EXCEPTION` (#237). No
-        ofrece ninguna acción para resolver, transicionar o reasignar una compra — es pura
-        observabilidad sobre la máquina de estados existente. `size` mayor a 50 se **rechaza**
-        con `400` — nunca se recorta (mismo criterio que el inbox de pagos pendientes).
+        según `Payment.createdAt`), de compras presenciales varadas en `EXCEPTION` (#237). Una
+        compra sale de este inventario únicamente al cerrarse con
+        `POST /api/v1/admin/billing/purchases/{purchaseId}/resolution` (#539). `size` mayor a 50
+        se **rechaza** con `400` — nunca se recorta (mismo criterio que el inbox de pagos
+        pendientes).
       operationId: listPurchasesInException
       security:
         - bearerAuth: []
@@ -731,6 +732,102 @@ paths:
           description: Falta un access token válido.
         '403':
           description: El caller autenticado no tiene rol ADMIN.
+
+  /api/v1/admin/billing/purchases/{purchaseId}/resolution:
+    post:
+      tags: [Excepciones de compras presenciales]
+      summary: Cerrar una compra presencial en EXCEPTION con registro auditable (ADMIN)
+      description: |
+        Cierra una compra varada en `EXCEPTION` como `REFUNDED` (el dinero se devolvió fuera de
+        la plataforma) o `COMPENSATED` (se compensó al alumno de otra forma), dejando una nota
+        obligatoria (#539). La compra pasa al estado terminal `RESOLVED` y conserva quién la
+        cerró, cuándo y por qué. El pago no se modifica y no se asigna ninguna sesión: la
+        asistencia sigue sin habilitarse. En la misma transacción se publica
+        `billing.PurchaseResolved` (sin la nota).
+
+        Es idempotente: repetir la misma resolución con la misma nota responde `200` sin
+        efectos ni eventos nuevos. Una resolución es definitiva: una decisión o nota distinta
+        sobre una compra ya resuelta responde `409`.
+      operationId: resolveExceptionPurchase
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: purchaseId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveExceptionPurchaseRequest'
+      responses:
+        '200':
+          description: La compra quedó resuelta (o ya lo estaba con exactamente esta decisión y nota).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseResolutionResponse'
+        '400':
+          description: >-
+            `resolution` ausente o desconocida, `note` vacía o de más de 500 caracteres, o
+            `purchaseId` que no es un UUID.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                solicitud_invalida:
+                  value:
+                    type: https://menta.dance/problems/invalid_request
+                    title: Bad Request
+                    status: 400
+                    detail: La solicitud es inválida.
+                    code: INVALID_REQUEST
+        '401':
+          description: Falta un access token válido.
+        '403':
+          description: El caller autenticado no tiene rol ADMIN.
+        '404':
+          description: La compra no existe.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                compra_inexistente:
+                  value:
+                    type: https://menta.dance/problems/purchase_not_found
+                    title: Not Found
+                    status: 404
+                    detail: No se encontró la compra indicada.
+                    code: PURCHASE_NOT_FOUND
+        '409':
+          description: >-
+            La compra no está en `EXCEPTION` (`ILLEGAL_PURCHASE_STATE_TRANSITION`) o ya fue
+            resuelta con otra decisión o nota (`PURCHASE_ALREADY_RESOLVED`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                estado_invalido:
+                  value:
+                    type: https://menta.dance/problems/illegal_purchase_state_transition
+                    title: Conflict
+                    status: 409
+                    detail: La compra no está en un estado que admita esta operación.
+                    code: ILLEGAL_PURCHASE_STATE_TRANSITION
+                ya_resuelta:
+                  value:
+                    type: https://menta.dance/problems/purchase_already_resolved
+                    title: Conflict
+                    status: 409
+                    detail: La compra ya fue resuelta de otra forma.
+                    code: PURCHASE_ALREADY_RESOLVED
 
   /api/v1/admin/billing/payments/{paymentId}:
     get:
@@ -1460,6 +1557,55 @@ components:
           type: integer
         totalPages:
           type: integer
+
+    ResolveExceptionPurchaseRequest:
+      type: object
+      required: [resolution, note]
+      properties:
+        resolution:
+          type: string
+          enum: [REFUNDED, COMPENSATED]
+          description: |
+            `REFUNDED`: el dinero se devolvió al alumno. `COMPENSATED`: se lo compensó de otra
+            forma (por ejemplo, una clase equivalente).
+        note:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: Justificación obligatoria; se guarda sin espacios sobrantes en los extremos.
+
+    PurchaseResolutionResponse:
+      type: object
+      description: La compra tras la resolución. Todos los campos de resolución están siempre presentes.
+      required:
+        [purchaseId, paymentId, status, resolution, note, resolvedBy, resolvedAt, physicalSessionIds]
+      properties:
+        purchaseId:
+          type: string
+          format: uuid
+        paymentId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [RESOLVED]
+        resolution:
+          type: string
+          enum: [REFUNDED, COMPENSATED]
+        note:
+          type: string
+        resolvedBy:
+          type: string
+          format: uuid
+          description: Id del ADMIN que tomó la decisión.
+        resolvedAt:
+          type: string
+          format: date-time
+        physicalSessionIds:
+          type: array
+          description: Sesiones que cubría la compra; nunca se asignaron. `[]` si no tenía ninguna.
+          items:
+            type: string
 
     PaymentDetailResponse:
       type: object

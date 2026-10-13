@@ -114,7 +114,8 @@ confirmación en `EXPIRED`. La respuesta del proveedor se mapea así: `approved`
 al consultar al proveedor. Un pago confirmado que no logra asignar capacidad queda
 `COMPLETED` porque representa liquidación financiera. Su Purchase inicia
 `PENDING_FULFILLMENT` y sólo luego pasa a `ASSIGNED` o `EXCEPTION`; no se habilita
-asistencia hasta `ASSIGNED`. `EXPIRED` no habilita suscripción ni asigna cupo.
+asistencia hasta `ASSIGNED`. Desde `EXCEPTION` sólo se sale a `RESOLVED` (terminal, sin
+asistencia) por resolución administrativa. `EXPIRED` no habilita suscripción ni asigna cupo.
 
 Cuando una Purchase presencial pasa a `EXCEPTION`, el evento `billing.PurchaseExceptioned`
 (y la notificación operativa) lleva el campo `reason` con el motivo codificado:
@@ -123,6 +124,17 @@ alumno), `ALREADY_ASSIGNED` (el alumno ya tiene confirmada una de las sesiones a
 aunque sobre cupo; lo detecta la unicidad `(session_id, student_id)`), `HOLD_EXPIRED`,
 `COVERAGE_CHANGED`, `TARGET_NOT_SCHEDULED` y `UNIQUE_COLLISION`. Quien investiga una compra
 en `EXCEPTION` debe usar ese motivo: `ALREADY_ASSIGNED` no indica falta de capacidad.
+
+Una Purchase en `EXCEPTION` sale de ese estado únicamente por una resolución administrativa
+(#539): `POST /api/v1/admin/billing/purchases/{purchaseId}/resolution` con `resolution`
+(`REFUNDED` o `COMPENSATED`) y una `note` obligatoria de hasta 500 caracteres; requiere `ADMIN`.
+La Purchase pasa al estado terminal `RESOLVED`, guarda quién la cerró, cuándo y por qué, y se
+publica `billing.PurchaseResolved` (sin la nota) en la misma transacción. El Payment no cambia,
+no se asigna ninguna sesión y no se habilita asistencia: la resolución registra que el dinero
+se devolvió o compensó fuera de la plataforma, no lo ejecuta. Es idempotente para la misma
+decisión y nota; una decisión o nota distinta sobre una compra ya resuelta responde `409
+PURCHASE_ALREADY_RESOLVED`, y una compra que no está en `EXCEPTION`, `409
+ILLEGAL_PURCHASE_STATE_TRANSITION`. Ver `api/openapi/billing-v1.yaml`.
 
 Las transiciones originadas por proveedor son monotónicas: un webhook tardío o
 duplicado nunca puede retroceder ni reemplazar un estado ya aplicado. Sólo
