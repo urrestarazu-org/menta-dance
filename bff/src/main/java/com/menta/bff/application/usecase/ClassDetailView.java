@@ -57,8 +57,9 @@ public record ClassDetailView(
      * @param sessionId      session identifier, sent back to quote this single class
      * @param whenLabel      readable Spanish date and time in the academy's zone
      * @param availableSpots free spots, 0 when full
+     * @param owned          whether the signed-in student already holds a confirmed spot in it
      */
-    public record SessionRow(String sessionId, String whenLabel, int availableSpots) {
+    public record SessionRow(String sessionId, String whenLabel, int availableSpots, boolean owned) {
 
         /** Whether the session has no free spot left. */
         public boolean full() {

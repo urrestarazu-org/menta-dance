@@ -1,5 +1,6 @@
 package com.menta.bff.infrastructure.web.controller;
 
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
@@ -11,6 +12,7 @@ import com.menta.bff.application.usecase.ClassDetailView;
 import com.menta.bff.application.usecase.ClassesView;
 import com.menta.bff.application.usecase.GetClassDetailViewUseCase;
 import com.menta.bff.application.usecase.GetClassesViewUseCase;
+import com.menta.bff.infrastructure.web.filter.TokenRefreshFilter;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -70,7 +72,7 @@ class ClassesControllerTest {
         ClassDetailView detail = new ClassDetailView(
                 "p-1", "Salsa", "Avanzado", "María", "Lunes 18:00", ClassDetailView.PriceState.PUBLISHED,
                 "$ 25.000,00 por mes", List.of(), false);
-        when(getClassDetailViewUseCase.execute("p-1")).thenReturn(detail);
+        when(getClassDetailViewUseCase.execute("p-1", null)).thenReturn(detail);
 
         mockMvc.perform(get("/classes/p-1"))
                 .andExpect(status().isOk())
@@ -81,7 +83,7 @@ class ClassesControllerTest {
     @Test
     @DisplayName("answers 503 with the degraded detail when the catalog is down")
     void detailAnswers503WhenUnavailable() throws Exception {
-        when(getClassDetailViewUseCase.execute("p-1")).thenReturn(ClassDetailView.unavailableView());
+        when(getClassDetailViewUseCase.execute("p-1", null)).thenReturn(ClassDetailView.unavailableView());
 
         mockMvc.perform(get("/classes/p-1"))
                 .andExpect(status().isServiceUnavailable())
@@ -91,9 +93,35 @@ class ClassesControllerTest {
     @Test
     @DisplayName("answers 404 for a course that is not a published physical class")
     void detailAnswers404() throws Exception {
-        when(getClassDetailViewUseCase.execute("v-1"))
+        when(getClassDetailViewUseCase.execute("v-1", null))
                 .thenThrow(new CatalogApiClient.NotFoundException("nope"));
 
         mockMvc.perform(get("/classes/v-1")).andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("hands the signed-in student's access token to the use case")
+    void passesTheAccessTokenOfASignedInStudent() throws Exception {
+        ClassDetailView detail = new ClassDetailView(
+                "p-1", "Salsa", "Avanzado", "María", "Lunes 18:00", ClassDetailView.PriceState.PUBLISHED,
+                "$ 25.000,00 por mes", List.of(new ClassDetailView.SessionRow("s-1", "lunes", 5, true)), false);
+        when(getClassDetailViewUseCase.execute("p-1", "access-token-abc")).thenReturn(detail);
+
+        mockMvc.perform(get("/classes/p-1").requestAttr(TokenRefreshFilter.ACCESS_TOKEN_ATTRIBUTE, "access-token-abc"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("class-detail"))
+                .andExpect(model().attribute("course", detail));
+        verify(getClassDetailViewUseCase).execute("p-1", "access-token-abc");
+    }
+
+    @Test
+    @DisplayName("an anonymous visitor reaches the use case without a token")
+    void anonymousVisitorHasNoToken() throws Exception {
+        ClassDetailView detail = ClassDetailView.unavailableView();
+        when(getClassDetailViewUseCase.execute("p-1", null)).thenReturn(detail);
+
+        mockMvc.perform(get("/classes/p-1")).andExpect(view().name("class-detail"));
+
+        verify(getClassDetailViewUseCase).execute("p-1", null);
     }
 }

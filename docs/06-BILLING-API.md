@@ -230,6 +230,13 @@ Un alumno autenticado cotiza y paga desde el BFF (plantillas Thymeleaf, sin Java
    si el precio no se puede consultar (`429`, `5xx`, cuerpo ilegible o error de red) se muestra
    un aviso breve, también sin botones. En ningún caso se rompe el detalle ni se muestra el
    cuerpo del error de Billing.
+
+   Para un alumno con sesión, la página consulta además `GET /api/v1/physical/sessions/me` (#542)
+   con su token y marca "Ya tenés lugar" las sesiones listadas donde ya tiene lugar confirmado
+   (se cruza por `sessionId`); esas sesiones no ofrecen "Cotizar solo esta clase". La ventana de
+   sesiones la decide la API (`physical.sessions.window-days`, 60 días por defecto), el visitante
+   anónimo no dispara la consulta y, si falla (timeout, `401`, `403`, `404`, `5xx` o cuerpo
+   ilegible), la ficha se muestra igual sin marcas.
 2. `POST /classes/{courseId}/cotizar` (`purchaseType`, y `selectedSessionId` si es individual)
    llama a `POST /api/v1/billing/physical/quotes` con el access token del alumno y muestra la
    cotización: importe en formato es-AR, sesiones del período y vencimiento (zona
