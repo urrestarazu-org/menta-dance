@@ -544,7 +544,7 @@ class PhysicalPurchaseIntegrationTest extends BaseIntegrationTest {
 
         String html = returnPageAfterPaying("COMPLETED");
 
-        assertThat(html).contains("¡Pago confirmado! Estamos asignando tus lugares")
+        assertThat(html).contains("¡Pago confirmado! Ya tenés lugar en las sesiones de abajo")
                 .contains("Tus próximas sesiones")
                 .containsSubsequence("Salsa en vivo", "lunes 19 de octubre a las 18:00",
                         "Bachata", "martes 20 de octubre a las 22:30");

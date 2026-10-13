@@ -149,9 +149,12 @@ public class PhysicalPurchaseController {
         }
         return switch (progress) {
             case COMPLETED -> {
-                model.addAttribute("assignedSessions", getAssignedSessionsUseCase.execute(accessToken(request)));
-                yield PurchaseFlowErrors.notice(model, "Pago confirmado",
-                        "¡Pago confirmado! Estamos asignando tus lugares.", CLASSES_PATH, BACK_TO_CLASSES);
+                var assignedSessions = getAssignedSessionsUseCase.execute(accessToken(request));
+                model.addAttribute("assignedSessions", assignedSessions);
+                String confirmed = assignedSessions.isEmpty()
+                        ? "¡Pago confirmado! Estamos asignando tus lugares."
+                        : "¡Pago confirmado! Ya tenés lugar en las sesiones de abajo.";
+                yield PurchaseFlowErrors.notice(model, "Pago confirmado", confirmed, CLASSES_PATH, BACK_TO_CLASSES);
             }
             case REJECTED -> PurchaseFlowErrors.notice(model, "Pago rechazado",
                     "El pago fue rechazado. No se te cobró nada; podés intentar de nuevo.",
