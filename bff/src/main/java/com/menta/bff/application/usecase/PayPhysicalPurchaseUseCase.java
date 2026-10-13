@@ -19,6 +19,8 @@ public interface PayPhysicalPurchaseUseCase {
      * @return the payment id and the provider checkout URL
      * @throws com.menta.bff.application.port.out.PhysicalPurchaseApiClient.CapacityUnavailableException
      *         if no room is left
+     * @throws com.menta.bff.application.port.out.PhysicalPurchaseApiClient.NoNewSessionsException
+     *         if the purchase would add no session the student does not already own
      * @throws com.menta.bff.application.port.out.PhysicalPurchaseApiClient.QuoteExpiredException
      *         if the quote expired or does not exist
      */

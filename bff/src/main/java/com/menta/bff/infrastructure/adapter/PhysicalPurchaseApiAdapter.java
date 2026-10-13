@@ -44,6 +44,7 @@ public class PhysicalPurchaseApiAdapter implements PhysicalPurchaseApiClient {
     private static final String PAYMENTS = "/api/v1/billing/payments/{paymentId}";
     private static final String PAYMENT_METHOD = "MERCADO_PAGO";
     private static final String NO_SCHEDULED_SESSIONS = "NO_SCHEDULED_SESSIONS";
+    private static final String NO_NEW_SESSIONS = "NO_NEW_SESSIONS";
 
     private final WebClient webClient;
     private final BillingApiProperties properties;
@@ -123,7 +124,9 @@ public class PhysicalPurchaseApiAdapter implements PhysicalPurchaseApiClient {
     private RuntimeException mapError(int status, String code, Long retryAfter) {
         return switch (status) {
             case 400 -> new InvalidRequestException("Billing API rejected the request");
-            case 409 -> new CapacityUnavailableException("No capacity for the quote");
+            case 409 -> NO_NEW_SESSIONS.equals(code)
+                    ? new NoNewSessionsException("The purchase would add no new session")
+                    : new CapacityUnavailableException("No capacity for the quote");
             case 410 -> new QuoteExpiredException("Quote expired or unknown");
             case 404 -> new BillingApiClient.NotFoundException("Billing resource not found");
             case 422 -> NO_SCHEDULED_SESSIONS.equals(code)

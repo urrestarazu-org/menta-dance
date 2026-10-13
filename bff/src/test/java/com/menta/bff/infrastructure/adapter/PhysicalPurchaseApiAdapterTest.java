@@ -120,6 +120,9 @@ class PhysicalPurchaseApiAdapterTest {
     @CsvSource({
         "422, NO_SCHEDULED_SESSIONS, NoScheduledSessionsException",
         "422, SELECTED_SESSION_REQUIRED, InvalidRequestException",
+        "409, NO_NEW_SESSIONS, NoNewSessionsException",
+        "409, CAPACITY_UNAVAILABLE, CapacityUnavailableException",
+        "409, SOMETHING_NEW, CapacityUnavailableException",
         "422, INDIVIDUAL_SURCHARGE_TOO_SMALL, InvalidRequestException",
         "400, INVALID_REQUEST, InvalidRequestException",
         "404, PHYSICAL_COURSE_PRICING_NOT_FOUND, NotFoundException",
@@ -165,9 +168,11 @@ class PhysicalPurchaseApiAdapterTest {
                 .isInstanceOf(BillingApiClient.ServiceUnavailableException.class);
     }
 
-    @ParameterizedTest(name = "checkout {0} -> {2}")
+    @ParameterizedTest(name = "checkout {0} {1} -> {2}")
     @CsvSource({
+        "409, NO_NEW_SESSIONS, NoNewSessionsException",
         "409, CAPACITY_UNAVAILABLE, CapacityUnavailableException",
+        "409, SOMETHING_NEW, CapacityUnavailableException",
         "410, PHYSICAL_COURSE_QUOTE_EXPIRED, QuoteExpiredException",
         "400, INVALID_REQUEST, InvalidRequestException",
         "503, PAYMENT_PREFERENCE_UNAVAILABLE, ServiceUnavailableException",
@@ -177,6 +182,18 @@ class PhysicalPurchaseApiAdapterTest {
 
         assertThatThrownBy(() -> adapter.createCheckout(TOKEN, QUOTE_ID, "key-1"))
                 .satisfies(e -> assertThat(e.getClass().getSimpleName()).isEqualTo(expected));
+    }
+
+    @Test
+    @DisplayName("a 409 without a readable problem body keeps meaning no capacity")
+    void conflictWithoutCodeIsCapacityUnavailable() {
+        stubFor(post(urlEqualTo(PURCHASES)).willReturn(aResponse().withStatus(409)));
+        assertThatThrownBy(() -> adapter.createCheckout(TOKEN, QUOTE_ID, "key-1"))
+                .isInstanceOf(PhysicalPurchaseApiClient.CapacityUnavailableException.class);
+
+        stubFor(post(urlEqualTo(QUOTES)).willReturn(aResponse().withStatus(409).withBody("<html>conflict</html>")));
+        assertThatThrownBy(() -> adapter.createQuote(TOKEN, "course-1", PhysicalPurchaseType.MONTHLY, null))
+                .isInstanceOf(PhysicalPurchaseApiClient.CapacityUnavailableException.class);
     }
 
     @ParameterizedTest(name = "payment status {0} -> {1}")

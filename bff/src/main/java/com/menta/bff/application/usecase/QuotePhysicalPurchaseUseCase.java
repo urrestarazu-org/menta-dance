@@ -21,6 +21,8 @@ public interface QuotePhysicalPurchaseUseCase {
      * @throws com.menta.bff.application.port.out.CatalogApiClient.NotFoundException if the course is unknown
      * @throws com.menta.bff.application.port.out.PhysicalPurchaseApiClient.NoScheduledSessionsException
      *         if the period has no sessions
+     * @throws com.menta.bff.application.port.out.PhysicalPurchaseApiClient.NoNewSessionsException
+     *         if a monthly quote would add no session the student does not already own
      */
     PurchaseQuoteView execute(
             String accessToken, String courseId, PhysicalPurchaseType purchaseType, String selectedSessionId);
