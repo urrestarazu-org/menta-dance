@@ -19,6 +19,7 @@ import com.menta.billing.application.port.out.PhysicalCourseAvailabilityPort;
 import com.menta.billing.application.port.out.PhysicalCoursePricingRepository;
 import com.menta.billing.application.port.out.PhysicalCourseQuoteRepository;
 import com.menta.billing.domain.exception.IndividualSurchargeTooSmallException;
+import com.menta.billing.domain.exception.NoNewSessionsToPurchaseException;
 import com.menta.billing.domain.exception.NoScheduledSessionsException;
 import com.menta.billing.domain.exception.PhysicalCoursePricingNotFoundException;
 import com.menta.billing.domain.exception.PhysicalSessionNotFoundException;
@@ -33,12 +34,15 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class CreatePhysicalCourseQuoteUseCaseImplTest {
 
     private static final String COURSE_ID = "course-1";
+    private static final UUID USER_ID = UUID.randomUUID();
     // September 2026 has 30 days, October 2026 has 31 -- a normative pair per the DoD.
     private static final Instant SEPTEMBER_NOW = Instant.parse("2026-09-15T12:00:00Z");
     private static final Instant OCTOBER_NOW = Instant.parse("2026-10-15T12:00:00Z");
@@ -84,7 +88,7 @@ class CreatePhysicalCourseQuoteUseCaseImplTest {
         ));
 
         PhysicalCourseQuoteResult result =
-            useCase.create(new CreatePhysicalCourseQuoteCommand(COURSE_ID, PurchaseType.MONTHLY, null));
+            useCase.create(new CreatePhysicalCourseQuoteCommand(USER_ID, COURSE_ID, PurchaseType.MONTHLY, null));
 
         assertThat(result.purchaseType()).isEqualTo(PurchaseType.MONTHLY);
         assertThat(result.amount()).isEqualByComparingTo("150.00");
@@ -102,7 +106,7 @@ class CreatePhysicalCourseQuoteUseCaseImplTest {
         ));
 
         PhysicalCourseQuoteResult result =
-            useCase.create(new CreatePhysicalCourseQuoteCommand(COURSE_ID, PurchaseType.MONTHLY, null));
+            useCase.create(new CreatePhysicalCourseQuoteCommand(USER_ID, COURSE_ID, PurchaseType.MONTHLY, null));
 
         assertThat(result.availability()).isEqualTo(QuoteAvailability.UNAVAILABLE);
     }
@@ -121,9 +125,9 @@ class CreatePhysicalCourseQuoteUseCaseImplTest {
         ));
 
         PhysicalCourseQuoteResult september =
-            useCase.create(new CreatePhysicalCourseQuoteCommand(COURSE_ID, PurchaseType.MONTHLY, null));
+            useCase.create(new CreatePhysicalCourseQuoteCommand(USER_ID, COURSE_ID, PurchaseType.MONTHLY, null));
         PhysicalCourseQuoteResult october =
-            useCase.create(new CreatePhysicalCourseQuoteCommand(COURSE_ID, PurchaseType.MONTHLY, null));
+            useCase.create(new CreatePhysicalCourseQuoteCommand(USER_ID, COURSE_ID, PurchaseType.MONTHLY, null));
 
         assertThat(september.scheduledSessionCount()).isEqualTo(1);
         assertThat(october.scheduledSessionCount()).isEqualTo(2);
@@ -132,9 +136,89 @@ class CreatePhysicalCourseQuoteUseCaseImplTest {
     @Test
     void monthly_quote_with_a_selected_session_id_is_rejected() {
         assertThatThrownBy(() ->
-            useCase.create(new CreatePhysicalCourseQuoteCommand(COURSE_ID, PurchaseType.MONTHLY, "session-1"))
+            useCase.create(new CreatePhysicalCourseQuoteCommand(USER_ID, COURSE_ID, PurchaseType.MONTHLY, "session-1"))
         ).isInstanceOf(SelectedSessionNotAllowedException.class);
         verifyNoInteractions(pricingRepository, availabilityPort, quoteRepository);
+    }
+
+    // ---- Escenario 1b: MONTHLY y sesiones que el alumno ya tiene (#541) ----
+
+    private static final Instant SEPTEMBER_HORIZON_END = SEPTEMBER_NOW.plus(CoveragePlanner.COVERAGE_LOOKAHEAD);
+
+    private void givenMonthlySeptemberCalendar() {
+        when(clock.now()).thenReturn(SEPTEMBER_NOW);
+        when(pricingRepository.findByCourseId(COURSE_ID)).thenReturn(Optional.of(pricing("150.00", "10")));
+        // The calendar month the quote prices: two sessions (one already past).
+        when(availabilityPort.findScheduledSessions(
+            eq(COURSE_ID), eq(Instant.parse("2026-09-01T00:00:00Z")), eq(Instant.parse("2026-10-01T00:00:00Z"))
+        )).thenReturn(List.of(
+            session("s1", "2026-09-10T20:00:00Z", 5),
+            session("s2", "2026-09-22T20:00:00Z", 5)
+        ));
+        // What the monthly would actually cover from "now" on.
+        when(availabilityPort.findScheduledSessions(eq(COURSE_ID), eq(SEPTEMBER_NOW), eq(SEPTEMBER_HORIZON_END)))
+            .thenReturn(List.of(
+                session("s2", "2026-09-22T20:00:00Z", 5),
+                session("s3", "2026-09-29T20:00:00Z", 5)
+            ));
+    }
+
+    private void givenStudentOwns(String... sessionIds) {
+        when(availabilityPort.findSessionIdsAssignedTo(
+            eq(COURSE_ID), eq(USER_ID), eq(SEPTEMBER_NOW), eq(SEPTEMBER_HORIZON_END)
+        )).thenReturn(Set.of(sessionIds));
+    }
+
+    @Test
+    void monthly_quote_is_unchanged_when_the_student_owns_no_session() {
+        givenMonthlySeptemberCalendar();
+        givenStudentOwns();
+
+        PhysicalCourseQuoteResult result =
+            useCase.create(new CreatePhysicalCourseQuoteCommand(USER_ID, COURSE_ID, PurchaseType.MONTHLY, null));
+
+        assertThat(result.amount()).isEqualByComparingTo("150.00");
+        assertThat(result.scheduledSessionCount()).isEqualTo(2);
+        verify(quoteRepository).save(any());
+    }
+
+    @Test
+    void monthly_quote_keeps_the_full_price_and_session_count_when_the_student_owns_only_some_sessions() {
+        givenMonthlySeptemberCalendar();
+        givenStudentOwns("s2");
+
+        PhysicalCourseQuoteResult result =
+            useCase.create(new CreatePhysicalCourseQuoteCommand(USER_ID, COURSE_ID, PurchaseType.MONTHLY, null));
+
+        assertThat(result.amount()).isEqualByComparingTo("150.00");
+        assertThat(result.scheduledSessionCount()).isEqualTo(2);
+        verify(quoteRepository).save(any());
+    }
+
+    @Test
+    void monthly_quote_is_rejected_and_nothing_is_saved_when_the_student_owns_every_covered_session() {
+        givenMonthlySeptemberCalendar();
+        givenStudentOwns("s2", "s3");
+
+        assertThatThrownBy(() ->
+            useCase.create(new CreatePhysicalCourseQuoteCommand(USER_ID, COURSE_ID, PurchaseType.MONTHLY, null))
+        ).isInstanceOf(NoNewSessionsToPurchaseException.class)
+            .satisfies(thrown -> assertThat(((NoNewSessionsToPurchaseException) thrown).getErrorCode())
+                .isEqualTo("NO_NEW_SESSIONS"));
+        verifyNoInteractions(quoteRepository);
+    }
+
+    @Test
+    void individual_quote_never_consults_the_students_owned_sessions() {
+        when(clock.now()).thenReturn(SEPTEMBER_NOW);
+        when(pricingRepository.findByCourseId(COURSE_ID)).thenReturn(Optional.of(pricing("100.00", "10")));
+        when(availabilityPort.findScheduledSessions(eq(COURSE_ID), any(), any())).thenReturn(List.of(
+            session("s1", "2026-09-03T20:00:00Z", 5)
+        ));
+
+        useCase.create(new CreatePhysicalCourseQuoteCommand(USER_ID, COURSE_ID, PurchaseType.INDIVIDUAL, "s1"));
+
+        verify(availabilityPort, never()).findSessionIdsAssignedTo(any(), any(), any(), any());
     }
 
     // ---- Escenario 2: INDIVIDUAL ----
@@ -152,7 +236,7 @@ class CreatePhysicalCourseQuoteUseCaseImplTest {
         ));
 
         PhysicalCourseQuoteResult result =
-            useCase.create(new CreatePhysicalCourseQuoteCommand(COURSE_ID, PurchaseType.INDIVIDUAL, "s3"));
+            useCase.create(new CreatePhysicalCourseQuoteCommand(USER_ID, COURSE_ID, PurchaseType.INDIVIDUAL, "s3"));
 
         assertThat(result.purchaseType()).isEqualTo(PurchaseType.INDIVIDUAL);
         assertThat(result.selectedSessionId()).isEqualTo("s3");
@@ -165,7 +249,7 @@ class CreatePhysicalCourseQuoteUseCaseImplTest {
     @Test
     void individual_quote_missing_selected_session_id_is_rejected_before_touching_any_port() {
         assertThatThrownBy(() ->
-            useCase.create(new CreatePhysicalCourseQuoteCommand(COURSE_ID, PurchaseType.INDIVIDUAL, null))
+            useCase.create(new CreatePhysicalCourseQuoteCommand(USER_ID, COURSE_ID, PurchaseType.INDIVIDUAL, null))
         ).isInstanceOf(SelectedSessionRequiredException.class);
         verifyNoInteractions(pricingRepository, availabilityPort, quoteRepository);
     }
@@ -185,7 +269,7 @@ class CreatePhysicalCourseQuoteUseCaseImplTest {
         ));
 
         PhysicalCourseQuoteResult result =
-            useCase.create(new CreatePhysicalCourseQuoteCommand(COURSE_ID, PurchaseType.INDIVIDUAL, "sSep"));
+            useCase.create(new CreatePhysicalCourseQuoteCommand(USER_ID, COURSE_ID, PurchaseType.INDIVIDUAL, "sSep"));
 
         assertThat(result.scheduledSessionCount()).isEqualTo(1);
     }
@@ -199,7 +283,7 @@ class CreatePhysicalCourseQuoteUseCaseImplTest {
         ));
 
         assertThatThrownBy(() ->
-            useCase.create(new CreatePhysicalCourseQuoteCommand(COURSE_ID, PurchaseType.INDIVIDUAL, "unknown"))
+            useCase.create(new CreatePhysicalCourseQuoteCommand(USER_ID, COURSE_ID, PurchaseType.INDIVIDUAL, "unknown"))
         ).isInstanceOf(PhysicalSessionNotFoundException.class);
         verifyNoInteractions(quoteRepository);
     }
@@ -215,7 +299,7 @@ class CreatePhysicalCourseQuoteUseCaseImplTest {
         );
 
         assertThatThrownBy(() ->
-            useCase.create(new CreatePhysicalCourseQuoteCommand(COURSE_ID, PurchaseType.INDIVIDUAL, "s0"))
+            useCase.create(new CreatePhysicalCourseQuoteCommand(USER_ID, COURSE_ID, PurchaseType.INDIVIDUAL, "s0"))
         ).isInstanceOf(IndividualSurchargeTooSmallException.class);
         verifyNoInteractions(quoteRepository);
     }
@@ -229,7 +313,7 @@ class CreatePhysicalCourseQuoteUseCaseImplTest {
         when(availabilityPort.findScheduledSessions(eq(COURSE_ID), any(), any())).thenReturn(List.of());
 
         assertThatThrownBy(() ->
-            useCase.create(new CreatePhysicalCourseQuoteCommand(COURSE_ID, PurchaseType.MONTHLY, null))
+            useCase.create(new CreatePhysicalCourseQuoteCommand(USER_ID, COURSE_ID, PurchaseType.MONTHLY, null))
         ).isInstanceOf(NoScheduledSessionsException.class);
         verifyNoInteractions(quoteRepository);
     }
@@ -245,7 +329,7 @@ class CreatePhysicalCourseQuoteUseCaseImplTest {
         ));
 
         PhysicalCourseQuoteResult result =
-            useCase.create(new CreatePhysicalCourseQuoteCommand(COURSE_ID, PurchaseType.INDIVIDUAL, "s1"));
+            useCase.create(new CreatePhysicalCourseQuoteCommand(USER_ID, COURSE_ID, PurchaseType.INDIVIDUAL, "s1"));
 
         assertThat(result.availability()).isEqualTo(QuoteAvailability.UNAVAILABLE);
     }
@@ -257,7 +341,7 @@ class CreatePhysicalCourseQuoteUseCaseImplTest {
         when(pricingRepository.findByCourseId(COURSE_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
-            useCase.create(new CreatePhysicalCourseQuoteCommand(COURSE_ID, PurchaseType.MONTHLY, null))
+            useCase.create(new CreatePhysicalCourseQuoteCommand(USER_ID, COURSE_ID, PurchaseType.MONTHLY, null))
         ).isInstanceOf(PhysicalCoursePricingNotFoundException.class);
         verifyNoInteractions(availabilityPort, quoteRepository);
     }

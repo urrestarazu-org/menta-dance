@@ -279,4 +279,76 @@ class CoveragePlannerTest {
         assertThatThrownBy(() -> CoveragePlanner.planIndividual(List.of(), null, false))
             .isInstanceOf(NullPointerException.class);
     }
+
+    // --- monthlyAddsNoNewSession: the student owns every session the monthly would cover ---
+
+    @Test
+    void monthly_adds_nothing_when_the_student_owns_every_session_it_would_cover() {
+        List<ScheduledSessionSnapshot> calendar = List.of(
+            new ScheduledSessionSnapshot(SESSION_1, CONFIRMED_AT.plus(Duration.ofDays(1)), 5),
+            new ScheduledSessionSnapshot(SESSION_2, CONFIRMED_AT.plus(Duration.ofDays(8)), 5),
+            new ScheduledSessionSnapshot(SESSION_3, CONFIRMED_AT.plus(Duration.ofDays(15)), 5)
+        );
+
+        boolean addsNothing = CoveragePlanner.monthlyAddsNoNewSession(
+            calendar, CONFIRMED_AT, 2, Set.of(SESSION_1, SESSION_2)
+        );
+
+        assertThat(addsNothing).isTrue();
+    }
+
+    @Test
+    void monthly_adds_sessions_when_the_student_owns_only_some_of_the_covered_ones() {
+        List<ScheduledSessionSnapshot> calendar = List.of(
+            new ScheduledSessionSnapshot(SESSION_1, CONFIRMED_AT.plus(Duration.ofDays(1)), 5),
+            new ScheduledSessionSnapshot(SESSION_2, CONFIRMED_AT.plus(Duration.ofDays(8)), 5)
+        );
+
+        assertThat(CoveragePlanner.monthlyAddsNoNewSession(calendar, CONFIRMED_AT, 2, Set.of(SESSION_1))).isFalse();
+        assertThat(CoveragePlanner.monthlyAddsNoNewSession(calendar, CONFIRMED_AT, 2, Set.of())).isFalse();
+    }
+
+    @Test
+    void monthly_only_looks_at_the_next_n_sessions_not_at_what_the_student_owns_beyond_them() {
+        List<ScheduledSessionSnapshot> calendar = List.of(
+            new ScheduledSessionSnapshot(SESSION_1, CONFIRMED_AT.plus(Duration.ofDays(1)), 5),
+            new ScheduledSessionSnapshot(SESSION_2, CONFIRMED_AT.plus(Duration.ofDays(8)), 5)
+        );
+
+        // Owning the second one is irrelevant when only the first one would be covered.
+        assertThat(CoveragePlanner.monthlyAddsNoNewSession(calendar, CONFIRMED_AT, 1, Set.of(SESSION_2))).isFalse();
+    }
+
+    @Test
+    void monthly_ignores_availability_and_sessions_before_the_reference_instant_when_checking_ownership() {
+        List<ScheduledSessionSnapshot> calendar = List.of(
+            new ScheduledSessionSnapshot(SESSION_1, CONFIRMED_AT.minus(Duration.ofDays(1)), 5),
+            new ScheduledSessionSnapshot(SESSION_2, CONFIRMED_AT.plus(Duration.ofDays(1)), 0)
+        );
+
+        // SESSION_1 is already in the past and SESSION_2 is full but still owned: nothing new to cover.
+        assertThat(CoveragePlanner.monthlyAddsNoNewSession(calendar, CONFIRMED_AT, 1, Set.of(SESSION_2))).isTrue();
+    }
+
+    @Test
+    void monthly_with_no_session_to_cover_is_not_reported_as_adding_nothing() {
+        // An empty calendar is a capacity/scheduling problem, never "you already own everything".
+        assertThat(CoveragePlanner.monthlyAddsNoNewSession(List.of(), CONFIRMED_AT, 2, Set.of(SESSION_1))).isFalse();
+    }
+
+    @Test
+    void monthly_adds_nothing_check_rejects_null_arguments() {
+        assertThatThrownBy(() -> CoveragePlanner.monthlyAddsNoNewSession(null, CONFIRMED_AT, 1, Set.of()))
+            .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> CoveragePlanner.monthlyAddsNoNewSession(List.of(), null, 1, Set.of()))
+            .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> CoveragePlanner.monthlyAddsNoNewSession(List.of(), CONFIRMED_AT, 1, null))
+            .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void monthly_adds_nothing_check_rejects_a_non_positive_session_count() {
+        assertThatThrownBy(() -> CoveragePlanner.monthlyAddsNoNewSession(List.of(), CONFIRMED_AT, 0, Set.of()))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
 }

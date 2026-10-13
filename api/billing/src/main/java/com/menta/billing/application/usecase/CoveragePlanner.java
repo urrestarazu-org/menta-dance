@@ -7,6 +7,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Stream;
 
 /**
  * Pure function that resolves the eligible session set a physical purchase
@@ -89,19 +90,64 @@ public final class CoveragePlanner {
             throw new IllegalArgumentException("scheduledSessionCount must be greater than zero");
         }
 
-        Instant horizonEnd = referenceInstant.plus(COVERAGE_LOOKAHEAD);
-
-        List<EligibleSession> eligible = scheduledSessions.stream()
-            .filter(session -> !session.scheduledAt().isBefore(referenceInstant))
-            .filter(session -> session.scheduledAt().isBefore(horizonEnd))
+        List<EligibleSession> eligible = monthlyCandidates(scheduledSessions, referenceInstant)
             .filter(session -> !requireAvailable || session.availableSpots() > 0)
             .filter(session -> !excludedSessionIds.contains(session.sessionId()))
-            .sorted(CLAIM_ORDER)
             .limit(scheduledSessionCount)
             .map(session -> new EligibleSession(session.sessionId(), session.scheduledAt()))
             .toList();
 
         return eligible.size() < scheduledSessionCount ? new Plan.Insufficient() : new Plan.Complete(eligible);
+    }
+
+    /**
+     * Whether a MONTHLY purchase would add no session at all for the student
+     * (#541): the next {@code scheduledSessionCount} sessions it would cover —
+     * counted from {@code referenceInstant} with <em>no</em> exclusion and
+     * availability ignored — are all in {@code ownedSessionIds}.
+     *
+     * <p>This looks at what the monthly nominally covers, not at what {@link
+     * #planMonthly} would pick once it skips owned sessions and extends
+     * forward: a student who owns every one of those sessions has nothing to
+     * buy, even if later sessions exist. Partial ownership returns {@code
+     * false} (the purchase still adds sessions at full price). An empty
+     * calendar also returns {@code false}: that is a scheduling or capacity
+     * problem, reported by the caller's own checks.</p>
+     *
+     * @param ownedSessionIds ids of sessions the student already owns.
+     */
+    public static boolean monthlyAddsNoNewSession(
+        List<ScheduledSessionSnapshot> scheduledSessions, Instant referenceInstant, int scheduledSessionCount,
+        Set<String> ownedSessionIds
+    ) {
+        Objects.requireNonNull(scheduledSessions, "scheduledSessions cannot be null");
+        Objects.requireNonNull(referenceInstant, "referenceInstant cannot be null");
+        Objects.requireNonNull(ownedSessionIds, "ownedSessionIds cannot be null");
+        if (scheduledSessionCount <= 0) {
+            throw new IllegalArgumentException("scheduledSessionCount must be greater than zero");
+        }
+
+        List<ScheduledSessionSnapshot> covered = monthlyCandidates(scheduledSessions, referenceInstant)
+            .limit(scheduledSessionCount)
+            .toList();
+
+        return !covered.isEmpty()
+            && covered.stream().allMatch(session -> ownedSessionIds.contains(session.sessionId()));
+    }
+
+    /**
+     * Sessions a MONTHLY purchase can cover: inside {@code [referenceInstant,
+     * referenceInstant + COVERAGE_LOOKAHEAD)}, in claim order. Availability and
+     * ownership are left to the callers.
+     */
+    private static Stream<ScheduledSessionSnapshot> monthlyCandidates(
+        List<ScheduledSessionSnapshot> scheduledSessions, Instant referenceInstant
+    ) {
+        Instant horizonEnd = referenceInstant.plus(COVERAGE_LOOKAHEAD);
+        return scheduledSessions.stream()
+            .filter(session -> !session.scheduledAt().isBefore(referenceInstant))
+            .filter(session -> session.scheduledAt().isBefore(horizonEnd))
+            .sorted(CLAIM_ORDER);
     }
 
     /**

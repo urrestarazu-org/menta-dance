@@ -25,6 +25,7 @@ import com.menta.billing.application.port.out.PhysicalCapacityHoldPort;
 import com.menta.billing.application.port.out.PhysicalCourseAvailabilityPort;
 import com.menta.billing.application.port.out.PhysicalCourseQuoteRepository;
 import com.menta.billing.domain.exception.BankTransferRateLimitedException;
+import com.menta.billing.domain.exception.NoNewSessionsToPurchaseException;
 import com.menta.billing.domain.exception.PhysicalCapacityUnavailableException;
 import com.menta.billing.domain.exception.PhysicalCourseQuoteExpiredException;
 import com.menta.billing.domain.model.Money;
@@ -151,6 +152,36 @@ class CreateBankTransferPhysicalPurchaseUseCaseImplTest {
             .isInstanceOf(PhysicalCapacityUnavailableException.class);
 
         verify(paymentRepository, never()).save(any());
+    }
+
+    /** #541: nothing new to buy — rejected before any Payment is written, same rule as the card rail. */
+    @Test
+    void a_quote_whose_covered_sessions_the_student_already_owns_is_rejected_without_a_payment() {
+        PhysicalCourseQuote quote = monthlyQuote(2, NOW.minusSeconds(60));
+        when(quoteRepository.findById(quote.getId().toString())).thenReturn(Optional.of(quote));
+        List<ScheduledSessionSnapshot> calendar = sessionsFrom(NOW, 3, 5);
+        when(availabilityPort.findScheduledSessions(any(), any(), any())).thenReturn(calendar);
+        when(availabilityPort.findSessionIdsAssignedTo(eq(COURSE_ID), eq(USER_ID), any(), any()))
+            .thenReturn(Set.of(calendar.get(0).sessionId(), calendar.get(1).sessionId()));
+
+        assertThatThrownBy(() -> useCase.create(command(quote.getId().toString(), "idem-1")))
+            .isInstanceOf(NoNewSessionsToPurchaseException.class);
+
+        verify(paymentRepository, never()).save(any());
+    }
+
+    @Test
+    void a_quote_with_only_some_covered_sessions_owned_still_creates_the_payment() {
+        PhysicalCourseQuote quote = monthlyQuote(2, NOW.minusSeconds(60));
+        when(quoteRepository.findById(quote.getId().toString())).thenReturn(Optional.of(quote));
+        List<ScheduledSessionSnapshot> calendar = sessionsFrom(NOW, 3, 5);
+        when(availabilityPort.findScheduledSessions(any(), any(), any())).thenReturn(calendar);
+        when(availabilityPort.findSessionIdsAssignedTo(eq(COURSE_ID), eq(USER_ID), any(), any()))
+            .thenReturn(Set.of(calendar.get(0).sessionId()));
+
+        useCase.create(command(quote.getId().toString(), "idem-1"));
+
+        verify(paymentRepository).save(any());
     }
 
     // --- Scenario 3: exhausted daily budget (429) ---

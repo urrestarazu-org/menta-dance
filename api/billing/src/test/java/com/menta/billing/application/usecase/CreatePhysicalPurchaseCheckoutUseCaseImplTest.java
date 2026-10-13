@@ -20,6 +20,7 @@ import com.menta.billing.application.port.out.PaymentRepository;
 import com.menta.billing.application.port.out.PhysicalCapacityHoldPort;
 import com.menta.billing.application.port.out.PhysicalCourseAvailabilityPort;
 import com.menta.billing.application.port.out.PhysicalCourseQuoteRepository;
+import com.menta.billing.domain.exception.NoNewSessionsToPurchaseException;
 import com.menta.billing.domain.exception.PaymentPreferenceUnavailableException;
 import com.menta.billing.domain.exception.PhysicalCapacityUnavailableException;
 import com.menta.billing.domain.exception.PhysicalCourseQuoteExpiredException;
@@ -291,6 +292,46 @@ class CreatePhysicalPurchaseCheckoutUseCaseImplTest {
             .isInstanceOf(PhysicalCapacityUnavailableException.class);
 
         verify(physicalCapacityHoldPort, never()).hold(any(), any());
+    }
+
+    /** #541: the student already holds every session the monthly would cover — nothing to buy. */
+    @Test
+    void a_monthly_purchase_is_rejected_before_any_hold_or_payment_when_the_student_owns_every_covered_session() {
+        PhysicalCourseQuote quote = monthlyQuote(2, NOW.minusSeconds(60));
+        when(quoteRepository.findById(quote.getId().toString())).thenReturn(Optional.of(quote));
+        // Four sessions exist: the two the monthly would cover are owned, later ones are not. The rule
+        // looks at what the monthly would cover, so this is NO_NEW_SESSIONS, not a silent purchase of
+        // the later sessions.
+        List<ScheduledSessionSnapshot> calendar = sessionsFrom(NOW, 4, 5);
+        when(availabilityPort.findScheduledSessions(any(), any(), any())).thenReturn(calendar);
+        when(availabilityPort.findSessionIdsAssignedTo(eq(COURSE_ID), eq(USER_ID), any(), any()))
+            .thenReturn(Set.of(calendar.get(0).sessionId(), calendar.get(1).sessionId()));
+
+        assertThatThrownBy(() -> useCase.create(command(quote.getId().toString(), "idem-1")))
+            .isInstanceOf(NoNewSessionsToPurchaseException.class);
+
+        verify(physicalCapacityHoldPort, never()).hold(any(), any());
+        verify(paymentRepository, never()).save(any());
+        verify(paymentPreferencePort, never()).createPreference(any());
+    }
+
+    @Test
+    void a_monthly_purchase_still_holds_new_sessions_when_the_student_owns_only_some_of_the_covered_ones() {
+        PhysicalCourseQuote quote = monthlyQuote(2, NOW.minusSeconds(60));
+        when(quoteRepository.findById(quote.getId().toString())).thenReturn(Optional.of(quote));
+        List<ScheduledSessionSnapshot> calendar = sessionsFrom(NOW, 4, 5);
+        when(availabilityPort.findScheduledSessions(any(), any(), any())).thenReturn(calendar);
+        when(availabilityPort.findSessionIdsAssignedTo(eq(COURSE_ID), eq(USER_ID), any(), any()))
+            .thenReturn(Set.of(calendar.get(1).sessionId()));
+
+        PhysicalPurchaseCheckoutResult result = useCase.create(command(quote.getId().toString(), "idem-1"));
+
+        assertThat(result.status()).isEqualTo("PENDING");
+        ArgumentCaptor<MultiSessionCapacityHoldCommand> holdCommand =
+            ArgumentCaptor.forClass(MultiSessionCapacityHoldCommand.class);
+        verify(physicalCapacityHoldPort).hold(holdCommand.capture(), any());
+        assertThat(holdCommand.getValue().claims()).extracting(claim -> claim.sessionId().toString())
+            .containsExactly(calendar.get(0).sessionId(), calendar.get(2).sessionId());
     }
 
     @Test
