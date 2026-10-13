@@ -7,6 +7,7 @@ import com.menta.billing.domain.exception.PhysicalCoursePricingNotFoundException
 import com.menta.billing.domain.exception.PhysicalSessionNotFoundException;
 import com.menta.billing.domain.exception.SelectedSessionNotAllowedException;
 import com.menta.billing.domain.exception.SelectedSessionRequiredException;
+import com.menta.billing.domain.model.PurchaseType;
 import com.menta.billing.infrastructure.web.ProblemDetails;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -43,14 +44,17 @@ public class PhysicalCourseQuoteExceptionHandler {
     }
 
     /**
-     * #541: the student already holds every session the monthly would cover. A conflict with
+     * #541/#545: the student already holds every session the purchase would cover. A conflict with
      * their own state (409, same family as "ya tenés una suscripción vigente"), not a malformed
      * request; the stable {@code code} lets the BFF render its own Spanish message.
      */
     @ExceptionHandler(NoNewSessionsToPurchaseException.class)
     ResponseEntity<ProblemDetail> noNewSessions(NoNewSessionsToPurchaseException exception) {
         return ProblemDetails.response(
-            HttpStatus.CONFLICT, "Ya tenés lugar en todas las sesiones que cubriría esta mensualidad.",
+            HttpStatus.CONFLICT,
+            exception.getPurchaseType() == PurchaseType.INDIVIDUAL
+                ? "Ya tenés lugar en esta sesión."
+                : "Ya tenés lugar en todas las sesiones que cubriría esta mensualidad.",
             exception.getErrorCode()
         );
     }

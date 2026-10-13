@@ -4,6 +4,7 @@ import com.menta.billing.domain.exception.NoNewSessionsToPurchaseException;
 import com.menta.billing.domain.exception.PaymentPreferenceUnavailableException;
 import com.menta.billing.domain.exception.PhysicalCapacityUnavailableException;
 import com.menta.billing.domain.exception.PhysicalCourseQuoteExpiredException;
+import com.menta.billing.domain.model.PurchaseType;
 import com.menta.billing.infrastructure.web.ProblemDetails;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -46,11 +47,14 @@ public class PhysicalPurchaseExceptionHandler {
         );
     }
 
-    /** #541: a monthly that adds no session for this student is refused before any hold or Payment. */
+    /** #541/#545: a purchase that adds no session for this student is refused before any hold or Payment. */
     @ExceptionHandler(NoNewSessionsToPurchaseException.class)
     ResponseEntity<ProblemDetail> noNewSessions(NoNewSessionsToPurchaseException exception) {
         return ProblemDetails.response(
-            HttpStatus.CONFLICT, "Ya tenés lugar en todas las sesiones que cubriría esta mensualidad.",
+            HttpStatus.CONFLICT,
+            exception.getPurchaseType() == PurchaseType.INDIVIDUAL
+                ? "Ya tenés lugar en esta sesión."
+                : "Ya tenés lugar en todas las sesiones que cubriría esta mensualidad.",
             exception.getErrorCode()
         );
     }

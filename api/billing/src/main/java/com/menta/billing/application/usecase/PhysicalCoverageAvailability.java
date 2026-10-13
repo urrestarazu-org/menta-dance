@@ -36,7 +36,8 @@ final class PhysicalCoverageAvailability {
      * owns are skipped (see {@link CoveragePlanner#planMonthly}); and when the
      * student owns <em>every</em> session the monthly would cover, the purchase
      * is refused with {@link NoNewSessionsToPurchaseException} (#541) before
-     * any hold or {@code Payment} exists.
+     * any hold or {@code Payment} exists. For INDIVIDUAL the same exception
+     * (#545) refuses a selected session the student already owns.
      */
     static CoveragePlanner.Plan.Complete requireComplete(
         PhysicalCourseAvailabilityPort availabilityPort, PhysicalCourseQuote quote, UUID studentId, Instant now
@@ -57,7 +58,17 @@ final class PhysicalCoverageAvailability {
                     scheduledSessions, now, quote.getScheduledSessionCount(), true, owned
                 );
             }
-            case INDIVIDUAL -> CoveragePlanner.planIndividual(scheduledSessions, quote.getSelectedSessionId(), true);
+            case INDIVIDUAL -> {
+                // #545: checked before availability, so a full session the student already owns is
+                // reported as owned. A session missing from the calendar falls through to Insufficient.
+                scheduledSessions.stream()
+                    .filter(session -> session.sessionId().equals(quote.getSelectedSessionId()))
+                    .findFirst()
+                    .ifPresent(selected -> requireSessionNotOwned(
+                        availabilityPort, quote.getCourseId(), studentId, selected
+                    ));
+                yield CoveragePlanner.planIndividual(scheduledSessions, quote.getSelectedSessionId(), true);
+            }
         };
 
         if (!(plan instanceof CoveragePlanner.Plan.Complete complete)) {
@@ -88,11 +99,32 @@ final class PhysicalCoverageAvailability {
         rejectWhenNothingNew(scheduledSessions, now, scheduledSessionCount, owned);
     }
 
+    /**
+     * #545: refuses an INDIVIDUAL purchase of a session the student already
+     * holds a confirmed assignment for. The lookup is exact — the half-open
+     * window {@code [scheduledAt, scheduledAt + 1ms)} holds only that
+     * session's instant, so it does not depend on the monthly lookahead and
+     * also covers a same-day class that already started. One millisecond, not
+     * one nanosecond: the JDBC driver rounds sub-microsecond bounds and would
+     * collapse the window to empty.
+     */
+    static void requireSessionNotOwned(
+        PhysicalCourseAvailabilityPort availabilityPort, String courseId, UUID studentId,
+        ScheduledSessionSnapshot session
+    ) {
+        Set<String> owned = availabilityPort.findSessionIdsAssignedTo(
+            courseId, studentId, session.scheduledAt(), session.scheduledAt().plusMillis(1)
+        );
+        if (owned.contains(session.sessionId())) {
+            throw new NoNewSessionsToPurchaseException(PurchaseType.INDIVIDUAL);
+        }
+    }
+
     private static void rejectWhenNothingNew(
         List<ScheduledSessionSnapshot> scheduledSessions, Instant now, int scheduledSessionCount, Set<String> owned
     ) {
         if (CoveragePlanner.monthlyAddsNoNewSession(scheduledSessions, now, scheduledSessionCount, owned)) {
-            throw new NoNewSessionsToPurchaseException();
+            throw new NoNewSessionsToPurchaseException(PurchaseType.MONTHLY);
         }
     }
 

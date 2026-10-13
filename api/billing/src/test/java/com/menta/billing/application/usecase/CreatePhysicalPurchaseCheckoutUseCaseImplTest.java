@@ -32,6 +32,7 @@ import com.menta.billing.domain.model.PaymentStatus;
 import com.menta.billing.domain.model.PaymentTarget;
 import com.menta.billing.domain.model.PhysicalCoursePricing;
 import com.menta.billing.domain.model.PhysicalCourseQuote;
+import com.menta.billing.domain.model.PurchaseType;
 import com.menta.billing.domain.model.QuoteAvailability;
 import com.menta.shared.physical.MultiSessionCapacityHoldCommand;
 import java.math.BigDecimal;
@@ -334,18 +335,62 @@ class CreatePhysicalPurchaseCheckoutUseCaseImplTest {
             .containsExactly(calendar.get(0).sessionId(), calendar.get(2).sessionId());
     }
 
-    @Test
-    void an_individual_purchase_never_consults_the_owned_sessions() {
-        PhysicalCourseQuote quote = PhysicalCourseQuote.individual(
-            COURSE_ID, pricing(), 4, "11111111-1111-1111-1111-111111111111", QuoteAvailability.AVAILABLE,
-            NOW.minusSeconds(60)
-        );
-        when(quoteRepository.findById(quote.getId().toString())).thenReturn(Optional.of(quote));
-        when(availabilityPort.findScheduledSessions(any(), any(), any())).thenReturn(List.of(
-            new ScheduledSessionSnapshot("11111111-1111-1111-1111-111111111111", NOW.plusSeconds(3600), 5)
-        ));
+    private static final String SELECTED_SESSION_ID = "11111111-1111-1111-1111-111111111111";
 
-        useCase.create(command(quote.getId().toString(), "idem-1"));
+    private PhysicalCourseQuote individualQuote() {
+        return PhysicalCourseQuote.individual(
+            COURSE_ID, pricing(), 4, SELECTED_SESSION_ID, QuoteAvailability.AVAILABLE, NOW.minusSeconds(60)
+        );
+    }
+
+    /** #545: the selected session is already assigned to the student — refused before hold and Payment. */
+    @Test
+    void an_individual_purchase_is_rejected_before_any_hold_or_payment_when_the_student_owns_the_session() {
+        PhysicalCourseQuote quote = individualQuote();
+        when(quoteRepository.findById(quote.getId().toString())).thenReturn(Optional.of(quote));
+        Instant scheduledAt = NOW.plusSeconds(3600);
+        when(availabilityPort.findScheduledSessions(any(), any(), any()))
+            .thenReturn(List.of(new ScheduledSessionSnapshot(SELECTED_SESSION_ID, scheduledAt, 5)));
+        when(availabilityPort.findSessionIdsAssignedTo(
+            eq(COURSE_ID), eq(USER_ID), eq(scheduledAt), eq(scheduledAt.plusMillis(1))
+        )).thenReturn(Set.of(SELECTED_SESSION_ID));
+
+        assertThatThrownBy(() -> useCase.create(command(quote.getId().toString(), "idem-1")))
+            .isInstanceOf(NoNewSessionsToPurchaseException.class)
+            .satisfies(thrown -> assertThat(((NoNewSessionsToPurchaseException) thrown).getPurchaseType())
+                .isEqualTo(PurchaseType.INDIVIDUAL));
+
+        verify(physicalCapacityHoldPort, never()).hold(any(), any());
+        verify(paymentRepository, never()).save(any());
+        verify(paymentPreferencePort, never()).createPreference(any());
+    }
+
+    @Test
+    void an_individual_purchase_of_a_session_the_student_does_not_own_still_holds_and_pays() {
+        PhysicalCourseQuote quote = individualQuote();
+        when(quoteRepository.findById(quote.getId().toString())).thenReturn(Optional.of(quote));
+        Instant scheduledAt = NOW.plusSeconds(3600);
+        when(availabilityPort.findScheduledSessions(any(), any(), any()))
+            .thenReturn(List.of(new ScheduledSessionSnapshot(SELECTED_SESSION_ID, scheduledAt, 5)));
+        when(availabilityPort.findSessionIdsAssignedTo(
+            eq(COURSE_ID), eq(USER_ID), eq(scheduledAt), eq(scheduledAt.plusMillis(1))
+        )).thenReturn(Set.of());
+
+        PhysicalPurchaseCheckoutResult result = useCase.create(command(quote.getId().toString(), "idem-1"));
+
+        assertThat(result.status()).isEqualTo("PENDING");
+        verify(physicalCapacityHoldPort).hold(any(), any());
+    }
+
+    /** A session that left the calendar is a capacity problem, not an ownership one. */
+    @Test
+    void an_individual_purchase_of_a_session_missing_from_the_calendar_is_still_capacity_unavailable() {
+        PhysicalCourseQuote quote = individualQuote();
+        when(quoteRepository.findById(quote.getId().toString())).thenReturn(Optional.of(quote));
+        when(availabilityPort.findScheduledSessions(any(), any(), any())).thenReturn(List.of());
+
+        assertThatThrownBy(() -> useCase.create(command(quote.getId().toString(), "idem-1")))
+            .isInstanceOf(PhysicalCapacityUnavailableException.class);
 
         verify(availabilityPort, never()).findSessionIdsAssignedTo(any(), any(), any(), any());
     }

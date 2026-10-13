@@ -28,7 +28,7 @@ public interface PhysicalPurchaseApiClient {
      * @param selectedSessionId session of an individual quote, {@code null} for monthly
      * @return the created quote
      * @throws NoScheduledSessionsException if the period has no sessions (422)
-     * @throws NoNewSessionsException       if a monthly quote would add no session the student does not
+     * @throws NoNewSessionsException       if the quote would add no session the student does not
      *                                      already own (409 NO_NEW_SESSIONS, nothing was persisted)
      * @throws InvalidRequestException      if the upstream rejects the request (400, other 422)
      */
@@ -77,8 +77,9 @@ public interface PhysicalPurchaseApiClient {
     }
 
     /**
-     * A monthly purchase would add no session the student does not already own (409
-     * {@code NO_NEW_SESSIONS}); nothing was persisted, so no quote, hold or payment exists.
+     * The purchase would add no session the student does not already own (409
+     * {@code NO_NEW_SESSIONS}): every session a monthly would cover, or the selected session of an
+     * individual purchase. Nothing was persisted, so no quote, hold or payment exists.
      */
     class NoNewSessionsException extends PurchaseFailureException {
         public NoNewSessionsException(String message) {

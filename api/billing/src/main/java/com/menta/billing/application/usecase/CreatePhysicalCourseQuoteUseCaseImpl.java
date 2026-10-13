@@ -125,6 +125,11 @@ public class CreatePhysicalCourseQuoteUseCaseImpl implements CreatePhysicalCours
             .findFirst()
             .orElseThrow(PhysicalSessionNotFoundException::new);
 
+        // #545: a session the student already owns is not worth quoting; nothing is persisted.
+        PhysicalCoverageAvailability.requireSessionNotOwned(
+            availabilityPort, command.courseId(), command.userId(), selectedSession
+        );
+
         Instant periodStart = calendarMonthStart(selectedSession.scheduledAt());
         Instant periodEnd = addMonths(periodStart, 1);
         long scheduledSessionCount = broadWindowSessions.stream()

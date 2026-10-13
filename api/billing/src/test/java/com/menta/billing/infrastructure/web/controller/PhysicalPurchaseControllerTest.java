@@ -21,6 +21,7 @@ import com.menta.billing.domain.exception.PhysicalCapacityUnavailableException;
 import com.menta.billing.domain.exception.PhysicalCourseQuoteExpiredException;
 import com.menta.billing.domain.model.Money;
 import com.menta.billing.domain.model.PaymentMethod;
+import com.menta.billing.domain.model.PurchaseType;
 import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
@@ -247,7 +248,7 @@ class PhysicalPurchaseControllerTest {
     /** #541: the student already holds every session the monthly would cover. */
     @Test
     void nothing_new_to_purchase_maps_to_409_with_its_own_code() throws Exception {
-        when(useCase.create(any())).thenThrow(new NoNewSessionsToPurchaseException());
+        when(useCase.create(any())).thenThrow(new NoNewSessionsToPurchaseException(PurchaseType.MONTHLY));
 
         mockMvc.perform(post("/api/v1/billing/physical/purchases")
                 .with(authenticatedAs(USER_ID))
@@ -255,6 +256,21 @@ class PhysicalPurchaseControllerTest {
                 .content(body(QUOTE_ID, "MERCADO_PAGO", "idem-1")))
             .andExpect(status().isConflict())
             .andExpect(jsonPath("$.code", is("NO_NEW_SESSIONS")));
+    }
+
+    /** #545: the same code for a session already owned, with wording that fits a single session. */
+    @Test
+    void an_already_owned_individual_session_maps_to_409_with_the_same_code_and_its_own_message()
+        throws Exception {
+        when(useCase.create(any())).thenThrow(new NoNewSessionsToPurchaseException(PurchaseType.INDIVIDUAL));
+
+        mockMvc.perform(post("/api/v1/billing/physical/purchases")
+                .with(authenticatedAs(USER_ID))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body(QUOTE_ID, "MERCADO_PAGO", "idem-1")))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.code", is("NO_NEW_SESSIONS")))
+            .andExpect(jsonPath("$.detail", is("Ya tenés lugar en esta sesión.")));
     }
 
     @Test

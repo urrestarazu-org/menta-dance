@@ -50,6 +50,14 @@
   el precio son los del Escenario 3. La cotización mensual aplica la misma regla y responde
   el mismo error sin persistir el quote.
 
+**Escenario 3c: sesión individual que el alumno ya tiene (#545)**
+
+- **Dado** un quote `INDIVIDUAL` y un alumno que ya tiene asignación confirmada en la sesión
+  elegida.
+- **Cuando** inicia el checkout, por Mercado Pago o por transferencia bancaria.
+- **Entonces** responde `409 NO_NEW_SESSIONS` ("Ya tenés lugar en esta sesión.") sin crear hold
+  ni `Payment`, antes de evaluar el cupo.
+
 **Escenario 4: idempotencia**
 
 - **Dado** una Purchase ya iniciada o confirmada.

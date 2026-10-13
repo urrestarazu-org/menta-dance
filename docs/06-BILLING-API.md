@@ -172,7 +172,9 @@ mensual saltea las sesiones donde el alumno ya tiene asignación confirmada y se
 extiende hacia adelante (hasta 120 días) para completar las N sesiones compradas.
 Si el alumno ya tiene **todas** las sesiones que la mensualidad cubriría, el checkout
 (Mercado Pago o transferencia) responde `409 NO_NEW_SESSIONS` antes de crear hold o
-`Payment`, igual que la cotización (#541).
+`Payment`, igual que la cotización (#541). Lo mismo para una compra `INDIVIDUAL` de una
+sesión que el alumno ya tiene asignada (#545): mismo código, mensaje "Ya tenés lugar en
+esta sesión."
 
 ## Pricing presencial
 
@@ -209,8 +211,9 @@ responde `422 INDIVIDUAL_SURCHARGE_TOO_SMALL` y no persiste nada.
 Errores: `404 PHYSICAL_COURSE_PRICING_NOT_FOUND` (sin pricing publicado),
 `404 PHYSICAL_SESSION_NOT_FOUND` (`selectedSessionId` fuera del período),
 `422 NO_SCHEDULED_SESSIONS` (sin sesiones `SCHEDULED` en el período),
-`409 NO_NEW_SESSIONS` (sólo `MONTHLY`: el alumno autenticado ya tiene asignación
-confirmada en todas las sesiones que la mensualidad cubriría; no persiste el quote).
+`409 NO_NEW_SESSIONS` (el alumno autenticado ya tiene asignación confirmada en todas las
+sesiones que la mensualidad cubriría, o en la `selectedSessionId` de un `INDIVIDUAL`, #545;
+no persiste el quote).
 La disponibilidad (`AVAILABLE`/`UNAVAILABLE`) es sólo informativa para la UI — el
 checkout (fuera de esta historia) es quien reserva o rechaza cupo de verdad.
 
