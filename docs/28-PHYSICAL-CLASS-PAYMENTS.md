@@ -136,11 +136,11 @@ Resultado, sin cambios de comportamiento:
 Resolución: no se resuelve automáticamente. El pasaje a `EXCEPTION` envía el aviso al
 alumno y a la dirección operativa (esta última con el `reason`) y la compra aparece en
 `GET /api/v1/admin/billing/purchases?status=EXCEPTION`, inventario de sólo lectura para
-`ADMIN`. Hoy el sistema no ofrece un endpoint para reasignar ni para cerrar la compra:
-el equipo de operaciones decide el tratamiento (por ejemplo, devolución o compensación)
-fuera del producto, y el motivo `ALREADY_ASSIGNED` indica que el problema no es de
-capacidad. Ver `docs/06-BILLING-API.md` y la prueba de integración
-`PhysicalPurchaseIntegrationTest`.
+`ADMIN`. El sistema no reasigna ni ejecuta la devolución: el equipo de operaciones decide el
+tratamiento (devolución o compensación) fuera del producto y luego **cierra la compra con
+registro** (ver "Resolución administrativa de una compra en EXCEPTION"). El motivo
+`ALREADY_ASSIGNED` indica que el problema no es de capacidad. Ver `docs/06-BILLING-API.md` y
+la prueba de integración `PhysicalPurchaseIntegrationTest`.
 
 La compra debe iniciarse antes del vencimiento del quote. La confirmación posterior
 conserva el precio snapshot, pero cobertura y sesiones elegibles se derivan del
@@ -172,3 +172,40 @@ se concilia manualmente con Mercado Pago, auditoría y logs correlacionados.
 El check-in exige asignación confirmada. Los lectores QR son dispositivos con
 secreto hasheado, expiración, revocación y rotación. Redis usa lock nonce + Lua
 compare-and-delete; al estar caído, no se procesa la solicitud autenticada.
+
+## Resolución administrativa de una compra en EXCEPTION (#539)
+
+Una compra en `EXCEPTION` con dinero cobrado necesita un cierre auditable. `ADMIN` la cierra con
+`POST /api/v1/admin/billing/purchases/{purchaseId}/resolution`:
+
+```json
+{ "resolution": "REFUNDED", "note": "Reembolsado desde el panel de Mercado Pago, ticket #4521" }
+```
+
+- `resolution`: `REFUNDED` (el dinero se devolvió al alumno) o `COMPENSATED` (se lo compensó de
+  otra forma). Es una decisión ya tomada fuera del producto: registrarla no mueve dinero.
+- `note`: obligatoria, hasta 500 caracteres. Queda en la compra y **no** viaja en el evento.
+- Respuesta `200` con la compra: `purchaseId`, `paymentId`, `status = RESOLVED`, `resolution`,
+  `note`, `resolvedBy`, `resolvedAt` y `physicalSessionIds`.
+
+Flujo y efectos:
+
+1. Se bloquea la compra, se valida que esté en `EXCEPTION` y se persiste `RESOLVED` con
+   quién, cuándo y por qué.
+2. En la misma transacción se agrega `billing.PurchaseResolved` al outbox
+   (`paymentId`, `purchaseId`, `userId`, `resolution`, `resolvedBy`, `occurredAt`).
+   `PurchaseResolvedOutboxEventHandler` lo reclama y sólo lo registra en el log; no notifica.
+3. No se toca el `Payment`, no se asigna ninguna sesión ni se convierte ningún hold, y no se
+   habilita asistencia.
+
+Errores: `404 PURCHASE_NOT_FOUND`, `409 ILLEGAL_PURCHASE_STATE_TRANSITION` (la compra no está en
+`EXCEPTION`), `409 PURCHASE_ALREADY_RESOLVED` (ya resuelta con otra decisión o nota) y `400`
+para nota vacía o de más de 500 caracteres o `resolution` ausente o desconocida. Repetir la
+misma decisión con la misma nota es idempotente: responde `200` sin evento nuevo.
+
+| Estado de la compra | Significado | Asistencia | Salidas |
+|---|---|---|---|
+| `PENDING_FULFILLMENT` | Pago acreditado, asignación en curso | No | `ASSIGNED`, `EXCEPTION` |
+| `ASSIGNED` | Todas las sesiones asignadas | Sí | (terminal) |
+| `EXCEPTION` | No se pudo asignar el conjunto | No | `RESOLVED` por resolución administrativa |
+| `RESOLVED` | Cerrada con registro (`REFUNDED` o `COMPENSATED`) | No | (terminal) |

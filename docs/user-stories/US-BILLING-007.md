@@ -75,9 +75,23 @@
   Payment queda `COMPLETED`, Purchase queda `EXCEPTION` con `reason = ALREADY_ASSIGNED`, no se
   asigna ninguna sesión de la compra (todo o nada, los holds no se convierten) y no se habilita
   asistencia. No se reabre el conjunto de sesiones: queda fijo desde el checkout (decisión de
-  #533). Operaciones recibe el aviso y la compra figura en el inventario administrativo de sólo
-  lectura (`GET /api/v1/admin/billing/purchases?status=EXCEPTION`); el tratamiento del caso es
-  manual y fuera del producto. Ver [28-PHYSICAL-CLASS-PAYMENTS.md](../28-PHYSICAL-CLASS-PAYMENTS.md).
+  #533). Operaciones recibe el aviso y la compra figura en el inventario administrativo
+  (`GET /api/v1/admin/billing/purchases?status=EXCEPTION`); el tratamiento del caso (devolución o
+  compensación) es manual y fuera del producto, y luego se cierra con el escenario 6. Ver [28-PHYSICAL-CLASS-PAYMENTS.md](../28-PHYSICAL-CLASS-PAYMENTS.md).
+
+**Escenario 6: cierre administrativo de una compra en EXCEPTION (#539)**
+
+- **Dado** una Purchase en `EXCEPTION` cuyo tratamiento (devolución o compensación) ya se hizo
+  fuera del producto.
+- **Cuando** un `ADMIN` hace `POST /api/v1/admin/billing/purchases/{purchaseId}/resolution` con
+  `resolution = REFUNDED` o `COMPENSATED` y una `note` obligatoria de hasta 500 caracteres.
+- **Entonces** la Purchase queda `RESOLVED` con quién la cerró, cuándo y por qué; el Payment no
+  cambia, no se asigna ninguna sesión y no se habilita asistencia; se publica
+  `billing.PurchaseResolved` sin la nota y la respuesta es `200`.
+- **Y** repetir la misma decisión con la misma nota responde `200` sin efectos nuevos; una
+  decisión o nota distinta sobre una compra ya resuelta responde `409 PURCHASE_ALREADY_RESOLVED`;
+  una compra que no está en `EXCEPTION` responde `409 ILLEGAL_PURCHASE_STATE_TRANSITION`; una
+  inexistente, `404`; un llamador sin rol `ADMIN`, `403`; y una nota vacía, `400`.
 
 ## 3. Requisitos No Funcionales y Restricciones
 
