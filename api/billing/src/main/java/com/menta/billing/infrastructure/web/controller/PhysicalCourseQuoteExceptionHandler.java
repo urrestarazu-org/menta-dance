@@ -1,6 +1,7 @@
 package com.menta.billing.infrastructure.web.controller;
 
 import com.menta.billing.domain.exception.IndividualSurchargeTooSmallException;
+import com.menta.billing.domain.exception.NoNewSessionsToPurchaseException;
 import com.menta.billing.domain.exception.NoScheduledSessionsException;
 import com.menta.billing.domain.exception.PhysicalCoursePricingNotFoundException;
 import com.menta.billing.domain.exception.PhysicalSessionNotFoundException;
@@ -37,6 +38,19 @@ public class PhysicalCourseQuoteExceptionHandler {
     ResponseEntity<ProblemDetail> noScheduledSessions(NoScheduledSessionsException exception) {
         return ProblemDetails.response(
             HttpStatus.UNPROCESSABLE_ENTITY, "No hay sesiones programadas para este período.",
+            exception.getErrorCode()
+        );
+    }
+
+    /**
+     * #541: the student already holds every session the monthly would cover. A conflict with
+     * their own state (409, same family as "ya tenés una suscripción vigente"), not a malformed
+     * request; the stable {@code code} lets the BFF render its own Spanish message.
+     */
+    @ExceptionHandler(NoNewSessionsToPurchaseException.class)
+    ResponseEntity<ProblemDetail> noNewSessions(NoNewSessionsToPurchaseException exception) {
+        return ProblemDetails.response(
+            HttpStatus.CONFLICT, "Ya tenés lugar en todas las sesiones que cubriría esta mensualidad.",
             exception.getErrorCode()
         );
     }

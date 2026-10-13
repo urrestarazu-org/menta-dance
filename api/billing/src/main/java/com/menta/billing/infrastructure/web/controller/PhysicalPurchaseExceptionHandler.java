@@ -1,5 +1,6 @@
 package com.menta.billing.infrastructure.web.controller;
 
+import com.menta.billing.domain.exception.NoNewSessionsToPurchaseException;
 import com.menta.billing.domain.exception.PaymentPreferenceUnavailableException;
 import com.menta.billing.domain.exception.PhysicalCapacityUnavailableException;
 import com.menta.billing.domain.exception.PhysicalCourseQuoteExpiredException;
@@ -42,6 +43,15 @@ public class PhysicalPurchaseExceptionHandler {
         return ProblemDetails.response(
             HttpStatus.CONFLICT,
             "No hay cupo disponible para los horarios elegibles de esta cotización.", exception.getErrorCode()
+        );
+    }
+
+    /** #541: a monthly that adds no session for this student is refused before any hold or Payment. */
+    @ExceptionHandler(NoNewSessionsToPurchaseException.class)
+    ResponseEntity<ProblemDetail> noNewSessions(NoNewSessionsToPurchaseException exception) {
+        return ProblemDetails.response(
+            HttpStatus.CONFLICT, "Ya tenés lugar en todas las sesiones que cubriría esta mensualidad.",
+            exception.getErrorCode()
         );
     }
 

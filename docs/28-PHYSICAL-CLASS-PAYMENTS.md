@@ -64,6 +64,29 @@ instante de referencia, para completar N. El importe del quote no cambia. Si no 
 sesiones sin asignar dentro de ese horizonte, el checkout responde
 `409 CAPACITY_UNAVAILABLE`. Un individual no se ve afectado.
 
+### Mensualidad sin sesiones nuevas (#541)
+
+Decisión de producto: **una mensualidad que no agrega ninguna sesión al alumno no se
+vende**. Si agrega al menos una, se cobra el precio completo del quote (sin prorrateo).
+
+- "No agrega ninguna sesión" significa que el alumno ya tiene asignación confirmada en
+  **todas** las sesiones que la mensualidad cubriría: las próximas N sesiones del curso
+  desde el instante de referencia, contadas sin saltear ninguna y sin mirar el cupo. Que
+  existan sesiones posteriores no cambia el resultado: si ya tiene las N que corresponden,
+  no hay nada para comprar.
+- **Cotización mensual**: se rechaza con `409 NO_NEW_SESSIONS` y no persiste ningún quote
+  (ver `docs/06-BILLING-API.md`).
+- **Checkout** (Mercado Pago y transferencia bancaria): se aplica la misma regla, con el
+  mismo código `409 NO_NEW_SESSIONS`, antes de crear el hold o el `Payment`. Cubre la ventana
+  entre la cotización y el checkout y las cotizaciones emitidas antes de esta regla.
+- **Propiedad parcial**: si el alumno tiene algunas de las sesiones cubiertas, pero no todas,
+  la compra sigue igual que hoy: precio completo, `scheduledSessionCount` sin cambios y
+  cobertura completada hacia adelante (#523).
+- **Atomicidad**: la lectura de las sesiones que el alumno ya tiene y la creación del hold no
+  son una única transacción; la ventana restante es la misma que ya describe la sección
+  siguiente (#533), no se agrega una nueva.
+- Las compras **individuales** no cambian con esta decisión.
+
 ### Ventana entre checkout y confirmación
 
 El conjunto de sesiones de una mensualidad se fija en el checkout: allí se leen las

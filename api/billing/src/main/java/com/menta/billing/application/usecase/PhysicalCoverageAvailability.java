@@ -2,6 +2,7 @@ package com.menta.billing.application.usecase;
 
 import com.menta.billing.application.dto.ScheduledSessionSnapshot;
 import com.menta.billing.application.port.out.PhysicalCourseAvailabilityPort;
+import com.menta.billing.domain.exception.NoNewSessionsToPurchaseException;
 import com.menta.billing.domain.exception.PhysicalCapacityUnavailableException;
 import com.menta.billing.domain.model.PhysicalCourseQuote;
 import com.menta.billing.domain.model.PurchaseType;
@@ -32,7 +33,10 @@ final class PhysicalCoverageAvailability {
      * {@code confirmedAt} and {@code requireAvailable = true} — a session
      * with zero visible spots is treated as not found here, ahead of the
      * real reserving hold call. For MONTHLY, sessions {@code studentId} already
-     * owns are skipped (see {@link CoveragePlanner#planMonthly}).
+     * owns are skipped (see {@link CoveragePlanner#planMonthly}); and when the
+     * student owns <em>every</em> session the monthly would cover, the purchase
+     * is refused with {@link NoNewSessionsToPurchaseException} (#541) before
+     * any hold or {@code Payment} exists.
      */
     static CoveragePlanner.Plan.Complete requireComplete(
         PhysicalCourseAvailabilityPort availabilityPort, PhysicalCourseQuote quote, UUID studentId, Instant now
@@ -46,10 +50,13 @@ final class PhysicalCoverageAvailability {
         );
 
         CoveragePlanner.Plan plan = switch (quote.getPurchaseType()) {
-            case MONTHLY -> CoveragePlanner.planMonthly(
-                scheduledSessions, now, quote.getScheduledSessionCount(), true,
-                ownedSessionIds(availabilityPort, quote, studentId, now)
-            );
+            case MONTHLY -> {
+                Set<String> owned = ownedSessionIds(availabilityPort, quote.getCourseId(), studentId, now);
+                rejectWhenNothingNew(scheduledSessions, now, quote.getScheduledSessionCount(), owned);
+                yield CoveragePlanner.planMonthly(
+                    scheduledSessions, now, quote.getScheduledSessionCount(), true, owned
+                );
+            }
             case INDIVIDUAL -> CoveragePlanner.planIndividual(scheduledSessions, quote.getSelectedSessionId(), true);
         };
 
@@ -60,15 +67,45 @@ final class PhysicalCoverageAvailability {
     }
 
     /**
+     * #541: refuses a MONTHLY quote when the student already owns every
+     * session the monthly would cover from {@code now}. Same rule, same
+     * window and same planner function the checkout applies, so a quote that
+     * passes here is never rejected at checkout for this reason alone (apart
+     * from changes in between). The calendar is only fetched when the student
+     * owns something at all.
+     */
+    static void requireNewSessions(
+        PhysicalCourseAvailabilityPort availabilityPort, String courseId, UUID studentId, int scheduledSessionCount,
+        Instant now
+    ) {
+        Set<String> owned = ownedSessionIds(availabilityPort, courseId, studentId, now);
+        if (owned.isEmpty()) {
+            return;
+        }
+        List<ScheduledSessionSnapshot> scheduledSessions = availabilityPort.findScheduledSessions(
+            courseId, now, now.plus(CoveragePlanner.COVERAGE_LOOKAHEAD)
+        );
+        rejectWhenNothingNew(scheduledSessions, now, scheduledSessionCount, owned);
+    }
+
+    private static void rejectWhenNothingNew(
+        List<ScheduledSessionSnapshot> scheduledSessions, Instant now, int scheduledSessionCount, Set<String> owned
+    ) {
+        if (CoveragePlanner.monthlyAddsNoNewSession(scheduledSessions, now, scheduledSessionCount, owned)) {
+            throw new NoNewSessionsToPurchaseException();
+        }
+    }
+
+    /**
      * Sessions the student already holds a confirmed assignment for inside the
      * planner's own window: a MONTHLY purchase skips them, because assigning
      * the same student to the same session twice is rejected by the database.
      */
     private static Set<String> ownedSessionIds(
-        PhysicalCourseAvailabilityPort availabilityPort, PhysicalCourseQuote quote, UUID studentId, Instant now
+        PhysicalCourseAvailabilityPort availabilityPort, String courseId, UUID studentId, Instant now
     ) {
         return availabilityPort.findSessionIdsAssignedTo(
-            quote.getCourseId(), studentId, now, now.plus(CoveragePlanner.COVERAGE_LOOKAHEAD)
+            courseId, studentId, now, now.plus(CoveragePlanner.COVERAGE_LOOKAHEAD)
         );
     }
 }
