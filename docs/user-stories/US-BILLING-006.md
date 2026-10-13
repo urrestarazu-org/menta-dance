@@ -47,6 +47,15 @@
 - **Entonces** el quote puede informar `availability: UNAVAILABLE`, sin reservar
   capacidad ni prometer que su estado se mantendrá hasta el checkout.
 
+**Escenario 5: mensualidad sin sesiones nuevas para el alumno (#541)**
+
+- **Dado** un alumno que ya tiene asignación confirmada en todas las sesiones que una
+  mensualidad cubriría desde ahora.
+- **Cuando** solicito `purchaseType: MONTHLY`.
+- **Entonces** responde `409 NO_NEW_SESSIONS` y no persiste el quote. Si el alumno tiene sólo
+  algunas de esas sesiones, el quote se emite igual, con el mismo importe y el mismo
+  `scheduledSessionCount`. El `INDIVIDUAL` no cambia.
+
 ## 3. Requisitos No Funcionales y Restricciones
 
 - Billing fija la fecha autoritativa; el cliente no puede enviarla.

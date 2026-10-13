@@ -562,6 +562,53 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         assertThat(assignmentRepository.countBySessionId(owned)).isEqualTo(1);
     }
 
+    // --- Scenario 1c: MONTHLY with nothing new to buy is refused before any hold or Payment (#541) ---
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void a_monthly_checkout_is_rejected_with_409_when_the_student_owns_every_covered_session() {
+        UUID userId = seedStudent();
+        UUID courseId = seedCourse();
+        List<UUID> sessionIds = seedScheduledSessions(courseId, 3, 5);
+        // The monthly covers the next two sessions; the student already holds both.
+        assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
+            UUID.randomUUID(), sessionIds.get(0), userId, Instant.now()
+        ));
+        assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
+            UUID.randomUUID(), sessionIds.get(1), userId, Instant.now()
+        ));
+        String quoteId = seedMonthlyQuote(courseId, 2, MONTHLY_PRICE);
+
+        ResponseEntity<Map> response = checkout(userId, quoteId, "idem-monthly-nothing-new-1");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody().get("code")).isEqualTo("NO_NEW_SESSIONS");
+        assertThat(paymentRepository.findAll()).isEmpty();
+        assertThat(holdRepository.findAll()).isEmpty();
+        verifyNoInteractions(paymentPreferencePort);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void a_bank_transfer_monthly_checkout_is_rejected_with_409_when_the_student_owns_every_covered_session() {
+        UUID userId = seedStudent();
+        UUID courseId = seedCourse();
+        List<UUID> sessionIds = seedScheduledSessions(courseId, 3, 5);
+        assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
+            UUID.randomUUID(), sessionIds.get(0), userId, Instant.now()
+        ));
+        assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
+            UUID.randomUUID(), sessionIds.get(1), userId, Instant.now()
+        ));
+        String quoteId = seedMonthlyQuote(courseId, 2, MONTHLY_PRICE);
+
+        ResponseEntity<Map> response = checkout(userId, quoteId, "BANK_TRANSFER", "idem-bt-nothing-new-1");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody().get("code")).isEqualTo("NO_NEW_SESSIONS");
+        assertThat(paymentRepository.findAll()).isEmpty();
+    }
+
     // --- Scenario 2: INDIVIDUAL (N=1) -----------------------------------------
 
     @Test

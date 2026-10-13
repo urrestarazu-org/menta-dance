@@ -37,6 +37,11 @@ final class PurchaseFlowErrors {
             status = HttpStatus.UNPROCESSABLE_ENTITY;
             title = "Sin clases en el período";
             message = "No hay clases programadas en este período, así que no podemos cotizar.";
+        } else if (failure instanceof PhysicalPurchaseApiClient.NoNewSessionsException) {
+            status = HttpStatus.CONFLICT;
+            title = "Ya tenés estas clases";
+            message = "Ya tenés lugar en todas las sesiones que cubriría esta mensualidad, "
+                    + "así que no hace falta pagar de nuevo. No se realizó ningún cobro.";
         } else if (failure instanceof PhysicalPurchaseApiClient.CapacityUnavailableException) {
             status = HttpStatus.CONFLICT;
             title = "Sin lugares";
