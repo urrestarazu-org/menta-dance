@@ -11,6 +11,16 @@
 <h1 th:text="${title}">Compra</h1>
 <p th:text="${message}">Mensaje</p>
 
+<section th:if="${not #lists.isEmpty(assignedSessions)}" id="assigned-sessions">
+    <h2>Tus próximas sesiones</h2>
+    <ul>
+        <li th:each="row : ${assignedSessions}">
+            <strong th:text="${row.courseName}">Salsa</strong> -
+            <span th:text="${row.momentLabel}">lunes 19 de octubre a las 18:00</span>
+        </li>
+    </ul>
+</section>
+
 <p><a th:href="@{${linkHref}}" th:text="${linkLabel}">Volver</a></p>
 </body>
 </html>

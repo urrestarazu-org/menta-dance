@@ -1,7 +1,9 @@
 package com.menta.bff.infrastructure.adapter;
 
+import com.menta.bff.application.dto.AssignedSession;
 import com.menta.bff.application.port.out.PhysicalSessionsApiClient;
 import com.menta.bff.infrastructure.config.VirtualApiProperties;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -43,6 +45,21 @@ public class PhysicalSessionsApiAdapter implements PhysicalSessionsApiClient {
 
     @Override
     public Set<String> findMySessionIds(String accessToken) {
+        return fetch(accessToken).stream()
+                .map(SessionWire::sessionId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    @Override
+    public List<AssignedSession> findMySessions(String accessToken) {
+        return fetch(accessToken).stream()
+                .filter(s -> s.sessionId() != null && s.scheduledAt() != null)
+                .map(s -> new AssignedSession(s.sessionId(), s.courseName(), s.scheduledAt()))
+                .toList();
+    }
+
+    private List<SessionWire> fetch(String accessToken) {
         MySessionsWire wire;
         try {
             wire = webClient.get()
@@ -59,16 +76,13 @@ public class PhysicalSessionsApiAdapter implements PhysicalSessionsApiClient {
         if (wire == null || wire.sessions() == null) {
             throw new ServiceUnavailableException("Physical sessions API returned an unusable body");
         }
-        return wire.sessions().stream()
-                .map(SessionWire::sessionId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toUnmodifiableSet());
+        return wire.sessions();
     }
 
-    /** Wire shape of the response: only the session ids are read. */
+    /** Wire shape of the response: only the fields the BFF shows are read. */
     private record MySessionsWire(List<SessionWire> sessions) {
     }
 
-    private record SessionWire(String sessionId) {
+    private record SessionWire(String sessionId, String courseName, Instant scheduledAt) {
     }
 }

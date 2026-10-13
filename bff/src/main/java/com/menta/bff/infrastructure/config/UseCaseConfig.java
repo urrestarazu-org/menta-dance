@@ -10,6 +10,8 @@ import com.menta.bff.application.port.out.SessionTokenRepository;
 import com.menta.bff.application.port.out.VirtualApiClient;
 import com.menta.bff.application.usecase.AccountActivationUseCase;
 import com.menta.bff.application.usecase.AccountActivationUseCaseImpl;
+import com.menta.bff.application.usecase.GetAssignedSessionsUseCase;
+import com.menta.bff.application.usecase.GetAssignedSessionsUseCaseImpl;
 import com.menta.bff.application.usecase.GetCatalogViewUseCase;
 import com.menta.bff.application.usecase.GetCatalogViewUseCaseImpl;
 import com.menta.bff.application.usecase.GetClassDetailViewUseCase;
@@ -161,5 +163,11 @@ public class UseCaseConfig {
     @Bean
     public GetPaymentProgressUseCase getPaymentProgressUseCase(PhysicalPurchaseApiClient purchaseApiClient) {
         return new GetPaymentProgressUseCaseImpl(purchaseApiClient);
+    }
+
+    @Bean
+    public GetAssignedSessionsUseCase getAssignedSessionsUseCase(
+            PhysicalSessionsApiClient physicalSessionsApiClient, ClassesProperties classesProperties) {
+        return new GetAssignedSessionsUseCaseImpl(physicalSessionsApiClient, classesProperties.getDisplayZone());
     }
 }

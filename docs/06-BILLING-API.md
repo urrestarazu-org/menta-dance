@@ -260,7 +260,12 @@ Un alumno autenticado cotiza y paga desde el BFF (plantillas Thymeleaf, sin Java
 5. Mercado Pago devuelve al alumno a `GET /compras/retorno`. El BFF lee el `paymentId` **de la
    sesión** (nunca de la URL), consulta `GET /api/v1/billing/payments/{paymentId}` con el token
    del alumno y muestra el estado: `COMPLETED` "¡Pago confirmado! Estamos asignando tus
-   lugares" (no afirma que las sesiones ya estén asignadas); `AWAITING_PROVIDER`,
+   lugares" (no afirma que las sesiones ya estén asignadas) y, debajo, la lista "Tus próximas
+   sesiones" con nombre de la clase y fecha/hora en la zona de la academia, tomada de
+   `GET /api/v1/physical/sessions/me` con el token del alumno (solo se consulta con el pago
+   `COMPLETED`; si la consulta falla, la página se muestra igual sin la lista, y como la
+   asignación puede demorar, la lista puede no incluir aún las sesiones recién compradas);
+   `AWAITING_PROVIDER`,
    `AWAITING_MANUAL_VERIFICATION`, `RECONCILIATION_REQUIRED` o cualquier estado desconocido
    "Estamos confirmando tu pago" con el enlace "Actualizar" a la misma URL (un estado
    desconocido nunca se muestra como éxito); `REJECTED`, `CANCELLED` y `EXPIRED` con mensajes
