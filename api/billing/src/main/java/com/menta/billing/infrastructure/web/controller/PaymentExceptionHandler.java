@@ -3,9 +3,12 @@ package com.menta.billing.infrastructure.web.controller;
 import com.menta.billing.domain.exception.BankTransferRateLimitedException;
 import com.menta.billing.domain.exception.BillingDegradedException;
 import com.menta.billing.domain.exception.IllegalPaymentStateTransitionException;
+import com.menta.billing.domain.exception.IllegalPurchaseStateTransitionException;
 import com.menta.billing.domain.exception.InvalidProofAccessTokenException;
 import com.menta.billing.domain.exception.PaymentNotFoundException;
 import com.menta.billing.domain.exception.PaymentProofRejectedException;
+import com.menta.billing.domain.exception.PurchaseNotFoundException;
+import com.menta.billing.domain.exception.PurchaseResolutionConflictException;
 import com.menta.billing.infrastructure.web.ProblemDetails;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -111,6 +114,34 @@ public class PaymentExceptionHandler {
     ResponseEntity<ProblemDetail> invalidProofAccessToken(InvalidProofAccessTokenException exception) {
         return ProblemDetails.response(
             HttpStatus.FORBIDDEN, "El enlace de comprobante no es válido o expiró.", exception.getErrorCode()
+        );
+    }
+
+    /** #539: the admin resolution targeted a purchase that does not exist. */
+    @ExceptionHandler(PurchaseNotFoundException.class)
+    ResponseEntity<ProblemDetail> purchaseNotFound(PurchaseNotFoundException exception) {
+        return ProblemDetails.response(
+            HttpStatus.NOT_FOUND, "No se encontró la compra indicada.", exception.getErrorCode()
+        );
+    }
+
+    /** #539: only a purchase in {@code EXCEPTION} can be resolved. */
+    @ExceptionHandler(IllegalPurchaseStateTransitionException.class)
+    ResponseEntity<ProblemDetail> illegalPurchaseStateTransition(
+        IllegalPurchaseStateTransitionException exception
+    ) {
+        return ProblemDetails.response(
+            HttpStatus.CONFLICT,
+            "La compra no está en un estado que admita esta operación.",
+            exception.getErrorCode()
+        );
+    }
+
+    /** #539: a resolution is final; a different decision or note on a resolved purchase conflicts. */
+    @ExceptionHandler(PurchaseResolutionConflictException.class)
+    ResponseEntity<ProblemDetail> purchaseResolutionConflict(PurchaseResolutionConflictException exception) {
+        return ProblemDetails.response(
+            HttpStatus.CONFLICT, "La compra ya fue resuelta de otra forma.", exception.getErrorCode()
         );
     }
 

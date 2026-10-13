@@ -15,8 +15,10 @@ import com.menta.billing.application.port.in.GetPlanUseCase;
 import com.menta.billing.application.port.in.GetSubscriptionHistoryUseCase;
 import com.menta.billing.application.port.in.ListPlansUseCase;
 import com.menta.billing.application.port.in.ReceiveWebhookUseCase;
+import com.menta.billing.application.port.in.ResolveExceptionPurchaseUseCase;
 import com.menta.billing.application.port.in.SubmitPaymentProofUseCase;
 import com.menta.billing.application.port.out.BankTransferRateLimitPort;
+import com.menta.billing.application.port.out.BillingOutboxAppenderPort;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.port.out.Clock;
 import com.menta.billing.application.port.out.CourseCatalogPort;
@@ -51,6 +53,7 @@ import com.menta.billing.infrastructure.transaction.TransactionalAssignTrialSubs
 import com.menta.billing.infrastructure.transaction.TransactionalCreatePhysicalPurchaseCheckoutUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalCreateSubscriptionCheckoutUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalReceiveWebhookUseCase;
+import com.menta.billing.infrastructure.transaction.TransactionalResolveExceptionPurchaseUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalSubmitPaymentProofUseCase;
 import com.menta.shared.auth.UserExistencePort;
 import com.menta.shared.billing.VirtualCourseEntitlementPort;
@@ -156,6 +159,16 @@ class BillingConfigurationTest {
         );
 
         assertThat(useCase).isInstanceOf(TransactionalAssignTrialSubscriptionUseCase.class);
+    }
+
+    @Test
+    void wires_the_resolve_exception_purchase_use_case_bean_transactionally() {
+        ResolveExceptionPurchaseUseCase useCase = configuration.resolveExceptionPurchaseUseCase(
+            mock(PurchaseRepository.class), mock(PaymentRepository.class),
+            mock(BillingOutboxAppenderPort.class), mock(Clock.class)
+        );
+
+        assertThat(useCase).isInstanceOf(TransactionalResolveExceptionPurchaseUseCase.class);
     }
 
     @Test
