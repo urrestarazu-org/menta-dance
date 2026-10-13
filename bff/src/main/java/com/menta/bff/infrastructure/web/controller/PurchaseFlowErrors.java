@@ -50,6 +50,14 @@ final class PurchaseFlowErrors {
             status = HttpStatus.GONE;
             title = "Cotización vencida";
             message = "La cotización venció, pedí una nueva.";
+        } else if (failure instanceof PhysicalPurchaseApiClient.ProofRejectedException) {
+            status = HttpStatus.BAD_REQUEST;
+            title = "Comprobante inválido";
+            message = "No pudimos aceptar el archivo. Subí una imagen PNG o JPG, o un PDF, de hasta 5 MB.";
+        } else if (failure instanceof PhysicalPurchaseApiClient.TooManyProofsException) {
+            status = HttpStatus.TOO_MANY_REQUESTS;
+            title = "Demasiados comprobantes";
+            message = "Alcanzaste el máximo de comprobantes para este pago. Intentá de nuevo más tarde.";
         } else if (failure instanceof BillingApiClient.NotFoundException) {
             status = HttpStatus.NOT_FOUND;
             title = "No se pudo cotizar";

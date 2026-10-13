@@ -2,6 +2,8 @@ package com.menta.bff.infrastructure.adapter;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.menta.bff.application.dto.PaymentProgress;
+import com.menta.bff.application.dto.PaymentProofFile;
+import com.menta.bff.application.dto.PhysicalBankTransfer;
 import com.menta.bff.application.dto.PhysicalCheckout;
 import com.menta.bff.application.dto.PhysicalPurchaseType;
 import com.menta.bff.application.dto.PhysicalQuote;
@@ -10,11 +12,16 @@ import com.menta.bff.application.port.out.PhysicalPurchaseApiClient;
 import com.menta.bff.infrastructure.config.BillingApiProperties;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.function.Function;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
+import org.springframework.http.MediaType;
+import org.springframework.http.client.MultipartBodyBuilder;
 import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
@@ -42,7 +49,9 @@ public class PhysicalPurchaseApiAdapter implements PhysicalPurchaseApiClient {
     private static final String QUOTES = "/api/v1/billing/physical/quotes";
     private static final String PURCHASES = "/api/v1/billing/physical/purchases";
     private static final String PAYMENTS = "/api/v1/billing/payments/{paymentId}";
+    private static final String PROOF = "/api/v1/billing/payments/{paymentId}/proof";
     private static final String PAYMENT_METHOD = "MERCADO_PAGO";
+    private static final String BANK_TRANSFER = "BANK_TRANSFER";
     private static final String NO_SCHEDULED_SESSIONS = "NO_SCHEDULED_SESSIONS";
     private static final String NO_NEW_SESSIONS = "NO_NEW_SESSIONS";
 
@@ -83,6 +92,40 @@ public class PhysicalPurchaseApiAdapter implements PhysicalPurchaseApiClient {
     }
 
     @Override
+    public PhysicalBankTransfer createBankTransferCheckout(String accessToken, String quoteId, String key) {
+        TransferWire transfer = execute("bank transfer checkout",
+                webClient.post().uri(PURCHASES).header(HttpHeaders.AUTHORIZATION, bearer(accessToken))
+                        .bodyValue(new CheckoutRequest(quoteId, BANK_TRANSFER, key)),
+                TransferWire.class);
+        InstructionsWire i = transfer.bankTransferInstructions();
+        if (transfer.paymentId() == null || i == null || i.cbu() == null || i.amount() == null
+                || i.amount().amount() == null) {
+            throw unavailable("bank transfer response is incomplete");
+        }
+        return new PhysicalBankTransfer(transfer.paymentId(), i.cbu(), i.alias(), i.holder(), i.cuit(),
+                i.amount().amount(), i.amount().currency(), i.reference());
+    }
+
+    @Override
+    public void submitPaymentProof(String accessToken, String paymentId, PaymentProofFile proof) {
+        MultipartBodyBuilder parts = new MultipartBodyBuilder();
+        parts.part("file", new ByteArrayResource(proof.content()))
+                .filename(proof.fileName())
+                .contentType(MediaType.parseMediaType(proof.contentType()));
+        try {
+            execute("payment proof",
+                    webClient.post().uri(PROOF, paymentId).header(HttpHeaders.AUTHORIZATION, bearer(accessToken))
+                            .body(BodyInserters.fromMultipartData(parts.build())),
+                    response -> response.statusCode().value() == 429
+                            ? Mono.error(new TooManyProofsException("Proof upload budget spent"))
+                            : handle(response, String.class),
+                    "accepted");
+        } catch (InvalidRequestException e) {
+            throw new ProofRejectedException("Billing API rejected the proof");
+        }
+    }
+
+    @Override
     public PaymentProgress getPaymentProgress(String accessToken, String paymentId) {
         PaymentWire payment = execute("payment status",
                 webClient.get().uri(PAYMENTS, paymentId).header(HttpHeaders.AUTHORIZATION, bearer(accessToken)),
@@ -91,10 +134,20 @@ public class PhysicalPurchaseApiAdapter implements PhysicalPurchaseApiClient {
     }
 
     private <T> T execute(String operation, WebClient.RequestHeadersSpec<?> request, Class<T> bodyType) {
+        return execute(operation, request, response -> handle(response, bodyType), null);
+    }
+
+    /** {@code whenEmpty} stands in for an empty success body; {@code null} means a body is required. */
+    private <T> T execute(
+            String operation, WebClient.RequestHeadersSpec<?> request,
+            Function<ClientResponse, Mono<T>> reader, T whenEmpty) {
         try {
-            T body = request.exchangeToMono(response -> handle(response, bodyType))
+            T body = request.exchangeToMono(reader)
                     .timeout(properties.getTimeout())
                     .block();
+            if (body == null && whenEmpty != null) {
+                return whenEmpty;
+            }
             if (body == null) {
                 throw unavailable(operation + " response has no body");
             }
@@ -174,6 +227,16 @@ public class PhysicalPurchaseApiAdapter implements PhysicalPurchaseApiClient {
     }
 
     private record CheckoutWire(String paymentId, String checkoutUrl) {
+    }
+
+    private record TransferWire(String paymentId, InstructionsWire bankTransferInstructions) {
+    }
+
+    private record InstructionsWire(
+            String cbu, String alias, String holder, String cuit, MoneyWire amount, String reference) {
+    }
+
+    private record MoneyWire(BigDecimal amount, String currency) {
     }
 
     private record PaymentWire(String status) {

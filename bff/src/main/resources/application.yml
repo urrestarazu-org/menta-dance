@@ -15,6 +15,12 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
 
+  # Proof of transfer uploads: the Billing API accepts up to 5MB
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
+
   # Thymeleaf configuration
   thymeleaf:
     cache: false

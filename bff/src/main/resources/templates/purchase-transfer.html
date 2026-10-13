@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pagar por transferencia - Menta Dance</title>
+</head>
+<body>
+<nav><a th:href="@{/classes}">Clases presenciales</a></nav>
+
+<h1>Pagá por transferencia bancaria</h1>
+<p>Hacé la transferencia con estos datos e incluí la referencia para que podamos identificar tu pago.</p>
+
+<ul>
+    <li>CBU: <strong th:text="${transfer.cbu}">0000003100010000000001</strong></li>
+    <li>Alias: <strong th:text="${transfer.alias}">menta.dance</strong></li>
+    <li>Titular: <span th:text="${transfer.holder}">Menta Dance</span></li>
+    <li>CUIT: <span th:text="${transfer.cuit}">30-12345678-9</span></li>
+    <li>Importe: <strong th:text="${transfer.amountLabel}">$ 12.500,00</strong></li>
+    <li>Referencia: <strong th:text="${transfer.reference}">PHY-BT-1</strong></li>
+</ul>
+
+<p>Tu lugar se confirma después de verificar el pago. Subir el comprobante nos ayuda a hacerlo más rápido.</p>
+
+<form th:action="@{/compras/transferencia/comprobante}" method="post" enctype="multipart/form-data">
+    <input type="hidden" name="paymentId" th:value="${transfer.paymentId}">
+    <label>Comprobante (PNG, JPG o PDF, hasta 5 MB)
+        <input type="file" name="file" accept="image/png,image/jpeg,application/pdf" required>
+    </label>
+    <button type="submit">Subir comprobante</button>
+</form>
+</body>
+</html>
