@@ -2,6 +2,7 @@ package com.menta.billing.domain.exception;
 
 import com.menta.billing.domain.model.FulfillmentStatus;
 import com.menta.shared.domain.exceptions.BusinessException;
+import java.util.UUID;
 
 /**
  * Distinct from {@code IllegalPurchaseStateTransitionException} — the
@@ -16,6 +17,10 @@ public class PurchaseNotFoundException extends BusinessException {
 
     public PurchaseNotFoundException() {
         super(ERROR_CODE, "No purchase found for the supplied paymentId");
+    }
+
+    public PurchaseNotFoundException(UUID purchaseId) {
+        super(ERROR_CODE, "No purchase found for purchaseId=" + purchaseId);
     }
 
     public PurchaseNotFoundException(FulfillmentStatus assumed) {

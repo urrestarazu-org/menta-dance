@@ -57,6 +57,10 @@ public interface PurchaseJpaRepository extends JpaRepository<PurchaseJpaEntity, 
     )
     Optional<PurchaseJpaEntity> findByPaymentIdForUpdate(@Param("paymentId") UUID paymentId);
 
+    /** A LOCKING read by primary key (#539), for the admin resolution that updates the row it reads. */
+    @Query(value = "SELECT * FROM billing_purchases WHERE id = :id FOR UPDATE", nativeQuery = true)
+    Optional<PurchaseJpaEntity> findByIdForUpdate(@Param("id") UUID id);
+
     /**
      * The admin EXCEPTION-purchases inbox (#237, design C2). {@code PurchaseJpaEntity} has no
      * {@code @ManyToOne} to {@code PaymentJpaEntity} ({@code payment_id} is a bare {@code UUID}

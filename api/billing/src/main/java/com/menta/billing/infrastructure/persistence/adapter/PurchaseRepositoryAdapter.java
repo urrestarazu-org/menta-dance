@@ -116,6 +116,12 @@ public class PurchaseRepositoryAdapter implements PurchaseRepository {
         return jpaRepository.findByPaymentIdForUpdate(paymentId.getValue()).map(this::toDomain);
     }
 
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<Purchase> findByIdForUpdate(UUID purchaseId) {
+        return jpaRepository.findByIdForUpdate(purchaseId).map(this::toDomain);
+    }
+
     /**
      * The admin EXCEPTION-purchases inbox (#237, design C1/C4). Deliberately {@code REQUIRED},
      * NOT {@code MANDATORY} like this adapter's other methods above: those all run inside an
