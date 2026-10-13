@@ -6,6 +6,7 @@ import com.menta.bff.application.dto.PhysicalPurchaseType;
 import com.menta.bff.application.port.out.BillingApiClient;
 import com.menta.bff.application.port.out.CatalogApiClient;
 import com.menta.bff.application.port.out.PhysicalPurchaseApiClient;
+import com.menta.bff.application.usecase.GetAssignedSessionsUseCase;
 import com.menta.bff.application.usecase.GetPaymentProgressUseCase;
 import com.menta.bff.application.usecase.PayPhysicalPurchaseUseCase;
 import com.menta.bff.application.usecase.QuotePhysicalPurchaseUseCase;
@@ -60,6 +61,7 @@ public class PhysicalPurchaseController {
     private final QuotePhysicalPurchaseUseCase quotePhysicalPurchaseUseCase;
     private final PayPhysicalPurchaseUseCase payPhysicalPurchaseUseCase;
     private final GetPaymentProgressUseCase getPaymentProgressUseCase;
+    private final GetAssignedSessionsUseCase getAssignedSessionsUseCase;
 
     /**
      * Quotes a class and renders the quote. No Post/Redirect/Get: a quote is informative and
@@ -146,8 +148,14 @@ public class PhysicalPurchaseController {
             session.removeAttribute(PAYMENT_ID_SESSION_ATTRIBUTE);
         }
         return switch (progress) {
-            case COMPLETED -> PurchaseFlowErrors.notice(model, "Pago confirmado",
-                    "¡Pago confirmado! Estamos asignando tus lugares.", CLASSES_PATH, BACK_TO_CLASSES);
+            case COMPLETED -> {
+                var assignedSessions = getAssignedSessionsUseCase.execute(accessToken(request));
+                model.addAttribute("assignedSessions", assignedSessions);
+                String confirmed = assignedSessions.isEmpty()
+                        ? "¡Pago confirmado! Estamos asignando tus lugares."
+                        : "¡Pago confirmado! Ya tenés lugar en las sesiones de abajo.";
+                yield PurchaseFlowErrors.notice(model, "Pago confirmado", confirmed, CLASSES_PATH, BACK_TO_CLASSES);
+            }
             case REJECTED -> PurchaseFlowErrors.notice(model, "Pago rechazado",
                     "El pago fue rechazado. No se te cobró nada; podés intentar de nuevo.",
                     CLASSES_PATH, BACK_TO_CLASSES);

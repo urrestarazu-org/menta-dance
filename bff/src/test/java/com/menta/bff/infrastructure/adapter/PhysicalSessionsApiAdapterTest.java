@@ -13,9 +13,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.github.tomakehurst.wiremock.http.Fault;
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
+import com.menta.bff.application.dto.AssignedSession;
 import com.menta.bff.application.port.out.PhysicalSessionsApiClient;
 import com.menta.bff.infrastructure.config.VirtualApiProperties;
 import java.time.Duration;
+import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -62,6 +64,40 @@ class PhysicalSessionsApiAdapterTest {
 
         assertThat(adapter.findMySessionIds(TOKEN)).containsExactlyInAnyOrder("s-1", "s-2");
         verify(getRequestedFor(urlEqualTo(MY_SESSIONS)).withHeader("Authorization", equalTo("Bearer " + TOKEN)));
+    }
+
+    @Test
+    @DisplayName("findMySessions maps id, class name and scheduled instant")
+    void mapsSessions() {
+        stubBody(200, TWO_SESSIONS_BODY);
+
+        assertThat(adapter.findMySessions(TOKEN)).containsExactly(
+                new AssignedSession("s-1", "Salsa", Instant.parse("2026-10-20T21:00:00Z")),
+                new AssignedSession("s-2", "Salsa", Instant.parse("2026-10-27T21:00:00Z")));
+        verify(getRequestedFor(urlEqualTo(MY_SESSIONS)).withHeader("Authorization", equalTo("Bearer " + TOKEN)));
+    }
+
+    @Test
+    @DisplayName("findMySessions skips items without id or time and tolerates a missing class name")
+    void sessionsSkipUnusableItems() {
+        stubBody(200, "{\"sessions\": [{\"courseId\": \"c-1\"}, {\"sessionId\": \"s-0\"}, "
+                + "{\"sessionId\": \"s-1\", \"scheduledAt\": \"2026-10-20T21:00:00Z\"}]}");
+
+        assertThat(adapter.findMySessions(TOKEN))
+                .containsExactly(new AssignedSession("s-1", null, Instant.parse("2026-10-20T21:00:00Z")));
+    }
+
+    @Test
+    @DisplayName("findMySessions is unavailable on an error status or an unusable body")
+    void sessionsUnavailable() {
+        stubBody(503, "{}");
+        assertThatThrownBy(() -> adapter.findMySessions(TOKEN))
+                .isInstanceOf(PhysicalSessionsApiClient.ServiceUnavailableException.class)
+                .hasMessageNotContaining(TOKEN);
+
+        stubBody(200, "{\"from\": \"2026-10-13T03:00:00Z\"}");
+        assertThatThrownBy(() -> adapter.findMySessions(TOKEN))
+                .isInstanceOf(PhysicalSessionsApiClient.ServiceUnavailableException.class);
     }
 
     @Test

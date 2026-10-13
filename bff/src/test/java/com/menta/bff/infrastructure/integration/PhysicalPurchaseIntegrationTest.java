@@ -518,6 +518,64 @@ class PhysicalPurchaseIntegrationTest extends BaseIntegrationTest {
                 .contains("¡Pago confirmado!");
     }
 
+    private static final String MY_SESSIONS = "/api/v1/physical/sessions/me";
+
+    private static final String MY_SESSIONS_BODY =
+            """
+            {"from": "2026-10-13T03:00:00Z", "to": "2026-12-12T03:00:00Z", "sessions": [
+              {"sessionId": "s-2", "courseId": "c-2", "courseName": "Bachata", "instructorName": "Ana",
+               "scheduledAt": "2026-10-21T01:30:00Z", "checkInOpen": false},
+              {"sessionId": "s-1", "courseId": "c-1", "courseName": "Salsa en vivo", "instructorName": "María",
+               "scheduledAt": "2026-10-19T21:00:00Z", "checkInOpen": false}]}
+            """;
+
+    private String returnPageAfterPaying(String paymentStatus) throws Exception {
+        stubCheckout(CHECKOUT_URL);
+        payFromQuotePage(monthlyQuotePage()).andExpect(status().is3xxRedirection());
+        stubPayment(paymentStatus);
+        WIRE_MOCK_SERVER.resetRequests();
+        return body(mockMvc.perform(withSession(get(RETURN_PAGE))).andExpect(status().isOk()));
+    }
+
+    @Test
+    @DisplayName("a confirmed payment lists the assigned sessions in the academy zone, soonest first")
+    void returnListsAssignedSessionsWhenConfirmed() throws Exception {
+        stubGet(MY_SESSIONS, 200, MY_SESSIONS_BODY);
+
+        String html = returnPageAfterPaying("COMPLETED");
+
+        assertThat(html).contains("¡Pago confirmado! Ya tenés lugar en las sesiones de abajo")
+                .contains("Tus próximas sesiones")
+                .containsSubsequence("Salsa en vivo", "lunes 19 de octubre a las 18:00",
+                        "Bachata", "martes 20 de octubre a las 22:30");
+        assertThat(WIRE_MOCK_SERVER.findAll(getRequestedFor(urlEqualTo(MY_SESSIONS))
+                .withHeader("Authorization", WireMock.matching("Bearer .+")))).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("when the student's sessions cannot be read the confirmed return renders without the list")
+    void returnWithoutListWhenSessionsLookupFails() throws Exception {
+        stubGet(MY_SESSIONS, 503, "{\"status\":503}");
+
+        String html = returnPageAfterPaying("COMPLETED");
+
+        assertThat(html).contains("¡Pago confirmado! Estamos asignando tus lugares")
+                .doesNotContain("Tus próximas sesiones").contains("href=\"/classes\"");
+        assertLinksWork(html);
+    }
+
+    @Test
+    @DisplayName("a payment that is not confirmed never queries nor shows the sessions")
+    void returnDoesNotQuerySessionsUnlessConfirmed() throws Exception {
+        stubGet(MY_SESSIONS, 200, MY_SESSIONS_BODY);
+
+        for (String paymentStatus : List.of("AWAITING_PROVIDER", "REJECTED", "CANCELLED", "EXPIRED")) {
+            String html = returnPageAfterPaying(paymentStatus);
+            assertThat(html).doesNotContain("Tus próximas sesiones").doesNotContain("Salsa en vivo");
+            assertThat(WIRE_MOCK_SERVER.findAll(getRequestedFor(urlEqualTo(MY_SESSIONS)))).isEmpty();
+        }
+    }
+
     private static void stubProblemGet(String url, int status, String code) {
         stubGet(url, status, "{\"status\":" + status + ",\"code\":\"" + code + "\"}");
     }
