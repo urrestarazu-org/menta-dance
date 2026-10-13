@@ -62,7 +62,9 @@ saltean las sesiones donde ya tiene una asignación confirmada (por ejemplo, de 
 compra individual) y la búsqueda se extiende hacia adelante, hasta 120 días desde el
 instante de referencia, para completar N. El importe del quote no cambia. Si no hay N
 sesiones sin asignar dentro de ese horizonte, el checkout responde
-`409 CAPACITY_UNAVAILABLE`. Un individual no se ve afectado.
+`409 CAPACITY_UNAVAILABLE`. Un individual no saltea ni extiende nada: cubre exactamente
+la sesión elegida, y si el alumno ya la tiene se rechaza (ver "Sesión individual ya
+asignada", #545).
 
 ### Mensualidad sin sesiones nuevas (#541)
 
@@ -85,7 +87,27 @@ vende**. Si agrega al menos una, se cobra el precio completo del quote (sin pror
 - **Atomicidad**: la lectura de las sesiones que el alumno ya tiene y la creación del hold no
   son una única transacción; la ventana restante es la misma que ya describe la sección
   siguiente (#533), no se agrega una nueva.
-- Las compras **individuales** no cambian con esta decisión.
+
+### Sesión individual ya asignada (#545)
+
+Decisión de producto: **una compra individual de una sesión que el alumno ya tiene no se
+vende**. Antes se cobraba y, al confirmar, chocaba con `uq_physical_assignment_session_student`
+(`Purchase` en `EXCEPTION` con `ALREADY_ASSIGNED`, dinero cobrado, #532 / #539).
+
+- "Ya la tiene" significa asignación confirmada del alumno en esa sesión (las sesiones
+  `CANCELLED` no cuentan). La consulta es exacta sobre la sesión elegida: no depende del
+  horizonte de 120 días ni de que la sesión ya haya empezado.
+- **Cotización individual**: se rechaza con `409 NO_NEW_SESSIONS` y no persiste ningún quote.
+  Se evalúa después de resolver la sesión (una sesión inexistente sigue siendo
+  `404 PHYSICAL_SESSION_NOT_FOUND`).
+- **Checkout** (Mercado Pago y transferencia bancaria): repite la regla con el mismo código,
+  antes de crear el hold o el `Payment`, y antes de evaluar el cupo (una sesión llena que el
+  alumno ya tiene se informa como "ya la tenés", no como falta de cupo).
+- **Contrato**: no hay código nuevo. Sólo cambia el `detail` (individual: "Ya tenés lugar en
+  esta sesión."; mensual: "...esta mensualidad."); el BFF muestra un aviso válido para ambos.
+- Las sesiones que el alumno no tiene se cotizan y se compran como siempre.
+- **Atomicidad**: igual que en la mensualidad, la lectura y la creación del hold no son una
+  única transacción; la ventana restante es la de la sección siguiente (#533).
 
 ### Ventana entre checkout y confirmación
 

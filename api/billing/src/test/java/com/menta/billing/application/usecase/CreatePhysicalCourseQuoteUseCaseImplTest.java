@@ -208,17 +208,60 @@ class CreatePhysicalCourseQuoteUseCaseImplTest {
         verifyNoInteractions(quoteRepository);
     }
 
+    /** #545: the student already holds the selected session, so there is nothing to buy. */
     @Test
-    void individual_quote_never_consults_the_students_owned_sessions() {
+    void individual_quote_is_rejected_and_nothing_is_saved_when_the_student_owns_the_selected_session() {
+        givenIndividualCalendar();
+        givenStudentOwnsAt("2026-09-03T20:00:00Z", "s1");
+
+        assertThatThrownBy(() ->
+            useCase.create(new CreatePhysicalCourseQuoteCommand(USER_ID, COURSE_ID, PurchaseType.INDIVIDUAL, "s1"))
+        ).isInstanceOf(NoNewSessionsToPurchaseException.class)
+            .satisfies(thrown -> {
+                NoNewSessionsToPurchaseException exception = (NoNewSessionsToPurchaseException) thrown;
+                assertThat(exception.getErrorCode()).isEqualTo("NO_NEW_SESSIONS");
+                assertThat(exception.getPurchaseType()).isEqualTo(PurchaseType.INDIVIDUAL);
+            });
+        verifyNoInteractions(quoteRepository);
+    }
+
+    @Test
+    void individual_quote_is_unchanged_when_the_student_owns_a_different_session() {
+        givenIndividualCalendar();
+        givenStudentOwnsAt("2026-09-10T20:00:00Z", "s2");
+        givenStudentOwnsAt("2026-09-03T20:00:00Z");
+
+        PhysicalCourseQuoteResult result =
+            useCase.create(new CreatePhysicalCourseQuoteCommand(USER_ID, COURSE_ID, PurchaseType.INDIVIDUAL, "s1"));
+
+        assertThat(result.selectedSessionId()).isEqualTo("s1");
+        verify(quoteRepository).save(any());
+    }
+
+    @Test
+    void individual_quote_of_a_session_that_is_not_found_is_never_looked_up_in_the_owned_sessions() {
+        givenIndividualCalendar();
+
+        assertThatThrownBy(() ->
+            useCase.create(new CreatePhysicalCourseQuoteCommand(USER_ID, COURSE_ID, PurchaseType.INDIVIDUAL, "nope"))
+        ).isInstanceOf(PhysicalSessionNotFoundException.class);
+        verify(availabilityPort, never()).findSessionIdsAssignedTo(any(), any(), any(), any());
+    }
+
+    private void givenIndividualCalendar() {
         when(clock.now()).thenReturn(SEPTEMBER_NOW);
         when(pricingRepository.findByCourseId(COURSE_ID)).thenReturn(Optional.of(pricing("100.00", "10")));
         when(availabilityPort.findScheduledSessions(eq(COURSE_ID), any(), any())).thenReturn(List.of(
-            session("s1", "2026-09-03T20:00:00Z", 5)
+            session("s1", "2026-09-03T20:00:00Z", 5),
+            session("s2", "2026-09-10T20:00:00Z", 5)
         ));
+    }
 
-        useCase.create(new CreatePhysicalCourseQuoteCommand(USER_ID, COURSE_ID, PurchaseType.INDIVIDUAL, "s1"));
-
-        verify(availabilityPort, never()).findSessionIdsAssignedTo(any(), any(), any(), any());
+    /** The owned lookup is exact: the half-open window holds only the selected session's instant. */
+    private void givenStudentOwnsAt(String scheduledAt, String... sessionIds) {
+        Instant from = Instant.parse(scheduledAt);
+        when(availabilityPort.findSessionIdsAssignedTo(eq(COURSE_ID), eq(USER_ID), eq(from), eq(from.plusMillis(1))))
+            .thenReturn(Set.of(sessionIds));
     }
 
     // ---- Escenario 2: INDIVIDUAL ----

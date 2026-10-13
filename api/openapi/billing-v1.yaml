@@ -525,10 +525,12 @@ paths:
             intenta antes de crear cualquier `Payment`, así que no se crea ningún
             `Payment` para este request. Ningún otro comprador puede tomar un cupo
             ya reservado por un hold vigente entre este request y la confirmación.
-            `NO_NEW_SESSIONS` (#541): sólo para mensualidades (ambos métodos de
-            pago), el alumno ya tiene asignación confirmada en todas las sesiones
-            que la mensualidad cubriría, así que no hay nada nuevo para comprar;
-            tampoco se crea hold ni `Payment`.
+            `NO_NEW_SESSIONS` (#541, #545): el alumno no sumaría ninguna sesión
+            nueva (ambos métodos de pago), así que no hay nada para comprar;
+            tampoco se crea hold ni `Payment`. Para `MONTHLY` ya tiene asignación
+            confirmada en todas las sesiones que la mensualidad cubriría; para
+            `INDIVIDUAL`, ya tiene asignada la sesión elegida. Mismo código en
+            ambos casos; sólo cambia el `detail`.
           content:
             application/problem+json:
               schema:
@@ -547,6 +549,13 @@ paths:
                     title: Conflict
                     status: 409
                     detail: Ya tenés lugar en todas las sesiones que cubriría esta mensualidad.
+                    code: NO_NEW_SESSIONS
+                no_new_sessions_individual:
+                  value:
+                    type: https://menta.dance/problems/no_new_sessions
+                    title: Conflict
+                    status: 409
+                    detail: Ya tenés lugar en esta sesión.
                     code: NO_NEW_SESSIONS
         '410':
           description: >-

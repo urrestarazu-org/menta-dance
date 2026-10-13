@@ -348,7 +348,7 @@ class PhysicalPurchaseIntegrationTest extends BaseIntegrationTest {
         stubProblem(QUOTES, 409, "NO_NEW_SESSIONS");
         String noNewSessions = body(submit(action, monthly).andExpect(status().isConflict()));
         assertThat(noNewSessions).contains("Ya tenés estas clases")
-                .contains("Ya tenés lugar en todas las sesiones que cubriría esta mensualidad")
+                .contains("Ya tenés lugar en todas las sesiones que cubriría esta compra")
                 .contains("No se realizó ningún cobro").contains("href=\"/classes/" + COURSE_ID + "\"")
                 .doesNotContain("Sin lugares").doesNotContain("NO_NEW_SESSIONS");
         assertLinksWork(noNewSessions);

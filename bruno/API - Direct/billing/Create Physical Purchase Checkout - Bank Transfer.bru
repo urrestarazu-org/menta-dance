@@ -57,9 +57,10 @@ docs {
     - 409 CAPACITY_UNAVAILABLE: best-effort, non-binding read (design D7) —
       unlike the Mercado Pago arm's hold-backed guarantee, this does not
       reserve anything even when it lets the request through.
-    - 409 NO_NEW_SESSIONS (#541): the student already holds every session the
-      monthly would cover; nothing is charged and no Payment is created. Same
-      code on the Mercado Pago arm and on POST /api/v1/billing/physical/quotes.
+    - 409 NO_NEW_SESSIONS (#541, #545): the student already holds every session
+      the monthly would cover, or the selected session of an individual
+      purchase; nothing is charged and no Payment is created. Same code on the
+      Mercado Pago arm and on POST /api/v1/billing/physical/quotes.
     - 429 BANK_TRANSFER_RATE_LIMITED: the shared 10/user/day bank-transfer
       creation budget (design D4) is exhausted — the SAME counter
       "Create Subscription Checkout.bru" with BANK_TRANSFER consumes.

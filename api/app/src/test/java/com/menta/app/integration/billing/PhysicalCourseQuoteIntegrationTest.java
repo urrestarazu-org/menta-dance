@@ -255,6 +255,31 @@ class PhysicalCourseQuoteIntegrationTest extends AbstractBillingMySqlIntegration
         assertThat(response.getBody().get("amount")).isEqualTo(27.50);
     }
 
+    /** #545: a session the student already holds is not quoted; a different one still is. */
+    @Test
+    void individual_quote_of_an_owned_session_is_rejected_with_409_and_persists_nothing() {
+        when(clock.now()).thenReturn(SEPTEMBER_NOW);
+        UUID courseId = seedCourse();
+        seedPricing(courseId.toString(), "100.00", "10");
+        UUID owned = seedSession(courseId, Instant.parse("2026-09-19T20:00:00Z"), 20);
+        UUID studentId = issueUser(Role.STUDENT);
+        assign(owned, studentId);
+
+        ResponseEntity<Map> rejected = quoteIndividual(courseId, owned, studentId);
+
+        assertThat(rejected.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(rejected.getBody().get("code")).isEqualTo("NO_NEW_SESSIONS");
+        assertThat(rejected.getBody().get("detail")).isEqualTo("Ya tenés lugar en esta sesión.");
+        assertThat(quoteRepository.findAll()).isEmpty();
+
+        UUID other = seedSession(courseId, Instant.parse("2026-09-26T20:00:00Z"), 20);
+
+        ResponseEntity<Map> accepted = quoteIndividual(courseId, other, studentId);
+
+        assertThat(accepted.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(quoteRepository.findAll()).hasSize(1);
+    }
+
     @Test
     void no_scheduled_sessions_in_the_period_returns_422() {
         when(clock.now()).thenReturn(SEPTEMBER_NOW);
@@ -379,6 +404,17 @@ class PhysicalCourseQuoteIntegrationTest extends AbstractBillingMySqlIntegration
         assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
             UUID.randomUUID(), sessionId, studentId, Instant.now()
         ));
+    }
+
+    private ResponseEntity<Map> quoteIndividual(UUID courseId, UUID sessionId, UUID studentId) {
+        return http.exchange(
+            "/api/v1/billing/physical/quotes", HttpMethod.POST,
+            new HttpEntity<>(
+                quoteBody(courseId.toString(), "INDIVIDUAL", sessionId.toString()),
+                headersFor(studentId, Role.STUDENT)
+            ),
+            Map.class
+        );
     }
 
     private ResponseEntity<Map> quoteMonthly(UUID courseId, UUID studentId) {

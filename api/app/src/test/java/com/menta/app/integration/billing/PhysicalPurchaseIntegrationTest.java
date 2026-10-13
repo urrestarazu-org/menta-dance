@@ -609,6 +609,47 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         assertThat(paymentRepository.findAll()).isEmpty();
     }
 
+    // --- Scenario 1d: INDIVIDUAL of a session the student already owns is refused up front (#545) ---
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void an_individual_checkout_is_rejected_with_409_when_the_student_owns_the_selected_session() {
+        UUID userId = seedStudent();
+        UUID courseId = seedCourse();
+        UUID session = seedScheduledSessions(courseId, 1, 5).get(0);
+        assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
+            UUID.randomUUID(), session, userId, Instant.now()
+        ));
+        String quoteId = seedIndividualQuote(courseId, session, INDIVIDUAL_PRICE);
+
+        ResponseEntity<Map> response = checkout(userId, quoteId, "idem-individual-owned-1");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody().get("code")).isEqualTo("NO_NEW_SESSIONS");
+        assertThat(response.getBody().get("detail")).isEqualTo("Ya tenés lugar en esta sesión.");
+        assertThat(paymentRepository.findAll()).isEmpty();
+        assertThat(holdRepository.findAll()).isEmpty();
+        verifyNoInteractions(paymentPreferencePort);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void a_bank_transfer_individual_checkout_is_rejected_with_409_when_the_student_owns_the_selected_session() {
+        UUID userId = seedStudent();
+        UUID courseId = seedCourse();
+        UUID session = seedScheduledSessions(courseId, 1, 5).get(0);
+        assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
+            UUID.randomUUID(), session, userId, Instant.now()
+        ));
+        String quoteId = seedIndividualQuote(courseId, session, INDIVIDUAL_PRICE);
+
+        ResponseEntity<Map> response = checkout(userId, quoteId, "BANK_TRANSFER", "idem-bt-individual-owned-1");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody().get("code")).isEqualTo("NO_NEW_SESSIONS");
+        assertThat(paymentRepository.findAll()).isEmpty();
+    }
+
     // --- Scenario 2: INDIVIDUAL (N=1) -----------------------------------------
 
     @Test

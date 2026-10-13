@@ -10,6 +10,7 @@ import com.menta.billing.domain.exception.PhysicalCoursePricingNotFoundException
 import com.menta.billing.domain.exception.PhysicalSessionNotFoundException;
 import com.menta.billing.domain.exception.SelectedSessionNotAllowedException;
 import com.menta.billing.domain.exception.SelectedSessionRequiredException;
+import com.menta.billing.domain.model.PurchaseType;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -46,11 +47,24 @@ class PhysicalCourseQuoteExceptionHandlerTest {
     }
 
     @Test
-    void maps_no_new_sessions_to_409() {
-        ResponseEntity<ProblemDetail> response = handler.noNewSessions(new NoNewSessionsToPurchaseException());
+    void maps_no_new_sessions_of_a_monthly_to_409_with_the_monthly_wording() {
+        ResponseEntity<ProblemDetail> response =
+            handler.noNewSessions(new NoNewSessionsToPurchaseException(PurchaseType.MONTHLY));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(response.getBody().getProperties().get("code")).isEqualTo("NO_NEW_SESSIONS");
+        assertThat(response.getBody().getDetail())
+            .isEqualTo("Ya tenés lugar en todas las sesiones que cubriría esta mensualidad.");
+    }
+
+    @Test
+    void maps_no_new_sessions_of_an_individual_to_409_with_the_same_code_and_its_own_wording() {
+        ResponseEntity<ProblemDetail> response =
+            handler.noNewSessions(new NoNewSessionsToPurchaseException(PurchaseType.INDIVIDUAL));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody().getProperties().get("code")).isEqualTo("NO_NEW_SESSIONS");
+        assertThat(response.getBody().getDetail()).isEqualTo("Ya tenés lugar en esta sesión.");
     }
 
     @Test

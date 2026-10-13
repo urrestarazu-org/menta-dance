@@ -172,7 +172,7 @@ class PhysicalCourseQuoteControllerTest {
     @Test
     void nothing_new_to_purchase_returns_409_with_a_stable_code() throws Exception {
         when(useCase.create(any(CreatePhysicalCourseQuoteCommand.class)))
-            .thenThrow(new NoNewSessionsToPurchaseException());
+            .thenThrow(new NoNewSessionsToPurchaseException(PurchaseType.MONTHLY));
 
         mockMvc.perform(post("/api/v1/billing/physical/quotes")
                 .with(authenticatedAs(USER_ID))

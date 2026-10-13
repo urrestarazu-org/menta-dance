@@ -54,7 +54,15 @@
 - **Cuando** solicito `purchaseType: MONTHLY`.
 - **Entonces** responde `409 NO_NEW_SESSIONS` y no persiste el quote. Si el alumno tiene sólo
   algunas de esas sesiones, el quote se emite igual, con el mismo importe y el mismo
-  `scheduledSessionCount`. El `INDIVIDUAL` no cambia.
+  `scheduledSessionCount`.
+
+**Escenario 6: sesión individual que el alumno ya tiene (#545)**
+
+- **Dado** un alumno con asignación confirmada en la sesión elegida.
+- **Cuando** solicito `purchaseType: INDIVIDUAL` con esa `selectedSessionId`.
+- **Entonces** responde `409 NO_NEW_SESSIONS` ("Ya tenés lugar en esta sesión.") y no persiste
+  el quote. El checkout repite la regla antes de crear hold o `Payment`. Una sesión que el
+  alumno no tiene se cotiza igual que siempre.
 
 ## 3. Requisitos No Funcionales y Restricciones
 

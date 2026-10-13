@@ -184,6 +184,27 @@ class CreateBankTransferPhysicalPurchaseUseCaseImplTest {
         verify(paymentRepository).save(any());
     }
 
+    /** #545: same rule as the card rail — the selected session is already the student's. */
+    @Test
+    void an_individual_quote_of_a_session_the_student_already_owns_is_rejected_without_a_payment() {
+        String sessionId = "11111111-1111-1111-1111-111111111111";
+        PhysicalCourseQuote quote = PhysicalCourseQuote.individual(
+            COURSE_ID, pricing(), 4, sessionId, QuoteAvailability.AVAILABLE, NOW.minusSeconds(60)
+        );
+        when(quoteRepository.findById(quote.getId().toString())).thenReturn(Optional.of(quote));
+        Instant scheduledAt = NOW.plusSeconds(3600);
+        when(availabilityPort.findScheduledSessions(any(), any(), any()))
+            .thenReturn(List.of(new ScheduledSessionSnapshot(sessionId, scheduledAt, 5)));
+        when(availabilityPort.findSessionIdsAssignedTo(
+            eq(COURSE_ID), eq(USER_ID), eq(scheduledAt), eq(scheduledAt.plusMillis(1))
+        )).thenReturn(Set.of(sessionId));
+
+        assertThatThrownBy(() -> useCase.create(command(quote.getId().toString(), "idem-1")))
+            .isInstanceOf(NoNewSessionsToPurchaseException.class);
+
+        verify(paymentRepository, never()).save(any());
+    }
+
     // --- Scenario 3: exhausted daily budget (429) ---
 
     /** Design C2/C7: the budget is consumed before any read or write, matching the subscription rail. */

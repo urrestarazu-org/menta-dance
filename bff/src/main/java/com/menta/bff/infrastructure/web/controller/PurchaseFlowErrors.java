@@ -40,7 +40,7 @@ final class PurchaseFlowErrors {
         } else if (failure instanceof PhysicalPurchaseApiClient.NoNewSessionsException) {
             status = HttpStatus.CONFLICT;
             title = "Ya tenés estas clases";
-            message = "Ya tenés lugar en todas las sesiones que cubriría esta mensualidad, "
+            message = "Ya tenés lugar en todas las sesiones que cubriría esta compra, "
                     + "así que no hace falta pagar de nuevo. No se realizó ningún cobro.";
         } else if (failure instanceof PhysicalPurchaseApiClient.CapacityUnavailableException) {
             status = HttpStatus.CONFLICT;
