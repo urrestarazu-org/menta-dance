@@ -1,6 +1,8 @@
 package com.menta.bff.application.port.out;
 
 import com.menta.bff.application.dto.PaymentProgress;
+import com.menta.bff.application.dto.PaymentProofFile;
+import com.menta.bff.application.dto.PhysicalBankTransfer;
 import com.menta.bff.application.dto.PhysicalCheckout;
 import com.menta.bff.application.dto.PhysicalPurchaseType;
 import com.menta.bff.application.dto.PhysicalQuote;
@@ -50,6 +52,35 @@ public interface PhysicalPurchaseApiClient {
      * @throws InvalidRequestException      if the upstream rejects the request (400)
      */
     PhysicalCheckout createCheckout(String accessToken, String quoteId, String idempotencyKey);
+
+    /**
+     * Starts a bank transfer payment for a quote ({@code POST /api/v1/billing/physical/purchases}
+     * with {@code BANK_TRANSFER}). Repeating the same idempotency key returns the original payment.
+     * The payment waits for a manual verification: nothing is accredited here.
+     *
+     * @param accessToken    caller's access token
+     * @param quoteId        quote to pay
+     * @param idempotencyKey caller-chosen key, 1 to 128 characters
+     * @return the payment id and the transfer instructions
+     * @throws CapacityUnavailableException if no room is left (409)
+     * @throws NoNewSessionsException       if the purchase would add no new session (409)
+     * @throws QuoteExpiredException        if the quote expired or does not exist (410)
+     * @throws InvalidRequestException      if the upstream rejects the request (400)
+     */
+    PhysicalBankTransfer createBankTransferCheckout(String accessToken, String quoteId, String idempotencyKey);
+
+    /**
+     * Uploads the proof of a transfer ({@code POST /api/v1/billing/payments/{paymentId}/proof},
+     * multipart field {@code file}). The upstream answers 404 for a payment that is not the
+     * caller's or no longer awaits verification.
+     *
+     * @param accessToken caller's access token
+     * @param paymentId   bank transfer payment the proof belongs to
+     * @param proof       the file
+     * @throws ProofRejectedException if the upstream rejects the file (400)
+     * @throws TooManyProofsException if the upload budget of the payment is spent (429)
+     */
+    void submitPaymentProof(String accessToken, String paymentId, PaymentProofFile proof);
 
     /**
      * Reads the status of a payment ({@code GET /api/v1/billing/payments/{paymentId}}). The
@@ -104,6 +135,20 @@ public interface PhysicalPurchaseApiClient {
     /** The upstream rejected the request as malformed or inconsistent (400, or a 422 other than no sessions). */
     class InvalidRequestException extends PurchaseFailureException {
         public InvalidRequestException(String message) {
+            super(message);
+        }
+    }
+
+    /** The upstream rejected the proof file: wrong type, too big, empty or unreadable (400). */
+    class ProofRejectedException extends PurchaseFailureException {
+        public ProofRejectedException(String message) {
+            super(message);
+        }
+    }
+
+    /** The proof upload budget of the payment is spent (429). */
+    class TooManyProofsException extends PurchaseFailureException {
+        public TooManyProofsException(String message) {
             super(message);
         }
     }

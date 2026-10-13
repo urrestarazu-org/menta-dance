@@ -1,6 +1,7 @@
 package com.menta.bff.infrastructure.adapter;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.containing;
 import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
@@ -20,6 +21,8 @@ import com.github.tomakehurst.wiremock.http.Fault;
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import com.menta.bff.application.dto.PaymentProgress;
+import com.menta.bff.application.dto.PaymentProofFile;
+import com.menta.bff.application.dto.PhysicalBankTransfer;
 import com.menta.bff.application.dto.PhysicalCheckout;
 import com.menta.bff.application.dto.PhysicalPurchaseType;
 import com.menta.bff.application.dto.PhysicalQuote;
@@ -283,5 +286,87 @@ class PhysicalPurchaseApiAdapterTest {
 
         assertThat(logs.list).isNotEmpty().allSatisfy(event -> assertThat(event.getFormattedMessage())
                 .doesNotContain(TOKEN).doesNotContain("Authorization"));
+    }
+
+    private static final String TRANSFER_BODY =
+            """
+            {"paymentId": "%s", "quoteId": "%s", "status": "PENDING", "providerPreferenceId": null,
+             "checkoutUrl": null, "externalReference": "PHY-BT-1",
+             "bankTransferInstructions": {"cbu": "0000003100010000000001", "alias": "menta.dance",
+               "holder": "Menta Dance SRL", "cuit": "30-12345678-9",
+               "amount": {"amount": 12500.50, "currency": "ARS"}, "reference": "PHY-BT-1"}}
+            """;
+    private static final String PROOF = PAYMENT + "/proof";
+
+    @Test
+    @DisplayName("a bank transfer checkout asks for BANK_TRANSFER and maps the instructions")
+    void bankTransferCheckout() {
+        stubFor(post(urlEqualTo(PURCHASES)).willReturn(aResponse().withStatus(201)
+                .withHeader("Content-Type", "application/json")
+                .withBody(TRANSFER_BODY.formatted(PAYMENT_ID, QUOTE_ID))));
+
+        PhysicalBankTransfer transfer = adapter.createBankTransferCheckout(TOKEN, QUOTE_ID, "key-1");
+
+        assertThat(transfer).isEqualTo(new PhysicalBankTransfer(PAYMENT_ID, "0000003100010000000001",
+                "menta.dance", "Menta Dance SRL", "30-12345678-9", new BigDecimal("12500.50"), "ARS", "PHY-BT-1"));
+        verify(postRequestedFor(urlEqualTo(PURCHASES)).withHeader("Authorization", equalTo(BEARER))
+                .withRequestBody(matchingJsonPath("$.paymentMethod", equalTo("BANK_TRANSFER")))
+                .withRequestBody(matchingJsonPath("$.idempotencyKey", equalTo("key-1"))));
+    }
+
+    @Test
+    @DisplayName("a bank transfer checkout without instructions is treated as unavailable")
+    void bankTransferWithoutInstructions() {
+        stubFor(post(urlEqualTo(PURCHASES)).willReturn(aResponse().withStatus(201)
+                .withHeader("Content-Type", "application/json")
+                .withBody("{\"paymentId\": \"" + PAYMENT_ID + "\", \"bankTransferInstructions\": null}")));
+
+        assertThatThrownBy(() -> adapter.createBankTransferCheckout(TOKEN, QUOTE_ID, "key-1"))
+                .isInstanceOf(BillingApiClient.ServiceUnavailableException.class);
+    }
+
+    @ParameterizedTest(name = "bank transfer checkout {0} {1} -> {2}")
+    @CsvSource({
+        "409, NO_NEW_SESSIONS, NoNewSessionsException",
+        "409, CAPACITY_UNAVAILABLE, CapacityUnavailableException",
+        "410, PHYSICAL_COURSE_QUOTE_EXPIRED, QuoteExpiredException",
+        "400, INVALID_REQUEST, InvalidRequestException",
+        "503, UNAVAILABLE, ServiceUnavailableException"})
+    void bankTransferErrors(int status, String code, String expected) {
+        stubStatus(post(urlEqualTo(PURCHASES)), status, code);
+
+        assertThatThrownBy(() -> adapter.createBankTransferCheckout(TOKEN, QUOTE_ID, "key-1"))
+                .satisfies(e -> assertThat(e.getClass().getSimpleName()).isEqualTo(expected));
+    }
+
+    @Test
+    @DisplayName("a proof is sent as multipart field file with the bearer token")
+    void proofUpload() {
+        stubFor(post(urlEqualTo(PROOF)).willReturn(aResponse().withStatus(200)));
+
+        adapter.submitPaymentProof(TOKEN, PAYMENT_ID, new PaymentProofFile("recibo.png", "image/png",
+                new byte[] {1, 2, 3}));
+
+        verify(postRequestedFor(urlEqualTo(PROOF)).withHeader("Authorization", equalTo(BEARER))
+                .withHeader("Content-Type", containing("multipart/form-data"))
+                .withRequestBody(containing("name=\"file\""))
+                .withRequestBody(containing("filename=\"recibo.png\""))
+                .withRequestBody(containing("image/png")));
+    }
+
+    @ParameterizedTest(name = "proof {0} -> {1}")
+    @CsvSource({
+        "400, ProofRejectedException",
+        "404, NotFoundException",
+        "429, TooManyProofsException",
+        "503, ServiceUnavailableException",
+        "401, ServiceUnavailableException"})
+    void proofErrors(int status, String expected) {
+        stubStatus(post(urlEqualTo(PROOF)), status, "SOME_CODE");
+
+        assertThatThrownBy(() -> adapter.submitPaymentProof(TOKEN, PAYMENT_ID,
+                new PaymentProofFile("r.pdf", "application/pdf", new byte[] {1})))
+                .satisfies(e -> assertThat(e.getClass().getSimpleName()).isEqualTo(expected))
+                .hasMessageNotContaining(TOKEN);
     }
 }

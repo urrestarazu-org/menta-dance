@@ -32,6 +32,8 @@ import com.menta.bff.application.usecase.LoginUseCase;
 import com.menta.bff.application.usecase.LoginUseCaseImpl;
 import com.menta.bff.application.usecase.LogoutUseCase;
 import com.menta.bff.application.usecase.LogoutUseCaseImpl;
+import com.menta.bff.application.usecase.PayPhysicalPurchaseByTransferUseCase;
+import com.menta.bff.application.usecase.PayPhysicalPurchaseByTransferUseCaseImpl;
 import com.menta.bff.application.usecase.PayPhysicalPurchaseUseCase;
 import com.menta.bff.application.usecase.PayPhysicalPurchaseUseCaseImpl;
 import com.menta.bff.application.usecase.QuotePhysicalPurchaseUseCase;
@@ -158,6 +160,12 @@ public class UseCaseConfig {
     @Bean
     public PayPhysicalPurchaseUseCase payPhysicalPurchaseUseCase(PhysicalPurchaseApiClient purchaseApiClient) {
         return new PayPhysicalPurchaseUseCaseImpl(purchaseApiClient);
+    }
+
+    @Bean
+    public PayPhysicalPurchaseByTransferUseCase payPhysicalPurchaseByTransferUseCase(
+            PhysicalPurchaseApiClient purchaseApiClient) {
+        return new PayPhysicalPurchaseByTransferUseCaseImpl(purchaseApiClient);
     }
 
     @Bean

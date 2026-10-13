@@ -25,4 +25,9 @@ public record PurchaseQuoteView(
         String expiresLabel,
         boolean unavailable,
         String idempotencyKey) {
+
+    /** Key of the bank transfer attempt of this rendering: distinct from the card one, stable on repost. */
+    public String transferIdempotencyKey() {
+        return idempotencyKey + "-transfer";
+    }
 }

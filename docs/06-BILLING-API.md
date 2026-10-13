@@ -297,8 +297,33 @@ Configuración: `billing.mercadopago.checkout-back-url` (variable
 `http://localhost:8080/compras/retorno` (ver `.env.example`). Vacía, la preferencia no lleva
 `back_urls`. En producción debe ser el origen público `https` del BFF.
 
-Fuera de este corte: mostrar las sesiones asignadas tras el pago y el pago por transferencia
-bancaria.
+### Pago por transferencia bancaria desde la web (BFF, #553)
+
+La página de cotización ofrece, junto a "Pagar con Mercado Pago", "Pagar por transferencia bancaria"
+(es el último criterio funcional de #384). Es otro formulario con CSRF y su propia clave de
+idempotencia (la del botón de Mercado Pago más `-transfer`), generada al renderizar la cotización:
+
+1. `POST /compras/transferencia` llama a `POST /api/v1/billing/physical/purchases` con
+   `paymentMethod: BANK_TRANSFER` y guarda en la sesión del servidor las instrucciones del último
+   pago (`bankTransferInstructions`: `cbu`, `alias`, `holder`, `cuit`, `amount` y `reference`).
+   Responde con una redirección a `GET /compras/transferencia`, que muestra CBU, alias, titular,
+   CUIT, importe y referencia, y aclara que el lugar se confirma después de verificar el pago.
+   Sin transferencia en la sesión redirige a `/classes`. Los errores (`409 NO_NEW_SESSIONS`,
+   `409` sin lugar, `410`, `400`, `5xx`) usan los mismos avisos en español que el pago con
+   Mercado Pago y nunca muestran códigos ni cuerpos de la API.
+2. `POST /compras/transferencia/comprobante` (multipart, campo `file` y `paymentId`) reenvía el
+   archivo a `POST /api/v1/billing/payments/{paymentId}/proof` con el token del alumno. La API
+   acepta PNG, JPG/JPEG o PDF de hasta 5 MB y permite 3 subidas por pago cada 72 horas; el BFF
+   configura el mismo límite de 5 MB (`spring.servlet.multipart`) y rechaza sin llamar a la API un
+   archivo vacío, ausente o con un `paymentId` que no es un UUID. `400` es "Comprobante
+   inválido", `429` "Demasiados comprobantes", `404` "Pago no encontrado" (el pago no es del
+   alumno o ya no espera comprobante) y `5xx` "Servicio no disponible". El éxito dice "Recibimos
+   tu comprobante y lo vamos a verificar".
+3. El BFF nunca decide la acreditación: un administrador aprueba o rechaza el pago
+   (ver "Transferencias bancarias"). Ni el contenido del archivo ni el token se registran en logs.
+
+Fuera de este corte: mostrar las sesiones asignadas tras la acreditación de una transferencia
+(la página de retorno solo contempla el `paymentId` de Mercado Pago).
 
 ## Transferencias bancarias
 

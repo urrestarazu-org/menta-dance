@@ -9,6 +9,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
@@ -26,6 +27,7 @@ import java.util.regex.Pattern;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
@@ -601,5 +603,127 @@ class PhysicalPurchaseIntegrationTest extends BaseIntegrationTest {
                 .andExpect(status().isForbidden());
         assertThat(WIRE_MOCK_SERVER.findAll(postRequestedFor(urlEqualTo(QUOTES)))).isEmpty();
         assertThat(WIRE_MOCK_SERVER.findAll(postRequestedFor(urlEqualTo(PURCHASES)))).isEmpty();
+    }
+
+    private static final String TRANSFER = "/compras/transferencia";
+    private static final String PROOF = TRANSFER + "/comprobante";
+    private static final String UPSTREAM_PROOF = PAYMENT + "/proof";
+
+    private static void stubTransfer() {
+        stubPost(PURCHASES, 201,
+                """
+                {"paymentId": "%s", "quoteId": "%s", "status": "PENDING", "providerPreferenceId": null,
+                 "checkoutUrl": null, "externalReference": "PHY-BT-1",
+                 "bankTransferInstructions": {"cbu": "0000003100010000000001", "alias": "menta.dance",
+                   "holder": "Menta Dance SRL", "cuit": "30-12345678-9",
+                   "amount": {"amount": 12500.50, "currency": "ARS"}, "reference": "PHY-BT-1"}}
+                """.formatted(PAYMENT_ID, QUOTE_ID));
+    }
+
+    private String transferPage() throws Exception {
+        String quotePage = monthlyQuotePage();
+        stubTransfer();
+        submit(TRANSFER, formPostingTo(quotePage, TRANSFER, "quoteId"))
+                .andExpect(status().is3xxRedirection()).andExpect(redirectedUrl(TRANSFER));
+        return body(mockMvc.perform(withSession(get(TRANSFER))).andExpect(status().isOk()));
+    }
+
+    private ResultActions uploadProof(String paymentId, MockMultipartFile file) throws Exception {
+        return mockMvc.perform(withSession(multipart(PROOF).file(file)).param("paymentId", paymentId).with(csrf()));
+    }
+
+    @Test
+    @DisplayName("the quote page offers the bank transfer with its own idempotency key and CSRF")
+    void quoteOffersTransfer() throws Exception {
+        String html = monthlyQuotePage();
+
+        Map<String, String> transfer = formPostingTo(html, TRANSFER, "quoteId");
+        assertThat(transfer).containsEntry("quoteId", QUOTE_ID).containsEntry("courseId", COURSE_ID);
+        assertThat(transfer.get("idempotencyKey")).isNotBlank()
+                .isNotEqualTo(formPostingTo(html, "/compras", "quoteId").get("idempotencyKey"));
+        assertThat(html).contains("Pagar por transferencia bancaria").contains("name=\"_csrf\"");
+    }
+
+    @Test
+    @DisplayName("choosing the transfer shows the bank data, amount and reference, and the proof form")
+    void transferInstructions() throws Exception {
+        String html = transferPage();
+
+        assertThat(html).contains("0000003100010000000001", "menta.dance", "Menta Dance SRL", "30-12345678-9",
+                "12.500,50", "PHY-BT-1", "después de verificar el pago");
+        assertThat(formPostingTo(html, PROOF, "paymentId")).containsEntry("paymentId", PAYMENT_ID);
+        assertThat(html).contains("enctype=\"multipart/form-data\"").contains("name=\"_csrf\"");
+        WIRE_MOCK_SERVER.verify(postRequestedFor(urlEqualTo(PURCHASES))
+                .withHeader("Authorization", equalTo("Bearer " + ACCESS_TOKEN))
+                .withRequestBody(matchingJsonPath("$.paymentMethod", equalTo("BANK_TRANSFER")))
+                .withRequestBody(matchingJsonPath("$.quoteId", equalTo(QUOTE_ID))));
+        assertThat(storedPaymentId()).isNull();
+    }
+
+    @Test
+    @DisplayName("the instructions page without a started transfer redirects to the classes")
+    void transferPageWithoutTransfer() throws Exception {
+        mockMvc.perform(withSession(get(TRANSFER))).andExpect(redirectedUrl("/classes"));
+    }
+
+    @Test
+    @DisplayName("a bank transfer checkout failure is a Spanish notice without API codes")
+    void transferCheckoutFailures() throws Exception {
+        String quotePage = monthlyQuotePage();
+        Map<String, String> form = formPostingTo(quotePage, TRANSFER, "quoteId");
+        Map<Integer, String> codes = Map.of(409, "NO_NEW_SESSIONS", 410, "PHYSICAL_COURSE_QUOTE_EXPIRED",
+                503, "PAYMENT_PREFERENCE_UNAVAILABLE");
+
+        for (Map.Entry<Integer, String> failure : codes.entrySet()) {
+            stubProblem(PURCHASES, failure.getKey(), failure.getValue());
+            String html = body(submit(TRANSFER, form).andExpect(status().is(failure.getKey())));
+            assertThat(html).doesNotContain(failure.getValue()).doesNotContain("PHY-BT");
+            assertThat(html).contains("href=\"/classes/" + COURSE_ID + "\"");
+        }
+    }
+
+    @Test
+    @DisplayName("a proof is forwarded with the student's token and the page says it will be verified")
+    void proofUpload() throws Exception {
+        transferPage();
+        WIRE_MOCK_SERVER.stubFor(WireMock.post(urlEqualTo(UPSTREAM_PROOF)).willReturn(aResponse().withStatus(200)));
+
+        String html = body(uploadProof(PAYMENT_ID, new MockMultipartFile("file", "recibo.png", "image/png",
+                new byte[] {1, 2, 3})).andExpect(status().isOk()));
+
+        assertThat(html).contains("Recibimos tu comprobante").contains("verificar");
+        WIRE_MOCK_SERVER.verify(postRequestedFor(urlEqualTo(UPSTREAM_PROOF))
+                .withHeader("Authorization", equalTo("Bearer " + ACCESS_TOKEN)));
+    }
+
+    @Test
+    @DisplayName("an empty or missing file is refused without calling the API")
+    void emptyProof() throws Exception {
+        transferPage();
+
+        uploadProof(PAYMENT_ID, new MockMultipartFile("file", "r.png", "image/png", new byte[0]))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(withSession(multipart(PROOF)).param("paymentId", PAYMENT_ID).with(csrf()))
+                .andExpect(status().isBadRequest());
+        uploadProof("not-a-uuid", new MockMultipartFile("file", "r.png", "image/png", new byte[] {1}))
+                .andExpect(status().isBadRequest());
+
+        assertThat(WIRE_MOCK_SERVER.findAll(postRequestedFor(urlEqualTo(UPSTREAM_PROOF)))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("proof failures are Spanish notices without API codes and lead back")
+    void proofFailures() throws Exception {
+        transferPage();
+        Map<Integer, String> failures = Map.of(400, "PAYMENT_PROOF_REJECTED", 404, "PAYMENT_NOT_FOUND",
+                429, "BANK_TRANSFER_RATE_LIMITED", 503, "BILLING_DEGRADED");
+
+        for (Map.Entry<Integer, String> failure : failures.entrySet()) {
+            stubProblem(UPSTREAM_PROOF, failure.getKey(), failure.getValue());
+            String html = body(uploadProof(PAYMENT_ID, new MockMultipartFile("file", "r.png", "image/png",
+                    new byte[] {1})).andExpect(status().is(failure.getKey())));
+            assertThat(html).doesNotContain(failure.getValue())
+                    .contains("href=\"" + (failure.getKey() == 404 ? "/classes" : TRANSFER) + "\"");
+        }
     }
 }

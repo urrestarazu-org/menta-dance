@@ -28,6 +28,13 @@
     <button type="submit">Pagar con Mercado Pago</button>
 </form>
 
+<form th:unless="${quote.unavailable()}" th:action="@{/compras/transferencia}" method="post">
+    <input type="hidden" name="quoteId" th:value="${quote.quoteId()}">
+    <input type="hidden" name="courseId" th:value="${quote.courseId()}">
+    <input type="hidden" name="idempotencyKey" th:value="${quote.transferIdempotencyKey()}">
+    <button type="submit">Pagar por transferencia bancaria</button>
+</form>
+
 <p><a th:href="@{/classes/{id}(id=${quote.courseId()})}">Volver a la clase</a></p>
 </body>
 </html>

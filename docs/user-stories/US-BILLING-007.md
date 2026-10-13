@@ -109,5 +109,6 @@ autómatas separados.
   consulta el estado a la API y muestra "Pago confirmado, estamos asignando tus lugares" (`COMPLETED`), "Estamos
   confirmando tu pago" (pendiente o desconocido) o un mensaje por pago rechazado, cancelado o vencido. Ignora los
   parámetros de la URL y nunca decide el pago; **no** afirma que las sesiones ya estén asignadas.
-- **Pendiente (corte B):** mostrar las sesiones asignadas tras el pago (Purchase `ASSIGNED`) y el pago por
-  transferencia bancaria desde la web.
+- **Implementado (BFF web, #553):** el alumno elige "Pagar por transferencia bancaria" en la cotización, ve CBU,
+  alias, titular, CUIT, importe y referencia, y sube el comprobante; el BFF no decide la acreditación. Ver
+  [06-BILLING-API.md](../06-BILLING-API.md#pago-por-transferencia-bancaria-desde-la-web-bff-553).
