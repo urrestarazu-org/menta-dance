@@ -170,6 +170,9 @@ se crea pago. El hold reduce, pero no elimina, la excepción posterior si la
 cobertura mensual calculada al confirmar cambia o el hold expira. La cobertura
 mensual saltea las sesiones donde el alumno ya tiene asignación confirmada y se
 extiende hacia adelante (hasta 120 días) para completar las N sesiones compradas.
+Si el alumno ya tiene **todas** las sesiones que la mensualidad cubriría, el checkout
+(Mercado Pago o transferencia) responde `409 NO_NEW_SESSIONS` antes de crear hold o
+`Payment`, igual que la cotización (#541).
 
 ## Pricing presencial
 
@@ -205,8 +208,10 @@ responde `422 INDIVIDUAL_SURCHARGE_TOO_SMALL` y no persiste nada.
 
 Errores: `404 PHYSICAL_COURSE_PRICING_NOT_FOUND` (sin pricing publicado),
 `404 PHYSICAL_SESSION_NOT_FOUND` (`selectedSessionId` fuera del período),
-`422 NO_SCHEDULED_SESSIONS` (sin sesiones `SCHEDULED` en el período). La
-disponibilidad (`AVAILABLE`/`UNAVAILABLE`) es sólo informativa para la UI — el
+`422 NO_SCHEDULED_SESSIONS` (sin sesiones `SCHEDULED` en el período),
+`409 NO_NEW_SESSIONS` (sólo `MONTHLY`: el alumno autenticado ya tiene asignación
+confirmada en todas las sesiones que la mensualidad cubriría; no persiste el quote).
+La disponibilidad (`AVAILABLE`/`UNAVAILABLE`) es sólo informativa para la UI — el
 checkout (fuera de esta historia) es quien reserva o rechaza cupo de verdad.
 
 ## Cotizar y pagar clases presenciales desde la web (BFF, #365)
@@ -230,11 +235,13 @@ Un alumno autenticado cotiza y paga desde el BFF (plantillas Thymeleaf, sin Java
    cotización: importe en formato es-AR, sesiones del período y vencimiento (zona
    `menta.classes.display-zone`). Si `availability` es `UNAVAILABLE` muestra "Sin lugares
    disponibles" y no hay botón de pago; si hay lugares, el botón "Pagar con Mercado Pago".
-   `422 NO_SCHEDULED_SESSIONS`, los `404` de precio o sesión, los `400` y los errores de
-   servicio se muestran como avisos en español con el enlace de vuelta al detalle.
+   `422 NO_SCHEDULED_SESSIONS`, `409 NO_NEW_SESSIONS` ("Ya tenés estas clases", no se cobró
+   nada), los `404` de precio o sesión, los `400` y los errores de servicio se muestran como
+   avisos en español con el enlace de vuelta al detalle.
 3. `POST /compras` (`quoteId`, `courseId` y un `idempotencyKey` UUID que el servidor genera al
    renderizar la cotización) llama a `POST /api/v1/billing/physical/purchases` con
-   `MERCADO_PAGO`. `409 CAPACITY_UNAVAILABLE` ("Ya no hay lugares", no se creó ningún pago) y
+   `MERCADO_PAGO`. `409 NO_NEW_SESSIONS` ("Ya tenés estas clases", no se creó ningún pago),
+   `409 CAPACITY_UNAVAILABLE` ("Ya no hay lugares", no se creó ningún pago) y
    `410 PHYSICAL_COURSE_QUOTE_EXPIRED` ("La cotización venció, pedí una nueva") tienen aviso
    propio; `400`, `429` y `5xx` se muestran con un mensaje genérico. Repetir la misma
    `idempotencyKey` devuelve el checkout original.

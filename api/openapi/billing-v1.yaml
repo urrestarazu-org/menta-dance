@@ -517,14 +517,18 @@ paths:
           description: Falta un access token válido.
         '409':
           description: >-
-            No se pudo reservar capacidad para todas las sesiones elegibles de la
-            cotización (#208, design B2/B4/D2) — ya sea porque una o más sesiones
-            ya están llenas, o porque el curso no tiene suficientes sesiones
-            elegibles para cubrir el plan completo. Esta es una garantía real: el
-            hold atómico se intenta antes de crear cualquier `Payment`, así que no
-            se crea ningún `Payment` para este request. Ningún otro comprador puede
-            tomar un cupo ya reservado por un hold vigente entre este request y la
-            confirmación.
+            Dos casos, distinguibles por `code`. `CAPACITY_UNAVAILABLE`: no se pudo
+            reservar capacidad para todas las sesiones elegibles de la cotización
+            (#208, design B2/B4/D2) — ya sea porque una o más sesiones ya están
+            llenas, o porque el curso no tiene suficientes sesiones elegibles para
+            cubrir el plan completo. Esta es una garantía real: el hold atómico se
+            intenta antes de crear cualquier `Payment`, así que no se crea ningún
+            `Payment` para este request. Ningún otro comprador puede tomar un cupo
+            ya reservado por un hold vigente entre este request y la confirmación.
+            `NO_NEW_SESSIONS` (#541): sólo para mensualidades (ambos métodos de
+            pago), el alumno ya tiene asignación confirmada en todas las sesiones
+            que la mensualidad cubriría, así que no hay nada nuevo para comprar;
+            tampoco se crea hold ni `Payment`.
           content:
             application/problem+json:
               schema:
@@ -537,6 +541,13 @@ paths:
                     status: 409
                     detail: No hay cupo disponible para los horarios elegibles de esta cotización.
                     code: CAPACITY_UNAVAILABLE
+                no_new_sessions:
+                  value:
+                    type: https://menta.dance/problems/no_new_sessions
+                    title: Conflict
+                    status: 409
+                    detail: Ya tenés lugar en todas las sesiones que cubriría esta mensualidad.
+                    code: NO_NEW_SESSIONS
         '410':
           description: >-
             La cotización no existe o su vigencia de 1 hora ya expiró. Deliberadamente
