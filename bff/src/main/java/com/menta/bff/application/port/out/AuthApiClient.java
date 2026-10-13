@@ -34,8 +34,13 @@ public interface AuthApiClient {
      *
      * @param command Login credentials (email, password)
      * @return Token pair (access token, refresh token, expiration)
-     * @throws AuthenticationException    if credentials are invalid (401)
-     * @throws ServiceUnavailableException if Auth API is unreachable (503)
+     * @throws AuthenticationException       if credentials are invalid (401)
+     * @throws AccountLockedException         if the password was right but the account is locked (423)
+     * @throws AccountNotActivatedException   if the password was right but the account awaits
+     *                                        activation (403 ACCOUNT_NOT_ACTIVATED)
+     * @throws RateLimitedException           if too many login attempts were made (429)
+     * @throws ServiceUnavailableException    if Auth API is unreachable, degraded (5xx) or answers
+     *                                        with a status the contract does not list
      */
     TokenPairResponse login(LoginCommand command);
 
@@ -184,6 +189,26 @@ public interface AuthApiClient {
 
         public RefreshTokenRevokedException(String message, Throwable cause) {
             super(message, cause);
+        }
+    }
+
+    /**
+     * Exception thrown when a login supplied the right password but the account is locked (423).
+     * Unlike {@link RefreshTokenRevokedException} it says nothing about token families.
+     */
+    class AccountLockedException extends RuntimeException {
+        public AccountLockedException(String message) {
+            super(message);
+        }
+    }
+
+    /**
+     * Exception thrown when a login supplied the right password but the account still awaits
+     * activation (403 ACCOUNT_NOT_ACTIVATED).
+     */
+    class AccountNotActivatedException extends RuntimeException {
+        public AccountNotActivatedException(String message) {
+            super(message);
         }
     }
 

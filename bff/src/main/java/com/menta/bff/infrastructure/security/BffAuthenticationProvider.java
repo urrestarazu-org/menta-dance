@@ -9,6 +9,7 @@ import java.util.List;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.InternalAuthenticationServiceException;
+import org.springframework.security.authentication.LockedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
@@ -27,7 +28,10 @@ import org.springframework.stereotype.Component;
  *
  * <p>Failure mapping is deliberate: invalid credentials and an unreachable
  * Auth API are different events. Reporting the latter as a bad password sends
- * users to reset a credential that was never wrong.</p>
+ * users to reset a credential that was never wrong. A locked account, a throttled login and
+ * an account awaiting activation each get their own exception so the login page can say what
+ * happened; the Auth API only reports the locked and not-activated ones once the password was
+ * verified.</p>
  */
 @Component
 public class BffAuthenticationProvider implements AuthenticationProvider {
@@ -48,6 +52,13 @@ public class BffAuthenticationProvider implements AuthenticationProvider {
             result = loginUseCase.execute(new LoginCommand(email, password, clientAddressOf(authentication)));
         } catch (AuthApiClient.AuthenticationException e) {
             throw new BadCredentialsException("Invalid email or password");
+        } catch (AuthApiClient.AccountLockedException e) {
+            // Only answered after the password was verified, so naming the state leaks nothing new.
+            throw new LockedException("Account is locked");
+        } catch (AuthApiClient.RateLimitedException e) {
+            throw new TooManyLoginAttemptsException("Too many login attempts", e.retryAfter());
+        } catch (AuthApiClient.AccountNotActivatedException e) {
+            throw new PendingActivationException("Account is not activated");
         } catch (AuthApiClient.ServiceUnavailableException e) {
             throw new InternalAuthenticationServiceException("Auth service temporarily unavailable");
         } catch (AccessTokenClaimsReader.UnreadableTokenException e) {
