@@ -82,3 +82,7 @@ tmp/
 # dev.sh outputs
 .dev-pids/
 .dev-logs/
+
+# BFF frontend (Tailwind pipeline): dependencies are restored with `npm ci`,
+# generated CSS lives under build/ and is never committed.
+bff/node_modules/

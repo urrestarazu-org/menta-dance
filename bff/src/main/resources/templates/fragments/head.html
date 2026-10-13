@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <!--
+      Single place that loads the compiled Tailwind stylesheet. Include it from
+      every page <head>:
+        <th:block th:replace="~{fragments/head :: assets}"></th:block>
+      Spring's content-hash resource chain rewrites /css/app.css to
+      /css/app-<md5>.css, which is what makes NGINX's 30-day immutable cache safe.
+    -->
+    <th:block th:fragment="assets">
+        <link rel="stylesheet" th:href="@{/css/app.css}">
+    </th:block>
+</head>
+<body></body>
+</html>

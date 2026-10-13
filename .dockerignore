@@ -49,3 +49,7 @@ Dockerfile*
 *.apk
 *.aab
 local.properties
+
+# Frontend (restored/provisioned inside the build stage)
+**/node_modules/
+bff/.gradle/
