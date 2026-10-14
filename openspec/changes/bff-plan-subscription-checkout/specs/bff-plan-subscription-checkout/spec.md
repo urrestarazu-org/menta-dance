@@ -138,9 +138,13 @@ upstream problem-detail bodies:
 `{kind, paymentId}` and `GET /api/v1/billing/payments/{paymentId}` called with
 the caller's token. Query-string parameters (including `status`,
 `payment_id`, `external_reference`) MUST be ignored for every decision. When
-the session holds no `{kind, paymentId}`, or the API answers `404` (not the
-owner / unknown), the BFF MUST render a subscription-specific fallback when
-the stored kind is `SUBSCRIPTION` and MUST NOT redirect to `/classes`.
+the stored kind is `SUBSCRIPTION` and the session holds no `paymentId`, or the
+API answers `404` (not the owner / unknown), the BFF MUST render a
+subscription-specific fallback and MUST NOT redirect to `/classes`. When the
+session holds no kind at all, the route MUST behave as the class-purchase
+return (redirect to `/classes`), because a stateless browser cannot be told
+apart from a class buyer and the existing class-purchase behavior is pinned by
+its tests.
 
 #### Scenario: URL params never decide
 
@@ -157,11 +161,18 @@ the stored kind is `SUBSCRIPTION` and MUST NOT redirect to `/classes`.
 - THEN the subscription fallback view is rendered
 - AND the response is not a redirect to `/classes`
 
-#### Scenario: No session state
+#### Scenario: Subscription kind without a payment id
 
-- GIVEN a STUDENT whose session holds no `{kind, paymentId}`
+- GIVEN a STUDENT whose session holds kind `SUBSCRIPTION` and no `paymentId`
 - WHEN they open `/compras/retorno`
 - THEN the subscription fallback view is rendered with a link back to `/plans`
+
+#### Scenario: No session state
+
+- GIVEN a STUDENT whose session holds no kind and no `paymentId`
+- WHEN they open `/compras/retorno`
+- THEN the response is the class-purchase behavior (redirect to `/classes`)
+- AND no subscription copy is rendered
 
 ### Requirement: Subscription return copy follows PaymentProgress and never claims activation
 
