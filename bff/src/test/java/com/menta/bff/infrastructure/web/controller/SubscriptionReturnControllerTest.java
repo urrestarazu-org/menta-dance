@@ -10,7 +10,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
 import com.menta.bff.application.dto.PaymentProgress;
+import com.menta.bff.application.dto.PaymentStatusView;
 import com.menta.bff.application.dto.PhysicalCheckout;
+import com.menta.bff.application.dto.PurchaseFulfillment;
 import com.menta.bff.application.port.out.BillingApiClient;
 import com.menta.bff.application.usecase.GetAssignedSessionsUseCase;
 import com.menta.bff.application.usecase.GetPaymentProgressUseCase;
@@ -73,7 +75,8 @@ class SubscriptionReturnControllerTest {
     @Test
     @DisplayName("a confirmed payment says the subscription is being activated and skips sessions")
     void confirmed() throws Exception {
-        when(getPaymentProgressUseCase.execute(TOKEN, "pay-1")).thenReturn(PaymentProgress.COMPLETED);
+        when(getPaymentProgressUseCase.execute(TOKEN, "pay-1"))
+                .thenReturn(statusOf(PaymentProgress.COMPLETED, null));
 
         returnPage().andExpect(status().isOk())
                 .andExpect(view().name("purchase-notice"))
@@ -92,7 +95,8 @@ class SubscriptionReturnControllerTest {
     @Test
     @DisplayName("a pending payment asks to refresh and keeps the session for the next visit")
     void pending() throws Exception {
-        when(getPaymentProgressUseCase.execute(TOKEN, "pay-1")).thenReturn(PaymentProgress.PENDING);
+        when(getPaymentProgressUseCase.execute(TOKEN, "pay-1"))
+                .thenReturn(statusOf(PaymentProgress.PENDING, null));
 
         returnPage().andExpect(status().isOk())
                 .andExpect(model().attribute("message",
@@ -107,7 +111,8 @@ class SubscriptionReturnControllerTest {
     @Test
     @DisplayName("a rejected payment says nothing was charged and links to the plans")
     void rejected() throws Exception {
-        when(getPaymentProgressUseCase.execute(TOKEN, "pay-1")).thenReturn(PaymentProgress.REJECTED);
+        when(getPaymentProgressUseCase.execute(TOKEN, "pay-1"))
+                .thenReturn(statusOf(PaymentProgress.REJECTED, null));
 
         returnPage().andExpect(model().attribute("message", "El pago fue rechazado. No se te cobró nada."))
                 .andExpect(model().attribute("linkHref", "/plans"))
@@ -117,7 +122,8 @@ class SubscriptionReturnControllerTest {
     @Test
     @DisplayName("a cancelled payment links to the plans")
     void cancelled() throws Exception {
-        when(getPaymentProgressUseCase.execute(TOKEN, "pay-1")).thenReturn(PaymentProgress.CANCELLED);
+        when(getPaymentProgressUseCase.execute(TOKEN, "pay-1"))
+                .thenReturn(statusOf(PaymentProgress.CANCELLED, null));
 
         returnPage().andExpect(model().attribute("message", "El pago fue cancelado."))
                 .andExpect(model().attribute("linkHref", "/plans"));
@@ -126,7 +132,8 @@ class SubscriptionReturnControllerTest {
     @Test
     @DisplayName("an expired payment links to the plans")
     void expired() throws Exception {
-        when(getPaymentProgressUseCase.execute(TOKEN, "pay-1")).thenReturn(PaymentProgress.EXPIRED);
+        when(getPaymentProgressUseCase.execute(TOKEN, "pay-1"))
+                .thenReturn(statusOf(PaymentProgress.EXPIRED, null));
 
         returnPage().andExpect(model().attribute("message", "El pago venció antes de completarse."))
                 .andExpect(model().attribute("linkHref", "/plans"));
@@ -184,5 +191,9 @@ class SubscriptionReturnControllerTest {
         assertThat(session.getAttribute(PhysicalPurchaseController.PAYMENT_ID_SESSION_ATTRIBUTE))
                 .isEqualTo("pay-2");
         assertThat(session.getAttribute(PhysicalPurchaseController.PURCHASE_KIND_SESSION_ATTRIBUTE)).isNull();
+    }
+
+    private static PaymentStatusView statusOf(PaymentProgress progress, PurchaseFulfillment fulfillment) {
+        return new PaymentStatusView(progress, fulfillment);
     }
 }

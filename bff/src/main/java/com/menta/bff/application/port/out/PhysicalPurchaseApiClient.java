@@ -1,7 +1,7 @@
 package com.menta.bff.application.port.out;
 
-import com.menta.bff.application.dto.PaymentProgress;
 import com.menta.bff.application.dto.PaymentProofFile;
+import com.menta.bff.application.dto.PaymentStatusView;
 import com.menta.bff.application.dto.PhysicalBankTransfer;
 import com.menta.bff.application.dto.PhysicalCheckout;
 import com.menta.bff.application.dto.PhysicalPurchaseType;
@@ -89,9 +89,10 @@ public interface PhysicalPurchaseApiClient {
      *
      * @param accessToken caller's access token
      * @param paymentId   payment to read
-     * @return where the payment stands; any pending or unknown upstream status reads as pending
+     * @return where the payment stands (any pending or unknown status reads as pending) and its
+     *         purchase fulfillment, {@code null} when absent or unknown
      */
-    PaymentProgress getPaymentProgress(String accessToken, String paymentId);
+    PaymentStatusView getPaymentProgress(String accessToken, String paymentId);
 
     /** Base of the failures this port defines, so adapters can tell them from transport errors. */
     abstract class PurchaseFailureException extends RuntimeException {

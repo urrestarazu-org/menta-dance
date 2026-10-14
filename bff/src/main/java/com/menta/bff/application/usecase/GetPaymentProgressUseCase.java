@@ -1,6 +1,6 @@
 package com.menta.bff.application.usecase;
 
-import com.menta.bff.application.dto.PaymentProgress;
+import com.menta.bff.application.dto.PaymentStatusView;
 
 /**
  * Use case that asks the Billing API where a payment stands. The answer is
@@ -20,5 +20,5 @@ public interface GetPaymentProgressUseCase {
      * @throws com.menta.bff.application.port.out.BillingApiClient.NotFoundException
      *         if the payment does not exist or is not the caller's
      */
-    PaymentProgress execute(String accessToken, String paymentId);
+    PaymentStatusView execute(String accessToken, String paymentId);
 }

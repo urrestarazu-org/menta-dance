@@ -7,10 +7,12 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.menta.bff.application.dto.PaymentProgress;
+import com.menta.bff.application.dto.PaymentStatusView;
 import com.menta.bff.application.dto.PhysicalCheckout;
 import com.menta.bff.application.dto.PhysicalCourseDetail;
 import com.menta.bff.application.dto.PhysicalPurchaseType;
 import com.menta.bff.application.dto.PhysicalQuote;
+import com.menta.bff.application.dto.PurchaseFulfillment;
 import com.menta.bff.application.port.out.CatalogApiClient;
 import com.menta.bff.application.port.out.PhysicalPurchaseApiClient;
 import java.math.BigDecimal;
@@ -121,10 +123,11 @@ class QuotePhysicalPurchaseUseCaseImplTest {
     @Test
     @DisplayName("reading the payment progress delegates to the Billing port with the caller's token")
     void paymentProgress() {
-        when(purchaseApi.getPaymentProgress(TOKEN, "pay-1")).thenReturn(PaymentProgress.COMPLETED);
+        when(purchaseApi.getPaymentProgress(TOKEN, "pay-1"))
+                .thenReturn(statusOf(PaymentProgress.COMPLETED, null));
 
         assertThat(new GetPaymentProgressUseCaseImpl(purchaseApi).execute(TOKEN, "pay-1"))
-                .isEqualTo(PaymentProgress.COMPLETED);
+                .isEqualTo(statusOf(PaymentProgress.COMPLETED, null));
     }
 
     @Test
@@ -134,5 +137,9 @@ class QuotePhysicalPurchaseUseCaseImplTest {
         assertThat(PaymentProgress.COMPLETED.isFinal()).isTrue();
         assertThat(PaymentProgress.fromUpstream(null)).isEqualTo(PaymentProgress.PENDING);
         assertThat(PaymentProgress.fromUpstream("SOMETHING_NEW")).isEqualTo(PaymentProgress.PENDING);
+    }
+
+    private static PaymentStatusView statusOf(PaymentProgress progress, PurchaseFulfillment fulfillment) {
+        return new PaymentStatusView(progress, fulfillment);
     }
 }
