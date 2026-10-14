@@ -170,6 +170,7 @@ Tokens de feedback (contraste AA sobre su superficie): `feedback-error`,
 |-----------|------------|-------|
 | `field` | `id, label, type, name, autocomplete, value, hint, autofocus, errors` | `value`, `hint` y `errors` pueden ser `null`; `errors` es una lista (`${#fields.errors('email')}`). Enlaza hint/errores con `aria-describedby`. |
 | `alert` | `kind, message` | `kind`: `error`, `success` o `info`. |
+| `notice` | `heading, message` | Página informativa: `<h1>` más una `.card` con un párrafo ("revisá tu correo", "cuenta activada"). Los enlaces de salida van después, fuera del fragmento. |
 
 ```html
 <div th:replace="~{fragments/components :: field('email', 'Email:', 'email', 'email', 'username', *{email}, null, true, ${#fields.errors('email')})}"></div>

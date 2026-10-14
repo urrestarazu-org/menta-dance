@@ -1,15 +1,13 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cuenta activada - Menta Dance</title>
-</head>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('Cuenta activada', ~{::main-content})}">
 <body>
-<h1>Tu cuenta fue activada</h1>
+<th:block th:fragment="main-content">
+<div class="mx-auto max-w-sm">
+    <div th:replace="~{fragments/components :: notice('Tu cuenta fue activada', 'Ya podés usar Menta Dance con tu email y tu contraseña.')}"></div>
 
-<p>Ya podés usar Menta Dance con tu email y tu contraseña.</p>
-
-<p><a th:href="@{/login}">Ir a iniciar sesión</a></p>
+    <p class="mt-6"><a th:href="@{/login}">Ir a iniciar sesión</a></p>
+</div>
+</th:block>
 </body>
 </html>
