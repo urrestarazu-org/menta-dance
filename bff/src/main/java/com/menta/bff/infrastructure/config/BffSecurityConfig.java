@@ -107,6 +107,9 @@ public class BffSecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/recuperar-contrasena").permitAll()
                         .requestMatchers(HttpMethod.GET, "/restablecer-contrasena/*").permitAll()
                         .requestMatchers(HttpMethod.POST, "/restablecer-contrasena").permitAll()
+                        // Subscription checkout (#361): students only. Any other role gets 403
+                        // before the controller runs; anonymous callers go to /login.
+                        .requestMatchers(HttpMethod.POST, "/suscripciones").hasRole("STUDENT")
                         // Physical class purchase (#365): POST /classes/{id}/cotizar, POST /compras and
                         // GET /compras/retorno are deliberately not listed above, so they fall under
                         // anyRequest().authenticated();

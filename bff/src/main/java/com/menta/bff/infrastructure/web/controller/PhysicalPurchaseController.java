@@ -53,6 +53,12 @@ public class PhysicalPurchaseController {
     /** Session attribute holding the id of the payment the buyer is about to pay. */
     static final String PAYMENT_ID_SESSION_ATTRIBUTE = "com.menta.bff.PENDING_PAYMENT_ID";
 
+    /**
+     * Session attribute telling which flow started the pending payment; absent means a class
+     * purchase, so sessions written before subscriptions existed keep working.
+     */
+    static final String PURCHASE_KIND_SESSION_ATTRIBUTE = "com.menta.bff.PENDING_PURCHASE_KIND";
+
     private static final String CLASSES_PATH = "/classes";
     private static final String BACK_TO_CLASS = "Volver a la clase";
     private static final String BACK_TO_CLASSES = "Ver clases presenciales";
@@ -123,6 +129,7 @@ public class PhysicalPurchaseController {
                     model, response, back, BACK_TO_CLASS);
         }
         session.setAttribute(PAYMENT_ID_SESSION_ATTRIBUTE, checkout.paymentId());
+        session.removeAttribute(PURCHASE_KIND_SESSION_ATTRIBUTE);
         return "redirect:" + checkout.checkoutUrl();
     }
 
