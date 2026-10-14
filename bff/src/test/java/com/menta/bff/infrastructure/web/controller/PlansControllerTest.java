@@ -7,6 +7,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
 import com.menta.bff.application.dto.PlanSummary;
+import com.menta.bff.application.dto.PlansView;
+import com.menta.bff.application.dto.PlansViewer;
 import com.menta.bff.application.port.out.BillingApiClient;
 import com.menta.bff.application.usecase.GetPlansViewUseCase;
 import java.math.BigDecimal;
@@ -54,7 +56,8 @@ class PlansControllerTest {
         List<PlanSummary> plans = List.of(
                 new PlanSummary("plan-1", "Mensual", "Acceso mensual", BigDecimal.valueOf(1000), "ARS", 30, false),
                 new PlanSummary("plan-2", "Anual", "Acceso anual", BigDecimal.valueOf(10000), "ARS", 365, true));
-        when(getPlansViewUseCase.execute()).thenReturn(plans);
+        when(getPlansViewUseCase.execute(PlansViewer.ANONYMOUS, null))
+                .thenReturn(new PlansView(plans, null));
 
         mockMvc.perform(get("/plans"))
                 .andExpect(status().isOk())
@@ -65,7 +68,8 @@ class PlansControllerTest {
     @Test
     @DisplayName("propagates NotFoundException, which resolves to HTTP 404 via @ResponseStatus")
     void shouldResolveNotFoundExceptionTo404() throws Exception {
-        when(getPlansViewUseCase.execute()).thenThrow(new BillingApiClient.NotFoundException("no plans"));
+        when(getPlansViewUseCase.execute(PlansViewer.ANONYMOUS, null))
+                .thenThrow(new BillingApiClient.NotFoundException("no plans"));
 
         mockMvc.perform(get("/plans"))
                 .andExpect(status().isNotFound());
@@ -74,7 +78,8 @@ class PlansControllerTest {
     @Test
     @DisplayName("propagates ServiceUnavailableException, which resolves to HTTP 503 via @ResponseStatus")
     void shouldResolveServiceUnavailableExceptionTo503() throws Exception {
-        when(getPlansViewUseCase.execute()).thenThrow(new BillingApiClient.ServiceUnavailableException("unavailable"));
+        when(getPlansViewUseCase.execute(PlansViewer.ANONYMOUS, null))
+                .thenThrow(new BillingApiClient.ServiceUnavailableException("unavailable"));
 
         mockMvc.perform(get("/plans"))
                 .andExpect(status().isServiceUnavailable());

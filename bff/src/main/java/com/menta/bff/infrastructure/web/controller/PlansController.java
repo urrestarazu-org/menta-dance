@@ -1,5 +1,6 @@
 package com.menta.bff.infrastructure.web.controller;
 
+import com.menta.bff.application.dto.PlansViewer;
 import com.menta.bff.application.usecase.GetPlansViewUseCase;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -33,7 +34,7 @@ public class PlansController {
 
     @GetMapping("/plans")
     public String plans(Model model) {
-        model.addAttribute("plans", getPlansViewUseCase.execute());
+        model.addAttribute("plans", getPlansViewUseCase.execute(PlansViewer.ANONYMOUS, null).plans());
         return "plans";
     }
 }
