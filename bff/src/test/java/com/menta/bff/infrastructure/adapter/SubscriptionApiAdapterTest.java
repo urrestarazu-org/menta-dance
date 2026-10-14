@@ -2,8 +2,11 @@ package com.menta.bff.infrastructure.adapter;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.equalToJson;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.post;
+import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.verify;
@@ -17,7 +20,9 @@ import com.github.tomakehurst.wiremock.http.Fault;
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import com.menta.bff.application.dto.CurrentSubscription;
+import com.menta.bff.application.dto.SubscriptionCheckout;
 import com.menta.bff.application.port.out.BillingApiClient;
+import com.menta.bff.application.port.out.SubscriptionApiClient;
 import com.menta.bff.infrastructure.config.BillingApiProperties;
 import java.time.Duration;
 import java.time.Instant;
@@ -164,5 +169,112 @@ class SubscriptionApiAdapterTest {
 
         assertThatThrownBy(() -> adapter.getCurrentSubscription(TOKEN))
                 .isInstanceOf(BillingApiClient.ServiceUnavailableException.class);
+    }
+
+    private static final String SUBSCRIPTIONS = "/api/v1/billing/subscriptions";
+
+    private static void stubCreate(int status, String body) {
+        stubFor(post(urlEqualTo(SUBSCRIPTIONS)).willReturn(aResponse().withStatus(status)
+                .withHeader("Content-Type", status < 300 ? "application/json" : "application/problem+json")
+                .withBody(body)));
+    }
+
+    @Test
+    @DisplayName("201 maps the payment and checkout URL, sending plan, Mercado Pago and the key")
+    void createsCheckout() {
+        stubCreate(201,
+                """
+                {"subscriptionId": "s-1", "paymentId": "pay-1", "planId": "p-1", "status": "PENDING",
+                "checkoutUrl": "https://pay.example.com/c/1", "overlapNotice": null}
+                """);
+
+        assertThat(adapter.createSubscriptionCheckout(TOKEN, "p-1", "key-1"))
+                .isEqualTo(new SubscriptionCheckout("pay-1", "https://pay.example.com/c/1"));
+        verify(postRequestedFor(urlEqualTo(SUBSCRIPTIONS))
+                .withHeader("Authorization", equalTo("Bearer " + TOKEN))
+                .withRequestBody(equalToJson(
+                        "{\"planId\":\"p-1\",\"paymentMethod\":\"MERCADO_PAGO\",\"idempotencyKey\":\"key-1\"}")));
+    }
+
+    @ParameterizedTest(name = "incomplete 201 body {0} fails closed")
+    @CsvSource(delimiter = '|', value = {
+        "no payment id|{\"checkoutUrl\":\"https://pay.example.com/c/1\"}",
+        "no checkout url|{\"paymentId\":\"pay-1\"}"})
+    void incompleteCheckoutFailsClosed(String label, String body) {
+        stubCreate(201, body);
+
+        assertThatThrownBy(() -> adapter.createSubscriptionCheckout(TOKEN, "p-1", "key-1"))
+                .isInstanceOf(BillingApiClient.ServiceUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("409 SUBSCRIPTION_ALREADY_ACTIVE carries the end date of the blocking subscription")
+    void alreadyActiveWithDate() {
+        stubCreate(409, "{\"status\":409,\"code\":\"SUBSCRIPTION_ALREADY_ACTIVE\","
+                + "\"currentEndDate\":\"2026-10-31T00:00:00Z\"}");
+
+        assertThatThrownBy(() -> adapter.createSubscriptionCheckout(TOKEN, "p-1", "key-1"))
+                .isInstanceOfSatisfying(SubscriptionApiClient.SubscriptionAlreadyActiveException.class,
+                        e -> assertThat(e.currentEndDate()).isEqualTo(Instant.parse("2026-10-31T00:00:00Z")));
+    }
+
+    @Test
+    @DisplayName("409 SUBSCRIPTION_ALREADY_ACTIVE without a date leaves it null")
+    void alreadyActiveWithoutDate() {
+        stubCreate(409, "{\"status\":409,\"code\":\"SUBSCRIPTION_ALREADY_ACTIVE\"}");
+
+        assertThatThrownBy(() -> adapter.createSubscriptionCheckout(TOKEN, "p-1", "key-1"))
+                .isInstanceOfSatisfying(SubscriptionApiClient.SubscriptionAlreadyActiveException.class,
+                        e -> assertThat(e.currentEndDate()).isNull());
+    }
+
+    @Test
+    @DisplayName("any other 409 is a conflict, distinct from already active")
+    void conflict() {
+        stubCreate(409, "{\"status\":409,\"code\":\"SUBSCRIPTION_CONFLICT\"}");
+
+        assertThatThrownBy(() -> adapter.createSubscriptionCheckout(TOKEN, "p-1", "key-1"))
+                .isInstanceOf(SubscriptionApiClient.SubscriptionConflictException.class);
+    }
+
+    @Test
+    @DisplayName("422 PLAN_NOT_AVAILABLE is typed; another 422 is an invalid request")
+    void unprocessable() {
+        stubCreate(422, "{\"status\":422,\"code\":\"PLAN_NOT_AVAILABLE\"}");
+        assertThatThrownBy(() -> adapter.createSubscriptionCheckout(TOKEN, "p-1", "key-1"))
+                .isInstanceOf(SubscriptionApiClient.PlanNotAvailableException.class);
+
+        stubCreate(422, "{\"status\":422,\"code\":\"PAYMENT_METHOD_NOT_ACCEPTED\"}");
+        assertThatThrownBy(() -> adapter.createSubscriptionCheckout(TOKEN, "p-1", "key-1"))
+                .isInstanceOf(SubscriptionApiClient.InvalidRequestException.class);
+    }
+
+    @Test
+    @DisplayName("400 is an invalid request")
+    void badRequest() {
+        stubCreate(400, "{\"status\":400,\"code\":\"VALIDATION_FAILED\"}");
+
+        assertThatThrownBy(() -> adapter.createSubscriptionCheckout(TOKEN, "p-1", "key-1"))
+                .isInstanceOf(SubscriptionApiClient.InvalidRequestException.class);
+    }
+
+    @ParameterizedTest(name = "{0} on checkout fails closed")
+    @CsvSource({"404", "401", "429", "500", "503", "418"})
+    void checkoutFailsClosed(int status) {
+        stubCreate(status, "{\"status\":" + status + ",\"code\":\"X\"}");
+
+        assertThatThrownBy(() -> adapter.createSubscriptionCheckout(TOKEN, "p-1", "key-1"))
+                .isInstanceOf(BillingApiClient.ServiceUnavailableException.class)
+                .hasMessageNotContaining(TOKEN);
+    }
+
+    @Test
+    @DisplayName("a checkout transport fault fails closed and the token never reaches a log line")
+    void checkoutTransportFault() {
+        stubFor(post(urlEqualTo(SUBSCRIPTIONS)).willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)));
+
+        assertThatThrownBy(() -> adapter.createSubscriptionCheckout(TOKEN, "p-1", "key-1"))
+                .isInstanceOf(BillingApiClient.ServiceUnavailableException.class);
+        assertThat(logs.list).noneMatch(event -> event.getFormattedMessage().contains(TOKEN));
     }
 }
