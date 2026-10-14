@@ -26,6 +26,8 @@ Chain strategy: stacked-to-main
 
 **Chain reminder (lesson #361):** each stacked PR MUST be retargeted to `develop`, or its head branch deleted on merge, before the next PR is merged; otherwise the child merges into a dead branch.
 
+**Archive note (delivery strategy as executed):** the planned `stacked-to-main` chain above was NOT used. The change shipped as two independent PRs, both against `develop`: S1 API (#578, merge commit 366b150) and S2 BFF + openspec artifacts (#579, merge commit 31d4ddc). The S2 BFF slice therefore did not depend on a child-retarget step. The "Likely PR" column reflects the original plan only.
+
 ## Slice 0: Artifacts
 
 - [x] 0.1 Commit `openspec/changes/billing-purchase-fulfillment-status/{proposal,design,tasks}.md` + `specs/*`. Covers: all. Done: `git status` clean, PR 0 opened.
