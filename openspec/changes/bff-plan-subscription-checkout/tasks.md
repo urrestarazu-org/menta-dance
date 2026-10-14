@@ -41,13 +41,13 @@ Gate for every commit batch: `./gradlew :bff:test :bff:checkstyleMain :bff:check
 
 ## PR2 - Checkout, return, docs (spec: bff-plan-subscription-checkout)
 
-- [ ] 5.1 RED: adapter POST tests: 201, incomplete body, 409 active (date)/conflict, 422, 400, 503; body `{planId, MERCADO_PAGO, key}`. GREEN: add `createSubscriptionCheckout` + exceptions to port/adapter. Commit: `feat(bff): crear checkout de suscripcion contra la API (#361)`.
-- [ ] 5.2 RED then GREEN: `SubscribeToPlanUseCaseImplTest` / `SubscribeToPlanUseCase{,Impl}.java`. Covers: rendered key used, double submit same key.
-- [ ] 6.1 RED: `SubscriptionControllerTest` + integration: CSRF-less 403 no upstream call, INSTRUCTOR 403, anonymous -> `/login`, policy-accepted redirect with session `{PAYMENT_ID, KIND=SUBSCRIPTION}`, rejected URL -> notice, error mapping 409x2/422/400/503 non-leaky.
-- [ ] 6.2 GREEN: `POST /suscripciones` in `SubscriptionController.java`, `web/dto/SubscriptionForm.java`, `PurchaseFlowErrors.java` branches, `BffSecurityConfig` `hasRole("STUDENT")`. Commit: `feat(bff): suscribirse a un plan con pago en linea (#361)`.
-- [ ] 7.1 RED: return tests: URL params ignored, 404 / no session -> subscription fallback (no `/classes`), COMPLETED "se esta activando", PENDING, REJECTED/CANCELLED/EXPIRED link `/plans`, latest checkout wins.
-- [ ] 7.2 GREEN: `PhysicalPurchaseController.java` (`PENDING_PURCHASE_KIND`, `pay()` clears kind, skip assigned sessions), `templates/purchase-notice.html` (`breadcrumbHref`/`breadcrumbLabel`, default `/classes`). Commit: `feat(bff): retorno de pago con copy de suscripcion (#361)`.
-- [ ] 7.3 Regression: run unchanged `PhysicalPurchaseIntegrationTest` + `PhysicalPurchaseControllerTest` (class return, kind absent); no edits to existing assertions.
-- [ ] 8.1 Docs: `docs/06-BILLING-API.md` D1 deviation (session `paymentId`, no signed `state`; why); `docs/26-LOCAL-DEV-SETUP-HOWTO.md` paymentId lookup (DB/Bruno) for simulator webhook. Commit: `docs(bff): documentar retorno de suscripcion y desviacion D1 (#361)`.
-- [ ] 8.2 VERIFY in API (read-only): a REJECTED payment releases the slot (SubscriptionStatus.CANCELLED, US-BILLING-010 escenario 6). Record finding in design.md Open Questions and PR2 body; if not released, add notice caveat task.
-- [ ] 8.3 Run gate; open PR2 (base S1 branch, `Closes #361`); update project board fields.
+- [x] 5.1 RED: adapter POST tests: 201, incomplete body, 409 active (date)/conflict, 422, 400, 503; body `{planId, MERCADO_PAGO, key}`. GREEN: add `createSubscriptionCheckout` + exceptions to port/adapter. Commit: `feat(bff): crear checkout de suscripcion contra la API (#361)`.
+- [x] 5.2 RED then GREEN: `SubscribeToPlanUseCaseImplTest` / `SubscribeToPlanUseCase{,Impl}.java`. Covers: rendered key used, double submit same key.
+- [x] 6.1 RED: `SubscriptionControllerTest` + integration: CSRF-less 403 no upstream call, INSTRUCTOR 403, anonymous -> `/login`, policy-accepted redirect with session `{PAYMENT_ID, KIND=SUBSCRIPTION}`, rejected URL -> notice, error mapping 409x2/422/400/503 non-leaky.
+- [x] 6.2 GREEN: `POST /suscripciones` in `SubscriptionController.java`, `web/dto/SubscriptionForm.java`, `PurchaseFlowErrors.java` branches, `BffSecurityConfig` `hasRole("STUDENT")`. Commit: `feat(bff): suscribirse a un plan con pago en linea (#361)`.
+- [x] 7.1 RED: return tests: URL params ignored, 404 / no session -> subscription fallback (no `/classes`), COMPLETED "se esta activando", PENDING, REJECTED/CANCELLED/EXPIRED link `/plans`, latest checkout wins.
+- [x] 7.2 GREEN: `PhysicalPurchaseController.java` (`PENDING_PURCHASE_KIND`, `pay()` clears kind, skip assigned sessions), `templates/purchase-notice.html` (`breadcrumbHref`/`breadcrumbLabel`, default `/classes`). Commit: `feat(bff): retorno de pago con copy de suscripcion (#361)`.
+- [x] 7.3 Regression: run unchanged `PhysicalPurchaseIntegrationTest` + `PhysicalPurchaseControllerTest` (class return, kind absent); no edits to existing assertions.
+- [x] 8.1 Docs: `docs/06-BILLING-API.md` D1 deviation (session `paymentId`, no signed `state`; why); `docs/26-LOCAL-DEV-SETUP-HOWTO.md` paymentId lookup (DB/Bruno) for simulator webhook. Commit: `docs(bff): documentar retorno de suscripcion y desviacion D1 (#361)`.
+- [x] 8.2 VERIFY in API (read-only): a REJECTED payment releases the slot (SubscriptionStatus.CANCELLED, US-BILLING-010 escenario 6). Record finding in design.md Open Questions and PR2 body; if not released, add notice caveat task.
+- [ ] 8.3 (gate run green locally; PR not opened yet) Run gate; open PR2 (base S1 branch, `Closes #361`); update project board fields.
