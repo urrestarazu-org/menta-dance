@@ -60,6 +60,9 @@ public class BffSecurityConfig {
                         // are anonymous, so their CSS must be too. GET-only and scoped to
                         // /css/**, so no other static location and no mutating verb opens up.
                         .requestMatchers(HttpMethod.GET, "/css/**").permitAll()
+                        // Self-hosted Poppins (woff2) referenced by app.css via @font-face;
+                        // same GET-only, path-scoped reasoning as /css/**.
+                        .requestMatchers(HttpMethod.GET, "/fonts/**").permitAll()
                         // Course detail is access-agnostic (design D2, #170) — a single
                         // "*" does not cross "/", so future subpaths (e.g. a course's
                         // settings page) stay authenticated by default, and GET-only
