@@ -65,6 +65,38 @@ siendo `200` con el plan completo. Si un módulo falla, sólo se degradan a
 `null` los cursos que ese módulo habría respondido (se registra un `WARN` con
 el módulo y los ids afectados); el otro módulo conserva sus nombres.
 
+## Estado de un pago propio (`GET /api/v1/billing/payments/{paymentId}`)
+
+Requiere un access token válido y devuelve el estado de un pago del propio
+usuario:
+
+```json
+{ "status": "COMPLETED", "createdAt": "...", "updatedAt": "...", "fulfillment": "EXCEPTION" }
+```
+
+`fulfillment` (#559) es el estado de la compra asociada al pago, o `null`:
+
+| Valor | Significado |
+| --- | --- |
+| `PENDING_FULFILLMENT` | La compra existe y todavía se están asignando los lugares |
+| `ASSIGNED` | Los lugares quedaron asignados |
+| `EXCEPTION` | No se pudieron asignar los lugares; el equipo debe resolverlo |
+| `RESOLVED` | El equipo cerró la excepción (reembolso o compensación) |
+| `null` | El pago no tiene compra: es una suscripción, o el pago está `COMPLETED` y el outbox todavía no creó la compra |
+
+Reglas:
+
+- El campo siempre se serializa; `null` es un valor, no una ausencia. Un cliente
+  debe tratar `null` y cualquier valor que no reconozca como "sin información
+  de cumplimiento".
+- Sólo se expone el nombre del estado. El motivo de la excepción, el tipo de
+  resolución y la nota administrativa nunca forman parte de esta respuesta.
+- La compra se consulta recién después de verificar que el pago pertenece al
+  usuario. Un pago ajeno y uno inexistente responden el mismo
+  `404 PAYMENT_NOT_FOUND`; nunca `403`.
+- El contrato vive en `api/openapi/billing-v1.yaml` y
+  `PaymentStatusContractTest` falla si el record, el enum y el YAML divergen.
+
 ## Checkout de suscripción virtual (US-BILLING-010)
 
 `POST /api/v1/billing/subscriptions` inicia un checkout para el usuario del
