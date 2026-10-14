@@ -80,3 +80,8 @@ No migration. Slice 1 (API + OpenAPI + docs + tests) ~340 lines; slice 2 (BFF) ~
 ## Open Questions
 
 - [x] Notice titles for EXCEPTION/RESOLVED (approved 2026-10-14): EXCEPTION title "Pago recibido", RESOLVED title "Compra resuelta"; both shown as an info alert (not error), with the approved copy bodies.
+
+## Implementation Deviations (recorded at archive)
+
+- **`PurchaseRepositoryAdapter` non-locking read (not in the File Changes table above).** `PurchaseRepositoryAdapter.findByPaymentId` maps through `toDomainWithoutLocking`, which reads the purchase's sessions with a plain (non-`FOR UPDATE`) query. Reason: MySQL rejects `SELECT ... FOR UPDATE` inside a READ ONLY transaction, and this lookup runs inside the student status read's read-only transaction. The lock-free read is safe under REPEATABLE READ because a purchase row and its session rows are inserted in one transaction, so any snapshot that sees the row sees its sessions. The locking variants (`findByPaymentIdForUpdate`, `findByIdForUpdate`) are unchanged and still used by the fulfillment writers.
+- Source: `verify-report-s1` warning W3, recorded here per that report's request.
