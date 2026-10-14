@@ -8,7 +8,10 @@
     <h1 class="mb-2" th:text="${playable.lesson().title()}">Título de la lección</h1>
     <p class="mb-4" th:text="${playable.lesson().description()}">Descripción de la lección</p>
     <div class="aspect-video w-full overflow-hidden rounded-xl bg-brand-deep">
-        <video controls th:src="${playable.streamUrl()}" class="h-full w-full"></video>
+        <video controls th:src="${playable.streamUrl()}" preload="metadata"
+               th:attr="aria-label='Video de la lección: ' + ${playable.lesson().title()}" class="h-full w-full">
+            No se puede reproducir este video en tu navegador. Probá recargar la página o abrirla en otro navegador.
+        </video>
     </div>
 
     <nav aria-label="Navegación entre lecciones" class="mt-6 flex flex-wrap justify-between gap-3">

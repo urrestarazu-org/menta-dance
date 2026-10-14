@@ -5,7 +5,7 @@
 <th:block th:fragment="main-content">
 <h1 class="mb-4">Menta Dance</h1>
 
-<nav class="mb-8 flex flex-wrap gap-3">
+<nav aria-label="Accesos principales" class="mb-8 flex flex-wrap gap-3">
     <a class="btn btn-primary" sec:authorize="isAuthenticated()" th:href="@{/dashboard}">Ir a mi panel</a>
     <a class="btn btn-primary" sec:authorize="!isAuthenticated()" th:href="@{/login}">Iniciar sesión</a>
     <a class="btn btn-secondary" sec:authorize="!isAuthenticated()" th:href="@{/registro}">Crear cuenta</a>

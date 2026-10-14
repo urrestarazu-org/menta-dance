@@ -231,6 +231,9 @@ class CatalogPurchaseLayoutIntegrationTest extends BaseIntegrationTest {
         assertHeadingsInOrder(html);
         assertThat(html).contains("<video controls src=\"" + STREAM_URL + "\"")
                 .containsPattern("(?s)<div[^>]*aspect-video[^>]*>\\s*<video")
+                .contains("aria-label=\"Video de la lección: Postura básica\"")
+                .contains("preload=\"metadata\"")
+                .containsPattern("(?s)<video[^>]*>[^<]*No se puede reproducir este video[^<]*</video>")
                 .contains("href=\"/courses/course-1/lessons/lesson-2\"");
     }
 
@@ -439,6 +442,9 @@ class CatalogPurchaseLayoutIntegrationTest extends BaseIntegrationTest {
                 .doesNotContain(" style=\"");
         assertThat(html.split("<main", -1)).as("single main landmark").hasSize(2);
         assertThat(html.split("<h1", -1)).as("single h1").hasSize(2);
+        assertThat(html).as("skip link target is focusable").contains("<main id=\"main\" tabindex=\"-1\"");
+        assertThat(html).as("every nav landmark is named")
+                .doesNotContainPattern("<nav(?![^>]*aria-label=)[^>]*>");
     }
 
     /** The first heading is an h1 and no level is skipped when going deeper. */

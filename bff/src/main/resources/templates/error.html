@@ -4,15 +4,15 @@
 <body>
 <th:block th:fragment="main-content">
 <div class="mx-auto max-w-sm">
-    <h1 class="mb-6">Error</h1>
+    <h1 class="mb-6">No pudimos mostrar la página</h1>
 
     <div class="card space-y-2" role="alert">
-        <p th:if="${status}" th:text="'Status: ' + ${status}">Status</p>
-        <p th:if="${error}" th:text="'Error: ' + ${error}">Error</p>
-        <p th:if="${message}" th:text="'Message: ' + ${message}">Message</p>
+        <p th:if="${status == 404}">No encontramos la página que buscás.</p>
+        <p th:unless="${status == 404}">Algo salió mal de nuestro lado. Intentá nuevamente en unos minutos.</p>
+        <p class="text-sm" th:if="${status}" th:text="'Código: ' + ${status}">Código: 500</p>
     </div>
 
-    <p class="mt-6"><a th:href="@{/}">Go to Home</a></p>
+    <p class="mt-6"><a th:href="@{/}">Volver al inicio</a></p>
 </div>
 </th:block>
 </body>

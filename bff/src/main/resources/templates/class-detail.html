@@ -3,7 +3,7 @@
       th:replace="~{fragments/layout :: page(${course.unavailable()} ? 'Clase' : ${course.title()}, ~{::main-content})}">
 <body>
 <th:block th:fragment="main-content">
-<nav class="mb-6"><a th:href="@{/classes}">Clases presenciales</a></nav>
+<nav aria-label="Ruta de navegación" class="mb-6"><a th:href="@{/classes}">Clases presenciales</a></nav>
 
 <div th:if="${course.unavailable()}">
     <div th:replace="~{fragments/components :: alert('error', 'No pudimos cargar esta clase en este momento. Intentá nuevamente en unos minutos.')}"></div>
