@@ -32,5 +32,16 @@
      th:attr="role=${kind == 'error'} ? 'alert' : 'status'">
     <p th:text="${message}">Message</p>
 </div>
+
+<!--
+  notice(heading, message): page heading plus a card with one paragraph, for
+  "check your email" / "done" style pages. Put follow-up links after it.
+-->
+<div th:fragment="notice(heading, message)">
+    <h1 class="mb-6" th:text="${heading}">Heading</h1>
+    <div class="card">
+        <p th:text="${message}">Message</p>
+    </div>
+</div>
 </body>
 </html>
