@@ -22,10 +22,12 @@ import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import com.menta.bff.application.dto.PaymentProgress;
 import com.menta.bff.application.dto.PaymentProofFile;
+import com.menta.bff.application.dto.PaymentStatusView;
 import com.menta.bff.application.dto.PhysicalBankTransfer;
 import com.menta.bff.application.dto.PhysicalCheckout;
 import com.menta.bff.application.dto.PhysicalPurchaseType;
 import com.menta.bff.application.dto.PhysicalQuote;
+import com.menta.bff.application.dto.PurchaseFulfillment;
 import com.menta.bff.application.port.out.BillingApiClient;
 import com.menta.bff.application.port.out.PhysicalPurchaseApiClient;
 import com.menta.bff.infrastructure.config.BillingApiProperties;
@@ -210,8 +212,34 @@ class PhysicalPurchaseApiAdapterTest {
                 .withBody("{\"status\":\"" + upstream
                         + "\",\"createdAt\":\"2026-10-10T12:00:00Z\",\"updatedAt\":\"2026-10-10T12:01:00Z\"}")));
 
-        assertThat(adapter.getPaymentProgress(TOKEN, PAYMENT_ID)).isEqualTo(expected);
+        assertThat(adapter.getPaymentProgress(TOKEN, PAYMENT_ID).progress()).isEqualTo(expected);
         verify(getRequestedFor(urlEqualTo(PAYMENT)).withHeader("Authorization", equalTo(BEARER)));
+    }
+
+    @ParameterizedTest(name = "fulfillment {0} -> {1}")
+    @CsvSource(value = {"EXCEPTION, EXCEPTION", "RESOLVED, RESOLVED", "ASSIGNED, ASSIGNED",
+        "SOMETHING_NEW, null"}, nullValues = "null")
+    @DisplayName("a completed payment carries the purchase fulfillment, unknown reads as null")
+    void paymentFulfillment(String upstream, PurchaseFulfillment expected) {
+        stubFor(get(urlEqualTo(PAYMENT)).willReturn(aResponse().withStatus(200)
+                .withHeader("Content-Type", "application/json")
+                .withBody("{\"status\":\"COMPLETED\",\"fulfillment\":\"" + upstream + "\"}")));
+
+        assertThat(adapter.getPaymentProgress(TOKEN, PAYMENT_ID))
+                .isEqualTo(new PaymentStatusView(PaymentProgress.COMPLETED, expected));
+    }
+
+    @Test
+    @DisplayName("an absent or null fulfillment field reads as null")
+    void paymentWithoutFulfillment() {
+        stubFor(get(urlEqualTo(PAYMENT)).willReturn(aResponse().withStatus(200)
+                .withHeader("Content-Type", "application/json").withBody("{\"status\":\"COMPLETED\"}")));
+        assertThat(adapter.getPaymentProgress(TOKEN, PAYMENT_ID).fulfillment()).isNull();
+
+        stubFor(get(urlEqualTo(PAYMENT)).willReturn(aResponse().withStatus(200)
+                .withHeader("Content-Type", "application/json")
+                .withBody("{\"status\":\"COMPLETED\",\"fulfillment\":null}")));
+        assertThat(adapter.getPaymentProgress(TOKEN, PAYMENT_ID).fulfillment()).isNull();
     }
 
     @Test

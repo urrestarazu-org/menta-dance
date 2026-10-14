@@ -1,8 +1,10 @@
 package com.menta.bff.infrastructure.web.controller;
 
 import com.menta.bff.application.dto.PaymentProgress;
+import com.menta.bff.application.dto.PaymentStatusView;
 import com.menta.bff.application.dto.PhysicalCheckout;
 import com.menta.bff.application.dto.PhysicalPurchaseType;
+import com.menta.bff.application.dto.PurchaseFulfillment;
 import com.menta.bff.application.port.out.BillingApiClient;
 import com.menta.bff.application.port.out.CatalogApiClient;
 import com.menta.bff.application.port.out.PhysicalPurchaseApiClient;
@@ -144,19 +146,20 @@ public class PhysicalPurchaseController {
         if (paymentId == null) {
             return subscription ? subscriptionFallback(model) : "redirect:" + CLASSES_PATH;
         }
-        PaymentProgress progress;
+        PaymentStatusView status;
         try {
-            progress = getPaymentProgressUseCase.execute(accessToken(request), paymentId);
+            status = getPaymentProgressUseCase.execute(accessToken(request), paymentId);
         } catch (BillingApiClient.NotFoundException e) {
             clearPending(session);
             return subscription ? subscriptionFallback(model) : "redirect:" + CLASSES_PATH;
         } catch (BillingApiClient.ServiceUnavailableException e) {
             return PurchaseFlowErrors.apply(e, model, response, RETURN_PATH, "Actualizar");
         }
+        PaymentProgress progress = status.progress();
         if (progress.isFinal()) {
             clearPending(session);
         }
-        return subscription ? subscriptionNotice(progress, model) : classNotice(progress, request, model);
+        return subscription ? subscriptionNotice(progress, model) : classNotice(status, request, model);
     }
 
     private static void clearPending(HttpSession session) {
@@ -193,9 +196,18 @@ public class PhysicalPurchaseController {
         };
     }
 
-    private String classNotice(PaymentProgress progress, HttpServletRequest request, Model model) {
-        return switch (progress) {
+    private String classNotice(PaymentStatusView status, HttpServletRequest request, Model model) {
+        return switch (status.progress()) {
             case COMPLETED -> {
+                if (status.fulfillment() == PurchaseFulfillment.EXCEPTION) {
+                    yield PurchaseFlowErrors.notice(model, "Pago recibido",
+                            "Recibimos tu pago, pero no pudimos asignarte los lugares. El equipo lo está "
+                                    + "revisando y te va a contactar.", CLASSES_PATH, BACK_TO_CLASSES);
+                }
+                if (status.fulfillment() == PurchaseFulfillment.RESOLVED) {
+                    yield PurchaseFlowErrors.notice(model, "Compra resuelta",
+                            "Tu compra ya fue resuelta por el equipo.", CLASSES_PATH, BACK_TO_CLASSES);
+                }
                 var assignedSessions = getAssignedSessionsUseCase.execute(accessToken(request));
                 model.addAttribute("assignedSessions", assignedSessions);
                 String confirmed = assignedSessions.isEmpty()

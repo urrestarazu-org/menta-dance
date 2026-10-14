@@ -1,6 +1,6 @@
 package com.menta.bff.application.usecase;
 
-import com.menta.bff.application.dto.PaymentProgress;
+import com.menta.bff.application.dto.PaymentStatusView;
 import com.menta.bff.application.port.out.PhysicalPurchaseApiClient;
 import lombok.RequiredArgsConstructor;
 
@@ -11,7 +11,7 @@ public class GetPaymentProgressUseCaseImpl implements GetPaymentProgressUseCase 
     private final PhysicalPurchaseApiClient purchaseApiClient;
 
     @Override
-    public PaymentProgress execute(String accessToken, String paymentId) {
+    public PaymentStatusView execute(String accessToken, String paymentId) {
         return purchaseApiClient.getPaymentProgress(accessToken, paymentId);
     }
 }
