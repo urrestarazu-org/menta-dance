@@ -47,6 +47,8 @@ import com.menta.bff.application.usecase.ResendActivationUseCase;
 import com.menta.bff.application.usecase.ResendActivationUseCaseImpl;
 import com.menta.bff.application.usecase.ResetPasswordUseCase;
 import com.menta.bff.application.usecase.ResetPasswordUseCaseImpl;
+import com.menta.bff.application.usecase.SubscribeToPlanUseCase;
+import com.menta.bff.application.usecase.SubscribeToPlanUseCaseImpl;
 import com.menta.bff.infrastructure.web.filter.TokenRefreshFilter;
 import java.util.UUID;
 import org.springframework.context.annotation.Bean;
@@ -164,6 +166,11 @@ public class UseCaseConfig {
     @Bean
     public PayPhysicalPurchaseUseCase payPhysicalPurchaseUseCase(PhysicalPurchaseApiClient purchaseApiClient) {
         return new PayPhysicalPurchaseUseCaseImpl(purchaseApiClient);
+    }
+
+    @Bean
+    public SubscribeToPlanUseCase subscribeToPlanUseCase(SubscriptionApiClient subscriptionApiClient) {
+        return new SubscribeToPlanUseCaseImpl(subscriptionApiClient);
     }
 
     @Bean

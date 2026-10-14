@@ -1,6 +1,7 @@
 package com.menta.bff.infrastructure.adapter;
 
 import com.menta.bff.application.dto.CurrentSubscription;
+import com.menta.bff.application.dto.SubscriptionCheckout;
 import com.menta.bff.application.port.out.BillingApiClient;
 import com.menta.bff.application.port.out.SubscriptionApiClient;
 import com.menta.bff.infrastructure.config.BillingApiProperties;
@@ -31,7 +32,11 @@ import reactor.core.publisher.Mono;
 public class SubscriptionApiAdapter implements SubscriptionApiClient {
 
     private static final String ME = "/api/v1/billing/subscriptions/me";
+    private static final String SUBSCRIPTIONS = "/api/v1/billing/subscriptions";
+    private static final String PAYMENT_METHOD = "MERCADO_PAGO";
     private static final String NO_SUBSCRIPTION = "NO_SUBSCRIPTION";
+    private static final String ALREADY_ACTIVE = "SUBSCRIPTION_ALREADY_ACTIVE";
+    private static final String PLAN_NOT_AVAILABLE = "PLAN_NOT_AVAILABLE";
 
     private final WebClient webClient;
     private final BillingApiProperties properties;
@@ -63,6 +68,53 @@ public class SubscriptionApiAdapter implements SubscriptionApiClient {
         }
     }
 
+    @Override
+    public SubscriptionCheckout createSubscriptionCheckout(String accessToken, String planId, String key) {
+        try {
+            CheckoutWire checkout = webClient.post().uri(SUBSCRIPTIONS)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                    .bodyValue(new CheckoutRequest(planId, PAYMENT_METHOD, key))
+                    .exchangeToMono(this::readCheckout)
+                    .timeout(properties.getTimeout())
+                    .block();
+            if (checkout == null || checkout.paymentId() == null || checkout.checkoutUrl() == null) {
+                throw unavailable("checkout response is incomplete");
+            }
+            return new SubscriptionCheckout(checkout.paymentId(), checkout.checkoutUrl());
+        } catch (SubscriptionApiClient.SubscriptionFailureException
+                 | BillingApiClient.ServiceUnavailableException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            log.error("Billing API subscription checkout call failed: {}", e.getClass().getSimpleName());
+            throw new BillingApiClient.ServiceUnavailableException("Billing API unavailable", e);
+        }
+    }
+
+    private Mono<CheckoutWire> readCheckout(ClientResponse response) {
+        int status = response.statusCode().value();
+        if (response.statusCode().is2xxSuccessful()) {
+            return response.bodyToMono(CheckoutWire.class);
+        }
+        return response.bodyToMono(ProblemWire.class)
+                .onErrorResume(e -> Mono.empty())
+                .defaultIfEmpty(new ProblemWire(null, null))
+                .flatMap(problem -> Mono.error(mapCheckoutError(status, problem)));
+    }
+
+    private static RuntimeException mapCheckoutError(int status, ProblemWire problem) {
+        return switch (status) {
+            case 400 -> new SubscriptionApiClient.InvalidRequestException("Billing API rejected the request");
+            case 409 -> ALREADY_ACTIVE.equals(problem.code())
+                    ? new SubscriptionApiClient.SubscriptionAlreadyActiveException(
+                            "Student already holds a subscription", problem.currentEndDate())
+                    : new SubscriptionApiClient.SubscriptionConflictException("Subscription changed concurrently");
+            case 422 -> PLAN_NOT_AVAILABLE.equals(problem.code())
+                    ? new SubscriptionApiClient.PlanNotAvailableException("Plan is not available")
+                    : new SubscriptionApiClient.InvalidRequestException("Billing API rejected the request");
+            default -> unavailable("answered " + status);
+        };
+    }
+
     private Mono<CurrentSubscription> readCurrent(ClientResponse response) {
         int status = response.statusCode().value();
         if (response.statusCode().is2xxSuccessful()) {
@@ -71,7 +123,7 @@ public class SubscriptionApiAdapter implements SubscriptionApiClient {
         if (status == 404) {
             return response.bodyToMono(ProblemWire.class)
                     .onErrorResume(e -> Mono.empty())
-                    .defaultIfEmpty(new ProblemWire(null))
+                    .defaultIfEmpty(new ProblemWire(null, null))
                     .flatMap(problem -> NO_SUBSCRIPTION.equals(problem.code())
                             ? Mono.just(new CurrentSubscription.None())
                             : Mono.error(unavailable("unexpected 404")));
@@ -105,6 +157,12 @@ public class SubscriptionApiAdapter implements SubscriptionApiClient {
     private record CurrentWire(String subscriptionId, String status, Instant endDate) {
     }
 
-    private record ProblemWire(String code) {
+    private record CheckoutRequest(String planId, String paymentMethod, String idempotencyKey) {
+    }
+
+    private record CheckoutWire(String paymentId, String checkoutUrl) {
+    }
+
+    private record ProblemWire(String code, Instant currentEndDate) {
     }
 }
