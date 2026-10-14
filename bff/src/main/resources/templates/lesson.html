@@ -1,43 +1,44 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title th:if="${playable}" th:text="${playable.lesson().title()} + ' - Menta Dance'">Lección - Menta Dance</title>
-    <title th:if="${sample}" th:text="${sample.lesson().title()} + ' - Menta Dance'">Lección - Menta Dance</title>
-</head>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page(${playable != null ? playable.lesson().title() : sample.lesson().title()}, ~{::main-content})}">
 <body>
+<th:block th:fragment="main-content">
 
-<div th:if="${playable}">
-    <h1 th:text="${playable.lesson().title()}">Título de la lección</h1>
-    <p th:text="${playable.lesson().description()}">Descripción de la lección</p>
-    <video controls th:src="${playable.streamUrl()}"></video>
+<th:block th:if="${playable}">
+    <h1 class="mb-2" th:text="${playable.lesson().title()}">Título de la lección</h1>
+    <p class="mb-4" th:text="${playable.lesson().description()}">Descripción de la lección</p>
+    <div class="aspect-video w-full overflow-hidden rounded-xl bg-brand-deep">
+        <video controls th:src="${playable.streamUrl()}" class="h-full w-full"></video>
+    </div>
 
-    <p>
-        <a th:if="${playable.nav().previousLesson()}"
+    <nav aria-label="Navegación entre lecciones" class="mt-6 flex flex-wrap justify-between gap-3">
+        <a class="btn btn-secondary" th:if="${playable.nav().previousLesson()}"
            th:href="@{'/courses/' + ${playable.course().courseId()} + '/lessons/' + ${playable.nav().previousLesson().lessonId()}}"
            th:text="'&larr; ' + ${playable.nav().previousLesson().title()}">Anterior</a>
-        <a th:if="${playable.nav().nextLesson()}"
+        <a class="btn btn-secondary" th:if="${playable.nav().nextLesson()}"
            th:href="@{'/courses/' + ${playable.course().courseId()} + '/lessons/' + ${playable.nav().nextLesson().lessonId()}}"
            th:text="${playable.nav().nextLesson().title()} + ' &rarr;'">Siguiente</a>
-    </p>
-</div>
+    </nav>
+</th:block>
 
-<div th:if="${sample}">
-    <h1 th:text="${sample.lesson().title()}">Título de la lección</h1>
-    <p th:text="${sample.lesson().duration()}">00:00</p>
-    <p>Esta lección requiere una suscripción activa.
-        <a th:href="@{/plans}">Ver planes disponibles</a>
-    </p>
+<th:block th:if="${sample}">
+    <h1 class="mb-2" th:text="${sample.lesson().title()}">Título de la lección</h1>
+    <p class="mb-4" th:text="${sample.lesson().duration()}">00:00</p>
+    <div class="card">
+        <p>Esta lección requiere una suscripción activa.
+            <a th:href="@{/plans}">Ver planes disponibles</a>
+        </p>
+    </div>
 
-    <p>
-        <a th:if="${sample.nav().previousLesson()}"
+    <nav aria-label="Navegación entre lecciones" class="mt-6 flex flex-wrap justify-between gap-3">
+        <a class="btn btn-secondary" th:if="${sample.nav().previousLesson()}"
            th:href="@{'/courses/' + ${sample.course().courseId()} + '/lessons/' + ${sample.nav().previousLesson().lessonId()}}"
            th:text="'&larr; ' + ${sample.nav().previousLesson().title()}">Anterior</a>
-        <a th:if="${sample.nav().nextLesson()}"
+        <a class="btn btn-secondary" th:if="${sample.nav().nextLesson()}"
            th:href="@{'/courses/' + ${sample.course().courseId()} + '/lessons/' + ${sample.nav().nextLesson().lessonId()}}"
            th:text="${sample.nav().nextLesson().title()} + ' &rarr;'">Siguiente</a>
-    </p>
-</div>
+    </nav>
+</th:block>
+</th:block>
 </body>
 </html>

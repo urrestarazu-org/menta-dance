@@ -1,19 +1,17 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - Menta Dance</title>
-</head>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('Panel', ~{::main-content})}">
 <body>
-<h1>Dashboard</h1>
+<th:block th:fragment="main-content">
+<h1 class="mb-4">Panel</h1>
 
-<p>Welcome, <span th:text="${username}">User</span>!</p>
+<p class="mb-6">Hola, <span th:text="${username}">User</span>!</p>
 
-<p><a th:href="@{/classes}">Clases presenciales</a></p>
+<p class="mb-6"><a class="btn btn-primary" th:href="@{/classes}">Clases presenciales</a></p>
 
 <form th:action="@{/logout}" method="post">
-    <button type="submit">Logout</button>
+    <button type="submit" class="btn btn-secondary">Cerrar sesión</button>
 </form>
+</th:block>
 </body>
 </html>

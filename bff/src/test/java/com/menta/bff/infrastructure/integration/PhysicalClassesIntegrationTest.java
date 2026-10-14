@@ -131,7 +131,7 @@ class PhysicalClassesIntegrationTest extends BaseIntegrationTest {
         String body = page("/classes", 200);
 
         assertThat(body).contains("Todavía no hay clases presenciales disponibles.");
-        assertThat(body).doesNotContain("<li");
+        assertThat(body).doesNotContainPattern("<li[\s>]");
     }
 
     @Test

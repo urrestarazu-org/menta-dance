@@ -98,7 +98,7 @@ class PublicCatalogViewIntegrationTest extends BaseIntegrationTest {
         String body = anonymousHome("/");
 
         assertThat(body).contains("Todavía no hay cursos disponibles.");
-        assertThat(body).doesNotContain("<li");
+        assertThat(body).doesNotContainPattern("<li[\s>]");
     }
 
     @Test

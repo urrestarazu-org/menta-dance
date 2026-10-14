@@ -1,17 +1,14 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pagar por transferencia - Menta Dance</title>
-</head>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('Pagar por transferencia', ~{::main-content})}">
 <body>
-<nav><a th:href="@{/classes}">Clases presenciales</a></nav>
+<th:block th:fragment="main-content">
+<nav class="mb-6"><a th:href="@{/classes}">Clases presenciales</a></nav>
 
-<h1>Pagá por transferencia bancaria</h1>
-<p>Hacé la transferencia con estos datos e incluí la referencia para que podamos identificar tu pago.</p>
+<h1 class="mb-4">Pagá por transferencia bancaria</h1>
+<p class="mb-4">Hacé la transferencia con estos datos e incluí la referencia para que podamos identificar tu pago.</p>
 
-<ul>
+<ul class="card mb-6 space-y-2">
     <li>CBU: <strong th:text="${transfer.cbu}">0000003100010000000001</strong></li>
     <li>Alias: <strong th:text="${transfer.alias}">menta.dance</strong></li>
     <li>Titular: <span th:text="${transfer.holder}">Menta Dance</span></li>
@@ -20,14 +17,16 @@
     <li>Referencia: <strong th:text="${transfer.reference}">PHY-BT-1</strong></li>
 </ul>
 
-<p>Tu lugar se confirma después de verificar el pago. Subir el comprobante nos ayuda a hacerlo más rápido.</p>
+<p class="mb-4">Tu lugar se confirma después de verificar el pago. Subir el comprobante nos ayuda a hacerlo más rápido.</p>
 
-<form th:action="@{/compras/transferencia/comprobante}" method="post" enctype="multipart/form-data">
+<form th:action="@{/compras/transferencia/comprobante}" method="post" enctype="multipart/form-data" class="card space-y-4">
     <input type="hidden" name="paymentId" th:value="${transfer.paymentId}">
-    <label>Comprobante (PNG, JPG o PDF, hasta 5 MB)
-        <input type="file" name="file" accept="image/png,image/jpeg,application/pdf" required>
-    </label>
-    <button type="submit">Subir comprobante</button>
+    <div class="field">
+        <label class="field-label" for="proof-file">Comprobante (PNG, JPG o PDF, hasta 5 MB)</label>
+        <input class="field-input" id="proof-file" type="file" name="file" accept="image/png,image/jpeg,application/pdf" required>
+    </div>
+    <button type="submit" class="btn btn-primary">Subir comprobante</button>
 </form>
+</th:block>
 </body>
 </html>

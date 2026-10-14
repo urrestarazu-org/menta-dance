@@ -1,27 +1,29 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Clases presenciales - Menta Dance</title>
-</head>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('Clases presenciales', ~{::main-content})}">
 <body>
-<h1>Clases presenciales</h1>
+<th:block th:fragment="main-content">
+<nav class="mb-6"><a th:href="@{/}">Inicio</a></nav>
 
-<nav><a th:href="@{/}">Inicio</a></nav>
+<h1 class="mb-6">Clases presenciales</h1>
 
-<p th:if="${classes.unavailable()}">No pudimos cargar las clases en este momento. Intentá nuevamente en unos minutos.</p>
-<p th:if="${classes.empty()}">Todavía no hay clases presenciales disponibles.</p>
+<div th:if="${classes.unavailable()}" class="mb-4">
+    <div th:replace="~{fragments/components :: alert('error', 'No pudimos cargar las clases en este momento. Intentá nuevamente en unos minutos.')}"></div>
+</div>
+<div th:if="${classes.empty()}" class="mb-4">
+    <div th:replace="~{fragments/components :: alert('info', 'Todavía no hay clases presenciales disponibles.')}"></div>
+</div>
 
-<ul th:unless="${classes.classes().isEmpty()}">
-    <li th:each="item : ${classes.classes()}">
+<ul th:unless="${classes.classes().isEmpty()}" class="grid gap-4 sm:grid-cols-2">
+    <li th:each="item : ${classes.classes()}" class="card">
         <h2><a th:href="@{${item.detailPath()}}" th:text="${item.title()}">Clase</a></h2>
-        <p>
-            <span th:if="${item.levelLabel() != null}" th:text="${item.levelLabel()}">Principiante</span>
+        <p class="mt-2 text-sm">
+            <span th:if="${item.levelLabel() != null}" class="badge badge-neutral" th:text="${item.levelLabel()}">Principiante</span>
             <span th:if="${item.professorName() != null}">· Profesor/a: <span th:text="${item.professorName()}">Nombre</span></span>
             <span th:if="${item.scheduleLabel() != null}">· <span th:text="${item.scheduleLabel()}">Lunes 18:00</span></span>
         </p>
     </li>
 </ul>
+</th:block>
 </body>
 </html>

@@ -1,46 +1,48 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security" lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Menta Dance</title>
-</head>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security"
+      th:replace="~{fragments/layout :: page('Inicio', ~{::main-content})}">
 <body>
-<h1>Menta Dance</h1>
+<th:block th:fragment="main-content">
+<h1 class="mb-4">Menta Dance</h1>
 
-<nav>
-    <a sec:authorize="isAuthenticated()" th:href="@{/dashboard}">Ir a mi panel</a>
-    <a sec:authorize="!isAuthenticated()" th:href="@{/login}">Iniciar sesión</a>
-    <a sec:authorize="!isAuthenticated()" th:href="@{/registro}">Crear cuenta</a>
-    <a th:href="@{/classes}">Clases presenciales</a>
+<nav class="mb-8 flex flex-wrap gap-3">
+    <a class="btn btn-primary" sec:authorize="isAuthenticated()" th:href="@{/dashboard}">Ir a mi panel</a>
+    <a class="btn btn-primary" sec:authorize="!isAuthenticated()" th:href="@{/login}">Iniciar sesión</a>
+    <a class="btn btn-secondary" sec:authorize="!isAuthenticated()" th:href="@{/registro}">Crear cuenta</a>
+    <a class="btn btn-secondary" th:href="@{/classes}">Clases presenciales</a>
 </nav>
 
-<h2>Cursos</h2>
+<h2 class="mb-4">Cursos</h2>
 
-<nav aria-label="Filtrar por modalidad">
-    <a th:href="@{/}" th:unless="${catalog.selected() == null}">Todos</a>
-    <strong th:if="${catalog.selected() == null}">Todos</strong>
-    <a th:href="@{/(modality=virtual)}" th:unless="${catalog.selected() != null and catalog.selected().name() == 'VIRTUAL'}">Virtuales</a>
-    <strong th:if="${catalog.selected() != null and catalog.selected().name() == 'VIRTUAL'}">Virtuales</strong>
-    <a th:href="@{/(modality=physical)}" th:unless="${catalog.selected() != null and catalog.selected().name() == 'PHYSICAL'}">Presenciales</a>
-    <strong th:if="${catalog.selected() != null and catalog.selected().name() == 'PHYSICAL'}">Presenciales</strong>
+<nav aria-label="Filtrar por modalidad" class="mb-6 flex flex-wrap items-center gap-3">
+    <a class="btn btn-secondary" th:href="@{/}" th:unless="${catalog.selected() == null}">Todos</a>
+    <strong class="badge badge-success" aria-current="true" th:if="${catalog.selected() == null}">Todos</strong>
+    <a class="btn btn-secondary" th:href="@{/(modality=virtual)}" th:unless="${catalog.selected() != null and catalog.selected().name() == 'VIRTUAL'}">Virtuales</a>
+    <strong class="badge badge-success" aria-current="true" th:if="${catalog.selected() != null and catalog.selected().name() == 'VIRTUAL'}">Virtuales</strong>
+    <a class="btn btn-secondary" th:href="@{/(modality=physical)}" th:unless="${catalog.selected() != null and catalog.selected().name() == 'PHYSICAL'}">Presenciales</a>
+    <strong class="badge badge-success" aria-current="true" th:if="${catalog.selected() != null and catalog.selected().name() == 'PHYSICAL'}">Presenciales</strong>
 </nav>
 
-<p th:if="${catalog.unavailable()}">No pudimos cargar el catálogo de cursos en este momento. Intentá nuevamente en unos minutos.</p>
-<p th:if="${catalog.empty()}">Todavía no hay cursos disponibles.</p>
+<div th:if="${catalog.unavailable()}" class="mb-4">
+    <div th:replace="~{fragments/components :: alert('error', 'No pudimos cargar el catálogo de cursos en este momento. Intentá nuevamente en unos minutos.')}"></div>
+</div>
+<div th:if="${catalog.empty()}" class="mb-4">
+    <div th:replace="~{fragments/components :: alert('info', 'Todavía no hay cursos disponibles.')}"></div>
+</div>
 
-<ul th:unless="${catalog.courses().isEmpty()}">
-    <li th:each="course : ${catalog.courses()}">
+<ul th:unless="${catalog.courses().isEmpty()}" class="grid gap-4 sm:grid-cols-2">
+    <li th:each="course : ${catalog.courses()}" class="card">
         <h3>
             <a th:if="${course.detailPath() != null}" th:href="@{${course.detailPath()}}" th:text="${course.title()}">Curso</a>
             <span th:if="${course.detailPath() == null}" th:text="${course.title()}">Curso</span>
         </h3>
-        <p>
-            <span th:text="${course.modalityLabel()}">Virtual</span>
+        <p class="mt-2 text-sm">
+            <span class="badge badge-neutral" th:text="${course.modalityLabel()}">Virtual</span>
             <span th:if="${course.levelLabel() != null}">· <span th:text="${course.levelLabel()}">Principiante</span></span>
             <span th:if="${course.professorName() != null}">· Profesor/a: <span th:text="${course.professorName()}">Nombre</span></span>
         </p>
     </li>
 </ul>
+</th:block>
 </body>
 </html>
