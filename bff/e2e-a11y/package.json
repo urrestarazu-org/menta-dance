@@ -1,0 +1,17 @@
+{
+  "name": "menta-dance-bff-e2e-a11y",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Automated accessibility regression checks for the BFF (Playwright + axe-core, issue #529)",
+  "engines": {
+    "node": "20.11.1"
+  },
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.64.1"
+  }
+}

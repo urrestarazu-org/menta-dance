@@ -86,3 +86,8 @@ tmp/
 # BFF frontend (Tailwind pipeline): dependencies are restored with `npm ci`,
 # generated CSS lives under build/ and is never committed.
 bff/node_modules/
+
+# BFF accessibility checks (Playwright + axe-core): own package, never committed outputs.
+bff/e2e-a11y/node_modules/
+bff/e2e-a11y/playwright-report/
+bff/e2e-a11y/test-results/

@@ -14,8 +14,9 @@ auditoría y correcciones). El objetivo de referencia es **WCAG 2.1 nivel AA**.
   comunes (`fragments/layout.html`, `fragments/components.html`).
 - **Fuera de alcance**: app Android, contenido de los videos (subtítulos, ver
   más abajo), correos transaccionales y la página de pago de Mercado Pago.
-- **No incluido en este slice**: automatización en CI con Playwright + axe
-  (slice 2 de #529).
+- **Automatización**: las comprobaciones de regresión con Playwright + axe-core
+  corren en CI (ver "Comprobaciones automáticas en CI"). Detectan regresiones
+  detectables por herramienta; no reemplazan la revisión manual.
 
 ## Método
 
@@ -26,7 +27,8 @@ auditoría y correcciones). El objetivo de referencia es **WCAG 2.1 nivel AA**.
 | Foco | Recorrido con Tab en `/login` y `/`, leyendo el estilo computado (`outline`, `box-shadow`, `border-color`) de cada control. |
 | Código | Revisión de plantillas: jerarquía de encabezados, `main` único, landmarks, errores de formulario, regiones vivas, nombres accesibles, `<video>`. |
 
-Las herramientas se instalaron fuera del repositorio; no hay dependencias nuevas.
+La auditoría inicial usó herramientas instaladas fuera del repositorio. Las
+comprobaciones de regresión viven en `bff/e2e-a11y/` (paquete npm propio).
 
 ### Páginas auditadas
 
@@ -171,6 +173,53 @@ Hacerlo antes de cada release que cambie plantillas o CSS.
 
 ### Automática (local)
 
-Ejecutar axe-core con los tags `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`
-sobre las páginas listadas arriba. La automatización en CI es el slice 2 de
-#529.
+Ver "Comprobaciones automáticas en CI" más abajo: la misma suite se ejecuta
+localmente contra el stack de desarrollo.
+
+## Comprobaciones automáticas en CI
+
+Suite: `bff/e2e-a11y/` (Playwright + `@axe-core/playwright`, Chromium, tags
+`wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`). Es un paquete npm **independiente**
+del pipeline de Tailwind (`bff/package.json`), con versiones exactas y
+`engines.node` 20.11.1.
+
+| Qué | Detalle |
+|---|---|
+| Recorridos | Públicos (`/`, `/classes`, detalle de clase, detalle de curso, `/plans`, 404), autenticación (`/login` y su error, `/registro` y errores de validación, `/recuperar-contrasena`, `/reenviar-activacion`) y alumno demo (`/dashboard`, una lección). |
+| Datos | Perfil `demo` (datos públicos de siembra, docs/26). Alumno `alumno@menta.dance`; no se usan otras credenciales ni secretos. |
+| Falla el job | Violaciones de impacto `critical` o `serious`. |
+| Solo informa | Violaciones `moderate`/`minor` y resultados `incomplete` no previstos: anotación `::warning` y resumen del job. |
+| Lista permitida | `ALLOWED_INCOMPLETE` en `bff/e2e-a11y/tests/axe.js` (único lugar). Hoy: `video-caption`, hueco conocido de subtítulos, issue #568. |
+| Workflow | `.github/workflows/bff-accessibility.yml`: en PR a `develop` cuando cambian `bff/**`, `scripts/dev.sh`, este documento o el propio workflow; también `workflow_dispatch`. |
+| Si falla | Se sube el artefacto `bff-accessibility-report` (reporte HTML de Playwright, trazas y `.dev-logs/`). |
+
+**Un resultado verde no es una declaración de conformidad.** Axe cubre solo una
+parte de WCAG; el procedimiento manual de arriba sigue siendo necesario.
+
+### Ejecución local
+
+```bash
+# 1. Levantar el stack con datos demo (requiere .env, ver docs/26)
+SPRING_PROFILES_ACTIVE=demo ./scripts/dev.sh start
+
+# 2. Instalar y correr la suite (Node 20.11.1)
+cd bff/e2e-a11y
+npm ci
+npx playwright install chromium     # la primera vez
+BASE_URL=http://localhost:8080 npx playwright test   # BASE_URL es opcional
+
+# 3. Detener el stack
+cd ../.. && ./scripts/dev.sh stop
+```
+
+Sin el perfil `demo` fallan los recorridos que dependen de datos sembrados.
+`BASE_URL` por defecto es `http://localhost:8080`.
+
+### Mantenimiento
+
+- Un recorrido nuevo se agrega en `bff/e2e-a11y/tests/journeys.spec.js` con el
+  helper `expectNoBlockingViolations`.
+- No agregar reglas a `ALLOWED_INCOMPLETE` sin un issue de seguimiento enlazado
+  en el comentario.
+- Las dependencias de `bff/e2e-a11y/` se actualizan a mano (versión exacta y
+  lockfile); Dependabot no vigila ese paquete hoy.
