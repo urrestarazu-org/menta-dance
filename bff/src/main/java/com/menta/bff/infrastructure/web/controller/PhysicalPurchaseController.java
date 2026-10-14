@@ -138,22 +138,62 @@ public class PhysicalPurchaseController {
     public String checkoutReturn(
             HttpServletRequest request, HttpServletResponse response, HttpSession session, Model model) {
         response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
+        boolean subscription = SubscriptionController.SUBSCRIPTION_KIND.equals(
+                session.getAttribute(PURCHASE_KIND_SESSION_ATTRIBUTE));
         String paymentId = (String) session.getAttribute(PAYMENT_ID_SESSION_ATTRIBUTE);
         if (paymentId == null) {
-            return "redirect:" + CLASSES_PATH;
+            return subscription ? subscriptionFallback(model) : "redirect:" + CLASSES_PATH;
         }
         PaymentProgress progress;
         try {
             progress = getPaymentProgressUseCase.execute(accessToken(request), paymentId);
         } catch (BillingApiClient.NotFoundException e) {
-            session.removeAttribute(PAYMENT_ID_SESSION_ATTRIBUTE);
-            return "redirect:" + CLASSES_PATH;
+            clearPending(session);
+            return subscription ? subscriptionFallback(model) : "redirect:" + CLASSES_PATH;
         } catch (BillingApiClient.ServiceUnavailableException e) {
             return PurchaseFlowErrors.apply(e, model, response, RETURN_PATH, "Actualizar");
         }
         if (progress.isFinal()) {
-            session.removeAttribute(PAYMENT_ID_SESSION_ATTRIBUTE);
+            clearPending(session);
         }
+        return subscription ? subscriptionNotice(progress, model) : classNotice(progress, request, model);
+    }
+
+    private static void clearPending(HttpSession session) {
+        session.removeAttribute(PAYMENT_ID_SESSION_ATTRIBUTE);
+        session.removeAttribute(PURCHASE_KIND_SESSION_ATTRIBUTE);
+    }
+
+    /** Shown instead of redirecting to the classes when a subscription payment cannot be looked up. */
+    private static String subscriptionFallback(Model model) {
+        model.addAttribute("breadcrumbHref", SubscriptionController.PLANS_PATH);
+        model.addAttribute("breadcrumbLabel", "Planes");
+        return PurchaseFlowErrors.notice(model, "Pago no encontrado",
+                "No encontramos un pago de suscripción en curso. Volvé a Planes para ver el estado de tu "
+                        + "suscripción.",
+                SubscriptionController.PLANS_PATH, SubscriptionController.BACK_TO_PLANS);
+    }
+
+    private static String subscriptionNotice(PaymentProgress progress, Model model) {
+        model.addAttribute("breadcrumbHref", SubscriptionController.PLANS_PATH);
+        model.addAttribute("breadcrumbLabel", "Planes");
+        String plans = SubscriptionController.PLANS_PATH;
+        String back = SubscriptionController.BACK_TO_PLANS;
+        return switch (progress) {
+            case COMPLETED -> PurchaseFlowErrors.notice(model, "Pago confirmado",
+                    "¡Pago confirmado! Tu suscripción se está activando.", plans, back);
+            case REJECTED -> PurchaseFlowErrors.notice(model, "Pago rechazado",
+                    "El pago fue rechazado. No se te cobró nada.", plans, back);
+            case CANCELLED -> PurchaseFlowErrors.notice(model, "Pago cancelado",
+                    "El pago fue cancelado.", plans, back);
+            case EXPIRED -> PurchaseFlowErrors.notice(model, "Pago vencido",
+                    "El pago venció antes de completarse.", plans, back);
+            case PENDING -> PurchaseFlowErrors.notice(model, "Pago en proceso",
+                    "Estamos confirmando tu pago, actualizá en unos minutos.", RETURN_PATH, "Actualizar");
+        };
+    }
+
+    private String classNotice(PaymentProgress progress, HttpServletRequest request, Model model) {
         return switch (progress) {
             case COMPLETED -> {
                 var assignedSessions = getAssignedSessionsUseCase.execute(accessToken(request));

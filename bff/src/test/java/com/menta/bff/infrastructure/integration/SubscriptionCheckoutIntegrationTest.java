@@ -2,6 +2,7 @@ package com.menta.bff.infrastructure.integration;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
@@ -180,5 +181,68 @@ class SubscriptionCheckoutIntegrationTest extends BaseIntegrationTest {
 
         assertThat(body).contains("Ya tenés una suscripción vigente hasta el 31/10/2026.")
                 .doesNotContain("SUBSCRIPTION_ALREADY_ACTIVE");
+    }
+
+    private String returnPage(Cookie session) throws Exception {
+        return mockMvc.perform(get(RETURN_PAGE).cookie(session)
+                        .param("status", "approved").param("payment_id", "someone-elses"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+    }
+
+    @Test
+    @DisplayName("the return page after a subscription checkout uses subscription copy and plans links")
+    void returnPageCompleted() throws Exception {
+        stubCheckout(CHECKOUT_URL);
+        stubPayment("COMPLETED");
+        Cookie session = logIn("STUDENT");
+        subscribe(session, "plan-1", "key-1").andExpect(status().is3xxRedirection());
+
+        String html = returnPage(session);
+
+        assertThat(html).contains("Tu suscripción se está activando.")
+                .contains("href=\"/plans\"").doesNotContain("href=\"/classes\"");
+        WIRE_MOCK_SERVER.verify(getRequestedFor(urlEqualTo(PAYMENT)));
+        WIRE_MOCK_SERVER.verify(0, getRequestedFor(urlEqualTo("/api/v1/physical/sessions/me")));
+    }
+
+    @Test
+    @DisplayName("a rejected subscription payment links back to the plans")
+    void returnPageRejected() throws Exception {
+        stubCheckout(CHECKOUT_URL);
+        stubPayment("REJECTED");
+        Cookie session = logIn("STUDENT");
+        subscribe(session, "plan-1", "key-1");
+
+        String html = returnPage(session);
+
+        assertThat(html).contains("El pago fue rechazado. No se te cobró nada.")
+                .contains("href=\"/plans\"").contains("Ver planes");
+    }
+
+    @Test
+    @DisplayName("without any stored payment the return page keeps sending a class buyer to the classes")
+    void returnPageWithoutPayment() throws Exception {
+        Cookie session = logIn("STUDENT");
+
+        mockMvc.perform(get(RETURN_PAGE).cookie(session))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/classes"));
+    }
+
+    @Test
+    @DisplayName("a 404 for the stored payment sends a subscription back to the plans")
+    void returnPageNotFound() throws Exception {
+        stubCheckout(CHECKOUT_URL);
+        stubJson(WireMock.get(urlEqualTo(PAYMENT)), 404, "{\"status\":404,\"code\":\"PAYMENT_NOT_FOUND\"}");
+        Cookie session = logIn("STUDENT");
+        subscribe(session, "plan-1", "key-1");
+
+        String html = mockMvc.perform(get(RETURN_PAGE).cookie(session))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(html).contains("No encontramos un pago de suscripción en curso.").contains("href=\"/plans\"");
+        assertThat(sessionAttribute("PENDING_PAYMENT_ID")).isNullOrEmpty();
     }
 }
