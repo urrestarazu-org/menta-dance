@@ -1,5 +1,6 @@
 package com.menta.billing.application.dto;
 
+import com.menta.billing.domain.model.FulfillmentStatus;
 import java.time.Instant;
 import java.util.Objects;
 
@@ -13,8 +14,12 @@ import java.util.Objects;
  * @param updatedAt derived, never a stored column (design C9): {@code
  *     Payment.statusChangedAt().orElse(createdAt)} — when this payment's status changed, or {@code
  *     createdAt} if it never has.
+ * @param fulfillment the Purchase's fulfillment status, or {@code null} when the payment has no
+ *     Purchase row (a non-purchase payment, or one the outbox has not processed yet) (#559).
  */
-public record PaymentStatusResult(String status, Instant createdAt, Instant updatedAt) {
+public record PaymentStatusResult(
+    String status, Instant createdAt, Instant updatedAt, FulfillmentStatus fulfillment
+) {
 
     public PaymentStatusResult {
         if (status == null || status.isBlank()) {

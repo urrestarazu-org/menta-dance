@@ -45,6 +45,8 @@ tags:
       (ADMIN).
   - name: Compras presenciales
     description: Compra de cursos presenciales (#41, US-PHYSICAL-004).
+  - name: Pagos
+    description: Consulta del estado de los pagos propios (#559).
   - name: Webhooks
     description: Notificaciones asíncronas de proveedores de pago.
   - name: Verificación manual de pagos
@@ -939,6 +941,55 @@ paths:
                     detail: El pago no está en un estado que admita esta operación.
                     code: ILLEGAL_PAYMENT_STATE_TRANSITION
 
+  /api/v1/billing/payments/{paymentId}:
+    get:
+      tags: [Pagos]
+      summary: Consultar el estado de un pago propio
+      description: |
+        Devuelve el estado del pago del usuario autenticado y, cuando existe, el estado de
+        cumplimiento (`fulfillment`) de su compra (#559).
+
+        `fulfillment` es `null` cuando el pago no tiene una compra asociada — por ejemplo una
+        suscripción, o un pago `COMPLETED` cuyo evento todavía no fue procesado por el outbox.
+        Siempre se serializa: nunca está ausente.
+
+        Sólo se expone el nombre del estado. El motivo de la excepción, el tipo de resolución y
+        la nota administrativa no forman parte de este contrato.
+
+        Un pago de otro usuario y un pago inexistente responden el mismo `404 PAYMENT_NOT_FOUND`
+        (anti-enumeración): nunca `403`.
+      operationId: getPaymentStatus
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Estado actual del pago y de su compra, si existe.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentStatusResponse'
+        '401':
+          description: Falta un access token válido.
+        '404':
+          description: El pago no existe o pertenece a otro usuario.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                pago_inexistente:
+                  value:
+                    type: https://menta.dance/problems/payment_not_found
+                    title: Not Found
+                    status: 404
+                    detail: No se encontró el pago.
+                    code: PAYMENT_NOT_FOUND
+
   /api/v1/billing/payments/{paymentId}/proof:
     get:
       tags: [Verificación manual de pagos]
@@ -1606,6 +1657,29 @@ components:
           description: Sesiones que cubría la compra; nunca se asignaron. `[]` si no tenía ninguna.
           items:
             type: string
+
+    PaymentStatusResponse:
+      type: object
+      description: |
+        Estado de un pago propio. `fulfillment` refleja la compra asociada (#559) y es `null`
+        cuando no existe una; nunca expone motivo, tipo de resolución ni nota.
+      required: [status, createdAt, updatedAt, fulfillment]
+      properties:
+        status:
+          type: string
+          enum:
+            [AWAITING_PROVIDER, AWAITING_MANUAL_VERIFICATION, RECONCILIATION_REQUIRED, COMPLETED, REJECTED, CANCELLED, EXPIRED]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+          description: Momento del último cambio de estado; igual a `createdAt` si nunca cambió.
+        fulfillment:
+          type: ["string", "null"]
+          enum: [PENDING_FULFILLMENT, ASSIGNED, EXCEPTION, RESOLVED, null]
+          description: Estado de cumplimiento de la compra, o `null` si el pago no tiene una.
 
     PaymentDetailResponse:
       type: object

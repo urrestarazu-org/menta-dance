@@ -8,11 +8,15 @@ import java.time.Instant;
  *
  * <p>{@code updatedAt} is never a stored column — see {@link
  * com.menta.billing.domain.model.Payment#statusChangedAt()}'s Javadoc.</p>
+ *
+ * <p>{@code fulfillment} (#559) is the Purchase status name only, or an always-serialized {@code
+ * null}. Resolution type, note and exception reason are deliberately never exposed.</p>
  */
-public record PaymentStatusResponse(String status, Instant createdAt, Instant updatedAt) {
+public record PaymentStatusResponse(String status, Instant createdAt, Instant updatedAt, String fulfillment) {
 
     /** Maps the status result to the wire shape without altering any value. */
     public static PaymentStatusResponse from(PaymentStatusResult result) {
-        return new PaymentStatusResponse(result.status(), result.createdAt(), result.updatedAt());
+        String fulfillment = result.fulfillment() == null ? null : result.fulfillment().name();
+        return new PaymentStatusResponse(result.status(), result.createdAt(), result.updatedAt(), fulfillment);
     }
 }
