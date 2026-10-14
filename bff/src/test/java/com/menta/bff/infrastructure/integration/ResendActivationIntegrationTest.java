@@ -33,7 +33,7 @@ class ResendActivationIntegrationTest extends BaseIntegrationTest {
     private static final String PAGE = "/reenviar-activacion";
     private static final String EMAIL = "user@example.com";
     private static final Pattern EMAIL_FIELD = Pattern.compile("<input[^>]*type=\"email\"[^>]*name=\"([^\"]+)\"");
-    private static final Pattern HREF = Pattern.compile("<a[^>]*href=\"([^\"]+)\"");
+    private static final Pattern HREF = Pattern.compile("<a[^>]*href=\"([^\"#][^\"]*)\"");
     private static final String LOGIN_REDIRECT = "http://localhost/login";
 
     private String formPage() throws Exception {

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<!--
+  Common page shell. Adopt it by replacing the whole <html> element:
+
+    <html xmlns:th="http://www.thymeleaf.org"
+          th:replace="~{fragments/layout :: page('Page title', ~{::main-content})}">
+    <body>
+      <th:block th:fragment="main-content"> ...page content... </th:block>
+    </body>
+    </html>
+
+  `title` is shown as "<title> - Menta Dance"; `content` is placed inside
+  <main id="main">.
+-->
+<html lang="es" th:fragment="page(title, content)">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${title} + ' - Menta Dance'">Menta Dance</title>
+    <th:block th:replace="~{fragments/head :: assets}"></th:block>
+</head>
+<body class="flex min-h-screen flex-col">
+<a href="#main"
+   class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-10 focus:rounded focus:bg-white focus:px-4 focus:py-2">Saltar al contenido</a>
+<header class="border-b border-brand-deep/20 bg-white">
+    <div class="container-page py-4">
+        <a th:href="@{/}" class="text-xl font-bold text-brand-deep no-underline">Menta Dance</a>
+    </div>
+</header>
+<main id="main" class="container-page flex-1 py-10" th:insert="${content}">Contenido</main>
+<footer class="border-t border-brand-deep/20 bg-white">
+    <div class="container-page py-4 text-sm">
+        <p>&copy; Menta Dance</p>
+    </div>
+</footer>
+</body>
+</html>
