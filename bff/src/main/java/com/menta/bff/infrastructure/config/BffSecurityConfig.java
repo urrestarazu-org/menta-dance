@@ -15,13 +15,15 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.savedrequest.HttpSessionRequestCache;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 
 /**
  * Security configuration for BFF.
  *
  * <p>Configures:
  * - Custom AuthenticationProvider (validates against Auth API)
- * - Form-based login (custom login page)
+ * - Form-based login (custom login page); only the subscribe entry path is remembered across it
  * - Custom LogoutHandler (revokes refresh token BEFORE session invalidation)
  * - Custom LogoutSuccessHandler (redirects AFTER session invalidation)
  * - CSRF protection (session-stored tokens; only /actuator/health is exempt)
@@ -123,10 +125,16 @@ public class BffSecurityConfig {
                         // the request is still in hand, so the provider never
                         // has to reach for it out of band.
                         .authenticationDetailsSource(clientAuthenticationDetailsSource)
-                        .defaultSuccessUrl("/dashboard", true)
+                        // Only the anonymous "Suscribirme" entry point is remembered across the
+                        // login (see subscribeEntryRequestCache); without alwaysUse, any other
+                        // login still lands on the dashboard.
+                        .defaultSuccessUrl("/dashboard")
                         .failureUrl("/login?error=true")
                         .permitAll()
                 )
+
+                // Login return (#361): the saved request is honored only for the subscribe entry path
+                .requestCache(cache -> cache.requestCache(subscribeEntryRequestCache()))
 
                 // Logout configuration with custom handlers
                 .logout(logout -> logout
@@ -161,5 +169,17 @@ public class BffSecurityConfig {
                 .addFilterBefore(tokenRefreshFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    /**
+     * Request cache that remembers only {@code GET /plans/suscribirme}. Every other request
+     * that reaches the login is not saved, and there is no user-supplied return target, so
+     * the login cannot be turned into an open redirect.
+     */
+    private static HttpSessionRequestCache subscribeEntryRequestCache() {
+        HttpSessionRequestCache cache = new HttpSessionRequestCache();
+        cache.setRequestMatcher(PathPatternRequestMatcher.withDefaults()
+                .matcher(HttpMethod.GET, "/plans/suscribirme"));
+        return cache;
     }
 }
