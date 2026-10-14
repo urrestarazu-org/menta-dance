@@ -175,6 +175,24 @@ refrescar pasa a "Pago confirmado". Sin `BILLING_MERCADOPAGO_CHECKOUT_BACK_URL` 
 simulador conserva la URL `http://local.mercadopago/...`, que la web rechaza a
 propósito (no es `https` ni loopback).
 
+**Probar la suscripción web con el simulador (#361):** con el mismo arranque de arriba, el
+alumno demo entra a `/plans`, pulsa "Suscribirme" y vuelve a `/compras/retorno`, que muestra
+"pendiente". El webhook aprobado necesita la `externalReference` del pago, que el BFF no
+muestra a propósito. Se obtiene de la base (el pago más reciente del alumno):
+
+```bash
+docker exec -it menta-mysql mysql -u root -p menta -e \
+  "SELECT BIN_TO_UUID(id) AS payment_id, expected_external_reference, status_type \
+   FROM billing_payments WHERE target_modality = 'VIRTUAL' ORDER BY created_at DESC LIMIT 1;"
+```
+
+Con `expected_external_reference`, `POST /api/v1/e2e/mercadopago/approved-webhook` (cuerpo
+`externalReference`, `providerPaymentId` y `requestId`, como en `bruno/E2E/mercadopago`) devuelve
+la firma para entregar el webhook. Al refrescar `/compras/retorno` el pago pasa a "¡Pago
+confirmado! Tu suscripción se está activando"; el estado final de la suscripción se ve en
+`/plans`. El simulador solo cubre el camino aprobado y el inconsistente (queda pendiente);
+rechazado, cancelado y vencido se prueban con WireMock en los tests del BFF.
+
 **Cómo ejecutarlo:** no requiere un comando separado — corre automáticamente
 al final de `scripts/e2e/catalog-content.sh` (ver arriba). Usa Bruno CLI sobre
 `bruno/E2E/mercadopago/01-registration` y `02-journey`, con el mismo

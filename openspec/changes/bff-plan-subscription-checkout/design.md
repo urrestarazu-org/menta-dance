@@ -141,5 +141,24 @@ slices: (1) port, adapter, `/plans` offer, login return; (2) POST, return discri
 
 ## Open Questions
 
-- [ ] After a REJECTED payment, does the subscription leave PENDING? If not, the student stays blocked by the PENDING notice; copy avoids promising a retry.
-- [ ] Local demo needs the `paymentId` for the approved webhook; the BFF never shows it. Document the lookup (DB/Bruno) in `26-…`.
+- [x] After a REJECTED payment, does the subscription leave PENDING? **Yes (verified read-only, #361 PR2).**
+  `PaymentVerificationService.applyOutcome` calls `PaymentFulfillmentService.release` for any terminal
+  non-settled payment (REJECTED/CANCELLED/EXPIRED); `release` saves `Subscription.cancelled()`
+  (`SubscriptionStatus.CANCELLED`, `occupiesUserSlot() == false`) for virtual targets, and
+  `PaymentExpiryWorker` does the same on expiry. `GET /subscriptions/me` resolves only
+  PENDING/ACTIVE/EXPIRED, so a CANCELLED row reads as `NO_SUBSCRIPTION` and `/plans` offers
+  "Suscribirme" again. Tests: `PaymentVerificationServiceTest.a_rejected_payment_cancels_the_pending_subscription`,
+  `PaymentFulfillmentServiceTest` (release cancels, already-cancelled writes nothing). No copy caveat
+  needed; the return copy for REJECTED stays "No se te cobró nada" with a link to `/plans`.
+- [x] Local demo needs the `paymentId` for the approved webhook; the BFF never shows it. Document the lookup (DB/Bruno) in `26-…`.
+
+## Deviations recorded during PR2 apply
+
+- No-session / 404 fallback: `/compras/retorno` keeps redirecting to `/classes` when the session holds no
+  kind (existing class tests `returnWithoutPayment` / 404 must stay unchanged); the subscription fallback
+  notice (link `/plans`) renders only when the stored kind is `SUBSCRIPTION`. A session with neither
+  attribute is indistinguishable from a class buyer.
+- `SubscriptionController` takes `ClassesProperties` to format the 409 end date in the display zone;
+  `PurchaseFlowErrors.apply` gained an overload carrying the formatted date.
+- `pay()` clearing the kind landed in the 6.2 commit (needed for correctness of that work unit); its
+  test is in `SubscriptionReturnControllerTest`.

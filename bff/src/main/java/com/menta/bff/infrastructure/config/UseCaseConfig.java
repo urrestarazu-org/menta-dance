@@ -7,6 +7,7 @@ import com.menta.bff.application.port.out.CatalogApiClient;
 import com.menta.bff.application.port.out.PhysicalPurchaseApiClient;
 import com.menta.bff.application.port.out.PhysicalSessionsApiClient;
 import com.menta.bff.application.port.out.SessionTokenRepository;
+import com.menta.bff.application.port.out.SubscriptionApiClient;
 import com.menta.bff.application.port.out.VirtualApiClient;
 import com.menta.bff.application.usecase.AccountActivationUseCase;
 import com.menta.bff.application.usecase.AccountActivationUseCaseImpl;
@@ -46,6 +47,8 @@ import com.menta.bff.application.usecase.ResendActivationUseCase;
 import com.menta.bff.application.usecase.ResendActivationUseCaseImpl;
 import com.menta.bff.application.usecase.ResetPasswordUseCase;
 import com.menta.bff.application.usecase.ResetPasswordUseCaseImpl;
+import com.menta.bff.application.usecase.SubscribeToPlanUseCase;
+import com.menta.bff.application.usecase.SubscribeToPlanUseCaseImpl;
 import com.menta.bff.infrastructure.web.filter.TokenRefreshFilter;
 import java.util.UUID;
 import org.springframework.context.annotation.Bean;
@@ -127,8 +130,11 @@ public class UseCaseConfig {
     }
 
     @Bean
-    public GetPlansViewUseCase getPlansViewUseCase(BillingApiClient billingApiClient) {
-        return new GetPlansViewUseCaseImpl(billingApiClient);
+    public GetPlansViewUseCase getPlansViewUseCase(
+            BillingApiClient billingApiClient, SubscriptionApiClient subscriptionApiClient,
+            ClassesProperties classesProperties) {
+        return new GetPlansViewUseCaseImpl(billingApiClient, subscriptionApiClient,
+                classesProperties.getDisplayZone(), () -> UUID.randomUUID().toString());
     }
 
     @Bean
@@ -160,6 +166,11 @@ public class UseCaseConfig {
     @Bean
     public PayPhysicalPurchaseUseCase payPhysicalPurchaseUseCase(PhysicalPurchaseApiClient purchaseApiClient) {
         return new PayPhysicalPurchaseUseCaseImpl(purchaseApiClient);
+    }
+
+    @Bean
+    public SubscribeToPlanUseCase subscribeToPlanUseCase(SubscriptionApiClient subscriptionApiClient) {
+        return new SubscribeToPlanUseCaseImpl(subscriptionApiClient);
     }
 
     @Bean
