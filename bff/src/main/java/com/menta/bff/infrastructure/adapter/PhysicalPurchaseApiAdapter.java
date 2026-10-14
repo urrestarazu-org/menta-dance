@@ -1,6 +1,7 @@
 package com.menta.bff.infrastructure.adapter;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.menta.bff.application.dto.PaymentProgress;
 import com.menta.bff.application.dto.PaymentProofFile;
 import com.menta.bff.application.dto.PaymentStatusView;
@@ -133,7 +134,9 @@ public class PhysicalPurchaseApiAdapter implements PhysicalPurchaseApiClient {
                 webClient.get().uri(PAYMENTS, paymentId).header(HttpHeaders.AUTHORIZATION, bearer(accessToken)),
                 PaymentWire.class);
         return new PaymentStatusView(PaymentProgress.fromUpstream(payment.status()),
-                PurchaseFulfillment.fromUpstream(payment.fulfillment()));
+                PurchaseFulfillment.fromUpstream(
+                        payment.fulfillment() != null && payment.fulfillment().isTextual()
+                                ? payment.fulfillment().asText() : null));
     }
 
     private <T> T execute(String operation, WebClient.RequestHeadersSpec<?> request, Class<T> bodyType) {
@@ -242,7 +245,7 @@ public class PhysicalPurchaseApiAdapter implements PhysicalPurchaseApiClient {
     private record MoneyWire(BigDecimal amount, String currency) {
     }
 
-    private record PaymentWire(String status, String fulfillment) {
+    private record PaymentWire(String status, JsonNode fulfillment) {
     }
 
     private record ProblemWire(String code) {

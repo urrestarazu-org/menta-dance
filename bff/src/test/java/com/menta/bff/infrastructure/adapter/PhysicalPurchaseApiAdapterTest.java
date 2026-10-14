@@ -40,6 +40,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -240,6 +241,18 @@ class PhysicalPurchaseApiAdapterTest {
                 .withHeader("Content-Type", "application/json")
                 .withBody("{\"status\":\"COMPLETED\",\"fulfillment\":null}")));
         assertThat(adapter.getPaymentProgress(TOKEN, PAYMENT_ID).fulfillment()).isNull();
+    }
+
+    @ParameterizedTest(name = "fulfillment {0} reads as null without failing the payment status")
+    @ValueSource(strings = {"{\"code\":\"EXCEPTION\"}", "[\"EXCEPTION\"]", "42"})
+    @DisplayName("a fulfillment that is not a string degrades to null instead of erroring")
+    void paymentWithUnmappableFulfillment(String fulfillmentJson) {
+        stubFor(get(urlEqualTo(PAYMENT)).willReturn(aResponse().withStatus(200)
+                .withHeader("Content-Type", "application/json")
+                .withBody("{\"status\":\"COMPLETED\",\"fulfillment\":" + fulfillmentJson + "}")));
+
+        assertThat(adapter.getPaymentProgress(TOKEN, PAYMENT_ID))
+                .isEqualTo(new PaymentStatusView(PaymentProgress.COMPLETED, null));
     }
 
     @Test

@@ -148,15 +148,17 @@ class PhysicalPurchaseControllerTest {
     @ParameterizedTest(name = "fulfillment {0} keeps listing the sessions")
     @EnumSource(value = PurchaseFulfillment.class, names = {"ASSIGNED", "PENDING_FULFILLMENT"})
     @NullSource
-    @DisplayName("ASSIGNED, PENDING_FULFILLMENT and unknown fulfillment keep today's rendering")
+    @DisplayName("ASSIGNED, PENDING_FULFILLMENT and unknown fulfillment keep today's rendering with sessions")
     void todaysRendering(PurchaseFulfillment fulfillment) throws Exception {
+        List<AssignedSessionRow> rows = List.of(
+                new AssignedSessionRow("s-1", "Salsa en vivo", "lunes 19 de octubre a las 18:00"));
         when(getPaymentProgressUseCase.execute(TOKEN, "pay-1"))
                 .thenReturn(statusOf(PaymentProgress.COMPLETED, fulfillment));
-        when(getAssignedSessionsUseCase.execute(TOKEN)).thenReturn(List.of());
+        when(getAssignedSessionsUseCase.execute(TOKEN)).thenReturn(rows);
 
         mockMvc.perform(returnPage())
                 .andExpect(model().attribute("title", "Pago confirmado"))
-                .andExpect(model().attribute("message", "¡Pago confirmado! Estamos asignando tus lugares."))
-                .andExpect(model().attribute("assignedSessions", List.of()));
+                .andExpect(model().attribute("message", "¡Pago confirmado! Ya tenés lugar en las sesiones de abajo."))
+                .andExpect(model().attribute("assignedSessions", rows));
     }
 }
