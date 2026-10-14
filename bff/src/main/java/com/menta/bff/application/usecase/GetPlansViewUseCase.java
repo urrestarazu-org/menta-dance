@@ -1,7 +1,7 @@
 package com.menta.bff.application.usecase;
 
-import com.menta.bff.application.dto.PlanSummary;
-import java.util.List;
+import com.menta.bff.application.dto.PlansView;
+import com.menta.bff.application.dto.PlansViewer;
 
 /**
  * Use case for retrieving the plans page's rendering data.
@@ -12,22 +12,21 @@ import java.util.List;
 public interface GetPlansViewUseCase {
 
     /**
-     * Retrieves the list of plans to render on the plans page, in upstream
-     * response order.
+     * Composes the shared plan catalog with the offer for the viewer.
      *
-     * <p>This is a pure pass-through to {@link
-     * com.menta.bff.application.port.out.BillingApiClient#getPlans()}: no
-     * branching, no cross-reference with any other upstream call. Every
-     * failure propagates untranslated (design: the plans page has exactly
-     * one upstream dependency, so there is nothing to collapse a failure
-     * into).
+     * <p>The student's subscription is read only for {@link PlansViewer#STUDENT}, with the
+     * caller's token. Any failure propagates untranslated: a catalog failure and, for a student,
+     * a failure to verify the subscription state both end in the shared error view, so no
+     * checkout can start while the state is unknown.
      * </p>
      *
-     * @return the list of plans, unchanged from the upstream response order
+     * @param viewer      who is looking at the page
+     * @param accessToken caller's access token; only read for a student
+     * @return the plans and the offer
      * @throws com.menta.bff.application.port.out.BillingApiClient.NotFoundException
      *         if the upstream endpoint reports no plans found (404)
      * @throws com.menta.bff.application.port.out.BillingApiClient.ServiceUnavailableException
-     *         if the upstream is unreachable, rate-limited, or errors (429/503)
+     *         if the catalog or the subscription state is unavailable
      */
-    List<PlanSummary> execute();
+    PlansView execute(PlansViewer viewer, String accessToken);
 }
