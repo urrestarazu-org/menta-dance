@@ -50,15 +50,15 @@ Base: `api/billing/src/{main,test}/java/com/menta/billing/...`
 
 Base: `bff/src/{main,test}/java/...`
 
-- [ ] 2.1 RED `PurchaseFulfillmentTest`: `fromUpstream` null/absent/unknown -> null, four known values. Covers: unknown treated as null. Done: fails.
-- [ ] 2.2 GREEN `PurchaseFulfillment` enum, `PaymentStatusView(PaymentProgress, PurchaseFulfillment)`. Done: 2.1 passes.
-- [ ] 2.3 RED `PhysicalPurchaseApiAdapterTest` (HTTP stub): maps COMPLETED+EXCEPTION; absent and unknown -> null. Covers: Adapter maps; field absent. Done: fails.
-- [ ] 2.4 GREEN `PhysicalPurchaseApiAdapter` (`PaymentWire(status, fulfillment)`), `PhysicalPurchaseApiClient`, `GetPaymentProgressUseCase(Impl)` return `PaymentStatusView`. Done: 2.3 passes.
-- [ ] 2.5 Ripple: `SubscriptionReturnControllerTest`, `QuotePhysicalPurchaseUseCaseImplTest` stubs -> `new PaymentStatusView(progress, null)`; assertions unchanged. Covers: Non-completed unaffected. Done: compile + pass.
-- [ ] 2.6 RED `PhysicalPurchaseControllerTest`: EXCEPTION (title "Pago recibido", info alert, approved body), RESOLVED (title "Compra resuelta", info alert, body), `verifyNoInteractions(getAssignedSessionsUseCase)`, no contact link, no "Estamos asignando"; ASSIGNED/PENDING/null/unknown call sessions; non-COMPLETED ignores fulfillment. Covers: EXCEPTION, RESOLVED, Assigned sessions, Non-completed. Done: fails.
-- [ ] 2.7 GREEN `PhysicalPurchaseController.classNotice` branching (`case null`), copy, `subscriptionNotice(view.progress())`. Done: 2.6 passes, `purchase-notice.html` untouched unless needed.
-- [ ] 2.8 Docs: BFF return section (states table, no sessions on EXCEPTION/RESOLVED). Done: reviewed.
-- [ ] 2.9 Gate: `./gradlew :bff:test` + `:bff:checkstyleMain :bff:checkstyleTest`; `:bff:jacocoTestCoverageVerification` (floor >= 85%). Done: green, ~230 lines.
+- [x] 2.1 RED `PurchaseFulfillmentTest`: `fromUpstream` null/absent/unknown -> null, four known values. Covers: unknown treated as null. Done: fails.
+- [x] 2.2 GREEN `PurchaseFulfillment` enum, `PaymentStatusView(PaymentProgress, PurchaseFulfillment)`. Done: 2.1 passes.
+- [x] 2.3 RED `PhysicalPurchaseApiAdapterTest` (HTTP stub): maps COMPLETED+EXCEPTION; absent and unknown -> null. Covers: Adapter maps; field absent. Done: fails.
+- [x] 2.4 GREEN `PhysicalPurchaseApiAdapter` (`PaymentWire(status, fulfillment)`), `PhysicalPurchaseApiClient`, `GetPaymentProgressUseCase(Impl)` return `PaymentStatusView`. Done: 2.3 passes.
+- [x] 2.5 Ripple: `SubscriptionReturnControllerTest`, `QuotePhysicalPurchaseUseCaseImplTest` stubs -> `new PaymentStatusView(progress, null)`; assertions unchanged. Covers: Non-completed unaffected. Done: compile + pass.
+- [x] 2.6 RED `PhysicalPurchaseControllerTest`: EXCEPTION (title "Pago recibido", info alert, approved body), RESOLVED (title "Compra resuelta", info alert, body), `verifyNoInteractions(getAssignedSessionsUseCase)`, no contact link, no "Estamos asignando"; ASSIGNED/PENDING/null/unknown call sessions; non-COMPLETED ignores fulfillment. Covers: EXCEPTION, RESOLVED, Assigned sessions, Non-completed. Done: fails.
+- [x] 2.7 GREEN `PhysicalPurchaseController.classNotice` branching (`case null`), copy, `subscriptionNotice(view.progress())`. Done: 2.6 passes, `purchase-notice.html` untouched unless needed.
+- [x] 2.8 Docs: BFF return section (states table, no sessions on EXCEPTION/RESOLVED). Done: reviewed.
+- [x] 2.9 Gate: `./gradlew :bff:test` + `:bff:checkstyleMain :bff:checkstyleTest`; `:bff:jacocoTestCoverageVerification` (floor >= 85%). Done: green, ~230 lines.
 
 ## Follow-up (non-blocking)
 
