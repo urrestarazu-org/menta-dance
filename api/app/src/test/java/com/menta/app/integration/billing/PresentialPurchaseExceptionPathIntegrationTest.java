@@ -1,6 +1,7 @@
 package com.menta.app.integration.billing;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 import com.menta.app.integration.support.AbstractBillingMySqlIntegrationTest;
@@ -19,6 +20,7 @@ import com.menta.billing.application.port.out.BankTransferRateLimitPort;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.port.out.CourseCatalogPort;
 import com.menta.billing.application.port.out.PaymentProviderPort;
+import com.menta.billing.domain.exception.PaymentNotFoundException;
 import com.menta.billing.domain.model.FulfillmentStatus;
 import com.menta.billing.domain.model.Money;
 import com.menta.billing.infrastructure.persistence.entity.PaymentJpaEntity;
@@ -144,6 +146,44 @@ class PresentialPurchaseExceptionPathIntegrationTest extends AbstractBillingMySq
         assertThat(purchaseRepository.findByPaymentId(paymentId).orElseThrow().getStatus())
             .isEqualTo("EXCEPTION");
         assertThat(assignmentRepository.countBySessionId(sessionId)).isEqualTo(1);
+    }
+
+    /**
+     * #559 W1: the student status read runs in a READ ONLY transaction, where MySQL rejects the
+     * {@code FOR UPDATE} session read. An ASSIGNED purchase has a NON-EMPTY session list, so this
+     * is the only test that exercises the non-locking session read against real MySQL.
+     */
+    @Test
+    void assigned_purchase_with_sessions_is_readable_in_read_only_transaction() {
+        UUID courseId = UUID.randomUUID();
+        UUID sessionId = seedSessionWithCapacityOne(courseId);
+        UUID paymentId = UUID.randomUUID();
+        UUID studentId = UUID.randomUUID();
+        String quoteId = seedIndividualQuote(courseId, sessionId).toString();
+        paymentRepository.save(new PaymentJpaEntity(
+            paymentId, studentId, "mp-assigned-path", new BigDecimal("100.00"), "ARS",
+            "ext-2", "merchant-1", "PHYSICAL", quoteId, "AWAITING_PROVIDER",
+            null, null, Instant.now()
+        ));
+        when(paymentProviderPort.fetchPayment("mp-assigned-path")).thenReturn(
+            new ProviderPaymentResult(
+                "approved", Money.of(new BigDecimal("100.00"), "ARS"), "ext-2", "merchant-1"
+            )
+        );
+        WebhookInboxJpaEntity inbox = inboxRepository.save(new WebhookInboxJpaEntity(
+            "mp-assigned-path:req-1", "mp-assigned-path", "req-1", WebhookInboxStatus.RECEIVED,
+            0, null, null, Instant.now(), null
+        ));
+
+        webhookWorker.process(inbox);
+        OutboxRowJpaEntity event = outboxRepository.findAll().getFirst();
+        assertThat(outboxWorker.process(event)).isFalse();
+
+        assertThat(assignmentRepository.countBySessionId(sessionId)).isEqualTo(1);
+        assertThat(getPaymentUseCase.getPayment(paymentId.toString(), studentId).fulfillment())
+            .isEqualTo(FulfillmentStatus.ASSIGNED);
+        assertThatThrownBy(() -> getPaymentUseCase.getPayment(paymentId.toString(), UUID.randomUUID()))
+            .isInstanceOf(PaymentNotFoundException.class);
     }
 
     private UUID seedSessionWithCapacityOne(UUID courseId) {
