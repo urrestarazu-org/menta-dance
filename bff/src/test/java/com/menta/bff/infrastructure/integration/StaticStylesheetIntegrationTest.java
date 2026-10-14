@@ -6,10 +6,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.nio.charset.StandardCharsets;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.MediaType;
 
 /**
@@ -88,5 +91,46 @@ class StaticStylesheetIntegrationTest extends BaseIntegrationTest {
                 .andExpect(status().is4xxClientError());
         mockMvc.perform(get("/dashboard"))
                 .andExpect(status().is3xxRedirection());
+    }
+
+    @ParameterizedTest(name = "GET /fonts/poppins-latin-{0}-normal.woff2")
+    @ValueSource(ints = {400, 500, 600, 700})
+    @DisplayName("las fuentes Poppins self-hosted se sirven anónimas como font/woff2")
+    void poppinsFontsAreServedAnonymously(int weight) throws Exception {
+        byte[] body = mockMvc.perform(get("/fonts/poppins-latin-" + weight + "-normal.woff2"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.valueOf("font/woff2")))
+                .andReturn()
+                .getResponse()
+                .getContentAsByteArray();
+
+        // A real woff2 file starts with the "wOF2" magic number.
+        assertThat(new String(body, 0, 4, StandardCharsets.US_ASCII)).isEqualTo("wOF2");
+    }
+
+    @Test
+    @DisplayName("app.css declara @font-face de Poppins con font-display swap y URLs locales")
+    void stylesheetDeclaresSelfHostedPoppins() throws Exception {
+        String css = mockMvc.perform(get("/css/app.css"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertThat(css)
+                .contains("@font-face")
+                .contains("font-family:Poppins")
+                .contains("font-display:swap")
+                .contains("/fonts/poppins-latin-400-normal.woff2")
+                .contains("/fonts/poppins-latin-700-normal.woff2")
+                .doesNotContain("fonts.googleapis.com")
+                .doesNotContain("fonts.gstatic.com");
+    }
+
+    @Test
+    @DisplayName("el permiso público de /fonts es GET-only y no abre verbos que mutan")
+    void fontsPermitDoesNotWidenAccess() throws Exception {
+        mockMvc.perform(post("/fonts/poppins-latin-400-normal.woff2"))
+                .andExpect(status().is4xxClientError());
     }
 }

@@ -17,6 +17,7 @@ bff/
 ├── postcss.config.js         # tailwindcss + autoprefixer
 └── src/main/
     ├── frontend/css/input.css        # CSS fuente (NO es un recurso servido)
+    ├── frontend/scripts/copy-fonts.js # copia los woff2 de Poppins a /fonts
     └── resources/templates/
         ├── fragments/head.html       # único lugar que carga app.css
         └── *.html                    # el content scan lee estos archivos
@@ -49,6 +50,46 @@ exportá `SPRING_WEB_RESOURCES_CHAIN_CACHE=false` antes de `bootRun`.
 
 Para cambiar una dependencia: editá `package.json` con la versión **exacta**,
 ejecutá `npm install --package-lock-only` con Node 20.11.1 y commiteá ambos archivos.
+
+## Tipografía
+
+Fuente: **Poppins**, alineada con el proyecto de referencia (`menta-virtual-academy`).
+Escala (tokens `fontSize` en `tailwind.config.js`; el resto de las medidas de Tailwind se conserva):
+
+| Token | Tamaño | Uso |
+|-------|--------|-----|
+| `text-body` | 16px | Texto base (`html`). |
+| `text-small` | 12px | Texto secundario. |
+| `text-subtitle` | 24px | `h2` (semibold). |
+| `text-title` | 36px | `h1` (bold). |
+
+`fontFamily.sans` = Poppins + el stack de sistema como fallback (mientras carga o si falla).
+
+### Self-hosting de la fuente
+
+No se usa Google Fonts ni ningún CDN: la CSP de producción es `default-src 'self'`
+(`infra/docker/nginx/conf/nginx.production.conf.example`) y un CDN rompería la política.
+
+- Dependencia: `@fontsource/poppins` (versión exacta, solo `devDependency`).
+- `npm run build` ejecuta Tailwind y luego `src/main/frontend/scripts/copy-fonts.js`, que copia
+  **solo** `poppins-latin-{400,500,600,700}-normal.woff2` a `build/generated/tailwind/static/fonts/`.
+- `input.css` declara los cuatro `@font-face` con `font-display: swap`.
+- Spring las sirve en `/fonts/**`; `BffSecurityConfig` permite **solo GET** (igual que `/css/**`).
+- Las URLs de `/fonts/**` son **estables** (sin hash de contenido): el versionado de Spring solo
+  reescribe referencias en plantillas, no los `url()` dentro del CSS. NGINX cachea `woff2`
+  30 días; al actualizar `@fontsource/poppins` hay que considerar ese plazo.
+- Licencia: Poppins se distribuye bajo **SIL Open Font License 1.1 (OFL)**, que permite
+  uso, embebido y redistribución con la aplicación.
+
+## Formas
+
+| Elemento | Clases |
+|----------|--------|
+| `.btn` | `px-6 py-2 rounded-lg font-semibold` |
+| `.card` | `rounded-xl shadow-lg p-6` (conserva el borde) |
+| `.field-input` | `rounded-lg px-4 py-2` |
+| `.badge` | `rounded-full px-3 py-1 text-sm font-medium` |
+| `.container-page` | `px-4 sm:px-6 lg:px-8` |
 
 ## Cache-busting
 
@@ -98,7 +139,7 @@ que ninguna vista usa todavía.
 |-------|-----|
 | `.btn` + `.btn-primary` / `.btn-secondary` | Botón. Estado deshabilitado con `disabled` o `aria-disabled="true"`. |
 | `.field`, `.field-label`, `.field-input`, `.field-error` | Campo de formulario. `aria-invalid="true"` en el input activa el borde de error. |
-| `.card` | Contenedor con borde y sombra suave. |
+| `.card` | Contenedor con borde, esquinas `rounded-xl` y sombra `shadow-lg`. |
 | `.badge` + `.badge-success` / `-warning` / `-danger` / `-neutral` | Etiqueta de estado; el texto siempre lleva el significado, no solo el color. |
 | `.container-page` | Ancho máximo y gutter horizontal de la página. |
 | `.alert` + `.alert-error` / `-success` / `-info` | Mensaje en bloque; `role="alert"` para errores, `role="status"` para el resto. |

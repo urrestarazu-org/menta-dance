@@ -58,7 +58,7 @@ val tailwindOutputRoot = layout.buildDirectory.dir("generated/tailwind")
 
 val tailwindBuild = tasks.register<NpmTask>("tailwindBuild") {
     group = "build"
-    description = "Compiles and minifies the Tailwind CSS served at /css/app.css."
+    description = "Compiles the Tailwind CSS served at /css/app.css and copies the self-hosted Poppins fonts to /fonts."
     dependsOn(tasks.npmInstall)
     npmCommand = listOf("run")
     args = listOf("build")
@@ -78,10 +78,11 @@ val tailwindBuild = tasks.register<NpmTask>("tailwindBuild") {
         .withPropertyName("templates")
         .withPathSensitivity(PathSensitivity.RELATIVE)
     outputs.dir(tailwindOutputRoot.map { it.dir("static/css") })
+    outputs.dir(tailwindOutputRoot.map { it.dir("static/fonts") })
 }
 
-// The generated root holds static/css/app.css, so it lands on the classpath as
-// static/css/app.css and Spring serves it at /css/app.css.
+// The generated root holds static/css/app.css and static/fonts/*.woff2, so they
+// land on the classpath and Spring serves /css/app.css and /fonts/*.
 sourceSets.main {
     resources.srcDir(files(tailwindOutputRoot).builtBy(tailwindBuild))
 }

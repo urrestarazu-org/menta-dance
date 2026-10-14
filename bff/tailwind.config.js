@@ -52,8 +52,18 @@ module.exports = {
           'warning-surface': rgb('feedback-warning-surface'),
         },
       },
+      // Type scale of the reference project; Tailwind's own sizes are kept.
+      fontSize: {
+        body: '16px',
+        small: '12px',
+        subtitle: '24px',
+        title: '36px',
+      },
       fontFamily: {
+        // Poppins is self-hosted (@font-face in input.css); the system stack
+        // is the fallback while it loads or if it fails.
         sans: [
+          'Poppins',
           'ui-sans-serif',
           'system-ui',
           '-apple-system',
