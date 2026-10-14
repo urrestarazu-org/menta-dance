@@ -26,6 +26,11 @@ readonly API_TASK=":api:app:bootRun"
 readonly BFF_TASK=":bff:bootRun"
 readonly API_HEALTH_URL="http://localhost:8081/actuator/health"
 readonly BFF_HEALTH_URL="http://localhost:8080/actuator/health"
+# Seconds to wait for each service to report healthy. A cold CI runner compiles
+# before booting, so the workflow raises it; local runs keep the default.
+HEALTH_TIMEOUT_SECONDS="${DEV_HEALTH_TIMEOUT:-120}"
+[[ "$HEALTH_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]] || HEALTH_TIMEOUT_SECONDS=120
+readonly HEALTH_TIMEOUT_SECONDS
 
 # Set by launch_service so cmd_start can roll back only processes created by
 # the current invocation. Existing managed or external services remain intact.
@@ -669,7 +674,7 @@ cmd_start() {
     fi
 
     start_phase="api"
-    if ! launch_service "API" "$API_TASK" "$API_HEALTH_URL" "$API_PID_FILE" "$API_LOG" 120; then
+    if ! launch_service "API" "$API_TASK" "$API_HEALTH_URL" "$API_PID_FILE" "$API_LOG" "$HEALTH_TIMEOUT_SECONDS"; then
         api_started=$LAST_SERVICE_STARTED
         trap - INT TERM
         rollback_start false "$api_started" "$infrastructure_started"
@@ -678,7 +683,7 @@ cmd_start() {
     api_started=$LAST_SERVICE_STARTED
 
     start_phase="bff"
-    if ! launch_service "BFF" "$BFF_TASK" "$BFF_HEALTH_URL" "$BFF_PID_FILE" "$BFF_LOG" 120; then
+    if ! launch_service "BFF" "$BFF_TASK" "$BFF_HEALTH_URL" "$BFF_PID_FILE" "$BFF_LOG" "$HEALTH_TIMEOUT_SECONDS"; then
         bff_started=$LAST_SERVICE_STARTED
         trap - INT TERM
         rollback_start "$bff_started" "$api_started" "$infrastructure_started"

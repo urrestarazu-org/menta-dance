@@ -53,3 +53,6 @@ local.properties
 # Frontend (restored/provisioned inside the build stage)
 **/node_modules/
 bff/.gradle/
+
+# BFF accessibility checks (CI-only tooling, not part of any image)
+bff/e2e-a11y/

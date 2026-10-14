@@ -1,0 +1,115 @@
+// Representative journeys from docs/ACCESSIBILITY.md, scanned with axe-core.
+// Requires the stack running with the `demo` profile (public seed data only).
+import { expect, test } from '@playwright/test';
+import { expectNoBlockingViolations } from './axe.js';
+
+// Demo student from the public seed data (docs/26-LOCAL-DEV-SETUP-HOWTO.md).
+// These are documented demo-profile defaults, not real credentials.
+const DEMO_STUDENT = { email: 'alumno@menta.dance', password: 'Alumno123!' };
+
+async function scan(page, path, name) {
+  await page.goto(path);
+  await expect(page.locator('main')).toBeVisible();
+  await expectNoBlockingViolations(page, name);
+}
+
+// First link on a page whose href matches the pattern (demo ids are generated).
+async function firstHref(page, pattern) {
+  const hrefs = await page.locator('a[href]').evaluateAll(
+    (links) => links.map((a) => a.getAttribute('href')),
+  );
+  const found = hrefs.find((href) => pattern.test(href));
+  expect(found, `no link matching ${pattern} (is the demo profile active?)`).toBeTruthy();
+  return found;
+}
+
+test.describe('public pages', () => {
+  test('home', async ({ page }) => {
+    await scan(page, '/', 'home');
+  });
+
+  test('classes catalog', async ({ page }) => {
+    await scan(page, '/classes', 'classes');
+  });
+
+  test('class detail', async ({ page }) => {
+    await page.goto('/classes');
+    await scan(page, await firstHref(page, /^\/classes\/[^/]+$/), 'class detail');
+  });
+
+  test('course detail', async ({ page }) => {
+    await page.goto('/');
+    await scan(page, await firstHref(page, /^\/courses\/[^/]+$/), 'course detail');
+  });
+
+  test('plans', async ({ page }) => {
+    await scan(page, '/plans', 'plans');
+  });
+
+  test('not found', async ({ page }) => {
+    const response = await page.goto('/classes/not-a-uuid');
+    expect(response.status()).toBe(404);
+    await expect(page.locator('main')).toBeVisible();
+    await expectNoBlockingViolations(page, 'not found');
+  });
+});
+
+test.describe('authentication pages', () => {
+  test('login', async ({ page }) => {
+    await scan(page, '/login', 'login');
+  });
+
+  test('login error state', async ({ page }) => {
+    await page.goto('/login');
+    // Unknown account on purpose: never lock or rate-limit a real demo user.
+    await page.getByLabel('Email:').fill('no-such-user@example.invalid');
+    await page.getByLabel('Contraseña:').fill('Wrong-password-1');
+    await page.getByRole('button', { name: 'Iniciar Sesión' }).click();
+    await expect(page.getByRole('alert')).toBeVisible();
+    await expectNoBlockingViolations(page, 'login error');
+  });
+
+  test('register', async ({ page }) => {
+    await scan(page, '/registro', 'register');
+  });
+
+  test('register validation errors', async ({ page }) => {
+    await page.goto('/registro');
+    await page.getByLabel('Email:').fill('not-an-email');
+    await page.getByLabel('Contraseña:').fill('short');
+    await page.getByRole('button', { name: 'Crear cuenta' }).click();
+    await expect(page.locator('[aria-invalid="true"]').first()).toBeVisible();
+    await expectNoBlockingViolations(page, 'register errors');
+  });
+
+  test('password recovery', async ({ page }) => {
+    await scan(page, '/recuperar-contrasena', 'password recovery');
+  });
+
+  test('resend activation', async ({ page }) => {
+    await scan(page, '/reenviar-activacion', 'resend activation');
+  });
+});
+
+test.describe('signed-in student', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/login');
+    await page.getByLabel('Email:').fill(DEMO_STUDENT.email);
+    await page.getByLabel('Contraseña:').fill(DEMO_STUDENT.password);
+    await page.getByRole('button', { name: 'Iniciar Sesión' }).click();
+    await expect(page).toHaveURL(/\/dashboard$/);
+  });
+
+  test('dashboard', async ({ page }) => {
+    await expect(page.locator('main')).toBeVisible();
+    await expectNoBlockingViolations(page, 'dashboard');
+  });
+
+  test('lesson', async ({ page }) => {
+    await page.goto('/');
+    await page.goto(await firstHref(page, /^\/courses\/[^/]+$/));
+    await page.goto(await firstHref(page, /^\/courses\/[^/]+\/lessons\/[^/]+$/));
+    await expect(page.locator('main h1')).toBeVisible();
+    await expectNoBlockingViolations(page, 'lesson');
+  });
+});
