@@ -338,8 +338,10 @@ de la compra de clases:
    clases, comportamiento sin cambios). Para `SUBSCRIPTION`: `COMPLETED` dice "¡Pago confirmado!
    Tu suscripción se está activando." (un pago `COMPLETED` todavía no es una suscripción activa,
    ADR-0039); `PENDING` y desconocidos, "Estamos confirmando tu pago"; `REJECTED`, `CANCELLED` y
-   `EXPIRED` con mensajes propios y enlace a `/plans`. Sin pago en la sesión o con `404`, se
-   muestra un aviso con enlace a `/plans` en lugar de redirigir a `/classes`.
+   `EXPIRED` con mensajes propios y enlace a `/plans`. Si la sesión guarda el tipo
+   `SUBSCRIPTION` y la API responde `404` (o no hay `paymentId`), se muestra un aviso con enlace a
+   `/plans`. Si la sesión no guarda ningún tipo, la ruta se comporta como la de la compra de
+   clases y redirige a `/classes`: un navegador sin estado no se distingue de un comprador de clases.
 
 Desvío de diseño (D1): el `paymentId` viaja en la **sesión del servidor** y no en un parámetro
 `state` firmado de la URL de retorno. Motivo: `billing.mercadopago.checkout-back-url` es una
