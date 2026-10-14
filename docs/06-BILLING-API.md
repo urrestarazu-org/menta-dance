@@ -320,6 +320,18 @@ Un alumno autenticado cotiza y paga desde el BFF (plantillas Thymeleaf, sin Java
    `429` de la API muestra un aviso en español sin tocar la sesión. Las respuestas llevan
    `Cache-Control: no-store`.
 
+   Con el pago `COMPLETED`, la página de clases también lee `fulfillment` (#559) del mismo
+   `GET /payments/{paymentId}`:
+
+   | `fulfillment` | Título | Mensaje | Sesiones |
+   |---|---|---|---|
+   | `EXCEPTION` | "Pago recibido" | "Recibimos tu pago, pero no pudimos asignarte los lugares. El equipo lo está revisando y te va a contactar." | no se consultan |
+   | `RESOLVED` | "Compra resuelta" | "Tu compra ya fue resuelta por el equipo." | no se consultan |
+   | `ASSIGNED`, `PENDING_FULFILLMENT`, `null` o desconocido | "Pago confirmado" (texto de arriba) | según haya o no sesiones | se consultan |
+
+   Ambos avisos son informativos y sin enlace de contacto. Un `fulfillment` ausente, `null` o
+   desconocido se comporta como hasta ahora, y un estado de pago que no es `COMPLETED` lo ignora.
+
 Decisiones:
 
 - **Sesión en vez de `state` firmado.** El BFF ya custodia una sesión de servidor por alumno,
