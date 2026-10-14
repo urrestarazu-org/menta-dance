@@ -1,17 +1,14 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tu cotización - Menta Dance</title>
-</head>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('Tu cotización', ~{::main-content})}">
 <body>
-<nav><a th:href="@{/classes}">Clases presenciales</a></nav>
+<th:block th:fragment="main-content">
+<nav class="mb-6"><a th:href="@{/classes}">Clases presenciales</a></nav>
 
-<h1>Tu cotización</h1>
-<h2 th:text="${quote.courseTitle()}">Clase</h2>
+<h1 class="mb-2">Tu cotización</h1>
+<h2 class="mb-4" th:text="${quote.courseTitle()}">Clase</h2>
 
-<ul>
+<ul class="card mb-6 space-y-2">
     <li th:text="${quote.modalityLabel()}">Mensualidad: todas las clases del mes</li>
     <li th:if="${quote.sessionLabel() != null}">Clase: <span th:text="${quote.sessionLabel()}">lunes 12 de octubre a las 18:00</span></li>
     <li th:text="'Sesiones del período: ' + ${quote.sessionCount()}">Sesiones del período: 4</li>
@@ -19,22 +16,27 @@
     <li>Válida hasta: <span th:text="${quote.expiresLabel()}">sábado 10 de octubre a las 10:00</span></li>
 </ul>
 
-<p th:if="${quote.unavailable()}">Sin lugares disponibles: por ahora no podés pagar esta cotización.</p>
+<div th:if="${quote.unavailable()}" class="mb-6">
+    <div th:replace="~{fragments/components :: alert('error', 'Sin lugares disponibles: por ahora no podés pagar esta cotización.')}"></div>
+</div>
 
-<form th:unless="${quote.unavailable()}" th:action="@{/compras}" method="post">
-    <input type="hidden" name="quoteId" th:value="${quote.quoteId()}">
-    <input type="hidden" name="courseId" th:value="${quote.courseId()}">
-    <input type="hidden" name="idempotencyKey" th:value="${quote.idempotencyKey()}">
-    <button type="submit">Pagar con Mercado Pago</button>
-</form>
+<div th:unless="${quote.unavailable()}" class="mb-6 flex flex-wrap gap-3">
+    <form th:action="@{/compras}" method="post">
+        <input type="hidden" name="quoteId" th:value="${quote.quoteId()}">
+        <input type="hidden" name="courseId" th:value="${quote.courseId()}">
+        <input type="hidden" name="idempotencyKey" th:value="${quote.idempotencyKey()}">
+        <button type="submit" class="btn btn-primary">Pagar con Mercado Pago</button>
+    </form>
 
-<form th:unless="${quote.unavailable()}" th:action="@{/compras/transferencia}" method="post">
-    <input type="hidden" name="quoteId" th:value="${quote.quoteId()}">
-    <input type="hidden" name="courseId" th:value="${quote.courseId()}">
-    <input type="hidden" name="idempotencyKey" th:value="${quote.transferIdempotencyKey()}">
-    <button type="submit">Pagar por transferencia bancaria</button>
-</form>
+    <form th:action="@{/compras/transferencia}" method="post">
+        <input type="hidden" name="quoteId" th:value="${quote.quoteId()}">
+        <input type="hidden" name="courseId" th:value="${quote.courseId()}">
+        <input type="hidden" name="idempotencyKey" th:value="${quote.transferIdempotencyKey()}">
+        <button type="submit" class="btn btn-secondary">Pagar por transferencia bancaria</button>
+    </form>
+</div>
 
 <p><a th:href="@{/classes/{id}(id=${quote.courseId()})}">Volver a la clase</a></p>
+</th:block>
 </body>
 </html>

@@ -72,6 +72,7 @@ final class PurchaseFlowErrors {
             message = AuthFlowErrors.UNAVAILABLE;
         }
         response.setStatus(status.value());
+        model.addAttribute("failure", true);
         return notice(model, title, message, linkHref, linkLabel);
     }
 

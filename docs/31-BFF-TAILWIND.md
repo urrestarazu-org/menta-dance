@@ -3,9 +3,9 @@
 Línea base: [ADR-0024](adr/0024-technology-baseline.md) (Tailwind CSS 3.4.1,
 Node.js 20.11.1, PostCSS 8.4.35, Autoprefixer 10.4.17). Issue origen: #536.
 
-> Estado: **slice 2**. Existen el pipeline, los tokens, los componentes
-> (`@layer components`), el layout común y `login.html` / `register.html` como
-> adoptantes. La migración del resto de las vistas llega en el slice siguiente.
+> Estado: **slice 3b (migración completa)**. Existen el pipeline, los tokens, los
+> componentes (`@layer components`) y el layout común; todas las vistas de
+> `templates/` lo adoptan (cuenta, catálogo, curso, lección, planes, panel y compra).
 
 ## Estructura
 
@@ -163,6 +163,21 @@ Tokens de feedback (contraste AA sobre su superficie): `feedback-error`,
 </body>
 </html>
 ```
+
+### Patrones de las vistas de catálogo y compra
+
+- **Listados** (cursos, clases, planes, sesiones, lecciones): `<ul>` con un `<li class="card">`
+  por elemento; los títulos siguen el orden `h1` → `h2` → `h3` sin saltos.
+- **Estados** con `.badge-*` y siempre con texto: "Ya tenés lugar" (`badge-success`),
+  lugares libres (`badge-neutral`), "Completo" (`badge-warning`), "Gratis" / "Restringida",
+  "Destacado". El color nunca es la única señal.
+- **Avisos**: errores con `alert('error', ...)` (`role="alert"`); información con
+  `alert('info', ...)` (`role="status"`). `purchase-notice.html` usa `error` cuando el
+  controlador marca el atributo de modelo `failure` (`PurchaseFlowErrors.apply`).
+- **Video** (`lesson.html`): el `<video>` se conserva tal cual y solo se envuelve en
+  `<div class="aspect-video ...">` para que sea responsive. No se toca la URL ni la CSP.
+- **Archivos**: el `<input type="file">` lleva `<label for>` e `id` propios (no se anida en el label).
+- Ninguna vista usa `<style>` ni `style=""`; el test `CatalogPurchaseLayoutIntegrationTest` lo verifica.
 
 ### Fragmentos (`fragments/components.html`)
 
