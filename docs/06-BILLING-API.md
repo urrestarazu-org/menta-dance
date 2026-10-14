@@ -309,6 +309,51 @@ Configuración: `billing.mercadopago.checkout-back-url` (variable
 `http://localhost:8080/compras/retorno` (ver `.env.example`). Vacía, la preferencia no lleva
 `back_urls`. En producción debe ser el origen público `https` del BFF.
 
+### Suscribirse a un plan desde la web (BFF, #361)
+
+Un alumno autenticado (rol `STUDENT`) se suscribe desde `/plans`; el flujo reutiliza el retorno
+de la compra de clases:
+
+1. `GET /plans` es público, pero para un alumno consulta `GET /api/v1/billing/subscriptions/me`
+   con su token y muestra el estado: `ACTIVE` ("Ya tenés una suscripción activa hasta el
+   {fecha}", sin botón), `PENDING` (aviso de pago pendiente con el id de la suscripción en un
+   `<code>` para compartir con soporte, sin botón), `EXPIRED` (fecha de vencimiento y botón
+   "Suscribirme") o sin suscripción (`404 NO_SUBSCRIPTION`, botón "Suscribirme"). Cualquier
+   otro resultado de la API (404 con otro código, 401, 429, 5xx, cuerpo incompleto) es un
+   error: ante la duda no se ofrece iniciar un pago. La respuesta personalizada lleva
+   `Cache-Control: no-store`.
+2. Un visitante anónimo ve "Suscribirme" como enlace a `GET /plans/suscribirme`; tras iniciar
+   sesión vuelve a `/plans` (solo esa ruta guarda la petición; cualquier otro login va a
+   `/dashboard`).
+3. `POST /suscripciones` (`planId` e `idempotencyKey`, renderizada una por plan en cada vista)
+   exige CSRF y rol `STUDENT` (otro rol recibe 403). Llama a `POST /api/v1/billing/subscriptions`
+   con `paymentMethod = MERCADO_PAGO`, guarda `paymentId` y el tipo de compra `SUBSCRIPTION` en
+   la sesión del servidor y redirige (302) a `checkoutUrl`, que debe pasar la misma política que
+   la compra de clases.
+4. Errores, sin exponer detalles de la API: `409 SUBSCRIPTION_ALREADY_ACTIVE` ("Ya tenés una
+   suscripción vigente", con la fecha si la API la informa), `409 SUBSCRIPTION_CONFLICT` (copy
+   distinto: la suscripción cambió, volvé a Planes), `422` ("Este plan no está disponible"),
+   `400` y `5xx` con las frases genéricas del BFF.
+5. `GET /compras/retorno` se despacha por el tipo guardado en la sesión (ausente = compra de
+   clases, comportamiento sin cambios). Para `SUBSCRIPTION`: `COMPLETED` dice "¡Pago confirmado!
+   Tu suscripción se está activando." (un pago `COMPLETED` todavía no es una suscripción activa,
+   ADR-0039); `PENDING` y desconocidos, "Estamos confirmando tu pago"; `REJECTED`, `CANCELLED` y
+   `EXPIRED` con mensajes propios y enlace a `/plans`. Sin pago en la sesión o con `404`, se
+   muestra un aviso con enlace a `/plans` en lugar de redirigir a `/classes`.
+
+Desvío de diseño (D1): el `paymentId` viaja en la **sesión del servidor** y no en un parámetro
+`state` firmado de la URL de retorno. Motivo: `billing.mercadopago.checkout-back-url` es una
+propiedad **global** de la API, no una URL por petición, así que el BFF no puede añadirle un
+`state` por checkout; el vínculo "este navegador pagó este id" lo da la sesión y la propiedad
+del pago la verifica la API con `GET /api/v1/billing/payments/{paymentId}` (404 para un pago
+ajeno). El retorno ignora `status`, `payment_id` y cualquier parámetro de la URL. Limitación: un
+solo pago en curso por sesión; el último checkout iniciado (de clase o de suscripción) reemplaza
+al anterior, `paymentId` y tipo incluidos.
+
+Un pago `REJECTED`, `CANCELLED` o `EXPIRED` libera el cupo de suscripción del alumno (la
+suscripción pasa a `CANCELLED`, escenario 6 de US-BILLING-010), así que puede volver a Planes y
+reintentar.
+
 ### Pago por transferencia bancaria desde la web (BFF, #553)
 
 La página de cotización ofrece, junto a "Pagar con Mercado Pago", "Pagar por transferencia bancaria"
