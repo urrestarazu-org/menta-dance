@@ -153,6 +153,15 @@
     @apply block w-full rounded-lg border-brand-deep px-4 py-2 bg-white text-brand-deep;
   }
 
+  /*
+   * @tailwindcss/forms replaces the global focus outline of inputs with a 1px
+   * blue (#2563EB) ring. Restore the brand 2px outline so every control shares
+   * the same, measured focus indicator (WCAG 2.4.7).
+   */
+  .field-input:focus-visible {
+    @apply border-brand-action outline outline-2 outline-offset-2 outline-brand-action ring-0;
+  }
+
   .field-input[aria-invalid='true'] {
     @apply border-2 border-feedback-error;
   }

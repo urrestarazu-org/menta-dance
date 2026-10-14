@@ -3,7 +3,9 @@ package com.menta.bff.infrastructure.integration;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.github.tomakehurst.wiremock.client.WireMock;
@@ -137,12 +139,32 @@ class AccountViewsLayoutIntegrationTest extends BaseIntegrationTest {
         assertCommonLayout(html);
         assertThat(html)
                 .contains("<title>Error - Menta Dance</title>")
-                .contains("Status: 404")
+                .contains("No encontramos la página que buscás.")
+                .contains("Código: 404")
                 .contains("role=\"alert\"")
+                .contains("Volver al inicio")
+                .doesNotContain("Go to Home")
+                .doesNotContain("Not Found")
                 .contains("href=\"/\"")
                 .doesNotContain("secret-internal-detail")
                 .doesNotContain("IllegalStateException")
                 .doesNotContain("at com.menta");
+    }
+
+    @Test
+    @DisplayName("/registro con errores marca cada campo aria-invalid y lo vincula a su mensaje con aria-describedby")
+    void registrationErrorsAreLinkedToTheirFields() throws Exception {
+        String html = mockMvc.perform(post("/registro").with(csrf())
+                        .param("email", "not-an-email").param("password", "x"))
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(html)
+                .containsPattern(
+                        "<input[^>]*id=\"email\"[^>]*aria-invalid=\"true\"[^>]*aria-describedby=\"email-help\"")
+                .containsPattern("<input[^>]*id=\"password\"[^>]*aria-invalid=\"true\""
+                        + "[^>]*aria-describedby=\"password-help\"")
+                .contains("id=\"email-help\"")
+                .contains("id=\"password-help\"");
     }
 
     private static void assertCommonLayout(String html) {
@@ -154,7 +176,7 @@ class AccountViewsLayoutIntegrationTest extends BaseIntegrationTest {
                 .containsPattern("<link[^>]*rel=\"stylesheet\"[^>]*href=\"/css/app-[0-9a-f]{32}\\.css\"")
                 .contains("lang=\"es\"");
         assertThat(html.split("<main", -1)).as("single main landmark").hasSize(2);
-        assertThat(html).contains("<main id=\"main\"");
+        assertThat(html).contains("<main id=\"main\" tabindex=\"-1\"");
     }
 
     private String render(String path) throws Exception {

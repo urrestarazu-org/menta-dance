@@ -28,7 +28,7 @@
         <a th:href="@{/}" class="text-xl font-bold text-brand-deep no-underline">Menta Dance</a>
     </div>
 </header>
-<main id="main" class="container-page flex-1 py-10" th:insert="${content}">Contenido</main>
+<main id="main" tabindex="-1" class="container-page flex-1 py-10 focus:outline-none" th:insert="${content}">Contenido</main>
 <footer class="border-t border-brand-deep/20 bg-white">
     <div class="container-page py-4 text-sm">
         <p>&copy; Menta Dance</p>
