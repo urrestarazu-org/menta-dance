@@ -1,0 +1,72 @@
+/*
+ * Tailwind source for the BFF. The compiled, minified output is generated into
+ * build/generated/tailwind/static/css/app.css and served at /css/app.css.
+ * Never commit generated CSS. See docs/31-BFF-TAILWIND.md.
+ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Design tokens. RGB triplets so Tailwind can apply opacity modifiers
+ * (e.g. bg-brand-deep/90). Use the Tailwind names (brand-deep, ...) in
+ * templates, never the hex values.
+ */
+@layer base {
+  :root {
+    --color-brand-deep: 4 63 46; /* #043F2E */
+    --color-brand-action: 42 111 43; /* #2A6F2B */
+    --color-brand-bright: 120 197 28; /* #78C51C */
+    --color-brand-light: 200 241 105; /* #C8F169 */
+    --color-brand-surface: 238 242 227; /* #EEF2E3 */
+  }
+
+  html {
+    @apply font-sans text-base text-brand-deep antialiased;
+  }
+
+  body {
+    @apply bg-brand-surface leading-relaxed;
+  }
+
+  h1 {
+    @apply text-3xl font-bold tracking-tight;
+  }
+
+  h2 {
+    @apply text-2xl font-semibold;
+  }
+
+  h3 {
+    @apply text-xl font-semibold;
+  }
+
+  a {
+    @apply text-brand-action underline underline-offset-2;
+  }
+
+  /* Visible keyboard focus on every interactive element (WCAG 2.4.7). */
+  :focus-visible {
+    @apply outline outline-2 outline-offset-2 outline-brand-action;
+  }
+
+  /* Respect the user's motion preference (WCAG 2.3.3). */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/*
+ * Reusable components. Intentionally empty in this slice: buttons, cards,
+ * fields and badges land together with the views that use them, so no class
+ * ships unused.
+ */
+@layer components {
+}

@@ -21,6 +21,19 @@ spring:
       max-file-size: 5MB
       max-request-size: 6MB
 
+  # Static assets (#536). NGINX caches *.css for 30 days as immutable, so the
+  # compiled stylesheet is served under a content-hashed URL
+  # (/css/app-<md5>.css): Thymeleaf's @{/css/app.css} is rewritten
+  # automatically and a new build always gets a new URL. In local watch mode
+  # set SPRING_WEB_RESOURCES_CHAIN_CACHE=false so the hash follows the file.
+  web:
+    resources:
+      chain:
+        strategy:
+          content:
+            enabled: true
+            paths: /css/**
+
   # Thymeleaf configuration
   thymeleaf:
     cache: false

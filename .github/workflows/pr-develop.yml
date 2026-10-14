@@ -77,6 +77,12 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      - name: Build BFF stylesheet (npm ci + Tailwind)
+        # Verifica el pipeline de CSS del BFF (ADR-0024, #536) con el lockfile: Gradle descarga
+        # Node 20.11.1, ejecuta `npm ci` y compila Tailwind. Falla rápido si package.json y
+        # package-lock.json divergen. `build` luego encuentra la tarea UP-TO-DATE.
+        run: ./gradlew :bff:tailwindBuild
+
       - name: Run Checkstyle
         # Checkstyle primero: un error de estilo falla en segundos, antes del build completo.
         # Valida estilo de código (Google Java Style). Luego `build` las encuentra UP-TO-DATE.

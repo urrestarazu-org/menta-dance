@@ -56,6 +56,10 @@ public class BffSecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         // Public endpoints - no authentication required
                         .requestMatchers("/login", "/error", "/actuator/health").permitAll()
+                        // Compiled Tailwind stylesheet (#536): the login and onboarding pages
+                        // are anonymous, so their CSS must be too. GET-only and scoped to
+                        // /css/**, so no other static location and no mutating verb opens up.
+                        .requestMatchers(HttpMethod.GET, "/css/**").permitAll()
                         // Course detail is access-agnostic (design D2, #170) — a single
                         // "*" does not cross "/", so future subpaths (e.g. a course's
                         // settings page) stay authenticated by default, and GET-only

@@ -2,6 +2,7 @@
 spring-boot = "3.5.16"
 spring-dependency-management = "1.1.7"
 spotbugs-gradle-plugin = "6.5.12"
+node-gradle-plugin = "7.1.0"
 spotbugs-tool = "4.10.4"
 findsecbugs = "1.14.0"
 checkstyle = "13.8.0"
@@ -40,6 +41,7 @@ hilt-android = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
 spring-dependency-management = { id = "io.spring.dependency-management", version.ref = "spring-dependency-management" }
 spotbugs = { id = "com.github.spotbugs", version.ref = "spotbugs-gradle-plugin" }
+node-gradle = { id = "com.github.node-gradle.node", version.ref = "node-gradle-plugin" }
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity-compose" }
