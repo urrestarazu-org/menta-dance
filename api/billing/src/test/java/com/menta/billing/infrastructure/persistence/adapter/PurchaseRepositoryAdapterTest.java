@@ -104,10 +104,13 @@ class PurchaseRepositoryAdapterTest {
         Purchase purchase = Purchase.pendingFulfillment(PaymentId.generate(), List.of("session-1", "session-2"));
         PurchaseJpaEntity entity = PurchaseJpaMapper.toEntity(purchase);
         when(jpaRepository.findByPaymentId(purchase.getPaymentId().getValue())).thenReturn(Optional.of(entity));
-        when(sessionJpaRepository.findByPurchaseIdOrderByPositionAsc(purchase.getId())).thenReturn(List.of(
-            new PurchaseSessionJpaEntity(purchase.getId(), 0, "session-1"),
-            new PurchaseSessionJpaEntity(purchase.getId(), 1, "session-2")
-        ));
+        // #559: the plain read must use the NON-locking session read — it also runs inside the
+        // student GET's read-only transaction, where a FOR UPDATE query is rejected by MySQL.
+        when(sessionJpaRepository.findByPurchaseIdInOrderByPurchaseIdAscPositionAsc(List.of(purchase.getId())))
+            .thenReturn(List.of(
+                new PurchaseSessionJpaEntity(purchase.getId(), 0, "session-1"),
+                new PurchaseSessionJpaEntity(purchase.getId(), 1, "session-2")
+            ));
 
         Optional<Purchase> found =
             new PurchaseRepositoryAdapter(jpaRepository, sessionJpaRepository, transactionManager())
@@ -115,6 +118,7 @@ class PurchaseRepositoryAdapterTest {
 
         assertThat(found).isPresent();
         assertThat(found.get().getPhysicalSessionIds()).containsExactly("session-1", "session-2");
+        verify(sessionJpaRepository, times(0)).findByPurchaseIdOrderByPositionAsc(any());
     }
 
     @Test

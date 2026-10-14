@@ -327,8 +327,10 @@ public class BillingConfiguration {
      * setting), matching {@code TransactionalGetPaymentUseCase}'s own rationale.
      */
     @Bean
-    public GetPaymentUseCase getPaymentUseCase(PaymentRepository paymentRepository) {
-        return new TransactionalGetPaymentUseCase(new GetPaymentUseCaseImpl(paymentRepository));
+    public GetPaymentUseCase getPaymentUseCase(
+        PaymentRepository paymentRepository, PurchaseRepository purchaseRepository
+    ) {
+        return new TransactionalGetPaymentUseCase(new GetPaymentUseCaseImpl(paymentRepository, purchaseRepository));
     }
 
     /**

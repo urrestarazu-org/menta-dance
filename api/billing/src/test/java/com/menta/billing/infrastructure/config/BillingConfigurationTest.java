@@ -11,6 +11,7 @@ import com.menta.billing.application.port.in.CreateBankTransferSubscriptionUseCa
 import com.menta.billing.application.port.in.CreatePhysicalPurchaseCheckoutUseCase;
 import com.menta.billing.application.port.in.CreateSubscriptionCheckoutUseCase;
 import com.menta.billing.application.port.in.GetCurrentSubscriptionUseCase;
+import com.menta.billing.application.port.in.GetPaymentUseCase;
 import com.menta.billing.application.port.in.GetPlanUseCase;
 import com.menta.billing.application.port.in.GetSubscriptionHistoryUseCase;
 import com.menta.billing.application.port.in.ListPlansUseCase;
@@ -52,6 +53,7 @@ import com.menta.billing.infrastructure.security.RedisBillingPlansRateLimitPort;
 import com.menta.billing.infrastructure.transaction.TransactionalAssignTrialSubscriptionUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalCreatePhysicalPurchaseCheckoutUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalCreateSubscriptionCheckoutUseCase;
+import com.menta.billing.infrastructure.transaction.TransactionalGetPaymentUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalReceiveWebhookUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalResolveExceptionPurchaseUseCase;
 import com.menta.billing.infrastructure.transaction.TransactionalSubmitPaymentProofUseCase;
@@ -149,6 +151,16 @@ class BillingConfigurationTest {
         );
 
         assertThat(useCase).isInstanceOf(TransactionalSubmitPaymentProofUseCase.class);
+    }
+
+    /** #559: the read looks up the Purchase inside the decorator's transaction (MANDATORY repo). */
+    @Test
+    void wires_the_get_payment_use_case_bean_transactionally_with_the_purchase_lookup() {
+        GetPaymentUseCase useCase = configuration.getPaymentUseCase(
+            mock(PaymentRepository.class), mock(PurchaseRepository.class)
+        );
+
+        assertThat(useCase).isInstanceOf(TransactionalGetPaymentUseCase.class);
     }
 
     @Test

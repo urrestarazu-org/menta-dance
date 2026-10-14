@@ -107,7 +107,7 @@ public class PurchaseRepositoryAdapter implements PurchaseRepository {
     @Override
     @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
     public Optional<Purchase> findByPaymentId(PaymentId paymentId) {
-        return jpaRepository.findByPaymentId(paymentId.getValue()).map(this::toDomain);
+        return jpaRepository.findByPaymentId(paymentId.getValue()).map(this::toDomainWithoutLocking);
     }
 
     @Override
@@ -149,6 +149,22 @@ public class PurchaseRepositoryAdapter implements PurchaseRepository {
             sessionsByPurchaseId.getOrDefault(row.purchaseId(), List.of())
         )).toList();
         return new ExceptionPurchasePage(items, page, size, jpaPage.getTotalElements(), jpaPage.getTotalPages());
+    }
+
+    /**
+     * Same mapping as {@link #toDomain} but with the NON-locking session read (#559). The plain
+     * {@link #findByPaymentId(PaymentId)} also runs inside the student status read's READ ONLY
+     * transaction, where MySQL rejects the {@code FOR UPDATE} query. This stays safe under
+     * REPEATABLE READ: the purchase row and its session rows are inserted in one transaction, so a
+     * snapshot that sees the row sees its sessions too.
+     */
+    private Purchase toDomainWithoutLocking(PurchaseJpaEntity entity) {
+        List<String> physicalSessionIds = sessionJpaRepository
+            .findByPurchaseIdInOrderByPurchaseIdAscPositionAsc(List.of(entity.getId()))
+            .stream()
+            .map(PurchaseSessionJpaEntity::getPhysicalSessionId)
+            .toList();
+        return PurchaseJpaMapper.toDomain(entity, physicalSessionIds);
     }
 
     private Purchase toDomain(PurchaseJpaEntity entity) {

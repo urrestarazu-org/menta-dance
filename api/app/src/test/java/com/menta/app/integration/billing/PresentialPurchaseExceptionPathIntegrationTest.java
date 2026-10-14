@@ -14,10 +14,12 @@ import com.menta.auth.application.port.out.TokenBlacklistPort;
 import com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity;
 import com.menta.auth.infrastructure.persistence.repository.OutboxRowJpaRepository;
 import com.menta.billing.application.dto.ProviderPaymentResult;
+import com.menta.billing.application.port.in.GetPaymentUseCase;
 import com.menta.billing.application.port.out.BankTransferRateLimitPort;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.port.out.CourseCatalogPort;
 import com.menta.billing.application.port.out.PaymentProviderPort;
+import com.menta.billing.domain.model.FulfillmentStatus;
 import com.menta.billing.domain.model.Money;
 import com.menta.billing.infrastructure.persistence.entity.PaymentJpaEntity;
 import com.menta.billing.infrastructure.persistence.entity.PhysicalCourseQuoteJpaEntity;
@@ -73,6 +75,7 @@ class PresentialPurchaseExceptionPathIntegrationTest extends AbstractBillingMySq
     @Autowired private PhysicalCourseQuoteJpaRepository quoteRepository;
     @Autowired private WebhookVerificationWorker webhookWorker;
     @Autowired private OutboxReconciliationWorker outboxWorker;
+    @Autowired private GetPaymentUseCase getPaymentUseCase;
 
     @MockitoBean private PaymentProviderPort paymentProviderPort;
     @MockitoBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
@@ -110,9 +113,10 @@ class PresentialPurchaseExceptionPathIntegrationTest extends AbstractBillingMySq
             UUID.randomUUID(), sessionId, UUID.randomUUID(), Instant.now()
         ));
         UUID paymentId = UUID.randomUUID();
+        UUID studentId = UUID.randomUUID();
         String quoteId = seedIndividualQuote(courseId, sessionId).toString();
         paymentRepository.save(new PaymentJpaEntity(
-            paymentId, UUID.randomUUID(), "mp-exception-path", new BigDecimal("100.00"), "ARS",
+            paymentId, studentId, "mp-exception-path", new BigDecimal("100.00"), "ARS",
             "ext-1", "merchant-1", "PHYSICAL", quoteId, "AWAITING_PROVIDER",
             null, null, Instant.now()
         ));
@@ -127,8 +131,13 @@ class PresentialPurchaseExceptionPathIntegrationTest extends AbstractBillingMySq
         ));
 
         webhookWorker.process(inbox);
+        // #559: settled but the outbox has not run yet -> no Purchase row, fulfillment is null.
+        // Goes through the real (transactional) bean, so the MANDATORY purchase lookup is exercised.
+        assertThat(getPaymentUseCase.getPayment(paymentId.toString(), studentId).fulfillment()).isNull();
         OutboxRowJpaEntity event = outboxRepository.findAll().getFirst();
         assertThat(outboxWorker.process(event)).isFalse();
+        assertThat(getPaymentUseCase.getPayment(paymentId.toString(), studentId).fulfillment())
+            .isEqualTo(FulfillmentStatus.EXCEPTION);
 
         assertThat(paymentRepository.findById(paymentId).orElseThrow().getStatusType())
             .isEqualTo("COMPLETED");

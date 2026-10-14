@@ -21,6 +21,7 @@ import com.menta.billing.application.port.in.SubmitPaymentProofUseCase;
 import com.menta.billing.domain.exception.BankTransferRateLimitedException;
 import com.menta.billing.domain.exception.PaymentNotFoundException;
 import com.menta.billing.domain.exception.PaymentProofRejectedException;
+import com.menta.billing.domain.model.FulfillmentStatus;
 import com.menta.billing.domain.model.PaymentId;
 import java.time.Duration;
 import java.time.Instant;
@@ -159,21 +160,39 @@ class PaymentControllerTest {
         Instant createdAt = Instant.parse("2026-09-19T10:00:00Z");
         Instant updatedAt = Instant.parse("2026-09-19T12:00:00Z");
         when(getPaymentUseCase.getPayment(eq(PAYMENT_ID.toString()), eq(USER_ID)))
-            .thenReturn(new PaymentStatusResult("COMPLETED", createdAt, updatedAt));
+            .thenReturn(new PaymentStatusResult("COMPLETED", createdAt, updatedAt, FulfillmentStatus.EXCEPTION));
 
         mockMvc.perform(get("/api/v1/billing/payments/" + PAYMENT_ID)
                 .with(authenticatedAs(USER_ID)))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status", is("COMPLETED")))
             .andExpect(jsonPath("$.createdAt", is("2026-09-19T10:00:00Z")))
-            .andExpect(jsonPath("$.updatedAt", is("2026-09-19T12:00:00Z")));
+            .andExpect(jsonPath("$.updatedAt", is("2026-09-19T12:00:00Z")))
+            .andExpect(jsonPath("$.fulfillment", is("EXCEPTION")))
+            .andExpect(jsonPath("$.reason").doesNotExist())
+            .andExpect(jsonPath("$.resolution").doesNotExist())
+            .andExpect(jsonPath("$.resolutionType").doesNotExist())
+            .andExpect(jsonPath("$.resolutionNote").doesNotExist());
+    }
+
+    /** #559: a payment with no Purchase row serializes {@code fulfillment} as an explicit null. */
+    @Test
+    void a_payment_without_a_purchase_serializes_fulfillment_as_null() throws Exception {
+        when(getPaymentUseCase.getPayment(any(), any()))
+            .thenReturn(new PaymentStatusResult("COMPLETED", Instant.now(), Instant.now(), null));
+
+        mockMvc.perform(get("/api/v1/billing/payments/" + PAYMENT_ID)
+                .with(authenticatedAs(USER_ID)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$", org.hamcrest.Matchers.hasKey("fulfillment")))
+            .andExpect(jsonPath("$.fulfillment").value(org.hamcrest.Matchers.nullValue()));
     }
 
     /** C8: owner comes from the token, never from a query/body parameter — same pattern as the proof upload. */
     @Test
     void the_read_owner_comes_from_the_token() throws Exception {
         when(getPaymentUseCase.getPayment(any(), any()))
-            .thenReturn(new PaymentStatusResult("AWAITING_MANUAL_VERIFICATION", Instant.now(), Instant.now()));
+            .thenReturn(new PaymentStatusResult("AWAITING_MANUAL_VERIFICATION", Instant.now(), Instant.now(), null));
 
         mockMvc.perform(get("/api/v1/billing/payments/" + PAYMENT_ID)
                 .with(authenticatedAs(USER_ID)))
