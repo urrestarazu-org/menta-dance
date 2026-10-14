@@ -37,7 +37,7 @@ Gate for every commit batch: `./gradlew :bff:test :bff:checkstyleMain :bff:check
 - [x] 3.2 GREEN: `PlansController.java`, `templates/plans.html` (notices, `<code>` select-all, voseo copy, CSRF form with key, anonymous link to `/plans/suscribirme`). Commit: `feat(bff): mostrar estado de suscripcion y accion Suscribirme en planes (#361)`.
 - [x] 4.1 RED: integration (`BaseIntegrationTest`) anonymous -> `/plans/suscribirme` -> login -> `/plans`; direct login -> `/dashboard`; no open redirect. Covers: anonymous returns after login.
 - [x] 4.2 GREEN: `SubscriptionController` (`GET /plans/suscribirme` -> `redirect:/plans`), `BffSecurityConfig.java` (scoped `HttpSessionRequestCache`, `defaultSuccessUrl("/dashboard")` without alwaysUse). Commit: `feat(bff): volver a planes tras iniciar sesion (#361)`.
-- [ ] 4.3 (gate run green locally; PR not opened yet) Run gate; open PR1 (base `develop`, `Closes #361` only on PR2; PR1 uses `Refs #361`).
+- [x] 4.3 (reconciled at archive 2026-10-14: gate green locally; PR merged as stacked PRs #570-#575, consolidated in #576, squash 1252223 on develop) Run gate; open PR1 (base `develop`, `Closes #361` only on PR2; PR1 uses `Refs #361`).
 
 ## PR2 - Checkout, return, docs (spec: bff-plan-subscription-checkout)
 
@@ -50,4 +50,4 @@ Gate for every commit batch: `./gradlew :bff:test :bff:checkstyleMain :bff:check
 - [x] 7.3 Regression: run unchanged `PhysicalPurchaseIntegrationTest` + `PhysicalPurchaseControllerTest` (class return, kind absent); no edits to existing assertions.
 - [x] 8.1 Docs: `docs/06-BILLING-API.md` D1 deviation (session `paymentId`, no signed `state`; why); `docs/26-LOCAL-DEV-SETUP-HOWTO.md` paymentId lookup (DB/Bruno) for simulator webhook. Commit: `docs(bff): documentar retorno de suscripcion y desviacion D1 (#361)`.
 - [x] 8.2 VERIFY in API (read-only): a REJECTED payment releases the slot (SubscriptionStatus.CANCELLED, US-BILLING-010 escenario 6). Record finding in design.md Open Questions and PR2 body; if not released, add notice caveat task.
-- [ ] 8.3 (gate run green locally; PR not opened yet) Run gate; open PR2 (base S1 branch, `Closes #361`); update project board fields.
+- [x] 8.3 (reconciled at archive 2026-10-14: gate green locally; PR merged as part of #576, squash 1252223 on develop; #361 closed, Done on the project board) Run gate; open PR2 (base S1 branch, `Closes #361`); update project board fields.
