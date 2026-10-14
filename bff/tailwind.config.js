@@ -8,6 +8,29 @@ module.exports = {
     './src/main/resources/templates/**/*.html',
     './src/main/frontend/js/**/*.js',
   ],
+  // Component library classes (src/main/frontend/css/input.css, @layer
+  // components) ship as a whole: slice 3 migrates the remaining views and
+  // Tailwind would otherwise drop every component no template uses yet.
+  safelist: [
+    'btn',
+    'btn-primary',
+    'btn-secondary',
+    'field',
+    'field-label',
+    'field-input',
+    'field-error',
+    'card',
+    'badge',
+    'badge-success',
+    'badge-warning',
+    'badge-danger',
+    'badge-neutral',
+    'container-page',
+    'alert',
+    'alert-error',
+    'alert-success',
+    'alert-info',
+  ],
   theme: {
     extend: {
       colors: {
@@ -19,6 +42,14 @@ module.exports = {
           bright: rgb('brand-bright'),
           light: rgb('brand-light'),
           surface: rgb('brand-surface'),
+        },
+        feedback: {
+          error: rgb('feedback-error'),
+          'error-surface': rgb('feedback-error-surface'),
+          success: rgb('feedback-success'),
+          'success-surface': rgb('feedback-success-surface'),
+          warning: rgb('feedback-warning'),
+          'warning-surface': rgb('feedback-warning-surface'),
         },
       },
       fontFamily: {

@@ -3,9 +3,9 @@
 Línea base: [ADR-0024](adr/0024-technology-baseline.md) (Tailwind CSS 3.4.1,
 Node.js 20.11.1, PostCSS 8.4.35, Autoprefixer 10.4.17). Issue origen: #536.
 
-> Estado: **slice 1**. Existe el pipeline, los tokens base y `login.html` como
-> primer adoptante. Los componentes (`@layer components`) y la migración del
-> resto de las vistas llegan en los slices siguientes.
+> Estado: **slice 2**. Existen el pipeline, los tokens, los componentes
+> (`@layer components`), el layout común y `login.html` / `register.html` como
+> adoptantes. La migración del resto de las vistas llega en el slice siguiente.
 
 ## Estructura
 
@@ -87,6 +87,55 @@ claro. Texto blanco sobre `brand-action` y `brand-deep` sobre `brand-surface` cu
    complementario pequeño con dueño explícito y una justificación por regla.
 
 Nunca se duplica la misma regla en más de una de las tres capas.
+
+## Componentes
+
+Definidos en `input.css` (`@layer components`) con `@apply` y tokens. Se incluyen
+siempre completos vía `safelist` en `tailwind.config.js`: Tailwind descartaría los
+que ninguna vista usa todavía.
+
+| Clase | Uso |
+|-------|-----|
+| `.btn` + `.btn-primary` / `.btn-secondary` | Botón. Estado deshabilitado con `disabled` o `aria-disabled="true"`. |
+| `.field`, `.field-label`, `.field-input`, `.field-error` | Campo de formulario. `aria-invalid="true"` en el input activa el borde de error. |
+| `.card` | Contenedor con borde y sombra suave. |
+| `.badge` + `.badge-success` / `-warning` / `-danger` / `-neutral` | Etiqueta de estado; el texto siempre lleva el significado, no solo el color. |
+| `.container-page` | Ancho máximo y gutter horizontal de la página. |
+| `.alert` + `.alert-error` / `-success` / `-info` | Mensaje en bloque; `role="alert"` para errores, `role="status"` para el resto. |
+
+Tokens de feedback (contraste AA sobre su superficie): `feedback-error`,
+`feedback-success`, `feedback-warning` y sus variantes `-surface`.
+
+### Layout
+
+`fragments/layout.html :: page(title, content)` aporta `<head>` (con
+`fragments/head :: assets`), enlace "Saltar al contenido", header con la marca,
+`<main id="main">` y footer. El título final es `<title> - Menta Dance`. Uso:
+
+```html
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('Crear cuenta', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+    ...contenido de la página...
+</th:block>
+</body>
+</html>
+```
+
+### Fragmentos (`fragments/components.html`)
+
+| Fragmento | Parámetros | Notas |
+|-----------|------------|-------|
+| `field` | `id, label, type, name, autocomplete, value, hint, autofocus, errors` | `value`, `hint` y `errors` pueden ser `null`; `errors` es una lista (`${#fields.errors('email')}`). Enlaza hint/errores con `aria-describedby`. |
+| `alert` | `kind, message` | `kind`: `error`, `success` o `info`. |
+
+```html
+<div th:replace="~{fragments/components :: field('email', 'Email:', 'email', 'email', 'username', *{email}, null, true, ${#fields.errors('email')})}"></div>
+<div th:replace="~{fragments/components :: alert('error', ${formError})}"></div>
+```
+
+Los tests que recorren enlaces ignoran los anchors internos (`#main`) del skip link.
 
 ## Accesibilidad base
 

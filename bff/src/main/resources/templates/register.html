@@ -1,33 +1,25 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Crear cuenta - Menta Dance</title>
-</head>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('Crear cuenta', ~{::main-content})}">
 <body>
-<h1>Crear cuenta</h1>
+<th:block th:fragment="main-content">
+<div class="mx-auto max-w-sm">
+    <h1 class="mb-6">Crear cuenta</h1>
 
-<p th:if="${formError}" th:text="${formError}" role="alert">Error</p>
-
-<form th:action="@{/registro}" th:object="${form}" method="post" novalidate>
-    <div>
-        <label for="email">Email:</label>
-        <input type="email" id="email" name="email" th:value="*{email}" required autofocus/>
-        <p th:each="message : ${#fields.errors('email')}" th:text="${message}">Error del email</p>
+    <div th:if="${formError}" class="mb-4">
+        <div th:replace="~{fragments/components :: alert('error', ${formError})}"></div>
     </div>
 
-    <div>
-        <label for="password">Contraseña:</label>
-        <input type="password" id="password" name="password" required/>
-        <small>Al menos 8 caracteres, una mayúscula y un número.</small>
-        <p th:each="message : ${#fields.errors('password')}" th:text="${message}">Error de la contraseña</p>
-    </div>
+    <form th:action="@{/registro}" th:object="${form}" method="post" novalidate class="card space-y-4">
+        <div th:replace="~{fragments/components :: field('email', 'Email:', 'email', 'email', 'username', *{email}, null, true, ${#fields.errors('email')})}"></div>
+        <div th:replace="~{fragments/components :: field('password', 'Contraseña:', 'password', 'password', 'new-password', null, 'Al menos 8 caracteres, una mayúscula y un número.', false, ${#fields.errors('password')})}"></div>
 
-    <button type="submit">Crear cuenta</button>
-</form>
+        <button type="submit" class="btn btn-primary w-full">Crear cuenta</button>
+    </form>
 
-<p>¿Ya tenés cuenta? <a th:href="@{/login}">Iniciá sesión</a></p>
-<p>¿No te llegó el correo de activación? <a th:href="@{/reenviar-activacion}">Reenviar activación</a></p>
+    <p class="mt-6">¿Ya tenés cuenta? <a th:href="@{/login}">Iniciá sesión</a></p>
+    <p class="mt-2">¿No te llegó el correo de activación? <a th:href="@{/reenviar-activacion}">Reenviar activación</a></p>
+</div>
+</th:block>
 </body>
 </html>

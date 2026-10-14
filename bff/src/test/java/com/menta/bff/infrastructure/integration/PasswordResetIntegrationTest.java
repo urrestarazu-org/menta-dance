@@ -48,7 +48,7 @@ class PasswordResetIntegrationTest extends BaseIntegrationTest {
     private static final String PASSWORD = "Password1";
     private static final Pattern INPUT = Pattern.compile("<input[^>]*>");
     private static final Pattern NAME = Pattern.compile("name=\"([^\"]+)\"");
-    private static final Pattern HREF = Pattern.compile("<a[^>]*href=\"([^\"]+)\"");
+    private static final Pattern HREF = Pattern.compile("<a[^>]*href=\"([^\"#][^\"]*)\"");
     private static final String LOGIN_REDIRECT = "http://localhost/login";
 
     private static void stub(String url, int status, String body) {

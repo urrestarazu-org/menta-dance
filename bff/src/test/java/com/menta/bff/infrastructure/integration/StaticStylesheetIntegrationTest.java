@@ -34,7 +34,32 @@ class StaticStylesheetIntegrationTest extends BaseIntegrationTest {
                 .getResponse()
                 .getContentAsString();
 
-        assertThat(css).contains(".bg-brand-action").contains("--color-brand-deep");
+        assertThat(css).contains(".btn-primary").contains("--color-brand-deep");
+    }
+
+    @Test
+    @DisplayName("la hoja compilada incluye las clases de componente de @layer components")
+    void compiledStylesheetContainsComponentClasses() throws Exception {
+        String css = mockMvc.perform(get("/css/app.css"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertThat(css)
+                .contains(".btn-primary")
+                .contains(".btn-secondary")
+                .contains(".field-input")
+                .contains(".field-error")
+                .contains(".card")
+                .contains(".badge-success")
+                .contains(".badge-warning")
+                .contains(".badge-danger")
+                .contains(".badge-neutral")
+                .contains(".container-page")
+                .contains(".alert-error")
+                .contains(".alert-success")
+                .contains(".alert-info");
     }
 
     @Test
