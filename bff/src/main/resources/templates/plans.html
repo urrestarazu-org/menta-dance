@@ -5,6 +5,19 @@
 <th:block th:fragment="main-content">
 <h1 class="mb-6">Planes</h1>
 
+<div class="mb-6" th:if="${offer.notice().name() != 'NONE'}">
+    <th:block th:if="${offer.notice().name() == 'ACTIVE'}">
+        <div th:replace="~{fragments/components :: alert('info', 'Ya tenés una suscripción activa hasta el ' + ${offer.endDateLabel()} + '.')}"></div>
+    </th:block>
+    <th:block th:if="${offer.notice().name() == 'EXPIRED'}">
+        <div th:replace="~{fragments/components :: alert('info', 'Tu suscripción anterior venció el ' + ${offer.endDateLabel()} + '.')}"></div>
+    </th:block>
+    <div th:if="${offer.notice().name() == 'PENDING'}" class="alert alert-info" role="status">
+        <p>Tenés una suscripción con el pago pendiente. Si necesitás ayuda, compartí este código:
+            <code class="select-all" th:text="${offer.subscriptionId()}">00000000-0000-0000-0000-000000000000</code></p>
+    </div>
+</div>
+
 <ul class="grid gap-4 sm:grid-cols-2">
     <li th:each="plan : ${plans}" class="card">
         <h2 th:text="${plan.name()}">Plan</h2>
@@ -15,6 +28,14 @@
             ·
             <span th:text="'cada ' + ${plan.durationDays()} + (${plan.durationDays()} == 1 ? ' día' : ' días')">cada 30 días</span>
         </p>
+        <p class="mt-4" th:if="${offer.action().name() == 'LOGIN'}">
+            <a class="btn btn-primary" th:href="@{/plans/suscribirme}">Suscribirme</a>
+        </p>
+        <form class="mt-4" th:if="${offer.action().name() == 'SUBSCRIBE'}" th:action="@{/suscripciones}" method="post">
+            <input type="hidden" name="planId" th:value="${plan.id()}">
+            <input type="hidden" name="idempotencyKey" th:value="${offer.idempotencyKeyByPlanId().get(plan.id())}">
+            <button type="submit" class="btn btn-primary">Suscribirme</button>
+        </form>
     </li>
 </ul>
 </th:block>
