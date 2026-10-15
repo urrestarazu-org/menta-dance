@@ -36,5 +36,12 @@ public enum Reason {
     COVERAGE_CHANGED,
 
     /** Target session is no longer {@code SCHEDULED} (cancelled, archived). */
-    TARGET_NOT_SCHEDULED
+    TARGET_NOT_SCHEDULED,
+
+    /**
+     * The purchase's quote no longer exists when the payment is confirmed, so the assignment type cannot be
+     * resolved. Distinct from {@link #TARGET_NOT_SCHEDULED}: the session may be perfectly schedulable, the
+     * purchase data needed to assign it is what is missing.
+     */
+    QUOTE_NOT_FOUND
 }

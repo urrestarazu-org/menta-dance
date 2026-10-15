@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -33,6 +34,7 @@ import com.menta.billing.domain.model.PaymentId;
 import com.menta.billing.domain.model.PaymentStatus;
 import com.menta.billing.domain.model.PaymentTarget;
 import com.menta.billing.domain.model.PhysicalCourseQuote;
+import com.menta.billing.domain.model.Purchase;
 import com.menta.billing.domain.model.PurchaseType;
 import com.menta.billing.domain.model.QuoteAvailability;
 import com.menta.billing.domain.model.Reason;
@@ -57,6 +59,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 
 /**
  * RED-GREEN: every assertion references the new
@@ -492,26 +495,86 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
     }
 
     @Nested
-    @DisplayName("Spec scenario: quote reference resolves to no quote — EXCEPTION / TARGET_NOT_SCHEDULED")
+    @DisplayName("Spec scenario: quote reference resolves to no quote — EXCEPTION / QUOTE_NOT_FOUND")
     class QuoteMissing {
 
+        private Purchase purchaseAt(FulfillmentStatus status) {
+            Purchase purchase = mock(Purchase.class);
+            when(purchase.getStatus()).thenReturn(status);
+            return purchase;
+        }
+
         @Test
-        void purchase_built_directly_at_exception_when_quote_cannot_be_resolved() throws Exception {
+        void legacy_path_without_hold_creates_the_exception_purchase_then_publishes_quote_not_found()
+            throws Exception {
             when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
             when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.empty());
+            Purchase purchase = purchaseAt(FulfillmentStatus.EXCEPTION);
+            when(purchaseCreationFromEventPort.createPurchaseFromPaymentEvent(any(), eq(List.<String>of())))
+                .thenReturn(purchase);
+
+            handler.handle(rowWithPayload(payload()));
+
+            InOrder inOrder = inOrder(purchaseCreationFromEventPort, publishPaymentFulfillmentFailedAdapter);
+            inOrder.verify(purchaseCreationFromEventPort)
+                .createPurchaseFromPaymentEvent(any(), eq(List.<String>of()));
+            inOrder.verify(publishPaymentFulfillmentFailedAdapter).publish(
+                eq(PAYMENT_ID), eq(STUDENT_UUID), eq(Reason.QUOTE_NOT_FOUND)
+            );
+            verify(publishPaymentFulfillmentFailedAdapter, times(1)).publish(any(), any(), any());
+            verify(physicalCapacityHoldPort, never()).convertAll(any(), any());
+            verify(markExceptionAdapter, never()).markException(any(), any());
+            verify(physicalCapacityAssignmentPort, never()).assignAll(any());
+            verify(markAssignedAdapter, never()).markAssigned(any());
+        }
+
+        @Test
+        void missing_quote_with_a_hold_present_never_converts_the_hold() throws Exception {
+            when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
+            when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.empty());
+            when(physicalCapacityHoldPort.convertAll(any(), any()))
+                .thenReturn(new ConvertOutcome.Converted(List.of(SESSION_UUID)));
+            Purchase purchase = purchaseAt(FulfillmentStatus.EXCEPTION);
+            when(purchaseCreationFromEventPort.createPurchaseFromPaymentEvent(any(), any()))
+                .thenReturn(purchase);
+
+            handler.handle(rowWithPayload(payload()));
+
+            verify(physicalCapacityHoldPort, never()).convertAll(any(), any());
+            verify(publishPaymentFulfillmentFailedAdapter, times(1)).publish(
+                eq(PAYMENT_ID), eq(STUDENT_UUID), eq(Reason.QUOTE_NOT_FOUND)
+            );
+            verify(markAssignedAdapter, never()).markAssigned(any());
+        }
+
+        @Test
+        void redelivery_of_an_already_assigned_purchase_publishes_nothing_and_does_not_throw() throws Exception {
+            when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
+            when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.empty());
+            Purchase purchase = purchaseAt(FulfillmentStatus.ASSIGNED);
+            when(purchaseCreationFromEventPort.createPurchaseFromPaymentEvent(any(), any()))
+                .thenReturn(purchase);
+
+            assertThatCode(() -> handler.handle(rowWithPayload(payload()))).doesNotThrowAnyException();
+
+            verify(publishPaymentFulfillmentFailedAdapter, never()).publish(any(), any(), any());
+            verify(physicalCapacityHoldPort, never()).convertAll(any(), any());
+        }
+
+        @Test
+        void redelivery_after_a_crash_between_create_and_publish_publishes_once() throws Exception {
+            when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
+            when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.empty());
+            // The existing EXCEPTION purchase is returned by the idempotent create.
+            Purchase purchase = purchaseAt(FulfillmentStatus.EXCEPTION);
+            when(purchaseCreationFromEventPort.createPurchaseFromPaymentEvent(any(), any()))
+                .thenReturn(purchase);
 
             handler.handle(rowWithPayload(payload()));
 
             verify(publishPaymentFulfillmentFailedAdapter, times(1)).publish(
-                eq(PAYMENT_ID), eq(STUDENT_UUID), eq(Reason.TARGET_NOT_SCHEDULED)
+                eq(PAYMENT_ID), eq(STUDENT_UUID), eq(Reason.QUOTE_NOT_FOUND)
             );
-            // #238: Purchase row built directly at EXCEPTION; markException
-            // is never called for this site.
-            verify(purchaseCreationFromEventPort, times(1))
-                .createPurchaseFromPaymentEvent(any(), eq(List.<String>of()));
-            verify(markExceptionAdapter, never()).markException(any(), any());
-            verify(physicalCapacityAssignmentPort, never()).assignAll(any());
-            verify(markAssignedAdapter, never()).markAssigned(any());
         }
     }
 
@@ -522,6 +585,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
         @Test
         void converted_hold_creates_purchase_and_marks_assigned_without_recomputation() throws Exception {
             when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
+            when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.of(individualQuote(SESSION_ID_STR)));
             when(physicalCapacityHoldPort.convertAll(PAYMENT_UUID, STUDENT_UUID))
                 .thenReturn(new ConvertOutcome.Converted(List.of(SESSION_UUID, SESSION_UUID_2)));
 
@@ -531,7 +595,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
                 any(), eq(List.of(SESSION_UUID.toString(), SESSION_UUID_2.toString()))
             );
             verify(markAssignedAdapter, times(1)).markAssigned(PAYMENT_ID);
-            verify(quoteRepository, never()).findById(any());
+            verify(quoteRepository, times(1)).findById(any());
             verify(courseAvailabilityPort, never()).findScheduledSessions(any(), any(), any());
             verify(physicalCapacityAssignmentPort, never()).assignAll(any());
             verify(markExceptionAdapter, never()).markException(any(), any());
@@ -540,6 +604,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
         @Test
         void already_converted_hold_is_a_redelivery_noop() throws Exception {
             when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
+            when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.of(individualQuote(SESSION_ID_STR)));
             when(physicalCapacityHoldPort.convertAll(PAYMENT_UUID, STUDENT_UUID))
                 .thenReturn(ConvertOutcome.AlreadyConverted.INSTANCE);
 
@@ -547,7 +612,6 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
 
             verify(purchaseCreationFromEventPort, never()).createPurchaseFromPaymentEvent(any(), any());
             verify(markAssignedAdapter, never()).markAssigned(any());
-            verify(quoteRepository, never()).findById(any());
             verify(physicalCapacityAssignmentPort, never()).assignAll(any());
             verify(markExceptionAdapter, never()).markException(any(), any());
         }
@@ -555,6 +619,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
         @Test
         void capacity_trip_during_conversion_routes_to_exception_with_zero_assignment_rows() throws Exception {
             when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
+            when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.of(individualQuote(SESSION_ID_STR)));
             when(physicalCapacityHoldPort.convertAll(PAYMENT_UUID, STUDENT_UUID))
                 .thenThrow(new CapacityBelowAssignedException());
             when(physicalCapacityHoldPort.heldSessionIds(PAYMENT_UUID)).thenReturn(List.of(SESSION_UUID));
@@ -572,7 +637,6 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
                 eq(PAYMENT_ID), eq(Reason.CAPACITY_BELOW_ASSIGNED)
             );
             verify(markAssignedAdapter, never()).markAssigned(any());
-            verify(quoteRepository, never()).findById(any());
             verify(physicalCapacityAssignmentPort, never()).assignAll(any());
         }
 
@@ -580,6 +644,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
         void redelivery_after_conversion_capacity_trip_on_an_already_ASSIGNED_purchase_is_a_safe_noop()
             throws Exception {
             when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
+            when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.of(individualQuote(SESSION_ID_STR)));
             when(physicalCapacityHoldPort.convertAll(PAYMENT_UUID, STUDENT_UUID))
                 .thenThrow(new CapacityBelowAssignedException());
             when(physicalCapacityHoldPort.heldSessionIds(PAYMENT_UUID)).thenReturn(List.of(SESSION_UUID));
@@ -594,6 +659,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
         void student_already_assigned_during_conversion_routes_to_exception_with_the_already_assigned_reason()
             throws Exception {
             when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
+            when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.of(individualQuote(SESSION_ID_STR)));
             when(physicalCapacityHoldPort.convertAll(PAYMENT_UUID, STUDENT_UUID))
                 .thenThrow(new StudentAlreadyAssignedException());
             when(physicalCapacityHoldPort.heldSessionIds(PAYMENT_UUID)).thenReturn(List.of(SESSION_UUID));
@@ -612,6 +678,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
         void redelivery_after_a_student_already_assigned_conversion_on_an_ASSIGNED_purchase_is_a_safe_noop()
             throws Exception {
             when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
+            when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.of(individualQuote(SESSION_ID_STR)));
             when(physicalCapacityHoldPort.convertAll(PAYMENT_UUID, STUDENT_UUID))
                 .thenThrow(new StudentAlreadyAssignedException());
             when(physicalCapacityHoldPort.heldSessionIds(PAYMENT_UUID)).thenReturn(List.of(SESSION_UUID));
@@ -630,6 +697,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
         @Test
         void no_hold_for_the_payment_still_resolves_coverage_and_calls_assignAll() throws Exception {
             when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
+            when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.of(individualQuote(SESSION_ID_STR)));
             when(physicalCapacityHoldPort.convertAll(PAYMENT_UUID, STUDENT_UUID))
                 .thenReturn(ConvertOutcome.HoldNotFound.INSTANCE);
             when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.of(individualQuote(SESSION_ID_STR)));
@@ -677,15 +745,18 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
         }
 
         @Test
-        @DisplayName("publish fires at site 202 (quote not found) with the resolved userId")
+        @DisplayName("publish fires for a missing quote with QUOTE_NOT_FOUND and the resolved userId")
         void publish_fires_when_quote_not_found() throws Exception {
             when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
             when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.empty());
+            Purchase exception = mock(Purchase.class);
+            when(exception.getStatus()).thenReturn(FulfillmentStatus.EXCEPTION);
+            when(purchaseCreationFromEventPort.createPurchaseFromPaymentEvent(any(), any())).thenReturn(exception);
 
             handler.handle(rowWithPayload(payload()));
 
             verify(publishPaymentFulfillmentFailedAdapter, times(1)).publish(
-                eq(PAYMENT_ID), eq(STUDENT_UUID), eq(Reason.TARGET_NOT_SCHEDULED)
+                eq(PAYMENT_ID), eq(STUDENT_UUID), eq(Reason.QUOTE_NOT_FOUND)
             );
         }
 

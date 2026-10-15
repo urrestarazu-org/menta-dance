@@ -182,7 +182,7 @@ class PublishPhysicalPaymentCompletedUseCaseTest {
                 .extracting(Enum::name)
                 .containsExactlyInAnyOrder(
                     "CAPACITY_BELOW_ASSIGNED", "ALREADY_ASSIGNED", "UNIQUE_COLLISION",
-                    "HOLD_EXPIRED", "COVERAGE_CHANGED", "TARGET_NOT_SCHEDULED"
+                    "HOLD_EXPIRED", "COVERAGE_CHANGED", "TARGET_NOT_SCHEDULED", "QUOTE_NOT_FOUND"
                 );
         }
     }

@@ -13,9 +13,11 @@ import com.menta.billing.application.port.out.PaymentRepository;
 import com.menta.billing.application.port.out.PhysicalCourseAvailabilityPort;
 import com.menta.billing.application.port.out.PhysicalCourseQuoteRepository;
 import com.menta.billing.application.usecase.CoveragePlanner;
+import com.menta.billing.domain.model.FulfillmentStatus;
 import com.menta.billing.domain.model.Payment;
 import com.menta.billing.domain.model.PaymentTarget;
 import com.menta.billing.domain.model.PhysicalCourseQuote;
+import com.menta.billing.domain.model.Purchase;
 import com.menta.billing.domain.model.PurchaseType;
 import com.menta.billing.domain.model.Reason;
 import com.menta.physical.domain.exception.CapacityBelowAssignedException;
@@ -59,7 +61,7 @@ import org.springframework.stereotype.Component;
  * <h2>Purchase row built directly at EXCEPTION (#238)</h2>
  *
  * <p>Each of the three sites where no {@code Purchase} row can ever exist yet
- * (this branch, the quote-not-found branch, and the coverage-shortfall
+ * (this branch, the quote-not-found branch (create first, publish only if EXCEPTION), and the coverage-shortfall
  * branch) calls {@link PurchaseCreationFromEventPort#createPurchaseFromPaymentEvent}
  * with an EMPTY session list and never calls {@code markException} afterward.
  * {@code createPurchaseFromPaymentEvent} only needs {@code payload} — never
@@ -90,11 +92,14 @@ import org.springframework.stereotype.Component;
  * eligible-session set: {@code MONTHLY} counts forward from {@code
  * confirmedAt} for {@code scheduledSessionCount} sessions (design A4);
  * {@code INDIVIDUAL} is exactly the quote's own {@code selectedSessionId}.
- * A quote reference that resolves to nothing, or a coverage shortfall that
- * persists past {@link CoveragePlanner#COVERAGE_LOOKAHEAD}, routes through
- * {@link MarkPurchaseExceptionAdapter} with {@link
- * Reason#TARGET_NOT_SCHEDULED} — no {@code Purchase} row and no partial
- * assignment are ever written for an unfillable set. Once the eligible set
+ * The quote is resolved ONCE, BEFORE the hold conversion, so a missing
+ * quote is detected before any hold row is converted. A quote
+ * reference that resolves to nothing (with or without a hold) publishes
+ * {@link Reason#QUOTE_NOT_FOUND} only when the created/returned purchase is
+ * {@code EXCEPTION}; a coverage shortfall that persists past {@link
+ * CoveragePlanner#COVERAGE_LOOKAHEAD} keeps {@link
+ * Reason#TARGET_NOT_SCHEDULED} — no partial assignment is ever written for
+ * an unfillable set. Once the eligible set
  * is known, one ordered, all-or-nothing {@link
  * MultiSessionCapacityAssignmentCommand} is built and claimed via {@link
  * PhysicalCapacityAssignmentAdapter#assignAll} (design A3).</p>
@@ -175,6 +180,25 @@ public class PhysicalCapacityAssignmentOutboxEventHandler implements OutboxEvent
             return;
         }
 
+        // Resolve the quote ONCE, before any conversion, so a missing quote is
+        // detected here, before any hold row is converted.
+        String quoteId = physical.quoteId();
+        PhysicalCourseQuote quote = quoteRepository.findById(quoteId).orElse(null);
+        if (quote == null) {
+            log.warn(
+                "PhysicalCourseQuote {} not found for outbox event paymentId={}; routing to EXCEPTION",
+                quoteId, payload.paymentId()
+            );
+            // Create-then-publish: createPurchaseFromPaymentEvent returns the existing Purchase on
+            // redelivery. Only a Purchase that is (still) EXCEPTION is notified; one that was already
+            // converted (ASSIGNED) by an earlier delivery must not raise a false failure.
+            Purchase purchase = purchaseCreationFromEventPort.createPurchaseFromPaymentEvent(payload, List.of());
+            if (purchase != null && purchase.getStatus() == FulfillmentStatus.EXCEPTION) {
+                publishPaymentFulfillmentFailed(paymentId, payment.getUserId(), Reason.QUOTE_NOT_FOUND);
+            }
+            return;
+        }
+
         // Design B3/step 8: try converting an existing hold first. A held
         // purchase never recomputes via CoveragePlanner (D7) — the hold's
         // own session set, fixed atomically at checkout time, is the source
@@ -212,20 +236,6 @@ public class PhysicalCapacityAssignmentOutboxEventHandler implements OutboxEvent
         }
         // ConvertOutcome.HoldNotFound falls through to the legacy path
         // below, byte-identical to before this change (rollback layer 1).
-
-        String quoteId = physical.quoteId();
-        PhysicalCourseQuote quote = quoteRepository.findById(quoteId).orElse(null);
-        if (quote == null) {
-            log.warn(
-                "PhysicalCourseQuote {} not found for outbox event paymentId={}; routing to EXCEPTION",
-                quoteId, payload.paymentId()
-            );
-            publishPaymentFulfillmentFailed(paymentId, payment.getUserId(), Reason.TARGET_NOT_SCHEDULED);
-            // #238: see the class javadoc on the payment==null branch above —
-            // same direct-to-EXCEPTION construction, no markException call.
-            purchaseCreationFromEventPort.createPurchaseFromPaymentEvent(payload, List.of());
-            return;
-        }
 
         // INDIVIDUAL's selected session was picked once at quote time and may
         // legitimately sit before confirmedAt (e.g. a same-day class bought
