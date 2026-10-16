@@ -6,9 +6,9 @@ Bitácora operativa del cloud server de DonWeb donde se despliega Menta Dance (#
 
 - **Servidor**: `Menta-server-cloud`, Ubuntu 24.04, 2 vCPU, 4 GB de RAM, ~35 GB de SSD, Docker preinstalado
 - **IP y puerto SSH**: se consultan en el panel de DonWeb (Cloud Servers → Software y Accesos); no se guardan en el repositorio
-- **Dominios**: `mentadance.com` (BFF) y `api.mentadance.com` (API, pendiente de crear en el DNS); ambos apuntan al VPS
+- **Dominios**: `mentadance.com` (BFF, con `www` como CNAME) y `api.mentadance.com` (API); los tres nombres apuntan al VPS
 - **Vencimiento del plan**: 2027-10-22
-- **Estado**: proyecto anterior retirado (#595); aprovisionamiento pendiente (#590)
+- **Estado**: proyecto anterior retirado (#595); aprovisionamiento en curso (#590), certificado emitido (vence 2027-01-14); renovación por `webroot` decidida (se aplica en #589); `/opt/menta/.env` creado vacío; pendiente revisar el firewall y endurecer SSH
 
 > No se registran contraseñas, claves ni tokens en este documento.
 
@@ -97,14 +97,203 @@ Resultado: en el servidor, 80/443/3306 libres; desde afuera, `nc` al 3306 dio `O
 
 ---
 
-## 2. Hallazgos de seguridad pendientes (#590)
+## 2. Aprovisionamiento (#590)
 
-Detectados en el inventario, se corrigen al aprovisionar el servidor:
+Pasos ejecutados el 2026-10-16 en el VPS. `<PUERTO-SSH>` es el puerto SSH no estándar que figura en el panel de DonWeb.
 
-- SSH escucha en el puerto 22 y en uno no estándar; dejar solo el no estándar.
-- Acceso como `root` con contraseña; pasar a un usuario `deploy` con clave SSH.
-- Verificar en el panel de DonWeb que el firewall bloquee 3306 desde afuera.
-- Postfix escucha en el puerto 25 sin necesidad conocida.
+### 2.1 Swap de 2 GB
+
+Con 4 GB de RAM y límites de memoria por contenedor, el swap evita que el kernel mate procesos ante un pico.
+
+```bash
+fallocate -l 2G /swapfile
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+free -h
+```
+
+### 2.2 Actualizaciones de seguridad automáticas
+
+Ya venían activas; se verificó en lugar de reinstalar: `apt-daily-upgrade.timer` habilitado y `/etc/apt/apt.conf.d/20auto-upgrades` con las dos opciones en `"1"`.
+
+```bash
+systemctl is-enabled apt-daily-upgrade.timer
+cat /etc/apt/apt.conf.d/20auto-upgrades
+```
+
+> `systemctl status unattended-upgrades` puede mostrar el servicio inactivo y aun así funcionar: lo dispara el timer.
+
+### 2.3 Rotación de logs de Docker
+
+Sin límite, el driver `json-file` crece sin tope y puede llenar el disco.
+
+`/etc/docker/daemon.json`:
+
+```json
+{
+  "log-driver": "json-file",
+  "log-opts": { "max-size": "10m", "max-file": "3" }
+}
+```
+
+```bash
+python3 -m json.tool /etc/docker/daemon.json && sudo systemctl restart docker
+docker info --format '{{.LoggingDriver}}'
+```
+
+Solo aplica a contenedores creados después del reinicio.
+
+### 2.4 fail2ban sobre el puerto SSH real
+
+El jail por defecto vigila el puerto 22, que ya no se usa; hay que fijar el puerto real. `/etc/fail2ban/jail.local`:
+
+```ini
+[DEFAULT]
+bantime = 3600
+findtime = 600
+maxretry = 3
+banaction = nftables
+
+[sshd]
+enabled = true
+port = <PUERTO-SSH>
+```
+
+```bash
+sudo systemctl restart fail2ban
+sudo fail2ban-client status sshd
+```
+
+La tabla `inet f2b-table` de nftables se crea recién con el primer bloqueo, así que `nft list ruleset` aparece vacío antes. Prueba de que funciona, con una IP de documentación (RFC 5737):
+
+```bash
+sudo fail2ban-client set sshd banip 192.0.2.1
+sudo nft list ruleset | grep 192.0.2.1
+sudo fail2ban-client set sshd unbanip 192.0.2.1
+```
+
+### 2.5 Usuarios y accesos
+
+| Usuario | Para qué | Acceso |
+|---|---|---|
+| `mentaadmin` | Administración | `sudo`, clave SSH del operador |
+| `deploy` | Despliegue y operación de Compose | Clave SSH dedicada, contraseña bloqueada (`passwd -l`), grupo `docker`, dueño de `/opt/menta` |
+
+La clave de despliegue se generó en la máquina del operador, fuera del servidor, y solo su parte pública está en `/home/deploy/.ssh/authorized_keys`. El grupo `docker` equivale a `root`: cualquiera que entre como `deploy` controla el servidor.
+
+Cuando exista `deploy.sh` (#593), la entrada de esa clave se restringe a un comando forzado:
+
+```
+command="/opt/menta/deploy.sh",no-pty,no-port-forwarding ssh-ed25519 AAAA...
+```
+
+Directorios de trabajo:
+
+```bash
+install -d -o deploy -g deploy /opt/menta /opt/menta/backups
+```
+
+Archivo de secretos de la aplicación (ADR-0045). Se crea vacío, con permisos restringidos; su contenido lo define #589 con el `.env.production.example`:
+
+```bash
+sudo install -m 600 -o deploy -g deploy /dev/null /opt/menta/.env
+ls -l /opt/menta/.env
+# -rw------- 1 deploy deploy 0 ... /opt/menta/.env
+```
+
+Se eliminaron de `deploy` los restos de un uso anterior (`repos`, `.gradle`, `.cache`, `.docker` y una clave privada vieja). Conviene quitar también la deploy key vieja del repositorio `menta-virtual-academy` en GitHub.
+
+### 2.6 DNS
+
+En la zona `mentadance.com` del panel de DonWeb: registros `A` de `mentadance.com` y `api.mentadance.com` al VPS, y `www` como CNAME a `mentadance.com`. Verificación desde la máquina del operador:
+
+```bash
+dig +short mentadance.com A
+dig +short www.mentadance.com
+dig +short api.mentadance.com A
+```
+
+### 2.7 Lectura de imágenes desde GHCR
+
+Token de GitHub **classic** con scope `read:packages` únicamente y vencimiento de 1 año, creado en *Settings → Developer settings → Personal access tokens → Tokens (classic)* con el nombre `menta-vps-ghcr-pull`. Como `deploy`:
+
+```bash
+read -rs -p "Token: " T; echo
+echo "$T" | docker login ghcr.io -u <USUARIO-GITHUB> --password-stdin
+unset T
+chmod 600 ~/.docker/config.json
+```
+
+`read -rs` evita que el token quede en pantalla o en el historial. Docker avisa que guarda la credencial sin cifrar en `config.json`; es esperado y queda protegido por `chmod 600`. Resultado: `Login Succeeded`. El token vence a los 12 meses: renovarlo antes y repetir el login.
+
+### 2.8 Certbot (Let's Encrypt)
+
+Con el puerto 80 libre se usa el modo `standalone`. Instalación y prueba en seco, que valida el desafío HTTP sin emitir nada:
+
+```bash
+sudo apt install -y certbot
+sudo certbot certonly --standalone --dry-run \
+  -d mentadance.com -d www.mentadance.com -d api.mentadance.com \
+  --register-unsafely-without-email --agree-tos
+```
+
+Resultado: `The dry run was successful`. El paquete instala `certbot.timer`, que renueva solo.
+
+Emisión real (2026-10-16), con el mismo comando sin `--dry-run` y con el correo del operador para los avisos de vencimiento:
+
+```bash
+sudo certbot certonly --standalone \
+  -d mentadance.com -d www.mentadance.com -d api.mentadance.com
+```
+
+Resultado: un único certificado para los tres nombres, en `/etc/letsencrypt/live/mentadance.com/` (`fullchain.pem` y `privkey.pem`), que vence el 2027-01-14. Let's Encrypt emite certificados de 90 días; el temporizador intenta renovar cuando faltan 30.
+
+Verificación de la renovación automática (2026-10-16, con el puerto 80 todavía libre):
+
+```bash
+sudo certbot renew --dry-run
+systemctl list-timers certbot.timer
+```
+
+Resultado: `all simulated renewals succeeded` y `certbot.timer` programado.
+
+#### Renovación: pasar de `standalone` a `webroot` (decidido, se aplica en #589)
+
+`--standalone` levanta su propio servidor en el puerto 80, que a partir del primer despliegue ocupa Nginx, así que la renovación fallaría en silencio hacia el 2026-12-15 (30 días antes del vencimiento). Se eligió `webroot` porque no corta el servicio; la alternativa, `standalone` con hooks que detienen y levantan Nginx, cuesta unos segundos de caída por renovación.
+
+Dos cambios sobre lo que hoy trae el repositorio:
+
+- El Nginx de `infra/docker/nginx/` espera los certificados como archivos en `./certs/`. En producción se monta `/etc/letsencrypt` en solo lectura y `ssl_certificate` apunta a `/etc/letsencrypt/live/mentadance.com/`, así Nginx siempre ve el certificado vigente sin copiarlo.
+- El Nginx de producción tiene que servir el desafío ACME.
+
+Pasos, todos parte de los criterios de #589:
+
+1. En el `nginx.conf` de producción, una `location /.well-known/acme-challenge/` que sirva una carpeta del host.
+2. En el compose de producción, montar esa carpeta y `/etc/letsencrypt` (solo lectura) en el contenedor de Nginx.
+3. En el VPS, **antes del primer despliegue con Nginx**:
+
+   ```bash
+   sudo certbot reconfigure --cert-name mentadance.com \
+     --authenticator webroot --webroot-path <CARPETA-ACME>
+   ```
+
+4. Hook de renovación que recargue Nginx, en `/etc/letsencrypt/renewal-hooks/deploy/`:
+
+   ```bash
+   docker exec <contenedor-nginx> nginx -s reload
+   ```
+
+5. Con Nginx corriendo, `sudo certbot renew --dry-run` tiene que pasar.
+
+Si el paso 3 se omite, la renovación falla sin avisar hasta que el certificado vence. Lo único que se entera es el correo de avisos de Let's Encrypt.
+
+### Decisiones diferidas
+
+- **SSH con `root` y contraseña**: sigue permitido. Endurecerlo (solo clave, sin `root`) está pendiente. En `/etc/ssh/sshd_config.d/` hay `custom.conf` (`PermitRootLogin yes`) y `80-step.conf` (origen desconocido, parece Smallstep); se revisan antes de cambiar nada. Mientras tanto fail2ban es la defensa.
+- **Postfix** escucha en el puerto 25 sin necesidad conocida; el firewall del panel lo bloquea desde afuera. Revisar el MX del dominio antes de quitarlo.
+- **Puerto 22**: sigue escuchando en el servidor, pero el firewall del panel lo bloquea.
 
 ### Firewall del panel de DonWeb (revisado 2026-10-16)
 
@@ -123,6 +312,6 @@ El puerto 22 y el 3306 no tienen regla, es decir, están bloqueados desde afuera
 
 Se completa a medida que avancen los sub-issues de #380:
 
-- Aprovisionamiento: usuario `deploy`, firewall, Docker y TLS (#590).
+- Aprovisionamiento (#590): pasar la renovación del certificado a `webroot` (se aplica con #589, antes del primer despliegue de Nginx), contenido de `/opt/menta/.env` (el archivo ya existe, vacío; lo define #589), revisión de las reglas 587 y UDP 443 del firewall, y endurecimiento de SSH.
 - Despliegue y rollback (#593).
 - Backups y monitoreo (#594).
