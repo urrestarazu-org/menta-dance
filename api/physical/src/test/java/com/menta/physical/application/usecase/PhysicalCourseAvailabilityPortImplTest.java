@@ -20,6 +20,7 @@ import com.menta.physical.domain.model.PhysicalCourse;
 import com.menta.physical.domain.model.PhysicalCourseLevel;
 import com.menta.physical.domain.model.PhysicalSession;
 import com.menta.physical.domain.model.SessionId;
+import com.menta.shared.physical.AssignmentType;
 import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalTime;
@@ -252,7 +253,8 @@ class PhysicalCourseAvailabilityPortImplTest {
     }
 
     private static AssignedSessionRow assigned(UUID sessionId, UUID courseId) {
-        return new AssignedSessionRow(sessionId, courseId, "Salsa inicial", "María García", Instant.EPOCH);
+        return new AssignedSessionRow(sessionId, courseId, "Salsa inicial", "María García", Instant.EPOCH,
+            AssignmentType.MONTHLY);
     }
 
     private static PhysicalCourse activeCourse(CourseId id) {

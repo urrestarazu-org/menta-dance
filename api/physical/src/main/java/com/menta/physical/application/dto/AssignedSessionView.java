@@ -1,5 +1,6 @@
 package com.menta.physical.application.dto;
 
+import com.menta.shared.physical.AssignmentType;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -9,6 +10,7 @@ import java.util.UUID;
  */
 public record AssignedSessionView(
     UUID sessionId, UUID courseId, String courseName, String instructorName,
-    Instant scheduledAt, boolean checkInOpen
+    Instant scheduledAt, boolean checkInOpen,
+    AssignmentType assignmentType
 ) {
 }

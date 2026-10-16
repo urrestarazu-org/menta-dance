@@ -91,9 +91,13 @@ class PhysicalCapacityAssignmentRepositoryAdapterTest {
     }
 
     private void seedAssignment(UUID sessionId, UUID studentId) {
+        seedAssignment(sessionId, studentId, AssignmentType.MONTHLY);
+    }
+
+    private void seedAssignment(UUID sessionId, UUID studentId, AssignmentType type) {
         assignmentRepository.saveAndFlush(
             new PhysicalCapacityAssignmentJpaEntity(
-                UUID.randomUUID(), sessionId, studentId, AssignmentType.MONTHLY, Instant.now()
+                UUID.randomUUID(), sessionId, studentId, type, Instant.now()
             )
         );
     }
@@ -235,6 +239,24 @@ class PhysicalCapacityAssignmentRepositoryAdapterTest {
         assertThat(rows.get(0).courseName()).isEqualTo("Salsa Intermedio");
         assertThat(rows.get(0).instructorName()).isEqualTo("Ana Perez");
         assertThat(rows.get(0).scheduledAt()).isEqualTo(Instant.parse("2026-10-10T03:00:00Z"));
+    }
+
+    @Test
+    void assigned_sessions_carry_the_persisted_assignment_type_of_each_row() {
+        UUID studentId = UUID.randomUUID();
+        UUID courseId = seedCourse(UUID.randomUUID());
+        UUID monthly = seedSession(courseId, Instant.parse("2026-10-15T22:00:00Z"));
+        UUID individual = seedSession(courseId, Instant.parse("2026-10-16T22:00:00Z"));
+        seedAssignment(monthly, studentId, AssignmentType.MONTHLY);
+        seedAssignment(individual, studentId, AssignmentType.INDIVIDUAL);
+
+        List<AssignedSessionRow> rows = adapter().findAssignedSessions(
+            studentId, Instant.parse("2026-10-10T03:00:00Z"), Instant.parse("2026-12-09T03:00:00Z")
+        );
+
+        assertThat(rows).extracting(AssignedSessionRow::sessionId).containsExactly(monthly, individual);
+        assertThat(rows).extracting(AssignedSessionRow::assignmentType)
+            .containsExactly(AssignmentType.MONTHLY, AssignmentType.INDIVIDUAL);
     }
 
     @Test

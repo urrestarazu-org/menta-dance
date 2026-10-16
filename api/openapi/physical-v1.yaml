@@ -1379,7 +1379,7 @@ components:
 
     MySessionResponse:
       type: object
-      required: [sessionId, courseId, courseName, instructorName, scheduledAt, checkInOpen]
+      required: [sessionId, courseId, courseName, instructorName, scheduledAt, checkInOpen, assignmentType]
       properties:
         sessionId:
           type: string
@@ -1399,6 +1399,13 @@ components:
         checkInOpen:
           type: boolean
           description: Si la ventana de check-in está abierta en el instante de la consulta.
+        assignmentType:
+          type: string
+          enum: [MONTHLY, INDIVIDUAL]
+          description: |
+            Cómo obtuvo el alumno el lugar: `MONTHLY` (plan mensual) o `INDIVIDUAL`
+            (compra de una sola clase). Nunca es nulo; las asignaciones previas a la
+            migración V26 figuran como `MONTHLY`.
 
     AttendanceHistoryResponse:
       type: object

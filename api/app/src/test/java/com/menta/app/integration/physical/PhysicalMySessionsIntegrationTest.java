@@ -142,9 +142,13 @@ class PhysicalMySessionsIntegrationTest extends AbstractPhysicalMySqlIntegration
     }
 
     private void seedAssignment(UUID sessionId, UUID studentId) {
+        seedAssignment(sessionId, studentId, AssignmentType.MONTHLY);
+    }
+
+    private void seedAssignment(UUID sessionId, UUID studentId, AssignmentType type) {
         assignmentRepository.save(
             new PhysicalCapacityAssignmentJpaEntity(
-                UUID.randomUUID(), sessionId, studentId, AssignmentType.MONTHLY, Instant.now()
+                UUID.randomUUID(), sessionId, studentId, type, Instant.now()
             )
         );
     }
@@ -206,6 +210,51 @@ class PhysicalMySessionsIntegrationTest extends AbstractPhysicalMySqlIntegration
         assertThat(sessions).extracting(item -> item.get("checkInOpen")).containsExactly(false, false);
         assertThat(Instant.parse((String) response.getBody().get("from"))).isBefore(Instant.now());
         assertThat(Instant.parse((String) response.getBody().get("to"))).isAfter(now.plus(59, ChronoUnit.DAYS));
+    }
+
+    @Test
+    void a_monthly_session_exposes_assignment_type_monthly() {
+        UUID student = issueUser(Role.STUDENT);
+        seedAssignment(seedSession(
+            seedCourse("Salsa Intermedio"), Instant.now().plus(2, ChronoUnit.DAYS), "SCHEDULED"),
+            student, AssignmentType.MONTHLY);
+
+        @SuppressWarnings("rawtypes")
+        ResponseEntity<Map> response = getAs(student, Role.STUDENT, URL);
+
+        assertThat(sessionsOf(response)).singleElement()
+            .satisfies(item -> assertThat(item.get("assignmentType")).isEqualTo("MONTHLY"));
+    }
+
+    @Test
+    void an_individual_session_exposes_assignment_type_individual() {
+        UUID student = issueUser(Role.STUDENT);
+        seedAssignment(seedSession(
+            seedCourse("Salsa Intermedio"), Instant.now().plus(2, ChronoUnit.DAYS), "SCHEDULED"),
+            student, AssignmentType.INDIVIDUAL);
+
+        @SuppressWarnings("rawtypes")
+        ResponseEntity<Map> response = getAs(student, Role.STUDENT, URL);
+
+        assertThat(sessionsOf(response)).singleElement()
+            .satisfies(item -> assertThat(item.get("assignmentType")).isEqualTo("INDIVIDUAL"));
+    }
+
+    @Test
+    void mixed_types_in_one_response_each_keep_their_own_type() {
+        UUID student = issueUser(Role.STUDENT);
+        UUID course = seedCourse("Salsa Intermedio");
+        Instant now = Instant.now();
+        seedAssignment(seedSession(course, now.plus(2, ChronoUnit.DAYS), "SCHEDULED"),
+            student, AssignmentType.MONTHLY);
+        seedAssignment(seedSession(course, now.plus(3, ChronoUnit.DAYS), "SCHEDULED"),
+            student, AssignmentType.INDIVIDUAL);
+
+        @SuppressWarnings("rawtypes")
+        ResponseEntity<Map> response = getAs(student, Role.STUDENT, URL);
+
+        assertThat(sessionsOf(response)).extracting(item -> item.get("assignmentType"))
+            .containsExactly("MONTHLY", "INDIVIDUAL");
     }
 
     @Test

@@ -41,8 +41,10 @@ después (60 por defecto), y se devuelve como `from`/`to`. Los holds técnicos, 
 pagos pendientes y las sesiones canceladas no aparecen. Cada ítem incluye
 `sessionId` (el que recibe `access-qr`), curso, instructor, `scheduledAt` y
 `checkInOpen`, calculado con la misma ventana que el check-in. No acepta
-`studentId`. La sala y el tipo de asignación (mensual/individual) no se
-exponen: el modelo actual no los persiste.
+`studentId`. Cada ítem incluye además `assignmentType` (`MONTHLY` o
+`INDIVIDUAL`, nunca nulo), que indica si el lugar proviene del plan mensual o de
+una compra individual; las asignaciones anteriores a la migración V26 figuran
+como `MONTHLY`. La sala no se expone: el modelo actual no la persiste.
 
 Una **sesión** es la ocurrencia concreta de un curso: fecha, hora y cupo. No
 existen endpoints de reserva ni listas de espera: un pago confirmado crea las

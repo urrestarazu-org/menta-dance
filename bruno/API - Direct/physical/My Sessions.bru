@@ -20,11 +20,14 @@ docs {
   `from`/`to`. Holds and pending purchases do not count; cancelled sessions are
   omitted. `checkInOpen` tells whether the check-in window is open right now,
   so the `sessionId` can be fed straight to `POST .../access-qr`.
+  `assignmentType` (MONTHLY or INDIVIDUAL) says how the seat was obtained; it is
+  never null.
   The student id always comes from the Bearer token — there is no studentId
   parameter. Use a STUDENT token.
 
   Success contract: 200 with { from, to, sessions[] } where each session is
-  { sessionId, courseId, courseName, instructorName, scheduledAt, checkInOpen }.
+  { sessionId, courseId, courseName, instructorName, scheduledAt, checkInOpen,
+  assignmentType }.
   Error contract: 401 when unauthenticated; 403 for any role other than
   STUDENT.
 }

@@ -60,7 +60,7 @@ public class PhysicalCapacityAssignmentRepositoryAdapter
     private static AssignedSessionRow toAssignedSessionRow(AssignedSessionRowProjection row) {
         return new AssignedSessionRow(
             row.getSessionId(), row.getCourseId(), row.getCourseName(), row.getInstructorName(),
-            row.getScheduledAt()
+            row.getScheduledAt(), row.getAssignmentType()
         );
     }
 

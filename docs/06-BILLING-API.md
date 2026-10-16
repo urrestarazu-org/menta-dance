@@ -285,7 +285,8 @@ Un alumno autenticado cotiza y paga desde el BFF (plantillas Thymeleaf, sin Java
    (se cruza por `sessionId`); esas sesiones no ofrecen "Cotizar solo esta clase". La ventana de
    sesiones la decide la API (`physical.sessions.window-days`, 60 días por defecto), el visitante
    anónimo no dispara la consulta y, si falla (timeout, `401`, `403`, `404`, `5xx` o cuerpo
-   ilegible), la ficha se muestra igual sin marcas.
+   ilegible), la ficha se muestra igual sin marcas. Esa respuesta ahora incluye `assignmentType`
+   (`MONTHLY` o `INDIVIDUAL`) por sesión; la web todavía no lo consume.
 2. `POST /classes/{courseId}/cotizar` (`purchaseType`, y `selectedSessionId` si es individual)
    llama a `POST /api/v1/billing/physical/quotes` con el access token del alumno y muestra la
    cotización: importe en formato es-AR, sesiones del período y vencimiento (zona
