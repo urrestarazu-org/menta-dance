@@ -8,7 +8,7 @@ Bitácora operativa del cloud server de DonWeb donde se despliega Menta Dance (#
 - **IP y puerto SSH**: se consultan en el panel de DonWeb (Cloud Servers → Software y Accesos); no se guardan en el repositorio
 - **Dominios**: `mentadance.com` (BFF, con `www` como CNAME) y `api.mentadance.com` (API); los tres nombres apuntan al VPS
 - **Vencimiento del plan**: 2027-10-22
-- **Estado**: proyecto anterior retirado (#595); aprovisionamiento en curso (#590), certificado emitido (vence 2027-01-14); renovación por `webroot` decidida (se aplica en #589); `/opt/menta/.env` creado vacío; pendiente revisar el firewall y endurecer SSH
+- **Estado**: proyecto anterior retirado (#595); aprovisionamiento en curso (#590), certificado emitido (vence 2027-01-14); renovación por `webroot` decidida (se aplica en #589); `/opt/menta/.env` creado vacío; firewall del panel revisado; pendiente endurecer SSH
 
 > No se registran contraseñas, claves ni tokens en este documento.
 
@@ -297,21 +297,28 @@ Si el paso 3 se omite, la renovación falla sin avisar hasta que el certificado 
 
 ### Firewall del panel de DonWeb (revisado 2026-10-16)
 
-El firewall virtual del panel bloquea por defecto todo el tráfico entrante. Reglas existentes, todas para `0.0.0.0/0` y `::/0`:
+El firewall virtual del panel bloquea por defecto todo el tráfico entrante. Reglas vigentes, todas para `0.0.0.0/0` y `::/0`:
 
 | Puerto | Protocolo | Observación |
 |---|---|---|
-| 80, 443 | TCP | Web y HTTPS. Necesarios |
-| puerto SSH no estándar | TCP | SSH. Se podría limitar a la IP del operador |
-| 587 | TCP | Sin servicio conocido escuchando; revisar si se puede cerrar |
-| 443 | UDP | Solo útil con HTTP/3 en Nginx; revisar si se puede cerrar |
+| 80, 443 | TCP | Web, HTTPS y desafío ACME de Let's Encrypt. Necesarios |
+| puerto SSH no estándar | TCP | SSH. Abierto a todos (ver abajo) |
 
-El puerto 22 y el 3306 no tienen regla, es decir, están bloqueados desde afuera (se verificó el 3306 con `nc`). Las reglas tienen un año de antigüedad y se revisan en #590.
+Se cerraron el 2026-10-16 dos reglas heredadas del proyecto anterior:
+
+| Puerto | Protocolo | Motivo |
+|---|---|---|
+| 587 | TCP | Nada escuchaba en ese puerto. El correo saliente de la app no necesita una regla de entrada |
+| 443 | UDP | Solo sirve para HTTP/3 y la configuración de Nginx no lo usa |
+
+El puerto 22 y el 3306 no tienen regla, es decir, están bloqueados desde afuera (se verificó el 3306 con `nc`).
+
+**SSH no se limita a la IP del operador.** El despliegue (#593) entra por SSH desde GitHub Actions y los runners hospedados de GitHub usan IPs que cambian y no se pueden fijar. El puerto se protege con clave SSH, el comando forzado del usuario `deploy` y fail2ban. Limitarlo exigiría un runner propio o abrir y cerrar la regla en cada despliegue.
 
 ## 3. Pendiente de documentar
 
 Se completa a medida que avancen los sub-issues de #380:
 
-- Aprovisionamiento (#590): pasar la renovación del certificado a `webroot` (se aplica con #589, antes del primer despliegue de Nginx), contenido de `/opt/menta/.env` (el archivo ya existe, vacío; lo define #589), revisión de las reglas 587 y UDP 443 del firewall, y endurecimiento de SSH.
+- Aprovisionamiento (#590): pasar la renovación del certificado a `webroot` (se aplica con #589, antes del primer despliegue de Nginx), contenido de `/opt/menta/.env` (el archivo ya existe, vacío; lo define #589) y endurecimiento de SSH.
 - Despliegue y rollback (#593).
 - Backups y monitoreo (#594).
