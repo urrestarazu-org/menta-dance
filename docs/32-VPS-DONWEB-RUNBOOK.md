@@ -8,7 +8,7 @@ Bitácora operativa del cloud server de DonWeb donde se despliega Menta Dance (#
 - **IP y puerto SSH**: se consultan en el panel de DonWeb (Cloud Servers → Software y Accesos); no se guardan en el repositorio
 - **Dominios**: `mentadance.com` (BFF, con `www` como CNAME) y `api.mentadance.com` (API); los tres nombres apuntan al VPS
 - **Vencimiento del plan**: 2027-10-22
-- **Estado**: proyecto anterior retirado (#595); aprovisionamiento en curso (#590), certificado emitido (vence 2027-01-14); renovación por `webroot` decidida (se aplica en #589); `/opt/menta/.env` creado vacío; firewall del panel revisado; pendiente endurecer SSH
+- **Estado**: proyecto anterior retirado (#595); aprovisionamiento en curso (#590), certificado emitido (vence 2027-01-14); renovación por `webroot` decidida (se aplica en #589); `/opt/menta/.env` creado vacío; firewall del panel revisado; endurecimiento de SSH descartado por ahora
 
 > No se registran contraseñas, claves ni tokens en este documento.
 
@@ -291,7 +291,7 @@ Si el paso 3 se omite, la renovación falla sin avisar hasta que el certificado 
 
 ### Decisiones diferidas
 
-- **SSH con `root` y contraseña**: sigue permitido. Endurecerlo (solo clave, sin `root`) está pendiente. En `/etc/ssh/sshd_config.d/` hay `custom.conf` (`PermitRootLogin yes`) y `80-step.conf` (origen desconocido, parece Smallstep); se revisan antes de cambiar nada. Mientras tanto fail2ban es la defensa.
+- **SSH con `root` y contraseña** (descartado por ahora, decisión del operador del 2026-10-16): sigue permitido. Endurecerlo (solo clave, sin `root`, puerto 22 cerrado en `sshd`) se descarta porque un error de configuración puede dejar al operador sin acceso al servidor, y el beneficio para esta demo no lo justifica. La defensa es fail2ban y el firewall del panel, que bloquea el 22. Si se retoma: en `/etc/ssh/sshd_config.d/` hay `custom.conf` (`PermitRootLogin yes`) y `80-step.conf` (origen desconocido, parece Smallstep); SSH arranca por socket de systemd (`ssh.socket`), así que cerrar el 22 se hace ahí y no en `sshd_config`. Antes de cambiar nada, confirmar el acceso con clave de `mentaadmin` desde otra terminal y mantener abierta la sesión actual.
 - **Postfix** escucha en el puerto 25 sin necesidad conocida; el firewall del panel lo bloquea desde afuera. Revisar el MX del dominio antes de quitarlo.
 - **Puerto 22**: sigue escuchando en el servidor, pero el firewall del panel lo bloquea.
 
@@ -319,6 +319,6 @@ El puerto 22 y el 3306 no tienen regla, es decir, están bloqueados desde afuera
 
 Se completa a medida que avancen los sub-issues de #380:
 
-- Aprovisionamiento (#590): pasar la renovación del certificado a `webroot` (se aplica con #589, antes del primer despliegue de Nginx), contenido de `/opt/menta/.env` (el archivo ya existe, vacío; lo define #589) y endurecimiento de SSH.
+- Aprovisionamiento (#590): pasar la renovación del certificado a `webroot` (se aplica con #589, antes del primer despliegue de Nginx), contenido de `/opt/menta/.env` (el archivo ya existe, vacío; lo define #589). El endurecimiento de SSH quedó descartado (ver "Decisiones diferidas").
 - Despliegue y rollback (#593).
 - Backups y monitoreo (#594).
