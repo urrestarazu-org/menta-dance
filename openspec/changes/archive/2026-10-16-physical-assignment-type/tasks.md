@@ -90,7 +90,7 @@ Order is sequential: the command and port signature changes break compilation ac
 - [x] 7.2 Full tests: `./gradlew :api:shared:test :api:physical:test :api:billing:test :api:app:test`.
 - [x] 7.3 Style: `./gradlew :api:shared:checkstyleMain :api:shared:checkstyleTest :api:physical:checkstyleMain :api:physical:checkstyleTest :api:billing:checkstyleMain :api:billing:checkstyleTest :api:app:checkstyleMain :api:app:checkstyleTest` (adjust to the task names the build exposes).
 - [x] 7.4 Coverage: `./gradlew :api:shared:jacocoTestCoverageVerification :api:physical:jacocoTestCoverageVerification :api:billing:jacocoTestCoverageVerification :api:app:jacocoTestCoverageVerification` (per-layer ratchets: physical 95/90, billing 85/85, shared/app flat floors).
-- [x] 7.5 Final size check: delivered as three PRs within the 800-line budget: #583 (182 changed lines), #584 (775), and this read-side PR (221).
+- [x] 7.5 Final size check: delivered as three PRs within the 800-line budget: #583 (182 changed lines), #584 (775), and #585 (223).
 
 ## Dependencies and parallelism
 
