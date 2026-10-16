@@ -14,6 +14,7 @@ import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.menta.physical.application.dto.AssignedSessionView;
 import com.menta.physical.application.dto.AssignedSessionsView;
 import com.menta.physical.application.port.in.ListMyPhysicalSessionsUseCase;
+import com.menta.shared.physical.AssignmentType;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -58,7 +59,7 @@ class PhysicalMySessionsControllerTest {
             Instant.parse("2026-10-10T03:00:00Z"), Instant.parse("2026-12-09T03:00:00Z"),
             List.of(new AssignedSessionView(
                 SESSION_ID, COURSE_ID, "Salsa Intermedio", "Ana Perez",
-                Instant.parse("2026-10-10T22:00:00Z"), true
+                Instant.parse("2026-10-10T22:00:00Z"), true, AssignmentType.INDIVIDUAL
             ))
         ));
 
@@ -72,7 +73,8 @@ class PhysicalMySessionsControllerTest {
             .andExpect(jsonPath("$.sessions[0].courseName", is("Salsa Intermedio")))
             .andExpect(jsonPath("$.sessions[0].instructorName", is("Ana Perez")))
             .andExpect(jsonPath("$.sessions[0].scheduledAt", is("2026-10-10T22:00:00Z")))
-            .andExpect(jsonPath("$.sessions[0].checkInOpen", is(true)));
+            .andExpect(jsonPath("$.sessions[0].checkInOpen", is(true)))
+            .andExpect(jsonPath("$.sessions[0].assignmentType", is("INDIVIDUAL")));
     }
 
     /** The subject is always the token's: a {@code studentId} query parameter has nowhere to go. */

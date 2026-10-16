@@ -91,7 +91,10 @@ como valor y se validan mediante puertos; no se crean FKs ni `JOIN`s cruzados.
 - `physical_courses`, `physical_sessions`, `physical_capacity_assignments`,
   `physical_attendance` y holds técnicos internos.
 - Una sesión contiene fecha/hora/capacidad. Una asignación confirmada ocupa un
-  cupo y es única por alumno+sesión.
+  cupo y es única por alumno+sesión. Lleva `assignment_type` (`MONTHLY` o
+  `INDIVIDUAL`, `NOT NULL` sin valor por defecto desde V26; las filas previas
+  quedaron como `MONTHLY`) y `GET /physical/sessions/me` lo expone como
+  `assignmentType`.
 - `physical_qr_devices` guarda `secret_hash`, `expires_at`, `revoked_at`,
   `rotated_at` y auditoría; nunca un secreto en claro.
 - `physical_outbox`: eventos durables de asignación y asistencia; mismo patrón

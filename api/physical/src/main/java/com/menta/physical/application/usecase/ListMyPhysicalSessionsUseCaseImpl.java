@@ -57,7 +57,7 @@ public class ListMyPhysicalSessionsUseCaseImpl implements ListMyPhysicalSessions
     private AssignedSessionView toView(AssignedSessionRow row, Instant now) {
         return new AssignedSessionView(
             row.sessionId(), row.courseId(), row.courseName(), row.instructorName(), row.scheduledAt(),
-            checkInWindow.isOpenAt(row.scheduledAt(), now)
+            checkInWindow.isOpenAt(row.scheduledAt(), now), row.assignmentType()
         );
     }
 }

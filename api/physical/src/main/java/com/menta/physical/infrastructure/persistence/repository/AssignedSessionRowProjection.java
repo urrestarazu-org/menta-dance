@@ -1,5 +1,6 @@
 package com.menta.physical.infrastructure.persistence.repository;
 
+import com.menta.shared.physical.AssignmentType;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -24,4 +25,7 @@ public interface AssignedSessionRowProjection {
 
     /** Instant at which the session starts. */
     Instant getScheduledAt();
+
+    /** How the student obtained the assignment (monthly plan or individual purchase). */
+    AssignmentType getAssignmentType();
 }

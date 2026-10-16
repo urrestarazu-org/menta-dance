@@ -12,6 +12,7 @@ import com.menta.physical.application.dto.AssignedSessionsView;
 import com.menta.physical.application.port.out.Clock;
 import com.menta.physical.application.port.out.PhysicalCapacityAssignmentRepository;
 import com.menta.physical.domain.model.CheckInWindow;
+import com.menta.shared.physical.AssignmentType;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -36,9 +37,26 @@ class ListMyPhysicalSessionsUseCaseImplTest {
     }
 
     private static AssignedSessionRow row(String scheduledAt) {
+        return row(scheduledAt, AssignmentType.MONTHLY);
+    }
+
+    private static AssignedSessionRow row(String scheduledAt, AssignmentType type) {
         return new AssignedSessionRow(
-            UUID.randomUUID(), UUID.randomUUID(), "Salsa Intermedio", "Ana Perez", Instant.parse(scheduledAt)
+            UUID.randomUUID(), UUID.randomUUID(), "Salsa Intermedio", "Ana Perez", Instant.parse(scheduledAt), type
         );
+    }
+
+    @Test
+    void carries_each_rows_assignment_type_into_its_view() {
+        AssignedSessionRow monthly = row("2026-10-11T22:00:00Z", AssignmentType.MONTHLY);
+        AssignedSessionRow individual = row("2026-10-12T22:00:00Z", AssignmentType.INDIVIDUAL);
+        when(repository.findAssignedSessions(STUDENT_ID, Instant.parse("2026-10-10T03:00:00Z"),
+            Instant.parse("2026-12-09T03:00:00Z"))).thenReturn(List.of(monthly, individual));
+
+        List<AssignedSessionView> sessions = useCase(60).list(STUDENT_ID).sessions();
+
+        assertThat(sessions).extracting(AssignedSessionView::assignmentType)
+            .containsExactly(AssignmentType.MONTHLY, AssignmentType.INDIVIDUAL);
     }
 
     @Test

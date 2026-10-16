@@ -123,7 +123,8 @@ public interface PhysicalCapacityAssignmentJpaRepository
      */
     @Query(
         "SELECT s.id AS sessionId, c.id AS courseId, c.title AS courseName, "
-            + "c.professorName AS instructorName, s.scheduledAt AS scheduledAt "
+            + "c.professorName AS instructorName, s.scheduledAt AS scheduledAt, "
+            + "asg.assignmentType AS assignmentType "
             + "FROM PhysicalCapacityAssignmentJpaEntity asg "
             + "JOIN PhysicalSessionJpaEntity s ON s.id = asg.sessionId "
             + "JOIN PhysicalCourseJpaEntity c ON c.id = s.courseId "
