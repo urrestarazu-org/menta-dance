@@ -140,6 +140,23 @@ jobs:
             nginx:1.27.3-alpine \
             nginx -t
 
+      - name: Validate production nginx config (Let's Encrypt, webroot)
+        run: |
+          # El nginx.conf de producción lee el certificado de /etc/letsencrypt/live/mentadance.com/
+          mkdir -p /tmp/letsencrypt/live/mentadance.com
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -subj '/CN=mentadance.com' \
+            -keyout /tmp/letsencrypt/live/mentadance.com/privkey.pem \
+            -out /tmp/letsencrypt/live/mentadance.com/fullchain.pem
+          docker run --rm \
+            --add-host menta-api:127.0.0.1 \
+            --add-host menta-bff:127.0.0.1 \
+            -v $(pwd)/infra/docker/prod/nginx/nginx.conf:/etc/nginx/nginx.conf:ro \
+            -v $(pwd)/infra/docker/nginx/conf/conf.d:/etc/nginx/conf.d:ro \
+            -v /tmp/letsencrypt:/etc/letsencrypt:ro \
+            nginx:1.27.3-alpine \
+            nginx -t
+
       - name: Validate all locations resolve
         run: |
           docker run --rm \
@@ -201,6 +218,39 @@ jobs:
           export MYSQL_ROOT_PASSWORD=test
           export MYSQL_APP_PASSWORD=test
           docker compose config > /dev/null
+
+      - name: Validate production compose
+        working-directory: infra/docker/prod
+        run: |
+          # Variables obligatorias del compose de producción (valores de mentira: solo se valida la forma)
+          export API_DIGEST=sha256:$(printf 'a%.0s' {1..64})
+          export BFF_DIGEST=sha256:$(printf 'b%.0s' {1..64})
+          export MYSQL_ROOT_PASSWORD=test
+          export MYSQL_APP_PASSWORD=test
+          export AUTH_JWT_BASE64_SECRET=test
+          export AUTH_ACTIVATION_DELIVERY_KEY=test
+          export AUTH_PASSWORD_RESET_DELIVERY_KEY=test
+          export BILLING_WEBHOOK_MERCADOPAGO_HMAC_SECRET=test
+          export BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET=test
+          export SMTP_HOST=test
+          export SMTP_PORT=25
+          docker compose -f docker-compose.prod.yml config > /dev/null
+          # MySQL y Redis no pueden publicar puertos y cada servicio debe tener mem_limit
+          docker compose -f docker-compose.prod.yml config --format json | python3 -c '
+          import json, sys
+          services = json.load(sys.stdin)["services"]
+          errors = []
+          for name, svc in services.items():
+              if not svc.get("mem_limit"):
+                  errors.append(f"{name}: falta mem_limit")
+              if name in ("mysql", "redis") and svc.get("ports"):
+                  errors.append(f"{name}: no debe publicar puertos")
+          for forbidden in ("otel-collector", "loki", "grafana", "mailpit"):
+              if forbidden in services:
+                  errors.append(f"{forbidden}: no va en producción")
+          if errors:
+              sys.exit("\n".join(errors))
+          '
 
   # OpenAPI: el contrato se escribe y versiona a mano (ver api/openapi/README.md),
   # así que el lint automático es lo que impide que un YAML roto o un $ref
