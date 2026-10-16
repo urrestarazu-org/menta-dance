@@ -31,6 +31,7 @@
 | [0042](0042-security-tooling-baseline.md) | Baseline de tooling de seguridad de código |
 | [0043](0043-checkstyle-policy-ratchet.md) | Política de Checkstyle y trinquete |
 | [0044](0044-physical-checkin-rate-limiting-and-input-caps.md) | Rate limiting y topes de entrada en el check-in QR de Physical |
+| [0045](0045-despliegue-vps-donweb.md) | Despliegue en un VPS de DonWeb con Docker Compose |
 
 Los ADRs no listados fueron eliminados por contener decisiones incompatibles con
 el diseño vigente. Sus números no se reutilizan.

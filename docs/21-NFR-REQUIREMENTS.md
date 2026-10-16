@@ -40,8 +40,7 @@
 
 ## Entrega
 
-GitHub Actions exige CI verde para merges a `develop`/`master`. Releases SemVer
-se publican como JAR y contenedor inmutable en GitHub Packages/GHCR y se
-despliegan por digest; un health check fallido restaura el digest anterior sólo
-con evidencia de compatibilidad de la aplicación anterior con schema y datos
-migrados.
+GitHub Actions exige CI verde para merges a `develop`/`main`. Releases SemVer
+publican imágenes inmutables en GHCR, adjuntan los JAR a la GitHub Release y se
+despliegan por digest; ante un health check fallido el rollback es manual con los
+digests de la release anterior (ADR-0018).

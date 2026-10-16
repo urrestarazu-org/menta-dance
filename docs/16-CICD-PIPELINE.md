@@ -37,7 +37,7 @@ rg -n "ubuntu-latest" .github/workflows   # no debe devolver nada
 
 ## CI de Pull Request
 
-En cada PR contra `develop` o `master`:
+En cada PR contra `develop` o `main`:
 
 1. compilar backend, BFF y Android;
 2. ejecutar Checkstyle, tests, JaCoCo, SonarCloud y ArchUnit;
@@ -392,9 +392,9 @@ configuración del repositorio y son gratuitas en repositorios públicos.
 ## Git Flow y releases
 
 - `feature/*` nace de `develop`.
-- `release/*` nace de `develop` y se mergea a `master`.
-- Después, `master` se mergea de regreso a `develop`.
-- `hotfix/*` nace de `master`; su merge vuelve también a `develop`.
+- `release/*` nace de `develop` y se mergea a `main`.
+- Después, `main` se mergea de regreso a `develop`.
+- `hotfix/*` nace de `main`; su merge vuelve también a `develop`.
 
 Los commits y títulos de PR siguen Conventional Commits 1.0.0. La versión de
 release es SemVer `vMAJOR.MINOR.PATCH` y etiqueta el mismo commit, JAR, imagen y
@@ -402,20 +402,35 @@ GitHub Release.
 
 ## Release a producción
 
-El merge `release/* -> master` o `hotfix/* -> master` dispara automáticamente:
+> **Estado:** el workflow `release.yml` y el script `deploy.sh` se implementan en #592 y #593. Hasta entonces, esta sección describe el flujo acordado en ADR-0018 y ADR-0045.
 
-1. crear tag SemVer;
-2. publicar el JAR versionado en GitHub Packages y la imagen en GHCR;
-3. registrar y desplegar el **digest inmutable** de la imagen, nunca una tag;
-4. ejecutar migraciones Flyway hacia adelante, etiquetadas como
-   `backward-compatible` o `manual-recovery-only`, y health checks;
-5. si falla el health check, volver automáticamente al digest de la release
-   anterior.
+Tras el merge `release/* -> main` o `hotfix/* -> main`, se crea el tag SemVer
+`vX.Y.Z` sobre `main`. Ese tag dispara el workflow de release (`release.yml`), que
+sigue estos pasos:
 
-No existe rollback automático de base de datos. Si Flyway falla, se detiene la
-release y se interviene manualmente. El rollback automático de imagen sólo se
-permite con evidencia de compatibilidad: la aplicación anterior debe funcionar
-contra el schema migrado y los datos escritos por la release nueva. La etiqueta
-`backward-compatible` no sustituye esa prueba; sin evidencia se detiene para
-recuperación manual. Las migraciones destructivas se ejecutan sólo en una release
-posterior a dejar de usar los datos/columnas.
+1. `./gradlew build` con la versión tomada del tag (tests y cobertura, igual que el
+   gate de PR a `main`);
+2. construir las imágenes de API y BFF copiando los JAR del paso 1 (no se recompila
+   dentro de Docker) y publicarlas en GHCR;
+3. crear la GitHub Release con los dos JAR adjuntos;
+4. desplegar por SSH al servidor, pasando los **digests inmutables** de las
+   imágenes, nunca una tag. El job usa el Environment `production` de GitHub y la
+   concurrencia `production` impide dos despliegues a la vez.
+
+En el servidor, `deploy.sh` hace un backup de MySQL, descarga las imágenes por
+digest, levanta el stack con Compose y espera el health check. El proveedor y la
+arquitectura del servidor están en [ADR-0045](adr/0045-despliegue-vps-donweb.md); la
+operación, en [32-VPS-DONWEB-RUNBOOK.md](32-VPS-DONWEB-RUNBOOK.md).
+
+### Rollback
+
+El rollback es **manual**: si el health check falla, el script termina con error y
+se vuelve a ejecutar con los digests de la release anterior. No existe rollback
+automático de base de datos: Flyway solo avanza. Si la release trajo una migración
+incompatible con la versión anterior, se restaura el backup previo al deploy. Las
+migraciones destructivas se ejecutan solo en una release posterior a dejar de usar
+los datos o columnas.
+
+El rollback automático condicionado a evidencia de compatibilidad (ADR-0018) y la
+publicación del JAR en GitHub Packages quedan fuera del flujo actual: el JAR se
+adjunta a la GitHub Release.
