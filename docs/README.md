@@ -25,6 +25,7 @@ comunican por HTTP, broker, repositorios, `JOIN` ni claves foráneas entre sí.
 | Frontend BFF | [31-BFF-TAILWIND.md](31-BFF-TAILWIND.md) | Pipeline de Tailwind CSS, tokens y reglas de estilo |
 | Contribución | [30-SDD-CONTRIBUTION-GUIDE.md](30-SDD-CONTRIBUTION-GUIDE.md) | Selección de ruta, artefactos SDD, implementación, pruebas y entrega |
 | Operación | [18-SLA-DEFINITION.md](18-SLA-DEFINITION.md), [21-NFR-REQUIREMENTS.md](21-NFR-REQUIREMENTS.md) | Objetivos y restricciones |
+| Despliegue | [32-VPS-DONWEB-RUNBOOK.md](32-VPS-DONWEB-RUNBOOK.md) | Bitácora operativa del VPS de DonWeb |
 | Plan | [13-DEVELOPMENT-PLAN.md](13-DEVELOPMENT-PLAN.md) | Fases de implementación |
 | Costos y riesgos | [12-COST-ANALYSIS.md](12-COST-ANALYSIS.md), [15-RISK-MATRIX.md](15-RISK-MATRIX.md) | Supuestos operativos y mitigaciones |
 | Historias | [user-stories/README.md](user-stories/README.md) | Backlog funcional |
@@ -62,4 +63,4 @@ restaurarse sin una nueva decisión de diseño.
   como guía confiable y autoridad del protocolo. No se decide por convención local
   ni por lo que "parezca" REST.
 - Flyway sólo avanza; las migraciones destructivas se difieren una release.
-- CI verde es obligatorio para mergear a `develop` y `master`.
+- CI verde es obligatorio para mergear a `develop` y `main`.

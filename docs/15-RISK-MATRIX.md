@@ -7,6 +7,6 @@
 | Incidente MySQL | pérdida de hasta RPO acordado | backups/PITR y conciliación manual de pagos |
 | Migración Flyway fallida | release detenida | migraciones forward-only e intervención manual |
 | Violación modular | acoplamiento futuro | ArchUnit y revisión de migraciones |
-| Health check post-release fallido | indisponibilidad/regresión | rollback automático al digest anterior sólo con evidencia de compatibilidad de app anterior, schema migrado y datos nuevos; si no, intervención manual |
+| Health check post-release fallido | indisponibilidad/regresión | rollback manual al digest anterior (se vuelve a ejecutar el deploy); si la migración es incompatible, se restaura el backup previo (ADR-0018, ADR-0045) |
 
 Los riesgos se revisan antes de cada release; cambios de estrategia requieren ADR.

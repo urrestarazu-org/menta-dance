@@ -8,7 +8,7 @@ observabilidad. No incluye microservicios ni broker.
 | VPS/compute | API, BFF y proxy |
 | MySQL 8.0 | schema único `menta`, backups/PITR según proveedor |
 | Redis 7 | blacklist, locks y rate limiting; `noeviction` |
-| GHCR/GitHub Packages | JARs e imágenes versionadas |
+| GHCR y GitHub Releases | imágenes versionadas por digest y JARs adjuntos a cada release |
 | Grafana/Loki/OTel | logs y trazas del MVP |
 
 La selección de proveedor y presupuesto se decide antes de la primera release.
