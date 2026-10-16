@@ -1,5 +1,6 @@
 package com.menta.physical.application.port.out;
 
+import com.menta.shared.physical.AssignmentType;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -19,8 +20,9 @@ public interface PhysicalCapacityAssignmentWriter {
      * (session, student) pair is refused with {@code StudentAlreadyAssignedException}: the student
      * already holds the session, whatever the remaining capacity.
      *
+     * @param type how the seat was acquired; persisted verbatim on the assignment row.
      * @return the {@link Instant} the row was persisted (use the clock,
      *     not {@link Instant#now()}, for testability).
      */
-    Instant assertAssignment(UUID sessionId, UUID studentId);
+    Instant assertAssignment(UUID sessionId, UUID studentId, AssignmentType type);
 }

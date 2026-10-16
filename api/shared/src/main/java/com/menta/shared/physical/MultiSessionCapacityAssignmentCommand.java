@@ -37,16 +37,19 @@ import java.util.UUID;
  * @param studentId the buyer's user id, identical for every claim in the set.
  * @param paymentId the billing payment id this assignment set is a
  *     consequence of.
+ * @param assignmentType how every seat in the set was acquired; persisted on each assignment row.
  */
 public record MultiSessionCapacityAssignmentCommand(
     List<SessionClaim> claims,
     UUID studentId,
-    UUID paymentId
+    UUID paymentId,
+    AssignmentType assignmentType
 ) {
 
     public MultiSessionCapacityAssignmentCommand {
         Objects.requireNonNull(studentId, "studentId cannot be null");
         Objects.requireNonNull(paymentId, "paymentId cannot be null");
+        Objects.requireNonNull(assignmentType, "assignmentType cannot be null");
 
         claims = SessionClaimOrdering.requireTotalOrder(claims);
     }

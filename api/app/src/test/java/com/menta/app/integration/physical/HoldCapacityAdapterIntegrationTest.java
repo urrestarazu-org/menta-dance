@@ -14,6 +14,7 @@ import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacity
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityHoldJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
+import com.menta.shared.physical.AssignmentType;
 import com.menta.shared.physical.CapacityAssignmentCommand;
 import com.menta.shared.physical.MultiSessionCapacityHoldCommand;
 import com.menta.shared.physical.SessionClaim;
@@ -138,7 +139,8 @@ class HoldCapacityAdapterIntegrationTest extends CapacityAdapterMocksIntegration
     void assignment_first_then_hold_is_refused() {
         UUID sessionId = seedSession(1);
 
-        assignmentPort.assign(new CapacityAssignmentCommand(sessionId, UUID.randomUUID(), UUID.randomUUID()));
+        assignmentPort.assign(new CapacityAssignmentCommand(
+            sessionId, UUID.randomUUID(), UUID.randomUUID(), AssignmentType.MONTHLY));
 
         assertThatThrownBy(() -> holdPort.holdAll(
             holdCommand(sessionId, UUID.randomUUID()), Instant.now().plusSeconds(1800)
@@ -167,7 +169,8 @@ class HoldCapacityAdapterIntegrationTest extends CapacityAdapterMocksIntegration
         holdPort.holdAll(holdCommand(sessionId, UUID.randomUUID()), Instant.now().plusSeconds(1800));
 
         assertThatThrownBy(() -> assignmentPort.assign(
-            new CapacityAssignmentCommand(sessionId, UUID.randomUUID(), UUID.randomUUID())
+            new CapacityAssignmentCommand(
+                sessionId, UUID.randomUUID(), UUID.randomUUID(), AssignmentType.MONTHLY)
         )).isInstanceOf(CapacityBelowAssignedException.class);
 
         assertThat(holdRepository.findAll()).hasSize(1);

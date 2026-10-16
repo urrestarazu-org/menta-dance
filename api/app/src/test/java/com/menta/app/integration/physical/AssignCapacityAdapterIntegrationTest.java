@@ -14,6 +14,7 @@ import com.menta.physical.infrastructure.persistence.entity.PhysicalSessionJpaEn
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityAssignmentJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
+import com.menta.shared.physical.AssignmentType;
 import com.menta.shared.physical.CapacityAssignmentCommand;
 import com.menta.shared.physical.MultiSessionCapacityAssignmentCommand;
 import com.menta.shared.physical.SessionClaim;
@@ -72,7 +73,7 @@ class AssignCapacityAdapterIntegrationTest extends CapacityAdapterMocksIntegrati
 
     private static CapacityAssignmentCommand cmd(UUID sessionId, UUID studentId) {
         return new CapacityAssignmentCommand(
-            sessionId, studentId, UUID.randomUUID()
+            sessionId, studentId, UUID.randomUUID(), AssignmentType.MONTHLY
         );
     }
 
@@ -92,7 +93,7 @@ class AssignCapacityAdapterIntegrationTest extends CapacityAdapterMocksIntegrati
         // Pre-seed one assignment so capacity is exhausted.
         UUID existingStudent = UUID.randomUUID();
         assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
-            UUID.randomUUID(), sessionId, existingStudent, Instant.now()
+            UUID.randomUUID(), sessionId, existingStudent, AssignmentType.MONTHLY, Instant.now()
         ));
 
         assertThatThrownBy(() -> capacityPort.assign(cmd(sessionId, UUID.randomUUID())))
@@ -122,7 +123,7 @@ class AssignCapacityAdapterIntegrationTest extends CapacityAdapterMocksIntegrati
                 new SessionClaim(session2, base.plusSeconds(1)),
                 new SessionClaim(session3, base.plusSeconds(2))
             ),
-            studentId, UUID.randomUUID()
+            studentId, UUID.randomUUID(), AssignmentType.MONTHLY
         );
 
         CapacityAssignments result = capacityPort.assignAll(command);
@@ -138,7 +139,7 @@ class AssignCapacityAdapterIntegrationTest extends CapacityAdapterMocksIntegrati
         UUID session3 = seedSession(1);
         // Pre-fill session3 with an unrelated student so it reads full.
         assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
-            UUID.randomUUID(), session3, UUID.randomUUID(), Instant.now()
+            UUID.randomUUID(), session3, UUID.randomUUID(), AssignmentType.MONTHLY, Instant.now()
         ));
         UUID studentId = UUID.randomUUID();
         Instant base = Instant.now();
@@ -149,7 +150,7 @@ class AssignCapacityAdapterIntegrationTest extends CapacityAdapterMocksIntegrati
                 new SessionClaim(session2, base.plusSeconds(1)),
                 new SessionClaim(session3, base.plusSeconds(2))
             ),
-            studentId, UUID.randomUUID()
+            studentId, UUID.randomUUID(), AssignmentType.MONTHLY
         );
 
         assertThatThrownBy(() -> capacityPort.assignAll(command))

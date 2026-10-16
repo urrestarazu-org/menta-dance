@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import com.menta.physical.application.port.out.PhysicalCapacityHoldWriter;
 import com.menta.physical.domain.exception.CapacityBelowAssignedException;
+import com.menta.shared.physical.AssignmentType;
 import com.menta.shared.physical.MultiSessionCapacityHoldCommand;
 import com.menta.shared.physical.SessionClaim;
 import java.time.Instant;
@@ -128,12 +129,12 @@ class CreateCapacityHoldUseCaseTest {
         UUID paymentId = UUID.randomUUID();
         UUID studentId = UUID.randomUUID();
         ConvertOutcome outcome = new ConvertOutcome.Converted(List.of(UUID.randomUUID()));
-        when(convertUseCase.convertAll(paymentId, studentId)).thenReturn(outcome);
+        when(convertUseCase.convertAll(paymentId, studentId, AssignmentType.INDIVIDUAL)).thenReturn(outcome);
 
-        ConvertOutcome result = useCase.convertAll(paymentId, studentId);
+        ConvertOutcome result = useCase.convertAll(paymentId, studentId, AssignmentType.INDIVIDUAL);
 
         assertThat(result).isEqualTo(outcome);
-        verify(convertUseCase).convertAll(paymentId, studentId);
+        verify(convertUseCase).convertAll(paymentId, studentId, AssignmentType.INDIVIDUAL);
     }
 
     @Test

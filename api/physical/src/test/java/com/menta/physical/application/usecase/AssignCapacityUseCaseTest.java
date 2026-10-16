@@ -14,6 +14,7 @@ import com.menta.physical.application.port.out.PhysicalCapacityAssignmentWriter;
 import com.menta.physical.domain.exception.CapacityBelowAssignedException;
 import com.menta.physical.domain.exception.SessionNotFoundException;
 import com.menta.physical.domain.exception.StudentAlreadyAssignedException;
+import com.menta.shared.physical.AssignmentType;
 import com.menta.shared.physical.CapacityAssignmentCommand;
 import com.menta.shared.physical.MultiSessionCapacityAssignmentCommand;
 import com.menta.shared.physical.SessionClaim;
@@ -47,6 +48,8 @@ class AssignCapacityUseCaseTest {
     private static final UUID STUDENT_UUID = UUID.fromString("44444444-4444-4444-4444-444444444444");
     private static final UUID PAYMENT_UUID = UUID.fromString("55555555-5555-5555-5555-555555555555");
 
+    private static final AssignmentType TYPE = AssignmentType.MONTHLY;
+
     private PhysicalCapacityAssignmentWriter assignmentWriter;
     private AssignCapacityUseCase useCase;
 
@@ -57,7 +60,7 @@ class AssignCapacityUseCaseTest {
     }
 
     private static CapacityAssignmentCommand cmd() {
-        return new CapacityAssignmentCommand(SESSION_UUID, STUDENT_UUID, PAYMENT_UUID);
+        return new CapacityAssignmentCommand(SESSION_UUID, STUDENT_UUID, PAYMENT_UUID, TYPE);
     }
 
     @Nested
@@ -69,7 +72,19 @@ class AssignCapacityUseCaseTest {
             AssignmentOutcome result = useCase.assign(cmd());
 
             assertThat(result).isEqualTo(AssignmentOutcome.Assigned.INSTANCE);
-            verify(assignmentWriter).assertAssignment(SESSION_UUID, STUDENT_UUID);
+            verify(assignmentWriter).assertAssignment(SESSION_UUID, STUDENT_UUID, TYPE);
+        }
+
+        @Test
+        void passes_the_command_assignment_type_to_the_writer_not_a_default() {
+            CapacityAssignmentCommand individual = new CapacityAssignmentCommand(
+                SESSION_UUID, STUDENT_UUID, PAYMENT_UUID, AssignmentType.INDIVIDUAL
+            );
+
+            useCase.assign(individual);
+
+            verify(assignmentWriter).assertAssignment(SESSION_UUID, STUDENT_UUID, AssignmentType.INDIVIDUAL);
+            verify(assignmentWriter, never()).assertAssignment(SESSION_UUID, STUDENT_UUID, AssignmentType.MONTHLY);
         }
     }
 
@@ -80,7 +95,7 @@ class AssignCapacityUseCaseTest {
         @Test
         void propagates_the_writers_capacity_refusal_unchanged() {
             doThrow(new CapacityBelowAssignedException())
-                .when(assignmentWriter).assertAssignment(SESSION_UUID, STUDENT_UUID);
+                .when(assignmentWriter).assertAssignment(SESSION_UUID, STUDENT_UUID, TYPE);
 
             assertThatThrownBy(() -> useCase.assign(cmd()))
                 .isInstanceOf(CapacityBelowAssignedException.class);
@@ -94,7 +109,7 @@ class AssignCapacityUseCaseTest {
         @Test
         void propagates_the_writers_StudentAlreadyAssigned_unchanged() {
             doThrow(new StudentAlreadyAssignedException())
-                .when(assignmentWriter).assertAssignment(SESSION_UUID, STUDENT_UUID);
+                .when(assignmentWriter).assertAssignment(SESSION_UUID, STUDENT_UUID, TYPE);
 
             assertThatThrownBy(() -> useCase.assign(cmd()))
                 .isInstanceOf(StudentAlreadyAssignedException.class);
@@ -103,7 +118,7 @@ class AssignCapacityUseCaseTest {
         @Test
         void does_not_reclassify_a_raw_DataIntegrityViolation_as_a_capacity_refusal() {
             doThrow(new DataIntegrityViolationException("unrelated integrity failure"))
-                .when(assignmentWriter).assertAssignment(SESSION_UUID, STUDENT_UUID);
+                .when(assignmentWriter).assertAssignment(SESSION_UUID, STUDENT_UUID, TYPE);
 
             assertThatThrownBy(() -> useCase.assign(cmd()))
                 .isInstanceOf(DataIntegrityViolationException.class);
@@ -122,7 +137,7 @@ class AssignCapacityUseCaseTest {
         @Test
         void propagates_SessionNotFound_raised_by_the_writer() {
             doThrow(new SessionNotFoundException())
-                .when(assignmentWriter).assertAssignment(SESSION_UUID, STUDENT_UUID);
+                .when(assignmentWriter).assertAssignment(SESSION_UUID, STUDENT_UUID, TYPE);
 
             assertThatThrownBy(() -> useCase.assign(cmd()))
                 .isInstanceOf(SessionNotFoundException.class);
@@ -146,7 +161,7 @@ class AssignCapacityUseCaseTest {
         }
 
         private static MultiSessionCapacityAssignmentCommand multiCmd(List<SessionClaim> claims) {
-            return new MultiSessionCapacityAssignmentCommand(claims, STUDENT_UUID, PAYMENT_UUID);
+            return new MultiSessionCapacityAssignmentCommand(claims, STUDENT_UUID, PAYMENT_UUID, TYPE);
         }
 
         @Test
@@ -162,16 +177,16 @@ class AssignCapacityUseCaseTest {
                 .containsExactly(SESSION_UUID, SESSION_UUID_2, SESSION_UUID_3);
 
             InOrder inOrder = inOrder(assignmentWriter);
-            inOrder.verify(assignmentWriter).assertAssignment(SESSION_UUID, STUDENT_UUID);
-            inOrder.verify(assignmentWriter).assertAssignment(SESSION_UUID_2, STUDENT_UUID);
-            inOrder.verify(assignmentWriter).assertAssignment(SESSION_UUID_3, STUDENT_UUID);
+            inOrder.verify(assignmentWriter).assertAssignment(SESSION_UUID, STUDENT_UUID, TYPE);
+            inOrder.verify(assignmentWriter).assertAssignment(SESSION_UUID_2, STUDENT_UUID, TYPE);
+            inOrder.verify(assignmentWriter).assertAssignment(SESSION_UUID_3, STUDENT_UUID, TYPE);
         }
 
         @Test
         @DisplayName("A failure at claim k throws and attempts no k+1 insert")
         void failure_at_claim_k_aborts_and_attempts_no_further_insert() {
             doThrow(new CapacityBelowAssignedException())
-                .when(assignmentWriter).assertAssignment(SESSION_UUID_2, STUDENT_UUID);
+                .when(assignmentWriter).assertAssignment(SESSION_UUID_2, STUDENT_UUID, TYPE);
 
             List<SessionClaim> claims = List.of(
                 claim(SESSION_UUID, 1), claim(SESSION_UUID_2, 2), claim(SESSION_UUID_3, 3)
@@ -180,8 +195,9 @@ class AssignCapacityUseCaseTest {
             assertThatThrownBy(() -> useCase.assignAll(multiCmd(claims)))
                 .isInstanceOf(CapacityBelowAssignedException.class);
 
-            verify(assignmentWriter).assertAssignment(SESSION_UUID, STUDENT_UUID);
-            verify(assignmentWriter, never()).assertAssignment(eq(SESSION_UUID_3), any(UUID.class));
+            verify(assignmentWriter).assertAssignment(SESSION_UUID, STUDENT_UUID, TYPE);
+            verify(assignmentWriter, never())
+                .assertAssignment(eq(SESSION_UUID_3), any(UUID.class), any(AssignmentType.class));
         }
 
         @Test
@@ -190,7 +206,21 @@ class AssignCapacityUseCaseTest {
             CapacityAssignments result = useCase.assignAll(multiCmd(List.of(claim(SESSION_UUID, 1))));
 
             assertThat(result.assignedSessionIds()).containsExactly(SESSION_UUID);
-            verify(assignmentWriter).assertAssignment(SESSION_UUID, STUDENT_UUID);
+            verify(assignmentWriter).assertAssignment(SESSION_UUID, STUDENT_UUID, TYPE);
+        }
+
+        @Test
+        @DisplayName("Legacy assignAll persists the command type on every claim")
+        void every_claim_receives_the_command_assignment_type() {
+            MultiSessionCapacityAssignmentCommand individual = new MultiSessionCapacityAssignmentCommand(
+                List.of(claim(SESSION_UUID, 1), claim(SESSION_UUID_2, 2)),
+                STUDENT_UUID, PAYMENT_UUID, AssignmentType.INDIVIDUAL
+            );
+
+            useCase.assignAll(individual);
+
+            verify(assignmentWriter).assertAssignment(SESSION_UUID, STUDENT_UUID, AssignmentType.INDIVIDUAL);
+            verify(assignmentWriter).assertAssignment(SESSION_UUID_2, STUDENT_UUID, AssignmentType.INDIVIDUAL);
         }
     }
 }

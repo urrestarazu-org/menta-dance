@@ -45,6 +45,7 @@ import com.menta.physical.infrastructure.persistence.repository.PhysicalDeviceJp
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
 import com.menta.physical.infrastructure.qr.FormatQrCredentialSignatureService;
 import com.menta.shared.domain.vo.Email;
+import com.menta.shared.physical.AssignmentType;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -217,7 +218,7 @@ class PhysicalCheckInDeviceAuthIntegrationTest extends AbstractPhysicalMySqlInte
         );
         UUID studentId = UUID.randomUUID();
         assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
-            UUID.randomUUID(), sessionId, studentId, now
+            UUID.randomUUID(), sessionId, studentId, AssignmentType.MONTHLY, now
         ));
         String qrCredentials = SIGNATURE_SERVICE.sign(
             studentId.toString(), sessionId.toString(), "jti-" + UUID.randomUUID(),
@@ -546,7 +547,7 @@ class PhysicalCheckInDeviceAuthIntegrationTest extends AbstractPhysicalMySqlInte
         UUID studentId = student.getId().getValue();
         Scan scan = seedValidScan();
         assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
-            UUID.randomUUID(), scan.sessionId(), studentId, Instant.now()
+            UUID.randomUUID(), scan.sessionId(), studentId, AssignmentType.MONTHLY, Instant.now()
         ));
         stubRedisLockAcquired();
         UUID receptionistId = receptionist.getId().getValue();

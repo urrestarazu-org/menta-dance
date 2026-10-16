@@ -46,6 +46,7 @@ import com.menta.physical.application.usecase.ConvertOutcome;
 import com.menta.physical.domain.exception.CapacityBelowAssignedException;
 import com.menta.physical.domain.exception.StudentAlreadyAssignedException;
 import com.menta.shared.billing.PaymentCompletedOutboxPayload;
+import com.menta.shared.physical.AssignmentType;
 import com.menta.shared.physical.CapacityAssignmentCommand;
 import com.menta.shared.physical.MultiSessionCapacityAssignmentCommand;
 import com.menta.shared.physical.SessionClaim;
@@ -59,6 +60,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 
 /**
@@ -114,7 +116,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
         // Default: no hold exists for any payment (ConvertOutcome.HoldNotFound)
         // — every pre-existing test in this file exercises the legacy,
         // unheld path and must keep doing so unchanged.
-        when(physicalCapacityHoldPort.convertAll(any(), any()))
+        when(physicalCapacityHoldPort.convertAll(any(), any(), any()))
             .thenReturn(ConvertOutcome.HoldNotFound.INSTANCE);
         objectMapper = new ObjectMapper()
             .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
@@ -187,7 +189,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
     @DisplayName("Physical adapter delegates an assignment command unchanged")
     void capacity_adapter_delegates_assignment_unchanged() {
         CapacityAssignmentCommand command = new CapacityAssignmentCommand(
-            SESSION_UUID, STUDENT_UUID, PAYMENT_UUID
+            SESSION_UUID, STUDENT_UUID, PAYMENT_UUID, AssignmentType.MONTHLY
         );
         when(physicalCapacityAssignmentPort.assign(command)).thenReturn(AssignmentOutcome.Assigned.INSTANCE);
 
@@ -201,7 +203,8 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
     @DisplayName("Physical adapter delegates an assignAll command unchanged")
     void capacity_adapter_delegates_assignAll_unchanged() {
         MultiSessionCapacityAssignmentCommand command = new MultiSessionCapacityAssignmentCommand(
-            List.of(new SessionClaim(SESSION_UUID, NOW)), STUDENT_UUID, PAYMENT_UUID
+            List.of(new SessionClaim(SESSION_UUID, NOW)), STUDENT_UUID, PAYMENT_UUID,
+            AssignmentType.MONTHLY
         );
         CapacityAssignments result = new CapacityAssignments(List.of(SESSION_UUID));
         when(physicalCapacityAssignmentPort.assignAll(command)).thenReturn(result);
@@ -243,7 +246,8 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
             verify(purchaseCreationFromEventPort, times(1))
                 .createPurchaseFromPaymentEvent(any(), eq(List.of(SESSION_ID_STR)));
             verify(physicalCapacityAssignmentPort, times(1)).assignAll(new MultiSessionCapacityAssignmentCommand(
-                List.of(new SessionClaim(SESSION_UUID, NOW.plusSeconds(3600))), STUDENT_UUID, PAYMENT_UUID
+                List.of(new SessionClaim(SESSION_UUID, NOW.plusSeconds(3600))),
+                STUDENT_UUID, PAYMENT_UUID, AssignmentType.INDIVIDUAL
             ));
             verify(markExceptionAdapter, never()).markException(any(), any());
             verify(markAssignedAdapter, times(1)).markAssigned(PAYMENT_ID);
@@ -278,7 +282,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
                     new SessionClaim(SESSION_UUID, NOW.plusSeconds(3600)),
                     new SessionClaim(SESSION_UUID_2, NOW.plusSeconds(7200))
                 ),
-                STUDENT_UUID, PAYMENT_UUID
+                STUDENT_UUID, PAYMENT_UUID, AssignmentType.MONTHLY
             ));
             verify(markExceptionAdapter, never()).markException(any(), any());
             verify(markAssignedAdapter, times(1)).markAssigned(PAYMENT_ID);
@@ -315,7 +319,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
                     new SessionClaim(SESSION_UUID_2, NOW.plusSeconds(7200)),
                     new SessionClaim(session3, NOW.plusSeconds(10800))
                 ),
-                STUDENT_UUID, PAYMENT_UUID
+                STUDENT_UUID, PAYMENT_UUID, AssignmentType.MONTHLY
             ));
             verify(markAssignedAdapter, times(1)).markAssigned(PAYMENT_ID);
         }
@@ -522,7 +526,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
                 eq(PAYMENT_ID), eq(STUDENT_UUID), eq(Reason.QUOTE_NOT_FOUND)
             );
             verify(publishPaymentFulfillmentFailedAdapter, times(1)).publish(any(), any(), any());
-            verify(physicalCapacityHoldPort, never()).convertAll(any(), any());
+            verify(physicalCapacityHoldPort, never()).convertAll(any(), any(), any());
             verify(markExceptionAdapter, never()).markException(any(), any());
             verify(physicalCapacityAssignmentPort, never()).assignAll(any());
             verify(markAssignedAdapter, never()).markAssigned(any());
@@ -532,7 +536,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
         void missing_quote_with_a_hold_present_never_converts_the_hold() throws Exception {
             when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
             when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.empty());
-            when(physicalCapacityHoldPort.convertAll(any(), any()))
+            when(physicalCapacityHoldPort.convertAll(any(), any(), any()))
                 .thenReturn(new ConvertOutcome.Converted(List.of(SESSION_UUID)));
             Purchase purchase = purchaseAt(FulfillmentStatus.EXCEPTION);
             when(purchaseCreationFromEventPort.createPurchaseFromPaymentEvent(any(), any()))
@@ -540,7 +544,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
 
             handler.handle(rowWithPayload(payload()));
 
-            verify(physicalCapacityHoldPort, never()).convertAll(any(), any());
+            verify(physicalCapacityHoldPort, never()).convertAll(any(), any(), any());
             verify(publishPaymentFulfillmentFailedAdapter, times(1)).publish(
                 eq(PAYMENT_ID), eq(STUDENT_UUID), eq(Reason.QUOTE_NOT_FOUND)
             );
@@ -558,7 +562,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
             assertThatCode(() -> handler.handle(rowWithPayload(payload()))).doesNotThrowAnyException();
 
             verify(publishPaymentFulfillmentFailedAdapter, never()).publish(any(), any(), any());
-            verify(physicalCapacityHoldPort, never()).convertAll(any(), any());
+            verify(physicalCapacityHoldPort, never()).convertAll(any(), any(), any());
         }
 
         @Test
@@ -579,6 +583,68 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
     }
 
     @Nested
+    @DisplayName("Spec scenario: the resolved quote type is passed to the hold conversion")
+    class AssignmentTypeResolution {
+
+        @Test
+        void held_monthly_quote_passes_monthly_and_loads_the_quote_once() throws Exception {
+            when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
+            when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.of(monthlyQuote(2)));
+            when(physicalCapacityHoldPort.convertAll(PAYMENT_UUID, STUDENT_UUID, AssignmentType.MONTHLY))
+                .thenReturn(new ConvertOutcome.Converted(List.of(SESSION_UUID)));
+
+            handler.handle(rowWithPayload(payload()));
+
+            verify(physicalCapacityHoldPort).convertAll(PAYMENT_UUID, STUDENT_UUID, AssignmentType.MONTHLY);
+            verify(quoteRepository, times(1)).findById(QUOTE_ID_STR);
+            verify(markAssignedAdapter).markAssigned(PAYMENT_ID);
+        }
+
+        @Test
+        void held_individual_quote_passes_individual() throws Exception {
+            when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
+            when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.of(individualQuote(SESSION_ID_STR)));
+            when(physicalCapacityHoldPort.convertAll(PAYMENT_UUID, STUDENT_UUID, AssignmentType.INDIVIDUAL))
+                .thenReturn(new ConvertOutcome.Converted(List.of(SESSION_UUID)));
+
+            handler.handle(rowWithPayload(payload()));
+
+            verify(physicalCapacityHoldPort).convertAll(PAYMENT_UUID, STUDENT_UUID, AssignmentType.INDIVIDUAL);
+        }
+
+        @Test
+        void hold_not_found_reuses_the_loaded_quote_and_the_command_carries_the_type() throws Exception {
+            when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
+            when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.of(individualQuote(SESSION_ID_STR)));
+            when(courseAvailabilityPort.findScheduledSessions(eq(COURSE_ID), any(), any()))
+                .thenReturn(List.of(new ScheduledSessionSnapshot(SESSION_ID_STR, NOW.plusSeconds(3600), 5)));
+            when(physicalCapacityAssignmentPort.assignAll(any()))
+                .thenReturn(new CapacityAssignments(List.of(SESSION_UUID)));
+
+            handler.handle(rowWithPayload(payload()));
+
+            verify(quoteRepository, times(1)).findById(QUOTE_ID_STR);
+            ArgumentCaptor<MultiSessionCapacityAssignmentCommand> captor =
+                ArgumentCaptor.forClass(MultiSessionCapacityAssignmentCommand.class);
+            verify(physicalCapacityAssignmentPort).assignAll(captor.capture());
+            assertThat(captor.getValue().assignmentType()).isEqualTo(AssignmentType.INDIVIDUAL);
+        }
+
+        @Test
+        void coverage_shortfall_keeps_target_not_scheduled() throws Exception {
+            when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
+            when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.of(monthlyQuote(4)));
+            when(courseAvailabilityPort.findScheduledSessions(eq(COURSE_ID), any(), any())).thenReturn(List.of());
+
+            handler.handle(rowWithPayload(payload()));
+
+            verify(publishPaymentFulfillmentFailedAdapter).publish(
+                eq(PAYMENT_ID), eq(STUDENT_UUID), eq(Reason.TARGET_NOT_SCHEDULED)
+            );
+        }
+    }
+
+    @Nested
     @DisplayName("Spec scenario (design step 8): a held payment converts without CoveragePlanner recomputation")
     class HeldConversion {
 
@@ -586,7 +652,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
         void converted_hold_creates_purchase_and_marks_assigned_without_recomputation() throws Exception {
             when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
             when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.of(individualQuote(SESSION_ID_STR)));
-            when(physicalCapacityHoldPort.convertAll(PAYMENT_UUID, STUDENT_UUID))
+            when(physicalCapacityHoldPort.convertAll(PAYMENT_UUID, STUDENT_UUID, AssignmentType.INDIVIDUAL))
                 .thenReturn(new ConvertOutcome.Converted(List.of(SESSION_UUID, SESSION_UUID_2)));
 
             handler.handle(rowWithPayload(payload()));
@@ -605,7 +671,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
         void already_converted_hold_is_a_redelivery_noop() throws Exception {
             when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
             when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.of(individualQuote(SESSION_ID_STR)));
-            when(physicalCapacityHoldPort.convertAll(PAYMENT_UUID, STUDENT_UUID))
+            when(physicalCapacityHoldPort.convertAll(PAYMENT_UUID, STUDENT_UUID, AssignmentType.INDIVIDUAL))
                 .thenReturn(ConvertOutcome.AlreadyConverted.INSTANCE);
 
             assertThatCode(() -> handler.handle(rowWithPayload(payload()))).doesNotThrowAnyException();
@@ -620,7 +686,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
         void capacity_trip_during_conversion_routes_to_exception_with_zero_assignment_rows() throws Exception {
             when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
             when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.of(individualQuote(SESSION_ID_STR)));
-            when(physicalCapacityHoldPort.convertAll(PAYMENT_UUID, STUDENT_UUID))
+            when(physicalCapacityHoldPort.convertAll(PAYMENT_UUID, STUDENT_UUID, AssignmentType.INDIVIDUAL))
                 .thenThrow(new CapacityBelowAssignedException());
             when(physicalCapacityHoldPort.heldSessionIds(PAYMENT_UUID)).thenReturn(List.of(SESSION_UUID));
 
@@ -645,7 +711,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
             throws Exception {
             when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
             when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.of(individualQuote(SESSION_ID_STR)));
-            when(physicalCapacityHoldPort.convertAll(PAYMENT_UUID, STUDENT_UUID))
+            when(physicalCapacityHoldPort.convertAll(PAYMENT_UUID, STUDENT_UUID, AssignmentType.INDIVIDUAL))
                 .thenThrow(new CapacityBelowAssignedException());
             when(physicalCapacityHoldPort.heldSessionIds(PAYMENT_UUID)).thenReturn(List.of(SESSION_UUID));
             doThrow(new IllegalPurchaseStateTransitionException(
@@ -660,7 +726,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
             throws Exception {
             when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
             when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.of(individualQuote(SESSION_ID_STR)));
-            when(physicalCapacityHoldPort.convertAll(PAYMENT_UUID, STUDENT_UUID))
+            when(physicalCapacityHoldPort.convertAll(PAYMENT_UUID, STUDENT_UUID, AssignmentType.INDIVIDUAL))
                 .thenThrow(new StudentAlreadyAssignedException());
             when(physicalCapacityHoldPort.heldSessionIds(PAYMENT_UUID)).thenReturn(List.of(SESSION_UUID));
 
@@ -679,7 +745,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
             throws Exception {
             when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
             when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.of(individualQuote(SESSION_ID_STR)));
-            when(physicalCapacityHoldPort.convertAll(PAYMENT_UUID, STUDENT_UUID))
+            when(physicalCapacityHoldPort.convertAll(PAYMENT_UUID, STUDENT_UUID, AssignmentType.INDIVIDUAL))
                 .thenThrow(new StudentAlreadyAssignedException());
             when(physicalCapacityHoldPort.heldSessionIds(PAYMENT_UUID)).thenReturn(List.of(SESSION_UUID));
             doThrow(new IllegalPurchaseStateTransitionException(
@@ -698,7 +764,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
         void no_hold_for_the_payment_still_resolves_coverage_and_calls_assignAll() throws Exception {
             when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(physicalPayment()));
             when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.of(individualQuote(SESSION_ID_STR)));
-            when(physicalCapacityHoldPort.convertAll(PAYMENT_UUID, STUDENT_UUID))
+            when(physicalCapacityHoldPort.convertAll(PAYMENT_UUID, STUDENT_UUID, AssignmentType.INDIVIDUAL))
                 .thenReturn(ConvertOutcome.HoldNotFound.INSTANCE);
             when(quoteRepository.findById(QUOTE_ID_STR)).thenReturn(Optional.of(individualQuote(SESSION_ID_STR)));
             when(courseAvailabilityPort.findScheduledSessions(eq(COURSE_ID), any(), any()))
@@ -711,7 +777,8 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
             verify(purchaseCreationFromEventPort, times(1))
                 .createPurchaseFromPaymentEvent(any(), eq(List.of(SESSION_ID_STR)));
             verify(physicalCapacityAssignmentPort, times(1)).assignAll(new MultiSessionCapacityAssignmentCommand(
-                List.of(new SessionClaim(SESSION_UUID, NOW.plusSeconds(3600))), STUDENT_UUID, PAYMENT_UUID
+                List.of(new SessionClaim(SESSION_UUID, NOW.plusSeconds(3600))),
+                STUDENT_UUID, PAYMENT_UUID, AssignmentType.INDIVIDUAL
             ));
             verify(markExceptionAdapter, never()).markException(any(), any());
             verify(markAssignedAdapter, times(1)).markAssigned(PAYMENT_ID);

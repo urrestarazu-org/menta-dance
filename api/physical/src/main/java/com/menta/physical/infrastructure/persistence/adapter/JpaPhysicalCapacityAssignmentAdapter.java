@@ -7,6 +7,7 @@ import com.menta.physical.domain.exception.StudentAlreadyAssignedException;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityAssignmentJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityHoldJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
+import com.menta.shared.physical.AssignmentType;
 import java.time.Instant;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -96,7 +97,7 @@ public class JpaPhysicalCapacityAssignmentAdapter implements PhysicalCapacityAss
 
     @Override
     @Transactional(propagation = Propagation.REQUIRED)
-    public Instant assertAssignment(UUID sessionId, UUID studentId) {
+    public Instant assertAssignment(UUID sessionId, UUID studentId, AssignmentType type) {
         Instant now = clock.now();
         UUID rowId = UUID.randomUUID();
 
@@ -123,7 +124,7 @@ public class JpaPhysicalCapacityAssignmentAdapter implements PhysicalCapacityAss
         }
 
         jpaRepository.save(new com.menta.physical.infrastructure.persistence.entity.PhysicalCapacityAssignmentJpaEntity(
-            rowId, sessionId, studentId, now
+            rowId, sessionId, studentId, type, now
         ));
         // Force flush so a V7 UNIQUE (session_id, student_id) collision is
         // raised here, attributed to this claim, and not at commit time.

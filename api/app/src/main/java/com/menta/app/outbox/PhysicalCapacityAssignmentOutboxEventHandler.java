@@ -23,6 +23,7 @@ import com.menta.billing.domain.model.Reason;
 import com.menta.physical.domain.exception.CapacityBelowAssignedException;
 import com.menta.physical.domain.exception.StudentAlreadyAssignedException;
 import com.menta.shared.billing.PaymentCompletedOutboxPayload;
+import com.menta.shared.physical.AssignmentType;
 import com.menta.shared.physical.MultiSessionCapacityAssignmentCommand;
 import com.menta.shared.physical.SessionClaim;
 import java.time.Instant;
@@ -92,8 +93,9 @@ import org.springframework.stereotype.Component;
  * eligible-session set: {@code MONTHLY} counts forward from {@code
  * confirmedAt} for {@code scheduledSessionCount} sessions (design A4);
  * {@code INDIVIDUAL} is exactly the quote's own {@code selectedSessionId}.
- * The quote is resolved ONCE, BEFORE the hold conversion, so a missing
- * quote is detected before any hold row is converted. A quote
+ * The quote is resolved BEFORE the hold conversion because the
+ * assignment type ({@code MONTHLY}/{@code INDIVIDUAL}, via {@link
+ * AssignmentTypeMapper}) is persisted on every assignment row. A quote
  * reference that resolves to nothing (with or without a hold) publishes
  * {@link Reason#QUOTE_NOT_FOUND} only when the created/returned purchase is
  * {@code EXCEPTION}; a coverage shortfall that persists past {@link
@@ -180,8 +182,10 @@ public class PhysicalCapacityAssignmentOutboxEventHandler implements OutboxEvent
             return;
         }
 
-        // Resolve the quote ONCE, before any conversion, so a missing quote is
-        // detected here, before any hold row is converted.
+        // Resolve the quote ONCE, before any conversion: the hold's assignments
+        // are typed (MONTHLY / INDIVIDUAL) from quote.getPurchaseType(), so the
+        // type must be known before convertAll runs. A missing quote is detected
+        // here, before any hold row is converted.
         String quoteId = physical.quoteId();
         PhysicalCourseQuote quote = quoteRepository.findById(quoteId).orElse(null);
         if (quote == null) {
@@ -198,6 +202,7 @@ public class PhysicalCapacityAssignmentOutboxEventHandler implements OutboxEvent
             }
             return;
         }
+        AssignmentType assignmentType = AssignmentTypeMapper.from(quote.getPurchaseType());
 
         // Design B3/step 8: try converting an existing hold first. A held
         // purchase never recomputes via CoveragePlanner (D7) — the hold's
@@ -207,7 +212,9 @@ public class PhysicalCapacityAssignmentOutboxEventHandler implements OutboxEvent
         // falls through to today's unchanged CoveragePlanner + assignAll.
         com.menta.physical.application.usecase.ConvertOutcome convertOutcome;
         try {
-            convertOutcome = physicalCapacityHoldPort.convertAll(payload.paymentId(), payment.getUserId());
+            convertOutcome = physicalCapacityHoldPort.convertAll(
+                payload.paymentId(), payment.getUserId(), assignmentType
+            );
         } catch (CapacityBelowAssignedException capacityTripped) {
             routeHeldConversionFailure(payload, paymentId, Reason.CAPACITY_BELOW_ASSIGNED);
             return;
@@ -293,7 +300,7 @@ public class PhysicalCapacityAssignmentOutboxEventHandler implements OutboxEvent
             .map(session -> new SessionClaim(UUID.fromString(session.sessionId()), session.scheduledAt()))
             .toList();
         MultiSessionCapacityAssignmentCommand cmd = new MultiSessionCapacityAssignmentCommand(
-            claims, payment.getUserId(), payload.paymentId()
+            claims, payment.getUserId(), payload.paymentId(), assignmentType
         );
 
         try {

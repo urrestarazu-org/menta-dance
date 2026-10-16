@@ -13,6 +13,7 @@ import com.menta.physical.infrastructure.persistence.repository.AttendanceJpaRep
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityAssignmentJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
+import com.menta.shared.physical.AssignmentType;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
@@ -91,7 +92,9 @@ class PhysicalCapacityAssignmentRepositoryAdapterTest {
 
     private void seedAssignment(UUID sessionId, UUID studentId) {
         assignmentRepository.saveAndFlush(
-            new PhysicalCapacityAssignmentJpaEntity(UUID.randomUUID(), sessionId, studentId, Instant.now())
+            new PhysicalCapacityAssignmentJpaEntity(
+                UUID.randomUUID(), sessionId, studentId, AssignmentType.MONTHLY, Instant.now()
+            )
         );
     }
 

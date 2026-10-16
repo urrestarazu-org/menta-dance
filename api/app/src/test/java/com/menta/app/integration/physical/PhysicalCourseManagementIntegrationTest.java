@@ -28,6 +28,7 @@ import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacity
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
 import com.menta.shared.domain.vo.Email;
+import com.menta.shared.physical.AssignmentType;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
@@ -224,7 +225,7 @@ class PhysicalCourseManagementIntegrationTest {
             sessionId, courseId, Instant.now().plusSeconds(86400), 20, "SCHEDULED", null
         ));
         assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
-            UUID.randomUUID(), sessionId, UUID.randomUUID(), Instant.now()
+            UUID.randomUUID(), sessionId, UUID.randomUUID(), AssignmentType.MONTHLY, Instant.now()
         ));
         UUID adminId = issueUser(Role.ADMIN);
 

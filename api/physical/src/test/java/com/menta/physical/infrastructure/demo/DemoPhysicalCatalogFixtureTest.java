@@ -22,6 +22,7 @@ import com.menta.physical.domain.model.SessionStatus;
 import com.menta.physical.infrastructure.qr.QrProperties;
 import com.menta.shared.demo.DemoIds;
 import com.menta.shared.demo.DemoSeedOrder;
+import com.menta.shared.physical.AssignmentType;
 import com.menta.shared.physical.CapacityAssignmentCommand;
 import java.time.DayOfWeek;
 import java.time.Duration;
@@ -230,10 +231,11 @@ class DemoPhysicalCatalogFixtureTest {
         verify(assignmentPort, times(2)).assign(seats.capture());
         assertThat(seats.getAllValues()).containsExactly(
             new CapacityAssignmentCommand(
-                ROLLING.getValue(), DemoIds.STUDENT_USER_ID, DemoPhysicalCatalogFixture.SEAT_PAYMENT_ID),
+                ROLLING.getValue(), DemoIds.STUDENT_USER_ID, DemoPhysicalCatalogFixture.SEAT_PAYMENT_ID,
+                AssignmentType.INDIVIDUAL),
             new CapacityAssignmentCommand(
                 nextRegular.getId().getValue(), DemoIds.STUDENT_USER_ID,
-                DemoPhysicalCatalogFixture.SEAT_PAYMENT_ID));
+                DemoPhysicalCatalogFixture.SEAT_PAYMENT_ID, AssignmentType.INDIVIDUAL));
         assertThat(nextRegular.getScheduledAt()).isEqualTo(NEXT_SENSUAL);
     }
 

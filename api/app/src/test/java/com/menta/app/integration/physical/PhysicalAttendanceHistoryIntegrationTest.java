@@ -49,6 +49,7 @@ import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacity
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
 import com.menta.shared.domain.vo.Email;
+import com.menta.shared.physical.AssignmentType;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -212,7 +213,9 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
 
     private void seedAssignment(UUID sessionId, UUID studentId) {
         assignmentRepository.save(
-            new PhysicalCapacityAssignmentJpaEntity(UUID.randomUUID(), sessionId, studentId, Instant.now())
+            new PhysicalCapacityAssignmentJpaEntity(
+                UUID.randomUUID(), sessionId, studentId, AssignmentType.MONTHLY, Instant.now()
+            )
         );
     }
 

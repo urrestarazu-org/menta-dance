@@ -1,7 +1,10 @@
 package com.menta.physical.infrastructure.persistence.entity;
 
+import com.menta.shared.physical.AssignmentType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
@@ -23,6 +26,10 @@ import java.util.UUID;
  * guarantee a redelivered outbox event relies on to insert zero additional
  * rows for an already-claimed (session, student) pair — a schema/production
  * parity gap this entity mapping must not reintroduce.</p>
+ *
+ * <p>{@code assignment_type} mirrors V26's {@code NOT NULL} column for the same
+ * reason: the entity must declare it non-nullable so the create-drop test schema
+ * rejects a row written without a type, exactly like production.</p>
  */
 @Entity
 @Table(
@@ -43,6 +50,10 @@ public class PhysicalCapacityAssignmentJpaEntity {
     @Column(name = "student_id", nullable = false, updatable = false)
     private UUID studentId;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "assignment_type", nullable = false, updatable = false, columnDefinition = "VARCHAR(20)")
+    private AssignmentType assignmentType;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -50,10 +61,13 @@ public class PhysicalCapacityAssignmentJpaEntity {
         // JPA requires a no-arg constructor.
     }
 
-    public PhysicalCapacityAssignmentJpaEntity(UUID id, UUID sessionId, UUID studentId, Instant createdAt) {
+    public PhysicalCapacityAssignmentJpaEntity(
+        UUID id, UUID sessionId, UUID studentId, AssignmentType assignmentType, Instant createdAt
+    ) {
         this.id = id;
         this.sessionId = sessionId;
         this.studentId = studentId;
+        this.assignmentType = assignmentType;
         this.createdAt = createdAt;
     }
 
@@ -67,6 +81,10 @@ public class PhysicalCapacityAssignmentJpaEntity {
 
     public UUID getStudentId() {
         return studentId;
+    }
+
+    public AssignmentType getAssignmentType() {
+        return assignmentType;
     }
 
     public Instant getCreatedAt() {

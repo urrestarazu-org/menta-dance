@@ -19,16 +19,19 @@ import java.util.UUID;
  * @param studentId the buyer's user id (Capacity row keys on this — V7 line 44 UNIQUE per (session, student)).
  * @param paymentId the billing payment id this capacity row is a consequence of. The capacity row itself does not carry
  *     this id (see V7 schema); the link is reconstructed via {@code billing_purchases.payment_id} when needed.
+ * @param assignmentType how the seat was acquired; persisted verbatim on the assignment row.
  */
 public record CapacityAssignmentCommand(
     UUID sessionId,
     UUID studentId,
-    UUID paymentId
+    UUID paymentId,
+    AssignmentType assignmentType
 ) {
 
     public CapacityAssignmentCommand {
         Objects.requireNonNull(sessionId, "sessionId cannot be null");
         Objects.requireNonNull(studentId, "studentId cannot be null");
         Objects.requireNonNull(paymentId, "paymentId cannot be null");
+        Objects.requireNonNull(assignmentType, "assignmentType cannot be null");
     }
 }

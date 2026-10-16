@@ -2,6 +2,7 @@ package com.menta.physical.application.port.in;
 
 import com.menta.physical.application.usecase.CapacityHolds;
 import com.menta.physical.application.usecase.ConvertOutcome;
+import com.menta.shared.physical.AssignmentType;
 import com.menta.shared.physical.MultiSessionCapacityHoldCommand;
 import java.time.Instant;
 import java.util.List;
@@ -48,6 +49,8 @@ public interface PhysicalCapacityHoldPort {
      * {@code REQUIRES_NEW} transaction, per session in the hold's own claim
      * order.
      *
+     * @param type how the seats were acquired, resolved by the caller; every converted
+     *     assignment row is persisted with it (ignored for an already-converted hold).
      * @return {@link ConvertOutcome.HoldNotFound} when the payment never had
      *     a hold, {@link ConvertOutcome.AlreadyConverted} on a redelivered,
      *     already-converted hold, or {@link ConvertOutcome.Converted} with
@@ -60,7 +63,7 @@ public interface PhysicalCapacityHoldPort {
      *     row collision shows the student already holds it; every earlier write
      *     in this call is rolled back with either failure.
      */
-    ConvertOutcome convertAll(UUID paymentId, UUID studentId);
+    ConvertOutcome convertAll(UUID paymentId, UUID studentId, AssignmentType type);
 
     /**
      * The session ids currently held for {@code paymentId}, in claim order
