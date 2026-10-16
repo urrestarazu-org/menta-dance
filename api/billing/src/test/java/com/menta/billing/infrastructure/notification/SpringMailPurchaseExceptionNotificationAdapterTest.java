@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.menta.billing.application.dto.PurchaseExceptionNotification;
+import com.menta.billing.domain.model.Reason;
 import com.menta.shared.auth.UserEmailLookupPort;
 import java.time.Instant;
 import java.util.Optional;
@@ -16,6 +17,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -66,6 +69,21 @@ class SpringMailPurchaseExceptionNotificationAdapterTest {
         assertThat(ops.getText()).contains("CAPACITY_BELOW_ASSIGNED");
         assertThat(ops.getText()).contains(PAYMENT_ID.toString());
         assertThat(ops.getText()).contains(PURCHASE_ID.toString());
+    }
+
+    @ParameterizedTest
+    @EnumSource(Reason.class)
+    void ops_message_carries_the_raw_reason_code_for_every_reason(Reason reason) {
+        when(userEmailLookupPort.findEmailById(USER_ID)).thenReturn(Optional.empty());
+        PurchaseExceptionNotification notification = new PurchaseExceptionNotification(
+            PAYMENT_ID, PURCHASE_ID, USER_ID, reason.name(), OCCURRED_AT, "billing.PurchaseExceptioned"
+        );
+
+        adapter.notify(notification);
+
+        ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);
+        verify(mailSender).send(captor.capture());
+        assertThat(captor.getValue().getText()).contains("reason=" + reason.name());
     }
 
     @Test

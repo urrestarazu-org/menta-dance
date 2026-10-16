@@ -154,8 +154,10 @@ Cuando una Purchase presencial pasa a `EXCEPTION`, el evento `billing.PurchaseEx
 `CAPACITY_BELOW_ASSIGNED` (la capacidad real de una sesión no alcanza para asignar al
 alumno), `ALREADY_ASSIGNED` (el alumno ya tiene confirmada una de las sesiones a asignar,
 aunque sobre cupo; lo detecta la unicidad `(session_id, student_id)`), `HOLD_EXPIRED`,
-`COVERAGE_CHANGED`, `TARGET_NOT_SCHEDULED` y `UNIQUE_COLLISION`. Quien investiga una compra
-en `EXCEPTION` debe usar ese motivo: `ALREADY_ASSIGNED` no indica falta de capacidad.
+`COVERAGE_CHANGED`, `TARGET_NOT_SCHEDULED`, `QUOTE_NOT_FOUND` (el quote de la compra ya no
+existe al confirmar el pago, por lo que no se puede resolver el tipo de asignación) y
+`UNIQUE_COLLISION`. Quien investiga una compra en `EXCEPTION` debe usar ese motivo:
+`ALREADY_ASSIGNED` no indica falta de capacidad.
 
 Una Purchase en `EXCEPTION` sale de ese estado únicamente por una resolución administrativa
 (#539): `POST /api/v1/admin/billing/purchases/{purchaseId}/resolution` con `resolution`
