@@ -64,6 +64,7 @@ import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJ
 import com.menta.shared.billing.PaymentCompletedOutboxPayload;
 import com.menta.shared.domain.vo.Email;
 import com.menta.shared.outbox.OutboxStatus;
+import com.menta.shared.physical.AssignmentType;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalTime;
@@ -455,6 +456,17 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         }
     }
 
+    /** Every assignment of the student on {@code sessionIds} was persisted with exactly this type. */
+    private void assertAssignmentsTyped(UUID userId, List<UUID> sessionIds, AssignmentType expected) {
+        for (UUID sessionId : sessionIds) {
+            assertThat(assignmentRepository.findAll())
+                .filteredOn(a -> a.getSessionId().equals(sessionId) && a.getStudentId().equals(userId))
+                .singleElement()
+                .extracting(PhysicalCapacityAssignmentJpaEntity::getAssignmentType)
+                .isEqualTo(expected);
+        }
+    }
+
     private List<OutboxRowJpaEntity> outboxRowsFor(String eventType, UUID paymentId) {
         return outboxRepository.findAll().stream()
             .filter(row -> row.getEventType().equals(eventType))
@@ -495,6 +507,8 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
             assertThat(assignmentRepository.countBySessionId(sessionId)).isEqualTo(1);
             assertThat(assignmentRepository.existsBySessionIdAndStudentId(sessionId, userId)).isTrue();
         }
+        // #521: a held MONTHLY quote persists MONTHLY on every converted assignment.
+        assertAssignmentsTyped(userId, sessionIds, AssignmentType.MONTHLY);
     }
 
     // --- Scenario 1b: MONTHLY skips the sessions the student already owns (#523) ---
@@ -513,7 +527,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         List<UUID> sessionIds = seedScheduledSessions(courseId, 4, 5);
         UUID owned = sessionIds.get(0);
         assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
-            UUID.randomUUID(), owned, userId, Instant.now()
+            UUID.randomUUID(), owned, userId, AssignmentType.MONTHLY, Instant.now()
         ));
         String quoteId = seedMonthlyQuote(courseId, 3, MONTHLY_PRICE);
 
@@ -545,7 +559,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         List<UUID> sessionIds = seedScheduledSessions(courseId, 3, 5);
         UUID owned = sessionIds.get(0);
         assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
-            UUID.randomUUID(), owned, userId, Instant.now()
+            UUID.randomUUID(), owned, userId, AssignmentType.MONTHLY, Instant.now()
         ));
         String quoteId = seedMonthlyQuote(courseId, 2, MONTHLY_PRICE);
         UUID admin = seedAdmin();
@@ -560,6 +574,8 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
             .extracting(s -> UUID.fromString(s.getPhysicalSessionId()))
             .containsExactlyElementsOf(sessionIds.subList(1, 3));
         assertThat(assignmentRepository.countBySessionId(owned)).isEqualTo(1);
+        // #521: the legacy assignAll path persists the command type (MONTHLY) on the new rows.
+        assertAssignmentsTyped(userId, sessionIds.subList(1, 3), AssignmentType.MONTHLY);
     }
 
     // --- Scenario 1c: MONTHLY with nothing new to buy is refused before any hold or Payment (#541) ---
@@ -572,10 +588,10 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         List<UUID> sessionIds = seedScheduledSessions(courseId, 3, 5);
         // The monthly covers the next two sessions; the student already holds both.
         assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
-            UUID.randomUUID(), sessionIds.get(0), userId, Instant.now()
+            UUID.randomUUID(), sessionIds.get(0), userId, AssignmentType.MONTHLY, Instant.now()
         ));
         assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
-            UUID.randomUUID(), sessionIds.get(1), userId, Instant.now()
+            UUID.randomUUID(), sessionIds.get(1), userId, AssignmentType.MONTHLY, Instant.now()
         ));
         String quoteId = seedMonthlyQuote(courseId, 2, MONTHLY_PRICE);
 
@@ -595,10 +611,10 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         UUID courseId = seedCourse();
         List<UUID> sessionIds = seedScheduledSessions(courseId, 3, 5);
         assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
-            UUID.randomUUID(), sessionIds.get(0), userId, Instant.now()
+            UUID.randomUUID(), sessionIds.get(0), userId, AssignmentType.MONTHLY, Instant.now()
         ));
         assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
-            UUID.randomUUID(), sessionIds.get(1), userId, Instant.now()
+            UUID.randomUUID(), sessionIds.get(1), userId, AssignmentType.MONTHLY, Instant.now()
         ));
         String quoteId = seedMonthlyQuote(courseId, 2, MONTHLY_PRICE);
 
@@ -618,7 +634,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         UUID courseId = seedCourse();
         UUID session = seedScheduledSessions(courseId, 1, 5).get(0);
         assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
-            UUID.randomUUID(), session, userId, Instant.now()
+            UUID.randomUUID(), session, userId, AssignmentType.INDIVIDUAL, Instant.now()
         ));
         String quoteId = seedIndividualQuote(courseId, session, INDIVIDUAL_PRICE);
 
@@ -639,7 +655,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         UUID courseId = seedCourse();
         UUID session = seedScheduledSessions(courseId, 1, 5).get(0);
         assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
-            UUID.randomUUID(), session, userId, Instant.now()
+            UUID.randomUUID(), session, userId, AssignmentType.INDIVIDUAL, Instant.now()
         ));
         String quoteId = seedIndividualQuote(courseId, session, INDIVIDUAL_PRICE);
 
@@ -674,6 +690,8 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         assertThat(purchaseSessionRepository.findByPurchaseIdOrderByPositionAsc(purchase.getId())).hasSize(1);
         assertThat(assignmentRepository.countBySessionId(selectedSessionId)).isEqualTo(1);
         assertThat(assignmentRepository.existsBySessionIdAndStudentId(selectedSessionId, userId)).isTrue();
+        // #521: a held INDIVIDUAL quote persists INDIVIDUAL.
+        assertAssignmentsTyped(userId, List.of(selectedSessionId), AssignmentType.INDIVIDUAL);
     }
 
     // --- Scenario 5: duplicate webhook / outbox redelivery --------------------
@@ -794,7 +812,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         // only spot on one of the two sessions this quote covers.
         UUID contestedSession = sessionIds.get(0);
         assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
-            UUID.randomUUID(), contestedSession, UUID.randomUUID(), Instant.now()
+            UUID.randomUUID(), contestedSession, UUID.randomUUID(), AssignmentType.MONTHLY, Instant.now()
         ));
 
         OutboxRowJpaEntity event = confirmPayment("mp-capacity-trip-1", externalReference, MONTHLY_PRICE);
@@ -833,7 +851,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         UUID paymentId = UUID.fromString((String) checkout.getBody().get("paymentId"));
 
         assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
-            UUID.randomUUID(), session, userId, Instant.now()
+            UUID.randomUUID(), session, userId, AssignmentType.INDIVIDUAL, Instant.now()
         ));
 
         OutboxRowJpaEntity event = confirmPayment("mp-already-assigned-hold-1", externalReference, INDIVIDUAL_PRICE);
@@ -871,7 +889,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         // Between checkout and confirmation the student gets the last held session by another route.
         UUID lateAssigned = sessionIds.get(2);
         assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
-            UUID.randomUUID(), lateAssigned, userId, Instant.now()
+            UUID.randomUUID(), lateAssigned, userId, AssignmentType.MONTHLY, Instant.now()
         ));
 
         OutboxRowJpaEntity event = confirmPayment("mp-monthly-window-1", externalReference, MONTHLY_PRICE);
@@ -901,7 +919,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         UUID admin = seedAdmin();
         PaymentId paymentId = seedAwaitingManualVerificationPhysicalPayment(userId, quoteId, INDIVIDUAL_PRICE);
         assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
-            UUID.randomUUID(), session, userId, Instant.now()
+            UUID.randomUUID(), session, userId, AssignmentType.INDIVIDUAL, Instant.now()
         ));
 
         assertThat(approve(admin, paymentId).getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -924,7 +942,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         UUID fullSession = sessionIds.get(0);
         // Capacity 1, already occupied by someone else — availableSpots reads 0.
         assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
-            UUID.randomUUID(), fullSession, UUID.randomUUID(), Instant.now()
+            UUID.randomUUID(), fullSession, UUID.randomUUID(), AssignmentType.MONTHLY, Instant.now()
         ));
         String quoteId = seedIndividualQuote(courseId, fullSession, INDIVIDUAL_PRICE);
 
@@ -1108,7 +1126,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         // scenario above.
         UUID contestedSession = sessionIds.get(0);
         assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
-            UUID.randomUUID(), contestedSession, UUID.randomUUID(), Instant.now()
+            UUID.randomUUID(), contestedSession, UUID.randomUUID(), AssignmentType.MONTHLY, Instant.now()
         ));
 
         OutboxRowJpaEntity event = confirmPayment("mp-d1-exception-1", externalReference, MONTHLY_PRICE);
@@ -1237,7 +1255,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
 
         UUID contestedSession = sessionIds.get(0);
         assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
-            UUID.randomUUID(), contestedSession, UUID.randomUUID(), Instant.now()
+            UUID.randomUUID(), contestedSession, UUID.randomUUID(), AssignmentType.MONTHLY, Instant.now()
         ));
 
         outboxRepository.save(new OutboxRowJpaEntity(
@@ -1418,7 +1436,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         List<UUID> sessionIds = seedScheduledSessions(courseId, 1, 1);
         UUID fullSession = sessionIds.get(0);
         assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
-            UUID.randomUUID(), fullSession, UUID.randomUUID(), Instant.now()
+            UUID.randomUUID(), fullSession, UUID.randomUUID(), AssignmentType.MONTHLY, Instant.now()
         ));
         String quoteId = seedIndividualQuote(courseId, fullSession, INDIVIDUAL_PRICE);
 
@@ -1485,7 +1503,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         // between checkout (never a hold here, D1) and confirmation.
         UUID contestedSession = sessionIds.get(0);
         assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
-            UUID.randomUUID(), contestedSession, UUID.randomUUID(), Instant.now()
+            UUID.randomUUID(), contestedSession, UUID.randomUUID(), AssignmentType.MONTHLY, Instant.now()
         ));
 
         ResponseEntity<Map> response = approve(admin, paymentId);

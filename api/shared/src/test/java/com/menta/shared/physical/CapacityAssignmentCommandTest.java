@@ -27,32 +27,49 @@ class CapacityAssignmentCommandTest {
     @Test
     void builds_a_command_with_verbatim_uuids() {
         CapacityAssignmentCommand command = new CapacityAssignmentCommand(
-            SESSION_ID, STUDENT_ID, PAYMENT_ID
+            SESSION_ID, STUDENT_ID, PAYMENT_ID, AssignmentType.MONTHLY
         );
 
         assertThat(command.sessionId()).isEqualTo(SESSION_ID);
         assertThat(command.studentId()).isEqualTo(STUDENT_ID);
         assertThat(command.paymentId()).isEqualTo(PAYMENT_ID);
+        assertThat(command.assignmentType()).isEqualTo(AssignmentType.MONTHLY);
+    }
+
+    @Test
+    void exposes_the_individual_assignment_type_unchanged() {
+        CapacityAssignmentCommand command = new CapacityAssignmentCommand(
+            SESSION_ID, STUDENT_ID, PAYMENT_ID, AssignmentType.INDIVIDUAL
+        );
+
+        assertThat(command.assignmentType()).isEqualTo(AssignmentType.INDIVIDUAL);
+    }
+
+    @Test
+    void rejects_null_assignment_type() {
+        assertThatThrownBy(() -> new CapacityAssignmentCommand(
+            SESSION_ID, STUDENT_ID, PAYMENT_ID, null
+        )).isInstanceOf(NullPointerException.class);
     }
 
     @Test
     void rejects_null_session_id() {
         assertThatThrownBy(() -> new CapacityAssignmentCommand(
-            null, STUDENT_ID, PAYMENT_ID
+            null, STUDENT_ID, PAYMENT_ID, AssignmentType.MONTHLY
         )).isInstanceOf(NullPointerException.class);
     }
 
     @Test
     void rejects_null_student_id() {
         assertThatThrownBy(() -> new CapacityAssignmentCommand(
-            SESSION_ID, null, PAYMENT_ID
+            SESSION_ID, null, PAYMENT_ID, AssignmentType.MONTHLY
         )).isInstanceOf(NullPointerException.class);
     }
 
     @Test
     void rejects_null_payment_id() {
         assertThatThrownBy(() -> new CapacityAssignmentCommand(
-            SESSION_ID, STUDENT_ID, null
+            SESSION_ID, STUDENT_ID, null, AssignmentType.MONTHLY
         )).isInstanceOf(NullPointerException.class);
     }
 }

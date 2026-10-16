@@ -15,6 +15,7 @@ import com.menta.physical.domain.model.SessionStatus;
 import com.menta.physical.infrastructure.qr.QrProperties;
 import com.menta.shared.demo.DemoIds;
 import com.menta.shared.demo.DemoSeedOrder;
+import com.menta.shared.physical.AssignmentType;
 import com.menta.shared.physical.CapacityAssignmentCommand;
 import java.time.DayOfWeek;
 import java.time.Duration;
@@ -160,7 +161,7 @@ public final class DemoPhysicalCatalogFixture implements ApplicationRunner, Orde
     private void ensureSeat(SessionId sessionId) {
         if (!assignmentRepository.existsConfirmedAssignment(sessionId, DemoIds.STUDENT_USER_ID)) {
             assignmentPort.assign(new CapacityAssignmentCommand(
-                sessionId.getValue(), DemoIds.STUDENT_USER_ID, SEAT_PAYMENT_ID));
+                sessionId.getValue(), DemoIds.STUDENT_USER_ID, SEAT_PAYMENT_ID, AssignmentType.INDIVIDUAL));
         }
     }
 

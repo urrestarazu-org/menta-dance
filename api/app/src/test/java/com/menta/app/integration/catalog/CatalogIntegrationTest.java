@@ -10,6 +10,7 @@ import com.menta.physical.infrastructure.persistence.entity.PhysicalSessionJpaEn
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityAssignmentJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
+import com.menta.shared.physical.AssignmentType;
 import com.menta.virtual.infrastructure.persistence.entity.VirtualCourseJpaEntity;
 import com.menta.virtual.infrastructure.persistence.entity.VirtualLessonJpaEntity;
 import com.menta.virtual.infrastructure.persistence.entity.VirtualModuleJpaEntity;
@@ -83,7 +84,7 @@ class CatalogIntegrationTest extends CatalogAccessMocksIntegrationTestBase {
     private void seedAssignments(UUID sessionId, int count) {
         for (int i = 0; i < count; i++) {
             physicalAssignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
-                UUID.randomUUID(), sessionId, UUID.randomUUID(), Instant.now()));
+                UUID.randomUUID(), sessionId, UUID.randomUUID(), AssignmentType.MONTHLY, Instant.now()));
         }
     }
 

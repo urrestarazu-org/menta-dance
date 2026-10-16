@@ -15,6 +15,7 @@ import com.menta.physical.application.port.out.PhysicalCapacityAssignmentWriter;
 import com.menta.physical.application.port.out.PhysicalCapacityHoldWriter;
 import com.menta.physical.domain.exception.CapacityBelowAssignedException;
 import com.menta.physical.domain.exception.StudentAlreadyAssignedException;
+import com.menta.shared.physical.AssignmentType;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -44,10 +45,10 @@ class ConvertCapacityHoldUseCaseTest {
         UUID studentId = UUID.randomUUID();
         when(holdWriter.findByPaymentIdOrdered(paymentId)).thenReturn(List.of());
 
-        ConvertOutcome outcome = useCase.convertAll(paymentId, studentId);
+        ConvertOutcome outcome = useCase.convertAll(paymentId, studentId, AssignmentType.MONTHLY);
 
         assertThat(outcome).isInstanceOf(ConvertOutcome.HoldNotFound.class);
-        verify(assignmentWriter, never()).assertAssignment(any(), any());
+        verify(assignmentWriter, never()).assertAssignment(any(), any(), any());
         verify(holdWriter, never()).markConverted(any(), any());
     }
 
@@ -65,10 +66,10 @@ class ConvertCapacityHoldUseCaseTest {
             new HeldSessionRow(session1, true), new HeldSessionRow(session2, true)
         ));
 
-        ConvertOutcome outcome = useCase.convertAll(paymentId, studentId);
+        ConvertOutcome outcome = useCase.convertAll(paymentId, studentId, AssignmentType.MONTHLY);
 
         assertThat(outcome).isInstanceOf(ConvertOutcome.AlreadyConverted.class);
-        verify(assignmentWriter, never()).assertAssignment(any(), any());
+        verify(assignmentWriter, never()).assertAssignment(any(), any(), any());
         verify(holdWriter, never()).markConverted(any(), any());
     }
 
@@ -85,18 +86,19 @@ class ConvertCapacityHoldUseCaseTest {
         when(holdWriter.findByPaymentIdOrdered(paymentId)).thenReturn(List.of(
             new HeldSessionRow(session1, false), new HeldSessionRow(session2, false)
         ));
-        when(assignmentWriter.assertAssignment(any(), eq(studentId))).thenReturn(Instant.EPOCH);
+        when(assignmentWriter.assertAssignment(any(), eq(studentId), eq(AssignmentType.MONTHLY)))
+            .thenReturn(Instant.EPOCH);
 
-        ConvertOutcome outcome = useCase.convertAll(paymentId, studentId);
+        ConvertOutcome outcome = useCase.convertAll(paymentId, studentId, AssignmentType.MONTHLY);
 
         assertThat(outcome).isInstanceOf(ConvertOutcome.Converted.class);
         assertThat(((ConvertOutcome.Converted) outcome).sessionIds()).containsExactly(session1, session2);
 
         InOrder order = inOrder(holdWriter, assignmentWriter);
         order.verify(holdWriter).markConverted(paymentId, session1);
-        order.verify(assignmentWriter).assertAssignment(session1, studentId);
+        order.verify(assignmentWriter).assertAssignment(session1, studentId, AssignmentType.MONTHLY);
         order.verify(holdWriter).markConverted(paymentId, session2);
-        order.verify(assignmentWriter).assertAssignment(session2, studentId);
+        order.verify(assignmentWriter).assertAssignment(session2, studentId, AssignmentType.MONTHLY);
     }
 
     @Test
@@ -109,9 +111,10 @@ class ConvertCapacityHoldUseCaseTest {
         UUID studentId = UUID.randomUUID();
         UUID session1 = UUID.randomUUID();
         when(holdWriter.findByPaymentIdOrdered(paymentId)).thenReturn(List.of(new HeldSessionRow(session1, false)));
-        when(assignmentWriter.assertAssignment(session1, studentId)).thenThrow(new StudentAlreadyAssignedException());
+        when(assignmentWriter.assertAssignment(session1, studentId, AssignmentType.MONTHLY))
+            .thenThrow(new StudentAlreadyAssignedException());
 
-        assertThatThrownBy(() -> useCase.convertAll(paymentId, studentId))
+        assertThatThrownBy(() -> useCase.convertAll(paymentId, studentId, AssignmentType.MONTHLY))
             .isInstanceOf(StudentAlreadyAssignedException.class);
 
         verify(holdWriter).markConverted(paymentId, session1);
@@ -127,10 +130,10 @@ class ConvertCapacityHoldUseCaseTest {
         UUID studentId = UUID.randomUUID();
         UUID session1 = UUID.randomUUID();
         when(holdWriter.findByPaymentIdOrdered(paymentId)).thenReturn(List.of(new HeldSessionRow(session1, false)));
-        when(assignmentWriter.assertAssignment(session1, studentId))
+        when(assignmentWriter.assertAssignment(session1, studentId, AssignmentType.MONTHLY))
             .thenThrow(new DataIntegrityViolationException("unrelated integrity failure"));
 
-        assertThatThrownBy(() -> useCase.convertAll(paymentId, studentId))
+        assertThatThrownBy(() -> useCase.convertAll(paymentId, studentId, AssignmentType.MONTHLY))
             .isInstanceOf(DataIntegrityViolationException.class);
     }
 
@@ -147,14 +150,35 @@ class ConvertCapacityHoldUseCaseTest {
         when(holdWriter.findByPaymentIdOrdered(paymentId)).thenReturn(List.of(
             new HeldSessionRow(session1, false), new HeldSessionRow(session2, false)
         ));
-        when(assignmentWriter.assertAssignment(session1, studentId))
+        when(assignmentWriter.assertAssignment(session1, studentId, AssignmentType.MONTHLY))
             .thenThrow(new CapacityBelowAssignedException());
 
-        assertThatThrownBy(() -> useCase.convertAll(paymentId, studentId))
+        assertThatThrownBy(() -> useCase.convertAll(paymentId, studentId, AssignmentType.MONTHLY))
             .isInstanceOf(CapacityBelowAssignedException.class);
 
         verify(holdWriter).markConverted(paymentId, session1);
         verify(holdWriter, never()).markConverted(paymentId, session2);
-        verify(assignmentWriter, never()).assertAssignment(eq(session2), any());
+        verify(assignmentWriter, never()).assertAssignment(eq(session2), any(), any());
+    }
+
+    @Test
+    void convertAll_passes_the_resolved_type_to_every_assignment() {
+        PhysicalCapacityHoldWriter holdWriter = mock(PhysicalCapacityHoldWriter.class);
+        PhysicalCapacityAssignmentWriter assignmentWriter = mock(PhysicalCapacityAssignmentWriter.class);
+        ConvertCapacityHoldUseCase useCase = new ConvertCapacityHoldUseCase(holdWriter, assignmentWriter);
+
+        UUID paymentId = UUID.randomUUID();
+        UUID studentId = UUID.randomUUID();
+        UUID session1 = UUID.randomUUID();
+        UUID session2 = UUID.randomUUID();
+        when(holdWriter.findByPaymentIdOrdered(paymentId)).thenReturn(List.of(
+            new HeldSessionRow(session1, false), new HeldSessionRow(session2, false)
+        ));
+
+        useCase.convertAll(paymentId, studentId, AssignmentType.INDIVIDUAL);
+
+        verify(assignmentWriter).assertAssignment(session1, studentId, AssignmentType.INDIVIDUAL);
+        verify(assignmentWriter).assertAssignment(session2, studentId, AssignmentType.INDIVIDUAL);
+        verify(assignmentWriter, never()).assertAssignment(any(), any(), eq(AssignmentType.MONTHLY));
     }
 }

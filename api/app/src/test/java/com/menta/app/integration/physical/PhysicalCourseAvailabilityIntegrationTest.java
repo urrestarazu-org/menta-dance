@@ -15,6 +15,7 @@ import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacity
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityHoldJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
+import com.menta.shared.physical.AssignmentType;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
@@ -75,7 +76,7 @@ class PhysicalCourseAvailabilityIntegrationTest extends PhysicalVirtualCatalogPo
 
     private void seedAssignment(UUID sessionId) {
         assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
-            UUID.randomUUID(), sessionId, UUID.randomUUID(), Instant.now()
+            UUID.randomUUID(), sessionId, UUID.randomUUID(), AssignmentType.MONTHLY, Instant.now()
         ));
     }
 

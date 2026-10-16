@@ -4,6 +4,7 @@ import com.menta.physical.application.port.in.PhysicalCapacityAssignmentPort;
 import com.menta.physical.application.port.out.PhysicalCapacityAssignmentWriter;
 import com.menta.physical.domain.exception.CapacityBelowAssignedException;
 import com.menta.physical.domain.exception.SessionNotFoundException;
+import com.menta.shared.physical.AssignmentType;
 import com.menta.shared.physical.CapacityAssignmentCommand;
 import com.menta.shared.physical.MultiSessionCapacityAssignmentCommand;
 import com.menta.shared.physical.SessionClaim;
@@ -72,7 +73,7 @@ public class AssignCapacityUseCase implements PhysicalCapacityAssignmentPort {
         // placeholder, never compared against anything.
         SessionClaim onlyClaim = new SessionClaim(command.sessionId(), Instant.EPOCH);
         MultiSessionCapacityAssignmentCommand singleton = new MultiSessionCapacityAssignmentCommand(
-            List.of(onlyClaim), command.studentId(), command.paymentId()
+            List.of(onlyClaim), command.studentId(), command.paymentId(), command.assignmentType()
         );
 
         assignAll(singleton);
@@ -83,7 +84,7 @@ public class AssignCapacityUseCase implements PhysicalCapacityAssignmentPort {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public CapacityAssignments assignAll(MultiSessionCapacityAssignmentCommand command) {
         for (SessionClaim claim : command.claims()) {
-            claimOne(claim.sessionId(), command.studentId());
+            claimOne(claim.sessionId(), command.studentId(), command.assignmentType());
         }
         return new CapacityAssignments(command.claims().stream().map(SessionClaim::sessionId).toList());
     }
@@ -118,7 +119,7 @@ public class AssignCapacityUseCase implements PhysicalCapacityAssignmentPort {
      * It always runs inside the {@code REQUIRES_NEW} transaction already
      * opened by {@link #assign} or {@link #assignAll}.</p>
      */
-    private void claimOne(UUID sessionId, UUID studentId) {
-        assignmentWriter.assertAssignment(sessionId, studentId);
+    private void claimOne(UUID sessionId, UUID studentId, AssignmentType type) {
+        assignmentWriter.assertAssignment(sessionId, studentId, type);
     }
 }

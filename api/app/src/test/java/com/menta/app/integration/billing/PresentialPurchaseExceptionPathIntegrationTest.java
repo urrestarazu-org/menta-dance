@@ -40,6 +40,7 @@ import com.menta.physical.infrastructure.persistence.entity.PhysicalSessionJpaEn
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityAssignmentJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
+import com.menta.shared.physical.AssignmentType;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalTime;
@@ -112,7 +113,7 @@ class PresentialPurchaseExceptionPathIntegrationTest extends AbstractBillingMySq
         UUID courseId = UUID.randomUUID();
         UUID sessionId = seedSessionWithCapacityOne(courseId);
         assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
-            UUID.randomUUID(), sessionId, UUID.randomUUID(), Instant.now()
+            UUID.randomUUID(), sessionId, UUID.randomUUID(), AssignmentType.MONTHLY, Instant.now()
         ));
         UUID paymentId = UUID.randomUUID();
         UUID studentId = UUID.randomUUID();

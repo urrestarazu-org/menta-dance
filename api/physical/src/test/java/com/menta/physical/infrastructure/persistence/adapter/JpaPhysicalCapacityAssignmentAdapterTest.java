@@ -17,6 +17,7 @@ import com.menta.physical.infrastructure.persistence.entity.PhysicalCapacityAssi
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityAssignmentJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityHoldJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
+import com.menta.shared.physical.AssignmentType;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -75,7 +76,7 @@ class JpaPhysicalCapacityAssignmentAdapterTest {
         void assertAssignment_saves_one_row_when_assignedSpots_plus_one_does_not_exceed_capacity() {
             stubSessionWithCapacity(2, 0);
 
-            Instant returned = adapter.assertAssignment(SESSION_UUID, STUDENT_UUID);
+            Instant returned = adapter.assertAssignment(SESSION_UUID, STUDENT_UUID, AssignmentType.MONTHLY);
 
             assertThat(returned).isEqualTo(NOW);
 
@@ -90,6 +91,20 @@ class JpaPhysicalCapacityAssignmentAdapterTest {
             assertThat(row.getSessionId()).isEqualTo(SESSION_UUID);
             assertThat(row.getStudentId()).isEqualTo(STUDENT_UUID);
             assertThat(row.getCreatedAt()).isEqualTo(NOW);
+            assertThat(row.getAssignmentType()).isEqualTo(AssignmentType.MONTHLY);
+        }
+
+        @Test
+        void assertAssignment_persists_the_type_it_is_given_not_a_default() {
+            stubSessionWithCapacity(2, 0);
+
+            adapter.assertAssignment(SESSION_UUID, STUDENT_UUID, AssignmentType.INDIVIDUAL);
+
+            ArgumentCaptor<PhysicalCapacityAssignmentJpaEntity> captor = ArgumentCaptor.forClass(
+                PhysicalCapacityAssignmentJpaEntity.class
+            );
+            verify(assignmentRepository).save(captor.capture());
+            assertThat(captor.getValue().getAssignmentType()).isEqualTo(AssignmentType.INDIVIDUAL);
         }
 
         /**
@@ -100,7 +115,7 @@ class JpaPhysicalCapacityAssignmentAdapterTest {
         void assertAssignment_writes_nothing_when_assignedSpots_plus_one_exceeds_capacity() {
             stubSessionWithCapacity(1, 1);
 
-            assertThatThrownBy(() -> adapter.assertAssignment(SESSION_UUID, STUDENT_UUID))
+            assertThatThrownBy(() -> adapter.assertAssignment(SESSION_UUID, STUDENT_UUID, AssignmentType.MONTHLY))
                 .isInstanceOf(CapacityBelowAssignedException.class);
 
             verify(assignmentRepository, never()).save(any(PhysicalCapacityAssignmentJpaEntity.class));
@@ -111,7 +126,7 @@ class JpaPhysicalCapacityAssignmentAdapterTest {
         void assertAssignment_throws_SessionNotFound_when_the_locking_read_finds_no_row() {
             when(sessionRepository.lockCapacityForUpdate(SESSION_UUID)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> adapter.assertAssignment(SESSION_UUID, STUDENT_UUID))
+            assertThatThrownBy(() -> adapter.assertAssignment(SESSION_UUID, STUDENT_UUID, AssignmentType.MONTHLY))
                 .isInstanceOf(SessionNotFoundException.class);
 
             verify(assignmentRepository, never()).save(any(PhysicalCapacityAssignmentJpaEntity.class));
@@ -131,7 +146,7 @@ class JpaPhysicalCapacityAssignmentAdapterTest {
         void the_session_row_is_locked_before_the_assignments_are_counted() {
             stubSessionWithCapacity(2, 0);
 
-            adapter.assertAssignment(SESSION_UUID, STUDENT_UUID);
+            adapter.assertAssignment(SESSION_UUID, STUDENT_UUID, AssignmentType.MONTHLY);
 
             InOrder inOrder = inOrder(sessionRepository, assignmentRepository, holdRepository);
             inOrder.verify(sessionRepository).lockCapacityForUpdate(SESSION_UUID);
@@ -153,7 +168,7 @@ class JpaPhysicalCapacityAssignmentAdapterTest {
             when(assignmentRepository.countBySessionIdForUpdate(SESSION_UUID)).thenReturn(1L);
             when(holdRepository.countActiveBySessionIdForUpdate(SESSION_UUID, NOW)).thenReturn(0L);
 
-            assertThatThrownBy(() -> adapter.assertAssignment(SESSION_UUID, STUDENT_UUID))
+            assertThatThrownBy(() -> adapter.assertAssignment(SESSION_UUID, STUDENT_UUID, AssignmentType.MONTHLY))
                 .isInstanceOf(CapacityBelowAssignedException.class);
 
             verify(assignmentRepository, never()).countBySessionId(any(UUID.class));
@@ -169,7 +184,7 @@ class JpaPhysicalCapacityAssignmentAdapterTest {
         void assertAssignment_refuses_when_an_active_hold_already_occupies_the_only_free_spot() {
             stubSessionWithCapacity(1, 0, 1);
 
-            assertThatThrownBy(() -> adapter.assertAssignment(SESSION_UUID, STUDENT_UUID))
+            assertThatThrownBy(() -> adapter.assertAssignment(SESSION_UUID, STUDENT_UUID, AssignmentType.MONTHLY))
                 .isInstanceOf(CapacityBelowAssignedException.class);
 
             verify(assignmentRepository, never()).save(any(PhysicalCapacityAssignmentJpaEntity.class));
@@ -179,7 +194,7 @@ class JpaPhysicalCapacityAssignmentAdapterTest {
         void assertAssignment_consults_the_locking_hold_count_via_countActiveBySessionIdForUpdate() {
             stubSessionWithCapacity(2, 0, 0);
 
-            adapter.assertAssignment(SESSION_UUID, STUDENT_UUID);
+            adapter.assertAssignment(SESSION_UUID, STUDENT_UUID, AssignmentType.MONTHLY);
 
             verify(holdRepository).countActiveBySessionIdForUpdate(SESSION_UUID, NOW);
         }
@@ -201,7 +216,7 @@ class JpaPhysicalCapacityAssignmentAdapterTest {
                 "Duplicate entry for key 'uq_physical_assignment_session_student'"))
                 .when(assignmentRepository).flush();
 
-            assertThatThrownBy(() -> adapter.assertAssignment(SESSION_UUID, STUDENT_UUID))
+            assertThatThrownBy(() -> adapter.assertAssignment(SESSION_UUID, STUDENT_UUID, AssignmentType.MONTHLY))
                 .isInstanceOf(StudentAlreadyAssignedException.class)
                 .isNotInstanceOf(CapacityBelowAssignedException.class);
         }
@@ -210,7 +225,7 @@ class JpaPhysicalCapacityAssignmentAdapterTest {
         void a_real_capacity_refusal_is_still_reported_as_capacity() {
             stubSessionWithCapacity(1, 1);
 
-            assertThatThrownBy(() -> adapter.assertAssignment(SESSION_UUID, STUDENT_UUID))
+            assertThatThrownBy(() -> adapter.assertAssignment(SESSION_UUID, STUDENT_UUID, AssignmentType.MONTHLY))
                 .isInstanceOf(CapacityBelowAssignedException.class);
         }
     }

@@ -4,6 +4,7 @@ import com.menta.physical.application.port.in.PhysicalCapacityHoldPort;
 import com.menta.physical.application.port.out.HeldSessionRow;
 import com.menta.physical.application.port.out.PhysicalCapacityHoldWriter;
 import com.menta.physical.domain.exception.CapacityBelowAssignedException;
+import com.menta.shared.physical.AssignmentType;
 import com.menta.shared.physical.MultiSessionCapacityHoldCommand;
 import com.menta.shared.physical.SessionClaim;
 import java.time.Instant;
@@ -67,8 +68,8 @@ public class CreateCapacityHoldUseCase implements PhysicalCapacityHoldPort {
     }
 
     @Override
-    public ConvertOutcome convertAll(UUID paymentId, UUID studentId) {
-        return convertCapacityHoldUseCase.convertAll(paymentId, studentId);
+    public ConvertOutcome convertAll(UUID paymentId, UUID studentId, AssignmentType type) {
+        return convertCapacityHoldUseCase.convertAll(paymentId, studentId, type);
     }
 
     @Override

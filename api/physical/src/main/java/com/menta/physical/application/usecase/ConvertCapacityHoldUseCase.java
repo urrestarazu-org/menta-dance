@@ -3,6 +3,7 @@ package com.menta.physical.application.usecase;
 import com.menta.physical.application.port.out.HeldSessionRow;
 import com.menta.physical.application.port.out.PhysicalCapacityAssignmentWriter;
 import com.menta.physical.application.port.out.PhysicalCapacityHoldWriter;
+import com.menta.shared.physical.AssignmentType;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -54,9 +55,11 @@ public class ConvertCapacityHoldUseCase {
      * CapacityBelowAssignedException} and a unique-index collision (the student already holds
      * the session) as {@code StudentAlreadyAssignedException}; either rolls back the whole
      * conversion.
+     *
+     * @param type how the seats were acquired; persisted on every assignment row created here.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public ConvertOutcome convertAll(UUID paymentId, UUID studentId) {
+    public ConvertOutcome convertAll(UUID paymentId, UUID studentId, AssignmentType type) {
         List<HeldSessionRow> rows = holdWriter.findByPaymentIdOrdered(paymentId);
 
         if (rows.isEmpty()) {
@@ -68,7 +71,7 @@ public class ConvertCapacityHoldUseCase {
 
         List<UUID> sessionIds = rows.stream().map(HeldSessionRow::sessionId).toList();
         for (UUID sessionId : sessionIds) {
-            convertOne(paymentId, sessionId, studentId);
+            convertOne(paymentId, sessionId, studentId, type);
         }
         return new ConvertOutcome.Converted(sessionIds);
     }
@@ -80,11 +83,11 @@ public class ConvertCapacityHoldUseCase {
      * always runs inside the {@code REQUIRES_NEW} transaction already opened
      * by {@link #convertAll}.
      */
-    private void convertOne(UUID paymentId, UUID sessionId, UUID studentId) {
+    private void convertOne(UUID paymentId, UUID sessionId, UUID studentId, AssignmentType type) {
         holdWriter.markConverted(paymentId, sessionId);
         // Any refusal (capacity, or the student already holding the session)
         // propagates unchanged; the surrounding REQUIRES_NEW transaction rolls
         // back the markConverted call too — all-or-nothing.
-        assignmentWriter.assertAssignment(sessionId, studentId);
+        assignmentWriter.assertAssignment(sessionId, studentId, type);
     }
 }

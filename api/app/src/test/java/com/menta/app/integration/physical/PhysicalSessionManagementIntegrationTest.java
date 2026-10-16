@@ -44,6 +44,7 @@ import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJp
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
 import com.menta.shared.domain.vo.Email;
 import com.menta.shared.outbox.OutboxStatus;
+import com.menta.shared.physical.AssignmentType;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalTime;
@@ -331,10 +332,10 @@ class PhysicalSessionManagementIntegrationTest extends AbstractPhysicalMySqlInte
         // so the domain rule needs at least 2 assigned spots to be testable
         // through the HTTP layer's bean validation.
         assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
-            UUID.randomUUID(), sessionId, UUID.randomUUID(), Instant.now()
+            UUID.randomUUID(), sessionId, UUID.randomUUID(), AssignmentType.MONTHLY, Instant.now()
         ));
         assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
-            UUID.randomUUID(), sessionId, UUID.randomUUID(), Instant.now()
+            UUID.randomUUID(), sessionId, UUID.randomUUID(), AssignmentType.MONTHLY, Instant.now()
         ));
 
         UUID adminId = issueUser(Role.ADMIN);

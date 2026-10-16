@@ -53,6 +53,7 @@ import com.menta.physical.infrastructure.persistence.entity.PhysicalSessionJpaEn
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityAssignmentJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
+import com.menta.shared.physical.AssignmentType;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -398,7 +399,7 @@ class PaymentWebhookIntegrationTest extends AbstractBillingMySqlIntegrationTest 
     void webhook_handler_trips_capacity_invariant_flipping_purchase_to_exception() {
         UUID sessionId = seedSession(1);
         physicalCapacityAssignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
-            UUID.randomUUID(), sessionId, UUID.randomUUID(), Instant.now()
+            UUID.randomUUID(), sessionId, UUID.randomUUID(), AssignmentType.MONTHLY, Instant.now()
         ));
         when(paymentProviderPort.fetchPayment("mp-capacity-full")).thenReturn(
             new ProviderPaymentResult("approved", Money.of(new BigDecimal("100.00"), "ARS"), "ext-1", "merchant-1")

@@ -28,6 +28,7 @@ class MultiSessionCapacityAssignmentCommandTest {
     private static final UUID STUDENT_ID = UUID.fromString("44444444-4444-4444-4444-444444444444");
     private static final UUID PAYMENT_ID = UUID.fromString("55555555-5555-5555-5555-555555555555");
 
+    private static final AssignmentType TYPE = AssignmentType.INDIVIDUAL;
     private static final Instant T1 = Instant.parse("2026-01-01T10:00:00Z");
     private static final Instant T2 = Instant.parse("2026-01-08T10:00:00Z");
     private static final Instant T3 = Instant.parse("2026-01-15T10:00:00Z");
@@ -41,7 +42,7 @@ class MultiSessionCapacityAssignmentCommandTest {
         );
 
         MultiSessionCapacityAssignmentCommand command =
-            new MultiSessionCapacityAssignmentCommand(claims, STUDENT_ID, PAYMENT_ID);
+            new MultiSessionCapacityAssignmentCommand(claims, STUDENT_ID, PAYMENT_ID, TYPE);
 
         assertThat(command.claims()).containsExactly(
             new SessionClaim(SESSION_1, T1),
@@ -50,6 +51,27 @@ class MultiSessionCapacityAssignmentCommandTest {
         );
         assertThat(command.studentId()).isEqualTo(STUDENT_ID);
         assertThat(command.paymentId()).isEqualTo(PAYMENT_ID);
+        assertThat(command.assignmentType()).isEqualTo(AssignmentType.INDIVIDUAL);
+    }
+
+    @Test
+    void exposes_the_monthly_assignment_type_unchanged() {
+        List<SessionClaim> claims = List.of(new SessionClaim(SESSION_1, T1));
+
+        MultiSessionCapacityAssignmentCommand command = new MultiSessionCapacityAssignmentCommand(
+            claims, STUDENT_ID, PAYMENT_ID, AssignmentType.MONTHLY
+        );
+
+        assertThat(command.assignmentType()).isEqualTo(AssignmentType.MONTHLY);
+    }
+
+    @Test
+    void rejects_null_assignment_type() {
+        List<SessionClaim> claims = List.of(new SessionClaim(SESSION_1, T1));
+
+        assertThatThrownBy(() -> new MultiSessionCapacityAssignmentCommand(
+            claims, STUDENT_ID, PAYMENT_ID, null
+        )).isInstanceOf(NullPointerException.class);
     }
 
     @Test
@@ -60,7 +82,7 @@ class MultiSessionCapacityAssignmentCommandTest {
         );
 
         assertThatThrownBy(() -> new MultiSessionCapacityAssignmentCommand(
-            outOfOrder, STUDENT_ID, PAYMENT_ID
+            outOfOrder, STUDENT_ID, PAYMENT_ID, TYPE
         )).isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -75,7 +97,7 @@ class MultiSessionCapacityAssignmentCommandTest {
         );
 
         MultiSessionCapacityAssignmentCommand command =
-            new MultiSessionCapacityAssignmentCommand(ascendingBySessionId, STUDENT_ID, PAYMENT_ID);
+            new MultiSessionCapacityAssignmentCommand(ascendingBySessionId, STUDENT_ID, PAYMENT_ID, TYPE);
 
         assertThat(command.claims()).containsExactly(
             new SessionClaim(lower, T1),
@@ -88,7 +110,7 @@ class MultiSessionCapacityAssignmentCommandTest {
         );
 
         assertThatThrownBy(() -> new MultiSessionCapacityAssignmentCommand(
-            descendingBySessionId, STUDENT_ID, PAYMENT_ID
+            descendingBySessionId, STUDENT_ID, PAYMENT_ID, TYPE
         )).isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -100,7 +122,7 @@ class MultiSessionCapacityAssignmentCommandTest {
         );
 
         assertThatThrownBy(() -> new MultiSessionCapacityAssignmentCommand(
-            duplicate, STUDENT_ID, PAYMENT_ID
+            duplicate, STUDENT_ID, PAYMENT_ID, TYPE
         )).isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -126,21 +148,21 @@ class MultiSessionCapacityAssignmentCommandTest {
         );
 
         assertThatThrownBy(() -> new MultiSessionCapacityAssignmentCommand(
-            duplicate, STUDENT_ID, PAYMENT_ID
+            duplicate, STUDENT_ID, PAYMENT_ID, TYPE
         )).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void rejects_an_empty_claim_list() {
         assertThatThrownBy(() -> new MultiSessionCapacityAssignmentCommand(
-            List.of(), STUDENT_ID, PAYMENT_ID
+            List.of(), STUDENT_ID, PAYMENT_ID, TYPE
         )).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void rejects_null_claims() {
         assertThatThrownBy(() -> new MultiSessionCapacityAssignmentCommand(
-            null, STUDENT_ID, PAYMENT_ID
+            null, STUDENT_ID, PAYMENT_ID, TYPE
         )).isInstanceOf(NullPointerException.class);
     }
 
@@ -149,7 +171,7 @@ class MultiSessionCapacityAssignmentCommandTest {
         List<SessionClaim> claims = List.of(new SessionClaim(SESSION_1, T1));
 
         assertThatThrownBy(() -> new MultiSessionCapacityAssignmentCommand(
-            claims, null, PAYMENT_ID
+            claims, null, PAYMENT_ID, TYPE
         )).isInstanceOf(NullPointerException.class);
     }
 
@@ -158,7 +180,7 @@ class MultiSessionCapacityAssignmentCommandTest {
         List<SessionClaim> claims = List.of(new SessionClaim(SESSION_1, T1));
 
         assertThatThrownBy(() -> new MultiSessionCapacityAssignmentCommand(
-            claims, STUDENT_ID, null
+            claims, STUDENT_ID, null, TYPE
         )).isInstanceOf(NullPointerException.class);
     }
 
@@ -167,7 +189,7 @@ class MultiSessionCapacityAssignmentCommandTest {
         List<SessionClaim> claims = List.of(new SessionClaim(SESSION_1, T1));
 
         MultiSessionCapacityAssignmentCommand command =
-            new MultiSessionCapacityAssignmentCommand(claims, STUDENT_ID, PAYMENT_ID);
+            new MultiSessionCapacityAssignmentCommand(claims, STUDENT_ID, PAYMENT_ID, TYPE);
 
         assertThatThrownBy(() -> command.claims().add(new SessionClaim(SESSION_2, T2)))
             .isInstanceOf(UnsupportedOperationException.class);

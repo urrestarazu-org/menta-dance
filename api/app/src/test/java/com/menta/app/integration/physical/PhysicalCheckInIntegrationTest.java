@@ -40,6 +40,7 @@ import com.menta.physical.infrastructure.persistence.repository.PhysicalDeviceJp
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
 import com.menta.physical.infrastructure.qr.FormatQrCredentialSignatureService;
 import com.menta.shared.domain.vo.Email;
+import com.menta.shared.physical.AssignmentType;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.Map;
@@ -192,7 +193,7 @@ class PhysicalCheckInIntegrationTest extends AbstractPhysicalMySqlIntegrationTes
 
     private void seedAssignment(UUID sessionId, UUID studentId) {
         assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
-            UUID.randomUUID(), sessionId, studentId, Instant.now()
+            UUID.randomUUID(), sessionId, studentId, AssignmentType.MONTHLY, Instant.now()
         ));
     }
 
