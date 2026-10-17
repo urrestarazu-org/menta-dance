@@ -26,7 +26,7 @@ Tenemos dos workflows principales que se ejecutan según el branch target:
 - ❌ JaCoCo coverage verification
 - ❌ NGINX integration tests (levantar stack completo)
 - ❌ Upload de artifacts
-- ❌ SonarCloud, Playwright, Gatling y Trivy
+- ❌ SonarCloud, Playwright, Gatling y Trivy (Trivy corre solo en `pr-main.yml`)
 
 ---
 
@@ -45,11 +45,15 @@ rama debe permitir únicamente `release/*` y `hotfix/*` como ramas fuente.
 - ✅ JaCoCo coverage verification (100/80 strategy)
 - ✅ NGINX integration tests (stack completo con Docker Compose)
 - ✅ Upload de test results y coverage reports
-- ⏳ SonarCloud, Playwright, Gatling y Trivy: son gates de release previstos
+- ✅ Trivy (`trivy-image`): escanea las imágenes `menta-api:ci` y `menta-bff:ci`
+  con `scripts/trivy-scan.sh` y falla ante CRITICAL/HIGH con fix disponible.
+  Corre como imagen oficial con versión exacta y digest, sube el reporte como
+  artefacto y registra las excepciones en `.trivyignore.yaml`. Ver
+  `docs/16-CICD-PIPELINE.md`.
+- ⏳ SonarCloud, Playwright y Gatling: son gates de release previstos
   exclusivamente para este workflow, pero siguen diferidos hasta que existan
-  su configuración segura: SonarCloud necesita organización/proyecto/token,
-  Playwright y Gatling no están integrados al build, y Trivy no dispone aún de
-  configuración o acción con SHA pinneado. No se agregan pasos rotos.
+  su configuración segura: SonarCloud necesita organización/proyecto/token y
+  Playwright y Gatling no están integrados al build. No se agregan pasos rotos.
 
 ---
 

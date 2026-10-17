@@ -1,5 +1,10 @@
 [versions]
 spring-boot = "3.5.16"
+# Parches de seguridad sobre el BOM de Spring Boot (#192): 3.5.16 es la última 3.5.x y trae estas
+# librerías con CVE CRITICAL/HIGH que ya tienen fix. Quitar cada línea cuando el BOM la alcance.
+tomcat = "10.1.61"
+jackson = "2.21.7"
+netty = "4.1.137.Final"
 spring-dependency-management = "1.1.7"
 spotbugs-gradle-plugin = "6.5.12"
 node-gradle-plugin = "7.1.0"

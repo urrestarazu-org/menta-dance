@@ -190,6 +190,68 @@ fin de vida el 2026-04-30 (#449). El tag exacto solo da reproducibilidad; no
 resuelve el soporte. Además, el literal de la imagen de MySQL está repetido en
 15 tests de integración y Dependabot no lo ve (#409).
 
+## Escaneo de imágenes (Trivy)
+
+Hadolint y Trivy miran cosas distintas. **Hadolint** revisa cómo está escrito el
+Dockerfile (usuario no root, `exec form`, tags sin `latest`). **Trivy** revisa lo
+que trae la imagen ya construida: paquetes del SO, el JRE y las librerías Java que
+van dentro del JAR. Un Dockerfile impecable puede producir una imagen vulnerable.
+
+El job `trivy-image` de `pr-main.yml` construye `menta-api:ci` y `menta-bff:ci` y
+ejecuta `scripts/trivy-scan.sh` sobre cada una. `release.yml` (#592) invoca el
+mismo script antes de publicar en GHCR. Corre solo en PRs a `main` (ADR-0042).
+
+**Política de severidad:**
+
+| Hallazgo | Resultado |
+|---|---|
+| `CRITICAL` o `HIGH` con fix disponible | Falla el job |
+| `MEDIUM` | Se informa en el reporte, no bloquea |
+| Cualquier severidad sin fix | Se informa en el reporte, no bloquea |
+
+El reporte completo se sube como artefacto `trivy-reports` y se copia al resumen del
+job. No se usa SARIF ni la pestaña Security: requiere GitHub Code Security, de pago
+en repositorios privados.
+
+**Trivy como imagen y no como acción.** Corre con `docker run` sobre la imagen
+oficial `aquasec/trivy` con versión exacta y digest, igual que Gitleaks y ShellCheck.
+Así no depende de los tags de una acción de terceros y se reproduce en local:
+
+```bash
+./gradlew :api:app:bootJar :bff:bootJar
+docker build -t menta-api:ci -f infra/docker/app/Dockerfile.api .
+docker build -t menta-bff:ci -f infra/docker/app/Dockerfile.bff .
+scripts/trivy-scan.sh menta-api:ci
+scripts/trivy-scan.sh menta-bff:ci
+```
+
+`TRIVY_CACHE_DIR` (por defecto `~/.cache/trivy`) guarda la base de vulnerabilidades y
+`TRIVY_REPORT_DIR` guarda el reporte completo. En CI la base se cachea con una clave
+por fecha. Para subir Trivy se elige un release, se hace `docker pull
+aquasec/trivy:<versión>` y se copia el digest de `docker inspect` a `TRIVY_IMAGE`.
+
+### Cómo triar un hallazgo
+
+1. **Librería Java** (aparece con `(app.jar)`): subir la versión. Si Spring Boot ya
+   publicó una versión del BOM que la corrige, se sube Spring Boot. Si no, se
+   fija un parche en `gradle/libs.versions.toml` (hoy `tomcat`, `jackson` y
+   `netty`, aplicados como `tomcat.version`, `jackson-bom.version` y
+   `netty.version` en el `build.gradle.kts` raíz) y se quita cuando el BOM la
+   alcance. Hay que comprobar que la versión existe en Maven Central.
+2. **Paquete del SO o JRE**: subir el tag exacto de `eclipse-temurin` en los dos
+   Dockerfiles.
+3. **El fix exige un cambio mayor** (por ejemplo migrar de Spring Boot 3 a 4): no se
+   hace en el PR del escaneo. Se registra una excepción en `.trivyignore.yaml` y se
+   enlaza el issue que hará la migración.
+4. **Falso positivo o inalcanzable**: se registra una excepción solo si se verifica
+   en el código que la ruta de ataque no existe (por ejemplo, que no se usa la clase
+   afectada).
+
+Cada excepción de `.trivyignore.yaml` exige `statement` (por qué es seguro) y
+`expired_at` (fecha de revisión). `scripts/trivy-scan.sh` rechaza una entrada que
+no tenga ambos, y al vencer la fecha Trivy deja de aplicarla y el job vuelve a
+fallar. No se aceptan excepciones sin motivo ni sin fecha.
+
 ## Detección de secretos
 
 La detección se hace en tres capas complementarias (ADR-0042):

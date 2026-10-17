@@ -15,8 +15,8 @@ permissions:
 
 # Gates de release pendientes de habilitación segura:
 # SonarCloud requiere organización/proyecto/token; Playwright y Gatling aún no
-# están cableados al build; Trivy no tiene una configuración o acción pineada.
-# Se activarán aquí, nunca en pr-develop.yml, cuando esos contratos existan.
+# están cableados al build. Se activarán aquí, nunca en pr-develop.yml, cuando
+# esos contratos existan. Trivy ya está activo (job trivy-image, #192).
 
 jobs:
   # Gitleaks: detecta secretos en TODO el historial alcanzable desde el commit de la PR.
@@ -300,7 +300,8 @@ jobs:
         run: |
           docker run --rm -v "$(pwd):/mnt:ro" -w /mnt \
             koalaman/shellcheck:v0.11.0 \
-            infra/docker/manage.sh infra/docker/deploy.sh infra/docker/quick-deploy.sh
+            infra/docker/manage.sh infra/docker/deploy.sh infra/docker/quick-deploy.sh \
+            scripts/trivy-scan.sh
 
   # Hadolint: Dockerfile linter (best practices + security)
   hadolint:
@@ -322,6 +323,100 @@ jobs:
         with:
           dockerfile: infra/docker/app/Dockerfile.bff
           failure-threshold: warning
+
+  # Trivy: escanea el contenido de las imágenes de API y BFF (paquetes del SO, JRE y librerías Java
+  # dentro del JAR). Hadolint revisa cómo está escrito el Dockerfile; Trivy revisa lo que trae la
+  # imagen construida. Falla ante CRITICAL/HIGH con fix disponible; política y triaje en
+  # docs/16-CICD-PIPELINE.md. release.yml (#592) invoca el mismo script antes de publicar en GHCR.
+  # Job propio (no pasos de nginx-integration): un fallo de seguridad no se mezcla con uno de
+  # integración y no alarga el camino crítico. Cuesta construir las imágenes dos veces.
+  trivy-image:
+    runs-on: ubuntu-24.04
+    env:
+      TRIVY_CACHE_DIR: ${{ github.workspace }}/.trivy-cache
+      TRIVY_REPORT_DIR: ${{ github.workspace }}/trivy-reports
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          validate-wrappers: true
+
+      - name: Build application JARs
+        # Los Dockerfiles de runtime solo copian los JAR ya construidos (#587)
+        run: |
+          chmod +x gradlew
+          ./gradlew :api:app:bootJar :bff:bootJar --no-build-cache
+
+      - name: Build application images
+        run: |
+          docker build -t menta-api:ci -f infra/docker/app/Dockerfile.api .
+          docker build -t menta-bff:ci -f infra/docker/app/Dockerfile.bff .
+
+      - name: Compute Trivy database cache key
+        id: trivy-date
+        # La base de vulnerabilidades se actualiza a diario: una clave por fecha la renueva cada día
+        # y evita depender del rate limit de ghcr.io en cada ejecución.
+        run: echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Trivy database cache
+        id: trivy-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .trivy-cache
+          key: trivy-db-${{ steps.trivy-date.outputs.date }}
+          restore-keys: trivy-db-
+
+      - name: Scan images with Trivy
+        # Escanea las dos imágenes aunque la primera falle, para ver todos los hallazgos de una vez
+        run: |
+          status=0
+          for image in menta-api:ci menta-bff:ci; do
+            scripts/trivy-scan.sh "$image" || status=1
+          done
+          exit "$status"
+
+      - name: Make Trivy cache readable
+        # Trivy corre como root dentro del contenedor: sin esto actions/cache no puede leer la base
+        if: ${{ always() }}
+        run: sudo chown -R "$(id -u):$(id -g)" .trivy-cache || true
+
+      - name: Save Trivy database cache
+        # Se guarda aunque el escaneo falle (un hallazgo no es motivo para volver a descargar la base)
+        if: ${{ always() && steps.trivy-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .trivy-cache
+          key: trivy-db-${{ steps.trivy-date.outputs.date }}
+
+      - name: Publish Trivy report summary
+        if: ${{ always() }}
+        run: |
+          for report in trivy-reports/*.txt; do
+            [ -e "$report" ] || continue
+            {
+              echo "### $(basename "$report")"
+              echo '```'
+              cat "$report"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Upload Trivy reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: trivy-reports
+          path: trivy-reports/
+          if-no-files-found: ignore
 
   # Integration test: levanta stack completo y verifica comportamiento real
   # SOLO para PRs a main (test más costoso)

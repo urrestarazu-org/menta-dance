@@ -26,6 +26,9 @@ group = "com.menta"
 version = providers.gradleProperty("version").getOrElse("0.1.0-SNAPSHOT")
 
 val springBootVersion = libs.versions.spring.boot.get()
+val tomcatVersion = libs.versions.tomcat.get()
+val jacksonVersion = libs.versions.jackson.get()
+val nettyVersion = libs.versions.netty.get()
 val checkstyleVersion = libs.versions.checkstyle.get()
 val spotbugsToolVersion = libs.versions.spotbugs.tool.get()
 val findsecbugsDependency = libs.findsecbugs.plugin
@@ -125,6 +128,11 @@ subprojects {
         apply(plugin = "jacoco")
         apply(plugin = "checkstyle")
         apply(plugin = "com.github.spotbugs")
+
+        // Security patches over the Spring Boot BOM (#192, versions in libs.versions.toml).
+        extra["tomcat.version"] = tomcatVersion
+        extra["jackson-bom.version"] = jacksonVersion
+        extra["netty.version"] = nettyVersion
 
         extensions.configure<JavaPluginExtension> {
             toolchain {

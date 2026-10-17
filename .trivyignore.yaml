@@ -1,0 +1,35 @@
+# Excepciones de Trivy para scripts/trivy-scan.sh (#192, ADR-0042).
+#
+# Una excepción es el último recurso: primero se corrige subiendo la versión de la dependencia
+# (gradle/libs.versions.toml) o el tag exacto de eclipse-temurin en los Dockerfiles.
+# Cada entrada exige:
+#   statement   por qué es seguro ignorarla (qué la hace inalcanzable o inexplotable aquí)
+#   expired_at  fecha de revisión; al vencer, Trivy deja de aplicarla y el escaneo vuelve a fallar
+#
+# Ejemplo:
+#   vulnerabilities:
+#     - id: CVE-2099-0001
+#       statement: La librería afectada no se carga en runtime; ver #NNN.
+#       expired_at: 2027-01-31
+#
+# Spring Framework 6.2.19 es la última 6.2.x que publica el BOM de Spring Boot 3.5.16 y los fixes
+# de estos CVE solo existen en 7.0.9 (Spring Boot 4), una migración mayor que evalúa #426.
+vulnerabilities:
+  - id: CVE-2026-47884
+    statement: >-
+      Afecta a XsltView en Spring MVC con un mapping "/**" que renderiza vistas. El código no usa
+      XsltView ni XSLT (las vistas del BFF son Thymeleaf y la API no renderiza vistas), así que
+      la ruta de ataque no existe. Se corrige al migrar a Spring Boot 4 (#426).
+    expired_at: 2027-01-31
+  - id: CVE-2026-47890
+    statement: >-
+      Afecta a Server-Sent Events con fragmentos de vista. El código no usa SseEmitter ni
+      text/event-stream, así que no hay SSE que corromper. Se corrige al migrar a
+      Spring Boot 4 (#426).
+    expired_at: 2027-01-31
+  - id: CVE-2026-47892
+    statement: >-
+      Afecta a endpoints funcionales de WebFlux (RouterFunction) desplegados con DispatcherServlet.
+      El BFF incluye spring-webflux solo por WebClient para llamar a la API y no define
+      RouterFunction ni endpoints funcionales. Se corrige al migrar a Spring Boot 4 (#426).
+    expired_at: 2027-01-31
