@@ -1,58 +1,7 @@
-# Git
-.git/
-.gitignore
-.gitattributes
-
-# Environment files
-.env
-.env.*
-*.env
-
-# IDE
-.idea/
-*.iml
-.vscode/
-*.swp
-*.swo
-*~
-
-# Build artifacts
-build/
-target/
-.gradle/
-gradle-app.setting
-!gradle-wrapper.jar
-
-# Logs
-*.log
-logs/
-
-# Documentation
-*.md
-docs/
-
-# Testing
-.pre-commit-config.yaml
-
-# Docker
-docker-compose*.yml
-Dockerfile*
-.dockerignore
-
-# CI/CD
-.github/
-
-# macOS
-.DS_Store
-
-# Android specific (if not needed in API/BFF builds)
-*.apk
-*.aab
-local.properties
-
-# Frontend (restored/provisioned inside the build stage)
-**/node_modules/
-bff/.gradle/
-
-# BFF accessibility checks (CI-only tooling, not part of any image)
-bff/e2e-a11y/
+# The runtime images (infra/docker/app/Dockerfile.api and Dockerfile.bff) only copy the
+# pre-built Spring Boot JARs. Allow-list: everything is excluded except those two files, so
+# the build context stays small and no source, secret or local file can end up in an image.
+# Build them first: ./gradlew :api:app:bootJar :bff:bootJar
+*
+!api/app/build/libs/menta-dance-api.jar
+!bff/build/libs/menta-dance-bff.jar

@@ -1,5 +1,7 @@
 # Docker Compose para desarrollo local (sin Nginx)
 # Expone API:8081 y BFF:8080 directamente al host
+# Los Dockerfiles copian los JAR ya construidos (no compilan): antes de `--build` corré
+# ./gradlew :api:app:bootJar :bff:bootJar (deploy.sh ya lo hace con `gradlew clean build`).
 services:
   api:
     build:
