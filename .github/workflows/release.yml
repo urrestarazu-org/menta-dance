@@ -309,8 +309,15 @@ jobs:
     needs: [build, publish]
     runs-on: ubuntu-24.04
     environment: production
-    permissions: {}
+    permissions:
+      contents: read
     steps:
+      - name: Checkout code
+        # Del tag salen la configuración del stack (compose, nginx.conf, conf.d) que se envía al servidor
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
       - name: Configure SSH
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
@@ -330,6 +337,7 @@ jobs:
           API_DIGEST: ${{ needs.publish.outputs.api_digest }}
           BFF_DIGEST: ${{ needs.publish.outputs.bff_digest }}
         run: |
+          set -o pipefail
           for digest in "$API_DIGEST" "$BFF_DIGEST"; do
             if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
               echo "::error::Digest con formato inválido"
@@ -338,8 +346,12 @@ jobs:
           done
 
           # La clave del VPS tiene un command= forzado (/opt/menta/deploy.sh): lo que va entre comillas
-          # llega al script en SSH_ORIGINAL_COMMAND, y es lo único que puede ejecutar.
-          ssh \
+          # llega al script en SSH_ORIGINAL_COMMAND, y es lo único que puede ejecutar. La
+          # configuración del stack viaja como tar.gz por la entrada estándar, de modo que el
+          # compose y el nginx.conf del servidor son siempre los del tag que se despliega.
+          tar --create --gzip --owner=0 --group=0 --numeric-owner \
+            --file - --directory infra/docker prod nginx/conf/conf.d \
+          | ssh \
             -i ~/.ssh/deploy_key \
             -o IdentitiesOnly=yes \
             -o BatchMode=yes \

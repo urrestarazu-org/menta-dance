@@ -8,7 +8,7 @@ Bitácora operativa del cloud server de DonWeb donde se despliega Menta Dance (#
 - **IP y puerto SSH**: se consultan en el panel de DonWeb (Cloud Servers → Software y Accesos); no se guardan en el repositorio
 - **Dominios**: `mentadance.com` (BFF, con `www` como CNAME) y `api.mentadance.com` (API); los tres nombres apuntan al VPS
 - **Vencimiento del plan**: 2027-10-22
-- **Estado**: proyecto anterior retirado (#595); aprovisionamiento en curso (#590), certificado emitido (vence 2027-01-14); renovación por `webroot` decidida (se aplica en #589); `/opt/menta/.env` creado vacío; firewall del panel revisado; endurecimiento de SSH descartado por ahora
+- **Estado**: proyecto anterior retirado (#595); VPS aprovisionado (#590), certificado emitido (vence 2027-01-14); renovación por `webroot` decidida (se aplica en #589); `/opt/menta/.env` creado vacío; firewall del panel revisado; endurecimiento de SSH descartado por ahora. El compose de producción (#589) y `deploy.sh` (#593) están en el repositorio y falta instalarlos y probarlos en el servidor (secciones 2.9 y 2.10)
 
 > No se registran contraseñas, claves ni tokens en este documento.
 
@@ -183,7 +183,7 @@ sudo fail2ban-client set sshd unbanip 192.0.2.1
 
 La clave de despliegue se generó en la máquina del operador, fuera del servidor, y solo su parte pública está en `/home/deploy/.ssh/authorized_keys`. El grupo `docker` equivale a `root`: cualquiera que entre como `deploy` controla el servidor.
 
-Cuando exista `deploy.sh` (#593), la entrada de esa clave se restringe a un comando forzado:
+Una vez instalado `deploy.sh` (#593, sección 2.10), la entrada de esa clave se restringe a un comando forzado:
 
 ```
 command="/opt/menta/deploy.sh",no-pty,no-port-forwarding ssh-ed25519 AAAA...
@@ -306,8 +306,74 @@ Puntos a tener en cuenta:
 - `mem_limit`: API 1 GB, BFF 768 MB, MySQL 1 GB, Redis 128 MB, Nginx 128 MB. Suman unos 3 GB sobre los 4 GB del servidor, más el swap de 2.1.
 - Redis tiene `--maxmemory 96mb` y `noeviction`: si se llena, responde error y la API falla cerrada, en lugar de que el kernel mate el contenedor.
 - Subred de Compose fija (`172.29.250.0/24`): es la única que API y BFF aceptan como proxy de confianza para `X-Forwarded-For`. Si choca con otra red del servidor, se cambia con `MENTA_NETWORK_SUBNET`.
-- La carpeta `infra/docker/` tiene que existir completa en el servidor, porque el compose monta `../nginx/conf/conf.d`. Cómo llega ahí lo define el despliegue (#593).
-- Arranque a mano, para la primera prueba: `docker compose --env-file /opt/menta/.env -f docker-compose.prod.yml up -d`.
+- El compose monta `../nginx/conf/conf.d`, así que `prod/` y `nginx/conf/conf.d/` tienen que estar juntas en el servidor. Con el despliegue automático, `deploy.sh` las recibe en cada release como un `tar.gz` y las deja en `/opt/menta/stack/` (sección 2.10); no hace falta clonar el repositorio.
+- El healthcheck del contenedor de Nginx consulta `http://127.0.0.1/health`, que responde en el servidor por defecto del puerto 80. Antes consultaba `localhost`: resolvía a IPv6, donde Nginx no escucha, y por IPv4 el servidor por defecto cortaba la conexión (`return 444`), así que el contenedor habría quedado siempre `unhealthy` (corregido en #593; verificado con un Nginx real).
+- Arranque a mano, solo para la primera prueba: `cd /opt/menta/stack/prod && docker compose --env-file /opt/menta/.env -f docker-compose.prod.yml up -d`. Después del primer despliegue, usar `deploy.sh`.
+
+### 2.10 Despliegue con deploy.sh (#593)
+
+`infra/docker/prod/deploy.sh` es lo único que ejecuta la clave SSH de despliegue. Lo llama el job `deploy` de `release.yml` con los digests de las imágenes y la configuración del stack (contrato y pasos en `docs/16-CICD-PIPELINE.md`, "Contrato con `deploy.sh`"). Se probó con un Docker real: el backup y su restauración (33 tablas del esquema), la lectura del health de API, BFF y Nginx, y la poda de imágenes. Las pruebas de lógica están en `infra/docker/prod/deploy.test.sh` y corren en CI.
+
+**Archivos en el servidor:**
+
+| Ruta | Contenido |
+|---|---|
+| `/opt/menta/deploy.sh` | El script (lo instala el operador; no se actualiza solo) |
+| `/opt/menta/.env` | Secretos y `API_DIGEST` / `BFF_DIGEST` (los reescribe el deploy) |
+| `/opt/menta/stack/` | Configuración del release: `prod/` y `nginx/conf/conf.d/` |
+| `/opt/menta/previous-digests` | Digests de la versión anterior, en una línea |
+| `/opt/menta/backups/` | `menta-<fecha>.sql.gz` previos a cada deploy (los últimos 14) |
+
+**Instalación (pendiente de ejecutar en el VPS).** Como `mentaadmin`, con el `deploy.sh` del commit que se va a desplegar copiado al servidor:
+
+```bash
+sudo install -m 750 -o deploy -g deploy deploy.sh /opt/menta/deploy.sh
+```
+
+Pasos para el primer despliegue, en este orden:
+
+1. Completar `/opt/menta/.env` (sección 2.9) y hacer el login a GHCR de `deploy` (sección 2.7).
+2. Publicar un tag con sufijo (`v0.1.0-rc.1`): crea las imágenes y la pre-release sin desplegar y deja los digests en las notas.
+3. Desplegar a mano esa primera vez, desde la máquina del operador y con la clave de despliegue todavía sin comando forzado:
+
+   ```bash
+   tar -czf - -C infra/docker prod nginx/conf/conf.d \
+     | ssh -p <PUERTO> deploy@<HOST> /opt/menta/deploy.sh <digest-api> <digest-bff>
+   ```
+
+4. Comprobar los servicios y completar la renovación de certbot por `webroot` (sección 2.8).
+5. Recién entonces restringir la clave en `/home/deploy/.ssh/authorized_keys` al comando forzado (sección 2.5) y cargar los secretos del Environment `production` (ver `docs/16-CICD-PIPELINE.md`, "Configuración en GitHub").
+
+Con el comando forzado, la clave de despliegue ya no abre una shell: la administración se hace como `mentaadmin` y `sudo -iu deploy`.
+
+**Rollback manual.** Si el deploy termina con "no respondió UP", el script imprime el comando para volver atrás. Como `deploy`:
+
+```bash
+cat /opt/menta/previous-digests
+/opt/menta/deploy.sh $(cat /opt/menta/previous-digests)
+```
+
+Las imágenes anteriores siguen en el servidor, así que no descarga nada. Esto **no revierte la base de datos**: si la release trajo una migración de Flyway incompatible con la versión anterior, hay que restaurar antes el backup que `deploy.sh` hizo justo antes de ese deploy.
+
+**Restaurar un backup.** El volcado se probó restaurado sobre una base con datos modificados y sobre una base borrada y recreada (que además elimina las tablas que el backup no tiene). Para dejar el esquema exactamente como estaba (incluida la historia de Flyway), se borra y se recrea la base y se restaura, con la API y el BFF detenidos:
+
+```bash
+cd /opt/menta/stack/prod
+docker compose --env-file /opt/menta/.env -f docker-compose.prod.yml stop api bff
+docker exec menta-mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --user=root -e "DROP DATABASE menta; CREATE DATABASE menta"'
+gzip -dc /opt/menta/backups/menta-<fecha>.sql.gz \
+  | docker exec -i menta-mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql --user=root menta'
+/opt/menta/deploy.sh $(cat /opt/menta/previous-digests)
+```
+
+El usuario de la aplicación conserva sus permisos porque son sobre el nombre de la base. Los comprobantes de transferencia (volumen `payment_proofs_data`) no entran en este backup: su copia diaria fuera del servidor es parte de #594.
+
+**Errores comunes:**
+
+- `No se pudieron descargar las imágenes`: venció o falta el login a GHCR del usuario `deploy` (sección 2.7; el token dura 12 meses). El estado del servidor no cambia.
+- `Hay otro deploy en curso`: otro `deploy.sh` tiene el lock (`/opt/menta/deploy.lock`); el lock se libera solo cuando ese proceso termina.
+- `AVISO: ... difiere del deploy.sh de este release`: hay una versión nueva del script; reinstalarlo con el `install` de arriba. El deploy continúa con la versión instalada.
+- `mysqldump falló` o `backup ... incompleto`: no se despliega nada. Ver el espacio en disco (`df -h /opt/menta`) y que `menta-mysql` esté `healthy`.
 
 ### Decisiones diferidas
 
@@ -340,5 +406,5 @@ El puerto 22 y el 3306 no tienen regla, es decir, están bloqueados desde afuera
 Se completa a medida que avancen los sub-issues de #380:
 
 - Compose de producción (#589): ejecutar en el VPS los pasos 3 a 5 de la renovación por `webroot`, completar `/opt/menta/.env` (el archivo existe, vacío; los nombres están en `production.env.example`) y documentar el resultado del primer arranque. El endurecimiento de SSH quedó descartado (ver "Decisiones diferidas").
-- Despliegue y rollback (#593), y la carga en el Environment `production` de GitHub de los secretos de deploy que usa `release.yml` (#592; ver `docs/16-CICD-PIPELINE.md`, "Configuración en GitHub").
+- Despliegue y rollback (#593, sección 2.10): instalar `deploy.sh`, el primer despliegue a mano con un tag `-rc`, restringir la clave al comando forzado, y cargar en el Environment `production` de GitHub los secretos que usa `release.yml` (#592; ver `docs/16-CICD-PIPELINE.md`, "Configuración en GitHub"). Anotar acá el resultado de cada paso.
 - Backups y monitoreo (#594).

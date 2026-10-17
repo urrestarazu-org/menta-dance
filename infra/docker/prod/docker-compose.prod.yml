@@ -7,7 +7,7 @@
 #   - MySQL 8.4 LTS; MySQL y Redis no publican puertos (solo la red interna de Compose).
 #   - Sin Mailpit, otel-collector, Loki ni Grafana: la observabilidad se resuelve fuera del VPS.
 #
-# Uso (el deploy automático lo hace infra/docker/deploy.sh, #593):
+# Uso (el deploy automático lo hace infra/docker/prod/deploy.sh, #593):
 #   docker compose --env-file /opt/menta/.env -f docker-compose.prod.yml up -d
 # /opt/menta/.env (chmod 600, dueño deploy) trae los secretos y API_DIGEST / BFF_DIGEST.
 # Los nombres de variables están en production.env.example.
@@ -40,7 +40,7 @@ services:
       bff:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

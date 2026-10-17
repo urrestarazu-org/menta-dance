@@ -464,7 +464,7 @@ GitHub Release.
 
 ## Release a producción
 
-> **Estado:** `release.yml` está implementado (#592). El job `deploy` necesita `deploy.sh` en el servidor (#593) y los secretos del Environment `production`; hasta entonces solo se puede probar con un tag con sufijo (`v0.1.0-rc.1`), que publica sin desplegar.
+> **Estado:** `release.yml` (#592) y `deploy.sh` (#593) están en el repositorio. El job `deploy` necesita además que `deploy.sh` esté instalado en el servidor y los secretos del Environment `production` (ver "Configuración en GitHub" y el runbook, sección 2.10); hasta entonces solo se puede probar con un tag con sufijo (`v0.1.0-rc.1`), que publica sin desplegar.
 
 Tras el merge `release/* -> main` o `hotfix/* -> main`, se crea el tag SemVer
 `vX.Y.Z` sobre `main`. Ese tag dispara el workflow de release
@@ -484,7 +484,8 @@ Tras el merge `release/* -> main` o `hotfix/* -> main`, se crea el tag SemVer
 3. **`release`**: crea la GitHub Release con las notas generadas, los digests y los
    dos JAR (`menta-dance-api-<versión>.jar` y `menta-dance-bff-<versión>.jar`).
 4. **`deploy`**: solo para tags estables. Entra por SSH al servidor y le pasa los
-   **digests inmutables**, nunca un tag. Usa el Environment `production` de GitHub.
+   **digests inmutables**, nunca un tag, junto con la configuración del stack del
+   tag (compose, `nginx.conf`, `conf.d`). Usa el Environment `production` de GitHub.
 
 Un tag con sufijo (`v0.1.0-rc.1`) ejecuta `build`, `publish` y `release` (la Release
 queda marcada como pre-release) pero no `deploy`, y puede salir de una rama
@@ -525,21 +526,41 @@ El servidor las lee con el PAT de solo lectura de la sección 2.7 del runbook.
 ### Contrato con `deploy.sh`
 
 La clave de despliegue ejecuta siempre `/opt/menta/deploy.sh` (comando forzado de
-`authorized_keys`). El workflow le pasa los dos digests en el comando SSH, y el
-servidor los recibe en `SSH_ORIGINAL_COMMAND`:
+`authorized_keys`). El workflow le entrega dos cosas:
 
-```
-sha256:<64 hex de la API> sha256:<64 hex del BFF>
-```
+- los dos digests, como comando SSH. El servidor los recibe en `SSH_ORIGINAL_COMMAND`:
+  `sha256:<64 hex de la API> sha256:<64 hex del BFF>`;
+- por la entrada estándar, un `tar.gz` con `prod/` y `nginx/conf/conf.d/` de
+  `infra/docker/`. Así el compose y el `nginx.conf` del servidor son siempre los del
+  tag que se despliega, sin clonar el repositorio ni dejar credenciales de Git en el
+  VPS.
 
-El workflow valida el formato antes de enviarlos, pero el script debe validarlo
-también: es lo que se ejecuta con la clave. Una salida distinta de 0 hace fallar el
-job `deploy`.
+`deploy.sh` valida los dos digests y el contenido del `tar.gz` (solo archivos y
+carpetas dentro de esas dos rutas, tope de 5 MB) antes de usarlos: es lo que se ejecuta
+con la clave. Después hace, en este orden:
+
+1. toma un lock (un solo deploy a la vez) y deja la configuración en `/opt/menta/stack`;
+2. `mysqldump` de MySQL a `/opt/menta/backups` (se conservan los últimos 14; si el
+   backup falla o queda incompleto, no se despliega);
+3. descarga las imágenes por digest (si falla, nada cambió);
+4. guarda los digests vigentes en `/opt/menta/previous-digests` y escribe los nuevos
+   en `/opt/menta/.env`;
+5. `docker compose up -d` (Nginx se recrea solo si cambió la configuración);
+6. espera hasta 240 s a que API, BFF y Nginx respondan UP;
+7. deja de cada imagen solo la actual y la anterior.
+
+Una salida distinta de 0 hace fallar el job `deploy`. Si el health check no llega a UP, el
+script no revierte nada por su cuenta: imprime el comando para volver a la versión
+anterior (ver "Rollback"). `deploy.sh` no se actualiza solo: si el release trae una
+versión distinta de la instalada, lo avisa en el log y hay que reinstalarlo a mano
+(runbook, sección 2.10).
 
 ### Rollback
 
 El rollback es **manual**: si el health check falla, el script termina con error y
-se vuelve a ejecutar con los digests de la release anterior. No existe rollback
+se vuelve a ejecutar con los digests de la release anterior
+(`/opt/menta/deploy.sh $(cat /opt/menta/previous-digests)`; pasos y restauración del
+backup en el runbook, sección 2.10). No existe rollback
 automático de base de datos: Flyway solo avanza. Si la release trajo una migración
 incompatible con la versión anterior, se restaura el backup previo al deploy. Las
 migraciones destructivas se ejecutan solo en una release posterior a dejar de usar
