@@ -390,13 +390,31 @@ Con un único VPS, un backup que vive en el mismo servidor no protege de perderl
 
 **Cómo funciona.** Verifica el volcado (`gzip -t` y la línea `Dump completed`), archiva los comprobantes desde el contenedor de la API, copia ambos con `rclone` y comprueba que el almacenamiento externo tenga los dos archivos con el mismo tamaño. Recién entonces borra lo que supere los 30 días fuera del servidor. `rclone` corre como la imagen oficial con versión y digest fijos (igual que Trivy), así que no hay nada que instalar. El cifrado es del lado del cliente (`rclone crypt`, incluye los nombres de archivo): el proveedor guarda solo datos ilegibles. Si algo falla, el script sale con error y llama a `BACKUP_PING_URL/fail`; si deja de correr, el monitor avisa porque no recibe el ping diario.
 
+**Relación con la copia de seguridad del panel de DonWeb.** El plan incluye una copia semanal del servidor entero (el panel muestra las últimas cuatro, del 2026-09-24 al 2026-10-15). No reemplaza a este backup, porque cubre otra cosa:
+
+| | Copia del panel de DonWeb | `backup.sh` |
+|---|---|---|
+| Frecuencia | Semanal | Diaria |
+| Qué guarda | El servidor entero (sistema, Docker, configuración y datos) | Solo los datos: la base y los comprobantes |
+| Dónde vive | En DonWeb, en la misma cuenta que el servidor | En otro proveedor, cifrada |
+| Pérdida máxima de datos | Hasta 7 días | Hasta 24 horas |
+| Sirve para | Recuperar el servidor si se rompe el sistema | Recuperar los datos aunque se pierda la cuenta o el proveedor |
+
+Con una semana de ventana se perderían pagos y comprobantes que no se pueden regenerar, y la copia del panel comparte cuenta y proveedor con el servidor. No se sabe cómo toma DonWeb la copia, así que no se da por hecho que la base quede consistente como con un `mysqldump`. Se mantiene el backup diario: cuesta centavos y acorta la pérdida máxima de 7 días a 24 horas.
+
 **Qué se probó (en local, sin tocar el VPS).** Con MySQL 8.4.11, la API y un servidor S3 local (el propio `rclone serve s3`) reales, `backup.sh` generó el volcado (las 33 tablas del esquema más una tabla de control creada para la prueba) y el archivo de comprobantes, ambos con modo 600, y los subió. En el almacenamiento los nombres se ven cifrados y el objeto crudo no contiene texto legible (0 apariciones de `CREATE TABLE`). Después, en una base MySQL vacía: se descargó y descifró el backup, se restauró (34 tablas, la fila de control incluida), se recuperó el comprobante y **la API arrancó contra la base restaurada con `status: UP`** y las 27 migraciones de Flyway en su historia. Falta repetir el simulacro con el almacenamiento real y el VPS (ver "Pendiente de ejecutar").
 
 **Hallazgo corregido en este issue.** El directorio de comprobantes no existía en la imagen de la API: Docker crea el punto de montaje del volumen con dueño `root` y la API corre como `menta` (uid 1000), así que **no podía escribir ningún comprobante** (se reprodujo: `touch: Permission denied`). `Dockerfile.api` ahora crea `/var/menta-dance/payment-proofs` con dueño `menta`: un volumen nuevo hereda dueño y permisos de la ruta de la imagen. Vale para volúmenes nuevos; si ya existiera un `payment_proofs_data` creado con la imagen anterior, hay que corregir el dueño a mano (`docker exec -u root menta-api chown menta:menta /var/menta-dance/payment-proofs`).
 
 **Pendiente de ejecutar en el VPS:**
 
-1. **Almacenamiento externo.** Crear un bucket en un proveedor S3-compatible (Cloudflare R2 o Backblaze B2 tienen plan gratuito; comprobar las condiciones vigentes) y una clave de acceso limitada a ese bucket.
+1. **Almacenamiento externo.** Crear un bucket en un proveedor S3-compatible y una clave de acceso limitada a ese bucket. Opciones: Cloudflare R2 o Backblaze B2 (tienen plan gratuito; comprobar las condiciones vigentes) o **Bunny Storage**, que ya se usa para los videos:
+
+   - Crear una **zona de almacenamiento nueva y propia** (por ejemplo `menta-backups`), separada de la de los videos, para que la clave del backup no pueda tocar los videos ni al revés. Activar *S3 Compatibility* al crearla: el panel la marca como *Public preview* y lista crear, actualizar y borrar objetos, listar con prefijo y subida multipart, que es lo que usa `backup.sh`.
+   - **No conectarle ninguna Pull Zone (CDN)**: así los backups nunca quedan servidos por una URL pública.
+   - Tier *Standard*. Bunny exige una **región principal y al menos una de réplica** (por ejemplo Los Angeles y Frankfurt); las réplicas no se pueden quitar después de crear la zona. Al crearla (2026-10-17) el panel mostraba $0,02/GB al mes con dos regiones y $0,01/GB con una; comprobar el precio vigente. Para unos pocos MB son centavos.
+   - Los datos de acceso S3 (endpoint y claves) los muestra el panel; van en `/opt/menta/backup.env` con `RCLONE_CONFIG_OFFSITE_PROVIDER=Other`, nunca en el repositorio ni en un chat.
+   - Por ser *Public preview*, el primer backup y el simulacro de restauración con la zona real (pasos 4 y 6) son obligatorios antes de confiar en ella. Si diera problemas, cambiar a otro proveedor son solo las variables `RCLONE_CONFIG_OFFSITE_*` de `backup.env`.
 2. **Claves de cifrado.** Generar dos claves largas, guardarlas **en texto plano en un gestor de contraseñas fuera del servidor** (sin ellas los backups no se pueden descifrar) y ofuscarlas para `rclone`:
 
    ```bash
