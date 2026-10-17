@@ -429,10 +429,15 @@ menta-dance/
 - Cambios en dependencias
 
 **Workflow**:
-1. `./gradlew clean build`
+1. `./gradlew clean build` (genera `api/app/build/libs/menta-dance-api.jar` y `bff/build/libs/menta-dance-bff.jar`)
 2. `docker build -t menta-api:latest -f infra/docker/app/Dockerfile.api .`
 3. `docker build -t menta-bff:latest -f infra/docker/app/Dockerfile.bff .`
 4. `docker compose up -d`
+
+Los Dockerfiles **no compilan**: solo copian el JAR del paso 1 (build once, deploy many, #587).
+Si el JAR no existe, `docker build` falla con `not found`; corré antes
+`./gradlew :api:app:bootJar :bff:bootJar`. El `.dockerignore` es una lista de permitidos:
+excluye todo salvo esos dos JAR.
 
 ### quick-deploy.sh
 
@@ -466,8 +471,8 @@ Se ha completado la implementación de Nginx como reverse proxy con la siguiente
 infra/docker/
 ├── app/
 │   ├── docker-compose.yml      ✅ Desarrollo local sin Nginx
-│   ├── Dockerfile.api          ✅ Multi-stage build para API
-│   └── Dockerfile.bff          ✅ Multi-stage build para BFF
+│   ├── Dockerfile.api          ✅ Runtime del API (copia el JAR ya construido)
+│   └── Dockerfile.bff          ✅ Runtime del BFF (copia el JAR ya construido)
 ├── nginx/
 │   ├── docker-compose.yml      ✅ Producción con Nginx
 │   ├── conf/

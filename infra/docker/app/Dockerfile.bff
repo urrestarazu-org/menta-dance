@@ -1,28 +1,9 @@
-# Multi-stage build for BFF module
-# Stage 1: Build
-FROM gradle:8.12.0-jdk21 AS build
-
-WORKDIR /app
-
-# Copy Gradle wrapper and dependencies first (better caching)
-COPY gradle gradle
-COPY gradlew .
-COPY gradle.properties .
-COPY settings.gradle.kts .
-COPY build.gradle.kts .
-COPY gradle/libs.versions.toml gradle/
-
-# Copy build files for all modules (needed for Gradle configuration)
-COPY bff bff/
-COPY api api/
-COPY android/build.gradle.kts android/
-COPY config config/
-COPY scripts scripts/
-
-# Build only the BFF module
-RUN ./gradlew :bff:bootJar --no-daemon --parallel
-
-# Stage 2: Runtime
+# Runtime image for the BFF module (build once, deploy many).
+# The JAR is NOT compiled here: CI (or the developer) builds it first, so the artifact that
+# passed the tests is the same one that runs in production. The JAR already carries the
+# Thymeleaf templates and the compiled CSS/JS (processResources runs inside bootJar).
+#   ./gradlew :bff:bootJar
+#   docker build -f infra/docker/app/Dockerfile.bff .
 FROM eclipse-temurin:21.0.12.1_1-jre-alpine-3.24
 
 WORKDIR /app
@@ -31,14 +12,8 @@ WORKDIR /app
 RUN addgroup -g 1000 menta && \
     adduser -D -u 1000 -G menta menta
 
-# Copy JAR from build stage
-COPY --from=build /app/bff/build/libs/menta-dance-bff.jar /app/bff.jar
-
-# Copy static resources (Thymeleaf templates, CSS, JS)
-COPY --from=build /app/bff/src/main/resources /app/resources
-
-# Change ownership
-RUN chown -R menta:menta /app
+# Copy the pre-built JAR
+COPY --chown=menta:menta bff/build/libs/menta-dance-bff.jar /app/bff.jar
 
 # Switch to non-root user
 USER menta
