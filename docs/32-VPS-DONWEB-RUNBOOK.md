@@ -340,5 +340,5 @@ El puerto 22 y el 3306 no tienen regla, es decir, están bloqueados desde afuera
 Se completa a medida que avancen los sub-issues de #380:
 
 - Compose de producción (#589): ejecutar en el VPS los pasos 3 a 5 de la renovación por `webroot`, completar `/opt/menta/.env` (el archivo existe, vacío; los nombres están en `production.env.example`) y documentar el resultado del primer arranque. El endurecimiento de SSH quedó descartado (ver "Decisiones diferidas").
-- Despliegue y rollback (#593).
+- Despliegue y rollback (#593), y la carga en el Environment `production` de GitHub de los secretos de deploy que usa `release.yml` (#592; ver `docs/16-CICD-PIPELINE.md`, "Configuración en GitHub").
 - Backups y monitoreo (#594).
