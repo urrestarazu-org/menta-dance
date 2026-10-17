@@ -60,9 +60,12 @@ Gaps concretos, todos verificados por ausencia en el árbol de fuentes:
 
 Dos condiciones de contorno delimitan la decisión:
 
-- **El repositorio `urrestarazu-org/menta-dance` es público.** Dependabot
-  alerts y GitHub Secret Scanning con push protection no tienen costo. En
-  contrapartida, un secreto commiteado queda expuesto de inmediato y debe
+- **El repositorio `urrestarazu-org/menta-dance` es privado** (verificado el
+  2026-10-17 al implementar #192; este ADR lo daba por público) y se prevé
+  publicarlo. Dependabot alerts y GitHub Secret Scanning con push protection
+  no tienen costo. La pestaña Security con resultados SARIF, en cambio,
+  requiere GitHub Code Security, que es de pago en repositorios privados. Una
+  vez público, un secreto commiteado queda expuesto de inmediato y debe
   considerarse comprometido aunque se borre después: el objeto permanece en
   el historial, en los forks y en los mirrors que ya lo copiaron.
 - **`ADR-0024` ya declara Trivy y SonarCloud como parte del stack aceptado.**
@@ -93,8 +96,22 @@ exige ADR-0024. Dependabot debe actualizar el SHA y su comentario de versión,
 nunca reemplazarlo por un tag mutable.
 
 Toda supresión —`.gitleaks.toml`, `config/spotbugs/exclude.xml`,
-`.trivyignore`— exige justificación escrita por entrada. No se acepta una
+`.trivyignore.yaml`— exige justificación escrita por entrada. No se acepta una
 supresión global para poner el build en verde.
+
+**Implementación de Trivy (#192)**:
+
+- Corre como imagen oficial con versión exacta y digest vía `docker run`
+  (`scripts/trivy-scan.sh`), no como acción de terceros. Es el mismo patrón de
+  Gitleaks y ShellCheck: no depende de tags mutables de una acción externa
+  (vector de ataques de supply chain) y se reproduce igual en local.
+- Los resultados se publican como artefacto de CI y resumen del job, no como
+  SARIF en la pestaña Security, porque el repositorio es privado.
+- Las excepciones viven en `.trivyignore.yaml` (formato YAML de Trivy), con
+  `statement` y `expired_at` obligatorios por entrada; al vencer la fecha la
+  excepción deja de aplicarse y el escaneo vuelve a fallar.
+- Política: bloquean CRITICAL y HIGH con fix disponible; MEDIUM y las
+  vulnerabilidades sin fix solo se informan.
 
 **Corrección a ADR-0024**: Trivy pasa de declarado a implementado con esta
 decisión. SonarCloud se difiere; ver alternativas rechazadas.
@@ -179,7 +196,7 @@ decisión. SonarCloud se difiere; ver alternativas rechazadas.
 - **Riesgo secundario**: que la presión por poner el build en verde derive
   en supresiones sin justificar, dejando las herramientas instaladas y
   ciegas. Mitigación: cada archivo de supresiones exige comentario por
-  entrada, y `.trivyignore` además fecha de revisión.
+  entrada, y `.trivyignore.yaml` además fecha de revisión.
 - **Reversibilidad**: alta. Cada herramienta entra en su propio PR y se
   revierte de forma independiente sin migración de datos ni estado
   persistido. Ninguna toca `domain`, `application` ni `infrastructure`.
