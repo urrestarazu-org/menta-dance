@@ -1,0 +1,212 @@
+# Docker Compose de producción (VPS DonWeb, #589 / ADR-0045 / ADR-0018).
+#
+# Diferencias con infra/docker/nginx/docker-compose.yml (el de desarrollo y CI):
+#   - API y BFF se bajan de GHCR por digest, no se construyen ni se usan por tag.
+#   - Cada servicio tiene mem_limit: sin él, MaxRAMPercentage=75 calcula el heap sobre los
+#     4 GB del servidor entero y las JVM se disputan la memoria.
+#   - MySQL 8.4 LTS; MySQL y Redis no publican puertos (solo la red interna de Compose).
+#   - Sin Mailpit, otel-collector, Loki ni Grafana: la observabilidad se resuelve fuera del VPS.
+#
+# Uso (el deploy automático lo hace infra/docker/deploy.sh, #593):
+#   docker compose --env-file /opt/menta/.env -f docker-compose.prod.yml up -d
+# /opt/menta/.env (chmod 600, dueño deploy) trae los secretos y API_DIGEST / BFF_DIGEST.
+# Los nombres de variables están en production.env.example.
+
+name: menta
+
+services:
+  nginx:
+    image: nginx:1.27.3-alpine
+    container_name: menta-nginx
+    restart: unless-stopped
+    mem_limit: 128m
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # upstreams, headers y locations del BFF compartidos con el compose de desarrollo
+      - ../nginx/conf/conf.d:/etc/nginx/conf.d:ro
+      # Renovación por webroot: certbot escribe el desafío en /var/www/certbot del host y
+      # Nginx lo sirve; /etc/letsencrypt trae el certificado (live/ apunta a archive/).
+      - /var/www/certbot:/var/www/certbot:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - nginx_logs:/var/log/nginx
+    networks:
+      - menta-network
+    depends_on:
+      api:
+        condition: service_healthy
+      bff:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  api:
+    image: ghcr.io/urrestarazu-org/menta-api@${API_DIGEST:?Set API_DIGEST (sha256:...) in .env}
+    container_name: menta-api
+    restart: unless-stopped
+    mem_limit: 1g
+    expose:
+      - "8081"
+    environment:
+      SERVER_PORT: 8081
+      SPRING_PROFILES_ACTIVE: prod
+
+      SPRING_DATASOURCE_URL: jdbc:mysql://menta-mysql:3306/menta?serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_APP_USER:-menta_app}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_APP_PASSWORD:?Set MYSQL_APP_PASSWORD in .env}
+
+      SPRING_DATA_REDIS_HOST: menta-redis
+      SPRING_DATA_REDIS_PORT: 6379
+
+      # Solo la subred de Compose (donde está Nginx) puede aportar X-Forwarded-For.
+      AUTH_TRUSTED_PROXY_CIDRS: ${MENTA_NETWORK_SUBNET:-172.29.250.0/24}
+      PHYSICAL_CHECKIN_TRUSTED_PROXY_CIDRS: ${MENTA_NETWORK_SUBNET:-172.29.250.0/24}
+
+      # Secretos que el perfil prod rechaza si quedan en su valor de desarrollo
+      AUTH_JWT_BASE64_SECRET: ${AUTH_JWT_BASE64_SECRET:?Set AUTH_JWT_BASE64_SECRET in .env}
+      AUTH_ACTIVATION_DELIVERY_KEY: ${AUTH_ACTIVATION_DELIVERY_KEY:?Set AUTH_ACTIVATION_DELIVERY_KEY in .env}
+      AUTH_PASSWORD_RESET_DELIVERY_KEY: ${AUTH_PASSWORD_RESET_DELIVERY_KEY:?Set AUTH_PASSWORD_RESET_DELIVERY_KEY in .env}
+      BILLING_WEBHOOK_MERCADOPAGO_HMAC_SECRET: ${BILLING_WEBHOOK_MERCADOPAGO_HMAC_SECRET:?Set BILLING_WEBHOOK_MERCADOPAGO_HMAC_SECRET in .env}
+      BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET: ${BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET:?Set BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET in .env}
+
+      # URLs públicas que viajan dentro de los correos
+      AUTH_ACTIVATION_PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://mentadance.com}
+      AUTH_PASSWORD_RESET_PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://mentadance.com}
+
+      # Correo saliente
+      SMTP_HOST: ${SMTP_HOST:?Set SMTP_HOST in .env}
+      SMTP_PORT: ${SMTP_PORT:?Set SMTP_PORT in .env}
+      SPRING_MAIL_USERNAME: ${SMTP_USERNAME:-}
+      SPRING_MAIL_PASSWORD: ${SMTP_PASSWORD:-}
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: ${SMTP_AUTH:-false}
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: ${SMTP_STARTTLS:-false}
+
+      # Mercado Pago (la API arranca sin el token, pero no puede operar pagos sin él)
+      BILLING_MERCADOPAGO_ACCESS_TOKEN: ${BILLING_MERCADOPAGO_ACCESS_TOKEN:-}
+      BILLING_MERCADOPAGO_NOTIFICATION_URL: ${BILLING_MERCADOPAGO_NOTIFICATION_URL:-https://api.mentadance.com/api/v1/billing/payments/mercadopago/webhook}
+      BILLING_MERCADOPAGO_CHECKOUT_BACK_URL: ${BILLING_MERCADOPAGO_CHECKOUT_BACK_URL:-https://mentadance.com/compras/retorno}
+
+      # Transferencia bancaria
+      BILLING_BANK_TRANSFER_CBU: ${BILLING_BANK_TRANSFER_CBU:-}
+      BILLING_BANK_TRANSFER_ALIAS: ${BILLING_BANK_TRANSFER_ALIAS:-}
+      BILLING_BANK_TRANSFER_HOLDER: ${BILLING_BANK_TRANSFER_HOLDER:-}
+      BILLING_BANK_TRANSFER_CUIT: ${BILLING_BANK_TRANSFER_CUIT:-}
+
+      # Bunny.net (videos)
+      APP_CDN_BUNNYNET_PULLZONEHOSTNAME: ${APP_CDN_BUNNYNET_PULLZONEHOSTNAME:-invalid-missing-config}
+      APP_CDN_BUNNYNET_VIDEOLIBRARYID: ${APP_CDN_BUNNYNET_VIDEOLIBRARYID:-invalid-missing-config}
+
+      # El heap se calcula sobre el mem_limit del contenedor (1 GB), no sobre la RAM del servidor.
+      JAVA_OPTS: ${API_JAVA_OPTS:--XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC}
+    volumes:
+      # Comprobantes de transferencia: fuera de cualquier raíz de recursos estáticos
+      - payment_proofs_data:/var/menta-dance/payment-proofs
+    networks:
+      - menta-network
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8081/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+
+  bff:
+    image: ghcr.io/urrestarazu-org/menta-bff@${BFF_DIGEST:?Set BFF_DIGEST (sha256:...) in .env}
+    container_name: menta-bff
+    restart: unless-stopped
+    mem_limit: 768m
+    expose:
+      - "8080"
+    environment:
+      SERVER_PORT: 8080
+      SPRING_PROFILES_ACTIVE: prod
+
+      # Sesiones en Redis
+      REDIS_HOST: menta-redis
+      REDIS_PORT: 6379
+
+      # El BFF consume la API solo por HTTP, dentro de la red de Compose
+      MENTA_API_BASE_URL: http://menta-api:8081
+      AUTH_API_BASE_URL: http://menta-api:8081
+      BILLING_API_BASE_URL: http://menta-api:8081
+
+      MENTA_TRUSTED_PROXY_CIDRS: ${MENTA_NETWORK_SUBNET:-172.29.250.0/24}
+
+      JAVA_OPTS: ${BFF_JAVA_OPTS:--XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC}
+    networks:
+      - menta-network
+    depends_on:
+      api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+
+  mysql:
+    image: mysql:8.4.11
+    container_name: menta-mysql
+    restart: unless-stopped
+    mem_limit: 1g
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_DATABASE: menta
+      MYSQL_USER: ${MYSQL_APP_USER:-menta_app}
+      MYSQL_PASSWORD: ${MYSQL_APP_PASSWORD:?Set MYSQL_APP_PASSWORD in .env}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root --password=\"$$MYSQL_ROOT_PASSWORD\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - menta-network
+
+  redis:
+    image: redis:7.4.11-alpine
+    container_name: menta-redis
+    restart: unless-stopped
+    mem_limit: 128m
+    # noeviction + maxmemory por debajo del mem_limit: ante un Redis lleno responde error
+    # (la API falla cerrado) en lugar de que el kernel mate el contenedor.
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "96mb", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - menta-network
+
+networks:
+  menta-network:
+    driver: bridge
+    ipam:
+      config:
+        # Subred fija: las listas de proxies de confianza de API y BFF la nombran explícitamente
+        - subnet: ${MENTA_NETWORK_SUBNET:-172.29.250.0/24}
+
+volumes:
+  nginx_logs:
+  mysql_data:
+  redis_data:
+  payment_proofs_data:

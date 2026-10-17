@@ -268,26 +268,46 @@ Dos cambios sobre lo que hoy trae el repositorio:
 - El Nginx de `infra/docker/nginx/` espera los certificados como archivos en `./certs/`. En producción se monta `/etc/letsencrypt` en solo lectura y `ssl_certificate` apunta a `/etc/letsencrypt/live/mentadance.com/`, así Nginx siempre ve el certificado vigente sin copiarlo.
 - El Nginx de producción tiene que servir el desafío ACME.
 
-Pasos, todos parte de los criterios de #589:
+Pasos de #589. Los dos primeros ya están en el repositorio (`infra/docker/prod/`); los otros tres se ejecutan en el VPS y quedan **pendientes de ejecutar**:
 
-1. En el `nginx.conf` de producción, una `location /.well-known/acme-challenge/` que sirva una carpeta del host.
-2. En el compose de producción, montar esa carpeta y `/etc/letsencrypt` (solo lectura) en el contenedor de Nginx.
+1. `infra/docker/prod/nginx/nginx.conf` tiene la `location /.well-known/acme-challenge/` en el puerto 80, con `root /var/www/certbot`.
+2. `infra/docker/prod/docker-compose.prod.yml` monta `/var/www/certbot` y `/etc/letsencrypt` en solo lectura en el contenedor de Nginx.
 3. En el VPS, **antes del primer despliegue con Nginx**:
 
    ```bash
+   sudo mkdir -p /var/www/certbot
    sudo certbot reconfigure --cert-name mentadance.com \
-     --authenticator webroot --webroot-path <CARPETA-ACME>
+     --authenticator webroot --webroot-path /var/www/certbot
    ```
 
-4. Hook de renovación que recargue Nginx, en `/etc/letsencrypt/renewal-hooks/deploy/`:
+4. Hook de renovación que recarga Nginx, en `/etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh` (ejecutable). Si Nginx no está corriendo, el hook no debe hacer fallar la renovación:
 
    ```bash
-   docker exec <contenedor-nginx> nginx -s reload
+   #!/bin/sh
+   docker exec menta-nginx nginx -s reload || true
    ```
 
 5. Con Nginx corriendo, `sudo certbot renew --dry-run` tiene que pasar.
 
 Si el paso 3 se omite, la renovación falla sin avisar hasta que el certificado vence. Lo único que se entera es el correo de avisos de Let's Encrypt.
+
+### 2.9 Compose de producción (#589)
+
+Los archivos están en `infra/docker/prod/`:
+
+| Archivo | Para qué |
+|---|---|
+| `docker-compose.prod.yml` | API y BFF por digest desde GHCR, MySQL 8.4.11, Redis y Nginx, con `mem_limit` en cada uno |
+| `nginx/nginx.conf` | HTTPS con el certificado de Let's Encrypt, desafío ACME, host de la API y servidores por defecto |
+| `production.env.example` | Nombres de las variables que van en `/opt/menta/.env` (sin valores) |
+
+Puntos a tener en cuenta:
+
+- `mem_limit`: API 1 GB, BFF 768 MB, MySQL 1 GB, Redis 128 MB, Nginx 128 MB. Suman unos 3 GB sobre los 4 GB del servidor, más el swap de 2.1.
+- Redis tiene `--maxmemory 96mb` y `noeviction`: si se llena, responde error y la API falla cerrada, en lugar de que el kernel mate el contenedor.
+- Subred de Compose fija (`172.29.250.0/24`): es la única que API y BFF aceptan como proxy de confianza para `X-Forwarded-For`. Si choca con otra red del servidor, se cambia con `MENTA_NETWORK_SUBNET`.
+- La carpeta `infra/docker/` tiene que existir completa en el servidor, porque el compose monta `../nginx/conf/conf.d`. Cómo llega ahí lo define el despliegue (#593).
+- Arranque a mano, para la primera prueba: `docker compose --env-file /opt/menta/.env -f docker-compose.prod.yml up -d`.
 
 ### Decisiones diferidas
 
@@ -319,6 +339,6 @@ El puerto 22 y el 3306 no tienen regla, es decir, están bloqueados desde afuera
 
 Se completa a medida que avancen los sub-issues de #380:
 
-- Aprovisionamiento (#590): pasar la renovación del certificado a `webroot` (se aplica con #589, antes del primer despliegue de Nginx), contenido de `/opt/menta/.env` (el archivo ya existe, vacío; lo define #589). El endurecimiento de SSH quedó descartado (ver "Decisiones diferidas").
+- Compose de producción (#589): ejecutar en el VPS los pasos 3 a 5 de la renovación por `webroot`, completar `/opt/menta/.env` (el archivo existe, vacío; los nombres están en `production.env.example`) y documentar el resultado del primer arranque. El endurecimiento de SSH quedó descartado (ver "Decisiones diferidas").
 - Despliegue y rollback (#593).
 - Backups y monitoreo (#594).
