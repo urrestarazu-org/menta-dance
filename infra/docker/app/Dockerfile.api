@@ -7,9 +7,13 @@ FROM eclipse-temurin:21.0.12.1_1-jre-alpine-3.24
 
 WORKDIR /app
 
-# Create non-root user
+# Create non-root user, and the directory for payment proofs owned by it. In production a named
+# volume is mounted there (payment_proofs_data): a new volume inherits the owner and permissions of
+# the image path, so without this the directory is root-owned and the API (user menta) cannot write.
 RUN addgroup -g 1000 menta && \
-    adduser -D -u 1000 -G menta menta
+    adduser -D -u 1000 -G menta menta && \
+    mkdir -p /var/menta-dance/payment-proofs && \
+    chown menta:menta /var/menta-dance/payment-proofs
 
 # Copy the pre-built JAR
 COPY --chown=menta:menta api/app/build/libs/menta-dance-api.jar /app/app.jar
