@@ -366,7 +366,7 @@ gzip -dc /opt/menta/backups/menta-<fecha>.sql.gz \
 /opt/menta/deploy.sh $(cat /opt/menta/previous-digests)
 ```
 
-El usuario de la aplicación conserva sus permisos porque son sobre el nombre de la base. Los comprobantes de transferencia (volumen `payment_proofs_data`) no entran en este backup: su copia diaria fuera del servidor es parte de #594.
+El usuario de la aplicación conserva sus permisos porque son sobre el nombre de la base. Este backup (el previo a cada deploy) es solo de la base y solo local; el diario con copia fuera del servidor, que incluye los comprobantes de transferencia, es el de la sección 2.11.
 
 **Errores comunes:**
 
@@ -374,6 +374,146 @@ El usuario de la aplicación conserva sus permisos porque son sobre el nombre de
 - `Hay otro deploy en curso`: otro `deploy.sh` tiene el lock (`/opt/menta/deploy.lock`); el lock se libera solo cuando ese proceso termina.
 - `AVISO: ... difiere del deploy.sh de este release`: hay una versión nueva del script; reinstalarlo con el `install` de arriba. El deploy continúa con la versión instalada.
 - `mysqldump falló` o `backup ... incompleto`: no se despliega nada. Ver el espacio en disco (`df -h /opt/menta`) y que `menta-mysql` esté `healthy`.
+
+### 2.11 Backups diarios y monitoreo (#594)
+
+Con un único VPS, un backup que vive en el mismo servidor no protege de perderlo. `infra/docker/prod/backup.sh` hace cada día un `mysqldump` y un `tar` de los comprobantes de transferencia (`payment_proofs_data`, que no se pueden regenerar), los copia **cifrados** a un almacenamiento S3-compatible fuera del VPS y avisa a un monitor externo. Las pruebas de lógica están en `infra/docker/prod/backup.test.sh` y corren en CI.
+
+**Archivos en el servidor:**
+
+| Ruta | Contenido |
+|---|---|
+| `/opt/menta/backup.sh` | El script (se instala desde `/opt/menta/stack/prod/`, que `deploy.sh` actualiza en cada release) |
+| `/opt/menta/backup.env` | Credenciales del almacenamiento, claves de cifrado y retención (`chmod 600`, dueño `deploy`; los nombres están en `infra/docker/prod/backup.env.example`) |
+| `/opt/menta/backups/daily/` | `menta-<fecha>.sql.gz` y `proofs-<fecha>.tar.gz`; se conservan los últimos 7 de cada uno |
+| `/etc/systemd/system/menta-backup.{service,timer}` | Corre `backup.sh` todos los días a las 06:30 UTC (03:30 en Argentina), con `Persistent=true` por si el servidor estaba apagado |
+
+**Cómo funciona.** Verifica el volcado (`gzip -t` y la línea `Dump completed`), archiva los comprobantes desde el contenedor de la API, copia ambos con `rclone` y comprueba que el almacenamiento externo tenga los dos archivos con el mismo tamaño. Recién entonces borra lo que supere los 30 días fuera del servidor, sin tocar nunca el backup que acaba de subir. `rclone` corre como la imagen oficial con versión y digest fijos (igual que Trivy), así que no hay nada que instalar. El cifrado es del lado del cliente (`rclone crypt`, incluye los nombres de archivo): el proveedor guarda solo datos ilegibles. Si algo falla, el script sale con error y llama a `BACKUP_PING_URL/fail`; si deja de correr, el monitor avisa porque no recibe el ping diario.
+
+**Relación con la copia de seguridad del panel de DonWeb.** El plan incluye una copia semanal del servidor entero (el panel muestra las últimas cuatro, del 2026-09-24 al 2026-10-15). No reemplaza a este backup, porque cubre otra cosa:
+
+| | Copia del panel de DonWeb | `backup.sh` |
+|---|---|---|
+| Frecuencia | Semanal | Diaria |
+| Qué guarda | El servidor entero (sistema, Docker, configuración y datos) | Solo los datos: la base y los comprobantes |
+| Dónde vive | En DonWeb, en la misma cuenta que el servidor | En otro proveedor, cifrada |
+| Pérdida máxima de datos | Hasta 7 días | Hasta 24 horas |
+| Sirve para | Recuperar el servidor si se rompe el sistema | Recuperar los datos aunque se pierda la cuenta o el proveedor |
+
+Con una semana de ventana se perderían pagos y comprobantes que no se pueden regenerar, y la copia del panel comparte cuenta y proveedor con el servidor. No se sabe cómo toma DonWeb la copia, así que no se da por hecho que la base quede consistente como con un `mysqldump`. Se mantiene el backup diario: cuesta centavos y acorta la pérdida máxima de 7 días a 24 horas.
+
+**Qué se probó (en local, sin tocar el VPS).** Con MySQL 8.4.11, la API y un servidor S3 local (el propio `rclone serve s3`) reales, `backup.sh` generó el volcado (las 33 tablas del esquema más una tabla de control creada para la prueba) y el archivo de comprobantes, ambos con modo 600, y los subió. En el almacenamiento los nombres se ven cifrados y el objeto crudo no contiene texto legible (0 apariciones de `CREATE TABLE`). Después, en una base MySQL vacía: se descargó y descifró el backup, se restauró (34 tablas, la fila de control incluida), se recuperó el comprobante y **la API arrancó contra la base restaurada con `status: UP`** y las 27 migraciones de Flyway en su historia. Falta repetir el simulacro con el almacenamiento real y el VPS (ver "Pendiente de ejecutar").
+
+**Hallazgo corregido en este issue.** El directorio de comprobantes no existía en la imagen de la API: Docker crea el punto de montaje del volumen con dueño `root` y la API corre como `menta` (uid 1000), así que **no podía escribir ningún comprobante** (se reprodujo: `touch: Permission denied`). `Dockerfile.api` ahora crea `/var/menta-dance/payment-proofs` con dueño `menta`: un volumen nuevo hereda dueño y permisos de la ruta de la imagen. Vale para volúmenes nuevos; si ya existiera un `payment_proofs_data` creado con la imagen anterior, hay que corregir el dueño a mano (`docker exec -u root menta-api chown menta:menta /var/menta-dance/payment-proofs`).
+
+**Pendiente de ejecutar en el VPS:**
+
+1. **Almacenamiento externo.** Crear un bucket en un proveedor S3-compatible y una clave de acceso limitada a ese bucket. Opción recomendada: **Cloudflare R2**; alternativa: Bunny Storage (más abajo). Cualquier otro proveedor S3-compatible también sirve, porque solo cambian las variables `RCLONE_CONFIG_OFFSITE_*`.
+
+   **Cloudflare R2** (recomendado). Los pasos y las cifras salen de la documentación oficial de Cloudflare (consultada el 2026-10-17); los nombres de los botones del panel pueden variar.
+
+   - **Costo.** Almacenamiento *Standard*: 10 GB-mes gratis y después $0,015/GB-mes; 1 millón de operaciones de clase A (escrituras y listados) y 10 millones de clase B (lecturas y `HEAD`) gratis al mes; salida de datos gratis; `DeleteObject` no se cobra. Una corrida del backup hace unas 20 operaciones, así que son unas 600 al mes. El almacenamiento es aproximadamente (tamaño de los comprobantes) × 30 copias: se pasa de los 10 GB gratis con unos 330 MB de comprobantes, y cada GB de más cuesta $0,015 al mes. En el panel, la suscripción a R2 se agrega a la cuenta con un método de pago y solo se cobra si se superan esos límites.
+   - **Bucket.** Crear un bucket (el del proyecto se llama `menta-dance-backups`; creado el 2026-10-17 con clase *Estándar* y acceso público *Deshabilitado*) con ubicación automática y **sin acceso público** (no habilitar el dominio `r2.dev` ni un dominio personalizado). No elegir una jurisdicción (UE, EE. UU., FedRAMP) salvo que se necesite: obliga a usar otro endpoint.
+   - **Token.** En *R2 object storage → Overview → API Tokens → Manage*, crear un **Account API token** (los de usuario dejan de funcionar si se quita al usuario de la cuenta) con permiso **Object Read & Write**, limitado **solo a ese bucket**. El panel muestra el *Access Key ID* y el *Secret Access Key* **una sola vez**: copiarlos directo a `/opt/menta/backup.env`, nunca al repositorio ni a un chat. Crear también un segundo token **Object Read only** para el simulacro y para restaurar desde otra máquina: no puede borrar ni pisar backups.
+   - **Endpoint.** `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`; el ID de la cuenta está en el panel de Cloudflare.
+   - **Variables** de `/opt/menta/backup.env`:
+
+     ```
+     RCLONE_CONFIG_OFFSITE_PROVIDER=Cloudflare
+     RCLONE_CONFIG_OFFSITE_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+     RCLONE_CONFIG_OFFSITE_ACCESS_KEY_ID=<Access Key ID>
+     RCLONE_CONFIG_OFFSITE_SECRET_ACCESS_KEY=<Secret Access Key>
+     RCLONE_CONFIG_OFFSITE_ACL=private
+     RCLONE_CONFIG_OFFSITE_NO_CHECK_BUCKET=true
+     RCLONE_CONFIG_OFFSITECRYPT_REMOTE=offsite:menta-dance-backups/menta
+     ```
+
+     `NO_CHECK_BUCKET=true` es obligatorio con un token de permisos de objeto: la guía de `rclone` de Cloudflare advierte que sin él se obtienen errores. La región se deja vacía (R2 usa `auto`).
+   - **Compatibilidad con `backup.sh`.** R2 implementa todas las operaciones que usa `rclone` en el script (`PutObject`, `HeadObject`, `ListObjectsV2`, `DeleteObject`, y también el borrado por lotes y el multipart). Cloudflare indica que la implementación de la API S3 sigue en progreso, así que el primer backup y el simulacro de restauración (pasos 4 y 6) siguen siendo la prueba real.
+
+   **Alternativa: Bunny Storage**, que ya se usa para los videos. Más cara en la práctica ($0,02/GB por las dos regiones obligatorias) y con la compatibilidad S3 en *Public preview*:
+
+   - Crear una **zona de almacenamiento nueva y propia** (por ejemplo `menta-backups`; el nombre admite letras, números y guiones, mínimo 4 caracteres), separada de la de los videos, para que la clave del backup no pueda tocar los videos ni al revés. Activar *S3 Compatibility* **al crearla**: según la documentación de Bunny no se puede activar después en una zona existente (por eso la zona de los videos no sirve).
+   - **No conectarle ninguna Pull Zone (CDN)**: así los backups nunca quedan servidos por una URL pública.
+   - Tier *Standard*. Bunny exige una **región principal y al menos una de réplica** (por ejemplo Los Angeles y Frankfurt); las réplicas no se pueden quitar después de crear la zona. Al crearla (2026-10-17) el panel mostraba $0,02/GB al mes con dos regiones y $0,01/GB con una; comprobar el precio vigente. Para unos pocos MB son centavos.
+   - **Datos de acceso** (pestaña *Access* de la zona, según la documentación de Bunny): *Access Key ID* = nombre de la zona, *Secret Access Key* = contraseña de la zona, y endpoint `https://<región>-s3.storage.bunnycdn.com`, donde `<región>` es el código de la región **principal** (`la` para Los Angeles, `de` Frankfurt, `ny` New York, etc.). Van en `/opt/menta/backup.env`, nunca en el repositorio ni en un chat:
+
+     ```
+     RCLONE_CONFIG_OFFSITE_PROVIDER=Other
+     RCLONE_CONFIG_OFFSITE_ENDPOINT=https://la-s3.storage.bunnycdn.com
+     RCLONE_CONFIG_OFFSITE_REGION=la
+     RCLONE_CONFIG_OFFSITE_ACCESS_KEY_ID=<nombre de la zona>
+     RCLONE_CONFIG_OFFSITE_SECRET_ACCESS_KEY=<contraseña de la zona>
+     RCLONE_CONFIG_OFFSITECRYPT_REMOTE=offsite:<nombre de la zona>/menta
+     ```
+
+     El nombre de la zona hace de bucket. La pestaña *Access* también ofrece una **contraseña de solo lectura**: usarla para restaurar desde otra máquina o para el simulacro, así esa máquina no puede borrar ni pisar backups.
+   - **Compatibilidad con `backup.sh`.** La documentación de Bunny tiene un ejemplo con `rclone` y `provider=Other`. Se comprobó en local qué pedidos S3 hace `rclone` en las tres operaciones del script (copiar, verificar por tamaño y borrar por antigüedad): `HEAD` de objeto, `PUT` de objeto, listado y `DELETE` de un objeto. Las cuatro están en la lista de operaciones que soporta Bunny. No usa el borrado por lotes (`DeleteObjects`, que Bunny no soporta), no crea buckets ni usa operaciones de multipart para archivos chicos. Bunny no ofrece políticas de ciclo de vida ni cifrado del lado del servidor: la retención la aplica el propio script y el cifrado es el de `rclone crypt`. Tampoco guarda metadatos propios (`x-amz-meta-*`), así que la antigüedad de cada archivo sale de su fecha de subida.
+   - Por ser *Public preview*, el primer backup y el simulacro de restauración con la zona real (pasos 4 y 6) son obligatorios antes de confiar en ella: lo único que no se pudo probar es la conexión con Bunny en sí (firma de las peticiones, región y comportamiento real del servicio). Si diera problemas, cambiar a otro proveedor son solo las variables `RCLONE_CONFIG_OFFSITE_*` de `backup.env`.
+2. **Claves de cifrado.** Generar dos claves largas, guardarlas **en texto plano en un gestor de contraseñas fuera del servidor** (sin ellas los backups no se pueden descifrar) y ofuscarlas para `rclone`:
+
+   ```bash
+   read -rs -p "Clave: " K; echo
+   docker run --rm rclone/rclone:1.75.2 obscure "$K"
+   unset K
+   ```
+
+   `read -rs` evita que la clave quede en pantalla o en el historial del shell. Se repite para la segunda clave.
+
+3. **Instalar los archivos**, como `mentaadmin` (después de un deploy que haya dejado `/opt/menta/stack/prod/` actualizado):
+
+   ```bash
+   sudo install -m 750 -o deploy -g deploy /opt/menta/stack/prod/backup.sh /opt/menta/backup.sh
+   sudo install -m 600 -o deploy -g deploy /opt/menta/stack/prod/backup.env.example /opt/menta/backup.env
+   sudo -u deploy nano /opt/menta/backup.env    # completar el almacenamiento, las dos claves y BACKUP_PING_URL
+   sudo cp /opt/menta/stack/prod/systemd/menta-backup.service /opt/menta/stack/prod/systemd/menta-backup.timer /etc/systemd/system/
+   ```
+
+   El formato del archivo es el de `docker --env-file`: una variable por línea, sin comillas.
+
+4. **Primer backup a mano**, antes de activar el timer:
+
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl start menta-backup.service
+   journalctl -u menta-backup.service -n 30 --no-pager
+   ```
+
+   Debe terminar con `Backup completado`. Los avisos `Config file ... not found` y `No common hash found` de `rclone` son normales: la configuración viene de variables de entorno y un remoto cifrado no tiene hashes comparables, por eso se compara el tamaño.
+5. **Activar el timer** y comprobar la próxima ejecución:
+
+   ```bash
+   sudo systemctl enable --now menta-backup.timer
+   systemctl list-timers menta-backup.timer
+   ```
+
+6. **Simulacro de restauración en el VPS** (el criterio de aceptación pide hacerlo al menos una vez): bajar el último backup del almacenamiento externo, restaurarlo en una base vacía y levantar la API contra ella, como se hizo en local. Anotar acá la fecha y el resultado.
+
+**Restaurar desde el almacenamiento externo.** Hace falta Docker, el `backup.env` (o sus variables `RCLONE_CONFIG_*`) y las claves de cifrado en texto plano. En una máquina nueva se puede recrear el `backup.env` con las claves del gestor de contraseñas.
+
+```bash
+RCLONE=rclone/rclone:1.75.2@sha256:2687085f718d3c628f7fdfb77c52a1d344332aed543110bb88088f2c70d43eb5
+# 1. Ver qué hay (los nombres salen descifrados)
+docker run --rm --env-file /opt/menta/backup.env "$RCLONE" lsf offsitecrypt:daily
+# 2. Bajar y descifrar un día concreto
+mkdir -p ~/restore
+docker run --rm --env-file /opt/menta/backup.env -v ~/restore:/restore "$RCLONE" copy offsitecrypt:daily /restore \
+  --include "menta-<fecha>.sql.gz" --include "proofs-<fecha>.tar.gz"
+# 3. Base de datos: igual que en la sección 2.10 (detener API y BFF, DROP/CREATE DATABASE y restaurar el .sql.gz)
+# 4. Comprobantes, con la API en marcha (los archivos quedan con dueño menta)
+docker exec -i menta-api tar -xzf - -C /var/menta-dance/payment-proofs < ~/restore/proofs-<fecha>.tar.gz
+```
+
+**Monitoreo externo (pendiente de configurar).** Un chequeo desde afuera detecta lo que ningún script del servidor puede: que el servidor entero no responda. Usar un servicio gratuito de uptime (por ejemplo UptimeRobot, con chequeos cada 5 minutos y alerta por mail; comprobar las condiciones vigentes del plan) con estos monitores, de tipo *keyword*:
+
+| URL | Palabra clave | Qué cubre |
+|---|---|---|
+| `https://mentadance.com/health` | `ok` | Nginx y el certificado de `mentadance.com` |
+| `https://mentadance.com/actuator/health` | `"status":"UP"` | BFF |
+| `https://mentadance.com/api/actuator/health` | `"status":"UP"` | API, por el camino que usa la web |
+| `https://api.mentadance.com/actuator/health` | `"status":"UP"` | API, por el host que usa la app Android, y su certificado |
+
+Para el backup, un monitor tipo *heartbeat* (por ejemplo healthchecks.io, gratuito) con período de 1 día y unas 2 horas de gracia: su URL de ping va en `BACKUP_PING_URL`. **Validación:** apagar la API (`docker stop menta-api`) debe disparar la alerta por mail en pocos minutos; después, `docker start menta-api`. Anotar acá el resultado.
 
 ### Decisiones diferidas
 
@@ -407,4 +547,4 @@ Se completa a medida que avancen los sub-issues de #380:
 
 - Compose de producción (#589): ejecutar en el VPS los pasos 3 a 5 de la renovación por `webroot`, completar `/opt/menta/.env` (el archivo existe, vacío; los nombres están en `production.env.example`) y documentar el resultado del primer arranque. El endurecimiento de SSH quedó descartado (ver "Decisiones diferidas").
 - Despliegue y rollback (#593, sección 2.10): instalar `deploy.sh`, el primer despliegue a mano con un tag `-rc`, restringir la clave al comando forzado, y cargar en el Environment `production` de GitHub los secretos que usa `release.yml` (#592; ver `docs/16-CICD-PIPELINE.md`, "Configuración en GitHub"). Anotar acá el resultado de cada paso.
-- Backups y monitoreo (#594).
+- Backups y monitoreo (#594, sección 2.11): bucket y claves, instalar `backup.sh` y el timer, el primer backup, el simulacro de restauración en el VPS y los monitores externos. Anotar acá el resultado de cada paso.

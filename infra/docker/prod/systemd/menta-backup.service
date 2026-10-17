@@ -1,0 +1,13 @@
+[Unit]
+Description=Backup diario de Menta Dance (MySQL y comprobantes, copia cifrada fuera del VPS)
+Documentation=https://github.com/urrestarazu-org/menta-dance/blob/develop/docs/32-VPS-DONWEB-RUNBOOK.md
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=deploy
+Group=deploy
+ExecStart=/opt/menta/backup.sh
+# Un backup colgado no puede bloquear los siguientes
+TimeoutStartSec=2h

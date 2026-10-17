@@ -1,0 +1,12 @@
+[Unit]
+Description=Backup diario de Menta Dance
+
+[Timer]
+# 06:30 UTC = 03:30 en Argentina, la hora de menos tráfico
+OnCalendar=*-*-* 06:30:00 UTC
+# Si el servidor estaba apagado a esa hora, corre al volver a arrancar
+Persistent=true
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target
