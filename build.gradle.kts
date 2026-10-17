@@ -21,7 +21,9 @@ plugins {
 }
 
 group = "com.menta"
-version = "0.1.0-SNAPSHOT"
+// The release workflow passes -Pversion=X.Y.Z (taken from the git tag, #588). A plain
+// `version = "..."` would overwrite that value, so the property is read explicitly.
+version = providers.gradleProperty("version").getOrElse("0.1.0-SNAPSHOT")
 
 val springBootVersion = libs.versions.spring.boot.get()
 val checkstyleVersion = libs.versions.checkstyle.get()
@@ -158,6 +160,24 @@ subprojects {
             }
             tasks.named<Jar>("jar") {
                 enabled = true
+            }
+        } else {
+            // Executable modules (#588): /actuator/info shows the version and the commit that
+            // are deployed, and two builds of the same commit produce the same JAR.
+            extensions.configure<org.springframework.boot.gradle.dsl.SpringBootExtension> {
+                buildInfo {
+                    properties {
+                        // build.time changes on every run and would make the JAR irreproducible
+                        excludes.set(setOf("time"))
+                        // Only CI knows the commit for free; a local `git rev-parse` would change
+                        // the build inputs after every commit and invalidate the test cache of app/bff.
+                        additional.put("commit", System.getenv("GITHUB_SHA")?.takeIf { it.isNotBlank() } ?: "local")
+                    }
+                }
+            }
+            tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
+                isPreserveFileTimestamps = false
+                isReproducibleFileOrder = true
             }
         }
 
