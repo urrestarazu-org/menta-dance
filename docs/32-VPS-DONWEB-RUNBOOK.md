@@ -8,7 +8,7 @@ Bitácora operativa del cloud server de DonWeb donde se despliega Menta Dance (#
 - **IP y puerto SSH**: se consultan en el panel de DonWeb (Cloud Servers → Software y Accesos); no se guardan en el repositorio
 - **Dominios**: `mentadance.com` (BFF, con `www` como CNAME) y `api.mentadance.com` (API); los tres nombres apuntan al VPS
 - **Vencimiento del plan**: 2027-10-22
-- **Estado**: proyecto anterior retirado (#595); VPS aprovisionado (#590), certificado emitido (vence 2027-01-14); renovación por `webroot` decidida (se aplica en #589); `/opt/menta/.env` creado vacío; firewall del panel revisado; endurecimiento de SSH descartado por ahora. El compose de producción (#589) y `deploy.sh` (#593) están en el repositorio y falta instalarlos y probarlos en el servidor (secciones 2.9 y 2.10)
+- **Estado**: proyecto anterior retirado (#595); VPS aprovisionado (#590), certificado emitido (vence 2027-01-14); renovación por `webroot` decidida (se aplica en #589); `/opt/menta/.env` creado vacío; firewall del panel revisado; endurecimiento de SSH descartado por ahora. El compose de producción (#589), `deploy.sh` (#593) y `backup.sh` (#594) están en el repositorio y falta instalarlos y probarlos en el servidor (secciones 2.9, 2.10 y 2.11). Hecho en el servidor el 2026-10-17: login a Docker Hub y bucket, tokens y credenciales de R2 probados con cifrado (#610 hace el seguimiento de lo que falta)
 
 > No se registran contraseñas, claves ni tokens en este documento.
 
@@ -228,6 +228,21 @@ chmod 600 ~/.docker/config.json
 
 `read -rs` evita que el token quede en pantalla o en el historial. Docker avisa que guarda la credencial sin cifrar en `config.json`; es esperado y queda protegido por `chmod 600`. Resultado: `Login Succeeded`. El token vence a los 12 meses: renovarlo antes y repetir el login.
 
+#### Docker Hub (límite de descargas anónimas)
+
+**Qué pasó (2026-10-17).** La primera descarga de `rclone/rclone` en el VPS falló con `toomanyrequests: You have reached your unauthenticated pull rate limit`. Según la documentación de Docker Hub, sin iniciar sesión el límite es de **100 descargas cada 6 horas por dirección IPv4 (o subred IPv6 /64)**, y de **200 por cuenta** gratuita autenticada. En un VPS la IP puede estar compartida o ya consumida, así que el límite se agota sin haber descargado nada. Importa más allá de `rclone`: el compose de producción baja `mysql`, `redis` y `nginx` de Docker Hub en el primer despliegue, y podría fallar igual.
+
+**Solución.** Iniciar sesión en Docker Hub desde `deploy` con una cuenta gratuita y un **token de acceso personal de solo lectura** (*Account settings → Personal access tokens*; los nombres de los menús pueden variar). Con una cuenta creada con Google no hay contraseña para la terminal: se usa el nombre de usuario de Docker (Docker ID) y el token como contraseña.
+
+```bash
+read -rs -p "Token de Docker Hub: " T; echo
+echo "$T" | docker login -u <DOCKER-ID> --password-stdin
+unset T
+chmod 600 ~/.docker/config.json
+```
+
+Resultado: `Login Succeeded` (con el mismo aviso de credenciales sin cifrar que GHCR). Las credenciales de Docker Hub y de GHCR conviven en el mismo `~/.docker/config.json` de `deploy`: para revocar una hay que borrar su entrada o hacer `docker logout` del registro. Se hizo el 2026-10-17; el nombre de usuario no se registra en este documento.
+
 ### 2.8 Certbot (Let's Encrypt)
 
 Con el puerto 80 libre se usa el modo `standalone`. Instalación y prueba en seco, que valida el desafío HTTP sin emitir nada:
@@ -406,15 +421,15 @@ Con una semana de ventana se perderían pagos y comprobantes que no se pueden re
 
 **Hallazgo corregido en este issue.** El directorio de comprobantes no existía en la imagen de la API: Docker crea el punto de montaje del volumen con dueño `root` y la API corre como `menta` (uid 1000), así que **no podía escribir ningún comprobante** (se reprodujo: `touch: Permission denied`). `Dockerfile.api` ahora crea `/var/menta-dance/payment-proofs` con dueño `menta`: un volumen nuevo hereda dueño y permisos de la ruta de la imagen. Vale para volúmenes nuevos; si ya existiera un `payment_proofs_data` creado con la imagen anterior, hay que corregir el dueño a mano (`docker exec -u root menta-api chown menta:menta /var/menta-dance/payment-proofs`).
 
-**Pendiente de ejecutar en el VPS:**
+**Puesta en marcha en el VPS** (seguimiento en #610). Los pasos 1 y 2 están hechos y probados desde el VPS (2026-10-17); del 3 al 6 falta ejecutar. Lo ejecutado y sus resultados están en "Ejecutado el 2026-10-17", más abajo.
 
-1. **Almacenamiento externo.** Crear un bucket en un proveedor S3-compatible y una clave de acceso limitada a ese bucket. Opción recomendada: **Cloudflare R2**; alternativa: Bunny Storage (más abajo). Cualquier otro proveedor S3-compatible también sirve, porque solo cambian las variables `RCLONE_CONFIG_OFFSITE_*`.
+1. **Almacenamiento externo** (hecho el 2026-10-17: Cloudflare R2). Crear un bucket en un proveedor S3-compatible y una clave de acceso limitada a ese bucket. Opción recomendada: **Cloudflare R2**; alternativa: Bunny Storage (más abajo). Cualquier otro proveedor S3-compatible también sirve, porque solo cambian las variables `RCLONE_CONFIG_OFFSITE_*`.
 
    **Cloudflare R2** (recomendado). Los pasos y las cifras salen de la documentación oficial de Cloudflare (consultada el 2026-10-17); los nombres de los botones del panel pueden variar.
 
    - **Costo.** Almacenamiento *Standard*: 10 GB-mes gratis y después $0,015/GB-mes; 1 millón de operaciones de clase A (escrituras y listados) y 10 millones de clase B (lecturas y `HEAD`) gratis al mes; salida de datos gratis; `DeleteObject` no se cobra. Una corrida del backup hace unas 20 operaciones, así que son unas 600 al mes. El almacenamiento es aproximadamente (tamaño de los comprobantes) × 30 copias: se pasa de los 10 GB gratis con unos 330 MB de comprobantes, y cada GB de más cuesta $0,015 al mes. En el panel, la suscripción a R2 se agrega a la cuenta con un método de pago y solo se cobra si se superan esos límites.
    - **Bucket.** Crear un bucket (el del proyecto se llama `menta-dance-backups`; creado el 2026-10-17 con clase *Estándar* y acceso público *Deshabilitado*) con ubicación automática y **sin acceso público** (no habilitar el dominio `r2.dev` ni un dominio personalizado). No elegir una jurisdicción (UE, EE. UU., FedRAMP) salvo que se necesite: obliga a usar otro endpoint.
-   - **Token.** En *R2 object storage → Overview → API Tokens → Manage*, crear un **Account API token** (los de usuario dejan de funcionar si se quita al usuario de la cuenta) con permiso **Object Read & Write**, limitado **solo a ese bucket**. El panel muestra el *Access Key ID* y el *Secret Access Key* **una sola vez**: copiarlos directo a `/opt/menta/backup.env`, nunca al repositorio ni a un chat. Crear también un segundo token **Object Read only** para el simulacro y para restaurar desde otra máquina: no puede borrar ni pisar backups.
+   - **Token.** En *R2 object storage → Overview → API Tokens → Manage*, crear un **Account API token** (los de usuario dejan de funcionar si se quita al usuario de la cuenta) con permiso **Object Read & Write**, limitado **solo a ese bucket**. El panel muestra el *Access Key ID* y el *Secret Access Key* **una sola vez**: copiarlos directo a `/opt/menta/backup.env`, nunca al repositorio ni a un chat. Crear también un segundo token **Object Read only** para el simulacro y para restaurar desde otra máquina: no puede borrar ni pisar backups. Ver abajo "Cómo obtener el ID y el secreto" si el token se creó desde la pantalla genérica de *Tokens de API de cuenta*.
    - **Endpoint.** `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`; el ID de la cuenta está en el panel de Cloudflare.
    - **Variables** de `/opt/menta/backup.env`:
 
@@ -450,7 +465,7 @@ Con una semana de ventana se perderían pagos y comprobantes que no se pueden re
      El nombre de la zona hace de bucket. La pestaña *Access* también ofrece una **contraseña de solo lectura**: usarla para restaurar desde otra máquina o para el simulacro, así esa máquina no puede borrar ni pisar backups.
    - **Compatibilidad con `backup.sh`.** La documentación de Bunny tiene un ejemplo con `rclone` y `provider=Other`. Se comprobó en local qué pedidos S3 hace `rclone` en las tres operaciones del script (copiar, verificar por tamaño y borrar por antigüedad): `HEAD` de objeto, `PUT` de objeto, listado y `DELETE` de un objeto. Las cuatro están en la lista de operaciones que soporta Bunny. No usa el borrado por lotes (`DeleteObjects`, que Bunny no soporta), no crea buckets ni usa operaciones de multipart para archivos chicos. Bunny no ofrece políticas de ciclo de vida ni cifrado del lado del servidor: la retención la aplica el propio script y el cifrado es el de `rclone crypt`. Tampoco guarda metadatos propios (`x-amz-meta-*`), así que la antigüedad de cada archivo sale de su fecha de subida.
    - Por ser *Public preview*, el primer backup y el simulacro de restauración con la zona real (pasos 4 y 6) son obligatorios antes de confiar en ella: lo único que no se pudo probar es la conexión con Bunny en sí (firma de las peticiones, región y comportamiento real del servicio). Si diera problemas, cambiar a otro proveedor son solo las variables `RCLONE_CONFIG_OFFSITE_*` de `backup.env`.
-2. **Claves de cifrado.** Generar dos claves largas, guardarlas **en texto plano en un gestor de contraseñas fuera del servidor** (sin ellas los backups no se pueden descifrar) y ofuscarlas para `rclone`:
+2. **Claves de cifrado** (hecho el 2026-10-17). Generar dos claves largas, guardarlas **en texto plano en un gestor de contraseñas fuera del servidor** (sin ellas los backups no se pueden descifrar) y ofuscarlas para `rclone`:
 
    ```bash
    read -rs -p "Clave: " K; echo
@@ -460,7 +475,7 @@ Con una semana de ventana se perderían pagos y comprobantes que no se pueden re
 
    `read -rs` evita que la clave quede en pantalla o en el historial del shell. Se repite para la segunda clave.
 
-3. **Instalar los archivos**, como `mentaadmin` (después de un deploy que haya dejado `/opt/menta/stack/prod/` actualizado):
+3. **Instalar los archivos**, como `mentaadmin` (después de un deploy que haya dejado `/opt/menta/stack/prod/` actualizado). `backup.env` ya se creó a mano el 2026-10-17, porque ese deploy todavía no se hizo; faltan `backup.sh` y las unidades de systemd:
 
    ```bash
    sudo install -m 750 -o deploy -g deploy /opt/menta/stack/prod/backup.sh /opt/menta/backup.sh
@@ -488,6 +503,42 @@ Con una semana de ventana se perderían pagos y comprobantes que no se pueden re
    ```
 
 6. **Simulacro de restauración en el VPS** (el criterio de aceptación pide hacerlo al menos una vez): bajar el último backup del almacenamiento externo, restaurarlo en una base vacía y levantar la API contra ella, como se hizo en local. Anotar acá la fecha y el resultado.
+
+**Ejecutado el 2026-10-17 (VPS, usuario `deploy`):**
+
+| Paso | Resultado |
+|---|---|
+| Bucket `menta-dance-backups` en R2 (clase *Estándar*, acceso público *Deshabilitado*) y dos tokens de cuenta: escritura (*Workers R2 Storage Bucket Item* con Read y Edit, vence al año) y solo lectura | Creados. Los valores, en el gestor de contraseñas; el de solo lectura no va en el servidor |
+| Dos claves de cifrado (`openssl rand -base64 33`) y su versión ofuscada con `rclone obscure` | Claves en el gestor de contraseñas; las ofuscadas, en `backup.env` |
+| `/opt/menta/backup.env` creado a mano (`install -m 600 -o deploy -g deploy`), con las variables de R2 y del remoto cifrado | Creado |
+| `rclone lsf offsite:menta-dance-backups` | Bucket vacío, sin errores: las credenciales son correctas |
+| `rcat`, `lsf` y `deletefile` de un archivo de prueba en `offsite:` | Subió, listó y borró sin errores |
+| Mismo ciclo por `offsitecrypt:` (más `cat` y un `lsf -R` sobre el remoto sin cifrar) | `cat` devolvió el texto original; R2 solo muestra nombres ilegibles; el aviso `--checksum ... no hashes in common` es normal en un remoto cifrado |
+
+**Cómo obtener el ID y el secreto.** Si el token se creó desde la pantalla genérica de *Tokens de API de cuenta* (el valor empieza con `cfat_`), `rclone` necesita dos datos que se derivan del valor: el **Access Key ID** es el `id` del token (32 caracteres, lo devuelve `tokens/verify`) y el **Secret Access Key** es el **SHA-256 del valor del token** (64 caracteres), según la documentación de Cloudflare. El valor del token no va en ninguna variable de `rclone`.
+
+```bash
+read -rs -p "Valor del token: " T; echo
+curl -s "https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/tokens/verify" \
+  -H "Authorization: Bearer $T" | jq -r .result.id      # Access Key ID
+printf '%s' "$T" | sha256sum | cut -d' ' -f1             # Secret Access Key (en macOS: shasum -a 256)
+unset T
+```
+
+Para comprobar el archivo sin mostrar secretos:
+
+```bash
+sudo -u deploy awk -F= '/^RCLONE_CONFIG_OFFSITE_(ACCESS_KEY_ID|SECRET_ACCESS_KEY)=/{print $1, length($2)}' /opt/menta/backup.env
+```
+
+Deben salir 32 y 64.
+
+**Errores encontrados al probar R2 (y su causa):**
+
+- `toomanyrequests: You have reached your unauthenticated pull rate limit`: límite de descargas anónimas de Docker Hub; ver la sección 2.7, "Docker Hub".
+- `InvalidArgument: Credential access key has length 53, should be 32`: en `ACCESS_KEY_ID` se había puesto el **valor** del token (53 caracteres) en lugar de su **ID** (32).
+- `AccessDenied` al subir un archivo, con el listado funcionando: estaban cargados el ID y el hash del token de **solo lectura**. Lectura sí, escritura no. Se corrigió cargando el ID y el SHA-256 del token de escritura. Un `403` en una operación y no en otra apunta a permisos del token; si fallara todo, sería el filtro de IP o el alcance.
+- Cuidado con pegar tokens en chats, tickets o capturas: el valor `cfat_…` de un token se pegó por error en una conversación y hubo que rotarlo. Si un valor se expone, se invalida en el panel de Cloudflare y se vuelve a calcular el secreto.
 
 **Restaurar desde el almacenamiento externo.** Hace falta Docker, el `backup.env` (o sus variables `RCLONE_CONFIG_*`) y las claves de cifrado en texto plano. En una máquina nueva se puede recrear el `backup.env` con las claves del gestor de contraseñas.
 
@@ -547,4 +598,5 @@ Se completa a medida que avancen los sub-issues de #380:
 
 - Compose de producción (#589): ejecutar en el VPS los pasos 3 a 5 de la renovación por `webroot`, completar `/opt/menta/.env` (el archivo existe, vacío; los nombres están en `production.env.example`) y documentar el resultado del primer arranque. El endurecimiento de SSH quedó descartado (ver "Decisiones diferidas").
 - Despliegue y rollback (#593, sección 2.10): instalar `deploy.sh`, el primer despliegue a mano con un tag `-rc`, restringir la clave al comando forzado, y cargar en el Environment `production` de GitHub los secretos que usa `release.yml` (#592; ver `docs/16-CICD-PIPELINE.md`, "Configuración en GitHub"). Anotar acá el resultado de cada paso.
-- Backups y monitoreo (#594, sección 2.11): bucket y claves, instalar `backup.sh` y el timer, el primer backup, el simulacro de restauración en el VPS y los monitores externos. Anotar acá el resultado de cada paso.
+- Backups y monitoreo (#594, sección 2.11): el bucket, los tokens, las claves de cifrado y `backup.env` ya están hechos y probados (2026-10-17). Falta instalar `backup.sh` y el timer (después del primer despliegue), el primer backup real, el simulacro de restauración en el VPS y los monitores externos. Anotar acá el resultado de cada paso.
+- Seguimiento de todos los pasos pendientes del servidor: #610.
