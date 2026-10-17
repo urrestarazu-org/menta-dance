@@ -388,7 +388,7 @@ Con un único VPS, un backup que vive en el mismo servidor no protege de perderl
 | `/opt/menta/backups/daily/` | `menta-<fecha>.sql.gz` y `proofs-<fecha>.tar.gz`; se conservan los últimos 7 de cada uno |
 | `/etc/systemd/system/menta-backup.{service,timer}` | Corre `backup.sh` todos los días a las 06:30 UTC (03:30 en Argentina), con `Persistent=true` por si el servidor estaba apagado |
 
-**Cómo funciona.** Verifica el volcado (`gzip -t` y la línea `Dump completed`), archiva los comprobantes desde el contenedor de la API, copia ambos con `rclone` y comprueba que el almacenamiento externo tenga los dos archivos con el mismo tamaño. Recién entonces borra lo que supere los 30 días fuera del servidor. `rclone` corre como la imagen oficial con versión y digest fijos (igual que Trivy), así que no hay nada que instalar. El cifrado es del lado del cliente (`rclone crypt`, incluye los nombres de archivo): el proveedor guarda solo datos ilegibles. Si algo falla, el script sale con error y llama a `BACKUP_PING_URL/fail`; si deja de correr, el monitor avisa porque no recibe el ping diario.
+**Cómo funciona.** Verifica el volcado (`gzip -t` y la línea `Dump completed`), archiva los comprobantes desde el contenedor de la API, copia ambos con `rclone` y comprueba que el almacenamiento externo tenga los dos archivos con el mismo tamaño. Recién entonces borra lo que supere los 30 días fuera del servidor, sin tocar nunca el backup que acaba de subir. `rclone` corre como la imagen oficial con versión y digest fijos (igual que Trivy), así que no hay nada que instalar. El cifrado es del lado del cliente (`rclone crypt`, incluye los nombres de archivo): el proveedor guarda solo datos ilegibles. Si algo falla, el script sale con error y llama a `BACKUP_PING_URL/fail`; si deja de correr, el monitor avisa porque no recibe el ping diario.
 
 **Relación con la copia de seguridad del panel de DonWeb.** El plan incluye una copia semanal del servidor entero (el panel muestra las últimas cuatro, del 2026-09-24 al 2026-10-15). No reemplaza a este backup, porque cubre otra cosa:
 
@@ -408,13 +408,48 @@ Con una semana de ventana se perderían pagos y comprobantes que no se pueden re
 
 **Pendiente de ejecutar en el VPS:**
 
-1. **Almacenamiento externo.** Crear un bucket en un proveedor S3-compatible y una clave de acceso limitada a ese bucket. Opciones: Cloudflare R2 o Backblaze B2 (tienen plan gratuito; comprobar las condiciones vigentes) o **Bunny Storage**, que ya se usa para los videos:
+1. **Almacenamiento externo.** Crear un bucket en un proveedor S3-compatible y una clave de acceso limitada a ese bucket. Opción recomendada: **Cloudflare R2**; alternativa: Bunny Storage (más abajo). Cualquier otro proveedor S3-compatible también sirve, porque solo cambian las variables `RCLONE_CONFIG_OFFSITE_*`.
 
-   - Crear una **zona de almacenamiento nueva y propia** (por ejemplo `menta-backups`), separada de la de los videos, para que la clave del backup no pueda tocar los videos ni al revés. Activar *S3 Compatibility* al crearla: el panel la marca como *Public preview* y lista crear, actualizar y borrar objetos, listar con prefijo y subida multipart, que es lo que usa `backup.sh`.
+   **Cloudflare R2** (recomendado). Los pasos y las cifras salen de la documentación oficial de Cloudflare (consultada el 2026-10-17); los nombres de los botones del panel pueden variar.
+
+   - **Costo.** Almacenamiento *Standard*: 10 GB-mes gratis y después $0,015/GB-mes; 1 millón de operaciones de clase A (escrituras y listados) y 10 millones de clase B (lecturas y `HEAD`) gratis al mes; salida de datos gratis; `DeleteObject` no se cobra. Una corrida del backup hace unas 20 operaciones, así que son unas 600 al mes. El almacenamiento es aproximadamente (tamaño de los comprobantes) × 30 copias: se pasa de los 10 GB gratis con unos 330 MB de comprobantes, y cada GB de más cuesta $0,015 al mes. En el panel, la suscripción a R2 se agrega a la cuenta con un método de pago y solo se cobra si se superan esos límites.
+   - **Bucket.** Crear un bucket (el del proyecto se llama `menta-dance-backups`; creado el 2026-10-17 con clase *Estándar* y acceso público *Deshabilitado*) con ubicación automática y **sin acceso público** (no habilitar el dominio `r2.dev` ni un dominio personalizado). No elegir una jurisdicción (UE, EE. UU., FedRAMP) salvo que se necesite: obliga a usar otro endpoint.
+   - **Token.** En *R2 object storage → Overview → API Tokens → Manage*, crear un **Account API token** (los de usuario dejan de funcionar si se quita al usuario de la cuenta) con permiso **Object Read & Write**, limitado **solo a ese bucket**. El panel muestra el *Access Key ID* y el *Secret Access Key* **una sola vez**: copiarlos directo a `/opt/menta/backup.env`, nunca al repositorio ni a un chat. Crear también un segundo token **Object Read only** para el simulacro y para restaurar desde otra máquina: no puede borrar ni pisar backups.
+   - **Endpoint.** `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`; el ID de la cuenta está en el panel de Cloudflare.
+   - **Variables** de `/opt/menta/backup.env`:
+
+     ```
+     RCLONE_CONFIG_OFFSITE_PROVIDER=Cloudflare
+     RCLONE_CONFIG_OFFSITE_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+     RCLONE_CONFIG_OFFSITE_ACCESS_KEY_ID=<Access Key ID>
+     RCLONE_CONFIG_OFFSITE_SECRET_ACCESS_KEY=<Secret Access Key>
+     RCLONE_CONFIG_OFFSITE_ACL=private
+     RCLONE_CONFIG_OFFSITE_NO_CHECK_BUCKET=true
+     RCLONE_CONFIG_OFFSITECRYPT_REMOTE=offsite:menta-dance-backups/menta
+     ```
+
+     `NO_CHECK_BUCKET=true` es obligatorio con un token de permisos de objeto: la guía de `rclone` de Cloudflare advierte que sin él se obtienen errores. La región se deja vacía (R2 usa `auto`).
+   - **Compatibilidad con `backup.sh`.** R2 implementa todas las operaciones que usa `rclone` en el script (`PutObject`, `HeadObject`, `ListObjectsV2`, `DeleteObject`, y también el borrado por lotes y el multipart). Cloudflare indica que la implementación de la API S3 sigue en progreso, así que el primer backup y el simulacro de restauración (pasos 4 y 6) siguen siendo la prueba real.
+
+   **Alternativa: Bunny Storage**, que ya se usa para los videos. Más cara en la práctica ($0,02/GB por las dos regiones obligatorias) y con la compatibilidad S3 en *Public preview*:
+
+   - Crear una **zona de almacenamiento nueva y propia** (por ejemplo `menta-backups`; el nombre admite letras, números y guiones, mínimo 4 caracteres), separada de la de los videos, para que la clave del backup no pueda tocar los videos ni al revés. Activar *S3 Compatibility* **al crearla**: según la documentación de Bunny no se puede activar después en una zona existente (por eso la zona de los videos no sirve).
    - **No conectarle ninguna Pull Zone (CDN)**: así los backups nunca quedan servidos por una URL pública.
    - Tier *Standard*. Bunny exige una **región principal y al menos una de réplica** (por ejemplo Los Angeles y Frankfurt); las réplicas no se pueden quitar después de crear la zona. Al crearla (2026-10-17) el panel mostraba $0,02/GB al mes con dos regiones y $0,01/GB con una; comprobar el precio vigente. Para unos pocos MB son centavos.
-   - Los datos de acceso S3 (endpoint y claves) los muestra el panel; van en `/opt/menta/backup.env` con `RCLONE_CONFIG_OFFSITE_PROVIDER=Other`, nunca en el repositorio ni en un chat.
-   - Por ser *Public preview*, el primer backup y el simulacro de restauración con la zona real (pasos 4 y 6) son obligatorios antes de confiar en ella. Si diera problemas, cambiar a otro proveedor son solo las variables `RCLONE_CONFIG_OFFSITE_*` de `backup.env`.
+   - **Datos de acceso** (pestaña *Access* de la zona, según la documentación de Bunny): *Access Key ID* = nombre de la zona, *Secret Access Key* = contraseña de la zona, y endpoint `https://<región>-s3.storage.bunnycdn.com`, donde `<región>` es el código de la región **principal** (`la` para Los Angeles, `de` Frankfurt, `ny` New York, etc.). Van en `/opt/menta/backup.env`, nunca en el repositorio ni en un chat:
+
+     ```
+     RCLONE_CONFIG_OFFSITE_PROVIDER=Other
+     RCLONE_CONFIG_OFFSITE_ENDPOINT=https://la-s3.storage.bunnycdn.com
+     RCLONE_CONFIG_OFFSITE_REGION=la
+     RCLONE_CONFIG_OFFSITE_ACCESS_KEY_ID=<nombre de la zona>
+     RCLONE_CONFIG_OFFSITE_SECRET_ACCESS_KEY=<contraseña de la zona>
+     RCLONE_CONFIG_OFFSITECRYPT_REMOTE=offsite:<nombre de la zona>/menta
+     ```
+
+     El nombre de la zona hace de bucket. La pestaña *Access* también ofrece una **contraseña de solo lectura**: usarla para restaurar desde otra máquina o para el simulacro, así esa máquina no puede borrar ni pisar backups.
+   - **Compatibilidad con `backup.sh`.** La documentación de Bunny tiene un ejemplo con `rclone` y `provider=Other`. Se comprobó en local qué pedidos S3 hace `rclone` en las tres operaciones del script (copiar, verificar por tamaño y borrar por antigüedad): `HEAD` de objeto, `PUT` de objeto, listado y `DELETE` de un objeto. Las cuatro están en la lista de operaciones que soporta Bunny. No usa el borrado por lotes (`DeleteObjects`, que Bunny no soporta), no crea buckets ni usa operaciones de multipart para archivos chicos. Bunny no ofrece políticas de ciclo de vida ni cifrado del lado del servidor: la retención la aplica el propio script y el cifrado es el de `rclone crypt`. Tampoco guarda metadatos propios (`x-amz-meta-*`), así que la antigüedad de cada archivo sale de su fecha de subida.
+   - Por ser *Public preview*, el primer backup y el simulacro de restauración con la zona real (pasos 4 y 6) son obligatorios antes de confiar en ella: lo único que no se pudo probar es la conexión con Bunny en sí (firma de las peticiones, región y comportamiento real del servicio). Si diera problemas, cambiar a otro proveedor son solo las variables `RCLONE_CONFIG_OFFSITE_*` de `backup.env`.
 2. **Claves de cifrado.** Generar dos claves largas, guardarlas **en texto plano en un gestor de contraseñas fuera del servidor** (sin ellas los backups no se pueden descifrar) y ofuscarlas para `rclone`:
 
    ```bash

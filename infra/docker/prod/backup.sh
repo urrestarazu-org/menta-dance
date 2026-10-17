@@ -154,7 +154,10 @@ upload_offsite() {
         --include "menta-${stamp}.sql.gz" --include "proofs-${stamp}.tar.gz" \
         || die "La copia fuera del VPS no coincide con la local"
 
+    # El backup recién subido se excluye de la retención: aunque el almacenamiento informara mal la fecha
+    # de un objeto, esta corrida nunca puede borrar el backup que acaba de hacer
     rclone delete "$REMOTE" --min-age "${REMOTE_RETENTION_DAYS}d" \
+        --exclude "menta-${stamp}.sql.gz" --exclude "proofs-${stamp}.tar.gz" \
         || die "No se pudo aplicar la retención remota"
 }
 
