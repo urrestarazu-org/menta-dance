@@ -286,7 +286,13 @@ jobs:
         run: |
           docker run --rm -v "$(pwd):/mnt:ro" -w /mnt \
             koalaman/shellcheck:v0.11.0 \
-            infra/docker/manage.sh infra/docker/deploy.sh infra/docker/quick-deploy.sh
+            infra/docker/manage.sh infra/docker/deploy.sh infra/docker/quick-deploy.sh \
+            infra/docker/prod/deploy.sh infra/docker/prod/deploy.test.sh
+
+      - name: Test production deploy script
+        # Prueba infra/docker/prod/deploy.sh (#593) con un docker falso: validación de digests,
+        # backup, digests anteriores, poda, lock y archivo de configuración. No usa Docker real.
+        run: bash infra/docker/prod/deploy.test.sh
 
   # Hadolint: Dockerfile linter (best practices + security)
   hadolint:

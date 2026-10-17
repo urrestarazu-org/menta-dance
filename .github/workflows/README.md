@@ -70,8 +70,9 @@ rama debe permitir únicamente `release/*` y `hotfix/*` como ramas fuente.
   `scripts/trivy-scan.sh` y, solo si pasan, las publica en GHCR y toma sus digests.
 - ✅ `release`: crea la GitHub Release con notas generadas, los digests y los JAR.
 - ✅ `deploy`: solo tags estables. Environment `production`, SSH con
-  `StrictHostKeyChecking=yes` y los digests como único argumento; el servidor los
-  recibe en el comando forzado `deploy.sh` (#593).
+  `StrictHostKeyChecking=yes`: los digests van como único argumento y la configuración
+  del stack (`infra/docker/prod` y `conf.d`) como `tar.gz` por la entrada estándar. El
+  servidor los recibe en el comando forzado `infra/docker/prod/deploy.sh` (#593).
 
 Un tag con sufijo (`v0.1.0-rc.1`) publica y crea una pre-release, pero no despliega.
 `concurrency: production` sin cancelación evita dos releases simultáneos. Detalle,
