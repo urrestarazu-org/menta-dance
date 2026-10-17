@@ -4,7 +4,7 @@ Esta carpeta contiene los workflows de CI/CD optimizados para GitFlow.
 
 ## Estrategia
 
-Tenemos dos workflows principales que se ejecutan según el branch target:
+Tenemos dos workflows de PR, que se ejecutan según el branch target, y uno de release, que se ejecuta con un tag:
 
 ### 1. `pr-develop.yml` - Fast Feedback
 
@@ -57,6 +57,28 @@ rama debe permitir únicamente `release/*` y `hotfix/*` como ramas fuente.
 
 ---
 
+### 3. `release.yml` - Release a producción
+
+**Triggers**: push de un tag `v*.*.*` (el workflow valida `vX.Y.Z[-sufijo]`).
+
+**Objetivo**: construir una vez, escanear, publicar por digest y desplegar.
+
+**Jobs** (en este orden):
+- ✅ `build`: valida el tag, exige que un tag estable esté en `main`, corre `build`
+  de los módulos JVM con `-Pversion` y sube los dos JAR.
+- ✅ `publish`: construye las imágenes con esos JAR, las escanea con
+  `scripts/trivy-scan.sh` y, solo si pasan, las publica en GHCR y toma sus digests.
+- ✅ `release`: crea la GitHub Release con notas generadas, los digests y los JAR.
+- ✅ `deploy`: solo tags estables. Environment `production`, SSH con
+  `StrictHostKeyChecking=yes` y los digests como único argumento; el servidor los
+  recibe en el comando forzado `deploy.sh` (#593).
+
+Un tag con sufijo (`v0.1.0-rc.1`) publica y crea una pre-release, pero no despliega.
+`concurrency: production` sin cancelación evita dos releases simultáneos. Detalle,
+secretos y contrato con `deploy.sh` en `docs/16-CICD-PIPELINE.md`.
+
+---
+
 ## Flujo GitFlow
 
 ```
@@ -65,7 +87,7 @@ feature/* → develop (pr-develop.yml ejecuta)
           release/* → main (pr-main.yml ejecuta)
           hotfix/*  → main (pr-main.yml ejecuta)
                        ↓
-                    tag vX.Y.Z
+                    tag vX.Y.Z (release.yml ejecuta)
 ```
 
 ## Migración de branch protection

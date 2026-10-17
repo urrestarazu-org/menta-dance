@@ -464,25 +464,77 @@ GitHub Release.
 
 ## Release a producción
 
-> **Estado:** el workflow `release.yml` y el script `deploy.sh` se implementan en #592 y #593. Hasta entonces, esta sección describe el flujo acordado en ADR-0018 y ADR-0045.
+> **Estado:** `release.yml` está implementado (#592). El job `deploy` necesita `deploy.sh` en el servidor (#593) y los secretos del Environment `production`; hasta entonces solo se puede probar con un tag con sufijo (`v0.1.0-rc.1`), que publica sin desplegar.
 
 Tras el merge `release/* -> main` o `hotfix/* -> main`, se crea el tag SemVer
-`vX.Y.Z` sobre `main`. Ese tag dispara el workflow de release (`release.yml`), que
-sigue estos pasos:
+`vX.Y.Z` sobre `main`. Ese tag dispara el workflow de release
+(`.github/workflows/release.yml`), que encadena cuatro jobs:
 
-1. `./gradlew build` con la versión tomada del tag (tests y cobertura, igual que el
-   gate de PR a `main`);
-2. construir las imágenes de API y BFF copiando los JAR del paso 1 (no se recompila
-   dentro de Docker) y publicarlas en GHCR;
-3. crear la GitHub Release con los dos JAR adjuntos;
-4. desplegar por SSH al servidor, pasando los **digests inmutables** de las
-   imágenes, nunca una tag. El job usa el Environment `production` de GitHub y la
-   concurrencia `production` impide dos despliegues a la vez.
+1. **`build`**: valida el formato del tag, comprueba que un tag estable apunta a un
+   commit de `main` y corre `build` (tests, Checkstyle y cobertura) de los módulos
+   JVM con `-Pversion=<versión del tag>`. Comprueba que `build-info.properties` de
+   cada JAR declare esa versión y sube los dos JAR como artefactos. Android no entra:
+   no se despliega en el VPS y ya se compila en `pr-develop.yml`.
+2. **`publish`**: construye las imágenes de API y BFF copiando esos JAR (no se
+   recompila dentro de Docker), las escanea con `scripts/trivy-scan.sh` (el mismo
+   script y las mismas excepciones que `pr-main.yml`; ver "Escaneo de imágenes") y
+   recién entonces las publica en `ghcr.io/urrestarazu-org/menta-api` y
+   `menta-bff` con la versión como tag. Si el escaneo falla no se publica nada. El
+   digest de cada imagen se lee tras el push y pasa a los jobs siguientes.
+3. **`release`**: crea la GitHub Release con las notas generadas, los digests y los
+   dos JAR (`menta-dance-api-<versión>.jar` y `menta-dance-bff-<versión>.jar`).
+4. **`deploy`**: solo para tags estables. Entra por SSH al servidor y le pasa los
+   **digests inmutables**, nunca un tag. Usa el Environment `production` de GitHub.
 
-En el servidor, `deploy.sh` hace un backup de MySQL, descarga las imágenes por
-digest, levanta el stack con Compose y espera el health check. El proveedor y la
-arquitectura del servidor están en [ADR-0045](adr/0045-despliegue-vps-donweb.md); la
-operación, en [32-VPS-DONWEB-RUNBOOK.md](32-VPS-DONWEB-RUNBOOK.md).
+Un tag con sufijo (`v0.1.0-rc.1`) ejecuta `build`, `publish` y `release` (la Release
+queda marcada como pre-release) pero no `deploy`, y puede salir de una rama
+`release/*`. `concurrency: production` sin cancelación impide dos releases a la vez;
+GitHub conserva una sola ejecución en espera, así que si llegan dos tags mientras
+otro corre, el más viejo de los dos pendientes se descarta y hay que volver a
+empujarlo.
+
+Cada job declara los permisos mínimos: `build` y `publish` leen el contenido,
+`publish` además escribe paquetes, `release` escribe contenido y `deploy` no usa el
+`GITHUB_TOKEN`. Las acciones están fijadas por SHA.
+
+### Configuración en GitHub (una vez)
+
+El job `deploy` lee sus datos del Environment `production` (Settings → Environments):
+
+| Secreto | Contenido |
+|---|---|
+| `DEPLOY_HOST` | Nombre o IP del servidor |
+| `DEPLOY_PORT` | Puerto SSH del servidor (si falta, el workflow usa 22) |
+| `DEPLOY_USER` | `deploy` |
+| `DEPLOY_SSH_KEY` | Clave privada de despliegue, cuya parte pública tiene el comando forzado en el servidor |
+| `DEPLOY_KNOWN_HOSTS` | Línea de `known_hosts` del servidor, para el puerto real (`[host]:puerto ssh-ed25519 AAAA...`) |
+
+Conviene comprobar la huella contra la del servidor (`ssh-keygen -lf
+/etc/ssh/ssh_host_ed25519_key.pub`, ejecutado en el VPS) antes de guardarla: es lo
+único que impide aceptar un servidor falso, porque el workflow usa
+`StrictHostKeyChecking=yes`. El puerto va como secreto y no como variable para que no
+quede visible en los logs del workflow cuando el repositorio sea público.
+
+En el Environment también conviene agregar al operador como *required reviewer*: el
+job de deploy espera una aprobación manual antes de tocar producción.
+
+La primera vez que se publican las imágenes, GHCR crea los paquetes `menta-api` y
+`menta-bff` vinculados al repositorio por la etiqueta `org.opencontainers.image.source`.
+El servidor las lee con el PAT de solo lectura de la sección 2.7 del runbook.
+
+### Contrato con `deploy.sh`
+
+La clave de despliegue ejecuta siempre `/opt/menta/deploy.sh` (comando forzado de
+`authorized_keys`). El workflow le pasa los dos digests en el comando SSH, y el
+servidor los recibe en `SSH_ORIGINAL_COMMAND`:
+
+```
+sha256:<64 hex de la API> sha256:<64 hex del BFF>
+```
+
+El workflow valida el formato antes de enviarlos, pero el script debe validarlo
+también: es lo que se ejecuta con la clave. Una salida distinta de 0 hace fallar el
+job `deploy`.
 
 ### Rollback
 
