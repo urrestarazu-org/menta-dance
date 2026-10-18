@@ -165,7 +165,7 @@ no requieren aprobación humana y se integran con **squash merge**.
 
 Las imágenes que se **descargan** de un registro se fijan a un **tag de versión
 exacta** (`mysql:8.0.46`, `redis:7.4.11-alpine`,
-`eclipse-temurin:21.0.12.1_1-jre-alpine-3.24`), no a una línea flotante
+`eclipse-temurin:21.0.12.1_1-jre-alpine-3.23`), no a una línea flotante
 (`mysql:8.0`, `redis:7-alpine`, `21-jre-alpine`) ni a `latest`. Rige en todos los
 lugares donde aparece una imagen: los `docker-compose*.yml`, los `FROM` de los
 Dockerfiles, los workflows y las imágenes de **Testcontainers** en los tests
@@ -177,8 +177,12 @@ digest puede sumarse más adelante como endurecimiento.
 Al fijar un tag hay que comprobar que **apunta al mismo contenido** que reemplaza.
 Al migrar las líneas flotantes se verificó con la API del registro que
 `mysql:8.0.46` y `redis:7.4.11-alpine` tienen el mismo digest que `mysql:8.0` y
-`redis:7.4-alpine`, y que `eclipse-temurin:21.0.12.1_1-jre-alpine-3.24` coincide
-con `21-jre-alpine` (la variante `21.0.12_8-…` es otra build, más vieja).
+`redis:7.4-alpine`, y que `eclipse-temurin:21.0.12.1_1-jre-alpine-3.24` coincidía
+con `21-jre-alpine` (la variante `21.0.12_8-…` es otra build, más vieja). Los
+Dockerfiles de la API y el BFF usan hoy la variante `alpine-3.23` del mismo JRE: la
+`3.24` trae `libexpat` 2.8.5-r0 (CVE-2026-77214, HIGH) y el escaneo de Trivy del
+release la rechaza. Se vuelve a `3.24` cuando `eclipse-temurin` la publique con
+`libexpat` 2.9.0 o superior.
 
 **Excepción:** `menta-api` y `menta-bff` pueden usar `latest` en los compose
 porque son imágenes que **se construyen localmente** y no se descargan de un
