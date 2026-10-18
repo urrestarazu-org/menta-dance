@@ -325,6 +325,23 @@ Puntos a tener en cuenta:
 - El healthcheck del contenedor de Nginx consulta `http://127.0.0.1/health`, que responde en el servidor por defecto del puerto 80. Antes consultaba `localhost`: resolvía a IPv6, donde Nginx no escucha, y por IPv4 el servidor por defecto cortaba la conexión (`return 444`), así que el contenedor habría quedado siempre `unhealthy` (corregido en #593; verificado con un Nginx real).
 - Arranque a mano, solo para la primera prueba: `cd /opt/menta/stack/prod && docker compose --env-file /opt/menta/.env -f docker-compose.prod.yml up -d`. Después del primer despliegue, usar `deploy.sh`.
 
+**Ejecutado el 2026-10-17 (VPS): `/opt/menta/.env`** (seguimiento en #610).
+
+- `/opt/menta` es de `deploy` y `mentaadmin` no puede entrar: todo lo que esté adentro se hace con `sudo -iu deploy` (o con `sudo` puntual).
+- El archivo se creó como `deploy` con `set -C` (no pisa un archivo existente) y `umask 077`, y quedó en modo `600`. Sin comillas en los valores. Los secretos se generan en el propio servidor con `openssl` y no se pegan en ningún otro lado. Formato que exige la aplicación y comando con el que se generó cada una:
+
+  | Variable | Formato | Generación |
+  |---|---|---|
+  | `MYSQL_ROOT_PASSWORD`, `MYSQL_APP_PASSWORD` | arbitrario, sin comillas ni espacios | `openssl rand -hex 24` |
+  | `AUTH_JWT_BASE64_SECRET` | base64, al menos 32 bytes | `openssl rand -base64 48` |
+  | `AUTH_ACTIVATION_DELIVERY_KEY`, `AUTH_PASSWORD_RESET_DELIVERY_KEY` | base64 de exactamente 32 bytes (AES-256) | `openssl rand -base64 32` |
+  | `BILLING_WEBHOOK_MERCADOPAGO_HMAC_SECRET`, `BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET` | arbitrario | `openssl rand -hex 32` |
+
+- Correo: **EnvialoSimple** por SMTP, puerto **587** con `SMTP_AUTH=true` y `SMTP_STARTTLS=true`. El compose solo mapea STARTTLS (no hay variable para TLS implícito, puerto 465), así que el puerto 587 es el único que sirve.
+- Quedan vacías a propósito cinco variables: `BILLING_MERCADOPAGO_ACCESS_TOKEN` (sin ese token no hay cobros) y los cuatro datos de transferencia bancaria (CBU, alias, titular, CUIT). Se cargan antes de habilitar pagos reales.
+- `API_DIGEST` y `BFF_DIGEST` no están: las escribe `deploy.sh` en cada despliegue.
+- **Cómo revisar el archivo sin exponer valores:** `sed 's/=.*/=…/' /opt/menta/.env` lista los nombres, y `grep -cE '^[A-Z_]+=$' /opt/menta/.env` cuenta las vacías (deben ser 5). No usar `grep '=$'` a secas: las claves en base64 con relleno terminan en `=` y se imprimirían enteras. Pasó ese día con las dos claves de entrega; como la API todavía no había arrancado, se regeneraron en el momento y no hubo exposición real.
+
 ### 2.10 Despliegue con deploy.sh (#593)
 
 `infra/docker/prod/deploy.sh` es lo único que ejecuta la clave SSH de despliegue. Lo llama el job `deploy` de `release.yml` con los digests de las imágenes y la configuración del stack (contrato y pasos en `docs/16-CICD-PIPELINE.md`, "Contrato con `deploy.sh`"). Se probó con un Docker real: el backup y su restauración (33 tablas del esquema), la lectura del health de API, BFF y Nginx, y la poda de imágenes. Las pruebas de lógica están en `infra/docker/prod/deploy.test.sh` y corren en CI.
@@ -339,11 +356,13 @@ Puntos a tener en cuenta:
 | `/opt/menta/previous-digests` | Digests de la versión anterior, en una línea |
 | `/opt/menta/backups/` | `menta-<fecha>.sql.gz` previos a cada deploy (los últimos 14) |
 
-**Instalación (pendiente de ejecutar en el VPS).** Como `mentaadmin`, con el `deploy.sh` del commit que se va a desplegar copiado al servidor:
+**Instalación (hecha el 2026-10-17).** Como `mentaadmin`, con el `deploy.sh` del commit que se va a desplegar copiado al servidor:
 
 ```bash
 sudo install -m 750 -o deploy -g deploy deploy.sh /opt/menta/deploy.sh
 ```
+
+Se verificó que el instalado es idéntico al del repositorio: `sha256sum deploy.sh` en la máquina del operador y `sudo sha256sum /opt/menta/deploy.sh` en el servidor dan el mismo hash, y `sudo stat -c '%a %U:%G' /opt/menta/deploy.sh` da `750 deploy:deploy`. Con `sudo` porque `mentaadmin` no puede entrar a `/opt/menta`.
 
 Pasos para el primer despliegue, en este orden:
 
@@ -538,6 +557,7 @@ Deben salir 32 y 64.
 - `toomanyrequests: You have reached your unauthenticated pull rate limit`: límite de descargas anónimas de Docker Hub; ver la sección 2.7, "Docker Hub".
 - `InvalidArgument: Credential access key has length 53, should be 32`: en `ACCESS_KEY_ID` se había puesto el **valor** del token (53 caracteres) en lugar de su **ID** (32).
 - `AccessDenied` al subir un archivo, con el listado funcionando: estaban cargados el ID y el hash del token de **solo lectura**. Lectura sí, escritura no. Se corrigió cargando el ID y el SHA-256 del token de escritura. Un `403` en una operación y no en otra apunta a permisos del token; si fallara todo, sería el filtro de IP o el alcance.
+- Filtro de IP del token de escritura: el token de escritura tiene un filtro que solo admite la IP del VPS (confirmado el 2026-10-17), así que robar el token sin salir desde el servidor no sirve. Si el VPS cambiara de IP, hay que actualizar el filtro en Cloudflare o los backups empezarán a fallar con `403`. La IP no se registra en el repositorio.
 - Cuidado con pegar tokens en chats, tickets o capturas: el valor `cfat_…` de un token se pegó por error en una conversación y hubo que rotarlo. Si un valor se expone, se invalida en el panel de Cloudflare y se vuelve a calcular el secreto.
 
 **Restaurar desde el almacenamiento externo.** Hace falta Docker, el `backup.env` (o sus variables `RCLONE_CONFIG_*`) y las claves de cifrado en texto plano. En una máquina nueva se puede recrear el `backup.env` con las claves del gestor de contraseñas.
@@ -596,7 +616,9 @@ El puerto 22 y el 3306 no tienen regla, es decir, están bloqueados desde afuera
 
 Se completa a medida que avancen los sub-issues de #380:
 
-- Compose de producción (#589): ejecutar en el VPS los pasos 3 a 5 de la renovación por `webroot`, completar `/opt/menta/.env` (el archivo existe, vacío; los nombres están en `production.env.example`) y documentar el resultado del primer arranque. El endurecimiento de SSH quedó descartado (ver "Decisiones diferidas").
-- Despliegue y rollback (#593, sección 2.10): instalar `deploy.sh`, el primer despliegue a mano con un tag `-rc`, restringir la clave al comando forzado, y cargar en el Environment `production` de GitHub los secretos que usa `release.yml` (#592; ver `docs/16-CICD-PIPELINE.md`, "Configuración en GitHub"). Anotar acá el resultado de cada paso.
+- Compose de producción (#589): `/opt/menta/.env` ya está completo (2026-10-17, sección 2.9), salvo el token de producción de Mercado Pago y los datos de transferencia, que se cargan antes de habilitar pagos. Falta ejecutar en el VPS los pasos 3 a 5 de la renovación por `webroot` y documentar el resultado del primer arranque. El endurecimiento de SSH quedó descartado (ver "Decisiones diferidas").
+- Correo (EnvialoSimple): agregar en el DNS de `mentadance.com` los registros SPF y DKIM que indica la pestaña "Registro DNS" de la cuenta, y probar un envío real (activación de cuenta). Sin esos registros los mails pueden caer en spam.
+- Login a GHCR del usuario `deploy` (sección 2.7): comprobarlo con `grep -c 'ghcr.io' ~/.docker/config.json` como `deploy` (debe dar 1 o más) antes del primer despliegue.
+- Despliegue y rollback (#593, sección 2.10): `deploy.sh` ya está instalado y verificado; falta el primer despliegue a mano con un tag `-rc`, restringir la clave al comando forzado, y cargar en el Environment `production` de GitHub los secretos que usa `release.yml` (#592; ver `docs/16-CICD-PIPELINE.md`, "Configuración en GitHub"). Anotar acá el resultado de cada paso.
 - Backups y monitoreo (#594, sección 2.11): el bucket, los tokens, las claves de cifrado y `backup.env` ya están hechos y probados (2026-10-17). Falta instalar `backup.sh` y el timer (después del primer despliegue), el primer backup real, el simulacro de restauración en el VPS y los monitores externos. Anotar acá el resultado de cada paso.
 - Seguimiento de todos los pasos pendientes del servidor: #610.
