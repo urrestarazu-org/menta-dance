@@ -6,14 +6,18 @@
 # Alpine 3.23 on purpose: the 3.24 variant of this JRE still ships libexpat 2.8.5-r0 (CVE-2026-77214,
 # HIGH, fixed in 2.9.0-r0), which fails the Trivy gate. Go back to 3.24 once eclipse-temurin
 # publishes it with libexpat >= 2.9.0.
+# The 3.23 image also still carries libexpat 2.8.5-r0 although 2.9.0-r0 is already in the Alpine
+# 3.23 repository, hence the `apk upgrade` below. Drop it once the base image ships 2.9.0-r0.
 FROM eclipse-temurin:21.0.12.1_1-jre-alpine-3.23
 
 WORKDIR /app
 
-# Create non-root user, and the directory for payment proofs owned by it. In production a named
-# volume is mounted there (payment_proofs_data): a new volume inherits the owner and permissions of
-# the image path, so without this the directory is root-owned and the API (user menta) cannot write.
-RUN addgroup -g 1000 menta && \
+# Upgrade libexpat (CVE-2026-77214), then create the non-root user and the directory for payment
+# proofs owned by it. In production a named volume is mounted there (payment_proofs_data): a new
+# volume inherits the owner and permissions of the image path, so without this the directory is
+# root-owned and the API (user menta) cannot write.
+RUN apk upgrade --no-cache libexpat && \
+    addgroup -g 1000 menta && \
     adduser -D -u 1000 -G menta menta && \
     mkdir -p /var/menta-dance/payment-proofs && \
     chown menta:menta /var/menta-dance/payment-proofs
