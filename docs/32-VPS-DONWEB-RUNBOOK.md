@@ -174,6 +174,15 @@ sudo nft list ruleset | grep 192.0.2.1
 sudo fail2ban-client set sshd unbanip 192.0.2.1
 ```
 
+**Baneo del operador (2026-10-18).** Al hacer el primer despliegue a mano, `ssh` probó claves de más y cayó a pedir contraseña (el usuario `deploy` no tiene, ver 2.5): tres fallos en 10 minutos bastan para que fail2ban banee la IP del operador una hora. Con `banaction = nftables` el bloqueo se ve como `Connection refused` (no como un tiempo de espera agotado), y desde SSH no se puede entrar ni como `mentaadmin`. Se resolvió desde la consola web del panel de DonWeb, como `root`:
+
+```bash
+fail2ban-client status sshd        # "Banned IP list" confirma la causa (no pegar el resultado en el repositorio)
+fail2ban-client set sshd unbanip <IP-DEL-OPERADOR>
+```
+
+`fail2ban-client unban --all` **no existe** en la versión instalada (`Invalid command`); se usa `set sshd unbanip`. Mientras se opera por SSH conviene acortar el baneo sin tocar `jail.local`: `fail2ban-client set sshd bantime 900` rige solo hasta que se reinicie fail2ban, y para volver a una hora sin reiniciar es `fail2ban-client set sshd bantime 3600`. Para no caer en el baneo, siempre `-i <clave> -o IdentitiesOnly=yes` (ver 2.10) y cortar con Ctrl+C ante el primer pedido de contraseña.
+
 ### 2.5 Usuarios y accesos
 
 | Usuario | Para qué | Acceso |
@@ -188,6 +197,14 @@ Una vez instalado `deploy.sh` (#593, sección 2.10), la entrada de esa clave se 
 ```
 command="/opt/menta/deploy.sh",no-pty,no-port-forwarding ssh-ed25519 AAAA...
 ```
+
+**Aplicado el 2026-10-18**, después del primer despliegue, como `root` en el VPS: se comprobó que `authorized_keys` tuviera una sola clave, se guardó una copia de la parte pública en `/root/authorized_keys.deploy.bak` y se antepuso `command="/opt/menta/deploy.sh",no-pty,no-port-forwarding ` a esa línea. Verificación desde la máquina del operador:
+
+```bash
+ssh -i ~/.ssh/<clave-de-deploy> -o IdentitiesOnly=yes -p <PUERTO> deploy@<HOST> "ls /"
+```
+
+No lista nada: responde `[ERROR] Digest de la API inválido…`, porque el comando pedido llega a `deploy.sh` como argumento en vez de ejecutarse. Para deshacerlo, restaurar la copia del respaldo en `authorized_keys`.
 
 Directorios de trabajo:
 
@@ -227,6 +244,8 @@ chmod 600 ~/.docker/config.json
 ```
 
 `read -rs` evita que el token quede en pantalla o en el historial. Docker avisa que guarda la credencial sin cifrar en `config.json`; es esperado y queda protegido por `chmod 600`. Resultado: `Login Succeeded`. El token vence a los 12 meses: renovarlo antes y repetir el login.
+
+Verificado el 2026-10-18, antes del primer despliegue: como `deploy`, `grep -c 'ghcr.io' ~/.docker/config.json` dio `1`. Al desplegar, `docker compose pull` bajó las dos imágenes de GHCR sin errores de autenticación.
 
 #### Docker Hub (límite de descargas anónimas)
 
@@ -274,7 +293,7 @@ systemctl list-timers certbot.timer
 
 Resultado: `all simulated renewals succeeded` y `certbot.timer` programado.
 
-#### Renovación: pasar de `standalone` a `webroot` (decidido, se aplica en #589)
+#### Renovación: pasar de `standalone` a `webroot` (aplicado el 2026-10-18)
 
 `--standalone` levanta su propio servidor en el puerto 80, que a partir del primer despliegue ocupa Nginx, así que la renovación fallaría en silencio hacia el 2026-12-15 (30 días antes del vencimiento). Se eligió `webroot` porque no corta el servicio; la alternativa, `standalone` con hooks que detienen y levantan Nginx, cuesta unos segundos de caída por renovación.
 
@@ -283,28 +302,39 @@ Dos cambios sobre lo que hoy trae el repositorio:
 - El Nginx de `infra/docker/nginx/` espera los certificados como archivos en `./certs/`. En producción se monta `/etc/letsencrypt` en solo lectura y `ssl_certificate` apunta a `/etc/letsencrypt/live/mentadance.com/`, así Nginx siempre ve el certificado vigente sin copiarlo.
 - El Nginx de producción tiene que servir el desafío ACME.
 
-Pasos de #589. Los dos primeros ya están en el repositorio (`infra/docker/prod/`); los otros tres se ejecutan en el VPS y quedan **pendientes de ejecutar**:
+Pasos de #589. Los dos primeros ya están en el repositorio (`infra/docker/prod/`); los otros se ejecutan en el VPS:
 
 1. `infra/docker/prod/nginx/nginx.conf` tiene la `location /.well-known/acme-challenge/` en el puerto 80, con `root /var/www/certbot`.
 2. `infra/docker/prod/docker-compose.prod.yml` monta `/var/www/certbot` y `/etc/letsencrypt` en solo lectura en el contenedor de Nginx.
-3. En el VPS, **antes del primer despliegue con Nginx**:
+3. El directorio del desafío y el hook de renovación, **antes del primer despliegue** (hecho el 2026-10-18). El hook recarga Nginx; si Nginx no está corriendo, no debe hacer fallar la renovación. Queda con dueño `root` y permisos `755`:
 
    ```bash
    sudo mkdir -p /var/www/certbot
-   sudo certbot reconfigure --cert-name mentadance.com \
-     --authenticator webroot --webroot-path /var/www/certbot
-   ```
-
-4. Hook de renovación que recarga Nginx, en `/etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh` (ejecutable). Si Nginx no está corriendo, el hook no debe hacer fallar la renovación:
-
-   ```bash
+   sudo tee /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh >/dev/null <<'EOF'
    #!/bin/sh
    docker exec menta-nginx nginx -s reload || true
+   EOF
+   sudo chmod 755 /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
    ```
 
-5. Con Nginx corriendo, `sudo certbot renew --dry-run` tiene que pasar.
+4. El cambio de `standalone` a `webroot`, **después del primer despliegue, con Nginx corriendo** (hecho el 2026-10-18). `certbot reconfigure` hace una renovación de prueba contra el entorno de staging, y esa prueba necesita que Nginx ya sirva `/var/www/certbot` en el puerto 80; antes del despliegue el puerto está libre y el desafío no tiene quién lo responda:
 
-Si el paso 3 se omite, la renovación falla sin avisar hasta que el certificado vence. Lo único que se entera es el correo de avisos de Let's Encrypt.
+   ```bash
+   sudo certbot reconfigure --cert-name mentadance.com \
+     --authenticator webroot --webroot-path /var/www/certbot
+   sudo certbot renew --dry-run
+   ```
+
+   Resultado: `Successfully updated configuration` y `all simulated renewals succeeded`.
+
+5. El hook se prueba a mano, porque `certbot renew --dry-run` **no ejecuta los deploy hooks** (según la documentación de certbot). Resultado el 2026-10-18: `hook ok` y `menta-nginx` sigue `Up (healthy)` sin reiniciarse (solo recargó la configuración):
+
+   ```bash
+   sudo /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh && echo "hook ok"
+   docker ps --filter name=menta-nginx --format '{{.Names}} {{.Status}}'
+   ```
+
+Si el paso 4 se omite, la renovación falla sin avisar hasta que el certificado vence. Lo único que se entera es el correo de avisos de Let's Encrypt.
 
 ### 2.9 Compose de producción (#589)
 
@@ -367,18 +397,42 @@ Se verificó que el instalado es idéntico al del repositorio: `sha256sum deploy
 Pasos para el primer despliegue, en este orden:
 
 1. Completar `/opt/menta/.env` (sección 2.9) y hacer el login a GHCR de `deploy` (sección 2.7).
-2. Publicar un tag con sufijo (`v0.1.0-rc.1`): crea las imágenes y la pre-release sin desplegar y deja los digests en las notas.
-3. Desplegar a mano esa primera vez, desde la máquina del operador y con la clave de despliegue todavía sin comando forzado:
+2. Publicar un tag con sufijo (`v0.2.0-rc.N`): crea las imágenes y la pre-release sin desplegar y deja los digests en las notas.
+3. Desplegar a mano esa primera vez, desde la máquina del operador y con la clave de despliegue todavía sin comando forzado. La clave se pasa explícitamente y con `IdentitiesOnly`, para que `ssh` no pruebe otras y fail2ban no banee al operador (sección 2.4). Desde macOS, `COPYFILE_DISABLE=1` y `--no-xattrs` evitan que `tar` agregue entradas `._*` (AppleDouble) que el validador del script rechaza:
 
    ```bash
-   tar -czf - -C infra/docker prod nginx/conf/conf.d \
-     | ssh -p <PUERTO> deploy@<HOST> /opt/menta/deploy.sh <digest-api> <digest-bff>
+   COPYFILE_DISABLE=1 tar --no-xattrs -czf - -C infra/docker prod nginx/conf/conf.d \
+     | ssh -i ~/.ssh/<clave-de-deploy> -o IdentitiesOnly=yes -p <PUERTO> deploy@<HOST> \
+       /opt/menta/deploy.sh <digest-api> <digest-bff>
    ```
 
 4. Comprobar los servicios y completar la renovación de certbot por `webroot` (sección 2.8).
 5. Recién entonces restringir la clave en `/home/deploy/.ssh/authorized_keys` al comando forzado (sección 2.5) y cargar los secretos del Environment `production` (ver `docs/16-CICD-PIPELINE.md`, "Configuración en GitHub").
 
 Con el comando forzado, la clave de despliegue ya no abre una shell: la administración se hace como `mentaadmin` y `sudo -iu deploy`.
+
+#### Primer despliegue (ejecutado el 2026-10-18)
+
+Se desplegó `v0.2.0-rc.2` a mano, con los pasos 1 a 4 de arriba. El camino hasta ahí, con lo que falló:
+
+1. **`v0.2.0-rc.1`: Trivy rechazó las imágenes.** El job `publish` de `release.yml` cortó antes de publicar nada en GHCR por CVE-2026-77214 (HIGH) en `libexpat` 2.8.5-r0, que viene en el Alpine 3.24 de la imagen base y entra por `fontconfig`. Todavía no hay una imagen de Temurin sobre Alpine 3.24 con `libexpat` 2.9.0. Se pasaron los Dockerfiles a `eclipse-temurin:21.0.12.1_1-jre-alpine-3.23` (#612, PR #613) y se volverá a 3.24 cuando Temurin publique con `libexpat` >= 2.9.0. El tag `v0.2.0-rc.1` quedó sin imágenes ni release.
+2. **`v0.2.0-rc.2`: un test intermitente.** El primer intento falló en `:api:app:test` (`PaymentExpirySweepIntegrationTest`, `a_stale_unproven_payment_expires_and_cancels_the_subscription`); al reintentar solo el job fallido (`gh run rerun --failed`) pasó con el mismo código. La causa no se investigó.
+3. **El release publicó** las dos imágenes por digest y la pre-release; el job `deploy` quedó omitido porque el tag tiene sufijo.
+4. **Autenticación SSH.** El primer intento no usó la clave de despliegue, `ssh` cayó a pedir contraseña (el usuario `deploy` no tiene) y fail2ban baneó la IP del operador (sección 2.4).
+5. **Paquete rechazado.** `deploy.sh` respondió `Ruta inesperada en la configuración del stack: ._prod` y terminó sin tocar nada: el `tar` de macOS había agregado una entrada AppleDouble. Se resolvió con `COPYFILE_DISABLE=1` y `--no-xattrs`. Los avisos `Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'` que imprime el `tar` GNU del servidor son inofensivos.
+6. **MySQL no llegó a `healthy` en la primera inicialización.** `docker compose up` terminó con `dependency failed to start: container menta-mysql is unhealthy` y `deploy.sh` con `[ERROR] docker compose up falló`. MySQL estaba bien (`oom=false`, sin errores en los logs): inicializar el directorio de datos, crear la base y el usuario y reiniciar tardó unos 70 segundos, y el healthcheck del compose (`start_period: 30s` más 5 reintentos de 10 s) se agota antes. Como el volumen quedó inicializado, el segundo arranque no repite esa inicialización.
+7. **Reintento: éxito.** Mismo comando. Esta vez hizo el `mysqldump` previo (`/opt/menta/backups/menta-<fecha>.sql.gz`), bajó las imágenes, levantó el stack y terminó con `Stack saludable tras 0s` y `Deploy completado`.
+
+Verificación desde fuera, el mismo día: `https://mentadance.com/` responde 200, `https://www.mentadance.com/` y `http://mentadance.com/` redirigen con 301 a `https://mentadance.com/`, `https://api.mentadance.com/actuator/health` responde 200 con `status: UP`, y el certificado es de Let's Encrypt y vence el 2027-01-14.
+
+#### Comando forzado y Environment `production` (ejecutado el 2026-10-18)
+
+1. **Comando forzado** en la clave de despliegue, verificado (sección 2.5).
+2. **Huella del servidor.** Antes de guardar `DEPLOY_KNOWN_HOSTS` se comparó la huella de la clave de host del servidor (`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`, en el VPS) con la que presenta el puerto real (`ssh-keyscan -p <PUERTO> -t ed25519 <HOST> | ssh-keygen -lf -`, en la máquina del operador). Coincidían. Esa línea es lo único que impide aceptar un servidor falso, porque el workflow usa `StrictHostKeyChecking=yes`.
+3. **Environment `production` creado, sin reglas de protección.** Agregar al operador como *required reviewer* falló con `HTTP 422` (`Failed to create the environment protection rule. Please ensure the billing plan supports the required reviewers protection rule`): el repositorio es privado y el plan no lo permite, aunque la API reporte el plan de la organización como `team`. **Pendiente: agregar el *required reviewer* cuando el repositorio sea público**, para que el deploy de un tag estable espere una aprobación manual. Hasta entonces, un tag estable desde `main` se despliega sin aprobación.
+4. **Cinco secretos cargados** con `gh secret set <NOMBRE> --env production` (el valor se pega en el prompt, nunca como argumento): `DEPLOY_HOST`, `DEPLOY_PORT`, `DEPLOY_USER`, `DEPLOY_SSH_KEY` y `DEPLOY_KNOWN_HOSTS`. `gh secret list --env production` los muestra con su fecha de actualización y sin los valores.
+
+Todavía pendiente: desplegar un tag estable desde `main` por `release.yml` y probar el rollback.
 
 **Rollback manual.** Si el deploy termina con "no respondió UP", el script imprime el comando para volver atrás. Como `deploy`:
 
@@ -408,6 +462,9 @@ El usuario de la aplicación conserva sus permisos porque son sobre el nombre de
 - `Hay otro deploy en curso`: otro `deploy.sh` tiene el lock (`/opt/menta/deploy.lock`); el lock se libera solo cuando ese proceso termina.
 - `AVISO: ... difiere del deploy.sh de este release`: hay una versión nueva del script; reinstalarlo con el `install` de arriba. El deploy continúa con la versión instalada.
 - `mysqldump falló` o `backup ... incompleto`: no se despliega nada. Ver el espacio en disco (`df -h /opt/menta`) y que `menta-mysql` esté `healthy`.
+- `Ruta inesperada en la configuración del stack: ._...`: el `tar` es de macOS y agregó entradas AppleDouble; usar `COPYFILE_DISABLE=1 tar --no-xattrs` (paso 3 de arriba). No se tocó nada en el servidor.
+- `container menta-mysql is unhealthy` en el primer `compose up`: la inicialización del volumen nuevo tarda más que la ventana del healthcheck. Con `docker inspect menta-mysql` en `healthy` y sin errores en `docker logs menta-mysql`, alcanza con repetir el mismo comando de despliegue.
+- `Permission denied` pidiendo contraseña y luego `Connection refused`: `ssh` no usó la clave de despliegue y fail2ban baneó la IP (sección 2.4). Pasar `-i <clave> -o IdentitiesOnly=yes`.
 
 ### 2.11 Backups diarios y monitoreo (#594)
 
@@ -498,12 +555,10 @@ Con una semana de ventana se perderían pagos y comprobantes que no se pueden re
 
    ```bash
    sudo install -m 750 -o deploy -g deploy /opt/menta/stack/prod/backup.sh /opt/menta/backup.sh
-   sudo install -m 600 -o deploy -g deploy /opt/menta/stack/prod/backup.env.example /opt/menta/backup.env
-   sudo -u deploy nano /opt/menta/backup.env    # completar el almacenamiento, las dos claves y BACKUP_PING_URL
    sudo cp /opt/menta/stack/prod/systemd/menta-backup.service /opt/menta/stack/prod/systemd/menta-backup.timer /etc/systemd/system/
    ```
 
-   El formato del archivo es el de `docker --env-file`: una variable por línea, sin comillas.
+   **No volver a instalar `backup.env.example` sobre `/opt/menta/backup.env`**: `install` lo pisaría y se perderían las claves de cifrado ofuscadas. El `backup.env` se crea una sola vez (ver la tabla de abajo, 2026-10-17); `BACKUP_PING_URL` se agrega después, cuando exista el monitor *heartbeat*. Si está vacío, `backup.sh` no avisa y el backup funciona igual. El formato del archivo es el de `docker --env-file`: una variable por línea, sin comillas.
 
 4. **Primer backup a mano**, antes de activar el timer:
 
@@ -533,6 +588,20 @@ Con una semana de ventana se perderían pagos y comprobantes que no se pueden re
 | `rclone lsf offsite:menta-dance-backups` | Bucket vacío, sin errores: las credenciales son correctas |
 | `rcat`, `lsf` y `deletefile` de un archivo de prueba en `offsite:` | Subió, listó y borró sin errores |
 | Mismo ciclo por `offsitecrypt:` (más `cat` y un `lsf -R` sobre el remoto sin cifrar) | `cat` devolvió el texto original; R2 solo muestra nombres ilegibles; el aviso `--checksum ... no hashes in common` es normal en un remoto cifrado |
+
+**Ejecutado el 2026-10-19 (VPS, como `root`):**
+
+| Paso | Resultado |
+|---|---|
+| Instalar `backup.sh` y las unidades de systemd, `daemon-reload` (sin tocar `backup.env`) | Hecho |
+| `systemctl start menta-backup.service` (primer backup real) | `Backup completado (20261019T133346Z)` en unos 30 s. `rclone check` posterior: `0 differences found`, `2 matching files` |
+| `systemctl enable --now menta-backup.timer` | Activo. Próxima ejecución 06:30 UTC más hasta 10 min de `RandomizedDelaySec` |
+| Archivos locales | Dump de 5,5 KB y tar de comprobantes de 91 bytes (vacío: aún no hay comprobantes), ambos con modo 600 y `gzip -t` OK |
+| **Simulacro de restauración.** Con `lsf` y `copy` de `offsitecrypt:daily` se bajó y descifró el backup a `/root/restore` | Los dos archivos descargados son idénticos byte a byte (`cmp`) a los locales |
+| Restauración del dump en una base aparte `menta_drill` dentro del MySQL de producción (el dump no trae `USE` ni `CREATE DATABASE`, así que no toca `menta`) | `menta` y `menta_drill`: 33 tablas cada una y 27 migraciones de Flyway (`installed_rank` máximo 27). El tar de comprobantes abre bien |
+| Limpieza: `DROP DATABASE menta_drill` y borrado de `/root/restore` | `SHOW DATABASES` ya no lista `menta_drill` |
+
+Alcance del simulacro: se usó el `backup.env` del servidor (token de escritura). No se probó el token de solo lectura ni la restauración desde otra máquina con las claves del gestor de contraseñas, ni se levantó la API contra la base restaurada (eso sí se probó en local, ver arriba).
 
 **Cómo obtener el ID y el secreto.** Si el token se creó desde la pantalla genérica de *Tokens de API de cuenta* (el valor empieza con `cfat_`), `rclone` necesita dos datos que se derivan del valor: el **Access Key ID** es el `id` del token (32 caracteres, lo devuelve `tokens/verify`) y el **Secret Access Key** es el **SHA-256 del valor del token** (64 caracteres), según la documentación de Cloudflare. El valor del token no va en ninguna variable de `rclone`.
 
@@ -575,7 +644,7 @@ docker run --rm --env-file /opt/menta/backup.env -v ~/restore:/restore "$RCLONE"
 docker exec -i menta-api tar -xzf - -C /var/menta-dance/payment-proofs < ~/restore/proofs-<fecha>.tar.gz
 ```
 
-**Monitoreo externo (pendiente de configurar).** Un chequeo desde afuera detecta lo que ningún script del servidor puede: que el servidor entero no responda. Usar un servicio gratuito de uptime (por ejemplo UptimeRobot, con chequeos cada 5 minutos y alerta por mail; comprobar las condiciones vigentes del plan) con estos monitores, de tipo *keyword*:
+**Monitoreo externo (uptime configurado el 2026-10-19; heartbeat del backup pendiente).** Un chequeo desde afuera detecta lo que ningún script del servidor puede: que el servidor entero no responda. Se usa UptimeRobot (plan gratuito, chequeos cada 5 minutos, alerta por mail; comprobar las condiciones vigentes del plan) con estos monitores, de tipo *keyword*:
 
 | URL | Palabra clave | Qué cubre |
 |---|---|---|
@@ -584,7 +653,22 @@ docker exec -i menta-api tar -xzf - -C /var/menta-dance/payment-proofs < ~/resto
 | `https://mentadance.com/api/actuator/health` | `"status":"UP"` | API, por el camino que usa la web |
 | `https://api.mentadance.com/actuator/health` | `"status":"UP"` | API, por el host que usa la app Android, y su certificado |
 
-Para el backup, un monitor tipo *heartbeat* (por ejemplo healthchecks.io, gratuito) con período de 1 día y unas 2 horas de gracia: su URL de ping va en `BACKUP_PING_URL`. **Validación:** apagar la API (`docker stop menta-api`) debe disparar la alerta por mail en pocos minutos; después, `docker start menta-api`. Anotar acá el resultado.
+**Condición de alerta.** En cada monitor de keyword hay que elegir alertar cuando la palabra clave **no existe**. Con la opción contraria (alertar cuando existe) el monitor marca caída justo cuando el servicio está sano: pasó con el monitor de `api.mentadance.com` y se corrigió en el panel (*Edit*). Además de los cuatro de keyword hay dos monitores HTTP (`https://mentadance.com` y `https://mentadance.com/login`) que detectan caídas de la web por código de respuesta; en total son 6 de los 50 monitores del plan gratuito.
+
+**Validación (2026-10-19).** Se apagó la API en el VPS con `docker stop menta-api`: llegaron los mails de caída y, al ejecutar `docker start menta-api`, los monitores volvieron a `Up` y llegó el aviso de recuperación. `mentadance.com/api/actuator/health` quedó mostrando `502` unos minutos después de la recuperación; un `curl` ya devolvía `200`, porque cada monitor repite su chequeo en su propio momento dentro del intervalo de 5 minutos.
+
+Para el backup, un monitor tipo *heartbeat* (por ejemplo healthchecks.io, gratuito) con período de 1 día y unas 2 horas de gracia: su URL de ping va en `BACKUP_PING_URL`.
+
+**Heartbeat configurado el 2026-10-19.** Check `menta-backup` en healthchecks.io (*Period* 1 día, *Grace Time* 2 horas, alerta por mail), con una descripción que dice dónde mirar cuando avise (`journalctl -u menta-backup.service`). La URL de ping es un secreto (quien la tenga puede mandar avisos falsos): se cargó en el VPS sin mostrarla y sin pisar el archivo.
+
+```bash
+read -rs -p "Ping URL: " U; echo
+printf 'BACKUP_PING_URL=%s\n' "$U" >> /opt/menta/backup.env; unset U
+awk -F= '/^BACKUP_PING_URL=/{print $1, length($2)}' /opt/menta/backup.env   # largo 56, sin mostrar el valor
+stat -c '%a %U:%G' /opt/menta/backup.env                                     # sigue en 600 deploy:deploy
+```
+
+Un backup a mano (`systemctl start menta-backup.service`) terminó con `Backup completado` y el check pasó a verde con el último aviso de hace un minuto. **No se probó** el camino de fallo (`BACKUP_PING_URL/fail`) ni la alerta por falta de aviso a tiempo. Para probar la alerta de fallo se puede ejecutar `curl -fsS "$URL/fail"` desde una terminal que ya tenga la URL en una variable (sin escribirla en el historial).
 
 ### Decisiones diferidas
 
@@ -616,9 +700,10 @@ El puerto 22 y el 3306 no tienen regla, es decir, están bloqueados desde afuera
 
 Se completa a medida que avancen los sub-issues de #380:
 
-- Compose de producción (#589): `/opt/menta/.env` ya está completo (2026-10-17, sección 2.9), salvo el token de producción de Mercado Pago y los datos de transferencia, que se cargan antes de habilitar pagos. Falta ejecutar en el VPS los pasos 3 a 5 de la renovación por `webroot` y documentar el resultado del primer arranque. El endurecimiento de SSH quedó descartado (ver "Decisiones diferidas").
+- Compose de producción (#589): `/opt/menta/.env` ya está completo (2026-10-17, sección 2.9), salvo el token de producción de Mercado Pago y los datos de transferencia, que se cargan antes de habilitar pagos. El primer arranque y la renovación por `webroot` están hechos y documentados (2026-10-18, secciones 2.8 y 2.10). El endurecimiento de SSH quedó descartado (ver "Decisiones diferidas").
+- Mejoras al repositorio que dejó el primer despliegue, sin issue todavía: subir el `start_period` del healthcheck de MySQL en `docker-compose.prod.yml` (por ejemplo a 120 s) para que el primer despliegue en un servidor nuevo no falle, y revisar el test intermitente `PaymentExpirySweepIntegrationTest`.
+- Baneo de fail2ban: el `bantime` volvió a 3600 el 2026-10-19 con `fail2ban-client set sshd bantime 3600` (sección 2.4).
 - Correo (EnvialoSimple): agregar en el DNS de `mentadance.com` los registros SPF y DKIM que indica la pestaña "Registro DNS" de la cuenta, y probar un envío real (activación de cuenta). Sin esos registros los mails pueden caer en spam.
-- Login a GHCR del usuario `deploy` (sección 2.7): comprobarlo con `grep -c 'ghcr.io' ~/.docker/config.json` como `deploy` (debe dar 1 o más) antes del primer despliegue.
-- Despliegue y rollback (#593, sección 2.10): `deploy.sh` ya está instalado y verificado; falta el primer despliegue a mano con un tag `-rc`, restringir la clave al comando forzado, y cargar en el Environment `production` de GitHub los secretos que usa `release.yml` (#592; ver `docs/16-CICD-PIPELINE.md`, "Configuración en GitHub"). Anotar acá el resultado de cada paso.
-- Backups y monitoreo (#594, sección 2.11): el bucket, los tokens, las claves de cifrado y `backup.env` ya están hechos y probados (2026-10-17). Falta instalar `backup.sh` y el timer (después del primer despliegue), el primer backup real, el simulacro de restauración en el VPS y los monitores externos. Anotar acá el resultado de cada paso.
+- Despliegue y rollback (#593, sección 2.10): `deploy.sh` está instalado y el primer despliegue a mano con `v0.2.0-rc.2` ya se hizo (2026-10-18). La clave de despliegue ya tiene el comando forzado y el Environment `production` de GitHub tiene los cinco secretos que usa `release.yml` (#592; 2026-10-18). Falta el *required reviewer* del Environment (cuando el repositorio sea público), desplegar un tag estable desde `main` y probar el rollback. Anotar acá el resultado de cada paso.
+- Backups y monitoreo (#594, sección 2.11): el bucket, los tokens, las claves de cifrado y `backup.env` ya están hechos y probados (2026-10-17). `backup.sh`, el timer, el primer backup real y el simulacro de restauración en el VPS se hicieron el 2026-10-19 (ver la tabla de la sección 2.11). El uptime externo (UptimeRobot) se configuró y se validó con la caída de la API el mismo día. El heartbeat del backup (`BACKUP_PING_URL`, healthchecks.io) también se configuró ese día; sin probar aún su camino de fallo. Anotar acá el resultado de cada paso.
 - Seguimiento de todos los pasos pendientes del servidor: #610.
