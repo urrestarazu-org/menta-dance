@@ -233,6 +233,7 @@ jobs:
         run: |
           export MYSQL_ROOT_PASSWORD=test
           export MYSQL_APP_PASSWORD=test
+          export BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET=test
           docker compose config > /dev/null
 
       - name: Validate production nginx compose overlay
@@ -240,6 +241,7 @@ jobs:
         run: |
           export MYSQL_ROOT_PASSWORD=test
           export MYSQL_APP_PASSWORD=test
+          export BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET=test
           # Compose overlay pattern: -f base + -f override
           # docker-compose.production.yml sobrescribe/extiende docker-compose.yml
           # Ej: monta nginx.production.conf en vez de nginx.conf
