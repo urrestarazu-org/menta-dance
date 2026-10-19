@@ -113,6 +113,14 @@ services:
 
       # API Backend (BFF solo consume API via HTTP)
       MENTA_API_BASE_URL: http://api:8081
+      AUTH_API_BASE_URL: http://api:8081
+      BILLING_API_BASE_URL: http://api:8081
+
+      # Redis (sessions): without it the Redis health indicator reports DOWN and the container
+      # never turns healthy. Fixed on purpose, like the API's SMTP host: the default is localhost,
+      # which inside this container is the BFF itself.
+      REDIS_HOST: menta-redis
+      REDIS_PORT: 6379
 
       # JVM Opts
       JAVA_OPTS: ${JAVA_OPTS:--XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC}
@@ -120,6 +128,8 @@ services:
       - menta-network
     depends_on:
       api:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
