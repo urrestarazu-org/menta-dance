@@ -15,6 +15,23 @@
 | [0026](0026-redis-caffeine-strategy.md) | Redis/ Caffeine |
 | [0027](0027-mysql-flyway-strategy.md) | MySQL y Flyway |
 | [0028](0028-physical-capacity-precheck-hold.md) | Precheck de cupo y hold en checkout |
+| [0029](0029-java-type-design-guidelines.md) | Guías de diseño de tipos en Java |
+| [0030](0030-transactional-outbox-pattern.md) | Patrón Transactional Outbox |
+| [0031](0031-bff-session-strategy.md) | Estrategia de sesión web del BFF |
+| [0032](0032-activation-delivery-cipher-nonce-policy.md) | Nonce y rotación de clave del activation delivery cipher |
+| [0033](0033-activation-rate-limiting-strategy.md) | Rate limiting atómico para registro y reenvío de activación |
+| [0034](0034-activation-token-generation-hashing.md) | Generación y hashing del token de activación de cuenta |
+| [0035](0035-trusted-client-origin-propagation.md) | Propagación confiable del origen del cliente entre Nginx, BFF y API |
+| [0036](0036-android-agp9-tooling-migration.md) | Migración de tooling Android a AGP 9.x |
+| [0037](0037-catalog-course-id-routing.md) | Ruteo de courseId a su módulo dueño en el catálogo |
+| [0038](0038-payment-webhook-state-machine-and-worker.md) | Máquina de estados de Payment, worker de webhook y puerto a Mercado Pago |
+| [0039](0039-post-payment-fulfillment-boundaries.md) | Límites del fulfillment post-pago |
+| [0040](0040-local-bunny-net-signature-adapter.md) | Adaptador local determinista de firma Bunny.net |
+| [0041](0041-lesson-access-unplanned-course-denial.md) | Un curso sin plan deniega acceso a lecciones protegidas |
+| [0042](0042-security-tooling-baseline.md) | Baseline de tooling de seguridad de código |
+| [0043](0043-checkstyle-policy-ratchet.md) | Política de Checkstyle y trinquete |
+| [0044](0044-physical-checkin-rate-limiting-and-input-caps.md) | Rate limiting y topes de entrada en el check-in QR de Physical |
+| [0045](0045-despliegue-vps-donweb.md) | Despliegue en un VPS de DonWeb con Docker Compose |
 
 Los ADRs no listados fueron eliminados por contener decisiones incompatibles con
 el diseño vigente. Sus números no se reutilizan.

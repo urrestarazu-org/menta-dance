@@ -315,18 +315,18 @@ sequenceDiagram
     QRReader->>QRReader: Escanear qrCredentials
     QRReader->>API: POST /api/v1/physical/sessions/{sessionId}/check-ins<br/>{type: QR, qrCredentials, deviceId, deviceToken}
 
-    %% Device validation
-    API->>MySQL: Find device by deviceId
-    alt Device not found
-        API-->>QRReader: 401 DEVICE_NOT_FOUND
-    else Device found
-        API->>API: Verify deviceToken hash
-        alt Invalid token
-            API-->>QRReader: 401 INVALID_DEVICE_TOKEN
-        else Token valid
-            API->>MySQL: Check device status and expiration
-            alt Expired or revoked
-                API-->>QRReader: 401 DEVICE_EXPIRED / DEVICE_REVOKED
+    %% Autenticación del dispositivo contra el registro (#266)
+    alt deviceId is not a UUID
+        API-->>QRReader: 401 INVALID_DEVICE_TOKEN (sin consultar MySQL)
+    else deviceId is a UUID
+        API->>MySQL: Find device by deviceId (PK)
+        API->>API: Verify deviceToken hash (constant time)
+        alt Device not found or wrong deviceToken
+            API-->>QRReader: 401 INVALID_DEVICE_TOKEN (mismo cuerpo en ambos casos)
+        else Secret proven
+            API->>API: Check device status and expiration (REVOKED wins)
+            alt Revoked or expired
+                API-->>QRReader: 401 DEVICE_REVOKED / DEVICE_EXPIRED
             else Device active
                 %% QR validation
                 API->>API: Verify QR signature
@@ -374,6 +374,12 @@ sequenceDiagram
         end
     end
 ```
+
+Un `deviceId` desconocido, que no es UUID, o un `deviceToken` incorrecto responden
+el mismo `401 INVALID_DEVICE_TOKEN` (no se revela si el dispositivo existe);
+`DEVICE_REVOKED` y `DEVICE_EXPIRED` sólo se informan con el secreto correcto. Un
+fallo de autenticación del dispositivo corta todas las validaciones siguientes y
+nunca llega a Redis.
 
 ---
 

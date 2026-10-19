@@ -59,7 +59,7 @@ Las academias de danza suelen operar con herramientas fragmentadas: WhatsApp par
 | Kotlin | Lenguaje principal |
 | Jetpack Compose | UI declarativa |
 | Hilt | Inyección de dependencias |
-| Retrofit | Cliente HTTP |
+| Clean Architecture Android | `presentation/domain/data/di` |
 | Android Keystore | Almacenamiento seguro de tokens |
 
 ### Infraestructura
@@ -147,34 +147,51 @@ BUNNY_API_KEY=xxx
 BUNNY_LIBRARY_ID=xxx
 ```
 
-### 3. Iniciar Infraestructura
+### 3. Iniciar Servicios
+
+**Opción A - Script consolidado (Recomendado):**
 
 ```bash
-docker compose up -d
+./scripts/dev.sh start
 ```
 
 Esto levanta:
-- MySQL 8 en puerto `3306`
-- Redis en puerto `6379`
-- Stack de observabilidad (Grafana, Loki, Tempo)
+- **Infraestructura**: MySQL 8, Redis, OpenTelemetry, Loki, Grafana
+- **API**: Spring Boot en puerto `8081`
+- **BFF**: Frontend web en puerto `8080`
 
-### 4. Ejecutar la API
-
+Verificar estado:
 ```bash
-./gradlew :api:app:bootRun
+./scripts/dev.sh status
 ```
 
-La API estará disponible en `http://localhost:8081`
+Ver logs en tiempo real:
+```bash
+./scripts/dev.sh logs api   # Logs de API
+./scripts/dev.sh logs bff   # Logs de BFF
+```
 
-### 5. Ejecutar el BFF (Web)
+Detener todo:
+```bash
+./scripts/dev.sh stop
+```
+
+**Opción B - Ejecución manual:**
 
 ```bash
+# Terminal 1: Infraestructura
+docker compose up -d
+
+# Terminal 2: API
+./gradlew :api:app:bootRun
+
+# Terminal 3: BFF
 ./gradlew :bff:bootRun
 ```
 
-La web estará disponible en `http://localhost:8080`
+### 4. Testing
 
-### 6. Ejecutar Tests
+**Tests unitarios y de integración:**
 
 ```bash
 # Todos los tests
@@ -186,6 +203,28 @@ La web estará disponible en `http://localhost:8080`
 # Cobertura
 ./gradlew jacocoTestReport
 ```
+
+### Colecciones Bruno
+
+Las colecciones HTTP versionadas están en [`bruno/`](bruno/). Abrí esa carpeta
+como colección raíz en Bruno y seleccioná el entorno `local`.
+
+- **API - Direct**: pruebas directas contra la API local (`http://localhost:8081`),
+  incluyendo Auth y health; Physical y Virtual son placeholders mientras sus
+  endpoints no estén implementados.
+- **BFF - Session**: flujo de sesión contra el BFF local (`http://localhost:8080`):
+  login, dashboard autenticado, logout y verificación posterior al logout.
+
+También pueden ejecutarse con Bruno CLI:
+
+```bash
+cd bruno
+npx @usebruno/cli run --env local --folder "API - Direct" .
+npx @usebruno/cli run --env local --folder "BFF - Session" .
+```
+
+Consultá [`bruno/README.md`](bruno/README.md) para el flujo, variables de entorno
+y requisitos de cada colección.
 
 ---
 
@@ -204,10 +243,11 @@ menta-dance/
 ├── bff/                          # Backend for Frontend (Thymeleaf)
 │
 ├── android/                      # Aplicación móvil
-│   ├── app/                      # Módulo principal
-│   ├── domain/                   # Lógica de negocio
-│   ├── data/                     # Repositorios y APIs
-│   └── di/                       # Inyección de dependencias (Hilt)
+│   └── src/main/java/com/menta/android/
+│       ├── presentation/         # ViewModels, UI state y pantallas Compose
+│       ├── domain/               # Casos de uso, modelos y puertos
+│       ├── data/                 # Repositorios y adaptadores
+│       └── di/                   # Wiring con Hilt
 │
 ├── docs/                         # Documentación técnica
 │   ├── adr/                      # Architecture Decision Records
@@ -273,16 +313,51 @@ menta-dance/
 
 ---
 
-## Credenciales de Prueba
+## Datos Demo y Credenciales de Prueba
 
-> **Nota**: Las credenciales estarán disponibles una vez desplegado el proyecto.
+El perfil `demo` siembra, al arrancar la API, usuarios por rol, catálogo, sesiones, planes y una
+suscripción de prueba, para recorrer la aplicación con datos realistas. Solo para desarrollo local:
 
-| Rol | Email | Contraseña |
-|-----|-------|------------|
-| Admin | `admin@menta.dance` | `Admin123!` |
-| Profesor | `profesor@menta.dance` | `Prof123!` |
-| Alumno | `alumno@menta.dance` | `Alumno123!` |
-| Recepcionista | `recepcion@menta.dance` | `Recep123!` |
+```bash
+./gradlew :api:app:bootRun --args='--spring.profiles.active=demo'
+```
+
+| Rol | Email | Contraseña por defecto | Variable de entorno |
+|-----|-------|------------------------|---------------------|
+| Admin | `admin@menta.dance` | `Admin123!` | `DEMO_ADMIN_PASSWORD` |
+| Profesor | `profesor@menta.dance` | `Prof123!` | `DEMO_INSTRUCTOR_PASSWORD` |
+| Alumno | `alumno@menta.dance` | `Alumno123!` | `DEMO_STUDENT_PASSWORD` |
+| Recepcionista | `recepcion@menta.dance` | `Recep123!` | `DEMO_RECEPTIONIST_PASSWORD` |
+
+Otras variables del perfil (definidas en `api/app/src/main/resources/application-demo.yml`):
+
+- `DEMO_QR_READER_SECRET`: secreto del lector QR demo. Sin valor, el lector no se siembra (se registra un
+  WARN y el arranque continúa); si cambia entre arranques, se rota el hash guardado.
+- `BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET`: el perfil `demo` trae un valor por defecto solo para demo;
+  nunca reutilizarlo en otro entorno.
+
+Datos sembrados: los cursos virtuales "Bachata Sensual" y "Bachata Tradicional" (2 módulos cada uno, con
+lecciones gratuitas y restringidas, servidas por el adaptador local de Bunny.net); los cursos presenciales
+"Bachata Sensual Presencial" (martes y jueves 19:00, cupo 12) y "Bachata Tradicional Presencial" (sábados
+11:00, cupo 15), con sesiones para las próximas 4 semanas y una sesión "rolling" unos 10 minutos en el
+futuro; precios presenciales de 25000 y 20000 ARS (recargo individual del 20%); "Plan Virtual"
+(30000 ARS, 30 días, ambos cursos virtuales) y "Plan Completo" (60000 ARS, 30 días, los 4 cursos); y un
+TRIAL de 90 días sobre "Plan Completo" para el alumno, que además tiene cupo confirmado en la próxima
+sesión de Sensual y en la sesión rolling. Los horarios se expresan en UTC.
+
+Comportamiento a tener en cuenta:
+
+- **Guarda de arranque**: combinar `demo` con `prod`, `production` o `staging` (sin distinguir
+  mayúsculas) aborta el arranque antes de sembrar nada.
+- **Mercado Pago real**: el perfil no reemplaza los adaptadores de Mercado Pago; usar credenciales sandbox.
+- **Re-ejecuciones idempotentes**: reiniciar no duplica datos ni restablece contraseñas existentes; la
+  sesión rolling se reutiliza o se reprograma, nunca se acumula.
+- **Check-in tras reiniciar**: si ya existe asistencia en la sesión rolling, un nuevo check-in devuelve
+  la asistencia existente. Para un check-in nuevo hay que recrear la base de datos
+  (`docker compose down -v`). Es un comportamiento aceptado.
+
+Ver [docs/26-LOCAL-DEV-SETUP-HOWTO.md](docs/26-LOCAL-DEV-SETUP-HOWTO.md#perfil-demo-datos-de-prueba) para el
+paso a paso.
 
 ---
 

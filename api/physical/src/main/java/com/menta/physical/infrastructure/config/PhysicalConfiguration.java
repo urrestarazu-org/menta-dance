@@ -1,0 +1,363 @@
+package com.menta.physical.infrastructure.config;
+
+import com.menta.physical.application.port.in.BatchCreatePhysicalSessionsUseCase;
+import com.menta.physical.application.port.in.CreatePhysicalCourseUseCase;
+import com.menta.physical.application.port.in.CreatePhysicalSessionUseCase;
+import com.menta.physical.application.port.in.GetPhysicalAttendanceHistoryUseCase;
+import com.menta.physical.application.port.in.GetPhysicalDeviceUseCase;
+import com.menta.physical.application.port.in.IssuePhysicalAccessQrUseCase;
+import com.menta.physical.application.port.in.ListManagedPhysicalCoursesUseCase;
+import com.menta.physical.application.port.in.ListManagedPhysicalSessionsUseCase;
+import com.menta.physical.application.port.in.ListMyPhysicalSessionsUseCase;
+import com.menta.physical.application.port.in.ListPhysicalDevicesUseCase;
+import com.menta.physical.application.port.in.PhysicalCourseAvailabilityPort;
+import com.menta.physical.application.port.in.PhysicalCourseOwnershipPort;
+import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
+import com.menta.physical.application.port.in.RegisterPhysicalDeviceUseCase;
+import com.menta.physical.application.port.in.RevokePhysicalDeviceUseCase;
+import com.menta.physical.application.port.in.RotatePhysicalDeviceSecretUseCase;
+import com.menta.physical.application.port.in.UpdatePhysicalCourseUseCase;
+import com.menta.physical.application.port.in.UpdatePhysicalSessionUseCase;
+import com.menta.physical.application.port.out.AttendanceRepository;
+import com.menta.physical.application.port.out.CheckInRateLimitPort;
+import com.menta.physical.application.port.out.CheckInRateLimitRejectionPort;
+import com.menta.physical.application.port.out.Clock;
+import com.menta.physical.application.port.out.DeviceAuthenticationRejectionPort;
+import com.menta.physical.application.port.out.DeviceSecretGenerator;
+import com.menta.physical.application.port.out.DeviceSecretHasher;
+import com.menta.physical.application.port.out.PhysicalCapacityAssignmentRepository;
+import com.menta.physical.application.port.out.PhysicalCourseRepository;
+import com.menta.physical.application.port.out.PhysicalDeviceAuditRepository;
+import com.menta.physical.application.port.out.PhysicalDeviceRepository;
+import com.menta.physical.application.port.out.PhysicalSessionRepository;
+import com.menta.physical.application.usecase.BatchCreatePhysicalSessionsUseCaseImpl;
+import com.menta.physical.application.usecase.CreatePhysicalCourseUseCaseImpl;
+import com.menta.physical.application.usecase.CreatePhysicalSessionUseCaseImpl;
+import com.menta.physical.application.usecase.GetPhysicalAttendanceHistoryUseCaseImpl;
+import com.menta.physical.application.usecase.GetPhysicalDeviceUseCaseImpl;
+import com.menta.physical.application.usecase.IssuePhysicalAccessQrUseCaseImpl;
+import com.menta.physical.application.usecase.ListManagedPhysicalCoursesUseCaseImpl;
+import com.menta.physical.application.usecase.ListManagedPhysicalSessionsUseCaseImpl;
+import com.menta.physical.application.usecase.ListMyPhysicalSessionsUseCaseImpl;
+import com.menta.physical.application.usecase.ListPhysicalDevicesUseCaseImpl;
+import com.menta.physical.application.usecase.PhysicalCourseAvailabilityPortImpl;
+import com.menta.physical.application.usecase.PhysicalCourseOwnershipPortImpl;
+import com.menta.physical.application.usecase.PhysicalDeviceAuthenticator;
+import com.menta.physical.application.usecase.ProcessPhysicalCheckInUseCaseImpl;
+import com.menta.physical.application.usecase.RegisterPhysicalDeviceUseCaseImpl;
+import com.menta.physical.application.usecase.RevokePhysicalDeviceUseCaseImpl;
+import com.menta.physical.application.usecase.RotatePhysicalDeviceSecretUseCaseImpl;
+import com.menta.physical.application.usecase.UpdatePhysicalCourseUseCaseImpl;
+import com.menta.physical.application.usecase.UpdatePhysicalSessionUseCaseImpl;
+import com.menta.physical.domain.model.CheckInWindow;
+import com.menta.physical.infrastructure.device.SecureRandomDeviceSecretGenerator;
+import com.menta.physical.infrastructure.device.Sha256DeviceSecretHasher;
+import com.menta.physical.infrastructure.qr.FormatQrCredentialSignatureService;
+import com.menta.physical.infrastructure.qr.QrProperties;
+import com.menta.physical.infrastructure.redis.RedisCheckInLockPort;
+import com.menta.physical.infrastructure.redis.RedisCheckInRateLimitPort;
+import com.menta.physical.infrastructure.transaction.TransactionalRegisterPhysicalDeviceUseCase;
+import com.menta.physical.infrastructure.transaction.TransactionalRevokePhysicalDeviceUseCase;
+import com.menta.physical.infrastructure.transaction.TransactionalRotatePhysicalDeviceSecretUseCase;
+import com.menta.shared.auth.UserExistencePort;
+import java.time.Duration;
+import java.time.ZoneId;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.core.RedisTemplate;
+
+/**
+ * Wires Physical's use cases. Adapters are {@code @Component}-scanned; the
+ * use cases are plain Java classes composed here, mirroring {@code
+ * VirtualConfiguration}'s rationale: no implicit {@code @Autowired} on
+ * use-case classes.
+ *
+ * <p>{@link QrProperties} is picked up by the package-scoped {@code
+ * @ConfigurationPropertiesScan} below, same rationale {@code
+ * VirtualConfiguration} documents for {@code BunnyNetProperties}: kept
+ * annotation-free to avoid the dual-registration gotcha and to be explicit
+ * about package ownership inside Physical.</p>
+ */
+@Configuration
+@ConfigurationPropertiesScan(basePackages = "com.menta.physical.infrastructure.qr")
+public class PhysicalConfiguration {
+
+    /**
+     * Production {@link Clock} adapter for the application-layer port.
+     * Same "single test seam" approach as {@code VirtualConfiguration}'s
+     * own {@code clock()} bean: tests inject a fixed clock so TTL/window
+     * assertions never depend on the wall clock.
+     *
+     * <p>Named {@code physicalClock}, not {@code clock}: Spring bean
+     * definitions are registered by method name regardless of the declaring
+     * {@code @Configuration} class, so reusing {@code clock()} verbatim
+     * collides with {@code VirtualConfiguration.clock()} — a same-name,
+     * different-type {@code BeanDefinitionOverrideException} at context
+     * startup, the exact class of bug the app-level test suite exists to
+     * catch (see {@code PhysicalCheckInIntegrationTest} and the shared
+     * {@code :api:app:test} run). Autowiring by type is unaffected: this is
+     * still the only bean of {@code com.menta.physical...Clock} in the
+     * context.</p>
+     */
+    @Bean
+    public Clock physicalClock() {
+        return () -> java.time.Clock.systemUTC().instant();
+    }
+
+    /**
+     * Physical's own copy of the hold TTL (#208, design B5), read as {@code
+     * physical.capacity.hold.ttl-ms} — deliberately a DIFFERENT key from
+     * billing's interim {@code billing.physical.capacity.hold.ttl-ms}
+     * (see {@code BillingConfiguration.createPhysicalPurchaseCheckoutUseCase}),
+     * since the checkout use case cannot depend on {@code api:physical} to
+     * read it (ArchUnit boundary, D4). Both keys are expected to carry the
+     * same value in practice; this one is consumed only by
+     * {@code HoldExpiryWorker}, to decide how long a converted hold row is
+     * kept as history before the sweep prunes it — the hold's own creation
+     * path never needs it, since the caller (billing) already computes and
+     * passes {@code expiresAt} explicitly.
+     *
+     * <p>Exposed as a {@link Duration} bean, not a raw {@code @Value} on the
+     * consuming class, so the millisecond-to-{@code Duration} conversion
+     * lives in one place (design B5).</p>
+     */
+    @Bean
+    public Duration physicalCapacityHoldTtl(
+        @Value("${physical.capacity.hold.ttl-ms:1800000}") long ttlMs
+    ) {
+        return Duration.ofMillis(ttlMs);
+    }
+
+    @Bean
+    public IssuePhysicalAccessQrUseCase issuePhysicalAccessQrUseCase(
+        PhysicalSessionRepository sessionRepository,
+        PhysicalCapacityAssignmentRepository assignmentRepository,
+        Clock clock, QrProperties qrProperties
+    ) {
+        return new IssuePhysicalAccessQrUseCaseImpl(
+            sessionRepository, assignmentRepository, new FormatQrCredentialSignatureService(),
+            clock, qrProperties.getCredentialTtl(),
+            qrProperties.getSessionWindowBefore(), qrProperties.getSessionWindowAfter()
+        );
+    }
+
+    /**
+     * #45, US-PHYSICAL-008, design C10 -- {@code UserExistencePort} is the same {@code
+     * :api:shared} port {@code BillingConfiguration} already consumes for {@code
+     * AssignTrialSubscriptionUseCaseImpl}; {@code :api:auth}'s {@code UserExistenceAdapter}
+     * resolves it via component scan alone. No {@code build.gradle.kts} change: {@code
+     * :api:physical} already declares {@code :api:shared}.
+     */
+    @Bean
+    public ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase(
+        PhysicalSessionRepository sessionRepository,
+        PhysicalCapacityAssignmentRepository assignmentRepository,
+        AttendanceRepository attendanceRepository, RedisTemplate<String, String> redisTemplate,
+        Clock clock, QrProperties qrProperties, UserExistencePort userExistencePort,
+        PhysicalDeviceAuthenticator deviceAuthenticator, CheckInRateLimitPort rateLimitPort,
+        CheckInRateLimitRejectionPort rateLimitRejectionPort
+    ) {
+        return new ProcessPhysicalCheckInUseCaseImpl(
+            sessionRepository, assignmentRepository, attendanceRepository,
+            new FormatQrCredentialSignatureService(), new RedisCheckInLockPort(redisTemplate),
+            clock, deviceAuthenticator, qrProperties.getSessionWindowBefore(),
+            qrProperties.getSessionWindowAfter(), qrProperties.getLockTtl(), userExistencePort,
+            rateLimitPort, rateLimitRejectionPort
+        );
+    }
+
+    /**
+     * ADR-0044 -- QR check-in throttle: independent per-IP and per-device budgets over one fixed
+     * window. The defaults are provisional (no real traffic to calibrate against yet) and
+     * non-positive values fail startup through the adapter's constructor.
+     */
+    @Bean
+    public CheckInRateLimitPort physicalCheckInRateLimitPort(
+        RedisTemplate<String, String> redisTemplate,
+        @Value("${physical.checkin.rate-limit.ip-max-requests:120}") long ipMaxRequests,
+        @Value("${physical.checkin.rate-limit.device-max-requests:60}") long deviceMaxRequests,
+        @Value("${physical.checkin.rate-limit.window-seconds:60}") long windowSeconds
+    ) {
+        return new RedisCheckInRateLimitPort(
+            redisTemplate, ipMaxRequests, deviceMaxRequests, Duration.ofSeconds(windowSeconds)
+        );
+    }
+
+    /**
+     * #266 -- gate 1 of the QR check-in: authenticates the reader against the #44 device
+     * registry. Plain class composed here (same rationale as the use cases); the rejection port
+     * is the {@code @Component} log-and-metric adapter.
+     */
+    @Bean
+    public PhysicalDeviceAuthenticator physicalDeviceAuthenticator(
+        PhysicalDeviceRepository deviceRepository, DeviceSecretHasher secretHasher, Clock clock,
+        DeviceAuthenticationRejectionPort rejectionPort
+    ) {
+        return new PhysicalDeviceAuthenticator(
+            deviceRepository, secretHasher, clock, rejectionPort
+        );
+    }
+
+    @Bean
+    public PhysicalCourseAvailabilityPort physicalCourseAvailabilityPort(
+        PhysicalCourseRepository courseRepository, PhysicalSessionRepository sessionRepository,
+        PhysicalCapacityAssignmentRepository assignmentRepository
+    ) {
+        return new PhysicalCourseAvailabilityPortImpl(courseRepository, sessionRepository, assignmentRepository);
+    }
+
+    @Bean
+    public PhysicalCourseOwnershipPort physicalCourseOwnershipPort(PhysicalCourseRepository courseRepository) {
+        return new PhysicalCourseOwnershipPortImpl(courseRepository);
+    }
+
+    @Bean
+    public CreatePhysicalCourseUseCase createPhysicalCourseUseCase(PhysicalCourseRepository courseRepository) {
+        return new CreatePhysicalCourseUseCaseImpl(courseRepository);
+    }
+
+    @Bean
+    public ListManagedPhysicalCoursesUseCase listManagedPhysicalCoursesUseCase(
+        PhysicalCourseRepository courseRepository
+    ) {
+        return new ListManagedPhysicalCoursesUseCaseImpl(courseRepository);
+    }
+
+    @Bean
+    public UpdatePhysicalCourseUseCase updatePhysicalCourseUseCase(
+        PhysicalCourseRepository courseRepository, PhysicalSessionRepository sessionRepository
+    ) {
+        return new UpdatePhysicalCourseUseCaseImpl(courseRepository, sessionRepository);
+    }
+
+    @Bean
+    public CreatePhysicalSessionUseCase createPhysicalSessionUseCase(
+        PhysicalCourseRepository courseRepository, PhysicalSessionRepository sessionRepository
+    ) {
+        return new CreatePhysicalSessionUseCaseImpl(courseRepository, sessionRepository);
+    }
+
+    @Bean
+    public BatchCreatePhysicalSessionsUseCase batchCreatePhysicalSessionsUseCase(
+        PhysicalCourseRepository courseRepository, PhysicalSessionRepository sessionRepository
+    ) {
+        return new BatchCreatePhysicalSessionsUseCaseImpl(courseRepository, sessionRepository);
+    }
+
+    @Bean
+    public ListManagedPhysicalSessionsUseCase listManagedPhysicalSessionsUseCase(
+        PhysicalCourseRepository courseRepository, PhysicalSessionRepository sessionRepository
+    ) {
+        return new ListManagedPhysicalSessionsUseCaseImpl(courseRepository, sessionRepository);
+    }
+
+    @Bean
+    public UpdatePhysicalSessionUseCase updatePhysicalSessionUseCase(
+        PhysicalCourseRepository courseRepository, PhysicalSessionRepository sessionRepository
+    ) {
+        return new UpdatePhysicalSessionUseCaseImpl(courseRepository, sessionRepository);
+    }
+
+    /**
+     * #39, US-PHYSICAL-002, design C3 — {@code ZoneId.of} throws at context startup on a bad
+     * configured id, not at request time. Both the self and elevated (P2) controllers share this
+     * one bean.
+     */
+    @Bean
+    public GetPhysicalAttendanceHistoryUseCase getPhysicalAttendanceHistoryUseCase(
+        PhysicalCapacityAssignmentRepository assignmentRepository,
+        @Value("${physical.attendance.zone-id:America/Argentina/Buenos_Aires}") String zoneId
+    ) {
+        return new GetPhysicalAttendanceHistoryUseCaseImpl(assignmentRepository, ZoneId.of(zoneId));
+    }
+
+    /**
+     * #356 -- the listing's check-in flag uses the same {@code app.qr.session-window-*} bounds the QR
+     * flow enforces, and the same academy zone as the attendance history. {@code
+     * physical.sessions.window-days} bounds how far ahead the listing looks (default 60).
+     */
+    @Bean
+    public ListMyPhysicalSessionsUseCase listMyPhysicalSessionsUseCase(
+        PhysicalCapacityAssignmentRepository assignmentRepository, Clock clock, QrProperties qrProperties,
+        @Value("${physical.attendance.zone-id:America/Argentina/Buenos_Aires}") String zoneId,
+        @Value("${physical.sessions.window-days:60}") int windowDays
+    ) {
+        return new ListMyPhysicalSessionsUseCaseImpl(
+            assignmentRepository, clock, ZoneId.of(zoneId), windowDays,
+            new CheckInWindow(qrProperties.getSessionWindowBefore(), qrProperties.getSessionWindowAfter())
+        );
+    }
+
+    /**
+     * #44, US-PHYSICAL-007, design C2/D3 -- JDK {@code SecureRandom} only, no {@code :api:auth}
+     * import.
+     */
+    @Bean
+    public DeviceSecretGenerator deviceSecretGenerator() {
+        return new SecureRandomDeviceSecretGenerator();
+    }
+
+    /**
+     * #44, US-PHYSICAL-007, design C2/D3 -- JDK {@code MessageDigest}/{@code HexFormat} only, no
+     * {@code :api:auth} import.
+     */
+    @Bean
+    public DeviceSecretHasher deviceSecretHasher() {
+        return new Sha256DeviceSecretHasher();
+    }
+
+    /**
+     * #44, US-PHYSICAL-007, design C5/C9 -- wrapped in its transactional decorator so the device
+     * insert and its audit row share one commit.
+     */
+    @Bean
+    public RegisterPhysicalDeviceUseCase registerPhysicalDeviceUseCase(
+        PhysicalDeviceRepository deviceRepository, PhysicalDeviceAuditRepository auditRepository,
+        DeviceSecretGenerator secretGenerator, DeviceSecretHasher secretHasher, Clock clock
+    ) {
+        return new TransactionalRegisterPhysicalDeviceUseCase(new RegisterPhysicalDeviceUseCaseImpl(
+            deviceRepository, auditRepository, secretGenerator, secretHasher, clock
+        ));
+    }
+
+    /** #44, US-PHYSICAL-007, design C5/C9 -- read-only, no decorator (mirrors the attendance-history precedent). */
+    @Bean
+    public GetPhysicalDeviceUseCase getPhysicalDeviceUseCase(PhysicalDeviceRepository deviceRepository) {
+        return new GetPhysicalDeviceUseCaseImpl(deviceRepository);
+    }
+
+    /**
+     * #44, US-PHYSICAL-007, design C5/C9 -- wrapped in its transactional decorator so the secret
+     * rotation and its audit row share one commit.
+     */
+    @Bean
+    public RotatePhysicalDeviceSecretUseCase rotatePhysicalDeviceSecretUseCase(
+        PhysicalDeviceRepository deviceRepository, PhysicalDeviceAuditRepository auditRepository,
+        DeviceSecretGenerator secretGenerator, DeviceSecretHasher secretHasher, Clock clock
+    ) {
+        return new TransactionalRotatePhysicalDeviceSecretUseCase(new RotatePhysicalDeviceSecretUseCaseImpl(
+            deviceRepository, auditRepository, secretGenerator, secretHasher, clock
+        ));
+    }
+
+    /**
+     * #44, US-PHYSICAL-007, design C5/C9 -- wrapped in its transactional decorator so the
+     * revocation and its audit row share one commit.
+     */
+    @Bean
+    public RevokePhysicalDeviceUseCase revokePhysicalDeviceUseCase(
+        PhysicalDeviceRepository deviceRepository, PhysicalDeviceAuditRepository auditRepository, Clock clock
+    ) {
+        return new TransactionalRevokePhysicalDeviceUseCase(
+            new RevokePhysicalDeviceUseCaseImpl(deviceRepository, auditRepository, clock)
+        );
+    }
+
+    /** #44, US-PHYSICAL-007, design C5/C9 -- read-only, no decorator (mirrors the attendance-history precedent). */
+    @Bean
+    public ListPhysicalDevicesUseCase listPhysicalDevicesUseCase(PhysicalDeviceRepository deviceRepository) {
+        return new ListPhysicalDevicesUseCaseImpl(deviceRepository);
+    }
+}

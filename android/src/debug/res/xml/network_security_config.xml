@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Sólo para builds de debug: este archivo vive en src/debug y no se empaqueta
+  en release, así que la app publicada mantiene el rechazo de cleartext que
+  Android aplica por defecto desde targetSdk 28.
+
+  Sin esto, una llamada http:// al backend local falla con IOException, que el
+  data source captura como AuthRemoteResult.Unavailable: el síntoma es
+  "servicio no disponible" y la causa real queda invisible.
+
+  El permiso se acota a las direcciones con las que un emulador o dispositivo
+  de desarrollo alcanza la máquina del desarrollador. Ninguna es ruteable en
+  producción.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- Alias del host desde el emulador de Android. -->
+        <domain includeSubdomains="false">10.0.2.2</domain>
+        <!-- Loopback del propio dispositivo, para port forwarding con adb. -->
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+    </domain-config>
+</network-security-config>

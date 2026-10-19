@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SpotBugs / Find Security Bugs suppressions (#191, ADR-0042).
+
+  Rules for this file:
+    * One <Match> per finding, scoped to the narrowest class (and method when
+      possible) plus a single bug pattern. Never suppress a pattern globally.
+    * Every entry MUST carry a comment explaining why the finding is a false
+      positive (not "we will fix it later": fix it or open an issue instead).
+    * Entries are reviewed like code. A suppression nobody can justify is a hole.
+
+  How to triage a finding: see docs/16-CICD-PIPELINE.md, section "SpotBugs".
+-->
+<FindBugsFilter>
+
+  <!--
+    SPRING_CSRF_PROTECTION_DISABLED (CWE-352) in the API security chain.
+
+    False positive: the API is stateless. SessionCreationPolicy.STATELESS is set,
+    no session cookie is ever issued, and JwtAuthenticationFilter reads credentials
+    exclusively from the "Authorization: Bearer" header, which a browser never
+    attaches on its own to a cross-site request. CSRF only exists when the browser
+    sends ambient credentials (cookies); there are none here. The browser-facing
+    surface is the BFF, which keeps CSRF protection ENABLED (BffSecurityConfig).
+  -->
+  <Match>
+    <Class name="com.menta.auth.infrastructure.security.SecurityConfig"/>
+    <Bug pattern="SPRING_CSRF_PROTECTION_DISABLED"/>
+  </Match>
+
+</FindBugsFilter>

@@ -1,6 +1,6 @@
 # ADR-0028: Precheck de cupo y hold en checkout presencial
 
-**Fecha:** 2026-07-22  
+**Fecha:** 2026-07-22
 **Estado:** Aceptado
 
 ## Contexto

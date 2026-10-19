@@ -1,0 +1,42 @@
+meta {
+  name: Get Planned Course Progress - Resume Point
+  type: http
+  seq: 14
+}
+
+get {
+  url: {{baseUrl}}/api/{{apiVersion}}/virtual/courses/{{plannedCourseId}}/progress
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+tests {
+  test("Status is 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("The saved-but-not-completed lesson is the resume point", function() {
+    expect(res.getBody().courseId).to.equal(bru.getEnvVar("plannedCourseId"));
+    expect(res.getBody().totalLessons).to.equal(1);
+    expect(res.getBody().completedLessons).to.equal(0);
+    expect(res.getBody().percentage).to.equal(0);
+    expect(res.getBody().resumeLesson.lessonId).to.equal(bru.getVar("plannedProtectedLessonId"));
+    expect(res.getBody().resumeLesson.completed).to.equal(false);
+  });
+}
+
+docs {
+  US-VIRTUAL-005 (#52), Slice 3. The course-progress aggregate requires the
+  same current entitlement as the lesson stream — design.md decision 8 has
+  NO free/preview exception. plannedCourseId's single lesson was just
+  played (previous request) but not completed, so it is the resume point
+  with percentage still 0.
+}
+
+assert {
+  res.status: eq 200
+}

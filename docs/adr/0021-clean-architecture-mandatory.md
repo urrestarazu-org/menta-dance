@@ -95,7 +95,7 @@ realiza mediante puertos Java públicos.
 |------------|------------|
 | API (módulos) | domain / application / infrastructure |
 | BFF | domain / application / infrastructure |
-| Android | domain / data / presentation (MVVM) |
+| Android | presentation / domain / data / di |
 
 ## Referencias
 

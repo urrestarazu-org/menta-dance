@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Menta Dance</string>
+
+    <string name="login_title">Ingresá a tu cuenta</string>
+    <string name="login_email_label">Email</string>
+    <string name="login_password_label">Contraseña</string>
+    <string name="login_submit">Ingresar</string>
+    <string name="login_email_required">Ingresá tu email.</string>
+    <string name="login_password_required">Ingresá tu contraseña.</string>
+
+    <string name="login_error_invalid_credentials">Email o contraseña incorrectos.</string>
+    <string name="login_error_account_locked">Tu cuenta está bloqueada.</string>
+    <plurals name="login_error_rate_limited">
+        <item quantity="one">Demasiados intentos. Volvé a intentarlo en %d segundo.</item>
+        <item quantity="other">Demasiados intentos. Volvé a intentarlo en %d segundos.</item>
+    </plurals>
+    <string name="login_error_rate_limited_unknown">Demasiados intentos. Volvé a intentarlo más tarde.</string>
+    <string name="login_error_unavailable">El servicio no está disponible. Intentalo más tarde.</string>
+    <string name="login_error_students_only">Esta app es para alumnos.</string>
+
+    <string name="notice_session_expired">Tu sesión expiró. Ingresá de nuevo.</string>
+    <string name="notice_resume_rejected">No pudimos restaurar tu sesión.</string>
+    <string name="notice_resume_unavailable">Sin conexión: ingresá cuando vuelvas a estar en línea.</string>
+
+    <string name="home_greeting">¡Hola!</string>
+    <string name="menu_open">Menú</string>
+    <string name="menu_section_home">Inicio</string>
+    <string name="menu_logout">Cerrar sesión</string>
+</resources>

@@ -1,0 +1,270 @@
+spring:
+  application:
+    name: menta-dance-api
+
+  config:
+    import: optional:file:.env[.properties]
+
+  datasource:
+    url: ${MYSQL_URL:jdbc:mysql://localhost:3306/menta}
+    username: ${MYSQL_APP_USER:menta_app}
+    password: ${MYSQL_APP_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQLDialect
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+    schemas: menta
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2000ms
+
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
+    properties:
+      mail.smtp.connectiontimeout: ${SMTP_CONNECTION_TIMEOUT_MS:5000}
+      mail.smtp.timeout: ${SMTP_TIMEOUT_MS:5000}
+      mail.smtp.writetimeout: ${SMTP_WRITE_TIMEOUT_MS:5000}
+
+  servlet:
+    multipart:
+      # #31, US-BILLING-003, design C11: a container-level backstop, deliberately above the 5MB
+      # business rule PaymentProofContentValidator enforces — so the domain rule (400,
+      # application/problem+json) fires first for the ordinary oversized case, and this cap only
+      # catches a genuinely abusive upload before it reaches application code.
+      max-file-size: 6MB
+      max-request-size: 6MB
+
+# Auth module configuration (ADR-0025, ADR-0026)
+auth:
+  # Base64-encoded HMAC-SHA256 secret. MUST be at least 32 bytes raw (256-bit).
+  # Override via .env in production. The default is a dev-only placeholder so
+  # tests can construct JwtService without external config.
+  jwt:
+    base64-secret: ${AUTH_JWT_BASE64_SECRET:ZGV2LW9ubHktc2VjcmV0LXdpdGgtMzItYnl0ZXMtbWluaW11bS0zMmJ5dGVzLW1pbmltdW0tMzJieXRlcw==}
+  access-token-ttl-seconds: ${AUTH_ACCESS_TOKEN_TTL_SECONDS:900}
+  # Peers allowed to declare the originating client (ADR-0035). Only NGINX and
+  # the BFF forward on a client's behalf; a request from anywhere else has its
+  # forwarded headers ignored in favour of the observed peer address.
+  #
+  # The Docker-wide default below is a development convenience, NOT a safe
+  # production value: it trusts every container on the bridge network. Narrow
+  # it per environment to the actual proxy addresses.
+  trusted-proxy-cidrs: ${AUTH_TRUSTED_PROXY_CIDRS:172.16.0.0/12}
+  activation:
+    # Deprecated in favour of auth.trusted-proxy-cidrs (ADR-0035); still read as
+    # a fallback so existing deployments keep working.
+    trusted-proxy-cidrs: ${AUTH_ACTIVATION_TRUSTED_PROXY_CIDRS:172.16.0.0/12}
+    # ISO-8601 duration for a freshly-issued activation token TTL
+    # (design.md decision #3: 24h default, configurable).
+    token-ttl: ${AUTH_ACTIVATION_TOKEN_TTL:PT24H}
+    public-base-url: ${AUTH_ACTIVATION_PUBLIC_BASE_URL:http://localhost:8080}
+    # Path of the BFF page the activation email links to (#359); the token is appended.
+    link-path: ${AUTH_ACTIVATION_LINK_PATH:/activar/}
+    from-address: ${AUTH_ACTIVATION_FROM_ADDRESS:no-reply@menta.local}
+    # Dedicated AES-256-GCM key for the short-lived activation delivery envelope.
+    # The fallback is development-only; production profiles reject it at startup.
+    delivery-key: ${AUTH_ACTIVATION_DELIVERY_KEY:YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=}
+    delivery-key-version: ${AUTH_ACTIVATION_DELIVERY_KEY_VERSION:1}
+    rate-limit:
+      email-max-attempts: ${AUTH_ACTIVATION_RATE_LIMIT_EMAIL_MAX_ATTEMPTS:3}
+      client-max-attempts: ${AUTH_ACTIVATION_RATE_LIMIT_CLIENT_MAX_ATTEMPTS:10}
+      window-seconds: ${AUTH_ACTIVATION_RATE_LIMIT_WINDOW_SECONDS:900}
+  password-reset:
+    # ISO-8601: el enlace vence a la hora (US-AUTH-005/006).
+    token-ttl: ${AUTH_PASSWORD_RESET_TOKEN_TTL:PT1H}
+    public-base-url: ${AUTH_PASSWORD_RESET_PUBLIC_BASE_URL:http://localhost:8080}
+    # Path of the BFF page the reset email links to (#360); the token is appended.
+    link-path: ${AUTH_PASSWORD_RESET_LINK_PATH:/restablecer-contrasena/}
+    from-address: ${AUTH_PASSWORD_RESET_FROM_ADDRESS:no-reply@menta.local}
+    # Clave AES-256-GCM DEDICADA, distinta de la de activación: rotar o
+    # comprometer una no debe afectar al otro flujo. El fallback es sólo para
+    # desarrollo; los perfiles de producción lo rechazan al arrancar.
+    delivery-key: ${AUTH_PASSWORD_RESET_DELIVERY_KEY:YmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmI=}
+    delivery-key-version: ${AUTH_PASSWORD_RESET_DELIVERY_KEY_VERSION:1}
+    request-rate-limit:
+      # US-AUTH-005: 3 solicitudes/hora por email, 10/hora por IP.
+      email-max-attempts: ${AUTH_PASSWORD_RESET_REQUEST_EMAIL_MAX:3}
+      client-max-attempts: ${AUTH_PASSWORD_RESET_REQUEST_CLIENT_MAX:10}
+      window-seconds: ${AUTH_PASSWORD_RESET_REQUEST_WINDOW_SECONDS:3600}
+    attempt-rate-limit:
+      # US-AUTH-006: 10 intentos/hora por IP. Sin dimensión por email: el
+      # endpoint recibe un token, no un email.
+      client-max-attempts: ${AUTH_PASSWORD_RESET_ATTEMPT_CLIENT_MAX:10}
+      window-seconds: ${AUTH_PASSWORD_RESET_ATTEMPT_WINDOW_SECONDS:3600}
+  login:
+    rate-limit:
+      # Presupuestos SEMÁNTICOS: cuentan fallos de autenticación, no requests.
+      # El techo volumétrico vive en NGINX (ADR-0035, PR3); acá sólo llega lo
+      # que esta capa puede juzgar — si las credenciales realmente fallaron.
+      #
+      # Un login exitoso no consume nada y limpia el contador del email, así
+      # que estos números sólo los alcanza quien está fallando de verdad.
+      email-max-failures: ${AUTH_LOGIN_RATE_LIMIT_EMAIL_MAX_FAILURES:10}
+      # Más alto que el de email: detecta password spraying sin castigar a una
+      # NAT compartida (oficina, escuela, carrier) donde varias personas
+      # legítimas se equivocan dentro de la misma ventana.
+      client-max-failures: ${AUTH_LOGIN_RATE_LIMIT_CLIENT_MAX_FAILURES:50}
+      window-seconds: ${AUTH_LOGIN_RATE_LIMIT_WINDOW_SECONDS:900}
+  outbox:
+    reconcile-batch-size: ${AUTH_OUTBOX_RECONCILE_BATCH_SIZE:100}
+    reconcile-rate-ms: ${AUTH_OUTBOX_RECONCILE_RATE_MS:5000}
+    reconcile-backoff-seconds: ${AUTH_OUTBOX_RECONCILE_BACKOFF_SECONDS:30}
+    degraded-window-seconds: ${AUTH_OUTBOX_DEGRADED_WINDOW_SECONDS:30}
+
+# Billing module configuration (US-BILLING-012)
+billing:
+  subscription:
+    expiry:
+      # Real off switch (design A16) — rate-ms alone cannot disable a @Scheduled job.
+      enabled: ${BILLING_SUBSCRIPTION_EXPIRY_ENABLED:true}
+      rate-ms: ${BILLING_SUBSCRIPTION_EXPIRY_RATE_MS:60000}
+      batch-size: ${BILLING_SUBSCRIPTION_EXPIRY_BATCH_SIZE:100}
+  # Purchase-exception notification (#209 Phase C) — two recipients per
+  # EXCEPTION: the buyer (best-effort) and a configured ops distribution list.
+  purchase-exception:
+    ops-address: ${BILLING_PURCHASE_EXCEPTION_OPS_ADDRESS:ops@menta.local}
+    from-address: ${BILLING_PURCHASE_EXCEPTION_FROM_ADDRESS:no-reply@menta.local}
+  # Bank-transfer subscriptions (#31, US-BILLING-003, design C2/C7). The account fields default to
+  # empty — same convention as billing.mercadopago.merchant-account-id — so the context can start
+  # without real values configured (dev/test); production sets them via environment variables.
+  bank-transfer:
+    # Rollout switch (design "Migration / Rollout"). Declared here for P2; not yet consulted by
+    # any bean — wiring a conditional route is deferred to the phase that needs it.
+    enabled: ${BILLING_BANK_TRANSFER_ENABLED:true}
+    account:
+      cbu: ${BILLING_BANK_TRANSFER_CBU:}
+      alias: ${BILLING_BANK_TRANSFER_ALIAS:}
+      holder: ${BILLING_BANK_TRANSFER_HOLDER:}
+      cuit: ${BILLING_BANK_TRANSFER_CUIT:}
+    rate-limit:
+      # 10 bank-transfer subscription creations/user/day (design C7).
+      subscription-creation:
+        max-requests: ${BILLING_BANK_TRANSFER_SUBSCRIPTION_RATE_LIMIT_MAX_REQUESTS:10}
+        window-hours: ${BILLING_BANK_TRANSFER_SUBSCRIPTION_RATE_LIMIT_WINDOW_HOURS:26}
+      # 3 proof uploads/payment/72h (design C7) — consumed starting in a later phase (P3c).
+      proof-upload:
+        max-requests: ${BILLING_BANK_TRANSFER_PROOF_UPLOAD_RATE_LIMIT_MAX_REQUESTS:3}
+        window-hours: ${BILLING_BANK_TRANSFER_PROOF_UPLOAD_RATE_LIMIT_WINDOW_HOURS:72}
+    # Proof-submitted notification (design D2) — one fixed operations mailbox, no buyer message.
+    # Deliberately its own key, not a reuse of billing.purchase-exception.*: this is not an
+    # exception path, and the two notification reasons must be able to route to different
+    # mailboxes/senders later without one config change accidentally affecting the other.
+    proof:
+      ops-address: ${BILLING_BANK_TRANSFER_PROOF_OPS_ADDRESS:ops@menta.local}
+      from-address: ${BILLING_BANK_TRANSFER_PROOF_FROM_ADDRESS:no-reply@menta.local}
+      # #31, P3c, design C5/C11: the Docker volume backing LocalFilesystemPaymentProofStorageAdapter,
+      # mounted outside any static-resource root (see docker-compose) so no ResourceHttpRequestHandler
+      # can ever serve it — SecurityConfig's matcher is the actual gate, this is defense in depth.
+      storage-root: ${BILLING_BANK_TRANSFER_PROOF_STORAGE_ROOT:/var/menta-dance/payment-proofs}
+      # #33, US-BILLING-005, design D1/D6/C3: signs/verifies the token-authenticated proof-viewer
+      # URL. Deliberately NO fallback value — same convention as spring.datasource.password above —
+      # so an absent env var is an unresolvable Spring placeholder that fails startup before
+      # ProofAccessTokenSigner's own blank guard ever runs. Never reuse billing.webhook.mercadopago.hmac-secret
+      # or any other secret: a leaked proof-token secret must not also forge webhook signatures.
+      token-secret: ${BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET}
+      # 15 minutes (D1's own fixed window).
+      token-ttl-seconds: ${BILLING_BANK_TRANSFER_PROOF_TOKEN_TTL_SECONDS:900}
+    expiry:
+      # Real off switch (design A16, mirrors billing.subscription.expiry) — rate-ms alone cannot
+      # disable a @Scheduled job.
+      enabled: ${BILLING_BANK_TRANSFER_EXPIRY_ENABLED:true}
+      rate-ms: ${BILLING_BANK_TRANSFER_EXPIRY_RATE_MS:60000}
+      batch-size: ${BILLING_BANK_TRANSFER_EXPIRY_BATCH_SIZE:100}
+      # A submitted proof withholds automatic expiry (design C6) — this is the age cutoff, not a
+      # rate-limit window, though it defaults to the same 72h as proof-upload.window-hours above.
+      window-hours: ${BILLING_BANK_TRANSFER_EXPIRY_WINDOW_HOURS:72}
+
+# Physical module configuration (#208, US-PHYSICAL-004b, design B5)
+physical:
+  # #39, US-PHYSICAL-002, design C3: the academy's configured local zone, used to resolve
+  # calendar-month boundaries for the attendance history endpoints. Working default, so no
+  # deployment-time configuration is required.
+  attendance:
+    zone-id: ${PHYSICAL_ATTENDANCE_ZONE_ID:America/Argentina/Buenos_Aires}
+  # #356: how many days ahead GET /api/v1/physical/sessions/me looks, counted from the start of
+  # today in the zone above. Working default, so no deployment-time configuration is required.
+  sessions:
+    window-days: ${PHYSICAL_SESSIONS_WINDOW_DAYS:60}
+  capacity:
+    hold:
+      # The hold's own lifetime — see PhysicalConfiguration.physicalCapacityHoldTtl. Consumed only
+      # by the expiry sweep below, to decide when a converted row is old enough to prune; the hold
+      # creation path never reads it, since billing computes and passes expiresAt explicitly.
+      ttl-ms: ${PHYSICAL_CAPACITY_HOLD_TTL_MS:1800000}
+      expiry:
+        # Real off switch (#172's lesson) — rate-ms alone cannot disable a @Scheduled job.
+        enabled: ${PHYSICAL_CAPACITY_HOLD_EXPIRY_ENABLED:true}
+        rate-ms: ${PHYSICAL_CAPACITY_HOLD_EXPIRY_RATE_MS:60000}
+        batch-size: ${PHYSICAL_CAPACITY_HOLD_EXPIRY_BATCH_SIZE:100}
+  checkin:
+    # ADR-0044: peers allowed to vouch for X-Forwarded-For on the QR check-in. Falls back to the
+    # auth module's list so one value serves both; narrow it per environment, since a range wider
+    # than the real proxies lets a client spoof its address.
+    trusted-proxy-cidrs: ${PHYSICAL_CHECKIN_TRUSTED_PROXY_CIDRS:${auth.trusted-proxy-cidrs}}
+    # ADR-0044: fixed-window budgets for the unauthenticated QR check-in, consumed independently.
+    # PROVISIONAL defaults: there is no real traffic to calibrate against yet. Review them with
+    # the physical.checkin.rate.limited counter (tag dimension=ip|device) once there is.
+    rate-limit:
+      ip-max-requests: ${PHYSICAL_CHECKIN_RATE_LIMIT_IP_MAX_REQUESTS:120}
+      device-max-requests: ${PHYSICAL_CHECKIN_RATE_LIMIT_DEVICE_MAX_REQUESTS:60}
+      window-seconds: ${PHYSICAL_CHECKIN_RATE_LIMIT_WINDOW_SECONDS:60}
+
+# Public catalog composition (#107)
+catalog:
+  physical:
+    sessions:
+      # Forward window, in days, of the upcoming sessions listed on a physical course detail:
+      # [now, now + window-days). Valid range 1..90 (enforced by CatalogCompositionService, so an
+      # invalid value stops startup); there is no per-request override.
+      window-days: ${CATALOG_PHYSICAL_SESSIONS_WINDOW_DAYS:30}
+
+server:
+  port: 8081
+  servlet:
+    context-path: /
+  error:
+    include-message: always
+    include-binding-errors: always
+    include-stacktrace: on_param
+    include-exception: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+logging:
+  level:
+    root: INFO
+    com.menta: DEBUG
+    org.springframework.web: INFO
+    org.springframework.security: INFO
+    org.hibernate.SQL: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"

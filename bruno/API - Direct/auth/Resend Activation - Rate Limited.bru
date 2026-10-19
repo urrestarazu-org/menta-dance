@@ -1,0 +1,34 @@
+meta {
+  name: Resend Activation - Rate Limited
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/{{apiVersion}}/auth/resend-activation
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "{{email}}"
+  }
+}
+
+docs {
+  Run after exceeding the local configured limit. The response must not reveal
+  account state: 429, Retry-After, and an RFC 9457 ACTIVATION_RATE_LIMITED code.
+}
+
+tests {
+  test("Rate limit exposes Retry-After only", function() {
+    expect(res.getStatus()).to.equal(429);
+    expect(res.getHeader('retry-after')).to.be.a('string').and.not.empty;
+    expect(res.getBody().code).to.equal('ACTIVATION_RATE_LIMITED');
+  });
+}
+
+assert {
+  res.status: eq 429
+}

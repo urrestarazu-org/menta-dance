@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security"
+      th:replace="~{fragments/layout :: page(${course.unavailable()} ? 'Clase' : ${course.title()}, ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<nav aria-label="Ruta de navegación" class="mb-6"><a th:href="@{/classes}">Clases presenciales</a></nav>
+
+<div th:if="${course.unavailable()}">
+    <div th:replace="~{fragments/components :: alert('error', 'No pudimos cargar esta clase en este momento. Intentá nuevamente en unos minutos.')}"></div>
+</div>
+
+<div th:unless="${course.unavailable()}">
+    <h1 class="mb-2" th:text="${course.title()}">Clase</h1>
+    <p class="mb-4">
+        <span th:if="${course.levelLabel() != null}" class="badge badge-neutral" th:text="${course.levelLabel()}">Principiante</span>
+        <span th:if="${course.professorName() != null}">· Profesor/a: <span th:text="${course.professorName()}">Nombre</span></span>
+        <span th:if="${course.scheduleLabel() != null}">· <span th:text="${course.scheduleLabel()}">Lunes 18:00</span></span>
+    </p>
+
+    <p th:if="${course.priceState().name() == 'PUBLISHED'}">Precio: <strong th:text="${course.priceLabel()}">$ 25.000,00 por mes</strong></p>
+    <p th:if="${course.priceState().name() == 'NOT_PUBLISHED'}">Todavía no hay un precio publicado para esta clase.</p>
+    <p th:if="${course.priceState().name() == 'UNAVAILABLE'}">No pudimos consultar el precio en este momento. Intentá nuevamente en unos minutos.</p>
+
+    <h2 class="mb-4 mt-8">Próximas sesiones</h2>
+    <p th:unless="${course.hasSessions()}">Por ahora no hay próximas sesiones programadas.</p>
+    <ul th:if="${course.hasSessions()}" class="space-y-3">
+        <li th:each="slot : ${course.sessions()}" class="card flex flex-wrap items-center justify-between gap-3">
+            <div>
+                <p class="font-semibold" th:id="'session-' + ${slot.sessionId()}" th:text="${slot.whenLabel()}">lunes 12 de octubre a las 18:00</p>
+                <p class="mt-1">
+                    <span th:class="${slot.full()} ? 'badge badge-warning' : 'badge badge-neutral'" th:text="${slot.spotsLabel()}">5 lugares libres</span>
+                    <span th:if="${slot.owned()}" class="badge badge-success">Ya tenés lugar</span>
+                </p>
+            </div>
+            <form sec:authorize="isAuthenticated()" th:if="${course.canQuote() and !slot.full() and !slot.owned()}"
+                  th:action="@{/classes/{id}/cotizar(id=${course.courseId()})}" method="post">
+                <input type="hidden" name="purchaseType" value="INDIVIDUAL">
+                <input type="hidden" name="selectedSessionId" th:value="${slot.sessionId()}">
+                <button type="submit" class="btn btn-secondary" th:attr="aria-describedby='session-' + ${slot.sessionId()}">Cotizar solo esta clase</button>
+            </form>
+        </li>
+    </ul>
+
+    <form sec:authorize="isAuthenticated()" th:if="${course.canQuote()}" class="mt-6"
+          th:action="@{/classes/{id}/cotizar(id=${course.courseId()})}" method="post">
+        <input type="hidden" name="purchaseType" value="MONTHLY">
+        <button type="submit" class="btn btn-primary">Cotizar clases del mes</button>
+    </form>
+    <p sec:authorize="!isAuthenticated()" th:if="${course.canQuote()}" class="mt-6"><a th:href="@{/login}">Ingresá para comprar</a></p>
+</div>
+</th:block>
+</body>
+</html>

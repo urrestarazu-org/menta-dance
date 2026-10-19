@@ -1,0 +1,96 @@
+package com.menta.bff.infrastructure.security;
+
+import com.menta.bff.application.dto.LoginCommand;
+import com.menta.bff.application.dto.LoginResult;
+import com.menta.bff.application.port.out.AccessTokenClaimsReader;
+import com.menta.bff.application.port.out.AuthApiClient;
+import com.menta.bff.application.usecase.LoginUseCase;
+import java.util.List;
+import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.InternalAuthenticationServiceException;
+import org.springframework.security.authentication.LockedException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.stereotype.Component;
+
+/**
+ * Bridges Spring Security's {@code formLogin()} to the application layer.
+ *
+ * <p>This class owns exactly one concern: translating between Spring
+ * Security's {@link Authentication} contract and the login use case. The flow
+ * itself — exchange credentials at the Auth API, then store the token pair in
+ * the server-side session so the browser only ever holds an opaque cookie —
+ * belongs to {@link LoginUseCase} and is not restated here. Two copies of
+ * token custody are two places to forget a change.</p>
+ *
+ * <p>Failure mapping is deliberate: invalid credentials and an unreachable
+ * Auth API are different events. Reporting the latter as a bad password sends
+ * users to reset a credential that was never wrong. A locked account, a throttled login and
+ * an account awaiting activation each get their own exception so the login page can say what
+ * happened; the Auth API only reports the locked and not-activated ones once the password was
+ * verified.</p>
+ */
+@Component
+public class BffAuthenticationProvider implements AuthenticationProvider {
+
+    private final LoginUseCase loginUseCase;
+
+    public BffAuthenticationProvider(LoginUseCase loginUseCase) {
+        this.loginUseCase = loginUseCase;
+    }
+
+    @Override
+    public Authentication authenticate(Authentication authentication) throws AuthenticationException {
+        String email = authentication.getName();
+        String password = authentication.getCredentials().toString();
+
+        LoginResult result;
+        try {
+            result = loginUseCase.execute(new LoginCommand(email, password, clientAddressOf(authentication)));
+        } catch (AuthApiClient.AuthenticationException e) {
+            throw new BadCredentialsException("Invalid email or password");
+        } catch (AuthApiClient.AccountLockedException e) {
+            // Only answered after the password was verified, so naming the state leaks nothing new.
+            throw new LockedException("Account is locked");
+        } catch (AuthApiClient.RateLimitedException e) {
+            throw new TooManyLoginAttemptsException("Too many login attempts", e.retryAfter());
+        } catch (AuthApiClient.AccountNotActivatedException e) {
+            throw new PendingActivationException("Account is not activated");
+        } catch (AuthApiClient.ServiceUnavailableException e) {
+            throw new InternalAuthenticationServiceException("Auth service temporarily unavailable");
+        } catch (AccessTokenClaimsReader.UnreadableTokenException e) {
+            // The credentials were right; the Auth API answered with a token we
+            // cannot derive a role from. Not the user's fault, so not a bad password.
+            throw new InternalAuthenticationServiceException("Auth service returned an unusable token", e);
+        }
+
+        // Credentials are dropped: this token is stored in the session-backed
+        // security context and would otherwise outlive the request that
+        // carried the password.
+        return new UsernamePasswordAuthenticationToken(
+            email, null, List.of(new SimpleGrantedAuthority("ROLE_" + result.role())));
+    }
+
+    /**
+     * Reads the origin captured by {@link ClientAuthenticationDetailsSource}.
+     *
+     * <p>Returns {@code null} when no details were attached — for instance on
+     * a programmatic authentication that never passed through the filter. That
+     * degrades to the Auth API observing the BFF as the peer, which is the
+     * behaviour that existed before ADR-0035 and is strictly safer than
+     * forwarding an origin we cannot vouch for.</p>
+     */
+    private static String clientAddressOf(Authentication authentication) {
+        return authentication.getDetails() instanceof ClientAuthenticationDetails details
+            ? details.clientAddress()
+            : null;
+    }
+
+    @Override
+    public boolean supports(Class<?> authentication) {
+        return UsernamePasswordAuthenticationToken.class.isAssignableFrom(authentication);
+    }
+}

@@ -1,0 +1,958 @@
+openapi: 3.1.0
+
+# Contrato HTTP de la superficie Virtual v1.
+#
+# Escrito y versionado a mano, mismo criterio que auth-v1.yaml/billing-v1.yaml/
+# physical-v1.yaml: el diff se revisa en el PR igual que la colección Bruno.
+#
+# Describe exclusivamente endpoints IMPLEMENTADOS. Además de la gestión,
+# Virtual publica detalle y streaming de lecciones con autorización resuelta
+# del lado del servidor (US-VIRTUAL-003/004/007).
+
+info:
+  title: Menta Dance — Virtual API
+  version: "1.0.0"
+  description: |
+    Gestión de cursos, módulos y lecciones virtuales (US-VIRTUAL-006) para
+    ADMIN/PROFESOR.
+
+    ## Errores
+
+    Todos los errores usan `application/problem+json` (RFC 9457) con un
+    miembro adicional `code` estable. Los clientes deben discriminar por
+    `code`, no por `detail`.
+
+    ## Autorización
+
+    `/api/v1/admin/virtual/courses/**`, `/api/v1/admin/virtual/modules/**` y
+    `/api/v1/admin/virtual/lessons/**` aceptan tanto `ADMIN` como
+    `INSTRUCTOR` (rol interno de `PROFESOR`) — la coincidencia de rol se
+    verifica en el filtro de seguridad; la propiedad del curso dueño de un
+    módulo o lección se verifica en el caso de uso (`403 COURSE_NOT_OWNED`).
+    Ni un módulo ni una lección tienen `professorId` propio: la autorización
+    siempre se resuelve a través del curso padre.
+
+servers:
+  - url: http://localhost:8081
+    description: Desarrollo local
+  - url: https://api.mentadance.com
+    description: Producción
+
+tags:
+  - name: Gestión de cursos
+    description: Administración de cursos virtuales (ADMIN/PROFESOR).
+  - name: Gestión de módulos
+    description: Administración de módulos de un curso virtual (ADMIN/PROFESOR).
+  - name: Gestión de lecciones
+    description: Administración de lecciones de un módulo (ADMIN/PROFESOR).
+  - name: Lecciones públicas
+    description: Detalle y streaming de lecciones con autorización de suscripción.
+
+paths:
+  /api/v1/virtual/lessons/{lessonId}:
+    get:
+      tags: [Lecciones públicas]
+      summary: Obtener detalle de una lección publicada
+      description: |
+        No requiere autenticación para las rutas públicas: lección gratuita o
+        módulo preview. El resultado 200 incluye `access.preview` y
+        `access.requiresSubscription` para que
+        el cliente pueda distinguir contenido público de acceso pago vigente.
+        El detalle nunca contiene una URL de streaming. Una lección protegida
+        sin entitlement actual responde 403 RFC 9457 y no expone `videoId`.
+      operationId: getPublicVirtualLesson
+      security:
+        - {}
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LessonId'
+      responses:
+        '200':
+          description: Lección pública o protegida autorizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicLessonDetailResponse'
+        '403':
+          description: >-
+            La lección protegida no tiene un entitlement actual para el
+            caller — incluye cursos sin plan asociado.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                subscription_required:
+                  value:
+                    type: about:blank
+                    title: Forbidden
+                    status: 403
+                    detail: Esta lección requiere una suscripción activa
+                    code: LESSON_FORBIDDEN_SUBSCRIPTION_REQUIRED
+        '404':
+          description: Lección inexistente, inválida o cuyo curso no está publicado.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /api/v1/virtual/lessons/{lessonId}/stream:
+    get:
+      tags: [Lecciones públicas]
+      summary: Emitir una URL temporal de streaming para una lección autorizada
+      description: |
+        Evalúa la misma política de acceso que el detalle. Sólo una respuesta
+        200 contiene `stream.url`; los 403 son `application/problem+json` y
+        nunca contienen URL, `videoId` ni otra capacidad de media.
+      operationId: getPublicVirtualLessonStream
+      security:
+        - {}
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LessonId'
+      responses:
+        '200':
+          description: URL HLS firmada temporalmente para una lección autorizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicLessonStreamResponse'
+        '403':
+          description: >-
+            La lección protegida no tiene un entitlement actual para el
+            caller — incluye cursos sin plan asociado.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                subscription_required:
+                  value:
+                    type: about:blank
+                    title: Forbidden
+                    status: 403
+                    detail: Esta lección requiere una suscripción activa
+                    code: LESSON_FORBIDDEN_SUBSCRIPTION_REQUIRED
+        '404':
+          description: Lección inexistente, inválida o no publicada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /api/v1/admin/virtual/courses:
+    post:
+      tags: [Gestión de cursos]
+      summary: Crear un curso virtual (en borrador)
+      description: |
+        El curso se crea siempre en `DRAFT`. `professorId` es opcional: un
+        PROFESOR que lo omite queda asignado a sí mismo; si lo envía debe
+        coincidir con su propio id, o responde `400 PROFESSOR_MISMATCH`.
+        Sólo un ADMIN puede asignar el curso a un `professorId` arbitrario.
+      operationId: createVirtualCourse
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVirtualCourseRequest'
+      responses:
+        '201':
+          description: Curso creado en DRAFT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VirtualCourseManagementResponse'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '403':
+          description: Rol sin acceso a este prefijo (ni ADMIN ni INSTRUCTOR).
+
+    get:
+      tags: [Gestión de cursos]
+      summary: Listar cursos de gestión
+      description: |
+        A diferencia del catálogo público (`GET /api/v1/catalog/courses`),
+        devuelve cursos de cualquier estado. ADMIN ve todos los cursos;
+        PROFESOR ve únicamente los propios.
+      operationId: listManagedVirtualCourses
+      responses:
+        '200':
+          description: Cursos visibles para el actor autenticado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VirtualCourseManagementListResponse'
+        '403':
+          description: Rol sin acceso a este prefijo (ni ADMIN ni INSTRUCTOR).
+
+  /api/v1/admin/virtual/courses/{courseId}:
+    put:
+      tags: [Gestión de cursos]
+      summary: Actualizar un curso virtual (parcial)
+      description: Sólo los campos presentes en el body cambian.
+      operationId: updateVirtualCourse
+      parameters:
+        - $ref: '#/components/parameters/CourseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateVirtualCourseRequest'
+      responses:
+        '200':
+          description: Curso actualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VirtualCourseManagementResponse'
+        '403':
+          $ref: '#/components/responses/NotOwned'
+        '404':
+          $ref: '#/components/responses/CourseNotFound'
+
+    delete:
+      tags: [Gestión de cursos]
+      summary: Eliminar un curso (sólo DRAFT)
+      description: |
+        Un curso que nunca fue publicado no puede tener suscriptores por
+        construcción — esta restricción es suficiente sin consultar a
+        Billing.
+      operationId: deleteVirtualCourse
+      parameters:
+        - $ref: '#/components/parameters/CourseId'
+      responses:
+        '204':
+          description: Curso eliminado.
+        '403':
+          $ref: '#/components/responses/NotOwned'
+        '404':
+          $ref: '#/components/responses/CourseNotFound'
+        '409':
+          description: El curso no está en DRAFT.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                no_draft:
+                  value:
+                    type: https://menta.dance/problems/course_not_draft
+                    title: Conflict
+                    status: 409
+                    detail: Only a DRAFT course can be deleted.
+                    code: COURSE_NOT_DRAFT
+
+  /api/v1/admin/virtual/courses/{courseId}/publish:
+    put:
+      tags: [Gestión de cursos]
+      summary: Publicar un curso
+      description: |
+        Exige al menos un módulo con al menos una lección completa (título
+        no vacío y `videoId` asignado) — si no, `400 COURSE_NOT_PUBLISHABLE`
+        con el detalle de qué falta.
+      operationId: publishVirtualCourse
+      parameters:
+        - $ref: '#/components/parameters/CourseId'
+      responses:
+        '200':
+          description: Curso publicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VirtualCourseManagementResponse'
+        '400':
+          description: El curso no cumple los requisitos mínimos para publicarse.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                sin_modulos:
+                  value:
+                    type: https://menta.dance/problems/course_not_publishable
+                    title: Bad Request
+                    status: 400
+                    detail: El curso no tiene ningún módulo.
+                    code: COURSE_NOT_PUBLISHABLE
+        '403':
+          $ref: '#/components/responses/NotOwned'
+        '404':
+          $ref: '#/components/responses/CourseNotFound'
+
+  /api/v1/admin/virtual/courses/{courseId}/unpublish:
+    put:
+      tags: [Gestión de cursos]
+      summary: Despublicar un curso
+      description: |
+        Vuelve el curso a DRAFT. El acceso temporal de suscriptores
+        activos es responsabilidad de la autorización de contenido
+        (US-VIRTUAL-007, #56), no de este endpoint.
+      operationId: unpublishVirtualCourse
+      parameters:
+        - $ref: '#/components/parameters/CourseId'
+      responses:
+        '200':
+          description: Curso despublicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VirtualCourseManagementResponse'
+        '403':
+          $ref: '#/components/responses/NotOwned'
+        '404':
+          $ref: '#/components/responses/CourseNotFound'
+
+  /api/v1/admin/virtual/courses/{courseId}/modules:
+    post:
+      tags: [Gestión de módulos]
+      summary: Agregar un módulo a un curso
+      description: '`order` es opcional — si se omite, se agrega al final.'
+      operationId: createVirtualModule
+      parameters:
+        - $ref: '#/components/parameters/CourseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVirtualModuleRequest'
+      responses:
+        '201':
+          description: Módulo creado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VirtualModuleManagementResponse'
+        '403':
+          $ref: '#/components/responses/NotOwned'
+        '404':
+          $ref: '#/components/responses/CourseNotFound'
+
+  /api/v1/admin/virtual/courses/{courseId}/modules/reorder:
+    put:
+      tags: [Gestión de módulos]
+      summary: Reordenar los módulos de un curso
+      description: |
+        `moduleIds` debe contener exactamente el conjunto actual de módulos
+        del curso, en el nuevo orden deseado — ni de más ni de menos, o
+        `400 MODULE_REORDER_MISMATCH`.
+      operationId: reorderVirtualModules
+      parameters:
+        - $ref: '#/components/parameters/CourseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReorderVirtualModulesRequest'
+      responses:
+        '200':
+          description: Módulos reordenados.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VirtualModuleManagementListResponse'
+        '400':
+          description: La lista no coincide con el conjunto actual de módulos.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                mismatch:
+                  value:
+                    type: https://menta.dance/problems/module_reorder_mismatch
+                    title: Bad Request
+                    status: 400
+                    detail: The reorder list must contain exactly the course's current modules, no more, no less.
+                    code: MODULE_REORDER_MISMATCH
+        '403':
+          $ref: '#/components/responses/NotOwned'
+        '404':
+          $ref: '#/components/responses/CourseNotFound'
+
+  /api/v1/admin/virtual/modules/{moduleId}:
+    put:
+      tags: [Gestión de módulos]
+      summary: Actualizar un módulo (parcial)
+      operationId: updateVirtualModule
+      parameters:
+        - $ref: '#/components/parameters/ModuleId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateVirtualModuleRequest'
+      responses:
+        '200':
+          description: Módulo actualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VirtualModuleManagementResponse'
+        '403':
+          $ref: '#/components/responses/NotOwned'
+        '404':
+          description: Módulo inexistente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                no_encontrado:
+                  value:
+                    type: https://menta.dance/problems/module_not_found
+                    title: Not Found
+                    status: 404
+                    detail: Module not found.
+                    code: MODULE_NOT_FOUND
+
+  /api/v1/admin/virtual/modules/{moduleId}/lessons:
+    post:
+      tags: [Gestión de lecciones]
+      summary: Agregar una lección a un módulo
+      description: |
+        `durationMinutes` es un entero — no el string `"mm:ss"` que
+        mostraba el borrador original de la historia, ya que la columna es
+        `INT` desde #46. `videoId` es una referencia opaca a Bunny.net que
+        el cliente ya conoce; Virtual sólo la guarda por valor.
+      operationId: createVirtualLesson
+      parameters:
+        - $ref: '#/components/parameters/ModuleId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVirtualLessonRequest'
+      responses:
+        '201':
+          description: Lección creada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VirtualLessonManagementResponse'
+        '403':
+          $ref: '#/components/responses/NotOwned'
+        '404':
+          description: Módulo inexistente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /api/v1/admin/virtual/lessons/{lessonId}:
+    put:
+      tags: [Gestión de lecciones]
+      summary: Actualizar una lección (parcial)
+      operationId: updateVirtualLesson
+      parameters:
+        - $ref: '#/components/parameters/LessonId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateVirtualLessonRequest'
+      responses:
+        '200':
+          description: Lección actualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VirtualLessonManagementResponse'
+        '403':
+          $ref: '#/components/responses/NotOwned'
+        '404':
+          description: Lección inexistente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                no_encontrada:
+                  value:
+                    type: https://menta.dance/problems/lesson_not_found
+                    title: Not Found
+                    status: 404
+                    detail: Lesson not found.
+                    code: LESSON_NOT_FOUND
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Access token JWT de 15 minutos, emitido por `POST /api/v1/auth/login`
+        (ver auth-v1.yaml). Claims: `sub`, `roles`, `jti`, `tokenVersion`,
+        `iat`, `exp`, `iss`, `aud`.
+
+        El rol (`ADMIN`/`INSTRUCTOR`) se verifica en el filtro de seguridad y no
+        es expresable en este esquema. Las rutas públicas de lecciones aceptan
+        el token de forma opcional (`security: [{}, {bearerAuth: []}]`): sin
+        token se resuelven como visitante anónimo.
+
+  parameters:
+    CourseId:
+      name: courseId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ModuleId:
+      name: moduleId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    LessonId:
+      name: lessonId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    InvalidRequest:
+      description: Body inválido (bean validation) o `professorId` no coincide con el actor.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            professor_mismatch:
+              value:
+                type: https://menta.dance/problems/professor_mismatch
+                title: Bad Request
+                status: 400
+                detail: professorId must match the authenticated instructor.
+                code: PROFESSOR_MISMATCH
+
+    NotOwned:
+      description: Rol sin acceso a este prefijo, o un PROFESOR autenticado que no es dueño del curso.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            no_es_dueno:
+              value:
+                type: https://menta.dance/problems/course_not_owned
+                title: Forbidden
+                status: 403
+                detail: You do not own this course.
+                code: COURSE_NOT_OWNED
+
+    CourseNotFound:
+      description: Curso inexistente.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            no_encontrado:
+              value:
+                type: https://menta.dance/problems/course_not_found
+                title: Not Found
+                status: 404
+                detail: Course not found.
+                code: COURSE_NOT_FOUND
+
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 Problem Details con el miembro adicional `code`.
+      required: [type, title, status, code]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        code:
+          type: string
+
+    PublicLessonDetailResponse:
+      oneOf:
+        - $ref: '#/components/schemas/PublicLessonPreviewResponse'
+        - $ref: '#/components/schemas/PublicLessonEntitledResponse'
+
+    PublicLessonPreviewResponse:
+      type: object
+      required: [lesson, navigation, subscription, access]
+      properties:
+        lesson:
+          $ref: '#/components/schemas/PublicLessonPreview'
+        navigation:
+          $ref: '#/components/schemas/PublicLessonNavigation'
+        subscription:
+          $ref: '#/components/schemas/PublicLessonSubscriptionPrompt'
+        access:
+          $ref: '#/components/schemas/PublicLessonAccessMetadata'
+
+    PublicLessonEntitledResponse:
+      type: object
+      required: [lesson, navigation, access]
+      properties:
+        lesson:
+          $ref: '#/components/schemas/PublicLessonEntitled'
+        navigation:
+          $ref: '#/components/schemas/PublicLessonNavigation'
+        access:
+          $ref: '#/components/schemas/PublicLessonAccessMetadata'
+
+    PublicLessonPreview:
+      type: object
+      required: [lessonId, title, description, duration, isFree, order, module, course, thumbnailUrl]
+      properties:
+        lessonId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        duration:
+          type: string
+          example: '15:00'
+        isFree:
+          type: boolean
+        order:
+          type: integer
+        module:
+          $ref: '#/components/schemas/PublicModuleRef'
+        course:
+          $ref: '#/components/schemas/PublicCourseRef'
+        thumbnailUrl:
+          type: string
+
+    PublicLessonEntitled:
+      allOf:
+        - $ref: '#/components/schemas/PublicLessonPreview'
+        - type: object
+          required: [videoId]
+          properties:
+            videoId:
+              type: string
+              description: Identificador opaco de Bunny.net, sólo para un caller autorizado.
+
+    PublicModuleRef:
+      type: object
+      required: [moduleId, title]
+      properties:
+        moduleId:
+          type: string
+          format: uuid
+        title:
+          type: string
+
+    PublicCourseRef:
+      type: object
+      required: [courseId, title]
+      properties:
+        courseId:
+          type: string
+          format: uuid
+        title:
+          type: string
+
+    PublicLessonNavigation:
+      type: object
+      required: [previousLesson, nextLesson]
+      properties:
+        previousLesson:
+          oneOf:
+            - $ref: '#/components/schemas/PublicLessonNavigationRef'
+            - type: 'null'
+        nextLesson:
+          oneOf:
+            - $ref: '#/components/schemas/PublicLessonNavigationRef'
+            - type: 'null'
+
+    PublicLessonNavigationRef:
+      type: object
+      required: [lessonId, title, isFree]
+      properties:
+        lessonId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        isFree:
+          type: boolean
+
+    PublicLessonSubscriptionPrompt:
+      type: object
+      required: [message, plansUrl]
+      properties:
+        message:
+          type: string
+        plansUrl:
+          type: string
+
+    PublicLessonAccessMetadata:
+      type: object
+      description: Metadatos seguros de autorización, sin capacidad de media.
+      required: [preview, requiresSubscription]
+      properties:
+        preview:
+          type: boolean
+          description: True para contenido público entregado como preview.
+        requiresSubscription:
+          type: boolean
+          description: Siempre false en una respuesta 200; los casos protegidos se expresan con 403 Problem Details.
+
+    PublicLessonStreamResponse:
+      type: object
+      required: [stream, lesson]
+      properties:
+        stream:
+          type: object
+          required: [url, type, qualities, expiresAt]
+          properties:
+            url:
+              type: string
+              format: uri
+            type:
+              type: string
+              enum: [HLS]
+            qualities:
+              type: array
+              items:
+                type: object
+                required: [label, bitrate]
+                properties:
+                  label:
+                    type: string
+                  bitrate:
+                    type: integer
+                    format: int64
+            expiresAt:
+              type: string
+              format: date-time
+        lesson:
+          type: object
+          required: [lessonId, title, duration]
+          properties:
+            lessonId:
+              type: string
+              format: uuid
+            title:
+              type: string
+            duration:
+              type: string
+
+    CreateVirtualCourseRequest:
+      type: object
+      required: [title, shortDescription, description, imageUrl, category, level]
+      properties:
+        title:
+          type: string
+        shortDescription:
+          type: string
+        description:
+          type: string
+        professorId:
+          type: [string, "null"]
+          format: uuid
+          description: Omitido por un PROFESOR (se asigna a sí mismo); requerido para que un ADMIN asigne a otro profesor.
+        imageUrl:
+          type: string
+        category:
+          type: string
+          example: tango
+        level:
+          type: string
+          enum: [BEGINNER, INTERMEDIATE, ADVANCED]
+
+    UpdateVirtualCourseRequest:
+      type: object
+      description: Todos los campos son opcionales — sólo los presentes se aplican.
+      properties:
+        title:
+          type: string
+        shortDescription:
+          type: string
+        description:
+          type: string
+        imageUrl:
+          type: string
+        category:
+          type: string
+        level:
+          type: string
+          enum: [BEGINNER, INTERMEDIATE, ADVANCED]
+        premium:
+          type: boolean
+
+    VirtualCourseManagementResponse:
+      type: object
+      required: [courseId, title, shortDescription, description, professorId, imageUrl, category, level, premium, status]
+      properties:
+        courseId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        shortDescription:
+          type: string
+        description:
+          type: string
+        professorId:
+          type: string
+          format: uuid
+        imageUrl:
+          type: string
+        category:
+          type: string
+        level:
+          type: string
+        premium:
+          type: boolean
+        status:
+          type: string
+          enum: [DRAFT, PUBLISHED, ARCHIVED]
+
+    VirtualCourseManagementListResponse:
+      type: object
+      required: [courses]
+      properties:
+        courses:
+          type: array
+          items:
+            $ref: '#/components/schemas/VirtualCourseManagementResponse'
+
+    CreateVirtualModuleRequest:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+        order:
+          type: [integer, "null"]
+          minimum: 0
+
+    UpdateVirtualModuleRequest:
+      type: object
+      description: Todos los campos son opcionales — sólo los presentes se aplican.
+      properties:
+        title:
+          type: string
+        order:
+          type: integer
+          minimum: 0
+
+    VirtualModuleManagementResponse:
+      type: object
+      required: [moduleId, courseId, title, order]
+      properties:
+        moduleId:
+          type: string
+          format: uuid
+        courseId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        order:
+          type: integer
+
+    VirtualModuleManagementListResponse:
+      type: object
+      required: [modules]
+      properties:
+        modules:
+          type: array
+          items:
+            $ref: '#/components/schemas/VirtualModuleManagementResponse'
+
+    ReorderVirtualModulesRequest:
+      type: object
+      required: [moduleIds]
+      properties:
+        moduleIds:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            format: uuid
+
+    CreateVirtualLessonRequest:
+      type: object
+      required: [title, description, videoId, durationMinutes, free]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        videoId:
+          type: string
+          example: bunny-video-id-123
+        durationMinutes:
+          type: integer
+          minimum: 0
+        free:
+          type: boolean
+        order:
+          type: [integer, "null"]
+          minimum: 0
+
+    UpdateVirtualLessonRequest:
+      type: object
+      description: Todos los campos son opcionales — sólo los presentes se aplican.
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        videoId:
+          type: string
+        durationMinutes:
+          type: integer
+          minimum: 0
+        free:
+          type: boolean
+        order:
+          type: integer
+          minimum: 0
+
+    VirtualLessonManagementResponse:
+      type: object
+      required: [lessonId, moduleId, courseId, title, description, videoId, durationMinutes, free, order]
+      properties:
+        lessonId:
+          type: string
+          format: uuid
+        moduleId:
+          type: string
+          format: uuid
+        courseId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        videoId:
+          type: string
+        durationMinutes:
+          type: integer
+        free:
+          type: boolean
+        order:
+          type: integer
+
+security:
+  - bearerAuth: []

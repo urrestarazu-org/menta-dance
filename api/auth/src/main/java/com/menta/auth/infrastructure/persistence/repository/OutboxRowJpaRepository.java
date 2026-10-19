@@ -1,0 +1,71 @@
+package com.menta.auth.infrastructure.persistence.repository;
+
+import com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity;
+import com.menta.shared.outbox.OutboxStatus;
+import java.time.Instant;
+import java.util.List;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+/**
+ * Spring Data JPA repository for common_outbox_events.
+ *
+ * <p>The reconciler (api:app) reads PENDING rows via findByStatusOrderByIdAsc.
+ * Writes from :api:auth go through JpaRepository#save.
+ *
+ * <p>Pagination is the throttle: a single tick fetches at most `pageSize` rows
+ * so a stuck producer cannot monopolize the reconciler thread.
+ */
+@Repository
+public interface OutboxRowJpaRepository extends JpaRepository<OutboxRowJpaEntity, Long> {
+
+    /**
+     * Returns one page of the rows in the given status, oldest id first.
+     *
+     * @param status the status to filter by
+     * @param pageable the page size acts as the batch limit
+     * @return the matching rows ordered by id ascending
+     */
+    List<OutboxRowJpaEntity> findByStatusOrderByIdAsc(OutboxStatus status, Pageable pageable);
+
+    /**
+     * Counts the rows in the given status.
+     *
+     * @return the number of rows with that status
+     */
+    long countByStatus(OutboxStatus status);
+
+    /**
+     * Delete processed outbox events older than the given cutoff.
+     * Used by the retention cleanup job to prevent unbounded table growth.
+     *
+     * @param status   typically COMPLETED (successfully processed events)
+     * @param cutoff   events with processed_at before this instant are deleted
+     * @return number of deleted rows
+     */
+    long deleteByStatusAndProcessedAtBefore(OutboxStatus status, Instant cutoff);
+
+    /**
+     * PR3: Find rows eligible for processing:
+     *   - All PENDING rows (never processed)
+     *   - FAILED rows whose next_retry_at has passed (due for retry).
+     *
+     * <p>Ordered by id ASC for FIFO processing. Pageable controls batch size.
+     *
+     * @param now       current timestamp; FAILED rows with next_retry_at > now are skipped
+     * @param pageable  pagination (page size = batch size)
+     * @return list of rows to process, ordered by id ASC
+     */
+    @Query(
+        """
+        SELECT e FROM OutboxRowJpaEntity e
+        WHERE e.status = 'PENDING'
+           OR (e.status = 'FAILED' AND e.nextRetryAt <= :now)
+        ORDER BY e.id ASC
+        """)
+    List<OutboxRowJpaEntity> findPendingOrDueFailedOrderByIdAsc(
+        @Param("now") Instant now, Pageable pageable);
+}

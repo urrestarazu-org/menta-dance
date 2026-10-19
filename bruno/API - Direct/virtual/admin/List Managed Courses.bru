@@ -1,0 +1,26 @@
+meta {
+  name: List Managed Virtual Courses
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admin/virtual/courses
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  US-VIRTUAL-006. ADMIN sees every course; INSTRUCTOR sees only their own,
+  regardless of status (unlike the public catalog, which only shows
+  PUBLISHED).
+
+  Success contract: 200 with VirtualCourseManagementListResponse.
+}
+
+assert {
+  res.status: eq 200
+}

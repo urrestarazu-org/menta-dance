@@ -1,0 +1,59 @@
+meta {
+  name: Manual Check-in
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/physical/sessions/{{physicalSessionId}}/check-ins
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "type": "MANUAL",
+    "studentId": "{{physicalStudentId}}"
+  }
+}
+
+docs {
+  #45, US-PHYSICAL-008 escenario 1. The endpoint is public at the filter
+  level (`permitAll`) for both variants, but MANUAL requires a Bearer token
+  with role RECEPTIONIST or ADMIN, verified inside the use case, not the
+  security filter (D5) — `authToken` here must belong to a RECEPTIONIST or
+  ADMIN user, and `physicalStudentId` must hold a confirmed capacity
+  assignment for `physicalSessionId`.
+
+  A MANUAL body must never carry any QR-only field (`qrCredentials`,
+  `deviceId`, `deviceToken`) — mixing variants is rejected before the use
+  case runs.
+
+  Validation order (asserted by test): role → studentId existence →
+  confirmed capacity assignment → session not CANCELLED → idempotent
+  read-through → single Redis lock (shared with the QR variant on the same
+  key) → INSERT.
+
+  Success contract: 201 on the first valid MANUAL check-in, 200 on any
+  repeat for the same student+session (no duplicate row, no lock acquired).
+  Error contract:
+    400 INVALID_REQUEST → malformed body, mixed QR/MANUAL fields, or a
+        malformed studentId
+    403 INSUFFICIENT_ROLE → caller is not RECEPTIONIST/ADMIN, or anonymous
+    403 CAPACITY_ASSIGNMENT_REQUIRED → no confirmed assignment for the
+        student — this INCLUDES an unknown {sessionId}: MANUAL resolves the
+        assignment check before the session lookup, so an unknown session
+        answers 403 here, never 404
+    404 STUDENT_NOT_FOUND → studentId does not exist
+    409 SESSION_NOT_ACTIVE → the session is CANCELLED (an already-elapsed
+        but non-cancelled session is NOT rejected — MANUAL supports
+        retroactive backfill with no time limit, deliberate divergence, D8)
+}
+
+assert {
+  res.status: eq 201
+}

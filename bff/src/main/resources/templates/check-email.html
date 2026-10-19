@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('Revisá tu correo', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<div class="mx-auto max-w-sm">
+    <div th:replace="~{fragments/components :: notice('Revisá tu correo', 'Si el email puede usarse para crear o activar una cuenta, te enviamos un mensaje con el enlace de activación. Revisá tu bandeja de entrada y la carpeta de spam.')}"></div>
+
+    <p class="mt-6">¿No te llegó? <a th:href="@{/reenviar-activacion}">Reenviar activación</a></p>
+    <p class="mt-2"><a th:href="@{/login}">Ir a iniciar sesión</a></p>
+</div>
+</th:block>
+</body>
+</html>

@@ -1,0 +1,7 @@
+# The runtime images (infra/docker/app/Dockerfile.api and Dockerfile.bff) only copy the
+# pre-built Spring Boot JARs. Allow-list: everything is excluded except those two files, so
+# the build context stays small and no source, secret or local file can end up in an image.
+# Build them first: ./gradlew :api:app:bootJar :bff:bootJar
+*
+!api/app/build/libs/menta-dance-api.jar
+!bff/build/libs/menta-dance-bff.jar

@@ -1,0 +1,42 @@
+meta {
+  name: Get Unplanned Course Detail
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/{{apiVersion}}/catalog/courses/{{unplannedCourseId}}
+  body: none
+  auth: none
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    const modules = res.getBody().modules;
+    bru.setVar("unplannedPreviewLessonId", modules[0].lessons[0].lessonId);
+    bru.setVar("unplannedProtectedLessonId", modules[1].lessons[0].lessonId);
+  }
+}
+
+tests {
+  test("the unplanned course is public and carries both fixture modules", function() {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().courseId).to.equal(bru.getEnvVar("unplannedCourseId"));
+    expect(res.getBody().modules).to.be.an("array").with.lengthOf(2);
+    expect(res.getBody().modules[0].lessons[0].lessonId).to.be.a("string").and.not.empty;
+    expect(res.getBody().modules[1].lessons[0].lessonId).to.be.a("string").and.not.empty;
+  });
+}
+
+docs {
+  E2eBunnyNetVirtualFixture (design.md A3/A4') seeds UNPLANNED_COURSE_ID with
+  a preview module (order 0) and a protected module (order 1), each carrying
+  one lesson generated with a random id — so this journey discovers the
+  lesson ids through the public catalog detail endpoint instead of pinning
+  them in the environment. No billing_plan_courses row is ever created for
+  this course (D7 fixture setup).
+}
+
+assert {
+  res.status: eq 200
+}

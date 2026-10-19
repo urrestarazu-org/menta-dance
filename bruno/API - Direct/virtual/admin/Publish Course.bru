@@ -1,0 +1,30 @@
+meta {
+  name: Publish Virtual Course
+  type: http
+  seq: 10
+}
+
+put {
+  url: {{baseUrl}}/api/v1/admin/virtual/courses/{{virtualCourseId}}/publish
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  US-VIRTUAL-006 escenario 4/6. Requires at least one module with at least
+  one complete lesson (non-blank title and a videoId assigned) — run
+  "Create Module" and "Create Lesson" first.
+
+  Success contract: 200 with VirtualCourseManagementResponse, status=PUBLISHED.
+  Error contract:
+    400 COURSE_NOT_PUBLISHABLE → no module, or no module with a complete lesson
+    403 COURSE_NOT_OWNED → INSTRUCTOR is not the course's professor
+    404 COURSE_NOT_FOUND → courseId does not exist
+}
+
+assert {
+  res.status: eq 200
+}

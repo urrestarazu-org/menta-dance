@@ -1,0 +1,47 @@
+meta {
+  name: Save Planned Lesson Progress
+  type: http
+  seq: 13
+}
+
+put {
+  url: {{baseUrl}}/api/{{apiVersion}}/virtual/lessons/{{plannedProtectedLessonId}}/progress
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  content-type: application/json
+}
+
+body:json {
+  {
+    "positionSeconds": 90
+  }
+}
+
+tests {
+  test("Status is 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("Saves the position without completing the lesson", function() {
+    expect(res.getBody().positionSeconds).to.equal(90);
+    expect(res.getBody().completed).to.equal(false);
+  });
+}
+
+docs {
+  US-VIRTUAL-005 (#52), continuing the premium-grant journey (design.md
+  "Journey order") right after step 12 proved the entitlement grants stream
+  access: the same active entitlement grants the progress endpoints too
+  (design.md "Progress reads and writes reuse the lesson access cascade").
+}
+
+assert {
+  res.status: eq 200
+}

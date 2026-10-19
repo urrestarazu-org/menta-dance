@@ -1,0 +1,19 @@
+package com.menta.auth.application.dto;
+
+import java.time.Duration;
+
+/**
+ * Token-pair result returned by Login / Refresh use cases.
+ *
+ * <p>Mirrors the spec response shape (POST /api/v1/auth/login 200 → access_token,
+ * refresh_token, token_type, expires_in) without leaking the JWT wire format
+ * upward.
+ */
+public record TokenPair(
+    String accessToken,
+    String refreshToken,
+    String tokenType,
+    Duration expiresIn
+) {
+    public static final String TOKEN_TYPE_BEARER = "Bearer";
+}

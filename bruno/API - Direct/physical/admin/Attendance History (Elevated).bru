@@ -1,0 +1,42 @@
+meta {
+  name: Attendance History (Elevated)
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admin/physical/attendance/00000000-0000-0000-0000-000000000000?month=2026-09&includeAbsent=false
+  auth: bearer
+}
+
+params:query {
+  month: 2026-09
+  includeAbsent: false
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  #39, US-PHYSICAL-002 P2. Elevated read of ANOTHER student's month.
+  `ADMIN` reads any student unrestricted. `INSTRUCTOR` reads a student but
+  the result is filtered server-side to sessions of courses that instructor
+  teaches — both `sessions[]` and every aggregate number reflect only that
+  filtered set. `STUDENT` cannot reach this endpoint at all.
+
+  A student who is not enrolled in any course the instructor teaches
+  returns the same empty 200 shape as a student with zero assignments that
+  month — the response never leaks student existence.
+
+  Success contract: 200 with { period, scheduledSessionCount, attended,
+  absent, attendanceRate, sessions[] } — identical shape to the self
+  endpoint.
+  Error contract: 400 (`INVALID_REQUEST`) on a malformed studentId or
+  month; 401 when unauthenticated; 403 when the caller is neither ADMIN
+  nor INSTRUCTOR.
+}
+
+assert {
+  res.status: eq 200
+}

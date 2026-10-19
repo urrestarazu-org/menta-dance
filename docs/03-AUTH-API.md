@@ -11,18 +11,21 @@
   `iat`, `exp`, `iss` y `aud`. El refresh es UUID opaco, hasheado SHA-256 en
   `auth_refresh_tokens` y dura 7 días.
 
-## Endpoints
+## Endpoints planificados
+
+La superficie Auth v1 implementada se detalla en el contrato HTTP de abajo.
+Los restantes endpoints de esta lista son parte del diseño funcional, no rutas
+expuestas todavía:
 
 ```text
 POST /api/v1/auth/register
 GET  /api/v1/auth/activate/{token}
+POST /api/v1/auth/activate
 POST /api/v1/auth/resend-activation
 POST /api/v1/auth/login
 POST /api/v1/auth/refresh
 POST /api/v1/auth/logout
 POST /api/v1/auth/logout-all
-POST /api/v1/auth/forgot-password
-POST /api/v1/auth/reset-password
 POST /api/v1/auth/change-password
 GET  /api/v1/auth/me
 GET  /api/v1/auth/me/roles
@@ -30,9 +33,90 @@ GET  /api/v1/auth/me/roles
 
 Todas las respuestas de error usan `application/problem+json`.
 
+## Contrato HTTP implementado (v1)
+
+Las rutas canónicas están bajo `/api/v1/auth`; no existe compatibilidad para el
+prefijo legado `/auth`. Durante la migración de registro se conserva solamente
+el alias temporal `POST /api/v1/users/register`, con el mismo comportamiento
+que la ruta canónica.
+
+| Endpoint | Autenticación de entrada | Respuesta exitosa |
+| --- | --- | --- |
+| `POST /login` | JSON `{ "email", "password" }` | `200` con el par de tokens para el cliente de confianza (BFF o Android). El estado de la cuenta se revela sólo con la contraseña correcta: `403 ACCOUNT_NOT_ACTIVATED` (pendiente), `423 USER_LOCKED` (bloqueada); `INACTIVE`/`SUSPENDED` y toda contraseña incorrecta responden `401 INVALID_CREDENTIALS` |
+| `POST /refresh` | `X-Refresh-Token` obligatorio; nunca body JSON | `200` con el par rotado |
+| `POST /logout` | `Authorization: Bearer <access>` y `X-Refresh-Token` obligatorios | `204 No Content` |
+| `POST /register` | JSON `{ "email", "password", "role": "STUDENT" }` | `202 Accepted`, sin cuerpo y siempre genérico |
+| `GET /activate/{token}` | token opaco en el path; sólo valida sin consumir | `204 No Content` |
+| `POST /activate` | JSON `{ "token" }` | `204 No Content`; consume el token y activa la cuenta |
+| `POST /resend-activation` | JSON `{ "email" }` | `202 Accepted`, sin cuerpo y siempre genérico |
+| `POST /forgot-password` | JSON `{ "email" }` | `202 Accepted`, sin cuerpo y siempre genérico |
+| `POST /reset-password` | JSON `{ "token", "newPassword" }` | `200 OK`, sin cuerpo |
+
+Registro público crea una cuenta `PENDING_ACTIVATION`, un token de un uso y un
+evento durable de correo en una sola transacción. El enlace del correo no apunta
+a la API sino a la pantalla del BFF `GET /activar/{token}`
+(`auth.activation.link-path`, por defecto `/activar/`): esa pantalla valida el
+token con `GET /activate/{token}` y muestra el botón «Activar cuenta», que hace
+`POST /activar` al BFF; el BFF llama a `POST /activate` con el token en el cuerpo
+y redirige a `/cuenta-activada`, de modo que el token deja de estar en la URL.
+La recuperación de contraseña sigue el mismo criterio: el correo enlaza a la
+pantalla del BFF `GET /restablecer-contrasena/{token}`
+(`auth.password-reset.link-path`, por defecto `/restablecer-contrasena/`), que
+muestra el formulario de nueva contraseña; el token viaja de vuelta en el cuerpo
+de `POST /restablecer-contrasena` y, si todo sale bien, el BFF redirige a
+`/login?reset`. La API no tiene un endpoint para validar el token de reset, así
+que la pantalla no lo comprueba antes de mostrar el formulario.
+Registro duplicado conserva
+el mismo `202` vacío; nunca se devuelve el email, ID o estado de la cuenta.
+`resend-activation` también responde idénticamente para email inexistente,
+activo o pendiente. Registro y reenvío limitados devuelven `429` con
+`Retry-After`; si Redis no está disponible devuelven `503` con `Retry-After`.
+
+Un token expirado, reutilizado o inválido en activación devuelve `400
+application/problem+json` con código `ACTIVATION_TOKEN_INVALID`; el motivo no
+es distinguible. El token no se persiste ni registra en claro: sólo se guarda
+su hash y el material pendiente de entrega se cifra hasta que Mailpit/SMTP lo
+acepta.
+
+`forgot-password` responde `202` vacío para email inexistente, inactivo o
+activo — mismo patrón anti-enumeración que `resend-activation`. Sólo una
+cuenta activa invalida sus tokens de reset previos, genera uno nuevo (1 hora
+de vigencia) y dispara el email. El presupuesto agotado devuelve `429` con
+`Retry-After`.
+
+`reset-password` es la excepción deliberada a la no-enumeración: el token es
+un secreto de alta entropía que sólo llega al correo del dueño de la cuenta,
+así que el motivo de rechazo SÍ se distingue sin filtrar nada sobre la cuenta:
+`404 PASSWORD_RESET_TOKEN_NOT_FOUND` si el hash no existe, `410
+PASSWORD_RESET_TOKEN_EXPIRED`/`410 PASSWORD_RESET_TOKEN_ALREADY_USED` si
+expiró o ya se usó, `400 WEAK_PASSWORD` (con el detalle de qué regla no se
+cumple) o `400 SAME_PASSWORD` si la nueva contraseña es igual a la actual. Un
+reset exitoso invalida TODOS los refresh tokens del usuario e incrementa
+`auth_users.token_version` primero en MySQL, reflejándolo en Redis vía outbox
+para cerrar también los access tokens ya emitidos — si Redis no refleja la
+revocación, `AUTH_DEGRADED` bloquea tráfico autenticado hasta la recuperación
+durable (ver ADR-0026).
+
+El BFF lee su cookie de sesión internamente y pasa el refresh a Auth mediante
+`X-Refresh-Token`; puede ver esos valores sólo en su comunicación
+servidor-a-servidor con Auth y no los reenvía al navegador. Los refresh tokens
+no se escriben en logs, errores ni eventos HTTP. Un request inválido, una
+credencial rechazada o un Bearer faltante/inválido se representa como RFC 9457,
+por ejemplo:
+
+```json
+{
+  "type": "https://menta.dance/problems/authentication_required",
+  "title": "Unauthorized",
+  "status": 401,
+  "detail": "Authentication is required.",
+  "code": "AUTHENTICATION_REQUIRED"
+}
+```
+
 ## Renovación y reutilización
 
-`POST /refresh` rota obligatoriamente el refresh: revoca el token presentado y
+`POST /api/v1/auth/refresh` rota obligatoriamente el refresh: revoca el token presentado y
 emite un UUID nuevo. La reutilización de un token rotado, `POST /logout-all` y
 todo reset/cambio de contraseña revocan **todas** las sesiones, incrementan
 `auth_users.token_version` y exigen login nuevo. MySQL es la autoridad absoluta:
@@ -42,12 +126,13 @@ Si Redis no confirma esa reflexión, Auth marca el estado global MySQL como
 `AUTH_DEGRADED`; login, refresh y cualquier ruta autenticada quedan bloqueados
 hasta que el worker repare Redis y restablezca `NORMAL`. Si MySQL no está
 disponible, se niegan esos mismos flujos. `auth_outbox` aporta reintento y
-reparación, no autoridad. La respuesta web queda mediada por el BFF; Android
-recibe el nuevo token sólo en el header seguro definido para la app.
+reparación, no autoridad. La respuesta web queda mediada por el BFF; Android,
+como cliente de confianza, almacena el par rotado de la respuesta en Keystore.
 
 ## Logout y revocación
 
-`POST /logout` requiere `Authorization: Bearer <access>`. En la misma unidad
+`POST /api/v1/auth/logout` requiere `Authorization: Bearer <access>` y
+`X-Refresh-Token`. En la misma unidad
 transaccional se revoca el refresh, se persiste el `jti` revocado y se inserta un
 evento en `auth_outbox` para reflejar `blacklist:jti:{jti}` en Redis hasta `exp`.
 Logout no confirma éxito hasta que Redis lo refleje. Si Redis no puede hacerlo,
@@ -73,5 +158,68 @@ Un lector QR se autentica como dispositivo técnico y no es un rol.
 ## Seguridad y auditoría
 
 Nunca se registran passwords, JWT, refresh tokens, cookies ni encabezados de
-autorización. Los eventos de login, refresh, revocación, reutilización y denegación
-incluyen `correlationId`, usuario/dispositivo cuando corresponda y resultado.
+autorización. Tampoco se registra el token de activación. La API redacciona su URI en los
+access logs como `/api/v1/auth/activate/[REDACTED]`. El BFF no registra URIs de
+petición y sus páginas con el token (`/activar/{token}`, `/restablecer-contrasena/{token}`
+y el reintento de sus `POST`) responden `Cache-Control: no-store` y `Referrer-Policy:
+no-referrer`. Los access logs de NGINX redactan el token
+de los enlaces del correo: `GET /activar/{token}` y
+`GET /restablecer-contrasena/{token}` quedan como `/activar/[REDACTED]` y
+`/restablecer-contrasena/[REDACTED]`, también en el Referer (`log_format main`
+en `nginx.conf` y en `nginx.production.conf.example`). Los eventos
+de login, refresh, revocación, reutilización y denegación incluyen
+`correlationId`, usuario/dispositivo cuando corresponda y resultado.
+
+### Presupuestos de login y origen web
+
+> **Estado al 2026-08-15:** implementado y validado (PR #77, #79, #80, #81).
+
+El flujo web `Nginx -> BFF -> API` propaga el origen del cliente en la llamada de
+login del BFF, de modo que la API ya no identifica al BFF como peer ni agrupa a
+todos los usuarios web en un mismo fingerprint.
+
+[ADR-0035](adr/0035-trusted-client-origin-propagation.md) separó las
+responsabilidades así:
+
+* Nginx impone un techo de requests por origen para `POST /login` del BFF, antes
+  de llegar a bcrypt o Redis. La clave se anula fuera de `POST`, así que servir
+  el formulario no consume presupuesto.
+* Auth conserva presupuestos semánticos de **fallos** por email y por origen,
+  verificados antes de bcrypt y cobrados sólo tras un fallo contabilizable.
+* Un login exitoso limpia el presupuesto del email, pero no consume ni limpia el
+  presupuesto de fallos por origen: limpiarlo permitiría a un atacante con cuenta
+  propia borrar su contador a voluntad.
+* El BFF propaga un origen canónico sólo desde un proxy confiable —`X-Real-IP`
+  saneado por Nginx— y lo envía como un `X-Forwarded-For` de un solo valor; nunca
+  reenvía la cadena recibida.
+* Agotar el presupuesto devuelve `429` con `Retry-After` y **nunca** cambia el
+  estado de la cuenta: `LOCKED` queda reservado para acción administrativa, para
+  no habilitar una denegación de servicio dirigida contra una cuenta ajena.
+
+Los clientes directos, como Android, no atraviesan el BFF y nunca presentaron
+este colapso de identidad.
+
+### Errores de login en el BFF
+
+El formulario web traduce cada respuesta de error de `POST /login` en un mensaje
+en español (#479). Ninguna llega al usuario como error del servidor:
+
+| Respuesta de Auth | Mensaje en `/login` |
+| --- | --- |
+| `401` | «Email o contraseña inválidos» (genérico) |
+| `423 USER_LOCKED` | cuenta bloqueada; contactar a la academia |
+| `429` con `Retry-After` | demasiados intentos, con la espera en segundos o minutos redondeados hacia arriba; sin cabecera o con valor ilegible, «unos minutos» |
+| `403 ACCOUNT_NOT_ACTIVATED` | cuenta sin activar, con enlace a `/reenviar-activacion` |
+| `5xx`, caída o cualquier otro estado | «El servicio no está disponible por el momento» |
+
+El `423` y el `403` sólo llegan con la contraseña correcta, así que el mensaje no
+revela si un email existe. Nunca se muestran códigos ni cuerpos de la API. El
+refresh conserva su propio contrato (`423` es `RefreshTokenRevokedException`).
+
+## Contrato OpenAPI
+
+El contrato formal y versionado de esta superficie vive en
+[`api/openapi/auth-v1.yaml`](../api/openapi/auth-v1.yaml). Este documento explica
+el porqué de las decisiones; el YAML define la forma exacta de cada request,
+respuesta, header y código de error. Ante una discrepancia, el YAML manda: lo
+valida `redocly lint` en CI.

@@ -1,0 +1,35 @@
+meta {
+  name: Login Admin
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/{{apiVersion}}/auth/login
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "{{adminEmail}}",
+    "password": "{{adminPassword}}"
+  }
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    bru.setVar("adminAccessToken", res.body.access_token);
+  }
+}
+
+tests {
+  test("fixture administrator receives an access token", function() {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().access_token).to.be.a("string").and.not.empty;
+  });
+}
+
+assert {
+  res.status: eq 200
+}

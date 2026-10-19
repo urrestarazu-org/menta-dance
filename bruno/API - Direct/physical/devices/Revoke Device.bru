@@ -1,0 +1,33 @@
+meta {
+  name: Revoke Physical Device
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/admin/physical/devices/{{physicalDeviceId}}/revoke
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  #44, US-PHYSICAL-007 escenario 4. Run "Register Physical Device" first to
+  populate {{physicalDeviceId}}. REVOKED is an absorbing state: running this
+  request twice against the same device demonstrates the second call fails
+  with 409, never a silent 200.
+
+  Success contract: 200 with status: REVOKED.
+  Error contract:
+    400 INVALID_REQUEST        → malformed deviceId
+    401                        → no bearer token
+    403                        → authenticated role other than ADMIN
+    404 DEVICE_NOT_FOUND       → unknown deviceId
+    409 DEVICE_ALREADY_REVOKED → device is already REVOKED
+}
+
+assert {
+  res.status: eq 200
+}

@@ -1,0 +1,95 @@
+meta {
+  name: Get Course - Physical
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/catalog/courses/{{physicalCourseId}}
+  body: none
+  auth: none
+}
+
+docs {
+  Public detail of a single PHYSICAL course with its upcoming sessions and
+  live availability (#107, US-PHYSICAL-003). The id is resolved against the
+  virtual catalog first; only when no published virtual course matches does
+  the physical module answer.
+
+  Prerequisite: set the runtime-only `physicalCourseId` variable to an
+  ACTIVE physical course id ("Create Course" in physical/admin sets it, or
+  take one from "List Courses" with PHYSICAL modality). Create at least one
+  future session ("Create Session") to see a non-empty `sessions` array.
+
+  Success contract:
+    body → {
+      courseId,
+      modality: "PHYSICAL",
+      title,
+      level,
+      physical: {
+        professorName, dayOfWeek, startTime, capacity,
+        sessions: [{ sessionId, scheduledAt, capacity, availableSpots }]
+      }
+    }
+
+  Sessions:
+    - Only SCHEDULED sessions in the window [now, now + W). W is the number
+      of days in `catalog.physical.sessions.window-days` (env
+      CATALOG_PHYSICAL_SESSIONS_WINDOW_DAYS), default 30, valid range 1-90.
+    - No `from`/`to` parameters: if sent, they are ignored.
+    - Ascending by `scheduledAt`, at most 100 (the earliest 100, no
+      truncation signal). An empty array (never null) when there are none.
+    - A sold-out session is listed with `availableSpots` 0; a cancelled one
+      is not listed.
+    - `scheduledAt` is an ISO-8601 UTC instant (ends in `Z`).
+    - Only `availableSpots` is public: assigned spots and active holds are
+      internal, and there is no price or `quoteEndpoint`.
+
+  Error contract:
+    404 COURSE_NOT_FOUND   → unknown id or inactive course (indistinguishable)
+    503 CATALOG_DEGRADED   + Retry-After: 30 → the physical course or the
+                              sessions lookup failed (no partial detail)
+}
+
+tests {
+  test("Status is 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("Body is the physical detail", function() {
+    expect(res.getBody().modality).to.equal('PHYSICAL');
+    expect(res.getBody()).to.have.property('courseId');
+    expect(res.getBody().physical).to.have.property('sessions');
+    expect(res.getBody().physical.sessions).to.be.an('array');
+  });
+
+  test("Sessions are ascending, capped at 100 and expose only the public keys", function() {
+    const sessions = res.getBody().physical.sessions;
+    expect(sessions.length).to.be.at.most(100);
+    sessions.forEach((s, i) => {
+      expect(Object.keys(s).sort()).to.eql(
+        ['availableSpots', 'capacity', 'scheduledAt', 'sessionId']);
+      expect(s.scheduledAt).to.match(/Z$/);
+      if (i > 0) {
+        expect(Date.parse(s.scheduledAt)).to.be.at.least(
+          Date.parse(sessions[i - 1].scheduledAt));
+      }
+    });
+  });
+
+  test("No internal counts, prices or virtual fields", function() {
+    const body = res.getBody();
+    expect(body).to.not.have.property('quoteEndpoint');
+    expect(body).to.not.have.property('virtual');
+    expect(body).to.not.have.property('modules');
+    body.physical.sessions.forEach(s => {
+      expect(s).to.not.have.property('assignedSpots');
+      expect(s).to.not.have.property('activeCapacityHolds');
+    });
+  });
+}
+
+assert {
+  res.status: eq 200
+}

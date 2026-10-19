@@ -1,0 +1,36 @@
+meta {
+  name: Login Student
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/{{apiVersion}}/auth/login
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "{{studentEmail}}",
+    "password": "{{studentPassword}}"
+  }
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    bru.setVar("studentAccessToken", res.body.access_token);
+  }
+}
+
+tests {
+  test("active student receives an access token", function() {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().access_token).to.be.a("string").and.not.empty;
+    expect(res.getBody().refresh_token).to.equal(undefined);
+  });
+}
+
+assert {
+  res.status: eq 200
+}

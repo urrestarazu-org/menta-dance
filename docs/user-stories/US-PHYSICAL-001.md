@@ -1,8 +1,8 @@
 # US-PHYSICAL-001: Check-in con código QR
 
-**ID:** US-PHYSICAL-001  
-**Módulo:** Physical  
-**Prioridad:** Must Have  
+**ID:** US-PHYSICAL-001
+**Módulo:** Physical
+**Prioridad:** Must Have
 **Estado:** Draft
 
 ## Historia de usuario
@@ -56,6 +56,16 @@
 - **Entonces** Physical ejecuta compare-and-delete del lock solo si conserva ese
   nonce, y permite un reintento seguro.
 
+**Escenario 7: descubrir las sesiones con cupo (#356)**
+
+- **Dado** un alumno autenticado con asignaciones de cupo confirmadas.
+- **Cuando** consulta `GET /api/v1/physical/sessions/me`.
+- **Entonces** recibe, ordenadas por fecha ascendente, solo sus sesiones desde el
+  inicio de hoy hasta 60 días después (configurable), cada una con su `sessionId`
+  y si la ventana de check-in está abierta; los holds técnicos, los pagos
+  pendientes y las sesiones canceladas no aparecen, y un rol distinto de `STUDENT`
+  recibe `403`.
+
 ## Contrato
 
 ### Emisión para Android
@@ -78,10 +88,15 @@ ni se persiste en el dispositivo como un identificador reutilizable.
 {
   "type": "QR",
   "qrCredentials": "signed-qr",
-  "deviceId": "puerta-principal",
+  "deviceId": "3f2b8c1e-9d4a-4e6b-8a57-0c1d2e3f4a5b",
   "deviceToken": "dvc_xxx"
 }
 ```
+
+`deviceId` es el UUID del dispositivo registrado (US-PHYSICAL-007) y `deviceToken` es
+el secreto propio de ese dispositivo. Un `deviceId` desconocido, que no es UUID, o un
+`deviceToken` incorrecto responden `401 INVALID_DEVICE_TOKEN`; con el secreto correcto,
+un dispositivo revocado responde `401 DEVICE_REVOKED` y uno vencido `401 DEVICE_EXPIRED`.
 
 La carga manual usa exclusivamente `{ "type": "MANUAL", "studentId": "..." }`;
 una solicitud no puede contener `studentId` y credenciales QR a la vez.
@@ -95,7 +110,7 @@ La autorización consulta la asignación de cupo de Physical, no tablas financie
 ni una “reserva” del alumno. Véase
 [Pagos de Clases Presenciales](../28-PHYSICAL-CLASS-PAYMENTS.md).
 
-El orden QR es: autenticar lector; validar firma, expiración, ventana, claims,
+El orden QR es: autenticar lector contra el registro de dispositivos; validar firma, expiración, ventana, claims,
 asignación y sesión; consultar idempotencia; adquirir locks QR y de asistencia;
 insertar `attendance` con unique `(user_id, session_id)`. El manual omite los
 pasos QR y valida actor/`studentId`. La compensación Redis usa compare-and-delete

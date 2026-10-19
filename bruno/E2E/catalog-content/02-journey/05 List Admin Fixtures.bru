@@ -1,0 +1,36 @@
+meta {
+  name: List Admin Fixtures
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/{{apiVersion}}/admin/virtual/courses
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{adminAccessToken}}
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    const draft = res.body.courses.find((course) => course.title === "E2E Draft Catalog Course");
+    if (draft) {
+      bru.setVar("draftFixtureCourseId", draft.courseId);
+    }
+  }
+}
+
+tests {
+  test("admin sees the deterministic draft fixture", function() {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().courses).to.be.an("array");
+    expect(res.getBody().courses.some((course) => course.title === "E2E Draft Catalog Course")).to.equal(true);
+  });
+}
+
+assert {
+  res.status: eq 200
+}

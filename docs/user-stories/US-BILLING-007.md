@@ -1,16 +1,16 @@
 # US-BILLING-007: Compra presencial y pago individual
 
-**ID:** US-BILLING-007  
-**Título:** Compra mensual o de sesión individual con asignación automática  
-**Módulos:** Billing, Physical y api:app  
-**Prioridad (MoSCoW):** Must Have  
-**Estado:** Draft  
+**ID:** US-BILLING-007
+**Título:** Compra mensual o de sesión individual con asignación automática
+**Módulos:** Billing, Physical y api:app
+**Prioridad (MoSCoW):** Must Have
+**Estado:** Draft
 **Épica:** EP-04 Academia Física
 
 ## 1. Historia de Usuario
 
-> **Como** alumno  
-> **Quiero** pagar un quote mensual o individual  
+> **Como** alumno
+> **Quiero** pagar un quote mensual o individual
 > **Para** recibir automáticamente los cupos de sus sesiones.
 
 ## 2. Criterios de Aceptación (BDD)
@@ -30,19 +30,76 @@
 - **Entonces** Physical asigna exactamente `selectedSessionId` y ningún otro, y
   Billing deja la Purchase `ASSIGNED` después de esa asignación.
 
-**Escenario 3: idempotencia**
+**Escenario 3: mensualidad con sesiones que el alumno ya tiene**
+
+- **Dado** un quote mensual de N sesiones y un alumno que ya tiene asignación confirmada
+  en alguna de las próximas sesiones del curso (por ejemplo, por una compra individual).
+- **Cuando** compra la mensualidad (checkout y confirmación del pago).
+- **Entonces** la mensualidad saltea esas sesiones y busca hacia adelante (hasta 120 días)
+  hasta cubrir N sesiones que el alumno todavía no tiene: no se duplica ninguna asignación y
+  la Purchase queda `ASSIGNED`. El importe no cambia. Si en 120 días no hay N sesiones sin
+  asignar, el checkout responde `409 CAPACITY_UNAVAILABLE`.
+
+**Escenario 3b: mensualidad sin ninguna sesión nueva (#541)**
+
+- **Dado** un quote mensual y un alumno que ya tiene asignación confirmada en todas las
+  sesiones que la mensualidad cubriría (las próximas N desde el instante de referencia).
+- **Cuando** inicia el checkout, por Mercado Pago o por transferencia bancaria.
+- **Entonces** responde `409 NO_NEW_SESSIONS` sin crear hold ni `Payment`: no se cobra una
+  mensualidad que no agrega nada. Si tiene sólo algunas de esas sesiones, el comportamiento y
+  el precio son los del Escenario 3. La cotización mensual aplica la misma regla y responde
+  el mismo error sin persistir el quote.
+
+**Escenario 3c: sesión individual que el alumno ya tiene (#545)**
+
+- **Dado** un quote `INDIVIDUAL` y un alumno que ya tiene asignación confirmada en la sesión
+  elegida.
+- **Cuando** inicia el checkout, por Mercado Pago o por transferencia bancaria.
+- **Entonces** responde `409 NO_NEW_SESSIONS` ("Ya tenés lugar en esta sesión.") sin crear hold
+  ni `Payment`, antes de evaluar el cupo.
+
+**Escenario 4: idempotencia**
 
 - **Dado** una Purchase ya iniciada o confirmada.
 - **Cuando** se repite la operación con el mismo `purchaseId`, `paymentId` o clave
   idempotente.
 - **Entonces** se devuelve el mismo resultado sin consumir capacidad adicional.
 
+**Escenario 5: asignación del alumno entre el checkout y la confirmación**
+
+- **Dado** una mensualidad con checkout hecho (holds creados sobre N sesiones) y un pago aún
+  pendiente.
+- **Cuando** el alumno recibe, por otra vía, una asignación en una de las sesiones retenidas
+  (por ejemplo, una compra individual de esa sesión) y luego se confirma el pago.
+- **Entonces** la conversión del hold choca con la unicidad `(session_id, student_id)`:
+  Payment queda `COMPLETED`, Purchase queda `EXCEPTION` con `reason = ALREADY_ASSIGNED`, no se
+  asigna ninguna sesión de la compra (todo o nada, los holds no se convierten) y no se habilita
+  asistencia. No se reabre el conjunto de sesiones: queda fijo desde el checkout (decisión de
+  #533). Operaciones recibe el aviso y la compra figura en el inventario administrativo
+  (`GET /api/v1/admin/billing/purchases?status=EXCEPTION`); el tratamiento del caso (devolución o
+  compensación) es manual y fuera del producto, y luego se cierra con el escenario 6. Ver [28-PHYSICAL-CLASS-PAYMENTS.md](../28-PHYSICAL-CLASS-PAYMENTS.md).
+
+**Escenario 6: cierre administrativo de una compra en EXCEPTION (#539)**
+
+- **Dado** una Purchase en `EXCEPTION` cuyo tratamiento (devolución o compensación) ya se hizo
+  fuera del producto.
+- **Cuando** un `ADMIN` hace `POST /api/v1/admin/billing/purchases/{purchaseId}/resolution` con
+  `resolution = REFUNDED` o `COMPENSATED` y una `note` obligatoria de hasta 500 caracteres.
+- **Entonces** la Purchase queda `RESOLVED` con quién la cerró, cuándo y por qué; el Payment no
+  cambia, no se asigna ninguna sesión y no se habilita asistencia; se publica
+  `billing.PurchaseResolved` sin la nota y la respuesta es `200`.
+- **Y** repetir la misma decisión con la misma nota responde `200` sin efectos nuevos; una
+  decisión o nota distinta sobre una compra ya resuelta responde `409 PURCHASE_ALREADY_RESOLVED`;
+  una compra que no está en `EXCEPTION` responde `409 ILLEGAL_PURCHASE_STATE_TRANSITION`; una
+  inexistente, `404`; un llamador sin rol `ADMIN`, `403`; y una nota vacía, `400`.
+
 ## 3. Requisitos No Funcionales y Restricciones
 
 - Solo una transacción puede tomar el último cupo.
 - No existen reservas manuales ni listas de espera.
 - Un hold técnico es interno, breve y expirable.
-- El callback del BFF usa `purchaseId` y un `state` firmado; nunca decide el pago.
+- El retorno del BFF no usa un `state` firmado: el BFF guarda el `paymentId` en la sesión del servidor antes de
+  redirigir a Mercado Pago, lee ese id (nunca parámetros de la URL) y nunca decide el pago.
 
 ## 4. Notas Técnicas
 
@@ -54,4 +111,18 @@ autómatas separados.
 
 - [ ] Pruebas concurrentes del último cupo y compra multi-sesión.
 - [ ] Webhook duplicado e idempotencia end-to-end.
-- [ ] Contratos OpenAPI y pruebas de callback firmado.
+- [ ] Contratos OpenAPI y pruebas del retorno del BFF (el `paymentId` sale de la sesión; los parámetros de la
+      URL se ignoran).
+
+## 6. Estado de implementación
+
+- **Implementado (BFF web, #365):** cotizar y pagar con Mercado Pago desde la web: el alumno pide la cotización,
+  el BFF inicia el checkout con una clave de idempotencia, guarda el `paymentId` en la sesión y redirige al
+  proveedor. Ver [06-BILLING-API.md](../06-BILLING-API.md#cotizar-y-pagar-clases-presenciales-desde-la-web-bff-365).
+- **Implementado (BFF web, #365):** la página de retorno `GET /compras/retorno` lee el `paymentId` de la sesión,
+  consulta el estado a la API y muestra "Pago confirmado, estamos asignando tus lugares" (`COMPLETED`), "Estamos
+  confirmando tu pago" (pendiente o desconocido) o un mensaje por pago rechazado, cancelado o vencido. Ignora los
+  parámetros de la URL y nunca decide el pago; **no** afirma que las sesiones ya estén asignadas.
+- **Implementado (BFF web, #553):** el alumno elige "Pagar por transferencia bancaria" en la cotización, ve CBU,
+  alias, titular, CUIT, importe y referencia, y sube el comprobante; el BFF no decide la acreditación. Ver
+  [06-BILLING-API.md](../06-BILLING-API.md#pago-por-transferencia-bancaria-desde-la-web-bff-553).

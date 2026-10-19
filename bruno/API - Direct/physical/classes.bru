@@ -1,0 +1,26 @@
+meta {
+  name: List Classes
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{physicalClassesUrl}}
+  body: none
+  auth: none
+}
+
+script:pre-request {
+  if (["cli", "runner"].includes(req.getExecutionMode())) {
+    bru.runner.skipRequest();
+  }
+}
+
+docs {
+  Placeholder for a future physical classes endpoint.
+
+  No physical classes controller or public HTTP contract exists yet, so this
+  request deliberately has no status assertions and is skipped by the
+  collection runner. The `physicalClassesUrl` variable is intentionally not
+  defined. Configure it only after an endpoint contract is implemented.
+}

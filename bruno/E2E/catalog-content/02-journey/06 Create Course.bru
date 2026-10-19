@@ -1,0 +1,44 @@
+meta {
+  name: Create Course
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/{{apiVersion}}/admin/virtual/courses
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{adminAccessToken}}
+}
+
+body:json {
+  {
+    "title": "E2E Journey Course {{studentEmail}}",
+    "shortDescription": "Created by the local E2E journey.",
+    "description": "A deterministic course created through authenticated administration.",
+    "imageUrl": "https://example.test/e2e-journey-course.jpg",
+    "category": "DANCE",
+    "level": "BEGINNER"
+  }
+}
+
+script:post-response {
+  if (res.getStatus() === 201) {
+    bru.setVar("journeyCourseId", res.body.courseId);
+  }
+}
+
+tests {
+  test("administrator creates a draft course", function() {
+    expect(res.getStatus()).to.equal(201);
+    expect(res.getBody().courseId).to.be.a("string").and.not.empty;
+    expect(res.getBody().status).to.equal("DRAFT");
+  });
+}
+
+assert {
+  res.status: eq 201
+}

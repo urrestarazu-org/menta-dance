@@ -1,0 +1,219 @@
+package com.menta.auth.domain.model;
+
+import com.menta.shared.domain.vo.Email;
+import java.time.LocalDateTime;
+import java.util.Objects;
+
+/**
+ * User domain entity.
+ * Pure POJO without framework annotations (no JPA, no Spring).
+ */
+public class User {
+
+    private UserId id;
+    private Email email;
+    private String passwordHash;
+    private Role role;
+    private UserStatus status;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+    private long tokenVersion;
+
+    public User(
+        UserId id,
+        Email email,
+        String passwordHash,
+        Role role,
+        UserStatus status,
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt
+    ) {
+        this(id, email, passwordHash, role, status, createdAt, updatedAt, DEFAULT_TOKEN_VERSION);
+    }
+
+    private User(
+        UserId id,
+        Email email,
+        String passwordHash,
+        Role role,
+        UserStatus status,
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt,
+        long tokenVersion
+    ) {
+        this.id = id;
+        this.email = email;
+        this.passwordHash = passwordHash;
+        this.role = role;
+        this.status = status;
+        this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
+        this.tokenVersion = tokenVersion;
+    }
+
+    /** Default token_version for newly-minted auth_users rows (ADR-0025 V2 DDL). */
+    private static final long DEFAULT_TOKEN_VERSION = 1L;
+
+    /**
+     * Registers a public user that must prove email ownership before login.
+     */
+    public static User register(Email email, String passwordHash, Role role) {
+        LocalDateTime now = LocalDateTime.now();
+        return new User(
+            UserId.generate(),
+            email,
+            passwordHash,
+            role,
+            UserStatus.PENDING_ACTIVATION,
+            now,
+            now,
+            DEFAULT_TOKEN_VERSION
+        );
+    }
+
+    /**
+     * Creates an already-active user for trusted provisioning flows.
+     */
+    public static User create(Email email, String passwordHash, Role role) {
+        LocalDateTime now = LocalDateTime.now();
+        return new User(
+            UserId.generate(),
+            email,
+            passwordHash,
+            role,
+            UserStatus.ACTIVE,
+            now,
+            now,
+            DEFAULT_TOKEN_VERSION
+        );
+    }
+
+    /**
+     * Rebuilds a user from persisted state, trusting the stored status and timestamps.
+     *
+     * <p>Unlike {@link #register} and {@link #create}, nothing is generated here: the id, the status, the
+     * timestamps and the token version come from storage as they are.
+     *
+     * @return the user as it was persisted
+     */
+    public static User rehydrate(
+        UserId id,
+        Email email,
+        String passwordHash,
+        Role role,
+        UserStatus status,
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt,
+        long tokenVersion
+    ) {
+        return new User(id, email, passwordHash, role, status, createdAt, updatedAt, tokenVersion);
+    }
+
+    /**
+     * Moves a pending account to {@code ACTIVE}.
+     *
+     * @throws IllegalStateException when the account is not pending activation
+     */
+    public void activate() {
+        if (this.status != UserStatus.PENDING_ACTIVATION) {
+            throw new IllegalStateException("Only a user pending activation can be activated");
+        }
+        this.status = UserStatus.ACTIVE;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    /**
+     * Marks the account as {@code INACTIVE}.
+     *
+     * <p>Unlike {@link #activate()}, this transition has no precondition on the current status. The change is
+     * persisted by the caller through the repository.
+     */
+    public void deactivate() {
+        this.status = UserStatus.INACTIVE;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    /**
+     * Compromise path: increment tokenVersion by 1. All previously-issued
+     * refresh tokens carrying the OLD token_version will fail their family
+     * check on next presentation (auth-refresh spec: tokenVersion viejo).
+     * Persisted by the caller via UserRepository#save.
+     */
+    public void bumpTokenVersion() {
+        this.tokenVersion += 1;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    /**
+     * Replaces the password hash after a successful reset (US-AUTH-006) and
+     * bumps tokenVersion in the same call, so a caller cannot persist a
+     * changed password without also invalidating existing refresh tokens —
+     * changing the credential and closing prior sessions are one business
+     * event, not two independent calls a caller might forget to pair.
+     */
+    public void resetPassword(String newPasswordHash) {
+        this.passwordHash = Objects.requireNonNull(newPasswordHash, "newPasswordHash cannot be null");
+        this.tokenVersion += 1;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public boolean isActive() {
+        return this.status == UserStatus.ACTIVE;
+    }
+
+    // Getters
+    public UserId getId() {
+        return id;
+    }
+
+    public Email getEmail() {
+        return email;
+    }
+
+    public String getPasswordHash() {
+        return passwordHash;
+    }
+
+    public Role getRole() {
+        return role;
+    }
+
+    public UserStatus getStatus() {
+        return status;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public long getTokenVersion() {
+        return tokenVersion;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        User user = (User) o;
+        return Objects.equals(id, user.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
+    }
+
+    @Override
+    public String toString() {
+        return "User{id=" + id + ", email=" + email + ", role=" + role
+            + ", status=" + status + ", tokenVersion=" + tokenVersion + "}";
+    }
+}

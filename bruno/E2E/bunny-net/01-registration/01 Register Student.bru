@@ -1,0 +1,35 @@
+meta {
+  name: Register Student
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/{{apiVersion}}/auth/register
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "{{studentEmail}}",
+    "password": "{{studentPassword}}",
+    "role": "STUDENT"
+  }
+}
+
+docs {
+  Registers a fresh student dedicated to the local Bunny.net journey (issue
+  #129) — independent from the catalog-content and Mercado Pago journeys'
+  students so the three E2E flows never share entitlement/subscription state.
+}
+
+tests {
+  test("registration is accepted", function() {
+    expect(res.getStatus()).to.equal(202);
+  });
+}
+
+assert {
+  res.status: eq 202
+}

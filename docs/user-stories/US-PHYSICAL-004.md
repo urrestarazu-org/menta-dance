@@ -1,8 +1,8 @@
 # US-PHYSICAL-004: Compra y asignación automática de cupo
 
-**ID:** US-PHYSICAL-004  
-**Módulos:** Billing y Physical  
-**Prioridad:** Must Have  
+**ID:** US-PHYSICAL-004
+**Módulos:** Billing y Physical
+**Prioridad:** Must Have
 **Estado:** Draft
 
 ## Historia de usuario
@@ -87,3 +87,14 @@ aplica unicidad por Payment/sesión y devuelve CapacityAssignments tipadas.
 - [ ] Pruebas de expiración y conversión idempotente del hold técnico.
 - [ ] Ninguna asistencia queda habilitada sin una Purchase `ASSIGNED`.
 - [ ] Contratos OpenAPI de Billing y Physical actualizados.
+
+## Estado de implementación
+
+- **Implementado (BFF web, #365):** el alumno puede cotizar la mensualidad o una sesión individual y pagar con
+  Mercado Pago desde la web; los casos de falta de cupo (`409 CAPACITY_UNAVAILABLE`) y de cotización vencida
+  (`410`) tienen aviso propio. Ver
+  [06-BILLING-API.md](../06-BILLING-API.md#cotizar-y-pagar-clases-presenciales-desde-la-web-bff-365).
+- **Implementado (BFF web, #365):** la página de retorno informa el estado del pago que devuelve la API (confirmado,
+  en proceso, rechazado, cancelado o vencido). Un pago confirmado se muestra como "estamos asignando tus lugares",
+  no como sesiones ya asignadas.
+- **Pendiente (corte B):** mostrar las sesiones asignadas después del pago y el pago por transferencia bancaria.

@@ -1,0 +1,45 @@
+meta {
+  name: Create Physical Session
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/admin/physical/courses/{{physicalCourseId}}/sessions
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "date": "2026-09-16",
+    "startTime": "19:00:00",
+    "notes": "Clase especial de repaso"
+  }
+}
+
+script:post-response {
+  if (res.getStatus() === 201) {
+    bru.setVar("physicalSessionId", res.getBody().sessionId);
+  }
+}
+
+docs {
+  US-PHYSICAL-006 escenario 1. Requires an ADMIN or INSTRUCTOR bearer token
+  and an existing `physicalCourseId` (run "Create Physical Course" first).
+
+  `capacity` is omitted here — inherits the parent course's capacity.
+
+  Success contract: 201 with the full PhysicalSessionManagementResponse.
+  Error contract:
+    403 COURSE_NOT_OWNED → INSTRUCTOR is not the course's professor
+    404 COURSE_NOT_FOUND → courseId does not exist
+}
+
+assert {
+  res.status: eq 201
+}

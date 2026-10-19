@@ -1,0 +1,38 @@
+meta {
+  name: Update Physical Course
+  type: http
+  seq: 3
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/admin/physical/courses/{{physicalCourseId}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "capacity": 25
+  }
+}
+
+docs {
+  US-PHYSICAL-005 escenarios 3-5. Partial update — only fields present in the
+  body change. Run "Create Physical Course" first to populate
+  {{physicalCourseId}}.
+
+  Success contract: 200 with the updated PhysicalCourseManagementResponse.
+  Error contract:
+    403 COURSE_NOT_OWNED             → INSTRUCTOR editing a course they don't own
+    404 COURSE_NOT_FOUND             → courseId does not exist
+    409 COURSE_HAS_ACTIVE_ASSIGNMENTS → status: INACTIVE rejected because a
+                                        future session already has assignments
+}
+
+assert {
+  res.status: eq 200
+}

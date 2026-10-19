@@ -53,7 +53,94 @@ proveedor marca Payment `COMPLETED` de inmediato como liquidación financiera y
 la Purchase pasa a `PENDING_FULFILLMENT`. Sólo después de crear todas las
 asignaciones la Purchase queda `ASSIGNED` y se habilita asistencia. Si no se puede
 asignar todo el conjunto real, Payment permanece `COMPLETED`, la Purchase queda
-`EXCEPTION` y no se habilita asistencia hasta una resolución administrativa.
+`EXCEPTION` y no se habilita asistencia hasta una resolución administrativa. El
+motivo distingue la capacidad insuficiente (`CAPACITY_BELOW_ASSIGNED`) de que el alumno
+ya tenga la sesión (`ALREADY_ASSIGNED`); ver `docs/06-BILLING-API.md`.
+
+Un mensual cubre las próximas N sesiones **que el alumno todavía no tiene**: se
+saltean las sesiones donde ya tiene una asignación confirmada (por ejemplo, de una
+compra individual) y la búsqueda se extiende hacia adelante, hasta 120 días desde el
+instante de referencia, para completar N. El importe del quote no cambia. Si no hay N
+sesiones sin asignar dentro de ese horizonte, el checkout responde
+`409 CAPACITY_UNAVAILABLE`. Un individual no saltea ni extiende nada: cubre exactamente
+la sesión elegida, y si el alumno ya la tiene se rechaza (ver "Sesión individual ya
+asignada", #545).
+
+### Mensualidad sin sesiones nuevas (#541)
+
+Decisión de producto: **una mensualidad que no agrega ninguna sesión al alumno no se
+vende**. Si agrega al menos una, se cobra el precio completo del quote (sin prorrateo).
+
+- "No agrega ninguna sesión" significa que el alumno ya tiene asignación confirmada en
+  **todas** las sesiones que la mensualidad cubriría: las próximas N sesiones del curso
+  desde el instante de referencia, contadas sin saltear ninguna y sin mirar el cupo. Que
+  existan sesiones posteriores no cambia el resultado: si ya tiene las N que corresponden,
+  no hay nada para comprar.
+- **Cotización mensual**: se rechaza con `409 NO_NEW_SESSIONS` y no persiste ningún quote
+  (ver `docs/06-BILLING-API.md`).
+- **Checkout** (Mercado Pago y transferencia bancaria): se aplica la misma regla, con el
+  mismo código `409 NO_NEW_SESSIONS`, antes de crear el hold o el `Payment`. Cubre la ventana
+  entre la cotización y el checkout y las cotizaciones emitidas antes de esta regla.
+- **Propiedad parcial**: si el alumno tiene algunas de las sesiones cubiertas, pero no todas,
+  la compra sigue igual que hoy: precio completo, `scheduledSessionCount` sin cambios y
+  cobertura completada hacia adelante (#523).
+- **Atomicidad**: la lectura de las sesiones que el alumno ya tiene y la creación del hold no
+  son una única transacción; la ventana restante es la misma que ya describe la sección
+  siguiente (#533), no se agrega una nueva.
+
+### Sesión individual ya asignada (#545)
+
+Decisión de producto: **una compra individual de una sesión que el alumno ya tiene no se
+vende**. Antes se cobraba y, al confirmar, chocaba con `uq_physical_assignment_session_student`
+(`Purchase` en `EXCEPTION` con `ALREADY_ASSIGNED`, dinero cobrado, #532 / #539).
+
+- "Ya la tiene" significa asignación confirmada del alumno en esa sesión (las sesiones
+  `CANCELLED` no cuentan). La consulta es exacta sobre la sesión elegida: no depende del
+  horizonte de 120 días ni de que la sesión ya haya empezado.
+- **Cotización individual**: se rechaza con `409 NO_NEW_SESSIONS` y no persiste ningún quote.
+  Se evalúa después de resolver la sesión (una sesión inexistente sigue siendo
+  `404 PHYSICAL_SESSION_NOT_FOUND`).
+- **Checkout** (Mercado Pago y transferencia bancaria): repite la regla con el mismo código,
+  antes de crear el hold o el `Payment`, y antes de evaluar el cupo (una sesión llena que el
+  alumno ya tiene se informa como "ya la tenés", no como falta de cupo).
+- **Contrato**: no hay código nuevo. Sólo cambia el `detail` (individual: "Ya tenés lugar en
+  esta sesión."; mensual: "...esta mensualidad."); el BFF muestra un aviso válido para ambos.
+- Las sesiones que el alumno no tiene se cotizan y se compran como siempre.
+- **Atomicidad**: igual que en la mensualidad, la lectura y la creación del hold no son una
+  única transacción; la ventana restante es la de la sección siguiente (#533).
+
+### Ventana entre checkout y confirmación
+
+El conjunto de sesiones de una mensualidad se fija en el checkout: allí se leen las
+sesiones que el alumno ya tiene y se crean los holds. Si **entre el checkout y la
+confirmación del pago** el alumno recibe una asignación sobre una de las sesiones
+retenidas (por ejemplo, una compra individual de esa sesión o una asignación
+administrativa), el conjunto ya no es válido. Al confirmar, la conversión del hold choca
+con la unicidad `(session_id, student_id)` y se reporta como `ALREADY_ASSIGNED`.
+
+La ventana es angosta: sólo existe mientras el pago está pendiente (el hold nunca supera
+el deadline del proveedor) y exige que el mismo alumno obtenga por otra vía una sesión
+que justo estaba retenida para él. Reabrir el conjunto al confirmar obligaría a reservar
+capacidad de reemplazo y rompería la regla de que el conjunto queda fijo en el checkout;
+por eso no se hace (decisión de #533, V0).
+
+Resultado, sin cambios de comportamiento:
+
+- Payment queda `COMPLETED`: el dinero fue acreditado.
+- Purchase queda `EXCEPTION` y `billing.PurchaseExceptioned` lleva `reason = ALREADY_ASSIGNED`.
+- No se crea ninguna asignación de la compra (todo o nada): las demás sesiones retenidas
+  tampoco se asignan y los holds no se convierten. El alumno conserva únicamente la
+  asignación previa que provocó el conflicto.
+- No se habilita asistencia por esta compra.
+
+Resolución: no se resuelve automáticamente. El pasaje a `EXCEPTION` envía el aviso al
+alumno y a la dirección operativa (esta última con el `reason`) y la compra aparece en
+`GET /api/v1/admin/billing/purchases?status=EXCEPTION`, inventario de sólo lectura para
+`ADMIN`. El sistema no reasigna ni ejecuta la devolución: el equipo de operaciones decide el
+tratamiento (devolución o compensación) fuera del producto y luego **cierra la compra con
+registro** (ver "Resolución administrativa de una compra en EXCEPTION"). El motivo
+`ALREADY_ASSIGNED` indica que el problema no es de capacidad. Ver `docs/06-BILLING-API.md` y
+la prueba de integración `PhysicalPurchaseIntegrationTest`.
 
 La compra debe iniciarse antes del vencimiento del quote. La confirmación posterior
 conserva el precio snapshot, pero cobertura y sesiones elegibles se derivan del
@@ -85,3 +172,40 @@ se concilia manualmente con Mercado Pago, auditoría y logs correlacionados.
 El check-in exige asignación confirmada. Los lectores QR son dispositivos con
 secreto hasheado, expiración, revocación y rotación. Redis usa lock nonce + Lua
 compare-and-delete; al estar caído, no se procesa la solicitud autenticada.
+
+## Resolución administrativa de una compra en EXCEPTION (#539)
+
+Una compra en `EXCEPTION` con dinero cobrado necesita un cierre auditable. `ADMIN` la cierra con
+`POST /api/v1/admin/billing/purchases/{purchaseId}/resolution`:
+
+```json
+{ "resolution": "REFUNDED", "note": "Reembolsado desde el panel de Mercado Pago, ticket #4521" }
+```
+
+- `resolution`: `REFUNDED` (el dinero se devolvió al alumno) o `COMPENSATED` (se lo compensó de
+  otra forma). Es una decisión ya tomada fuera del producto: registrarla no mueve dinero.
+- `note`: obligatoria, hasta 500 caracteres. Queda en la compra y **no** viaja en el evento.
+- Respuesta `200` con la compra: `purchaseId`, `paymentId`, `status = RESOLVED`, `resolution`,
+  `note`, `resolvedBy`, `resolvedAt` y `physicalSessionIds`.
+
+Flujo y efectos:
+
+1. Se bloquea la compra, se valida que esté en `EXCEPTION` y se persiste `RESOLVED` con
+   quién, cuándo y por qué.
+2. En la misma transacción se agrega `billing.PurchaseResolved` al outbox
+   (`paymentId`, `purchaseId`, `userId`, `resolution`, `resolvedBy`, `occurredAt`).
+   `PurchaseResolvedOutboxEventHandler` lo reclama y sólo lo registra en el log; no notifica.
+3. No se toca el `Payment`, no se asigna ninguna sesión ni se convierte ningún hold, y no se
+   habilita asistencia.
+
+Errores: `404 PURCHASE_NOT_FOUND`, `409 ILLEGAL_PURCHASE_STATE_TRANSITION` (la compra no está en
+`EXCEPTION`), `409 PURCHASE_ALREADY_RESOLVED` (ya resuelta con otra decisión o nota) y `400`
+para nota vacía o de más de 500 caracteres o `resolution` ausente o desconocida. Repetir la
+misma decisión con la misma nota es idempotente: responde `200` sin evento nuevo.
+
+| Estado de la compra | Significado | Asistencia | Salidas |
+|---|---|---|---|
+| `PENDING_FULFILLMENT` | Pago acreditado, asignación en curso | No | `ASSIGNED`, `EXCEPTION` |
+| `ASSIGNED` | Todas las sesiones asignadas | Sí | (terminal) |
+| `EXCEPTION` | No se pudo asignar el conjunto | No | `RESOLVED` por resolución administrativa |
+| `RESOLVED` | Cerrada con registro (`REFUNDED` o `COMPENSATED`) | No | (terminal) |

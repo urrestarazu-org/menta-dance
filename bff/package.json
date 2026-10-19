@@ -1,0 +1,21 @@
+{
+  "name": "menta-dance-bff-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tailwind CSS pipeline of the Menta Dance BFF (ADR-0024)",
+  "engines": {
+    "node": "20.11.1"
+  },
+  "scripts": {
+    "build": "tailwindcss -i ./src/main/frontend/css/input.css -o ./build/generated/tailwind/static/css/app.css --minify && node ./src/main/frontend/scripts/copy-fonts.js",
+    "watch": "tailwindcss -i ./src/main/frontend/css/input.css -o ./build/resources/main/static/css/app.css --watch"
+  },
+  "devDependencies": {
+    "@fontsource/poppins": "5.3.0",
+    "@tailwindcss/forms": "0.5.7",
+    "@tailwindcss/typography": "0.5.10",
+    "autoprefixer": "10.4.17",
+    "postcss": "8.4.35",
+    "tailwindcss": "3.4.1"
+  }
+}

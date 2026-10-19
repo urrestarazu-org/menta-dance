@@ -1,0 +1,194 @@
+package com.menta.billing.infrastructure.persistence.adapter;
+
+import com.menta.billing.application.dto.SubscriptionHistoryEntry;
+import com.menta.billing.application.port.out.SubscriptionRepository;
+import com.menta.billing.domain.exception.SubscriptionAlreadyActiveException;
+import com.menta.billing.domain.model.PaymentId;
+import com.menta.billing.domain.model.PlanId;
+import com.menta.billing.domain.model.Subscription;
+import com.menta.billing.domain.model.SubscriptionStatus;
+import com.menta.billing.infrastructure.persistence.entity.SubscriptionCourseJpaEntity;
+import com.menta.billing.infrastructure.persistence.entity.SubscriptionJpaEntity;
+import com.menta.billing.infrastructure.persistence.mapper.SubscriptionJpaMapper;
+import com.menta.billing.infrastructure.persistence.repository.SubscriptionCourseJpaRepository;
+import com.menta.billing.infrastructure.persistence.repository.SubscriptionJpaRepository;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * JPA adapter for {@link SubscriptionRepository}.
+ *
+ * <p>The course snapshot is rewritten on every save rather than diffed: it is
+ * written exactly once, at activation, and a full replace cannot leave a
+ * half-updated snapshot behind.</p>
+ */
+@Component
+public class SubscriptionRepositoryAdapter implements SubscriptionRepository {
+
+    private final SubscriptionJpaRepository jpaRepository;
+    private final SubscriptionCourseJpaRepository courseJpaRepository;
+
+    public SubscriptionRepositoryAdapter(
+        SubscriptionJpaRepository jpaRepository, SubscriptionCourseJpaRepository courseJpaRepository
+    ) {
+        this.jpaRepository = jpaRepository;
+        this.courseJpaRepository = courseJpaRepository;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Subscription save(Subscription subscription) {
+        SubscriptionJpaEntity saved = jpaRepository.save(SubscriptionJpaMapper.toEntity(subscription));
+        return SubscriptionJpaMapper.toDomain(saved, replaceCourses(subscription));
+    }
+
+    /**
+     * The insert that claims the user's slot. {@code flush()} forces the
+     * unique index to decide <em>here</em> instead of at commit, so the
+     * caller sees a domain conflict rather than an opaque commit failure.
+     *
+     * <p>Not caught-and-continued: the violation must roll the caller's whole
+     * transaction back, which is exactly what makes escenario 3's "no crea un
+     * Payment ni una Subscription, ni inicia un cobro" hold for the losing
+     * side of a race, without any compensating delete.</p>
+     */
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Subscription saveNewCheckout(Subscription subscription) {
+        try {
+            SubscriptionJpaEntity saved = jpaRepository.save(SubscriptionJpaMapper.toEntity(subscription));
+            jpaRepository.flush();
+            return SubscriptionJpaMapper.toDomain(saved, List.of());
+        } catch (DataIntegrityViolationException slotTaken) {
+            throw new SubscriptionAlreadyActiveException(null);
+        }
+    }
+
+    /**
+     * A trial is born {@code ACTIVE} with its course snapshot already known (US-BILLING-012),
+     * so unlike {@link #saveNewCheckout(Subscription)} the slot claim and the snapshot must
+     * commit together (design A12): reusing {@code saveNewCheckout} would map back with an
+     * empty course list, since its snapshot is written later at activation.
+     */
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Subscription saveNewSubscription(Subscription subscription) {
+        try {
+            SubscriptionJpaEntity saved = jpaRepository.save(SubscriptionJpaMapper.toEntity(subscription));
+            jpaRepository.flush();
+            return SubscriptionJpaMapper.toDomain(saved, replaceCourses(subscription));
+        } catch (DataIntegrityViolationException slotTaken) {
+            throw new SubscriptionAlreadyActiveException(null);
+        }
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public List<UUID> findExpirableIds(Instant now, int limit) {
+        return jpaRepository.findExpirableIds(now, PageRequest.of(0, limit));
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public Optional<Subscription> findByPaymentId(PaymentId paymentId) {
+        return jpaRepository.findByPaymentId(paymentId.getValue()).map(this::toDomainWithCourses);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public Optional<Subscription> findByUserIdAndIdempotencyKey(UUID userId, String idempotencyKey) {
+        return jpaRepository.findByUserIdAndIdempotencyKey(userId, idempotencyKey).map(this::toDomainWithCourses);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public Optional<Subscription> findCurrentByUserId(UUID userId) {
+        return jpaRepository.findByActiveUserId(userId).map(this::toDomainWithCourses);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public List<Subscription> findAllByUserId(UUID userId) {
+        return jpaRepository.findAllByUserId(userId).stream().map(this::toDomainWithCourses).toList();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public Optional<Subscription> findActiveByUserId(UUID userId) {
+        return jpaRepository.findByUserIdAndStatus(userId, SubscriptionStatus.ACTIVE.name())
+            .map(this::toDomainWithCourses);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public Optional<Subscription> findById(UUID subscriptionId) {
+        return jpaRepository.findById(subscriptionId).map(this::toDomainWithCourses);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public Optional<Subscription> findLatestCancelledWithRemainingAccess(UUID userId, PlanId planId, Instant at) {
+        return jpaRepository.findFirstByUserIdAndPlanIdAndStatusAndEndDateAfterOrderByEndDateDesc(
+            userId, planId.getValue(), SubscriptionStatus.CANCELLED.name(), at
+        ).map(this::toDomainWithCourses);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public Optional<Subscription> findLatestExpiredByUserId(UUID userId) {
+        return jpaRepository.findFirstByUserIdAndStatusOrderByEndDateDesc(userId, SubscriptionStatus.EXPIRED.name())
+            .map(this::toDomainWithCourses);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public List<SubscriptionHistoryEntry> findHistoryByUserId(UUID userId) {
+        return jpaRepository.findAllByUserIdOrderByCreatedAtDesc(userId).stream()
+            .map(this::toHistoryEntry)
+            .toList();
+    }
+
+    private SubscriptionHistoryEntry toHistoryEntry(SubscriptionJpaEntity entity) {
+        return new SubscriptionHistoryEntry(
+            entity.getId().toString(),
+            entity.getPlanId().toString(),
+            SubscriptionStatus.valueOf(entity.getStatus()),
+            entity.getStartDate(),
+            entity.getEndDate(),
+            entity.getCreatedAt()
+        );
+    }
+
+    private Subscription toDomainWithCourses(SubscriptionJpaEntity entity) {
+        return SubscriptionJpaMapper.toDomain(entity, courseIdsOf(entity.getId()));
+    }
+
+    private List<String> courseIdsOf(UUID subscriptionId) {
+        return courseJpaRepository.findBySubscriptionId(subscriptionId).stream()
+            .map(SubscriptionCourseJpaEntity::getCourseId)
+            .toList();
+    }
+
+    /**
+     * Flushes the delete before queuing the inserts. Without it, Hibernate's action queue can
+     * flush insertions before deletions regardless of call order, and a save that repeats an
+     * unchanged snapshot (US-BILLING-011: cancelling an already-{@code ASSIGNED} subscription
+     * calls {@link #save} a second time with the same course ids) would collide with the
+     * still-present old rows under {@code uq_billing_subscription_courses (subscription_id, course_id)}.
+     */
+    private List<String> replaceCourses(Subscription subscription) {
+        courseJpaRepository.deleteBySubscriptionId(subscription.getId());
+        courseJpaRepository.flush();
+        courseJpaRepository.saveAll(subscription.getCourseIds().stream()
+            .map(courseId -> new SubscriptionCourseJpaEntity(subscription.getId(), courseId))
+            .toList());
+        return subscription.getCourseIds();
+    }
+}

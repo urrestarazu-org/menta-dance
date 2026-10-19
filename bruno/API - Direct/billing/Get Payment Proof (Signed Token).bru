@@ -1,0 +1,43 @@
+meta {
+  name: Get Payment Proof (Signed Token)
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{baseUrl}}/api/v1/billing/payments/{{paymentId}}/proof?token={{proofToken}}
+  body: none
+  auth: none
+}
+
+params:query {
+  token: {{proofToken}}
+}
+
+docs {
+  #33, US-BILLING-005 (D1/C2/C5/C6). No bearer token — the signed `token`
+  query param IS the credential. Copy `proofToken` from `proofUrl`'s query
+  string in "Get Payment Detail (Admin)"'s response (valid 15 minutes).
+
+  An absent token responds 401 (tasks.md Deviation #2). A present but
+  tampered/expired token, or one signed for a different paymentId, responds
+  403 — deliberately indistinguishable from each other (anti-oracle
+  property, design C2).
+
+  Success contract (200): raw file bytes,
+    Content-Disposition: inline, Cache-Control: no-store.
+
+  Error contract:
+    401  → token query param is absent
+    403 INVALID_PROOF_TOKEN  → tampered, expired, or wrong-payment token
+}
+
+tests {
+  test("Serves the stored proof file", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+}
+
+assert {
+  res.status: eq 200
+}

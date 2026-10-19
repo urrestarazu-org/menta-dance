@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Overlay de debug. El manifest merger suma este atributo al manifest principal
+  sólo en builds de debug, de modo que release nunca referencia la
+  configuración que habilita cleartext.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application android:networkSecurityConfig="@xml/network_security_config" />
+
+</manifest>

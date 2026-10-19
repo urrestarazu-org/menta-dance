@@ -1,0 +1,64 @@
+meta {
+  name: Resolve Exception Purchase (Admin)
+  type: http
+  seq: 14
+}
+
+post {
+  url: {{baseUrl}}/api/v1/admin/billing/purchases/{{purchaseId}}/resolution
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  content-type: application/json
+}
+
+body:json {
+  {
+    "resolution": "REFUNDED",
+    "note": "Reembolsado manualmente desde el panel de Mercado Pago, ticket #4521"
+  }
+}
+
+docs {
+  #539. Requires an ADMIN bearer token and a purchaseId currently in
+  EXCEPTION (see "List Purchases In Exception").
+
+  Closes the purchase as REFUNDED or COMPENSATED with a mandatory note. The
+  purchase moves to the terminal RESOLVED status and keeps who resolved it,
+  when and why. The payment is not touched and no session is assigned, so
+  attendance stays disabled. billing.PurchaseResolved is published in the
+  same transaction (without the note).
+
+  Idempotent: the identical resolution and note answers 200 again with no
+  new event. A different resolution or note on a resolved purchase is 409.
+
+  Success contract (200):
+    { purchaseId, paymentId, status: "RESOLVED", resolution, note,
+      resolvedBy, resolvedAt, physicalSessionIds }
+
+  Error contract:
+    400 INVALID_REQUEST                  -> resolution missing/unknown, note blank or over 500 chars,
+                                            or purchaseId is not a UUID
+    401                                  -> no access token
+    403                                  -> caller is not ADMIN
+    404 PURCHASE_NOT_FOUND               -> purchaseId does not exist
+    409 ILLEGAL_PURCHASE_STATE_TRANSITION -> purchase is not in EXCEPTION
+    409 PURCHASE_ALREADY_RESOLVED        -> already resolved with another decision or note
+}
+
+tests {
+  test("Resolves the purchase", function() {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().status).to.equal("RESOLVED");
+  });
+}
+
+assert {
+  res.status: eq 200
+}

@@ -1,0 +1,41 @@
+spring:
+  # Use H2 in-memory database for tests
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+
+  # Disable Flyway for tests (using ddl-auto instead)
+  flyway:
+    enabled: false
+
+  # Disable Redis for tests
+  data:
+    redis:
+      host: localhost
+      port: 6379
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+
+# #33, US-BILLING-005, design D6/C3: base application.yml deliberately sets no fallback for this
+# secret, so every profile that boots BillingConfiguration's context must supply its own test-only
+# value here.
+billing:
+  bank-transfer:
+    proof:
+      token-secret: "test-only-proof-token-secret-not-for-production-use"
+
+# Logging for tests
+logging:
+  level:
+    root: WARN
+    com.menta: DEBUG

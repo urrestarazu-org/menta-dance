@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('Error', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<div class="mx-auto max-w-sm">
+    <h1 class="mb-6">No pudimos mostrar la página</h1>
+
+    <div class="card space-y-2" role="alert">
+        <p th:if="${status == 404}">No encontramos la página que buscás.</p>
+        <p th:unless="${status == 404}">Algo salió mal de nuestro lado. Intentá nuevamente en unos minutos.</p>
+        <p class="text-sm" th:if="${status}" th:text="'Código: ' + ${status}">Código: 500</p>
+    </div>
+
+    <p class="mt-6"><a th:href="@{/}">Volver al inicio</a></p>
+</div>
+</th:block>
+</body>
+</html>

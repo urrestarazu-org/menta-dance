@@ -1,0 +1,39 @@
+meta {
+  name: Complete Lesson
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/api/v1/virtual/lessons/{{virtualEntitledLessonId}}/complete
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+script:pre-request {
+  if (!bru.getEnvVar("virtualEntitledLessonId") || !bru.getEnvVar("authToken")) {
+    bru.runner.skipRequest();
+  }
+}
+
+tests {
+  test("Status is 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("Completing never moves the saved position", function() {
+    expect(res.getBody().completed).to.equal(true);
+  });
+}
+
+docs {
+  US-VIRTUAL-005 (#52). Same access cascade as Save Lesson Progress.
+  Completion is independent and idempotent: repeating this request is a
+  no-op, and it never moves positionSeconds regardless of the saved value
+  (design.md decisions 3 and 7). Run Get Lesson Progress after this and
+  compare positionSeconds before/after to confirm.
+}

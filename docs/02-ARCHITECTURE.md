@@ -66,7 +66,12 @@ menta-dance/
 │   ├── virtual/                  # :api:virtual — cursos online
 │   └── physical/                 # :api:physical — clases presenciales
 ├── bff/                          # Web frontend (Thymeleaf)
-├── android/                      # App móvil (Kotlin + Compose)
+├── android/                      # App móvil (Kotlin + Compose + Hilt)
+│   └── src/main/java/com/menta/android/
+│       ├── presentation/         # ViewModels, UI state y pantallas Compose
+│       ├── domain/               # Casos de uso, modelos y puertos
+│       ├── data/                 # Repositorios y adaptadores
+│       └── di/                   # Wiring de dependencias con Hilt
 └── docs/                         # Documentación técnica
 ```
 

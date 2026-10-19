@@ -33,7 +33,7 @@ complementarios son `Should Have`.
 | [US-AUTH-006](US-AUTH-006.md) | Reset de contraseña | Auth | Must Have |
 | [US-AUTH-007](US-AUTH-007.md) | Logout y revocación | Auth | Must Have |
 
-### Billing (9 historias)
+### Billing (12 historias)
 
 | ID | Título | Módulo | Prioridad |
 |---|---|---|---|
@@ -46,6 +46,9 @@ complementarios son `Should Have`.
 | [US-BILLING-007](US-BILLING-007.md) | Compra presencial y pago individual | Billing, Physical y api:app | Must Have |
 | [US-BILLING-008](US-BILLING-008.md) | Transferencia presencial y excepción de capacidad | Billing, Physical y api:app | Should Have |
 | [US-BILLING-009](US-BILLING-009.md) | Administración y auditoría de pricing presencial | Billing | Must Have |
+| [US-BILLING-010](US-BILLING-010.md) | Suscripción a un plan con pago online | Billing y api:app | Must Have |
+| [US-BILLING-011](US-BILLING-011.md) | Cancelación de suscripción | Billing | Should Have |
+| [US-BILLING-012](US-BILLING-012.md) | Suscripción de prueba asignada por un administrador | Billing | Should Have |
 
 ### Virtual (8 historias)
 
@@ -78,7 +81,7 @@ complementarios son `Should Have`.
 | Módulo | Total | Must Have | Should Have |
 |---|---:|---:|---:|
 | Auth | 7 | 6 | 1 |
-| Billing | 9 | 7 | 2 |
+| Billing | 12 | 8 | 4 |
 | Virtual | 8 | 6 | 2 |
 | Physical | 8 | 7 | 1 |
-| **Total** | **32** | **26** | **6** |
+| **Total** | **35** | **27** | **8** |

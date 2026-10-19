@@ -1,0 +1,47 @@
+# Runtime image for the API module (build once, deploy many).
+# The JAR is NOT compiled here: CI (or the developer) builds it first, so the artifact that
+# passed the tests is the same one that runs in production.
+#   ./gradlew :api:app:bootJar
+#   docker build -f infra/docker/app/Dockerfile.api .
+# Alpine 3.23 on purpose: the 3.24 variant of this JRE still ships libexpat 2.8.5-r0 (CVE-2026-77214,
+# HIGH, fixed in 2.9.0-r0), which fails the Trivy gate. Go back to 3.24 once eclipse-temurin
+# publishes it with libexpat >= 2.9.0.
+# The 3.23 image also still carries libexpat 2.8.5-r0 although 2.9.0-r0 is already in the Alpine
+# 3.23 repository, hence the `apk upgrade` below. Drop it once the base image ships 2.9.0-r0.
+FROM eclipse-temurin:21.0.12.1_1-jre-alpine-3.23
+
+WORKDIR /app
+
+# Upgrade libexpat (CVE-2026-77214), then create the non-root user and the directory for payment
+# proofs owned by it. In production a named volume is mounted there (payment_proofs_data): a new
+# volume inherits the owner and permissions of the image path, so without this the directory is
+# root-owned and the API (user menta) cannot write.
+RUN apk upgrade --no-cache libexpat && \
+    addgroup -g 1000 menta && \
+    adduser -D -u 1000 -G menta menta && \
+    mkdir -p /var/menta-dance/payment-proofs && \
+    chown menta:menta /var/menta-dance/payment-proofs
+
+# Copy the pre-built JAR
+COPY --chown=menta:menta api/app/build/libs/menta-dance-api.jar /app/app.jar
+
+# Switch to non-root user
+USER menta
+
+# Expose API port
+EXPOSE 8081
+
+# Health check
+# DL3025 suppressed on purpose: the shell form is needed for "|| exit 1", which maps any
+# wget failure to exit code 1 (unhealthy). The exec form cannot express that operator.
+# hadolint ignore=DL3025
+HEALTHCHECK --interval=30s --timeout=10s --retries=5 --start-period=60s \
+    CMD wget --quiet --tries=1 --spider http://localhost:8081/actuator/health || exit 1
+
+# JVM optimization flags (can be overridden via JAVA_OPTS environment)
+ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC"
+
+# Run application
+# sh -c expande $JAVA_OPTS antes de ejecutar Java
+# El exec interno reemplaza el shell para que Java sea PID 1
+CMD ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]

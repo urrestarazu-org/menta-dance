@@ -1,0 +1,29 @@
+meta {
+  name: Delete Virtual Course
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/admin/virtual/courses/{{virtualCourseId}}
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  US-VIRTUAL-006. Only a DRAFT course can be deleted — a course that was
+  never published cannot have any subscriber by construction.
+
+  Success contract: 204 No Content.
+  Error contract:
+    403 COURSE_NOT_OWNED → INSTRUCTOR is not the course's professor
+    404 COURSE_NOT_FOUND → courseId does not exist
+    409 COURSE_NOT_DRAFT → course is PUBLISHED or ARCHIVED
+}
+
+assert {
+  res.status: eq 204
+}

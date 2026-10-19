@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page(${course.title()}, ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<h1 class="mb-2" th:text="${course.title()}">Título del curso</h1>
+<p class="mb-4" th:text="${course.description()}">Descripción del curso</p>
+
+<p class="mb-6 text-sm">
+    <span th:text="${course.stats().moduleCount()} + ' módulos'">0 módulos</span> ·
+    <span th:text="${course.stats().lessonCount()} + ' lecciones'">0 lecciones</span> ·
+    <span th:text="${course.stats().totalDuration()}">0m</span>
+</p>
+
+<p th:if="${resume}" class="mb-8">
+    <a class="btn btn-primary" th:href="@{'/courses/' + ${course.courseId()} + '/lessons/' + ${resume.lessonId()}}">
+        Continuar: <span th:text="${resume.title()}">Lección</span>
+        (<span th:text="${resume.completedLessons()}">0</span>/<span th:text="${resume.totalLessons()}">0</span> ·
+        <span th:text="${resume.percentage()}">0</span>%)
+    </a>
+</p>
+<p th:unless="${resume}" class="mb-8">
+    <a class="btn btn-primary" th:href="@{'/courses/' + ${course.courseId()}}">Comenzar</a>
+</p>
+
+<section th:each="module : ${course.modules()}" class="mb-8">
+    <h2 class="mb-3" th:text="${module.title()}">Módulo</h2>
+    <ul class="space-y-2">
+        <li th:each="lesson : ${module.lessons()}" class="card flex flex-wrap items-center justify-between gap-3 p-4">
+            <a th:href="@{'/courses/' + ${course.courseId()} + '/lessons/' + ${lesson.lessonId()}}"
+               th:text="${lesson.title()}">Lección</a>
+            <span class="text-sm">
+                <span th:text="${lesson.duration()}">00:00</span>
+                <span th:if="${lesson.isFree()}" class="badge badge-success">Gratis</span>
+                <span th:unless="${lesson.isFree()}" class="badge badge-neutral">Restringida</span>
+            </span>
+        </li>
+    </ul>
+</section>
+</th:block>
+</body>
+</html>

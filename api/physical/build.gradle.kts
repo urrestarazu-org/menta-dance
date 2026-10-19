@@ -1,0 +1,75 @@
+import com.menta.buildlogic.registerLayeredCoverageVerification
+
+plugins {
+    id("java-library")
+}
+
+description = "Physical classes module"
+
+dependencies {
+    // Shared module
+    implementation(project(":api:shared"))
+
+    // Spring Boot
+    implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+    implementation("org.springframework.boot:spring-boot-starter-validation")
+    // First Physical endpoint that reads the authenticated caller (#42):
+    // Authentication is a Spring Security type, resolved as a controller
+    // method argument. Already on the runtime classpath via :api:app /
+    // :api:auth; needed here too so this module compiles on its own.
+    implementation("org.springframework.boot:spring-boot-starter-security")
+
+    // Redis — check-in door lock (US-PHYSICAL-001 escenario 6).
+    implementation("org.springframework.boot:spring-boot-starter-data-redis")
+
+    // Micrometer (#266): the check-in device-rejection adapter increments a counter. Version comes
+    // from the Spring Boot BOM; application/ must never import it (ArchitectureTest).
+    implementation("io.micrometer:micrometer-core")
+
+    // Database
+    runtimeOnly("com.mysql:mysql-connector-j")
+
+    // MapStruct for mapping between layers
+    implementation(libs.mapstruct)
+    annotationProcessor(libs.mapstruct.processor)
+
+    // Annotations
+    compileOnly(libs.lombok)
+    annotationProcessor(libs.lombok)
+
+    // Testing
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("com.tngtech.archunit:archunit-junit5:1.5.1")
+    // #39, US-PHYSICAL-002: PhysicalCapacityAssignmentRepositoryAdapterTest is this module's
+    // first @DataJpaTest against real MySQL 8.0 (mirrors :api:virtual's
+    // LessonProgressRepositoryAdapterProjectionTest — same rationale: half-open Instant bounds
+    // and explicit entity joins need real MySQL semantics, not H2).
+    testImplementation("org.testcontainers:testcontainers")
+    testImplementation("org.testcontainers:junit-jupiter")
+    testImplementation("org.testcontainers:mysql")
+}
+
+tasks.jar {
+    enabled = true
+}
+
+// Coverage gates. The mechanism lives in buildSrc's
+// registerLayeredCoverageVerification; what stays here is the policy.
+// Migrated off a flat element = CLASS 0.80 for the same reason as
+// :api:virtual — see that module's note.
+//
+//   - Domain + Application: 0.95 LINE (BUNDLE). Real: 97.8%.
+//   - Infrastructure: 0.90 LINE (BUNDLE). Real: 97.3%.
+val jacocoDomainApplicationCoverageVerification = registerLayeredCoverageVerification(
+    "jacocoDomainApplicationCoverageVerification", "0.95",
+    listOf("com/menta/physical/domain/**", "com/menta/physical/application/**")
+)
+val jacocoInfrastructureCoverageVerification = registerLayeredCoverageVerification(
+    "jacocoInfrastructureCoverageVerification", "0.90",
+    listOf("com/menta/physical/infrastructure/**")
+)
+
+tasks.check {
+    dependsOn(jacocoDomainApplicationCoverageVerification, jacocoInfrastructureCoverageVerification)
+}

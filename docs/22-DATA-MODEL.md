@@ -21,6 +21,13 @@ como valor y se validan mediante puertos; no se crean FKs ni `JOIN`s cruzados.
   reparación.
 - `auth_password_reset_tokens`: `token_hash`, `expires_at`, `used_at` y
   `user_id`; nunca almacena el token en claro.
+- `auth_activation_tokens`: `id`, `user_id`, `token_hash CHAR(64) UNIQUE`,
+  `expires_at`, `used_at`, `invalidated_at` y `created_at`; el token de
+  activación nunca se almacena en claro. El sobre de entrega temporal usa
+  `delivery_ciphertext`, `delivery_nonce` y `delivery_key_version`, se cifra
+  con AES-GCM y se limpia después de aceptar el correo. No tiene FK hacia
+  `auth_users`: ambos recursos son propiedad de Auth y se preserva el límite
+  modular mediante el repositorio.
 
 ## Billing
 
@@ -84,7 +91,10 @@ como valor y se validan mediante puertos; no se crean FKs ni `JOIN`s cruzados.
 - `physical_courses`, `physical_sessions`, `physical_capacity_assignments`,
   `physical_attendance` y holds técnicos internos.
 - Una sesión contiene fecha/hora/capacidad. Una asignación confirmada ocupa un
-  cupo y es única por alumno+sesión.
+  cupo y es única por alumno+sesión. Lleva `assignment_type` (`MONTHLY` o
+  `INDIVIDUAL`, `NOT NULL` sin valor por defecto desde V26; las filas previas
+  quedaron como `MONTHLY`) y `GET /physical/sessions/me` lo expone como
+  `assignmentType`.
 - `physical_qr_devices` guarda `secret_hash`, `expires_at`, `revoked_at`,
   `rotated_at` y auditoría; nunca un secreto en claro.
 - `physical_outbox`: eventos durables de asignación y asistencia; mismo patrón

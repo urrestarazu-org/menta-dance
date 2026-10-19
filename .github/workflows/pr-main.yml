@@ -1,0 +1,521 @@
+name: PR to Main (Full Pipeline)
+
+# Workflow completo para PRs a main y releases
+# Incluye todos los checks de pr-develop.yml + coverage + integration tests
+# GitHub filtra pull_request por rama destino; el origen release/* o hotfix/*
+# se exige mediante las reglas de protección/merge de main.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Gates de release pendientes de habilitación segura:
+# SonarCloud requiere organización/proyecto/token; Playwright y Gatling aún no
+# están cableados al build. Se activarán aquí, nunca en pr-develop.yml, cuando
+# esos contratos existan. Trivy ya está activo (job trivy-image, #192).
+
+jobs:
+  # Gitleaks: detecta secretos en TODO el historial alcanzable desde el commit de la PR.
+  # El hook de pre-commit es sólo conveniencia local (se saltea con --no-verify);
+  # este job es el que realmente cierra la puerta. Ver docs/16-CICD-PIPELINE.md.
+  gitleaks:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Historial completo: con el checkout superficial por defecto sólo se vería el último commit
+          fetch-depth: 0
+
+      - name: Scan history for secrets
+        run: |
+          # Imagen oficial con versión exacta: gitleaks/gitleaks-action exige una GITLEAKS_LICENSE en repos de organización, y Dependabot y los forks no reciben secrets de Actions.
+          # GIT_CONFIG_*: evita "dubious ownership" (el repo se monta con otro UID).
+          set +e
+          output="$(docker run --rm \
+            -e GIT_CONFIG_COUNT=1 \
+            -e GIT_CONFIG_KEY_0=safe.directory \
+            -e GIT_CONFIG_VALUE_0=/repo \
+            -v "$(pwd):/repo:ro" -w /repo \
+            ghcr.io/gitleaks/gitleaks:v8.30.1 \
+            git --config .gitleaks.toml --redact --verbose --no-banner . 2>&1)"
+          status=$?
+          set -e
+          echo "$output"
+          if [ "$status" -ne 0 ]; then
+            echo "::error::Gitleaks encontró secretos o falló. Si es un secreto real: rotar primero la credencial (docs/16-CICD-PIPELINE.md)"
+            exit 1
+          fi
+          # Guarda contra fail-open: gitleaks reporta "no leaks found" aunque git haya fallado y escaneado 0 commits
+          if ! echo "$output" | grep -qE '[1-9][0-9]* commits scanned'; then
+            echo "::error::Gitleaks no escaneó ningún commit; el resultado no es confiable"
+            exit 1
+          fi
+
+  # SpotBugs + Find Security Bugs: SAST sobre el bytecode de producción de los 7 módulos JVM.
+  # Es seguridad, no estilo: Checkstyle no busca vulnerabilidades. Ver docs/16-CICD-PIPELINE.md.
+  # Job independiente (corre en paralelo con full-build-and-test); falla ante hallazgos de severidad alta.
+  spotbugs:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        # GitHub Actions reusable: caché de Gradle User Home (reemplaza `cache: 'gradle'` de setup-java).
+        # Solo lectura en ramas que no son la default; develop escribe la caché. También valida los wrapper JAR.
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          validate-wrappers: true
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run SpotBugs (Find Security Bugs)
+        # --continue: analiza todos los módulos aunque uno falle, para que el reporte sea completo
+        run: ./gradlew spotbugsMain --continue
+
+      - name: Upload SpotBugs reports
+        # if: always() → los reportes son más útiles justo cuando el análisis falla
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: spotbugs-reports
+          path: '**/build/reports/spotbugs/**'
+
+  full-build-and-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        # SHA pinning: fija una revisión inmutable de la acción y mitiga el retargeting de tags
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up JDK 21
+        # GitHub Actions reusable: configura el JDK (la caché de Gradle la maneja setup-gradle)
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        # GitHub Actions reusable: caché de Gradle User Home (reemplaza `cache: 'gradle'` de setup-java).
+        # Solo lectura en ramas que no son la default; develop escribe la caché. También valida los wrapper JAR.
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          validate-wrappers: true
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run Checkstyle
+        # Checkstyle primero: un error de estilo falla en segundos, antes del build completo.
+        # Luego `build` las encuentra UP-TO-DATE.
+        run: ./gradlew --no-build-cache :api:auth:checkstyleMain :api:auth:checkstyleTest :api:billing:checkstyleMain :api:billing:checkstyleTest :api:physical:checkstyleMain :api:physical:checkstyleTest :api:virtual:checkstyleMain :api:virtual:checkstyleTest :api:shared:checkstyleMain :api:shared:checkstyleTest :api:app:checkstyleMain :api:app:checkstyleTest :bff:checkstyleMain :bff:checkstyleTest
+
+      - name: Build with Gradle
+        # `build` ya ejecuta tests, ArchUnit, Checkstyle, jacocoTestReport (reporte HTML/XML)
+        # y jacocoTestCoverageVerification (umbrales por capa, ver docs/14-TEST-STRATEGY.md)
+        # en los 7 módulos JVM; por eso no hay pasos aparte para esas tareas.
+        # --no-build-cache: el gate de release compila y testea siempre desde las fuentes,
+        # sin reutilizar salidas cacheadas. Sin `clean`: no hace falta en un runner efímero.
+        # :android:assembleDebugAndroidTest compila y empaqueta los tests instrumentados, que
+        # `build` no toca (no hay emulador en CI para ejecutarlos; ver docs/16-CICD-PIPELINE.md,
+        # "Qué verifica el CI del módulo Android").
+        run: ./gradlew build :android:assembleDebugAndroidTest --no-build-cache
+
+      - name: Upload test results
+        # if: always() → ejecuta siempre (éxito o fallo) para preservar evidencia
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-results
+          # Los módulos JVM escriben en test/; Android (AGP) en testDebugUnitTest/.
+          path: |
+            **/build/test-results/test/*.xml
+            android/build/test-results/testDebugUnitTest/*.xml
+
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-reports
+          path: '**/build/reports/jacoco/test/html/**'
+
+  # Job independiente que corre en paralelo con full-build-and-test
+  nginx-validation:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate NGINX configuration syntax
+        run: |
+          # Contenedor efímero (--rm): se destruye automáticamente al terminar
+          # --add-host: simula DNS interno para que nginx.conf valide upstreams
+          # -v con :ro: monta archivos read-only (seguridad)
+          # nginx -t: comando de validación sin levantar el server
+          docker run --rm \
+            --add-host menta-api:127.0.0.1 \
+            --add-host menta-bff:127.0.0.1 \
+            -v $(pwd)/infra/docker/nginx/conf/nginx.conf:/etc/nginx/nginx.conf:ro \
+            -v $(pwd)/infra/docker/nginx/conf/conf.d:/etc/nginx/conf.d:ro \
+            nginx:1.27.3-alpine \
+            nginx -t
+
+      - name: Validate production NGINX configuration syntax
+        run: |
+          # Generar certificado SSL temporal auto-firmado para validación
+          # -x509: genera certificado (no CSR)
+          # -nodes: no encriptar la key privada (no password)
+          # -days 1: válido por 1 día (solo para CI)
+          # -subj: Subject Name del certificado (CN = Common Name)
+          mkdir -p /tmp/nginx-certs
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -subj '/CN=mentadance.com' \
+            -keyout /tmp/nginx-certs/mentadance.com.key \
+            -out /tmp/nginx-certs/mentadance.com-fullchain.crt
+          docker run --rm \
+            --add-host menta-api:127.0.0.1 \
+            --add-host menta-bff:127.0.0.1 \
+            -v $(pwd)/infra/docker/nginx/conf/nginx.production.conf.example:/etc/nginx/nginx.conf:ro \
+            -v $(pwd)/infra/docker/nginx/conf/conf.d:/etc/nginx/conf.d:ro \
+            -v /tmp/nginx-certs:/etc/nginx/certs:ro \
+            nginx:1.27.3-alpine \
+            nginx -t
+
+      - name: Validate all locations resolve
+        run: |
+          docker run --rm \
+            --add-host menta-api:127.0.0.1 \
+            --add-host menta-bff:127.0.0.1 \
+            -v $(pwd)/infra/docker/nginx/conf/nginx.conf:/etc/nginx/nginx.conf:ro \
+            -v $(pwd)/infra/docker/nginx/conf/conf.d:/etc/nginx/conf.d:ro \
+            nginx:1.27.3-alpine \
+            sh -c "nginx -T | grep -E 'location|upstream' || exit 1"
+
+      - name: Fail on remaining TODOs in nginx config
+        run: |
+          # Bloquea merge si hay TODOs sin resolver en config crítica
+          if grep -nE 'TODO|FIXME|XXX' infra/docker/nginx/conf/*.conf infra/docker/nginx/conf/conf.d/*.conf; then
+            echo "::error::TODOs sin resolver en config nginx"
+            exit 1
+          fi
+
+  docker-compose-validation:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate database compose
+        # working-directory: cambia el directorio para este step
+        working-directory: infra/docker/database
+        run: |
+          # Variables requeridas por docker-compose.yml (sin valores reales)
+          export MYSQL_ROOT_PASSWORD=test
+          export MYSQL_APP_PASSWORD=test
+          # docker compose config: valida sintaxis YAML sin levantar contenedores
+          # > /dev/null: descarta output, solo nos importa el exit code
+          docker compose config > /dev/null
+
+      - name: Validate nginx compose
+        working-directory: infra/docker/nginx
+        run: |
+          export MYSQL_ROOT_PASSWORD=test
+          export MYSQL_APP_PASSWORD=test
+          export BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET=test
+          docker compose config > /dev/null
+
+      - name: Validate production nginx compose overlay
+        working-directory: infra/docker/nginx
+        run: |
+          export MYSQL_ROOT_PASSWORD=test
+          export MYSQL_APP_PASSWORD=test
+          export BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET=test
+          # Compose overlay pattern: -f base + -f override
+          # docker-compose.production.yml sobrescribe/extiende docker-compose.yml
+          # Ej: monta nginx.production.conf en vez de nginx.conf
+          ENVIRONMENT=production docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.production.yml \
+            config > /dev/null
+
+      - name: Validate app compose
+        working-directory: infra/docker/app
+        run: |
+          export MYSQL_ROOT_PASSWORD=test
+          export MYSQL_APP_PASSWORD=test
+          docker compose config > /dev/null
+
+      - name: Validate production compose
+        working-directory: infra/docker/prod
+        run: |
+          # Variables obligatorias del compose de producción (valores de mentira: solo se valida la forma)
+          export API_DIGEST=sha256:$(printf 'a%.0s' {1..64})
+          export BFF_DIGEST=sha256:$(printf 'b%.0s' {1..64})
+          export MYSQL_ROOT_PASSWORD=test
+          export MYSQL_APP_PASSWORD=test
+          export AUTH_JWT_BASE64_SECRET=test
+          export AUTH_ACTIVATION_DELIVERY_KEY=test
+          export AUTH_PASSWORD_RESET_DELIVERY_KEY=test
+          export BILLING_WEBHOOK_MERCADOPAGO_HMAC_SECRET=test
+          export BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET=test
+          export SMTP_HOST=test
+          export SMTP_PORT=25
+          docker compose -f docker-compose.prod.yml config > /dev/null
+          # MySQL y Redis no pueden publicar puertos y cada servicio debe tener mem_limit
+          docker compose -f docker-compose.prod.yml config --format json | python3 -c '
+          import json, sys
+          services = json.load(sys.stdin)["services"]
+          errors = []
+          for name, svc in services.items():
+              if not svc.get("mem_limit"):
+                  errors.append(f"{name}: falta mem_limit")
+              if name in ("mysql", "redis") and svc.get("ports"):
+                  errors.append(f"{name}: no debe publicar puertos")
+          for forbidden in ("otel-collector", "loki", "grafana", "mailpit"):
+              if forbidden in services:
+                  errors.append(f"{forbidden}: no va en producción")
+          if errors:
+              sys.exit("\n".join(errors))
+          '
+
+  shellcheck:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate shell scripts
+        # ShellCheck oficial con versión exacta, en vez de la que traiga la imagen del runner
+        # (0.9.0 en ubuntu-24.04): el resultado no depende del sistema operativo del job.
+        run: |
+          docker run --rm -v "$(pwd):/mnt:ro" -w /mnt \
+            koalaman/shellcheck:v0.11.0 \
+            infra/docker/manage.sh infra/docker/deploy.sh infra/docker/quick-deploy.sh \
+            infra/docker/prod/deploy.sh infra/docker/prod/deploy.test.sh \
+            infra/docker/prod/backup.sh infra/docker/prod/backup.test.sh \
+            scripts/trivy-scan.sh
+
+      - name: Test production deploy script
+        # Prueba infra/docker/prod/deploy.sh (#593) con un docker falso: validación de digests,
+        # backup, digests anteriores, poda, lock y archivo de configuración. No usa Docker real.
+        run: bash infra/docker/prod/deploy.test.sh
+
+      - name: Test production backup script
+        # Prueba infra/docker/prod/backup.sh (#594) con docker y curl falsos: verificación del volcado,
+        # retención, orden de los pasos, aviso al monitor y lock. No usa Docker real ni la red.
+        run: bash infra/docker/prod/backup.test.sh
+
+  # Hadolint: Dockerfile linter (best practices + security)
+  hadolint:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Run Hadolint
+        # Hadolint: valida Dockerfile contra reglas DL* (ej: DL3025 = usar exec form CMD)
+        # failure-threshold: warning → falla CI en warnings (strict mode)
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
+        with:
+          dockerfile: infra/docker/app/Dockerfile.api
+          failure-threshold: warning
+
+      - name: Run Hadolint for BFF Dockerfile
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
+        with:
+          dockerfile: infra/docker/app/Dockerfile.bff
+          failure-threshold: warning
+
+  # Trivy: escanea el contenido de las imágenes de API y BFF (paquetes del SO, JRE y librerías Java
+  # dentro del JAR). Hadolint revisa cómo está escrito el Dockerfile; Trivy revisa lo que trae la
+  # imagen construida. Falla ante CRITICAL/HIGH con fix disponible; política y triaje en
+  # docs/16-CICD-PIPELINE.md. release.yml (#592) invoca el mismo script antes de publicar en GHCR.
+  # Job propio (no pasos de nginx-integration): un fallo de seguridad no se mezcla con uno de
+  # integración y no alarga el camino crítico. Cuesta construir las imágenes dos veces.
+  trivy-image:
+    runs-on: ubuntu-24.04
+    env:
+      TRIVY_CACHE_DIR: ${{ github.workspace }}/.trivy-cache
+      TRIVY_REPORT_DIR: ${{ github.workspace }}/trivy-reports
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          validate-wrappers: true
+
+      - name: Build application JARs
+        # Los Dockerfiles de runtime solo copian los JAR ya construidos (#587)
+        run: |
+          chmod +x gradlew
+          ./gradlew :api:app:bootJar :bff:bootJar --no-build-cache
+
+      - name: Build application images
+        run: |
+          docker build -t menta-api:ci -f infra/docker/app/Dockerfile.api .
+          docker build -t menta-bff:ci -f infra/docker/app/Dockerfile.bff .
+
+      - name: Compute Trivy database cache key
+        id: trivy-date
+        # La base de vulnerabilidades se actualiza a diario: una clave por fecha la renueva cada día
+        # y evita depender del rate limit de ghcr.io en cada ejecución.
+        run: echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Trivy database cache
+        id: trivy-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .trivy-cache
+          key: trivy-db-${{ steps.trivy-date.outputs.date }}
+          restore-keys: trivy-db-
+
+      - name: Scan images with Trivy
+        # Escanea las dos imágenes aunque la primera falle, para ver todos los hallazgos de una vez
+        run: |
+          status=0
+          for image in menta-api:ci menta-bff:ci; do
+            scripts/trivy-scan.sh "$image" || status=1
+          done
+          exit "$status"
+
+      - name: Make Trivy cache readable
+        # Trivy corre como root dentro del contenedor: sin esto actions/cache no puede leer la base
+        if: ${{ always() }}
+        run: sudo chown -R "$(id -u):$(id -g)" .trivy-cache || true
+
+      - name: Save Trivy database cache
+        # Se guarda aunque el escaneo falle (un hallazgo no es motivo para volver a descargar la base)
+        if: ${{ always() && steps.trivy-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .trivy-cache
+          key: trivy-db-${{ steps.trivy-date.outputs.date }}
+
+      - name: Publish Trivy report summary
+        if: ${{ always() }}
+        run: |
+          for report in trivy-reports/*.txt; do
+            [ -e "$report" ] || continue
+            {
+              echo "### $(basename "$report")"
+              echo '```'
+              cat "$report"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Upload Trivy reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: trivy-reports
+          path: trivy-reports/
+          if-no-files-found: ignore
+
+  # Integration test: levanta stack completo y verifica comportamiento real
+  # SOLO para PRs a main (test más costoso)
+  nginx-integration:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          validate-wrappers: true
+
+      - name: Build application JARs
+        # Los Dockerfiles de runtime solo copian los JAR ya construidos (build once, deploy many):
+        # hay que generarlos antes del `docker build`.
+        run: |
+          chmod +x gradlew
+          ./gradlew :api:app:bootJar :bff:bootJar --no-build-cache
+
+      - name: Build application images
+        # Construye imágenes con tag :ci (no :latest, para evitar colisiones)
+        run: |
+          docker build -t menta-api:ci -f infra/docker/app/Dockerfile.api .
+          docker build -t menta-bff:ci -f infra/docker/app/Dockerfile.bff .
+
+      - name: Start test stack
+        run: |
+          cp .env.example .env
+          # sed -i: edita archivo in-place (modifica el .env directamente)
+          sed -i 's/^MYSQL_ROOT_PASSWORD=.*/MYSQL_ROOT_PASSWORD=test-root-password/' .env
+          sed -i 's/^MYSQL_APP_PASSWORD=.*/MYSQL_APP_PASSWORD=test-app-password/' .env
+          # set +e: deshabilita "exit on error" temporalmente
+          # Permite capturar exit code sin abortar el script
+          set +e
+          IMAGE_VERSION=ci docker compose --env-file .env \
+            -f infra/docker/nginx/docker-compose.yml up -d
+          compose_status=$?  # Captura exit code del comando anterior
+          set -e  # Re-habilita "exit on error"
+
+          # || true: previene que el comando falle el step (diagnóstico)
+          docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml ps --no-trunc || true
+          if [ "$compose_status" -ne 0 ]; then
+            # Si compose up falló, dumpeamos logs antes de salir
+            echo "=== api logs ==="
+            docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml logs api --no-color || true
+            echo "=== compose logs ==="
+            docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml logs --no-color || true
+            exit "$compose_status"
+          fi
+
+      - name: Verify NGINX routing and security headers
+        run: |
+          # Retry loop: espera hasta 3 minutos (90 intentos × 2s) a que servicios estén listos
+          # Simula healthcheck antes de proceder con las pruebas
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent http://localhost/health > /dev/null; then
+              break
+            fi
+            echo "Waiting for NGINX health endpoint (attempt $attempt/90)..."
+            sleep 2
+          done
+          # Pruebas de routing: verifica que NGINX proxy funciona correctamente
+          curl --fail --silent http://localhost/health > /dev/null
+          curl --fail --silent http://localhost/api/actuator/health > /dev/null
+          # Verificación de security headers: grep -qi = case-insensitive
+          curl --fail --silent --head http://localhost/health | grep -qi '^X-Frame-Options:'
+
+      - name: Dump stack diagnostics on failure
+        # if: failure() → solo ejecuta si algún step previo falló (conditional execution)
+        if: failure()
+        run: |
+          docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml ps --no-trunc || true
+          docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml logs api --no-color || true
+          docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml logs --no-color || true
+
+      - name: Stop test stack
+        # if: always() → ejecuta siempre (éxito o fallo) para cleanup
+        # Importante: evita dejar contenedores corriendo en runner
+        if: always()
+        run: docker compose --env-file .env -f infra/docker/nginx/docker-compose.yml down || true

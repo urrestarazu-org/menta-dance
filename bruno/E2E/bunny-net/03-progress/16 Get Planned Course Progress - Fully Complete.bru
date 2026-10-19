@@ -1,0 +1,39 @@
+meta {
+  name: Get Planned Course Progress - Fully Complete
+  type: http
+  seq: 16
+}
+
+get {
+  url: {{baseUrl}}/api/{{apiVersion}}/virtual/courses/{{plannedCourseId}}/progress
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+tests {
+  test("Status is 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("The live aggregate reflects the just-completed lesson", function() {
+    expect(res.getBody().totalLessons).to.equal(1);
+    expect(res.getBody().completedLessons).to.equal(1);
+    expect(res.getBody().percentage).to.equal(100);
+    expect(res.getBody().resumeLesson.lessonId).to.equal(bru.getVar("plannedProtectedLessonId"));
+    expect(res.getBody().resumeLesson.completed).to.equal(true);
+  });
+}
+
+docs {
+  US-VIRTUAL-005 (#52), Slice 3, closing the journey. The aggregate is
+  recomputed live from current rows (design.md decision 7: no snapshot) —
+  the same request as step 14 now reflects 100% after step 15's completion.
+}
+
+assert {
+  res.status: eq 200
+}

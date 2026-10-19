@@ -32,6 +32,104 @@ POST /api/v1/billing/payments/{paymentId}/proof
 Las rutas `/me` y `/payments` son autoservicio del alumno; las de conciliación
 son exclusivas de `ADMIN`. Los errores usan `application/problem+json`.
 
+## Contrato HTTP implementado (v1)
+
+| Endpoint | Autenticación de entrada | Respuesta exitosa |
+| --- | --- | --- |
+| `GET /plans` | Ninguna (público) | `200` con `{ plans: [...] }`, `[]` si no hay planes activos |
+| `GET /plans/{planId}` | Ninguna (público) | `200` con el detalle completo del plan |
+| `POST /subscriptions` | Access token válido | `201` con la suscripción pendiente y la URL de Checkout Pro |
+
+`GET /plans` sólo devuelve planes con `status = ACTIVE`, ordenados por precio
+ascendente; el destacado se indica con el campo `featured`, no con el orden.
+`GET /plans/{planId}` responde `404 PLAN_NOT_FOUND` tanto para un id
+inexistente como para uno inactivo — el motivo real nunca es distinguible
+desde afuera. Ambos endpoints comparten un presupuesto de 60 solicitudes por
+minuto por IP (`429 PLAN_RATE_LIMITED` al agotarse); si el limitador no puede
+alcanzar Redis, responden `503 BILLING_DEGRADED` en vez de dejar pasar
+tráfico sin límite.
+
+`billing_plan_courses` referencia cursos de Virtual/Physical por `course_id`
+sin FK ni JOIN (`docs/25-ARCHITECTURE-RULES.md`). El nombre de cada curso se
+resuelve vía `CourseCatalogPort` (#108): `api:app` consulta Virtual y Physical
+en una sola búsqueda por módulo por solicitud, sin importar cuántos planes o
+cursos tenga la respuesta. `courses[].name` es el título del curso cuando es un
+curso virtual `PUBLISHED` o un curso presencial `ACTIVE`; si el mismo id
+existe en ambos módulos gana el virtual (Physical sólo se consulta por los ids
+que Virtual no resolvió).
+
+Cualquier otro caso — id inexistente, curso virtual `DRAFT` o `ARCHIVED`,
+curso presencial inactivo o un id que no es un UUID — devuelve `name: null`
+con el `id` guardado: el curso no se quita de `courses` y la respuesta sigue
+siendo `200` con el plan completo. Si un módulo falla, sólo se degradan a
+`null` los cursos que ese módulo habría respondido (se registra un `WARN` con
+el módulo y los ids afectados); el otro módulo conserva sus nombres.
+
+## Estado de un pago propio (`GET /api/v1/billing/payments/{paymentId}`)
+
+Requiere un access token válido y devuelve el estado de un pago del propio
+usuario:
+
+```json
+{ "status": "COMPLETED", "createdAt": "...", "updatedAt": "...", "fulfillment": "EXCEPTION" }
+```
+
+`fulfillment` (#559) es el estado de la compra asociada al pago, o `null`:
+
+| Valor | Significado |
+| --- | --- |
+| `PENDING_FULFILLMENT` | La compra existe y todavía se están asignando los lugares |
+| `ASSIGNED` | Los lugares quedaron asignados |
+| `EXCEPTION` | No se pudieron asignar los lugares; el equipo debe resolverlo |
+| `RESOLVED` | El equipo cerró la excepción (reembolso o compensación) |
+| `null` | El pago no tiene compra: es una suscripción, o el pago está `COMPLETED` y el outbox todavía no creó la compra |
+
+Reglas:
+
+- El campo siempre se serializa; `null` es un valor, no una ausencia. Un cliente
+  debe tratar `null` y cualquier valor que no reconozca como "sin información
+  de cumplimiento".
+- Sólo se expone el nombre del estado. El motivo de la excepción, el tipo de
+  resolución y la nota administrativa nunca forman parte de esta respuesta.
+- La compra se consulta recién después de verificar que el pago pertenece al
+  usuario. Un pago ajeno y uno inexistente responden el mismo
+  `404 PAYMENT_NOT_FOUND`; nunca `403`.
+- El contrato vive en `api/openapi/billing-v1.yaml` y
+  `PaymentStatusContractTest` falla si el record, el enum y el YAML divergen.
+
+## Checkout de suscripción virtual (US-BILLING-010)
+
+`POST /api/v1/billing/subscriptions` inicia un checkout para el usuario del
+access token. El body es `{ "planId": UUID, "paymentMethod": "MERCADO_PAGO",
+"idempotencyKey": string }`; no acepta `userId`. La clave tiene un máximo de
+128 caracteres y una repetición con el mismo usuario devuelve el checkout ya
+creado, sin abrir otro cobro.
+
+Este endpoint implementa exclusivamente Checkout Pro: `BANK_TRANSFER` es
+inválido aquí (`400 INVALID_REQUEST`) hasta que US-BILLING-003 incorpore su
+flujo propio de datos bancarios y comprobantes. Nunca se transforma una
+transferencia en una preferencia de Mercado Pago.
+
+La respuesta `201` es `{ subscriptionId, paymentId, planId, status,
+providerPreferenceId, externalReference, checkoutUrl }`. `status` comienza en
+`PENDING`; `providerPreferenceId` identifica la preferencia de Checkout Pro y
+`checkoutUrl` es la URL a la que el cliente debe redirigir al alumno.
+`paymentId`, `providerPreferenceId` y `externalReference` son identificadores
+distintos. El `providerPaymentId` todavía no existe y nunca se expone aquí.
+
+Errores: `400 INVALID_REQUEST` para un body inválido, `401` sin autenticación,
+`409 SUBSCRIPTION_ALREADY_ACTIVE` si el usuario ya tiene un checkout pendiente
+o una suscripción activa, `422 PLAN_NOT_AVAILABLE` para un plan inexistente o
+inactivo y `422 PAYMENT_METHOD_NOT_ACCEPTED` (incluye
+`acceptedPaymentMethods`). Si Mercado Pago no puede crear la preferencia,
+responde `503 PAYMENT_PREFERENCE_UNAVAILABLE`; la transacción local se revierte
+y no se reintenta automáticamente.
+
+La URL de retorno de Mercado Pago sólo devuelve navegación al cliente. La fuente
+de verdad es el webhook firmado: Billing consulta el pago, lo correlaciona con
+`externalReference`, valida cuenta, importe y moneda, y recién entonces activa
+la suscripción y congela su snapshot de cursos.
+
 ## Estados e idempotencia
 
 `Payment` usa un estado principal y, cuando está pendiente, un subestado.
@@ -48,7 +146,29 @@ confirmación en `EXPIRED`. La respuesta del proveedor se mapea así: `approved`
 al consultar al proveedor. Un pago confirmado que no logra asignar capacidad queda
 `COMPLETED` porque representa liquidación financiera. Su Purchase inicia
 `PENDING_FULFILLMENT` y sólo luego pasa a `ASSIGNED` o `EXCEPTION`; no se habilita
-asistencia hasta `ASSIGNED`. `EXPIRED` no habilita suscripción ni asigna cupo.
+asistencia hasta `ASSIGNED`. Desde `EXCEPTION` sólo se sale a `RESOLVED` (terminal, sin
+asistencia) por resolución administrativa. `EXPIRED` no habilita suscripción ni asigna cupo.
+
+Cuando una Purchase presencial pasa a `EXCEPTION`, el evento `billing.PurchaseExceptioned`
+(y la notificación operativa) lleva el campo `reason` con el motivo codificado:
+`CAPACITY_BELOW_ASSIGNED` (la capacidad real de una sesión no alcanza para asignar al
+alumno), `ALREADY_ASSIGNED` (el alumno ya tiene confirmada una de las sesiones a asignar,
+aunque sobre cupo; lo detecta la unicidad `(session_id, student_id)`), `HOLD_EXPIRED`,
+`COVERAGE_CHANGED`, `TARGET_NOT_SCHEDULED`, `QUOTE_NOT_FOUND` (el quote de la compra ya no
+existe al confirmar el pago, por lo que no se puede resolver el tipo de asignación) y
+`UNIQUE_COLLISION`. Quien investiga una compra en `EXCEPTION` debe usar ese motivo:
+`ALREADY_ASSIGNED` no indica falta de capacidad.
+
+Una Purchase en `EXCEPTION` sale de ese estado únicamente por una resolución administrativa
+(#539): `POST /api/v1/admin/billing/purchases/{purchaseId}/resolution` con `resolution`
+(`REFUNDED` o `COMPENSATED`) y una `note` obligatoria de hasta 500 caracteres; requiere `ADMIN`.
+La Purchase pasa al estado terminal `RESOLVED`, guarda quién la cerró, cuándo y por qué, y se
+publica `billing.PurchaseResolved` (sin la nota) en la misma transacción. El Payment no cambia,
+no se asigna ninguna sesión y no se habilita asistencia: la resolución registra que el dinero
+se devolvió o compensó fuera de la plataforma, no lo ejecuta. Es idempotente para la misma
+decisión y nota; una decisión o nota distinta sobre una compra ya resuelta responde `409
+PURCHASE_ALREADY_RESOLVED`, y una compra que no está en `EXCEPTION`, `409
+ILLEGAL_PURCHASE_STATE_TRANSITION`. Ver `api/openapi/billing-v1.yaml`.
 
 Las transiciones originadas por proveedor son monotónicas: un webhook tardío o
 duplicado nunca puede retroceder ni reemplazar un estado ya aplicado. Sólo
@@ -93,7 +213,14 @@ El quote expone una proyección informativa de disponibilidad, sin reserva. Ante
 de crear un `Payment` o iniciar el proveedor, `api:app` solicita a Physical un
 `CapacityHold` atómico. Si no hay cupo, responde `409 CAPACITY_UNAVAILABLE` y no
 se crea pago. El hold reduce, pero no elimina, la excepción posterior si la
-cobertura mensual calculada al confirmar cambia o el hold expira.
+cobertura mensual calculada al confirmar cambia o el hold expira. La cobertura
+mensual saltea las sesiones donde el alumno ya tiene asignación confirmada y se
+extiende hacia adelante (hasta 120 días) para completar las N sesiones compradas.
+Si el alumno ya tiene **todas** las sesiones que la mensualidad cubriría, el checkout
+(Mercado Pago o transferencia) responde `409 NO_NEW_SESSIONS` antes de crear hold o
+`Payment`, igual que la cotización (#541). Lo mismo para una compra `INDIVIDUAL` de una
+sesión que el alumno ya tiene asignada (#545): mismo código, mensaje "Ya tenés lugar en
+esta sesión."
 
 ## Pricing presencial
 
@@ -102,6 +229,207 @@ vigente. `PUT /billing/physical/courses/{courseId}/pricing` permite a `PROFESOR`
 propietario o `ADMIN` cambiar `monthlyPrice` e `individualSurchargePercent` con
 motivo. Billing valida ownership mediante puerto, versiona el pricing y registra
 una revisión append-only; los quotes existentes no cambian.
+
+## Cotización de curso presencial (US-BILLING-006)
+
+`POST /billing/physical/quotes` requiere cualquier usuario autenticado (sin
+restricción de rol) y crea un quote inmutable, válido durante **una hora**.
+Body: `{ "courseId": string, "purchaseType": "MONTHLY" | "INDIVIDUAL",
+"selectedSessionId": string | null }`. `selectedSessionId` es obligatorio para
+`INDIVIDUAL` y no debe enviarse para `MONTHLY` (`422
+SELECTED_SESSION_REQUIRED` / `422 SELECTED_SESSION_NOT_ALLOWED`).
+
+El período cotizado es siempre un mes calendario según el reloj del servidor
+(`ZoneOffset.UTC`, sin campo de fecha en el request): para `MONTHLY` es el mes
+calendario "actual"; para `INDIVIDUAL` es el mes calendario que contiene el
+`scheduledAt` de la sesión elegida (no necesariamente el mes "actual" cerca de
+un cambio de mes).
+
+Respuesta (`201`): `{ id, courseId, purchaseType, scheduledSessionCount,
+selectedSessionId, amount, currency, availability, pricingVersion, createdAt,
+expiresAt }`. `MONTHLY` no fija `selectedSessionId` ni cobertura — sólo el
+importe mensual snapshot y una proyección informativa de `availability`.
+`INDIVIDUAL` divide el precio mensual entre `scheduledSessionCount` con alta
+precisión, aplica el recargo y redondea `HALF_UP` a dos decimales; si el
+resultado no supera por al menos un centavo el precio por sesión sin recargo,
+responde `422 INDIVIDUAL_SURCHARGE_TOO_SMALL` y no persiste nada.
+
+Errores: `404 PHYSICAL_COURSE_PRICING_NOT_FOUND` (sin pricing publicado),
+`404 PHYSICAL_SESSION_NOT_FOUND` (`selectedSessionId` fuera del período),
+`422 NO_SCHEDULED_SESSIONS` (sin sesiones `SCHEDULED` en el período),
+`409 NO_NEW_SESSIONS` (el alumno autenticado ya tiene asignación confirmada en todas las
+sesiones que la mensualidad cubriría, o en la `selectedSessionId` de un `INDIVIDUAL`, #545;
+no persiste el quote).
+La disponibilidad (`AVAILABLE`/`UNAVAILABLE`) es sólo informativa para la UI — el
+checkout (fuera de esta historia) es quien reserva o rechaza cupo de verdad.
+
+## Cotizar y pagar clases presenciales desde la web (BFF, #365)
+
+Un alumno autenticado cotiza y paga desde el BFF (plantillas Thymeleaf, sin JavaScript):
+
+1. `/classes/{courseId}` consulta el precio con `GET /api/v1/billing/physical/courses/{courseId}/pricing`
+   (público: no envía token y no se cachea, porque el precio es por curso y un admin puede
+   editarlo) y muestra el precio mensual en es-AR con su moneda ("$ 25.000,00 por mes"). No
+   muestra un precio individual: depende de las sesiones del período y lo calcula Billing al
+   cotizar. Con precio publicado, el alumno ve "Cotizar clases del mes" y, por cada sesión con
+   lugares, "Cotizar solo esta clase" (una sesión llena no tiene botón); un visitante anónimo ve
+   el enlace "Ingresá para comprar" hacia `/login`. Sin precio publicado (`404
+   PHYSICAL_COURSE_PRICING_NOT_FOUND`) la página se muestra igual con el aviso "Todavía no hay un
+   precio publicado para esta clase." y sin botones de cotizar (tampoco "Ingresá para comprar");
+   si el precio no se puede consultar (`429`, `5xx`, cuerpo ilegible o error de red) se muestra
+   un aviso breve, también sin botones. En ningún caso se rompe el detalle ni se muestra el
+   cuerpo del error de Billing.
+
+   Para un alumno con sesión, la página consulta además `GET /api/v1/physical/sessions/me` (#542)
+   con su token y marca "Ya tenés lugar" las sesiones listadas donde ya tiene lugar confirmado
+   (se cruza por `sessionId`); esas sesiones no ofrecen "Cotizar solo esta clase". La ventana de
+   sesiones la decide la API (`physical.sessions.window-days`, 60 días por defecto), el visitante
+   anónimo no dispara la consulta y, si falla (timeout, `401`, `403`, `404`, `5xx` o cuerpo
+   ilegible), la ficha se muestra igual sin marcas. Esa respuesta ahora incluye `assignmentType`
+   (`MONTHLY` o `INDIVIDUAL`) por sesión; la web todavía no lo consume.
+2. `POST /classes/{courseId}/cotizar` (`purchaseType`, y `selectedSessionId` si es individual)
+   llama a `POST /api/v1/billing/physical/quotes` con el access token del alumno y muestra la
+   cotización: importe en formato es-AR, sesiones del período y vencimiento (zona
+   `menta.classes.display-zone`). Si `availability` es `UNAVAILABLE` muestra "Sin lugares
+   disponibles" y no hay botón de pago; si hay lugares, el botón "Pagar con Mercado Pago".
+   `422 NO_SCHEDULED_SESSIONS`, `409 NO_NEW_SESSIONS` ("Ya tenés estas clases", no se cobró
+   nada), los `404` de precio o sesión, los `400` y los errores de servicio se muestran como
+   avisos en español con el enlace de vuelta al detalle.
+3. `POST /compras` (`quoteId`, `courseId` y un `idempotencyKey` UUID que el servidor genera al
+   renderizar la cotización) llama a `POST /api/v1/billing/physical/purchases` con
+   `MERCADO_PAGO`. `409 NO_NEW_SESSIONS` ("Ya tenés estas clases", no se creó ningún pago),
+   `409 CAPACITY_UNAVAILABLE` ("Ya no hay lugares", no se creó ningún pago) y
+   `410 PHYSICAL_COURSE_QUOTE_EXPIRED` ("La cotización venció, pedí una nueva") tienen aviso
+   propio; `400`, `429` y `5xx` se muestran con un mensaje genérico. Repetir la misma
+   `idempotencyKey` devuelve el checkout original.
+4. El BFF **guarda el `paymentId` en la sesión del servidor (Redis/Spring Session)** y redirige
+   (302) a `checkoutUrl`.
+5. Mercado Pago devuelve al alumno a `GET /compras/retorno`. El BFF lee el `paymentId` **de la
+   sesión** (nunca de la URL), consulta `GET /api/v1/billing/payments/{paymentId}` con el token
+   del alumno y muestra el estado: `COMPLETED` con "¡Pago confirmado! Estamos asignando tus
+   lugares" mientras la lista está vacía (no afirma que las sesiones ya estén asignadas) o
+   "¡Pago confirmado! Ya tenés lugar en las sesiones de abajo" cuando hay sesiones y, debajo,
+   la lista "Tus próximas sesiones" con nombre de la clase y fecha/hora en la zona de la
+   academia, tomada de
+   `GET /api/v1/physical/sessions/me` con el token del alumno (solo se consulta con el pago
+   `COMPLETED`; si la consulta falla, la página se muestra igual sin la lista, y como la
+   asignación puede demorar, la lista puede no incluir aún las sesiones recién compradas);
+   `AWAITING_PROVIDER`,
+   `AWAITING_MANUAL_VERIFICATION`, `RECONCILIATION_REQUIRED` o cualquier estado desconocido
+   "Estamos confirmando tu pago" con el enlace "Actualizar" a la misma URL (un estado
+   desconocido nunca se muestra como éxito); `REJECTED`, `CANCELLED` y `EXPIRED` con mensajes
+   propios y enlace a `/classes`. Un estado final borra el `paymentId` de la sesión; uno
+   pendiente lo conserva. Sin `paymentId` en la sesión se redirige a `/classes`, y un `5xx` o
+   `429` de la API muestra un aviso en español sin tocar la sesión. Las respuestas llevan
+   `Cache-Control: no-store`.
+
+   Con el pago `COMPLETED`, la página de clases también lee `fulfillment` (#559) del mismo
+   `GET /payments/{paymentId}`:
+
+   | `fulfillment` | Título | Mensaje | Sesiones |
+   |---|---|---|---|
+   | `EXCEPTION` | "Pago recibido" | "Recibimos tu pago, pero no pudimos asignarte los lugares. El equipo lo está revisando y te va a contactar." | no se consultan |
+   | `RESOLVED` | "Compra resuelta" | "Tu compra ya fue resuelta por el equipo." | no se consultan |
+   | `ASSIGNED`, `PENDING_FULFILLMENT`, `null` o desconocido | "Pago confirmado" (texto de arriba) | según haya o no sesiones | se consultan |
+
+   Ambos avisos son informativos y sin enlace de contacto. Un `fulfillment` ausente, `null` o
+   desconocido se comporta como hasta ahora, y un estado de pago que no es `COMPLETED` lo ignora.
+
+Decisiones:
+
+- **Sesión en vez de `state` firmado.** El BFF ya custodia una sesión de servidor por alumno,
+  así que el vínculo "este navegador pagó este id" no necesita un parámetro firmado en la URL.
+  El retorno **nunca decide el pago**: solo navega y muestra lo que informa la API, e ignora
+  `status`, `payment_id` y cualquier otro parámetro que agregue Mercado Pago (la confirmación
+  real llega por el webhook). El control de propiedad lo da la API: pedir el pago de otro
+  usuario responde siempre 404 (nunca 403); el BFF entonces limpia la sesión y redirige a
+  `/classes`. Limitación: una sola
+  compra en curso por sesión; iniciar otra reemplaza el `paymentId` guardado.
+- **Política de `checkoutUrl`.** El navegador se redirige a lo que informe la API, así que solo
+  se sigue una URL absoluta `https` con host, o `http` si el host es `localhost`, `127.0.0.1`
+  o `[::1]` (simulador local). Cualquier otra se rechaza como servicio no disponible y no se
+  guarda nada en la sesión.
+- El access token viaja solo en el header `Authorization` y nunca se registra en logs.
+
+Configuración: `billing.mercadopago.checkout-back-url` (variable
+`BILLING_MERCADOPAGO_CHECKOUT_BACK_URL`) debe apuntar a `/compras/retorno` del BFF; en local
+`http://localhost:8080/compras/retorno` (ver `.env.example`). Vacía, la preferencia no lleva
+`back_urls`. En producción debe ser el origen público `https` del BFF.
+
+### Suscribirse a un plan desde la web (BFF, #361)
+
+Un alumno autenticado (rol `STUDENT`) se suscribe desde `/plans`; el flujo reutiliza el retorno
+de la compra de clases:
+
+1. `GET /plans` es público, pero para un alumno consulta `GET /api/v1/billing/subscriptions/me`
+   con su token y muestra el estado: `ACTIVE` ("Ya tenés una suscripción activa hasta el
+   {fecha}", sin botón), `PENDING` (aviso de pago pendiente con el id de la suscripción en un
+   `<code>` para compartir con soporte, sin botón), `EXPIRED` (fecha de vencimiento y botón
+   "Suscribirme") o sin suscripción (`404 NO_SUBSCRIPTION`, botón "Suscribirme"). Cualquier
+   otro resultado de la API (404 con otro código, 401, 429, 5xx, cuerpo incompleto) es un
+   error: ante la duda no se ofrece iniciar un pago. La respuesta personalizada lleva
+   `Cache-Control: no-store`.
+2. Un visitante anónimo ve "Suscribirme" como enlace a `GET /plans/suscribirme`; tras iniciar
+   sesión vuelve a `/plans` (solo esa ruta guarda la petición; cualquier otro login va a
+   `/dashboard`).
+3. `POST /suscripciones` (`planId` e `idempotencyKey`, renderizada una por plan en cada vista)
+   exige CSRF y rol `STUDENT` (otro rol recibe 403). Llama a `POST /api/v1/billing/subscriptions`
+   con `paymentMethod = MERCADO_PAGO`, guarda `paymentId` y el tipo de compra `SUBSCRIPTION` en
+   la sesión del servidor y redirige (302) a `checkoutUrl`, que debe pasar la misma política que
+   la compra de clases.
+4. Errores, sin exponer detalles de la API: `409 SUBSCRIPTION_ALREADY_ACTIVE` ("Ya tenés una
+   suscripción vigente", con la fecha si la API la informa), `409 SUBSCRIPTION_CONFLICT` (copy
+   distinto: la suscripción cambió, volvé a Planes), `422` ("Este plan no está disponible"),
+   `400` y `5xx` con las frases genéricas del BFF.
+5. `GET /compras/retorno` se despacha por el tipo guardado en la sesión (ausente = compra de
+   clases, comportamiento sin cambios). Para `SUBSCRIPTION`: `COMPLETED` dice "¡Pago confirmado!
+   Tu suscripción se está activando." (un pago `COMPLETED` todavía no es una suscripción activa,
+   ADR-0039); `PENDING` y desconocidos, "Estamos confirmando tu pago"; `REJECTED`, `CANCELLED` y
+   `EXPIRED` con mensajes propios y enlace a `/plans`. Si la sesión guarda el tipo
+   `SUBSCRIPTION` y la API responde `404` (o no hay `paymentId`), se muestra un aviso con enlace a
+   `/plans`. Si la sesión no guarda ningún tipo, la ruta se comporta como la de la compra de
+   clases y redirige a `/classes`: un navegador sin estado no se distingue de un comprador de clases.
+
+Desvío de diseño (D1): el `paymentId` viaja en la **sesión del servidor** y no en un parámetro
+`state` firmado de la URL de retorno. Motivo: `billing.mercadopago.checkout-back-url` es una
+propiedad **global** de la API, no una URL por petición, así que el BFF no puede añadirle un
+`state` por checkout; el vínculo "este navegador pagó este id" lo da la sesión y la propiedad
+del pago la verifica la API con `GET /api/v1/billing/payments/{paymentId}` (404 para un pago
+ajeno). El retorno ignora `status`, `payment_id` y cualquier parámetro de la URL. Limitación: un
+solo pago en curso por sesión; el último checkout iniciado (de clase o de suscripción) reemplaza
+al anterior, `paymentId` y tipo incluidos.
+
+Un pago `REJECTED`, `CANCELLED` o `EXPIRED` libera el cupo de suscripción del alumno (la
+suscripción pasa a `CANCELLED`, escenario 6 de US-BILLING-010), así que puede volver a Planes y
+reintentar.
+
+### Pago por transferencia bancaria desde la web (BFF, #553)
+
+La página de cotización ofrece, junto a "Pagar con Mercado Pago", "Pagar por transferencia bancaria"
+(es el último criterio funcional de #384). Es otro formulario con CSRF y su propia clave de
+idempotencia (la del botón de Mercado Pago más `-transfer`), generada al renderizar la cotización:
+
+1. `POST /compras/transferencia` llama a `POST /api/v1/billing/physical/purchases` con
+   `paymentMethod: BANK_TRANSFER` y guarda en la sesión del servidor las instrucciones del último
+   pago (`bankTransferInstructions`: `cbu`, `alias`, `holder`, `cuit`, `amount` y `reference`).
+   Responde con una redirección a `GET /compras/transferencia`, que muestra CBU, alias, titular,
+   CUIT, importe y referencia, y aclara que el lugar se confirma después de verificar el pago.
+   Sin transferencia en la sesión redirige a `/classes`. Los errores (`409 NO_NEW_SESSIONS`,
+   `409` sin lugar, `410`, `400`, `5xx`) usan los mismos avisos en español que el pago con
+   Mercado Pago y nunca muestran códigos ni cuerpos de la API.
+2. `POST /compras/transferencia/comprobante` (multipart, campo `file` y `paymentId`) reenvía el
+   archivo a `POST /api/v1/billing/payments/{paymentId}/proof` con el token del alumno. La API
+   acepta PNG, JPG/JPEG o PDF de hasta 5 MB y permite 3 subidas por pago cada 72 horas; el BFF
+   configura el mismo límite de 5 MB (`spring.servlet.multipart`) y rechaza sin llamar a la API un
+   archivo vacío, ausente o con un `paymentId` que no es un UUID. `400` es "Comprobante
+   inválido", `429` "Demasiados comprobantes", `404` "Pago no encontrado" (el pago no es del
+   alumno o ya no espera comprobante) y `5xx` "Servicio no disponible". El éxito dice "Recibimos
+   tu comprobante y lo vamos a verificar".
+3. El BFF nunca decide la acreditación: un administrador aprueba o rechaza el pago
+   (ver "Transferencias bancarias"). Ni el contenido del archivo ni el token se registran en logs.
+
+Fuera de este corte: mostrar las sesiones asignadas tras la acreditación de una transferencia
+(la página de retorno solo contempla el `paymentId` de Mercado Pago).
 
 ## Transferencias bancarias
 

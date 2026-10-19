@@ -1,0 +1,54 @@
+meta {
+  name: Mercado Pago Webhook
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/billing/payments/mercadopago/webhook?data.id={{webhookDataId}}
+  body: none
+  auth: none
+}
+
+headers {
+  x-request-id: {{webhookRequestId}}
+  x-signature: {{webhookSignature}}
+}
+
+script:pre-request {
+  const crypto = require('crypto');
+  // Dev-only default secret from BillingConfiguration.DEV_DEFAULT_WEBHOOK_HMAC_SECRET.
+  // Override billing.webhook.mercadopago.hmac-secret (and this literal) together
+  // if the local environment sets a non-default value.
+  const secretBase64 = 'ZGV2LW9ubHktd2ViaG9vay1zZWNyZXQtbm90LWZvci1wcm9kdWN0aW9uLXVzZQ==';
+  const secret = Buffer.from(secretBase64, 'base64').toString('utf8');
+
+  const dataId = 'mp-payment-' + Date.now();
+  const requestId = 'req-' + Date.now();
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const manifest = `id:${dataId};request-id:${requestId};ts:${timestamp};`;
+  const hash = crypto.createHmac('sha256', secret).update(manifest).digest('hex');
+
+  bru.setVar('webhookDataId', dataId);
+  bru.setVar('webhookRequestId', requestId);
+  bru.setVar('webhookSignature', `ts=${timestamp},v1=${hash}`);
+}
+
+docs {
+  Computes a real HMAC-SHA256 signature locally (against the dev-only default
+  secret) and sends it as a fresh, never-before-seen notification — exercises
+  the controller's verify+dedupe path (US-BILLING-002) without needing a
+  seeded local Payment: the controller never looks one up, only the async
+  worker does, later.
+
+  Re-running this request sends a NEW data.id/request-id each time (both are
+  timestamped), so it never hits the duplicate path — the second call
+  wouldn't dedupe against the first. That's intentional: reusing the exact
+  previous values to exercise dedup is a manual step, not automated here.
+
+  200 on success — verified, persisted (or already seen), never a 500.
+}
+
+assert {
+  res.status: eq 200
+}

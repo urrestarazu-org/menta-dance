@@ -1,0 +1,65 @@
+meta {
+  name: Assign Trial Subscription
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/v1/admin/billing/subscriptions/trial
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  content-type: application/json
+}
+
+body:json {
+  {
+    "userId": "{{trialUserId}}",
+    "planId": "{{planId}}",
+    "reason": "Evaluación de catálogo completo",
+    "days": 7
+  }
+}
+
+docs {
+  US-BILLING-012 (#131). Requires an ADMIN bearer token (log in first with a
+  fixture that has that role). Set runtime variables:
+    - trialUserId: an existing userId with no current subscription;
+    - planId: an ACTIVE plan.
+
+  Grants an ACTIVE TRIAL subscription with no Payment, using the plan's
+  frozen courseIds snapshot. days is the admin's own decision here — it is
+  never derived from the plan's configured duration. reason is mandatory
+  and auditable, but never returned in the response.
+
+  Success contract (201):
+    { subscriptionId, userId, planId, type: "TRIAL", status: "ACTIVE",
+      startDate, endDate, days }
+
+  Error contract:
+    400 INVALID_REQUEST            → reason missing/blank, or days missing/zero/negative
+    403                             → caller is not ADMIN
+    404 USER_NOT_FOUND              → userId does not reference an existing user (checked first)
+    409 SUBSCRIPTION_ALREADY_ACTIVE → target already has an ACTIVE or PENDING subscription
+    422 PLAN_NOT_AVAILABLE          → planId does not exist or is not ACTIVE
+}
+
+tests {
+  test("Creates an active trial subscription with the admin's own days", function() {
+    expect(res.getStatus()).to.equal(201);
+    expect(res.getBody().type).to.equal("TRIAL");
+    expect(res.getBody().status).to.equal("ACTIVE");
+    expect(res.getBody().days).to.equal(7);
+    expect(res.getBody()).to.not.have.property("reason");
+  });
+}
+
+assert {
+  res.status: eq 201
+}

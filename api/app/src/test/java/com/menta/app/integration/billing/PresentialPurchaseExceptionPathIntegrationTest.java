@@ -1,0 +1,218 @@
+package com.menta.app.integration.billing;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.when;
+
+import com.menta.app.integration.support.AbstractBillingMySqlIntegrationTest;
+import com.menta.app.outbox.OutboxReconciliationWorker;
+import com.menta.auth.application.port.out.ActivationRateLimitPort;
+import com.menta.auth.application.port.out.AuthDegradedGuard;
+import com.menta.auth.application.port.out.LoginRateLimitPort;
+import com.menta.auth.application.port.out.PasswordResetAttemptRateLimitPort;
+import com.menta.auth.application.port.out.PasswordResetRequestRateLimitPort;
+import com.menta.auth.application.port.out.TokenBlacklistPort;
+import com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity;
+import com.menta.auth.infrastructure.persistence.repository.OutboxRowJpaRepository;
+import com.menta.billing.application.dto.ProviderPaymentResult;
+import com.menta.billing.application.port.in.GetPaymentUseCase;
+import com.menta.billing.application.port.out.BankTransferRateLimitPort;
+import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
+import com.menta.billing.application.port.out.CourseCatalogPort;
+import com.menta.billing.application.port.out.PaymentProviderPort;
+import com.menta.billing.domain.exception.PaymentNotFoundException;
+import com.menta.billing.domain.model.FulfillmentStatus;
+import com.menta.billing.domain.model.Money;
+import com.menta.billing.infrastructure.persistence.entity.PaymentJpaEntity;
+import com.menta.billing.infrastructure.persistence.entity.PhysicalCourseQuoteJpaEntity;
+import com.menta.billing.infrastructure.persistence.entity.WebhookInboxJpaEntity;
+import com.menta.billing.infrastructure.persistence.repository.PaymentJpaRepository;
+import com.menta.billing.infrastructure.persistence.repository.PhysicalCourseQuoteJpaRepository;
+import com.menta.billing.infrastructure.persistence.repository.PurchaseJpaRepository;
+import com.menta.billing.infrastructure.persistence.repository.WebhookInboxJpaRepository;
+import com.menta.billing.infrastructure.webhook.WebhookInboxStatus;
+import com.menta.billing.infrastructure.webhook.WebhookVerificationWorker;
+import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
+import com.menta.physical.domain.model.CourseStatus;
+import com.menta.physical.infrastructure.persistence.entity.PhysicalCapacityAssignmentJpaEntity;
+import com.menta.physical.infrastructure.persistence.entity.PhysicalCourseJpaEntity;
+import com.menta.physical.infrastructure.persistence.entity.PhysicalSessionJpaEntity;
+import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityAssignmentJpaRepository;
+import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJpaRepository;
+import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
+import com.menta.shared.physical.AssignmentType;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalTime;
+import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+
+/**
+ * Proves that a settled physical payment remains settled when its delivery
+ * fails closed on capacity, while Billing records the EXCEPTION residual.
+ */
+@SpringBootTest
+@ActiveProfiles("integration-test")
+class PresentialPurchaseExceptionPathIntegrationTest extends AbstractBillingMySqlIntegrationTest {
+
+    @DynamicPropertySource
+    static void mysqlProperties(DynamicPropertyRegistry registry) {
+        registry.add("billing.webhook.reconcile-rate-ms", () -> "999999999");
+    }
+
+    @Autowired private PaymentJpaRepository paymentRepository;
+    @Autowired private PurchaseJpaRepository purchaseRepository;
+    @Autowired private WebhookInboxJpaRepository inboxRepository;
+    @Autowired private OutboxRowJpaRepository outboxRepository;
+    @Autowired private PhysicalCapacityAssignmentJpaRepository assignmentRepository;
+    @Autowired private PhysicalCourseJpaRepository courseRepository;
+    @Autowired private PhysicalSessionJpaRepository sessionRepository;
+    @Autowired private PhysicalCourseQuoteJpaRepository quoteRepository;
+    @Autowired private WebhookVerificationWorker webhookWorker;
+    @Autowired private OutboxReconciliationWorker outboxWorker;
+    @Autowired private GetPaymentUseCase getPaymentUseCase;
+
+    @MockitoBean private PaymentProviderPort paymentProviderPort;
+    @MockitoBean private BillingPlansRateLimitPort billingPlansRateLimitPort;
+    @MockitoBean private BankTransferRateLimitPort bankTransferRateLimitPort;
+    @MockitoBean private CourseCatalogPort courseCatalogPort;
+    @MockitoBean private ProcessPhysicalCheckInUseCase processPhysicalCheckInUseCase;
+    @MockitoBean private AuthDegradedGuard authDegradedGuard;
+    @MockitoBean private TokenBlacklistPort tokenBlacklistPort;
+    @MockitoBean private LoginRateLimitPort loginRateLimitPort;
+    @MockitoBean private ActivationRateLimitPort activationRateLimitPort;
+    @MockitoBean private PasswordResetRequestRateLimitPort passwordResetRequestRateLimitPort;
+    @MockitoBean private PasswordResetAttemptRateLimitPort passwordResetAttemptRateLimitPort;
+
+    @SuppressWarnings("rawtypes")
+    @MockitoBean
+    private RedisTemplate redisTemplate;
+
+    @AfterEach
+    void cleanUp() {
+        assignmentRepository.deleteAll();
+        purchaseRepository.deleteAll();
+        outboxRepository.deleteAll();
+        inboxRepository.deleteAll();
+        paymentRepository.deleteAll();
+        quoteRepository.deleteAll();
+        sessionRepository.deleteAll();
+        courseRepository.deleteAll();
+    }
+
+    @Test
+    void capacity_trip_preserves_completed_payment_and_records_exception_purchase() {
+        UUID courseId = UUID.randomUUID();
+        UUID sessionId = seedSessionWithCapacityOne(courseId);
+        assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
+            UUID.randomUUID(), sessionId, UUID.randomUUID(), AssignmentType.MONTHLY, Instant.now()
+        ));
+        UUID paymentId = UUID.randomUUID();
+        UUID studentId = UUID.randomUUID();
+        String quoteId = seedIndividualQuote(courseId, sessionId).toString();
+        paymentRepository.save(new PaymentJpaEntity(
+            paymentId, studentId, "mp-exception-path", new BigDecimal("100.00"), "ARS",
+            "ext-1", "merchant-1", "PHYSICAL", quoteId, "AWAITING_PROVIDER",
+            null, null, Instant.now()
+        ));
+        when(paymentProviderPort.fetchPayment("mp-exception-path")).thenReturn(
+            new ProviderPaymentResult(
+                "approved", Money.of(new BigDecimal("100.00"), "ARS"), "ext-1", "merchant-1"
+            )
+        );
+        WebhookInboxJpaEntity inbox = inboxRepository.save(new WebhookInboxJpaEntity(
+            "mp-exception-path:req-1", "mp-exception-path", "req-1", WebhookInboxStatus.RECEIVED,
+            0, null, null, Instant.now(), null
+        ));
+
+        webhookWorker.process(inbox);
+        // #559: settled but the outbox has not run yet -> no Purchase row, fulfillment is null.
+        // Goes through the real (transactional) bean, so the MANDATORY purchase lookup is exercised.
+        assertThat(getPaymentUseCase.getPayment(paymentId.toString(), studentId).fulfillment()).isNull();
+        OutboxRowJpaEntity event = outboxRepository.findAll().getFirst();
+        assertThat(outboxWorker.process(event)).isFalse();
+        assertThat(getPaymentUseCase.getPayment(paymentId.toString(), studentId).fulfillment())
+            .isEqualTo(FulfillmentStatus.EXCEPTION);
+
+        assertThat(paymentRepository.findById(paymentId).orElseThrow().getStatusType())
+            .isEqualTo("COMPLETED");
+        assertThat(purchaseRepository.findByPaymentId(paymentId).orElseThrow().getStatus())
+            .isEqualTo("EXCEPTION");
+        assertThat(assignmentRepository.countBySessionId(sessionId)).isEqualTo(1);
+    }
+
+    /**
+     * #559 W1: the student status read runs in a READ ONLY transaction, where MySQL rejects the
+     * {@code FOR UPDATE} session read. An ASSIGNED purchase has a NON-EMPTY session list, so this
+     * is the only test that exercises the non-locking session read against real MySQL.
+     */
+    @Test
+    void assigned_purchase_with_sessions_is_readable_in_read_only_transaction() {
+        UUID courseId = UUID.randomUUID();
+        UUID sessionId = seedSessionWithCapacityOne(courseId);
+        UUID paymentId = UUID.randomUUID();
+        UUID studentId = UUID.randomUUID();
+        String quoteId = seedIndividualQuote(courseId, sessionId).toString();
+        paymentRepository.save(new PaymentJpaEntity(
+            paymentId, studentId, "mp-assigned-path", new BigDecimal("100.00"), "ARS",
+            "ext-2", "merchant-1", "PHYSICAL", quoteId, "AWAITING_PROVIDER",
+            null, null, Instant.now()
+        ));
+        when(paymentProviderPort.fetchPayment("mp-assigned-path")).thenReturn(
+            new ProviderPaymentResult(
+                "approved", Money.of(new BigDecimal("100.00"), "ARS"), "ext-2", "merchant-1"
+            )
+        );
+        WebhookInboxJpaEntity inbox = inboxRepository.save(new WebhookInboxJpaEntity(
+            "mp-assigned-path:req-1", "mp-assigned-path", "req-1", WebhookInboxStatus.RECEIVED,
+            0, null, null, Instant.now(), null
+        ));
+
+        webhookWorker.process(inbox);
+        OutboxRowJpaEntity event = outboxRepository.findAll().getFirst();
+        assertThat(outboxWorker.process(event)).isFalse();
+
+        assertThat(assignmentRepository.countBySessionId(sessionId)).isEqualTo(1);
+        assertThat(getPaymentUseCase.getPayment(paymentId.toString(), studentId).fulfillment())
+            .isEqualTo(FulfillmentStatus.ASSIGNED);
+        assertThatThrownBy(() -> getPaymentUseCase.getPayment(paymentId.toString(), UUID.randomUUID()))
+            .isInstanceOf(PaymentNotFoundException.class);
+    }
+
+    private UUID seedSessionWithCapacityOne(UUID courseId) {
+        Instant now = Instant.now();
+        courseRepository.save(new PhysicalCourseJpaEntity(
+            courseId, "Integration course", "Test course", UUID.randomUUID(), "Test professor",
+            "MONDAY", LocalTime.NOON, 60, "BEGINNER", 1, CourseStatus.ACTIVE, now, now
+        ));
+        UUID sessionId = UUID.randomUUID();
+        sessionRepository.save(new PhysicalSessionJpaEntity(
+            sessionId, courseId, now, 1, "SCHEDULED", null
+        ));
+        return sessionId;
+    }
+
+    /**
+     * #41 PR6: {@code PaymentTarget.Physical}'s reference is the quoteId, not
+     * a raw session id (design A5) — the outbox handler now resolves it via
+     * {@code PhysicalCourseQuoteRepository} and runs {@code CoveragePlanner}.
+     */
+    private UUID seedIndividualQuote(UUID courseId, UUID selectedSessionId) {
+        UUID quoteId = UUID.randomUUID();
+        Instant now = Instant.now();
+        quoteRepository.save(new PhysicalCourseQuoteJpaEntity(
+            quoteId.toString(), courseId.toString(), "INDIVIDUAL",
+            new BigDecimal("100.00"), "ARS", BigDecimal.ZERO, 1, 1, selectedSessionId.toString(),
+            new BigDecimal("100.00"), "ARS", "AVAILABLE", now, now.plusSeconds(3600)
+        ));
+        return quoteId;
+    }
+}

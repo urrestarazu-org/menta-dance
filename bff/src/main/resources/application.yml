@@ -1,0 +1,88 @@
+spring:
+  application:
+    name: menta-dance-bff
+
+  # Session configuration
+  session:
+    store-type: redis
+    redis:
+      namespace: spring:session
+    timeout: 30m
+
+  # Redis configuration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+  # Proof of transfer uploads: the Billing API accepts up to 5MB
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
+
+  # Static assets (#536). NGINX caches *.css for 30 days as immutable, so the
+  # compiled stylesheet is served under a content-hashed URL
+  # (/css/app-<md5>.css): Thymeleaf's @{/css/app.css} is rewritten
+  # automatically and a new build always gets a new URL. In local watch mode
+  # set SPRING_WEB_RESOURCES_CHAIN_CACHE=false so the hash follows the file.
+  web:
+    resources:
+      chain:
+        strategy:
+          content:
+            enabled: true
+            paths: /css/**
+
+  # Thymeleaf configuration
+  thymeleaf:
+    cache: false
+    prefix: classpath:/templates/
+    suffix: .html
+
+# Server configuration
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+# API backend URL
+menta:
+  # Peers allowed to declare the originating client (ADR-0035). NGINX sets
+  # X-Real-IP with proxy_set_header, overwriting whatever the caller sent, so
+  # the value is trustworthy — but only across a hop that actually went through
+  # NGINX. From any other peer the header is ignored and remoteAddr is used.
+  #
+  # The Docker-wide default below is a development convenience, NOT a safe
+  # production value. Narrow it per environment to the real proxy addresses,
+  # and keep the BFF off the public internet.
+  trusted-proxy-cidrs: ${MENTA_TRUSTED_PROXY_CIDRS:172.16.0.0/12}
+  # Time zone in which public pages show physical class sessions (#383).
+  classes:
+    display-zone: ${MENTA_CLASSES_DISPLAY_ZONE:America/Argentina/Buenos_Aires}
+  api:
+    base-url: http://localhost:8081
+    timeout: 5s
+  auth:
+    base-url: ${AUTH_API_BASE_URL:http://localhost:8081}
+    timeout: 5s
+  billing:
+    base-url: ${BILLING_API_BASE_URL:http://localhost:8081}
+    timeout: 5s
+    cache-ttl: 5m
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+# Logging
+logging:
+  level:
+    root: INFO
+    com.menta: DEBUG

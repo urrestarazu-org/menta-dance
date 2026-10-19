@@ -1,0 +1,27 @@
+meta {
+  name: Activate Mismatch Student
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/{{apiVersion}}/auth/activate
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "token": "{{mismatchActivationToken}}"
+  }
+}
+
+tests {
+  test("activation consumes the runtime token", function() {
+    expect(res.getStatus()).to.equal(204);
+  });
+}
+
+assert {
+  res.status: eq 204
+}

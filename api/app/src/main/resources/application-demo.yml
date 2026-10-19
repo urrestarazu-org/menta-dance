@@ -1,0 +1,16 @@
+# Demo-only configuration. Loaded only when the "demo" profile is active.
+# Defaults are documented in the README; every value can be overridden by an environment variable.
+demo:
+  users:
+    admin-password: ${DEMO_ADMIN_PASSWORD:Admin123!}
+    instructor-password: ${DEMO_INSTRUCTOR_PASSWORD:Prof123!}
+    student-password: ${DEMO_STUDENT_PASSWORD:Alumno123!}
+    receptionist-password: ${DEMO_RECEPTIONIST_PASSWORD:Recep123!}
+  qr-reader:
+    # Empty on purpose: an unresolved placeholder would fail startup. A blank secret skips the QR reader seed.
+    secret: ${DEMO_QR_READER_SECRET:}
+
+billing:
+  bank-transfer:
+    proof:
+      token-secret: ${BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET:demo-only-proof-token-secret-do-not-use-in-prod}

@@ -1,0 +1,41 @@
+meta {
+  name: Get Payment Detail (Admin)
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admin/billing/payments/{{paymentId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  #33, US-BILLING-005 (D1/C5/C6). Requires an ADMIN bearer token. `proofUrl`
+  is present only when a proof was submitted, and embeds a freshly minted
+  15-minute signed token every call — never a cached one.
+
+  Success contract (200):
+    { paymentId, userId, targetModality, targetReference, amount, currency,
+      statusType, createdAt, proofUrl (nullable) }
+
+  Error contract:
+    401  → no access token
+    403  → caller is not ADMIN
+    404 PAYMENT_NOT_FOUND  → paymentId does not exist
+}
+
+tests {
+  test("Returns the payment detail", function() {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody()).to.have.property("paymentId");
+  });
+}
+
+assert {
+  res.status: eq 200
+}

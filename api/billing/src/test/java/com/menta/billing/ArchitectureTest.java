@@ -1,0 +1,128 @@
+package com.menta.billing;
+
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static com.tngtech.archunit.library.Architectures.layeredArchitecture;
+
+import com.tngtech.archunit.core.domain.JavaClasses;
+import com.tngtech.archunit.core.importer.ClassFileImporter;
+import com.tngtech.archunit.core.importer.ImportOption;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+/**
+ * ArchUnit tests to validate Clean Architecture rules for Billing module.
+ */
+class ArchitectureTest {
+
+    private static JavaClasses classes;
+
+    @BeforeAll
+    static void setUp() {
+        classes = new ClassFileImporter()
+            .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+            .importPackages("com.menta.billing");
+    }
+
+    @Test
+    void domain_should_not_depend_on_application() {
+        noClasses()
+            .that().resideInAPackage("..domain..")
+            .should().dependOnClassesThat().resideInAPackage("..application..")
+            .allowEmptyShould(true)
+            .check(classes);
+    }
+
+    @Test
+    void domain_should_not_depend_on_infrastructure() {
+        noClasses()
+            .that().resideInAPackage("..domain..")
+            .should().dependOnClassesThat().resideInAPackage("..infrastructure..")
+            .allowEmptyShould(true)
+            .check(classes);
+    }
+
+    @Test
+    void application_should_not_depend_on_infrastructure() {
+        noClasses()
+            .that().resideInAPackage("..application..")
+            .should().dependOnClassesThat().resideInAPackage("..infrastructure..")
+            .allowEmptyShould(true)
+            .check(classes);
+    }
+
+    /**
+     * #236: the subscription-fulfillment alarm counter lives behind an application port; Micrometer
+     * types may only appear in infrastructure.
+     */
+    @Test
+    void application_should_not_depend_on_micrometer() {
+        noClasses()
+            .that().resideInAPackage("..application..")
+            .should().dependOnClassesThat().resideInAPackage("io.micrometer..")
+            .allowEmptyShould(true)
+            .check(classes);
+    }
+
+    @Test
+    void domain_should_not_use_spring_annotations() {
+        noClasses()
+            .that().resideInAPackage("..domain..")
+            .should().dependOnClassesThat().resideInAPackage("org.springframework..")
+            .allowEmptyShould(true)
+            .check(classes);
+    }
+
+    @Test
+    void domain_should_not_use_jpa_annotations() {
+        noClasses()
+            .that().resideInAPackage("..domain..")
+            .should().dependOnClassesThat().resideInAPackage("jakarta.persistence..")
+            .allowEmptyShould(true)
+            .check(classes);
+    }
+
+    /**
+     * #41, US-PHYSICAL-004 (design "Checkout never references
+     * {@code api:physical}"). Also structurally guaranteed at compile time —
+     * {@code api:billing}'s {@code build.gradle.kts} has no dependency on
+     * {@code api:physical} at all — but this rule keeps the boundary
+     * self-documenting for the specific checkout use case even if that
+     * ever changes.
+     *
+     * <p>#36, US-BILLING-008, design C8: {@code haveSimpleName} widened to also cover {@code
+     * CreateBankTransferPhysicalPurchaseUseCaseImpl} and {@code
+     * RoutingCreatePhysicalPurchaseCheckoutUseCase} — neither has a hold to place (D1), so neither
+     * needs {@code com.menta.shared.physical.MultiSessionCapacityHoldCommand}/{@code SessionClaim}.
+     * The checked package intentionally stays {@code com.menta.physical..} only, NOT widened to
+     * {@code com.menta.shared.physical..}: {@code CreatePhysicalPurchaseCheckoutUseCaseImpl} (the
+     * Mercado Pago arm) legitimately depends on {@code
+     * com.menta.shared.physical.MultiSessionCapacityHoldCommand}/{@code SessionClaim} because it
+     * places the real, reserving hold (design B1/B6) — widening the package check to that shared
+     * package would false-positive on that pre-existing, correct dependency. Verified: both new
+     * classes import from neither package regardless, so this stricter-scoped rule already covers
+     * them fully.</p>
+     */
+    @Test
+    void checkout_use_case_should_not_depend_on_physical_module() {
+        noClasses()
+            .that().haveSimpleName("CreatePhysicalPurchaseCheckoutUseCaseImpl")
+            .or().haveSimpleName("CreateBankTransferPhysicalPurchaseUseCaseImpl")
+            .or().haveSimpleName("RoutingCreatePhysicalPurchaseCheckoutUseCase")
+            .should().dependOnClassesThat().resideInAPackage("com.menta.physical..")
+            .allowEmptyShould(true)
+            .check(classes);
+    }
+
+    @Test
+    void layered_architecture_should_be_respected() {
+        layeredArchitecture()
+            .consideringAllDependencies()
+            .layer("Domain").definedBy("..domain..")
+            .layer("Application").definedBy("..application..")
+            .layer("Infrastructure").definedBy("..infrastructure..")
+            .whereLayer("Domain").mayOnlyBeAccessedByLayers("Application", "Infrastructure")
+            .whereLayer("Application").mayOnlyBeAccessedByLayers("Infrastructure")
+            .allowEmptyShould(true)
+            .check(classes);
+    }
+}

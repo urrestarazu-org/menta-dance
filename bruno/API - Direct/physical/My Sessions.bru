@@ -1,0 +1,37 @@
+meta {
+  name: My Sessions
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/physical/sessions/me
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  #356. The acting student's upcoming sessions with a confirmed capacity
+  assignment, oldest first. Range: from the start of today in the academy zone
+  up to `physical.sessions.window-days` days ahead (default 60), returned as
+  `from`/`to`. Holds and pending purchases do not count; cancelled sessions are
+  omitted. `checkInOpen` tells whether the check-in window is open right now,
+  so the `sessionId` can be fed straight to `POST .../access-qr`.
+  `assignmentType` (MONTHLY or INDIVIDUAL) says how the seat was obtained; it is
+  never null.
+  The student id always comes from the Bearer token — there is no studentId
+  parameter. Use a STUDENT token.
+
+  Success contract: 200 with { from, to, sessions[] } where each session is
+  { sessionId, courseId, courseName, instructorName, scheduledAt, checkInOpen,
+  assignmentType }.
+  Error contract: 401 when unauthenticated; 403 for any role other than
+  STUDENT.
+}
+
+assert {
+  res.status: eq 200
+}

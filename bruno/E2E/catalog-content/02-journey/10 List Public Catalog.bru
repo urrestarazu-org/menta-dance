@@ -1,0 +1,23 @@
+meta {
+  name: List Public Catalog
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/api/{{apiVersion}}/catalog/courses
+  body: none
+  auth: none
+}
+
+tests {
+  test("published journey course appears to anonymous visitors", function() {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().courses).to.be.an("array");
+    expect(res.getBody().courses.some((course) => course.courseId === bru.getVar("journeyCourseId"))).to.equal(true);
+  });
+}
+
+assert {
+  res.status: eq 200
+}

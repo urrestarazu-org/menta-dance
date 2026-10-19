@@ -1,0 +1,32 @@
+package com.menta.billing.application.port.out;
+
+/**
+ * Out-port for the blob storage backing a {@link com.menta.billing.domain.model.PaymentProof}
+ * (#31, US-BILLING-003, design C5/C11). {@code storageKey} is the opaque string {@link
+ * com.menta.billing.domain.model.PaymentProof#create} computes — never a filesystem path. No
+ * implementation of this port may let a filesystem path cross back into the domain or application
+ * layers.
+ */
+public interface PaymentProofStoragePort {
+
+    /**
+     * Writes the blob under the given key.
+     *
+     * <p>The filesystem adapter creates missing parent directories and overwrites an existing blob.
+     * An I/O failure surfaces as {@link java.io.UncheckedIOException} and a key that escapes the
+     * storage root as {@link IllegalArgumentException}.
+     */
+    void store(String storageKey, byte[] content);
+
+    /** Silent no-op when {@code storageKey} does not exist — mirrors delete-if-present semantics. */
+    void delete(String storageKey);
+
+    /**
+     * Reads the stored blob back (#33, US-BILLING-005, design C4), backing the token-authenticated
+     * proof-serving endpoint.
+     *
+     * @throws RuntimeException if {@code storageKey} has no backing blob — never returns an empty
+     *     array in that case.
+     */
+    byte[] read(String storageKey);
+}

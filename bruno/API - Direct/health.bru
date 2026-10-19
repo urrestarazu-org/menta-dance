@@ -1,0 +1,31 @@
+meta {
+  name: Health Check
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/actuator/health
+  body: none
+  auth: none
+}
+
+docs {
+  Check the API application's Spring Boot Actuator health endpoint.
+  The response includes component details because local application
+  configuration enables health detail visibility.
+}
+
+tests {
+  test("Status is 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("Application status is UP", function() {
+    expect(res.getBody().status).to.equal('UP');
+  });
+}
+
+assert {
+  res.status: eq 200
+}

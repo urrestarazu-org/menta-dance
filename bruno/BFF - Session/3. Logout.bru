@@ -1,0 +1,68 @@
+meta {
+  name: 3. Logout
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{bff_url}}/logout
+  body: none
+  auth: none
+}
+
+headers {
+  Cookie: SESSION={{session_id}}
+}
+
+script:pre-request {
+  req.setMaxRedirects(0);
+}
+
+script:post-response {
+  const location = String(res.getHeader("location") || "");
+  const rawSetCookie = res.getHeader("set-cookie");
+  const cookieLines = (Array.isArray(rawSetCookie) ? rawSetCookie : [rawSetCookie])
+    .filter(Boolean)
+    .flatMap(value => String(value).split(/\r?\n/));
+  const sessionCookie = cookieLines.find(value => /^SESSION=/i.test(value.trim())) || "";
+
+  if (
+    res.getStatus() === 302 &&
+    /^(?:https?:\/\/[^/]+)?\/login\?logout$/.test(location) &&
+    /^SESSION=\s*;/i.test(sessionCookie) &&
+    /(?:^|;)\s*Max-Age=0(?:;|$)/i.test(sessionCookie)
+  ) {
+    // Request 4 intentionally runs without the local HTTP cookie bypass.
+    bru.deleteVar("session_id");
+  }
+}
+
+tests {
+  const location = String(res.getHeader("location") || "");
+  const rawSetCookie = res.getHeader("set-cookie");
+  const cookieLines = (Array.isArray(rawSetCookie) ? rawSetCookie : [rawSetCookie])
+    .filter(Boolean)
+    .flatMap(value => String(value).split(/\r?\n/));
+  const sessionCookie = cookieLines.find(value => /^SESSION=/i.test(value.trim())) || "";
+
+  test("Returns 302 Found", function() {
+    expect(res.getStatus()).to.equal(302);
+  });
+
+  test("Redirects to the logged-out page", function() {
+    expect(location).to.match(/^(?:https?:\/\/[^/]+)?\/login\?logout$/);
+  });
+
+  test("Expires the SESSION cookie", function() {
+    expect(sessionCookie).to.match(/^SESSION=\s*;/i);
+    expect(sessionCookie).to.match(/(?:^|;)\s*Max-Age=0(?:;|$)/i);
+  });
+}
+
+docs {
+  # End the BFF session
+
+  Sends the captured local session, verifies the logout redirect, and verifies
+  that the response expires the SESSION cookie. The post-response script removes
+  the runtime-only `session_id` so request 4 cannot reuse it.
+}

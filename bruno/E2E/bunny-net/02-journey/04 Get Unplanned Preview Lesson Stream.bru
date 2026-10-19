@@ -1,0 +1,39 @@
+meta {
+  name: Get Unplanned Preview Lesson Stream
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/{{apiVersion}}/virtual/lessons/{{unplannedPreviewLessonId}}/stream
+  body: none
+  auth: none
+}
+
+tests {
+  test("Status is 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("Preview streams anonymously with a deterministic local signed URL", function() {
+    const url = res.getBody().stream.url;
+    const pullZoneHostname = bru.getEnvVar("bunnyNetPullZoneHostname");
+    const videoLibraryId = bru.getEnvVar("bunnyNetVideoLibraryId");
+    const prefix = pullZoneHostname + "/" + videoLibraryId + "/";
+    expect(url).to.be.a("string").and.to.satisfy((value) => value.startsWith(prefix));
+    expect(url).to.match(/\?exp=\d+&sig=[0-9a-f]{64}$/);
+    expect(res.getBody().lesson.lessonId).to.equal(bru.getVar("unplannedPreviewLessonId"));
+  });
+}
+
+docs {
+  US-VIRTUAL-007 public cascade branch, local adapter (ADR-0040): a preview
+  module's lesson streams without authentication, even in a course absent
+  from every billing plan. The signed URL never reaches the real Bunny.net —
+  the local adapter derives it deterministically from the pinned pull zone
+  and video library (design.md "Local signed-URL contract").
+}
+
+assert {
+  res.status: eq 200
+}

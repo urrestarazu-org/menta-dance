@@ -1,0 +1,34 @@
+meta {
+  name: Deliver Inconsistent Webhook
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/v1/billing/payments/mercadopago/webhook?data.id={{mismatchWebhookDataId}}
+  body: none
+  auth: none
+}
+
+headers {
+  x-request-id: {{mismatchWebhookRequestId}}
+  x-signature: {{mismatchWebhookSignature}}
+}
+
+docs {
+  Delivers the mismatched notification prepared by "Prepare Inconsistent
+  Webhook" to the real public webhook endpoint — same controller, HMAC
+  verifier, inbox and async worker as production traffic. The mismatch is
+  resolved later by PaymentVerificationService/WebhookVerificationWorker,
+  never by this request; a 200 here only means "verified, persisted".
+}
+
+tests {
+  test("verified and persisted, never a 500", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+}
+
+assert {
+  res.status: eq 200
+}

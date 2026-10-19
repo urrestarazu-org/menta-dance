@@ -21,8 +21,11 @@ comunican por HTTP, broker, repositorios, `JOIN` ni claves foráneas entre sí.
 | Catálogo | [07-CATALOG-API.md](07-CATALOG-API.md) | Proyección de lectura unificada por API/BFF |
 | Datos | [22-DATA-MODEL.md](22-DATA-MODEL.md) | Modelo lógico y ownership |
 | Pagos presenciales | [28-PHYSICAL-CLASS-PAYMENTS.md](28-PHYSICAL-CLASS-PAYMENTS.md) | Pricing, cupos y conciliación |
-| Calidad y entrega | [14-TEST-STRATEGY.md](14-TEST-STRATEGY.md), [16-CICD-PIPELINE.md](16-CICD-PIPELINE.md), [24-LOCAL-DEV-SETUP.md](24-LOCAL-DEV-SETUP.md) | Scaffold, CI/CD y operación local |
+| Calidad y entrega | [14-TEST-STRATEGY.md](14-TEST-STRATEGY.md), [16-CICD-PIPELINE.md](16-CICD-PIPELINE.md), [24-LOCAL-DEV-SETUP-REQUIREMENTS.md](24-LOCAL-DEV-SETUP-REQUIREMENTS.md), [26-LOCAL-DEV-SETUP-HOWTO.md](26-LOCAL-DEV-SETUP-HOWTO.md) | Scaffold, CI/CD y contrato / guía práctica de operación local |
+| Frontend BFF | [31-BFF-TAILWIND.md](31-BFF-TAILWIND.md) | Pipeline de Tailwind CSS, tokens y reglas de estilo |
+| Contribución | [30-SDD-CONTRIBUTION-GUIDE.md](30-SDD-CONTRIBUTION-GUIDE.md) | Selección de ruta, artefactos SDD, implementación, pruebas y entrega |
 | Operación | [18-SLA-DEFINITION.md](18-SLA-DEFINITION.md), [21-NFR-REQUIREMENTS.md](21-NFR-REQUIREMENTS.md) | Objetivos y restricciones |
+| Despliegue | [32-VPS-DONWEB-RUNBOOK.md](32-VPS-DONWEB-RUNBOOK.md) | Bitácora operativa del VPS de DonWeb |
 | Plan | [13-DEVELOPMENT-PLAN.md](13-DEVELOPMENT-PLAN.md) | Fases de implementación |
 | Costos y riesgos | [12-COST-ANALYSIS.md](12-COST-ANALYSIS.md), [15-RISK-MATRIX.md](15-RISK-MATRIX.md) | Supuestos operativos y mitigaciones |
 | Historias | [user-stories/README.md](user-stories/README.md) | Backlog funcional |
@@ -48,6 +51,16 @@ restaurarse sin una nueva decisión de diseño.
 - MySQL es la fuente de verdad de Auth; Redis debe reflejarla. Si MySQL falla o
   Redis no se reconcilia, `AUTH_DEGRADED` bloquea rutas autenticadas.
 - Ningún pago externo se reintenta automáticamente.
-- Todas las APIs usan `application/problem+json` (RFC 9457).
+- Todas las APIs usan `application/problem+json` conforme a
+  [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457.html). Ante dudas sobre el
+  formato de errores, sus miembros estándar (`type`, `title`, `status`, `detail`,
+  `instance`) o extensiones, los agentes deben usar esta RFC como guía confiable.
+- Ante cualquier duda sobre semántica HTTP —métodos, idempotencia, seguridad,
+  cacheo, códigos de estado, campos de cabecera, negociación de contenido,
+  precondiciones o rangos— los agentes deben consultar
+  [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html), en particular la
+  sección [9.2 — Common Method Properties](https://www.rfc-editor.org/rfc/rfc9110.html#section-9.2),
+  como guía confiable y autoridad del protocolo. No se decide por convención local
+  ni por lo que "parezca" REST.
 - Flyway sólo avanza; las migraciones destructivas se difieren una release.
-- CI verde es obligatorio para mergear a `develop` y `master`.
+- CI verde es obligatorio para mergear a `develop` y `main`.

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('Activar cuenta', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<div class="mx-auto max-w-sm">
+    <h1 class="mb-6">Activar cuenta</h1>
+
+    <div th:if="${formError}" class="mb-4">
+        <div th:replace="~{fragments/components :: alert('error', ${formError})}"></div>
+    </div>
+
+    <div th:if="${invalidToken}">
+        <div class="mb-4">
+            <div th:replace="~{fragments/components :: alert('error', 'El enlace de activación es inválido, venció o ya fue utilizado.')}"></div>
+        </div>
+        <p>Si venció, podés pedir uno nuevo: <a th:href="@{/reenviar-activacion}">Reenviar activación</a>.</p>
+        <p class="mt-2">Si ya activaste tu cuenta, podés <a th:href="@{/login}">iniciar sesión</a>.</p>
+    </div>
+
+    <form th:unless="${invalidToken}" th:action="@{/activar}" method="post" class="card space-y-4">
+        <input type="hidden" name="token" th:value="${token}"/>
+        <p>Confirmá la activación de tu cuenta de Menta Dance.</p>
+        <button type="submit" class="btn btn-primary w-full">Activar cuenta</button>
+    </form>
+</div>
+</th:block>
+</body>
+</html>

@@ -1,0 +1,36 @@
+meta {
+  name: Get Planned Course Detail
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/{{apiVersion}}/catalog/courses/{{plannedCourseId}}
+  body: none
+  auth: none
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    bru.setVar("plannedProtectedLessonId", res.getBody().modules[0].lessons[0].lessonId);
+  }
+}
+
+tests {
+  test("the planned course is public and carries its single protected module", function() {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().courseId).to.equal(bru.getEnvVar("plannedCourseId"));
+    expect(res.getBody().modules).to.be.an("array").with.lengthOf(1);
+    expect(res.getBody().modules[0].lessons[0].lessonId).to.be.a("string").and.not.empty;
+  });
+}
+
+docs {
+  E2eBunnyNetVirtualFixture seeds PLANNED_COURSE_ID with one protected module
+  and one lesson; E2eBunnyNetBillingFixture links it to the Mercado Pago
+  fixture plan (design.md A4') so the premium-grant scenario below is real.
+}
+
+assert {
+  res.status: eq 200
+}

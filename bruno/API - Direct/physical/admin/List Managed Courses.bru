@@ -1,0 +1,27 @@
+meta {
+  name: List Managed Physical Courses
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admin/physical/courses
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  US-PHYSICAL-005 escenario 2. Unlike the public catalog
+  (GET /api/v1/catalog/courses), this returns courses of every status.
+  ADMIN sees every course; INSTRUCTOR sees only courses they own.
+
+  Success contract: 200 with { courses: [...] }.
+  Error contract: 403 when the role is neither ADMIN nor INSTRUCTOR.
+}
+
+assert {
+  res.status: eq 200
+}

@@ -1,0 +1,52 @@
+meta {
+  name: Create Physical Course
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/admin/physical/courses
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "title": "Salsa Intermedio",
+    "description": "Curso de salsa para nivel intermedio",
+    "professorName": "María García",
+    "dayOfWeek": "WEDNESDAY",
+    "startTime": "20:00:00",
+    "durationMinutes": 60,
+    "level": "INTERMEDIATE",
+    "capacity": 20
+  }
+}
+
+script:post-response {
+  if (res.getStatus() === 201) {
+    bru.setVar("physicalCourseId", res.getBody().courseId);
+  }
+}
+
+docs {
+  US-PHYSICAL-005 escenario 1. Requires an ADMIN or INSTRUCTOR bearer token
+  (log in first with a fixture that has one of those roles).
+
+  `professorId` is omitted here — an INSTRUCTOR creating a course is always
+  assigned to themselves; only an ADMIN may set an arbitrary `professorId` in
+  the body.
+
+  Success contract: 201 with the full PhysicalCourseManagementResponse.
+  Error contract:
+    400 PROFESSOR_MISMATCH → INSTRUCTOR supplied someone else's professorId
+    403                     → role is neither ADMIN nor INSTRUCTOR
+}
+
+assert {
+  res.status: eq 201
+}

@@ -1,0 +1,37 @@
+meta {
+  name: 4. Dashboard (After Logout)
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{bff_url}}/dashboard
+  body: none
+  auth: none
+}
+
+script:pre-request {
+  req.setMaxRedirects(0);
+}
+
+tests {
+  const location = String(res.getHeader("location") || "");
+
+  test("Returns 302 Found without a session", function() {
+    expect(res.getStatus()).to.equal(302);
+  });
+
+  test("Redirects to login", function() {
+    expect(location).to.match(/^(?:https?:\/\/[^/]+)?\/login$/);
+  });
+}
+
+docs {
+  # Dashboard after logout
+
+  Runs without an explicit SESSION header and verifies that the protected
+  dashboard redirects to login after request 3 invalidates the session.
+
+  Redis is not an HTTP service, so Redis inspection remains a manual CLI check
+  documented in `README.md` and `SETUP.md`.
+}

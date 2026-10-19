@@ -1,6 +1,6 @@
 # Estado del repositorio (leer primero)
 
-- El repositorio es **solo documentación hoy**. Antes de escribir código, revisar `docs/02-ARCHITECTURE.md`, `docs/27-CLEAN-ARCHITECTURE-GUIDE.md`, `docs/24-LOCAL-DEV-SETUP.md` y los ADRs relevantes; el scaffold que crees debe satisfacer esos contratos.
+- El repositorio es **solo documentación hoy**. Antes de escribir código, revisar `docs/02-ARCHITECTURE.md`, `docs/27-CLEAN-ARCHITECTURE-GUIDE.md`, `docs/24-LOCAL-DEV-SETUP-REQUIREMENTS.md` y los ADRs relevantes; el scaffold que crees debe satisfacer esos contratos.
 - Stack objetivo: Java 21 + Spring Boot 3 monolito modular (`api`) compuesto por `api:app`, cliente Android Kotlin + Jetpack Compose, Node 20.11.1 para assets web, Docker Compose para helpers de infraestructura.
 
 # Boundaries y ownership de módulos
@@ -10,6 +10,11 @@
 - Cada módulo backend debe seguir `domain -> application -> infrastructure` (sin dependencias inversas). `domain` permanece libre de frameworks, `application` expone puertos/casos de uso, `infrastructure` posee adaptadores, controllers, persistencia y config.
 - La colaboración entre módulos siempre va a través de interfaces Java (típicamente definidas en `api:shared`). Prohibido: compartir entidades JPA, repositorios, SQL joins, llamadas HTTP, messaging, o cualquier infraestructura de otro módulo.
 - Android replica la misma dirección (`presentation -> domain <- data`), con el wiring de Hilt aislado en `di`.
+
+## Documentación de código
+
+- Las interfaces públicas de `domain` y los puertos de `application` deben incluir Javadoc descriptivo: responsabilidad, semántica relevante, invariantes y efectos no obvios.
+- No repetir la firma; documentar el porqué y los límites arquitectónicos cuando aporten contexto.
 
 # Datos y migraciones
 
@@ -35,11 +40,47 @@
 - CI (GitHub Actions) debe ejecutar: build backend, Checkstyle, tests unitarios + ArchUnit, JaCoCo, SonarCloud, Playwright, Gatling, y Trivy antes del merge. Conectar estos en `./gradlew check`/workflows mientras el código aterriza.
 - Observabilidad (Logback JSON + OpenTelemetry) es parte de la definición de done—asegurar que los nuevos servicios emitan `correlationId` y respeten las reglas de retención de 90 días descritas en docs.
 
+## Contrato y documentación HTTP
+
+- Cada vez que se agregue, modifique o elimine un endpoint de la API —incluyendo ruta, método, parámetros, autenticación, respuestas, errores o rate limits— verificar si corresponde actualizar la colección versionada de Bruno en `bruno/` y el contrato OpenAPI/Swagger.
+- Cuando el endpoint esté cubierto por Bruno, ajustar la request, sus variables y aserciones para que representen el contrato real; no dejar ejemplos o expectativas obsoletos.
+- Cuando exista documentación OpenAPI/Swagger para el área afectada, actualizar paths, schemas, seguridad, códigos de respuesta y ejemplos en el mismo cambio. Si todavía no corresponde documentarlo, dejar explícito el motivo en la entrega.
+
 # Workflow y delivery
 
-- El branching sigue Git Flow: `feature/*` → `develop`; los releases originan de `release/*`, se mergean a `master` y luego de vuelta a `develop`; hotfixes inician desde `master`.
-- Usar Conventional Commits tanto para mensajes de commit como títulos de PR. Los releases se tagean `vMAJOR.MINOR.PATCH` y publican JAR + imágenes GHCR usando digests inmutables.
-- Los PRs se mergean via squash una vez que CI está verde; nunca agregar atribuciones de AI en trailers de commit. Los workflows de deployment deben pinear cada GitHub Action a un SHA completo (sin `latest`).
+## Git Flow
+
+El proyecto sigue Git Flow con las siguientes ramas:
+
+| Rama | Propósito | Protección |
+|------|-----------|------------|
+| `main` | Producción estable | Requiere PR, sin force push, historial lineal |
+| `develop` | Integración (rama default) | PRs apuntan acá por defecto |
+| `feature/*` | Desarrollo de funcionalidades | Temporal, se elimina post-merge |
+| `release/*` | Preparación de release | Temporal, se elimina post-merge |
+| `hotfix/*` | Fixes urgentes en producción | Temporal, se elimina post-merge |
+
+### Flujo de trabajo
+
+```
+1. feature/* → PR → develop       (desarrollo normal)
+2. develop → release/vX.Y.Z       (preparar release)
+3. release/* → PR → main          (publicar)
+4. Crear tag vX.Y.Z en main       (versionar)
+5. main → PR → develop            (sync back)
+```
+
+### Reglas
+
+- **Commits**: Usar Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`).
+- **PRs**: Mergear via squash una vez que CI está verde. Nunca agregar atribuciones de AI.
+- **Tags**: Releases se tagean `vMAJOR.MINOR.PATCH` y publican JAR + imágenes GHCR usando digests inmutables.
+- **Actions**: Los workflows de deployment deben pinear cada GitHub Action a un SHA completo (sin `latest`).
+
+### Sincronización con origen
+
+- Antes de crear, actualizar o mergear un Pull Request, ejecutar `git fetch origin` y verificar que la rama esté actualizada respecto de su rama base remota.
+- Si la rama quedó detrás de su base, integrarla mediante rebase o merge según la política del repositorio; al rebasear una feature ya publicada, usar `git push --force-with-lease`, nunca `--force`.
 
 # Guía de selección de modelos
 
@@ -74,3 +115,30 @@ Antes de iniciar una tarea, sugerir el modelo apropiado según la complejidad:
 |--------|------------|
 | **Gemini Flash** | Ediciones simples, actualizaciones de archivo único, verificaciones rápidas |
 | **Gemini Pro** | Diseño arquitectónico, refactoring multi-módulo, análisis profundo |
+
+# Project Skills
+
+Los siguientes skills están disponibles en este proyecto:
+
+## prcreator
+
+**Path:** `skills/prcreator/SKILL.md`
+
+**Trigger:** create a PR, open a pull request, gh pr create, crear un PR, hacer pull request
+
+**Descripción:** Orquesta la creación de Pull Requests en GitHub usando el CLI `gh` local. Aplica formato Conventional Commits v1.0.0, detecta automáticamente scope desde los archivos modificados, respeta branch protection, y genera body estructurado según el tipo de PR (feat, fix, hotfix, docs, etc.).
+
+**Características:**
+- **Verificación de PRs duplicados** (STEP 2 CRÍTICO): Detecta PRs existentes del mismo branch ANTES de crear uno nuevo
+- Auto-detección de tipo de PR desde commits y branch name
+- Scope inferido automáticamente desde paths modificados (auth, billing, virtual, physical, etc.)
+- Detección de breaking changes (BREAKING CHANGE: o `!`)
+- Templates específicos por tipo con checklist en español
+- Respeta Git Flow (feature/* → develop, hotfix/* → main)
+- Validación de ambiente (gh auth, branch pushed, etc.)
+
+**⚠️ IMPORTANTE - Lección aprendida:**
+- SIEMPRE verificar PRs existentes ANTES de crear uno nuevo (`gh pr list --head <branch>`)
+- Un mismo branch puede tener múltiples PRs abiertos si apuntan a diferentes bases
+- Si un PR existe con base incorrecta: actualizar base (`gh pr edit --base`) o cerrar y recrear
+- Nunca crear PR duplicado - actualizar el existente o corregir su base

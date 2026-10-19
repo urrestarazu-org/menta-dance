@@ -1,0 +1,64 @@
+meta {
+  name: Verify Mismatch Subscription Not Activated
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/api/v1/billing/subscriptions
+  body: json
+  auth: bearer
+}
+
+headers {
+  content-type: application/json
+}
+
+auth:bearer {
+  token: {{mismatchAuthToken}}
+}
+
+script:pre-request {
+  // WebhookInboxReconciler ticks every billing.webhook.reconcile-rate-ms
+  // (default 5000ms) — wait for at least one tick before checking the
+  // outcome of the mismatched webhook delivered in the previous step.
+  await new Promise((resolve) => setTimeout(resolve, 8000));
+}
+
+body:json {
+  {
+    "planId": "{{planId}}",
+    "paymentMethod": "MERCADO_PAGO",
+    "idempotencyKey": "{{mismatchSubscriptionIdempotencyKey}}"
+  }
+}
+
+docs {
+  Replays the mismatch checkout with the SAME idempotencyKey —
+  CreateSubscriptionCheckoutUseCaseImpl's replay branch returns the
+  subscription's CURRENT status without opening a second provider
+  preference, so this doubles as a poll for the async worker's outcome
+  through the existing public checkout contract (no new endpoint needed).
+
+  A mismatched provider result never activates the subscription (spec:
+  "Inconsistent provider result is not fulfilled"). Payment moves to
+  ReconciliationRequired — a non-terminal state
+  (Payment.isTerminal/PaymentStatus) — so the Subscription itself stays
+  PENDING rather than being cancelled: reconciliation is meant to be
+  resolved by an operator, not auto-discarded. billing_reconciliation_tasks
+  records the mismatch; that table has no public read endpoint, so this
+  collection proves the one HTTP-observable half of the contract (never
+  ACTIVE) and leaves the reconciliation-task assertion to
+  PaymentVerificationServiceTest/WebhookVerificationWorkerTest.
+}
+
+tests {
+  test("mismatch never activates the subscription", function() {
+    expect(res.getStatus()).to.equal(201);
+    expect(res.getBody().status).to.not.equal("ACTIVE");
+  });
+}
+
+assert {
+  res.status: eq 201
+}

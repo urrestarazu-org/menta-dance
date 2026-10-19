@@ -1,0 +1,36 @@
+meta {
+  name: Complete Planned Lesson
+  type: http
+  seq: 15
+}
+
+post {
+  url: {{baseUrl}}/api/{{apiVersion}}/virtual/lessons/{{plannedProtectedLessonId}}/complete
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+tests {
+  test("Status is 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("Completing does not move the previously saved position", function() {
+    expect(res.getBody().completed).to.equal(true);
+    expect(res.getBody().positionSeconds).to.equal(90);
+  });
+}
+
+docs {
+  US-VIRTUAL-005 (#52), design.md decisions 3 and 7: completion is
+  independent from position and never moves it. positionSeconds must still
+  be 90, the value saved by the previous request in this journey.
+}
+
+assert {
+  res.status: eq 200
+}

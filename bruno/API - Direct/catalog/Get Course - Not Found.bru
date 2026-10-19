@@ -1,0 +1,31 @@
+meta {
+  name: Get Course - Not Found
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/catalog/courses/00000000-0000-0000-0000-000000000000
+  body: none
+  auth: none
+}
+
+docs {
+  A well-formed but nonexistent courseId must return the exact same 404
+  COURSE_NOT_FOUND regardless of which module (or neither) it would belong
+  to — the endpoint never reveals which case it is (#95).
+}
+
+tests {
+  test("Status is 404", function() {
+    expect(res.getStatus()).to.equal(404);
+  });
+
+  test("Problem code is COURSE_NOT_FOUND", function() {
+    expect(res.getBody().code).to.equal('COURSE_NOT_FOUND');
+  });
+}
+
+assert {
+  res.status: eq 404
+}

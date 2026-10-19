@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('Panel', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<h1 class="mb-4">Panel</h1>
+
+<p class="mb-6">Hola, <span th:text="${username}">User</span>!</p>
+
+<p class="mb-6"><a class="btn btn-primary" th:href="@{/classes}">Clases presenciales</a></p>
+
+<form th:action="@{/logout}" method="post">
+    <button type="submit" class="btn btn-secondary">Cerrar sesión</button>
+</form>
+</th:block>
+</body>
+</html>

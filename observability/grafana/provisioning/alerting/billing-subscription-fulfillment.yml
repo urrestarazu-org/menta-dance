@@ -1,0 +1,64 @@
+apiVersion: 1
+
+# Log-based alert for silent virtual-subscription fulfillment failures (#236).
+#
+# The query consumes the ERROR line written by
+# LogAndMetricSubscriptionFulfillmentAlarmAdapter. Its marker, the `reason` key and the reason
+# codes are pinned by SubscriptionFulfillmentAlertRuleContractTest: change them together.
+#
+# No contact point or notification policy is defined on purpose (follow-up task). The rule is
+# visible in the Grafana UI only.
+groups:
+  - orgId: 1
+    name: billing
+    folder: Menta Dance
+    interval: 1m
+    rules:
+      - uid: billing-subscription-fulfillment-alarm
+        title: Virtual subscription fulfillment alarm
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: loki
+            model:
+              refId: A
+              queryType: instant
+              expr: 'sum by (reason) (count_over_time({service_name="menta-dance-api"} |= "alarm=virtual_subscription_fulfillment" | logfmt reason [1h]))'
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              settings:
+                mode: dropNN
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 0
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        isPaused: false
+        labels:
+          severity: critical
+          module: billing
+        annotations:
+          summary: 'Settled virtual payment ended without subscription access ({{ $labels.reason }})'
+          description: >-
+            A Completed virtual payment did not produce an active subscription.
+            reason=plan_missing: the pending subscription's plan could not be loaded and it was
+            parked as EXCEPTION. reason=subscription_missing: no subscription row exists for the
+            payment. Search Loki for the paymentId in the alarm log line
+            (alarm=virtual_subscription_fulfillment) to find the affected payment.

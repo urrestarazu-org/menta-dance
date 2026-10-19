@@ -1,0 +1,51 @@
+meta {
+  name: Prepare Inconsistent Webhook
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/v1/e2e/mercadopago/inconsistent-webhook
+  body: json
+  auth: none
+}
+
+script:pre-request {
+  bru.setVar('mismatchPreparePaymentId', 'e2e-mismatch-payment-' + Date.now());
+  bru.setVar('mismatchPrepareRequestId', 'e2e-mismatch-request-' + Date.now());
+}
+
+body:json {
+  {
+    "externalReference": "{{mismatchExternalReference}}",
+    "providerPaymentId": "{{mismatchPreparePaymentId}}",
+    "requestId": "{{mismatchPrepareRequestId}}"
+  }
+}
+
+script:post-response {
+  bru.setVar('mismatchWebhookDataId', res.getBody().providerPaymentId);
+  bru.setVar('mismatchWebhookRequestId', res.getBody().requestId);
+  bru.setVar('mismatchWebhookSignature', res.getBody().signature);
+}
+
+docs {
+  Profile-gated, local-only endpoint (e2e-mercadopago). Registers a provider
+  result whose merchantAccountId deliberately does not match the checkout's
+  expected value (design.md "Outcome model": deterministic mismatch) and
+  returns a current, valid signature computed server-side — this request
+  never sees or handles the real HMAC secret.
+}
+
+tests {
+  test("prepares a deliverable signed notification", function() {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().providerPaymentId).to.be.a("string").and.not.empty;
+    expect(res.getBody().requestId).to.be.a("string").and.not.empty;
+    expect(res.getBody().signature).to.match(/^ts=\d+,v1=[0-9a-f]+$/);
+  });
+}
+
+assert {
+  res.status: eq 200
+}

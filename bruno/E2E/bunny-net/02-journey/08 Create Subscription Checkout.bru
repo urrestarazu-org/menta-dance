@@ -1,0 +1,56 @@
+meta {
+  name: Create Subscription Checkout
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/v1/billing/subscriptions
+  body: json
+  auth: bearer
+}
+
+headers {
+  content-type: application/json
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "planId": "{{planId}}",
+    "paymentMethod": "MERCADO_PAGO",
+    "idempotencyKey": "{{subscriptionIdempotencyKey}}"
+  }
+}
+
+docs {
+  Starts Mercado Pago Checkout Pro for the authenticated student against
+  E2eMercadoPagoBillingFixture.PLAN_ID, which E2eBunnyNetBillingFixture links
+  to the planned course. Reuses the exact same local simulator as the
+  standalone Mercado Pago journey (design.md "Journey order").
+
+  Captures externalReference as a runtime var so the following
+  "Prepare Approved Webhook" step can correlate a local provider outcome
+  against this exact checkout.
+}
+
+script:post-response {
+  bru.setVar('externalReference', res.getBody().externalReference);
+}
+
+tests {
+  test("Creates a pending checkout", function() {
+    expect(res.getStatus()).to.equal(201);
+    expect(res.getBody().status).to.equal("PENDING");
+    expect(res.getBody().checkoutUrl).to.be.a("string").and.not.empty;
+    expect(res.getBody().providerPreferenceId).to.be.a("string").and.not.empty;
+    expect(res.getBody().externalReference).to.be.a("string").and.not.empty;
+  });
+}
+
+assert {
+  res.status: eq 201
+}

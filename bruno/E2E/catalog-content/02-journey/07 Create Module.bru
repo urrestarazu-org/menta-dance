@@ -1,0 +1,41 @@
+meta {
+  name: Create Module
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/{{apiVersion}}/admin/virtual/courses/{{journeyCourseId}}/modules
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{adminAccessToken}}
+}
+
+body:json {
+  {
+    "title": "E2E Journey Module",
+    "preview": true,
+    "order": 0
+  }
+}
+
+script:post-response {
+  if (res.getStatus() === 201) {
+    bru.setVar("journeyModuleId", res.body.moduleId);
+  }
+}
+
+tests {
+  test("administrator creates the course module", function() {
+    expect(res.getStatus()).to.equal(201);
+    expect(res.getBody().moduleId).to.be.a("string").and.not.empty;
+    expect(res.getBody().courseId).to.equal(bru.getVar("journeyCourseId"));
+  });
+}
+
+assert {
+  res.status: eq 201
+}

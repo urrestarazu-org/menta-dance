@@ -1,0 +1,262 @@
+services:
+  nginx:
+    # Tag fijo (1.27.3) en vez de :latest para reducir el drift de versiones
+    # alpine: imagen minimalista (~10MB vs ~150MB de nginx:latest)
+    image: nginx:1.27.3-alpine
+    container_name: menta-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # Configuración de nginx
+      - ./conf/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./conf/conf.d:/etc/nginx/conf.d:ro
+
+      # Logs de nginx (persistentes)
+      - nginx-logs:/var/log/nginx
+
+      # Certificados SSL (cuando se tengan)
+      - ./certs:/etc/nginx/certs:ro
+    networks:
+      - menta-network
+    depends_on:
+      api:
+        condition: service_healthy
+      bff:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  api:
+    # ${IMAGE_VERSION:-latest}: variable con default
+    # En CI: IMAGE_VERSION=ci (tags específicos por build)
+    # En dev: usa :latest (no requiere export IMAGE_VERSION)
+    image: menta-api:${IMAGE_VERSION:-latest}
+    container_name: menta-api
+    restart: unless-stopped
+    expose:
+      - "8081"  # Puerto interno, NO expuesto al host
+    environment:
+      # Spring Boot
+      SERVER_PORT: 8081
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-docker}
+
+      # Database
+      SPRING_DATASOURCE_URL: jdbc:mysql://menta-mysql:3306/menta?serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_APP_USER:-menta_app}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_APP_PASSWORD:?Set MYSQL_APP_PASSWORD in .env}
+
+      # Redis
+      SPRING_DATA_REDIS_HOST: menta-redis
+      SPRING_DATA_REDIS_PORT: 6379
+
+      # Signing secret for payment-proof access tokens: required, the API does not start without it.
+      BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET: ${BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET:?Set BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET in .env}
+
+      # SMTP (Mailpit): without a reachable host the mail health indicator reports DOWN,
+      # /actuator/health fails and the container never turns healthy.
+      # Fixed on purpose, not read from .env: .env.example sets SMTP_HOST=localhost for an API
+      # running on the host, and inside this container that would be the API itself.
+      SMTP_HOST: menta-mailpit
+      SMTP_PORT: 1025
+
+      # Only the Docker bridge containing NGINX may supply X-Forwarded-For.
+      AUTH_ACTIVATION_TRUSTED_PROXY_CIDRS: ${AUTH_ACTIVATION_TRUSTED_PROXY_CIDRS:-172.16.0.0/12}
+
+      # Observability
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://menta-otel-collector:4318/v1/traces
+      MANAGEMENT_OTLP_LOGS_ENDPOINT: http://menta-otel-collector:4318/v1/logs
+
+      # JVM Opts
+      JAVA_OPTS: ${JAVA_OPTS:--XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC}
+    volumes:
+      # #31, US-BILLING-003, design C5/C11: bank-transfer payment proofs. Mounted outside any
+      # static-resource root (Spring Boot's are all classpath-based) so no
+      # ResourceHttpRequestHandler can ever serve it — SecurityConfig's matcher is the actual
+      # gate, this placement is defense in depth (design "Threat Matrix").
+      - payment_proofs_data:/var/menta-dance/payment-proofs
+    networks:
+      - menta-network
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8081/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  bff:
+    image: menta-bff:${IMAGE_VERSION:-latest}
+    container_name: menta-bff
+    restart: unless-stopped
+    expose:
+      - "8080"  # Puerto interno, NO expuesto al host
+    environment:
+      # Spring Boot
+      SERVER_PORT: 8080
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-docker}
+
+      # Observability
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://menta-otel-collector:4318/v1/traces
+      MANAGEMENT_OTLP_LOGS_ENDPOINT: http://menta-otel-collector:4318/v1/logs
+
+      # API Backend (BFF solo consume API via HTTP)
+      MENTA_API_BASE_URL: http://api:8081
+      AUTH_API_BASE_URL: http://api:8081
+      BILLING_API_BASE_URL: http://api:8081
+
+      # Redis (sessions): without it the Redis health indicator reports DOWN and the container
+      # never turns healthy. Fixed on purpose, like the API's SMTP host: the default is localhost,
+      # which inside this container is the BFF itself.
+      REDIS_HOST: menta-redis
+      REDIS_PORT: 6379
+
+      # JVM Opts
+      JAVA_OPTS: ${JAVA_OPTS:--XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC}
+    networks:
+      - menta-network
+    depends_on:
+      api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # Servicios de infraestructura (referenciados desde database/docker-compose.yml)
+  mysql:
+    image: mysql:8.0.46
+    container_name: menta-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_DATABASE: menta
+      MYSQL_USER: ${MYSQL_APP_USER:-menta_app}
+      MYSQL_PASSWORD: ${MYSQL_APP_PASSWORD:?Set MYSQL_APP_PASSWORD in .env}
+    expose:
+      - "3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root --password=\"$$MYSQL_ROOT_PASSWORD\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - menta-network
+
+  redis:
+    image: redis:7.4.11-alpine
+    container_name: menta-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    expose:
+      - "6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - menta-network
+
+  mailpit:
+    # Same image as infra/docker/app/docker-compose.yml. No published ports: only the API
+    # (same Compose network) talks to it.
+    image: axllent/mailpit:v1.21.8
+    container_name: menta-mailpit
+    restart: unless-stopped
+    expose:
+      - "1025"
+      - "8025"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8025/livez"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - menta-network
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.131.0
+    container_name: menta-otel-collector
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ../../../observability/otel-collector-config.yml:/etc/otelcol-contrib/config.yaml:ro
+    expose:
+      - "4317"
+      - "4318"
+    depends_on:
+      loki:
+        condition: service_started
+    networks:
+      - menta-network
+
+  loki:
+    image: grafana/loki:3.5.3
+    container_name: menta-loki
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/config.yml"]
+    volumes:
+      - ../../../observability/loki-config.yml:/etc/loki/config.yml:ro
+      - loki_data:/loki
+    expose:
+      - "3100"
+    networks:
+      - menta-network
+
+  grafana:
+    image: grafana/grafana:11.5.2
+    container_name: menta-grafana
+    restart: unless-stopped
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - GF_AUTH_DISABLE_LOGIN_FORM=false
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+    volumes:
+      - ../../../observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    expose:
+      - "3000"
+    depends_on:
+      - loki
+    networks:
+      - menta-network
+
+networks:
+  menta-network:
+    driver: bridge
+
+volumes:
+  nginx-logs:
+    driver: local
+  mysql_data:
+    driver: local
+  redis_data:
+    driver: local
+  loki_data:
+    driver: local
+  grafana_data:
+    driver: local
+  payment_proofs_data:
+    driver: local

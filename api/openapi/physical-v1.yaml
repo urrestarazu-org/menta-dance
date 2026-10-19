@@ -1,0 +1,1524 @@
+openapi: 3.1.0
+
+# Contrato HTTP de la superficie Physical v1.
+#
+# Escrito y versionado a mano, mismo criterio que auth-v1.yaml/billing-v1.yaml:
+# el diff se revisa en el PR igual que la colección Bruno.
+#
+# Sólo describe endpoints IMPLEMENTADOS. El catálogo de sólo lectura de
+# Physical vive compuesto en api:app (docs/07-CATALOG-API.md, #95). Este
+# contrato cubre la gestión ADMIN/PROFESOR (US-PHYSICAL-005, US-PHYSICAL-006)
+# y, desde US-PHYSICAL-001, el primer endpoint público de Physical: el flujo
+# de check-in con QR para el alumno y el lector de puerta.
+
+info:
+  title: Menta Dance — Physical API
+  version: "1.0.0"
+  description: |
+    Gestión de cursos y sesiones presenciales (US-PHYSICAL-005,
+    US-PHYSICAL-006) para ADMIN/PROFESOR, más el check-in con QR
+    (US-PHYSICAL-001) para el alumno confirmado y el lector de puerta, y el
+    check-in MANUAL (#45, US-PHYSICAL-008) para el recepcionista/ADMIN
+    cuando el flujo QR no es viable.
+
+    ## Errores
+
+    Todos los errores usan `application/problem+json` (RFC 9457) con un
+    miembro adicional `code` estable. Los clientes deben discriminar por
+    `code`, no por `detail`.
+
+    ## Autorización
+
+    `/api/v1/admin/physical/courses/**` y `/api/v1/admin/physical/sessions/**`
+    aceptan tanto `ADMIN` como `INSTRUCTOR` (rol interno de `PROFESOR`) — la
+    coincidencia de rol se verifica en el filtro de seguridad; la propiedad
+    del curso dueño de la sesión se verifica en el caso de uso (`403
+    COURSE_NOT_OWNED`). Una sesión no tiene `professorId` propio: la
+    autorización siempre se resuelve a través de su curso padre.
+
+    `POST /api/v1/physical/sessions/{sessionId}/access-qr` requiere sólo un
+    Bearer token válido (sin rol específico) — el alumno autenticado es su
+    propia autorización. `POST
+    /api/v1/physical/sessions/{sessionId}/check-ins` es público a nivel de
+    filtro (`permitAll`) para AMBAS variantes de su body: el lector de
+    puerta (variante QR) se autentica contra el registro de dispositivos
+    (#44) con el `deviceId` (UUID del dispositivo registrado) y el
+    `deviceToken` (secreto propio de ese dispositivo) de su body, que el
+    caso de uso verifica internamente, nunca con un Bearer token de usuario;
+    el recepcionista/ADMIN (variante MANUAL, #45) sí envía un Bearer token
+    de usuario, pero su rol se verifica DENTRO del caso de uso, no en el
+    filtro de seguridad — `RoleAuthorizationManager` sólo discrimina por
+    prefijo de URL y no puede leer el body para elegir entre variantes
+    (`SecurityConfig` no se modifica por este endpoint).
+
+servers:
+  - url: http://localhost:8081
+    description: Desarrollo local
+  - url: https://api.mentadance.com
+    description: Producción
+
+tags:
+  - name: Gestión de cursos
+    description: Administración de cursos presenciales recurrentes (ADMIN/PROFESOR).
+  - name: Gestión de sesiones
+    description: Administración de sesiones concretas de un curso presencial (ADMIN/PROFESOR).
+  - name: Check-in
+    description: |
+      Emisión de QR efímero y redención en la puerta (US-PHYSICAL-001). MVP:
+      cubre los escenarios 1, 2, 3, 4 y 5 del issue #38; la compensación
+      Redis compare-and-delete del escenario 6 queda fuera de alcance — el
+      lock simplemente expira por TTL. Desde #45 (US-PHYSICAL-008), el mismo
+      endpoint también acepta un check-in MANUAL iniciado por un
+      RECEPTIONIST/ADMIN, con su propio orden de validación y su propia regla
+      de "sesión vigente" (sólo `CANCELLED` bloquea, a diferencia de QR).
+  - name: Mis sesiones
+    description: |
+      Consulta self-service del alumno: las sesiones próximas a las que tiene
+      derecho (#356). Alimenta la pantalla desde la que se pide el QR de
+      acceso (US-PHYSICAL-001).
+  - name: Historial de asistencia
+    description: |
+      Lectura del historial de asistencia mensual (#39, US-PHYSICAL-002).
+      Un endpoint self-service para el alumno y uno elevado para
+      ADMIN/PROFESOR, ambos de sólo lectura — sin paginación, acotados a un
+      mes calendario.
+  - name: Gestión de dispositivos
+    description: |
+      Registro, rotación y revocación de lectores QR de puerta, más el
+      listado de la flota (#44, US-PHYSICAL-007). Sólo ADMIN — a diferencia
+      de `/courses/**` y `/sessions/**`, INSTRUCTOR no tiene acceso: un
+      dispositivo no tiene concepto de dueño por curso. El secreto crudo
+      sólo aparece una vez, en la respuesta de registro o rotación; ningún
+      otro endpoint puede volver a exponerlo.
+
+paths:
+  /api/v1/admin/physical/courses:
+    post:
+      tags: [Gestión de cursos]
+      summary: Crear un curso presencial
+      description: |
+        `professorId` es opcional: un PROFESOR que lo omite queda asignado
+        a sí mismo; si lo envía debe coincidir con su propio id, o responde
+        `400 PROFESSOR_MISMATCH`. Sólo un ADMIN puede asignar el curso a un
+        `professorId` arbitrario. `professorName` no forma parte del diseño
+        original de la historia — se agregó porque no existe (todavía)
+        ningún puerto que resuelva el nombre de un profesor a partir de su
+        id desde Physical.
+      operationId: createPhysicalCourse
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePhysicalCourseRequest'
+      responses:
+        '201':
+          description: Curso creado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalCourseManagementResponse'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '403':
+          description: Rol sin acceso a este prefijo (ni ADMIN ni INSTRUCTOR).
+
+    get:
+      tags: [Gestión de cursos]
+      summary: Listar cursos de gestión
+      description: |
+        A diferencia del catálogo público (`GET /api/v1/catalog/courses`),
+        devuelve cursos de cualquier estado. ADMIN ve todos los cursos;
+        PROFESOR ve únicamente los propios.
+      operationId: listManagedPhysicalCourses
+      responses:
+        '200':
+          description: Cursos visibles para el actor autenticado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalCourseManagementListResponse'
+        '403':
+          description: Rol sin acceso a este prefijo (ni ADMIN ni INSTRUCTOR).
+
+  /api/v1/admin/physical/courses/{courseId}:
+    patch:
+      tags: [Gestión de cursos]
+      summary: Actualizar un curso presencial (parcial)
+      description: |
+        Sólo los campos presentes en el body cambian. Desactivar
+        (`status: INACTIVE`) un curso con sesiones futuras que ya tienen
+        cupos asignados responde `409 COURSE_HAS_ACTIVE_ASSIGNMENTS`.
+      operationId: updatePhysicalCourse
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePhysicalCourseRequest'
+      responses:
+        '200':
+          description: Curso actualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalCourseManagementResponse'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '403':
+          description: |
+            Rol sin acceso a este prefijo, o un PROFESOR autenticado que no
+            es dueño de este curso (`COURSE_NOT_OWNED`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                no_es_dueno:
+                  value:
+                    type: https://menta.dance/problems/course_not_owned
+                    title: Forbidden
+                    status: 403
+                    detail: You do not own this course.
+                    code: COURSE_NOT_OWNED
+        '404':
+          description: Curso inexistente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                no_encontrado:
+                  value:
+                    type: https://menta.dance/problems/course_not_found
+                    title: Not Found
+                    status: 404
+                    detail: Course not found.
+                    code: COURSE_NOT_FOUND
+        '409':
+          description: Desactivación rechazada por sesiones futuras con cupos asignados.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                sesiones_activas:
+                  value:
+                    type: https://menta.dance/problems/course_has_active_assignments
+                    title: Conflict
+                    status: 409
+                    detail: Course has future sessions with confirmed assignments and cannot be deactivated.
+                    code: COURSE_HAS_ACTIVE_ASSIGNMENTS
+
+  /api/v1/admin/physical/courses/{courseId}/sessions:
+    post:
+      tags: [Gestión de sesiones]
+      summary: Crear una sesión
+      description: |
+        `capacity` es opcional — si se omite, hereda la capacidad del curso.
+      operationId: createPhysicalSession
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePhysicalSessionRequest'
+      responses:
+        '201':
+          description: Sesión creada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalSessionManagementResponse'
+        '403':
+          description: Rol sin acceso, o PROFESOR que no es dueño del curso (`COURSE_NOT_OWNED`).
+        '404':
+          description: Curso inexistente.
+
+    get:
+      tags: [Gestión de sesiones]
+      summary: Listar sesiones de gestión
+      description: |
+        A diferencia de la lectura pública (`listSessions` compuesta en
+        `GET /api/v1/catalog/courses/{courseId}`), devuelve sesiones de
+        cualquier estado, incluidas las canceladas. `from`/`to` son
+        opcionales (instantes ISO-8601); si se omiten, cubre una ventana
+        amplia de ±10 años.
+      operationId: listManagedPhysicalSessions
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Sesiones del curso visibles para el actor autenticado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalSessionManagementListResponse'
+        '403':
+          description: Rol sin acceso, o PROFESOR que no es dueño del curso (`COURSE_NOT_OWNED`).
+
+  /api/v1/admin/physical/courses/{courseId}/sessions/batch:
+    post:
+      tags: [Gestión de sesiones]
+      summary: Crear sesiones en lote
+      description: |
+        Genera una sesión por cada fecha en `[fromDate, toDate]` que caiga
+        en el día de recurrencia del curso, con su horario y capacidad. Sin
+        exclusión de feriados: el proyecto no tiene ese concepto todavía.
+      operationId: batchCreatePhysicalSessions
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchCreatePhysicalSessionsRequest'
+      responses:
+        '201':
+          description: Sesiones generadas.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalSessionManagementListResponse'
+        '403':
+          description: Rol sin acceso, o PROFESOR que no es dueño del curso (`COURSE_NOT_OWNED`).
+        '404':
+          description: Curso inexistente.
+
+  /api/v1/admin/physical/sessions/{sessionId}:
+    patch:
+      tags: [Gestión de sesiones]
+      summary: Actualizar una sesión (parcial)
+      description: |
+        Sólo los campos presentes en el body cambian. `status: CANCELLED`
+        cancela la sesión. Reducir `capacity` por debajo de los cupos ya
+        asignados responde `409 CAPACITY_BELOW_ASSIGNED`. Cualquier
+        modificación sobre una sesión cuya fecha ya pasó responde
+        `409 SESSION_ALREADY_OCCURRED`.
+      operationId: updatePhysicalSession
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePhysicalSessionRequest'
+      responses:
+        '200':
+          description: Sesión actualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalSessionManagementResponse'
+        '403':
+          description: Rol sin acceso, o PROFESOR que no es dueño del curso de la sesión (`COURSE_NOT_OWNED`).
+        '404':
+          description: Sesión inexistente.
+        '409':
+          description: Capacidad por debajo de lo asignado, o la sesión ya ocurrió.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                capacidad_insuficiente:
+                  value:
+                    type: https://menta.dance/problems/capacity_below_assigned
+                    title: Conflict
+                    status: 409
+                    detail: New capacity is below the number of already assigned spots.
+                    code: CAPACITY_BELOW_ASSIGNED
+                sesion_ya_ocurrida:
+                  value:
+                    type: https://menta.dance/problems/session_already_occurred
+                    title: Conflict
+                    status: 409
+                    detail: Session has already occurred and cannot be modified.
+                    code: SESSION_ALREADY_OCCURRED
+
+  /api/v1/physical/sessions/me:
+    get:
+      tags: [Mis sesiones]
+      summary: Listar las propias sesiones próximas con cupo confirmado
+      description: |
+        Sesiones donde el alumno autenticado tiene una asignación de cupo
+        confirmada (`physical_capacity_assignments`), ordenadas por
+        `scheduledAt` ascendente (#356, US-PHYSICAL-001). Sólo rol `STUDENT`:
+        cualquier otro rol recibe `403`.
+
+        **Rango acotado.** Desde el inicio del día actual en la zona horaria
+        de la academia (`physical.attendance.zone-id`, por defecto
+        `America/Argentina/Buenos_Aires`) —así la clase de hoy sigue
+        apareciendo aunque ya haya empezado— hasta `physical.sessions.window-days`
+        días después (por defecto **60**), intervalo semiabierto `[from, to)`.
+        El rango efectivo se devuelve en `from` y `to`. No hay paginación.
+        Una sesión fuera del rango no se lista aunque tenga asignación.
+
+        **Qué cuenta.** Sólo asignaciones confirmadas: los holds técnicos de
+        capacidad y las compras pendientes de pago no aparecen. Las sesiones
+        canceladas (`CANCELLED`) se omiten, porque el check-in las rechaza.
+        Sin sesiones responde `200` con `sessions: []`, nunca `404`.
+
+        **`checkInOpen`.** `true` si ahora mismo cae dentro de la ventana de
+        check-in de la sesión, la misma que exige `POST .../access-qr` y la
+        redención del QR (`app.qr.session-window-before`/`-after`, por defecto
+        30 min antes y 2 h después del inicio, extremos incluidos). Es una foto
+        del instante de la consulta; el cliente no debe cachearla.
+
+        El id del alumno sale siempre del token — este endpoint no tiene
+        parámetro `studentId`; si se envía uno, se ignora.
+
+        Pendiente: la sala o ubicación y el tipo de asignación
+        (mensual/individual) no se exponen porque el modelo de physical no los
+        persiste hoy (la sesión no tiene sala y la asignación no guarda el
+        tipo de compra).
+      operationId: listOwnPhysicalSessions
+      responses:
+        '200':
+          description: Sesiones próximas del alumno.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MySessionsResponse'
+        '401':
+          description: Sin credencial de autenticación.
+        '403':
+          description: El rol del token no es `STUDENT`.
+
+  /api/v1/physical/sessions/{sessionId}/access-qr:
+    post:
+      tags: [Check-in]
+      summary: Emitir un QR de acceso efímero
+      description: |
+        Requiere un alumno autenticado con una asignación de cupo confirmada
+        para la sesión (US-PHYSICAL-001 escenario 1). El `studentId` sale
+        siempre del Bearer token, nunca del body. `qrCredentials` es un
+        placeholder de concatenación simple en este MVP — sin HMAC real
+        todavía. No es un recurso persistido: responde `200 OK`, no `201`.
+      operationId: issuePhysicalAccessQr
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: QR emitido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessQrResponse'
+        '400':
+          description: '`sessionId` malformado (`INVALID_REQUEST`).'
+        '403':
+          description: |
+            Sesión cancelada (`SESSION_CANCELLED`), fuera de la ventana de
+            check-in (`OUTSIDE_CHECK_IN_WINDOW`), o sin asignación de cupo
+            confirmada (`CAPACITY_ASSIGNMENT_REQUIRED`).
+        '404':
+          description: Sesión inexistente (`SESSION_NOT_FOUND`).
+
+  /api/v1/physical/sessions/{sessionId}/check-ins:
+    post:
+      tags: [Check-in]
+      summary: Redimir un QR escaneado en la puerta, o registrar un check-in manual
+      description: |
+        Público a nivel de filtro (`permitAll`) para ambas variantes — el
+        lector QR se autentica contra el registro de dispositivos con
+        `deviceId` + `deviceToken` (US-PHYSICAL-001 escenario 2, #266), y la
+        variante MANUAL (#45, US-PHYSICAL-008) resuelve su propia
+        autorización de rol DENTRO del caso de uso, no en el filtro de
+        seguridad, porque `RoleAuthorizationManager` discrimina sólo por
+        prefijo de URL y no puede leer el body para decidir entre variantes.
+        El body es una unión discriminada por `type` (`QR` | `MANUAL`); un
+        body mixto (campos de la otra variante presentes) responde
+        `400 INVALID_REQUEST` antes de cualquier paso del caso de uso.
+
+        **Variante QR** — Responde `201 Created` en el primer escaneo válido
+        y `200 OK` en cualquier replay idempotente del mismo QR (escenario
+        5, `count()` nunca crece en el replay). El orden de validación es
+        deliberado: autenticación del dispositivo, forma del QR,
+        coincidencia de `sessionId`, firma, expiración, existencia/ventana
+        de la sesión y asignación de cupo se resuelven TODOS antes de tocar
+        los locks de Redis (escenario 4) — sólo un request que pasó todas esas puertas
+        llega a los locks que producen `409 ALREADY_PROCESSING` o
+        `503 CHECK_IN_DEGRADED`. Una autenticación de dispositivo fallida
+        corta todas las puertas siguientes (un dispositivo inválido con una
+        credencial QR malformada responde el error del dispositivo).
+
+        Antes de la autenticación del dispositivo (#309, ADR-0044) se
+        aplican dos puertas sólo a esta variante: los topes de longitud de
+        `deviceId` (36), `deviceToken` (43) y `qrCredentials` (512), que
+        responden `400 INVALID_REQUEST`; y un rate limit con dos
+        presupuestos independientes (por IP del cliente y por `deviceId`)
+        que responde `429 CHECK_IN_RATE_LIMITED` con `Retry-After`. Si Redis
+        no puede evaluar el límite responde `503 CHECK_IN_DEGRADED`
+        (falla cerrada). La variante MANUAL no se limita.
+
+        La autenticación del dispositivo (#266) valida `deviceId` y
+        `deviceToken` contra el registro: un `deviceId` desconocido, que no
+        es un UUID, o un `deviceToken` incorrecto responden
+        `401 INVALID_DEVICE_TOKEN` con el mismo cuerpo (no revela si el
+        dispositivo existe); sólo con el secreto correcto se distingue un
+        dispositivo revocado (`401 DEVICE_REVOKED`) o vencido
+        (`401 DEVICE_EXPIRED`, inclusive: `expiresAt <= ahora`; si está
+        revocado y vencido, gana `DEVICE_REVOKED`). Un dispositivo vencido
+        no se recupera rotando su secreto: hay que registrarlo de nuevo. El
+        secreto compartido anterior ya no autentica ningún request.
+
+        **Variante MANUAL** — Requiere un Bearer token autenticado con rol
+        `RECEPTIONIST` o `ADMIN`; cualquier otro rol, o ausencia de
+        autenticación, responde `403 INSUFFICIENT_ROLE`. Reutiliza el mismo
+        lock de Redis que la variante QR sobre la misma clave
+        (`checkin:attendance:{sessionId}:{studentId}`), de modo que un
+        escaneo QR y una entrada MANUAL para el mismo alumno y sesión
+        compiten por la misma fila — nunca producen filas duplicadas. El
+        orden de validación es asertado por test: rol → existencia del
+        `studentId` → asignación de cupo confirmada → sesión no `CANCELLED`
+        → lectura idempotente → lock único → INSERT. Sólo el estado
+        `CANCELLED` bloquea MANUAL (`409 SESSION_NOT_ACTIVE`); una sesión ya
+        transcurrida pero no cancelada SÍ se acepta — MANUAL permite cargar
+        asistencia retroactiva sin límite de tiempo, a diferencia de la
+        variante QR (divergencia deliberada, ver más abajo).
+
+        **Advertencia de contrato — `{sessionId}` desconocido en una
+        solicitud MANUAL responde `403 CAPACITY_ASSIGNMENT_REQUIRED`, NO
+        `404`.** Esto NO es un error: es una consecuencia directa del orden
+        de validación anterior, que resuelve la asignación de cupo ANTES
+        que la existencia de la sesión. Una asignación de cupo confirmada
+        no puede existir para una sesión inexistente (restricción de clave
+        foránea), así que la comprobación de asignación falla primero y
+        determina la respuesta. La variante QR, en cambio, sí responde
+        `404 SESSION_NOT_FOUND` para una sesión inexistente, porque su
+        propio orden de validación resuelve la existencia de la sesión
+        antes que la asignación. Un consumidor de esta API no debe asumir
+        que ambas variantes responden igual ante un `sessionId` inválido.
+      operationId: processPhysicalCheckIn
+      security:
+        - {}
+        - bearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckInRequest'
+      responses:
+        '201':
+          description: Asistencia registrada por primera vez (cualquier variante).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckInResponse'
+        '200':
+          description: |
+            Replay idempotente de un check-in ya registrado — escenario 5
+            para QR, o un reintento MANUAL para el mismo alumno y sesión.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckInResponse'
+        '400':
+          description: |
+            Body inválido (`INVALID_REQUEST`) — `type` distinto de `QR`
+            o `MANUAL`, un body mixto que mezcla campos de ambas variantes,
+            o un `studentId` mal formado; o, sólo para QR, `qrCredentials`
+            malformado o de otra sesión (`INVALID_QR_CREDENTIAL`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                credencial_invalida:
+                  value:
+                    type: https://menta.dance/problems/invalid_qr_credential
+                    title: Bad Request
+                    status: 400
+                    detail: The QR credential is malformed or does not match the target session.
+                    code: INVALID_QR_CREDENTIAL
+        '401':
+          description: |
+            Sólo variante QR — falló la autenticación del dispositivo contra
+            el registro (#266). `INVALID_DEVICE_TOKEN`: `deviceId`
+            desconocido o que no es un UUID, o `deviceToken` incorrecto (los
+            tres casos son indistinguibles). `DEVICE_REVOKED`: dispositivo
+            revocado, con su secreto correcto. `DEVICE_EXPIRED`:
+            dispositivo vencido (`expiresAt <= ahora`), con su secreto
+            correcto. El código `DEVICE_REVOKED` responde `401` aquí y
+            `409` en la rotación de secreto de un dispositivo revocado
+            (`POST /api/v1/admin/physical/devices/{deviceId}/rotate-secret`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                token_invalido:
+                  value:
+                    type: https://menta.dance/problems/invalid_device_token
+                    title: Unauthorized
+                    status: 401
+                    detail: The device token is invalid.
+                    code: INVALID_DEVICE_TOKEN
+                dispositivo_revocado:
+                  value:
+                    type: https://menta.dance/problems/device_revoked
+                    title: Unauthorized
+                    status: 401
+                    detail: The device has been revoked.
+                    code: DEVICE_REVOKED
+                dispositivo_vencido:
+                  value:
+                    type: https://menta.dance/problems/device_expired
+                    title: Unauthorized
+                    status: 401
+                    detail: The device credential has expired.
+                    code: DEVICE_EXPIRED
+        '403':
+          description: |
+            QR: sesión cancelada (`SESSION_CANCELLED`), fuera de la ventana
+            de check-in (`OUTSIDE_CHECK_IN_WINDOW`), o sin asignación de
+            cupo confirmada (`CAPACITY_ASSIGNMENT_REQUIRED`).
+
+            MANUAL: el llamador autenticado no tiene rol `RECEPTIONIST` ni
+            `ADMIN`, o la solicitud es anónima (`INSUFFICIENT_ROLE`); o no
+            existe asignación de cupo confirmada para el alumno
+            (`CAPACITY_ASSIGNMENT_REQUIRED`) — **incluyendo el caso de un
+            `{sessionId}` inexistente, ver advertencia de contrato arriba**.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                rol_insuficiente:
+                  value:
+                    type: https://menta.dance/problems/insufficient_role
+                    title: Forbidden
+                    status: 403
+                    detail: Manual check-in requires the RECEPTIONIST or ADMIN role.
+                    code: INSUFFICIENT_ROLE
+        '404':
+          description: |
+            Sesión inexistente (`SESSION_NOT_FOUND`) — sólo variante QR
+            (para MANUAL ver la advertencia de contrato arriba); o, sólo
+            variante MANUAL, `studentId` inexistente (`STUDENT_NOT_FOUND`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                alumno_inexistente:
+                  value:
+                    type: https://menta.dance/problems/student_not_found
+                    title: Not Found
+                    status: 404
+                    detail: Student not found.
+                    code: STUDENT_NOT_FOUND
+        '409':
+          description: |
+            QR: otro lector procesando el mismo check-in
+            (`ALREADY_PROCESSING`). MANUAL: la sesión está cancelada
+            (`SESSION_NOT_ACTIVE`) — una sesión ya transcurrida pero NO
+            cancelada no cae en este código (backfill retroactivo, ver
+            descripción arriba); o `ALREADY_PROCESSING` si otra solicitud
+            (QR o MANUAL) sostiene el mismo lock.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                sesion_no_vigente:
+                  value:
+                    type: https://menta.dance/problems/session_not_active
+                    title: Conflict
+                    status: 409
+                    detail: This session is cancelled and no longer accepts check-ins.
+                    code: SESSION_NOT_ACTIVE
+        '410':
+          description: QR bien formado pero expirado (`EXPIRED_QR_CREDENTIAL`) — sólo variante QR.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                qr_expirado:
+                  value:
+                    type: https://menta.dance/problems/expired_qr_credential
+                    title: Gone
+                    status: 410
+                    detail: The QR credential has expired.
+                    code: EXPIRED_QR_CREDENTIAL
+        '429':
+          description: |
+            Sólo variante QR — se agotó el presupuesto de intentos por IP del
+            cliente o por `deviceId` (#309, ADR-0044). Se evalúa antes de
+            consultar el registro de dispositivos. Incluye `Retry-After`.
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Segundos hasta que el presupuesto agotado se renueve.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                demasiados_intentos:
+                  value:
+                    type: https://menta.dance/problems/check_in_rate_limited
+                    title: Too Many Requests
+                    status: 429
+                    detail: "Demasiados intentos de check-in; reintentá más tarde."
+                    code: CHECK_IN_RATE_LIMITED
+        '503':
+          description: Redis no disponible, ya sea en el rate limit o en los locks; fail-closed (`CHECK_IN_DEGRADED`). Incluye `Retry-After`.
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Segundos sugeridos antes de reintentar.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                redis_caido:
+                  value:
+                    type: https://menta.dance/problems/check_in_degraded
+                    title: Service Unavailable
+                    status: 503
+                    detail: "Check-in is temporarily unavailable; retry after 30s."
+                    code: CHECK_IN_DEGRADED
+
+  /api/v1/physical/attendance/me:
+    get:
+      tags: [Historial de asistencia]
+      summary: Leer el propio historial de asistencia mensual
+      description: |
+        Historial del propio alumno autenticado para un mes calendario
+        (#39, US-PHYSICAL-002 P1). `scheduledSessionCount` es el conteo de
+        asignaciones (`physical_capacity_assignments`) cuya sesión cae en
+        `[monthStart, monthNext)` del mes solicitado, resuelto en la zona
+        horaria configurada (`physical.attendance.zone-id`, por defecto
+        `America/Argentina/Buenos_Aires`) — nunca en la ventana de
+        cobertura de la compra. `includeAbsent=false` (default) omite las
+        asignaciones sin check-in de `sessions[]`; los cuatro agregados
+        (`scheduledSessionCount`, `attended`, `absent`, `attendanceRate`)
+        se calculan siempre sobre el conjunto completo, sin importar el
+        flag. Un mes sin asignaciones responde `200` con todo en cero,
+        nunca `404`. No hay paginación: el mes completo viene en una sola
+        respuesta. El id del alumno sale siempre del token — este endpoint
+        no tiene parámetro `studentId` que se pueda abusar.
+      operationId: getOwnAttendanceHistory
+      parameters:
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{2}$'
+            example: "2026-09"
+        - name: includeAbsent
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Historial del mes solicitado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttendanceHistoryResponse'
+        '400':
+          description: '`month` malformado, no `YYYY-MM` (`INVALID_REQUEST`).'
+        '401':
+          description: Sin credencial de autenticación.
+
+  /api/v1/admin/physical/attendance/{studentId}:
+    get:
+      tags: [Historial de asistencia]
+      summary: Leer el historial de asistencia mensual de otro alumno (elevado)
+      description: |
+        Lectura elevada del historial de OTRO alumno (#39, US-PHYSICAL-002
+        P2). `ADMIN` ve el mes del alumno sin restricción, idéntico en
+        forma al endpoint self-service. `INSTRUCTOR` (rol interno de
+        PROFESOR) ve el mismo mes filtrado server-side a las sesiones de
+        cursos que ese profesor dicta — tanto `sessions[]` como los cuatro
+        agregados reflejan sólo ese subconjunto, nunca el historial
+        completo del alumno; el filtro se aplica en la consulta (join
+        contra `professorId` del curso), nunca post-filtrado. Un alumno sin
+        ninguna sesión en cursos del profesor responde el mismo `200`
+        vacío que un alumno sin asignaciones ese mes — el endpoint nunca
+        distingue ambos casos por código de estado ni forma de la
+        respuesta (anti-enumeración). `STUDENT` no puede alcanzar este
+        endpoint en absoluto.
+      operationId: getElevatedAttendanceHistory
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{2}$'
+            example: "2026-09"
+        - name: includeAbsent
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: |
+            Historial del mes solicitado — sin restricción para ADMIN,
+            filtrado a cursos propios para INSTRUCTOR. Idéntico en forma al
+            endpoint self-service.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttendanceHistoryResponse'
+        '400':
+          description: '`studentId` o `month` malformado (`INVALID_REQUEST`).'
+        '401':
+          description: Sin credencial de autenticación.
+        '403':
+          description: Rol sin acceso a este endpoint (ni ADMIN ni INSTRUCTOR).
+
+  /api/v1/admin/physical/devices:
+    post:
+      tags: [Gestión de dispositivos]
+      summary: Registrar un dispositivo
+      description: |
+        Crea el dispositivo en estado `ACTIVE` y persiste únicamente el hash
+        SHA-256 de un secreto generado. El secreto crudo viene en la
+        respuesta y NUNCA vuelve a estar disponible por ningún endpoint
+        (#44, US-PHYSICAL-007 escenario 1). `expiresAt` es opcional; desde
+        #266 el check-in QR rechaza con `401 DEVICE_EXPIRED` a un
+        dispositivo cuyo `expiresAt` ya se alcanzó.
+      operationId: registerPhysicalDevice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterPhysicalDeviceRequest'
+      responses:
+        '201':
+          description: Dispositivo registrado; incluye el secreto crudo exactamente una vez.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalDeviceSecretResponse'
+        '400':
+          description: Body inválido (bean validation).
+        '401':
+          description: Sin credencial de autenticación.
+        '403':
+          description: Rol autenticado distinto de ADMIN.
+
+    get:
+      tags: [Gestión de dispositivos]
+      summary: Listar la flota de dispositivos
+      description: |
+        Devuelve todos los dispositivos, en cualquier estado, sin
+        paginación. Ningún elemento incluye secreto ni hash bajo ningún
+        nombre de campo (#44, US-PHYSICAL-007 escenario 6).
+      operationId: listPhysicalDevices
+      responses:
+        '200':
+          description: Flota completa de dispositivos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalDeviceListResponse'
+        '401':
+          description: Sin credencial de autenticación.
+        '403':
+          description: Rol autenticado distinto de ADMIN.
+
+  /api/v1/admin/physical/devices/{deviceId}:
+    get:
+      tags: [Gestión de dispositivos]
+      summary: Leer metadata de un dispositivo
+      description: |
+        Nunca incluye el secreto crudo ni su hash bajo ningún nombre de
+        campo (#44, US-PHYSICAL-007 escenario 2).
+      operationId: getPhysicalDevice
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Metadata del dispositivo, sin secreto ni hash.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalDeviceResponse'
+        '400':
+          description: '`deviceId` malformado (`INVALID_REQUEST`).'
+        '401':
+          description: Sin credencial de autenticación.
+        '403':
+          description: Rol autenticado distinto de ADMIN.
+        '404':
+          description: Dispositivo inexistente (`DEVICE_NOT_FOUND`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                no_encontrado:
+                  value:
+                    type: https://menta.dance/problems/device_not_found
+                    title: Not Found
+                    status: 404
+                    detail: Device not found.
+                    code: DEVICE_NOT_FOUND
+
+  /api/v1/admin/physical/devices/{deviceId}/rotate-secret:
+    post:
+      tags: [Gestión de dispositivos]
+      summary: Rotar el secreto de un dispositivo
+      description: |
+        Genera un secreto nuevo, invalida el hash anterior (deja de
+        validar) y devuelve el nuevo secreto crudo exactamente una vez
+        (#44, US-PHYSICAL-007 escenario 3). Rechazado con `409` sobre un
+        dispositivo `REVOKED` — es un estado absorbente, nunca un no-op
+        silencioso ni una rotación exitosa. El mismo código
+        `DEVICE_REVOKED` responde `401` en el check-in QR de un dispositivo
+        revocado (contexto distinto, ver `processPhysicalCheckIn`).
+      operationId: rotatePhysicalDeviceSecret
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Secreto rotado; incluye el nuevo secreto crudo exactamente una vez.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalDeviceSecretResponse'
+        '400':
+          description: '`deviceId` malformado (`INVALID_REQUEST`).'
+        '401':
+          description: Sin credencial de autenticación.
+        '403':
+          description: Rol autenticado distinto de ADMIN.
+        '404':
+          description: Dispositivo inexistente (`DEVICE_NOT_FOUND`).
+        '409':
+          description: Dispositivo `REVOKED` — la rotación está terminantemente rechazada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                dispositivo_revocado:
+                  value:
+                    type: https://menta.dance/problems/device_revoked
+                    title: Conflict
+                    status: 409
+                    detail: Device is revoked and cannot be rotated.
+                    code: DEVICE_REVOKED
+
+  /api/v1/admin/physical/devices/{deviceId}/revoke:
+    post:
+      tags: [Gestión de dispositivos]
+      summary: Revocar un dispositivo
+      description: |
+        Transición terminal a `REVOKED` (#44, US-PHYSICAL-007 escenario 4).
+        Una segunda revocación sobre un dispositivo ya `REVOKED` responde
+        `409` — nunca `200`, nunca un no-op silencioso.
+      operationId: revokePhysicalDevice
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Dispositivo revocado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalDeviceResponse'
+        '400':
+          description: '`deviceId` malformado (`INVALID_REQUEST`).'
+        '401':
+          description: Sin credencial de autenticación.
+        '403':
+          description: Rol autenticado distinto de ADMIN.
+        '404':
+          description: Dispositivo inexistente (`DEVICE_NOT_FOUND`).
+        '409':
+          description: Dispositivo ya `REVOKED` — rechazado, no un no-op.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                ya_revocado:
+                  value:
+                    type: https://menta.dance/problems/device_already_revoked
+                    title: Conflict
+                    status: 409
+                    detail: Device is already revoked.
+                    code: DEVICE_ALREADY_REVOKED
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Access token JWT de 15 minutos, emitido por `POST /api/v1/auth/login`
+        (ver auth-v1.yaml). Claims: `sub`, `roles`, `jti`, `tokenVersion`,
+        `iat`, `exp`, `iss`, `aud`.
+
+        El rol (`ADMIN`/`INSTRUCTOR`/`RECEPTIONIST`) no es expresable en este
+        esquema. `POST .../check-ins` acepta el token de forma opcional
+        (`security: [{}, {bearerAuth: []}]`): la variante QR no lo envía y la
+        variante MANUAL sí.
+
+  responses:
+    InvalidRequest:
+      description: Body inválido (bean validation) o `professorId` no coincide con el actor.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            professor_mismatch:
+              value:
+                type: https://menta.dance/problems/professor_mismatch
+                title: Bad Request
+                status: 400
+                detail: professorId must match the authenticated instructor.
+                code: PROFESSOR_MISMATCH
+
+  schemas:
+    Problem:
+      type: object
+      description: |
+        RFC 9457 Problem Details con el miembro adicional `code`.
+      required: [type, title, status, code]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        code:
+          type: string
+
+    CreatePhysicalCourseRequest:
+      type: object
+      required: [title, description, professorName, dayOfWeek, startTime, durationMinutes, level, capacity]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        professorId:
+          type: [string, "null"]
+          format: uuid
+          description: Omitido por un PROFESOR (se asigna a sí mismo); requerido para que un ADMIN asigne a otro profesor.
+        professorName:
+          type: string
+        dayOfWeek:
+          type: string
+          enum: [MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY]
+        startTime:
+          type: string
+          example: "20:00:00"
+        durationMinutes:
+          type: integer
+          minimum: 1
+        level:
+          type: string
+          enum: [BEGINNER, INTERMEDIATE, ADVANCED]
+        capacity:
+          type: integer
+          minimum: 1
+
+    UpdatePhysicalCourseRequest:
+      type: object
+      description: Todos los campos son opcionales — sólo los presentes se aplican.
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        dayOfWeek:
+          type: string
+          enum: [MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY]
+        startTime:
+          type: string
+        durationMinutes:
+          type: integer
+          minimum: 1
+        level:
+          type: string
+          enum: [BEGINNER, INTERMEDIATE, ADVANCED]
+        capacity:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+
+    PhysicalCourseManagementResponse:
+      type: object
+      required: [courseId, title, description, professorId, professorName, dayOfWeek, startTime, durationMinutes, level, capacity, status]
+      properties:
+        courseId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        professorId:
+          type: string
+          format: uuid
+        professorName:
+          type: string
+        dayOfWeek:
+          type: string
+        startTime:
+          type: string
+        durationMinutes:
+          type: integer
+        level:
+          type: string
+        capacity:
+          type: integer
+        status:
+          type: string
+
+    PhysicalCourseManagementListResponse:
+      type: object
+      required: [courses]
+      properties:
+        courses:
+          type: array
+          items:
+            $ref: '#/components/schemas/PhysicalCourseManagementResponse'
+
+    CreatePhysicalSessionRequest:
+      type: object
+      required: [date, startTime]
+      properties:
+        date:
+          type: string
+          format: date
+        startTime:
+          type: string
+          example: "19:00:00"
+        capacity:
+          type: [integer, "null"]
+          minimum: 1
+          description: Omitido para heredar la capacidad del curso.
+        notes:
+          type: [string, "null"]
+
+    BatchCreatePhysicalSessionsRequest:
+      type: object
+      required: [fromDate, toDate]
+      properties:
+        fromDate:
+          type: string
+          format: date
+        toDate:
+          type: string
+          format: date
+
+    UpdatePhysicalSessionRequest:
+      type: object
+      description: Todos los campos son opcionales — sólo los presentes se aplican.
+      properties:
+        date:
+          type: string
+          format: date
+        startTime:
+          type: string
+        capacity:
+          type: integer
+          minimum: 1
+        notes:
+          type: string
+        status:
+          type: string
+          enum: [SCHEDULED, CANCELLED]
+
+    PhysicalSessionManagementResponse:
+      type: object
+      required:
+        [sessionId, courseId, scheduledAt, capacity, assignedSpots, activeCapacityHolds, availableSpots, status]
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        courseId:
+          type: string
+          format: uuid
+        scheduledAt:
+          type: string
+          format: date-time
+        capacity:
+          type: integer
+        assignedSpots:
+          type: integer
+        activeCapacityHolds:
+          type: integer
+        availableSpots:
+          type: integer
+        status:
+          type: string
+        notes:
+          type: [string, "null"]
+
+    PhysicalSessionManagementListResponse:
+      type: object
+      required: [sessions]
+      properties:
+        sessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PhysicalSessionManagementResponse'
+
+    AccessQrResponse:
+      type: object
+      required: [qrCredentials, expiresAt, refreshAfterSeconds]
+      properties:
+        qrCredentials:
+          type: string
+          description: |
+            Token de acceso efímero. Placeholder de concatenación simple en
+            este MVP (`qr:<studentId>:<sessionId>:<jti>:<exp>`) — sin HMAC
+            real todavía.
+        expiresAt:
+          type: string
+          format: date-time
+        refreshAfterSeconds:
+          type: integer
+          description: Hint para que la app del alumno reemita el QR cada N segundos.
+
+    CheckInRequest:
+      description: |
+        Unión discriminada por `type` (#45, US-PHYSICAL-008). Un valor de
+        `type` distinto de `QR`/`MANUAL`, o un body que mezcla campos de
+        ambas variantes, responde `400 INVALID_REQUEST` antes de cualquier
+        paso del caso de uso.
+      oneOf:
+        - $ref: '#/components/schemas/CheckInQrRequest'
+        - $ref: '#/components/schemas/CheckInManualRequest'
+      discriminator:
+        propertyName: type
+        mapping:
+          QR: '#/components/schemas/CheckInQrRequest'
+          MANUAL: '#/components/schemas/CheckInManualRequest'
+
+    CheckInQrRequest:
+      type: object
+      required: [type, qrCredentials, deviceId, deviceToken]
+      properties:
+        type:
+          type: string
+          enum: [QR]
+        qrCredentials:
+          type: string
+          maxLength: 512
+          description: Más de 512 caracteres responde `400 INVALID_REQUEST` (ADR-0044).
+        deviceId:
+          type: string
+          format: uuid
+          maxLength: 36
+          description: |
+            UUID del dispositivo registrado (`id` devuelto por
+            `POST /api/v1/admin/physical/devices`). Un valor que no es un
+            UUID de hasta 36 caracteres responde `401 INVALID_DEVICE_TOKEN`,
+            no `400`; en blanco, ausente o de más de 36 caracteres
+            responde `400 INVALID_REQUEST`.
+        deviceToken:
+          type: string
+          maxLength: 43
+          description: |
+            Secreto propio de ese dispositivo, el mismo que se muestra una
+            sola vez al registrarlo o rotarlo (`secret`). Se verifica
+            dentro del caso de uso contra el hash almacenado; el secreto
+            compartido anterior ya no se acepta. Hasta 43 caracteres (32
+            bytes en Base64 URL sin padding, el formato del secreto
+            emitido); más responde `400 INVALID_REQUEST`.
+
+    CheckInManualRequest:
+      description: |
+        #45, US-PHYSICAL-008. Requiere un Bearer token autenticado con rol
+        `RECEPTIONIST` o `ADMIN`. El Bearer se declara con el esquema
+        `bearerAuth`, pero el rol no es expresable en `securitySchemes`: se
+        verifica dentro del caso de uso, no en el filtro de seguridad (D5). NO debe
+        incluir ningún campo de la variante QR
+        (`qrCredentials`, `deviceId`, `deviceToken`).
+      type: object
+      required: [type, studentId]
+      properties:
+        type:
+          type: string
+          enum: [MANUAL]
+        studentId:
+          type: string
+          format: uuid
+          description: Alumno cuya asistencia registra el recepcionista/admin.
+
+    CheckInResponse:
+      type: object
+      required: [attendanceId, recordedAt, kind]
+      properties:
+        attendanceId:
+          type: string
+          format: uuid
+        recordedAt:
+          type: string
+          format: date-time
+        kind:
+          type: string
+          enum: [QR, MANUAL]
+
+    MySessionsResponse:
+      type: object
+      required: [from, to, sessions]
+      properties:
+        from:
+          type: string
+          format: date-time
+          description: Inicio del rango (inclusive), el comienzo del día actual en la zona de la academia.
+        to:
+          type: string
+          format: date-time
+          description: Fin del rango (exclusivo), `window-days` días después de `from`.
+        sessions:
+          type: array
+          description: Ordenadas por `scheduledAt` ascendente.
+          items:
+            $ref: '#/components/schemas/MySessionResponse'
+
+    MySessionResponse:
+      type: object
+      required: [sessionId, courseId, courseName, instructorName, scheduledAt, checkInOpen, assignmentType]
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+          description: Es el `{sessionId}` que espera `POST /api/v1/physical/sessions/{sessionId}/access-qr`.
+        courseId:
+          type: string
+          format: uuid
+        courseName:
+          type: string
+        instructorName:
+          type: string
+        scheduledAt:
+          type: string
+          format: date-time
+          description: Inicio de la sesión, en UTC.
+        checkInOpen:
+          type: boolean
+          description: Si la ventana de check-in está abierta en el instante de la consulta.
+        assignmentType:
+          type: string
+          enum: [MONTHLY, INDIVIDUAL]
+          description: |
+            Cómo obtuvo el alumno el lugar: `MONTHLY` (plan mensual) o `INDIVIDUAL`
+            (compra de una sola clase). Nunca es nulo; las asignaciones previas a la
+            migración V26 figuran como `MONTHLY`.
+
+    AttendanceHistoryResponse:
+      type: object
+      description: |
+        Forma compartida por ambos endpoints de historial de asistencia
+        (self y elevado) — deliberadamente idéntica: difieren en QUIÉN
+        puede llamar, nunca en lo que se devuelve.
+      required: [period, scheduledSessionCount, attended, absent, attendanceRate, sessions]
+      properties:
+        period:
+          type: string
+          example: "2026-09"
+        scheduledSessionCount:
+          type: integer
+          description: Conteo de asignaciones cuya sesión cae en el mes solicitado.
+        attended:
+          type: integer
+        absent:
+          type: integer
+        attendanceRate:
+          type: number
+          format: double
+          description: attended / scheduledSessionCount, escala 2, HALF_UP; 0.00 si el denominador es 0.
+        sessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttendanceSessionResponse'
+
+    AttendanceSessionResponse:
+      type: object
+      required: [sessionId, scheduledAt, courseName, instructorName, status]
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        scheduledAt:
+          type: string
+          format: date-time
+        courseName:
+          type: string
+        instructorName:
+          type: string
+        status:
+          type: string
+          enum: [ATTENDED, ABSENT]
+        recordedAt:
+          type: [string, "null"]
+          format: date-time
+          description: Null cuando status es ABSENT.
+
+    RegisterPhysicalDeviceRequest:
+      type: object
+      required: [name, location]
+      properties:
+        name:
+          type: string
+          maxLength: 120
+        location:
+          type: string
+          maxLength: 160
+        expiresAt:
+          type: [string, "null"]
+          format: date-time
+          description: |
+            Opcional. Desde #266 el check-in QR responde `401 DEVICE_EXPIRED`
+            cuando `expiresAt <= ahora` (inclusive); sin valor, nunca vence.
+
+    PhysicalDeviceResponse:
+      type: object
+      description: Nunca incluye secreto ni hash bajo ningún nombre de campo (#44, design C2).
+      required: [id, name, location, status, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        location:
+          type: string
+        status:
+          type: string
+          enum: [ACTIVE, REVOKED]
+        expiresAt:
+          type: [string, "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PhysicalDeviceSecretResponse:
+      type: object
+      description: |
+        Devuelto únicamente por register y rotate-secret. `secret` es el
+        valor crudo, expuesto exactamente una vez — ningún otro endpoint
+        puede volver a devolverlo (D4).
+      required: [device, secret]
+      properties:
+        device:
+          $ref: '#/components/schemas/PhysicalDeviceResponse'
+        secret:
+          type: string
+
+    PhysicalDeviceListResponse:
+      type: object
+      required: [devices]
+      properties:
+        devices:
+          type: array
+          items:
+            $ref: '#/components/schemas/PhysicalDeviceResponse'
+
+security:
+  - bearerAuth: []

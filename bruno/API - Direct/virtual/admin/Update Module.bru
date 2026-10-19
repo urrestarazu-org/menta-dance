@@ -1,0 +1,36 @@
+meta {
+  name: Update Virtual Module
+  type: http
+  seq: 6
+}
+
+put {
+  url: {{baseUrl}}/api/v1/admin/virtual/modules/{{virtualModuleId}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "title": "Módulo 1: Fundamentos (revisado)"
+  }
+}
+
+docs {
+  US-VIRTUAL-006. Lives under a DIFFERENT top-level prefix than course
+  endpoints (/admin/virtual/modules/**) — ownership resolves through the
+  module's course_id, denormalized since #46.
+
+  Success contract: 200 with VirtualModuleManagementResponse.
+  Error contract:
+    403 COURSE_NOT_OWNED → INSTRUCTOR is not the parent course's professor
+    404 MODULE_NOT_FOUND → moduleId does not exist
+}
+
+assert {
+  res.status: eq 200
+}

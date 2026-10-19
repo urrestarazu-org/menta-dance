@@ -1,0 +1,4 @@
+services:
+  nginx:
+    volumes:
+      - ./conf/nginx.production.conf:/etc/nginx/nginx.conf:ro

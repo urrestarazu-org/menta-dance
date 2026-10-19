@@ -22,13 +22,13 @@ menta-dance/
 │   ├── billing/             # :api:billing — pagos
 │   └── app/                 # :api:app — ensambla todo
 ├── bff/                     # Frontend web (Thymeleaf)
-└── android/                 # App móvil (Kotlin)
+└── android/                 # App móvil (Kotlin + Compose + Hilt)
 ```
 
 ## Stack Tecnológico
 
 - **API/BFF**: Java 21, Spring Boot 3, Gradle (Kotlin DSL)
-- **Android**: Kotlin, Jetpack Compose, Hilt
+- **Android**: Kotlin, Jetpack Compose, Hilt, Clean Architecture (`presentation/domain/data/di`)
 - **Base de datos**: MySQL 8.0
 - **Testing**: JUnit 5, Mockito, Testcontainers, ArchUnit
 
@@ -51,6 +51,46 @@ module/
 - `infrastructure` depende de `application` y `domain`
 
 **Validado con ArchUnit** — los tests fallan si se viola.
+
+## Convenciones de Código
+
+### Idioma
+
+**Regla**: Código en **inglés**, UI/documentación en **español** (idioma del negocio).
+
+- ✅ **Código** (clases, métodos, variables, enums, constantes): **Inglés**
+  ```java
+  public enum Role { ADMIN, INSTRUCTOR, STUDENT }
+  public class UserService { ... }
+  private String firstName;
+  ```
+
+- ✅ **UI/Mensajes al usuario**: **Español**
+  ```java
+  throw new ValidationException("El email ya está registrado");
+  return ResponseEntity.badRequest().body("Contraseña inválida");
+  ```
+
+- ✅ **Documentación pública** (READMEs, guías de usuario): **Español**
+- ✅ **Comentarios técnicos/JavaDoc**: **Inglés** (opcional español para lógica de negocio compleja)
+
+**Justificación**: Esta es una best practice universal que facilita colaboración internacional, reutilización de código, y onboarding de nuevos desarrolladores.
+
+### Boilerplate (Lombok)
+
+**Regla** (vigente desde 2026-09-27): preferir anotaciones de Lombok (`@Getter`,
+`@Setter`, `@RequiredArgsConstructor`, `@AllArgsConstructor`, `@NoArgsConstructor`,
+etc.) sobre getters/setters/constructores escritos a mano en código **nuevo**.
+
+- Lombok ya está declarado (`compileOnly` + `annotationProcessor`) en todos los
+  módulos `api/*`, pero el código existente lo dejó sin adoptar — todo getter
+  está escrito a mano. Esta regla aplica hacia adelante, no es un mandato de
+  retrofit sobre clases existentes.
+- Los value objects/DTOs naturalmente inmutables siguen prefiriendo `record` de
+  Java (ya es el patrón establecido para ese caso); Lombok resuelve el
+  boilerplate de getters/setters/constructores en clases mutables (ej.
+  entidades JPA) o con inyección de dependencias (`@RequiredArgsConstructor`
+  en casos de uso), no reemplaza a `record` donde `record` ya encaja.
 
 ## Comandos de Build
 
@@ -75,11 +115,29 @@ module/
 ./gradlew jacocoTestCoverageVerification
 ```
 
-## Estrategia de Tests (100/80/0)
+## Estrategia de Tests
 
-- **100% cobertura**: `billing.domain`, `billing.application`, `auth.domain`, `auth.application`
-- **80% cobertura**: `virtual.*`, `physical.*`
-- **0% tests unitarios**: DTOs, configs, interfaces de repositorio JPA
+Cada módulo gatea cobertura **por capa** (JaCoCo, agregación BUNDLE), no
+con un número plano por módulo. El umbral es un trinquete calibrado justo
+debajo de la cobertura real vigente — nunca una meta aspiracional muy por
+encima, ni un piso muy por debajo que deje de proteger nada.
+
+| Módulo | domain + application | infrastructure |
+|---|---|---|
+| `auth` | 100% | 85% |
+| `billing` | 85% | 85% |
+| `virtual` | 95% | 90% |
+| `physical` | 95% | 90% |
+
+`shared`, `app` y `bff` no tienen capas propias; llevan un piso plano
+declarado en `moduleCoverageFloor` (root `build.gradle.kts`), todos en
+85% o más. Ningún umbral del proyecto está por debajo de 85%.
+
+El mecanismo (`registerLayeredCoverageVerification`) vive en
+`buildSrc/` y se documenta en detalle, junto al bug de JaCoCo #96 que
+motivó el diseño, en `docs/14-TEST-STRATEGY.md`. `./gradlew
+jacocoAggregatedReport` genera el reporte combinado del monorepo
+(sin umbral propio — sólo reporting).
 
 ## Comunicación entre Módulos
 
@@ -108,11 +166,17 @@ public class SubscriptionUseCase {
 | BFF      | 8080   |
 | MySQL    | 3306   |
 
-## Nomenclatura de Branches
+## Git Flow
 
-- `feature/{descripcion}`
-- `bugfix/{descripcion}`
-- `hotfix/{descripcion}`
+| Rama | Propósito |
+|------|-----------|
+| `main` | Producción (protegida, requiere PR) |
+| `develop` | Integración (rama default) |
+| `feature/*` | Nuevas funcionalidades |
+| `release/*` | Preparación de release |
+| `hotfix/*` | Fixes urgentes |
+
+**Flujo**: `feature/*` → `develop` → `release/*` → `main` → tag `vX.Y.Z`
 
 ## Selección de Modelo
 
@@ -132,3 +196,31 @@ Antes de iniciar una tarea, considerar el modelo apropiado:
 - **Edición de archivo único** → Sonnet 5
 - **Documentación** → Sonnet 5
 - **Verificación rápida** → Haiku 4.5
+
+## Skills del Proyecto
+
+Cuando el usuario pida "crear un PR", "prcreator", o variantes, leer y ejecutar:
+- **prcreator**: @skills/prcreator/SKILL.md
+
+Cuando el usuario pida "prsync", "actualizar la descripción del PR", "sincronizar el PR",
+o variantes, leer y ejecutar:
+- **prsync**: @skills/prsync/SKILL.md
+
+### ⚠️ Lección importante sobre PRs
+
+**SIEMPRE verificar PRs existentes antes de crear uno nuevo:**
+
+```bash
+gh pr list --head $(git branch --show-current)
+```
+
+**Por qué es crítico:**
+- Un mismo branch puede tener múltiples PRs si apuntan a diferentes bases
+- Esto causa confusión en code review y duplica recursos de CI
+- Si existe PR con base incorrecta → actualizar base o cerrarlo, NO crear duplicado
+
+**Flujo correcto:**
+1. Verificar PRs existentes del branch actual
+2. Si existe con base correcta → actualizar descripción
+3. Si existe con base incorrecta → `gh pr edit --base <correct>` o cerrar y recrear
+4. Si no existe → crear nuevo PR

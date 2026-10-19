@@ -1,0 +1,100 @@
+package com.menta.physical.application.usecase;
+
+import com.menta.physical.application.port.in.PhysicalCapacityHoldPort;
+import com.menta.physical.application.port.out.HeldSessionRow;
+import com.menta.physical.application.port.out.PhysicalCapacityHoldWriter;
+import com.menta.physical.domain.exception.CapacityBelowAssignedException;
+import com.menta.shared.physical.AssignmentType;
+import com.menta.shared.physical.MultiSessionCapacityHoldCommand;
+import com.menta.shared.physical.SessionClaim;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * Claims a technical, all-or-nothing hold over an ordered set of sessions
+ * (proposal — scenario 3; design step 3), the sibling of
+ * {@code AssignCapacityUseCase#assignAll}.
+ *
+ * <p>The hold invariant itself is decided one layer down, in
+ * {@link PhysicalCapacityHoldWriter#assertHold}, from three locking reads
+ * (design B4). This use case deliberately reads nothing about the session
+ * before calling it — a plain read here would fix the transaction's MVCC
+ * snapshot before the row lock is taken and reintroduce the oversell of
+ * issue #216, exactly as documented on {@code AssignCapacityUseCase}.</p>
+ *
+ * <p>{@link #holdAll} is the one real implementation of the invariant: one
+ * {@code REQUIRES_NEW} transaction wraps the whole ordered loop, so a
+ * failure on any claim rolls back every earlier insert in the same set.
+ * {@code release} and {@code convertAll} are delegated to
+ * {@link ReleaseCapacityHoldUseCase} and {@link ConvertCapacityHoldUseCase}
+ * respectively, so every entry point of {@link PhysicalCapacityHoldPort} is
+ * backed by an independently unit-testable class, while the port itself has
+ * one implementing bean.</p>
+ */
+@Component
+public class CreateCapacityHoldUseCase implements PhysicalCapacityHoldPort {
+
+    private final PhysicalCapacityHoldWriter holdWriter;
+    private final ReleaseCapacityHoldUseCase releaseCapacityHoldUseCase;
+    private final ConvertCapacityHoldUseCase convertCapacityHoldUseCase;
+
+    public CreateCapacityHoldUseCase(
+        PhysicalCapacityHoldWriter holdWriter,
+        ReleaseCapacityHoldUseCase releaseCapacityHoldUseCase,
+        ConvertCapacityHoldUseCase convertCapacityHoldUseCase
+    ) {
+        this.holdWriter = holdWriter;
+        this.releaseCapacityHoldUseCase = releaseCapacityHoldUseCase;
+        this.convertCapacityHoldUseCase = convertCapacityHoldUseCase;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public CapacityHolds holdAll(MultiSessionCapacityHoldCommand command, Instant expiresAt) {
+        for (SessionClaim claim : command.claims()) {
+            claimOne(claim.sessionId(), command.paymentId(), expiresAt);
+        }
+        return new CapacityHolds(command.claims().stream().map(SessionClaim::sessionId).toList());
+    }
+
+    @Override
+    public void release(UUID paymentId) {
+        releaseCapacityHoldUseCase.release(paymentId);
+    }
+
+    @Override
+    public ConvertOutcome convertAll(UUID paymentId, UUID studentId, AssignmentType type) {
+        return convertCapacityHoldUseCase.convertAll(paymentId, studentId, type);
+    }
+
+    @Override
+    public List<UUID> heldSessionIds(UUID paymentId) {
+        return holdWriter.findByPaymentIdOrdered(paymentId).stream().map(HeldSessionRow::sessionId).toList();
+    }
+
+    /**
+     * One claim of the ordered set, delegated whole to
+     * {@link PhysicalCapacityHoldWriter#assertHold}. Deliberately private
+     * with no {@code @Transactional} of its own — a self-invocation of an
+     * annotated method on {@code this} does not go through the Spring AOP
+     * proxy, so it always runs inside the {@code REQUIRES_NEW} transaction
+     * already opened by {@link #holdAll}.
+     */
+    private void claimOne(UUID sessionId, UUID paymentId, Instant expiresAt) {
+        try {
+            holdWriter.assertHold(sessionId, paymentId, expiresAt);
+        } catch (DataIntegrityViolationException uniqueRace) {
+            // uq_physical_holds_payment_session — the second concurrent
+            // INSERT lost. Route as CapacityBelowAssigned. Unlike the
+            // assignment unique index, this one is keyed by payment+session,
+            // not student: it is a repeated claim, not a student who already
+            // holds the session (#532), so no StudentAlreadyAssigned here.
+            throw new CapacityBelowAssignedException();
+        }
+    }
+}

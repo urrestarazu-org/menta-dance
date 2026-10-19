@@ -1,0 +1,362 @@
+name: Release
+
+# Release a producción (#592, ADR-0018, ADR-0045). Se dispara al empujar un tag vX.Y.Z[-sufijo]:
+#
+#   build -> publish (Trivy + push a GHCR por digest) -> release (GitHub Release) y deploy (VPS)
+#
+# Los JAR se construyen una vez (job build) y las imágenes solo los copian (#587): lo que se
+# escanea, se publica y se despliega es el mismo artefacto. El deploy referencia las imágenes por
+# digest, nunca por tag.
+#
+# Un tag con sufijo (v0.1.0-rc.1) publica imágenes y un GitHub Release marcado como pre-release,
+# pero no despliega. Un tag estable solo se acepta si su commit ya está en main.
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+# Un solo release a la vez y ninguno se cancela a mitad: un deploy interrumpido deja el VPS a medias.
+# GitHub conserva una sola ejecución en espera: si llegan dos tags mientras otro corre, el más viejo
+# de los dos en espera se descarta.
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+# Sin permisos por defecto: cada job declara los suyos.
+permissions: {}
+
+env:
+  API_IMAGE: ghcr.io/urrestarazu-org/menta-api
+  BFF_IMAGE: ghcr.io/urrestarazu-org/menta-bff
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Historial completo: hace falta para comprobar que un tag estable está en main
+          fetch-depth: 0
+
+      - name: Validate tag and derive version
+        id: meta
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          # El patrón del trigger (v*.*.*) es más laxo que esto: el tag acaba en comandos y tags de Docker
+          if [[ ! "$TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::El tag '$TAG' no cumple vX.Y.Z[-sufijo]"
+            exit 1
+          fi
+          version="${TAG#v}"
+          prerelease=false
+          if [[ "$version" == *-* ]]; then
+            prerelease=true
+          fi
+          {
+            echo "version=${version}"
+            echo "prerelease=${prerelease}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Verify stable tag is on main
+        # Lo que se despliega sale de main (Git Flow). Los pre-releases pueden salir de una release/*.
+        if: ${{ steps.meta.outputs.prerelease == 'false' }}
+        run: |
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main; then
+            echo "::error::El commit del tag no está en main; un release estable sale de main"
+            exit 1
+          fi
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          validate-wrappers: true
+
+      - name: Build and test
+        # Módulos JVM: son los que se despliegan. Android no entra en el release del VPS y ya se
+        # compila en pr-develop.yml. -Pversion fija la versión del JAR y de buildInfo (#588).
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          chmod +x gradlew
+          ./gradlew \
+            :api:shared:build :api:auth:build :api:billing:build :api:physical:build \
+            :api:virtual:build :api:app:build :bff:build \
+            -Pversion="$VERSION"
+
+      - name: Verify version inside the JARs
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          for jar in api/app/build/libs/menta-dance-api.jar bff/build/libs/menta-dance-bff.jar; do
+            if ! unzip -p "$jar" META-INF/build-info.properties | grep -qx "build.version=${VERSION}"; then
+              echo "::error::${jar} no declara build.version=${VERSION}"
+              exit 1
+            fi
+          done
+
+      - name: Upload API JAR
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: jar-api
+          path: api/app/build/libs/menta-dance-api.jar
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload BFF JAR
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: jar-bff
+          path: bff/build/libs/menta-dance-bff.jar
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    env:
+      VERSION: ${{ needs.build.outputs.version }}
+      TRIVY_CACHE_DIR: ${{ github.workspace }}/.trivy-cache
+      TRIVY_REPORT_DIR: ${{ github.workspace }}/trivy-reports
+    outputs:
+      api_digest: ${{ steps.push.outputs.api_digest }}
+      bff_digest: ${{ steps.push.outputs.bff_digest }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download API JAR
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: jar-api
+          path: api/app/build/libs
+
+      - name: Download BFF JAR
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: jar-bff
+          path: bff/build/libs
+
+      - name: Build application images
+        run: |
+          build_image() {
+            docker build \
+              --file "infra/docker/app/Dockerfile.$1" \
+              --tag "$2:${VERSION}" \
+              --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+              --label "org.opencontainers.image.version=${VERSION}" \
+              --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+              .
+          }
+          build_image api "$API_IMAGE"
+          build_image bff "$BFF_IMAGE"
+
+      - name: Compute Trivy database cache key
+        id: trivy-date
+        run: echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Trivy database cache
+        id: trivy-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .trivy-cache
+          key: trivy-db-${{ steps.trivy-date.outputs.date }}
+          restore-keys: trivy-db-
+
+      - name: Scan images with Trivy
+        # El mismo script que pr-main.yml (#192). Si falla, el job termina aquí: no se publica nada.
+        run: |
+          status=0
+          for image in "$API_IMAGE:${VERSION}" "$BFF_IMAGE:${VERSION}"; do
+            scripts/trivy-scan.sh "$image" || status=1
+          done
+          exit "$status"
+
+      - name: Make Trivy cache readable
+        if: ${{ always() }}
+        run: sudo chown -R "$(id -u):$(id -g)" .trivy-cache || true
+
+      - name: Save Trivy database cache
+        if: ${{ always() && steps.trivy-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .trivy-cache
+          key: trivy-db-${{ steps.trivy-date.outputs.date }}
+
+      - name: Publish Trivy report summary
+        if: ${{ always() }}
+        run: |
+          for report in trivy-reports/*.txt; do
+            [ -e "$report" ] || continue
+            {
+              echo "### $(basename "$report")"
+              echo '```'
+              cat "$report"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Upload Trivy reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: trivy-reports
+          path: trivy-reports/
+          if-no-files-found: ignore
+
+      - name: Log in to GHCR
+        env:
+          GITHUB_ACTOR_NAME: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$REGISTRY_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR_NAME" --password-stdin
+
+      - name: Push images and capture digests
+        id: push
+        run: |
+          push_image() {
+            local image="$1" output_name="$2" digest
+            docker push "${image}:${VERSION}" > /dev/null
+            digest="$(docker inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "${image}:${VERSION}" \
+              | grep "^${image}@" | head -n 1 | cut -d@ -f2)"
+            if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "::error::No se pudo leer el digest de ${image}:${VERSION}"
+              exit 1
+            fi
+            echo "${output_name}=${digest}" >> "$GITHUB_OUTPUT"
+            echo "- \`${image}@${digest}\`" >> "$GITHUB_STEP_SUMMARY"
+          }
+          echo "### Imágenes publicadas (${VERSION})" >> "$GITHUB_STEP_SUMMARY"
+          push_image "$API_IMAGE" api_digest
+          push_image "$BFF_IMAGE" bff_digest
+
+      - name: Log out of GHCR
+        if: ${{ always() }}
+        run: docker logout ghcr.io
+
+  release:
+    needs: [build, publish]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download API JAR
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: jar-api
+          path: assets/api
+
+      - name: Download BFF JAR
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: jar-bff
+          path: assets/bff
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.build.outputs.version }}
+          PRERELEASE: ${{ needs.build.outputs.prerelease }}
+          API_DIGEST: ${{ needs.publish.outputs.api_digest }}
+          BFF_DIGEST: ${{ needs.publish.outputs.bff_digest }}
+        run: |
+          # Los JAR se publican con la versión en el nombre
+          mv assets/api/menta-dance-api.jar "assets/menta-dance-api-${VERSION}.jar"
+          mv assets/bff/menta-dance-bff.jar "assets/menta-dance-bff-${VERSION}.jar"
+
+          flags=()
+          if [[ "$PRERELEASE" == "true" ]]; then
+            flags+=(--prerelease)
+          fi
+
+          notes="## Imágenes
+
+          - API: \`${API_IMAGE}@${API_DIGEST}\`
+          - BFF: \`${BFF_IMAGE}@${BFF_DIGEST}\`"
+
+          # --notes se antepone a las notas que genera GitHub
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "$TAG" \
+            --generate-notes \
+            --notes "$notes" \
+            "${flags[@]}" \
+            "assets/menta-dance-api-${VERSION}.jar" \
+            "assets/menta-dance-bff-${VERSION}.jar"
+
+  deploy:
+    # Los pre-releases no despliegan. El Environment `production` guarda los secretos de deploy y,
+    # si se configura, exige una aprobación antes de que el job arranque.
+    if: ${{ needs.build.outputs.prerelease == 'false' }}
+    needs: [build, publish]
+    runs-on: ubuntu-24.04
+    environment: production
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        # Del tag salen la configuración del stack (compose, nginx.conf, conf.d) que se envía al servidor
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Huella del servidor guardada de antemano: nunca se acepta una desconocida
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Deploy digests on the VPS
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          API_DIGEST: ${{ needs.publish.outputs.api_digest }}
+          BFF_DIGEST: ${{ needs.publish.outputs.bff_digest }}
+        run: |
+          set -o pipefail
+          for digest in "$API_DIGEST" "$BFF_DIGEST"; do
+            if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "::error::Digest con formato inválido"
+              exit 1
+            fi
+          done
+
+          # La clave del VPS tiene un command= forzado (/opt/menta/deploy.sh): lo que va entre comillas
+          # llega al script en SSH_ORIGINAL_COMMAND, y es lo único que puede ejecutar. La
+          # configuración del stack viaja como tar.gz por la entrada estándar, de modo que el
+          # compose y el nginx.conf del servidor son siempre los del tag que se despliega.
+          tar --create --gzip --owner=0 --group=0 --numeric-owner \
+            --file - --directory infra/docker prod nginx/conf/conf.d \
+          | ssh \
+            -i ~/.ssh/deploy_key \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -p "${DEPLOY_PORT:-22}" \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "${API_DIGEST} ${BFF_DIGEST}"

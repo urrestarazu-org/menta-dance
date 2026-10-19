@@ -1,0 +1,52 @@
+meta {
+  name: Poll Subscription Activated
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/api/v1/billing/subscriptions
+  body: json
+  auth: bearer
+}
+
+headers {
+  content-type: application/json
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+script:pre-request {
+  // Wait for at least one WebhookInboxReconciler tick (default 5000ms) to
+  // process the delivered webhook.
+  await new Promise((resolve) => setTimeout(resolve, 8000));
+}
+
+body:json {
+  {
+    "planId": "{{planId}}",
+    "paymentMethod": "MERCADO_PAGO",
+    "idempotencyKey": "{{subscriptionIdempotencyKey}}"
+  }
+}
+
+docs {
+  Replays this journey's checkout with the same idempotencyKey — same
+  replay-returns-current-status contract used by the standalone Mercado
+  Pago journey. An approved, matching provider result activates the
+  subscription once WebhookVerificationWorker processes it.
+}
+
+tests {
+  test("worker fulfillment activated the subscription", function() {
+    expect(res.getStatus()).to.equal(201);
+    expect(res.getBody().status).to.equal("ACTIVE");
+  });
+}
+
+assert {
+  res.status: eq 201
+  res.body.status: eq ACTIVE
+}

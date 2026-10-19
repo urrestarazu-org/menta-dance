@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Reusable UI fragments. Classes are defined in input.css (@layer components).
+
+  field(id, label, type, name, autocomplete, value, hint, autofocus, errors)
+    Label + input + optional hint + errors. `value`, `hint` and `errors` may be
+    null; `errors` is a list of messages (e.g. ${#fields.errors('email')}).
+    The input points to its hint/errors through aria-describedby and is
+    flagged aria-invalid when there are errors.
+-->
+<div class="field" th:fragment="field(id, label, type, name, autocomplete, value, hint, autofocus, errors)">
+    <label class="field-label" th:for="${id}" th:text="${label}">Label</label>
+    <input class="field-input" th:id="${id}" th:type="${type}" th:name="${name}"
+           th:autocomplete="${autocomplete}" th:value="${value}" required
+           th:autofocus="${autofocus}"
+           th:attr="aria-invalid=${!#lists.isEmpty(errors)} ? 'true' : null,
+                    aria-describedby=${!#lists.isEmpty(errors) or hint != null} ? ${id} + '-help' : null"/>
+    <div th:id="${id} + '-help'" th:if="${!#lists.isEmpty(errors) or hint != null}">
+        <p class="text-sm" th:if="${hint != null}" th:text="${hint}">Hint</p>
+        <p class="field-error" th:each="message : ${errors}" th:text="${message}">Error</p>
+    </div>
+</div>
+
+<!--
+  alert(kind, message): kind is error | success | info. Errors use
+  role="alert" (announced immediately); the rest use role="status".
+-->
+<div th:fragment="alert(kind, message)"
+     th:class="'alert alert-' + ${kind}"
+     th:attr="role=${kind == 'error'} ? 'alert' : 'status'">
+    <p th:text="${message}">Message</p>
+</div>
+
+<!--
+  notice(heading, message): page heading plus a card with one paragraph, for
+  "check your email" / "done" style pages. Put follow-up links after it.
+-->
+<div th:fragment="notice(heading, message)">
+    <h1 class="mb-6" th:text="${heading}">Heading</h1>
+    <div class="card">
+        <p th:text="${message}">Message</p>
+    </div>
+</div>
+</body>
+</html>

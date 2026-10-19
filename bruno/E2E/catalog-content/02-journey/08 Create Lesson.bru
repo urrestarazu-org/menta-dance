@@ -1,0 +1,38 @@
+meta {
+  name: Create Lesson
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/{{apiVersion}}/admin/virtual/modules/{{journeyModuleId}}/lessons
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{adminAccessToken}}
+}
+
+body:json {
+  {
+    "title": "E2E Journey Lesson",
+    "description": "A local E2E lesson.",
+    "videoId": "e2e-journey-video",
+    "durationMinutes": 5,
+    "free": true,
+    "order": 0
+  }
+}
+
+tests {
+  test("administrator creates a complete lesson", function() {
+    expect(res.getStatus()).to.equal(201);
+    expect(res.getBody().lessonId).to.be.a("string").and.not.empty;
+    expect(res.getBody().videoId).to.equal("e2e-journey-video");
+  });
+}
+
+assert {
+  res.status: eq 201
+}

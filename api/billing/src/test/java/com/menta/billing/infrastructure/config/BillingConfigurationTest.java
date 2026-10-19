@@ -1,0 +1,307 @@
+package com.menta.billing.infrastructure.config;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import com.menta.billing.application.port.in.AssignTrialSubscriptionUseCase;
+import com.menta.billing.application.port.in.CreateBankTransferPhysicalPurchaseUseCase;
+import com.menta.billing.application.port.in.CreateBankTransferSubscriptionUseCase;
+import com.menta.billing.application.port.in.CreatePhysicalPurchaseCheckoutUseCase;
+import com.menta.billing.application.port.in.CreateSubscriptionCheckoutUseCase;
+import com.menta.billing.application.port.in.GetCurrentSubscriptionUseCase;
+import com.menta.billing.application.port.in.GetPaymentUseCase;
+import com.menta.billing.application.port.in.GetPlanUseCase;
+import com.menta.billing.application.port.in.GetSubscriptionHistoryUseCase;
+import com.menta.billing.application.port.in.ListPlansUseCase;
+import com.menta.billing.application.port.in.ReceiveWebhookUseCase;
+import com.menta.billing.application.port.in.ResolveExceptionPurchaseUseCase;
+import com.menta.billing.application.port.in.SubmitPaymentProofUseCase;
+import com.menta.billing.application.port.out.BankTransferRateLimitPort;
+import com.menta.billing.application.port.out.BillingOutboxAppenderPort;
+import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
+import com.menta.billing.application.port.out.Clock;
+import com.menta.billing.application.port.out.CourseCatalogPort;
+import com.menta.billing.application.port.out.PaymentPreferencePort;
+import com.menta.billing.application.port.out.PaymentProofNotificationPort;
+import com.menta.billing.application.port.out.PaymentProofRepository;
+import com.menta.billing.application.port.out.PaymentProofStoragePort;
+import com.menta.billing.application.port.out.PaymentProviderPort;
+import com.menta.billing.application.port.out.PaymentRepository;
+import com.menta.billing.application.port.out.PhysicalCapacityHoldPort;
+import com.menta.billing.application.port.out.PhysicalCourseAvailabilityPort;
+import com.menta.billing.application.port.out.PhysicalCourseQuoteRepository;
+import com.menta.billing.application.port.out.PlanRepository;
+import com.menta.billing.application.port.out.PurchaseRepository;
+import com.menta.billing.application.port.out.SubscriptionFulfillmentAlarmPort;
+import com.menta.billing.application.port.out.SubscriptionRepository;
+import com.menta.billing.application.port.out.WebhookInboxAppender;
+import com.menta.billing.application.port.out.WebhookSignatureVerifier;
+import com.menta.billing.application.usecase.CreateBankTransferPhysicalPurchaseUseCaseImpl;
+import com.menta.billing.application.usecase.CreateBankTransferSubscriptionUseCaseImpl;
+import com.menta.billing.application.usecase.GetCurrentSubscriptionUseCaseImpl;
+import com.menta.billing.application.usecase.GetPlanUseCaseImpl;
+import com.menta.billing.application.usecase.GetSubscriptionHistoryUseCaseImpl;
+import com.menta.billing.application.usecase.ListPlansUseCaseImpl;
+import com.menta.billing.application.usecase.PaymentFulfillmentService;
+import com.menta.billing.application.usecase.PaymentVerificationService;
+import com.menta.billing.application.usecase.PublishPhysicalPaymentCompletedUseCase;
+import com.menta.billing.application.usecase.VirtualCourseEntitlementService;
+import com.menta.billing.infrastructure.security.RedisBankTransferRateLimitPort;
+import com.menta.billing.infrastructure.security.RedisBillingPlansRateLimitPort;
+import com.menta.billing.infrastructure.transaction.TransactionalAssignTrialSubscriptionUseCase;
+import com.menta.billing.infrastructure.transaction.TransactionalCreatePhysicalPurchaseCheckoutUseCase;
+import com.menta.billing.infrastructure.transaction.TransactionalCreateSubscriptionCheckoutUseCase;
+import com.menta.billing.infrastructure.transaction.TransactionalGetPaymentUseCase;
+import com.menta.billing.infrastructure.transaction.TransactionalReceiveWebhookUseCase;
+import com.menta.billing.infrastructure.transaction.TransactionalResolveExceptionPurchaseUseCase;
+import com.menta.billing.infrastructure.transaction.TransactionalSubmitPaymentProofUseCase;
+import com.menta.shared.auth.UserExistencePort;
+import com.menta.shared.billing.VirtualCourseEntitlementPort;
+import java.lang.reflect.Field;
+import org.junit.jupiter.api.Test;
+import org.springframework.core.env.Environment;
+import org.springframework.data.redis.core.RedisTemplate;
+
+class BillingConfigurationTest {
+
+    private final Environment environment = mock(Environment.class);
+    private final BillingConfiguration configuration = new BillingConfiguration(environment);
+
+    @Test
+    void wires_the_receive_webhook_use_case_bean_transactionally() {
+        ReceiveWebhookUseCase useCase = configuration.receiveWebhookUseCase(
+            mock(WebhookSignatureVerifier.class), mock(WebhookInboxAppender.class), mock(Clock.class)
+        );
+
+        assertThat(useCase).isInstanceOf(TransactionalReceiveWebhookUseCase.class);
+    }
+
+    @Test
+    void wires_the_payment_fulfillment_service_bean() {
+        PaymentFulfillmentService service = configuration.paymentFulfillmentService(
+            mock(SubscriptionRepository.class), mock(PlanRepository.class), mock(Clock.class),
+            mock(PublishPhysicalPaymentCompletedUseCase.class),
+            mock(SubscriptionFulfillmentAlarmPort.class)
+        );
+
+        assertThat(service).isInstanceOf(PaymentFulfillmentService.class);
+    }
+
+    @Test
+    void wires_the_payment_verification_service_bean() {
+        PaymentVerificationService service = configuration.paymentVerificationService(
+            mock(PaymentRepository.class), mock(PaymentProviderPort.class), mock(Clock.class),
+            mock(PaymentFulfillmentService.class)
+        );
+
+        assertThat(service).isInstanceOf(PaymentVerificationService.class);
+    }
+
+    @Test
+    void wires_the_virtual_course_entitlement_port_bean() {
+        VirtualCourseEntitlementPort port = configuration.virtualCourseEntitlementPort(
+            mock(PlanRepository.class), mock(SubscriptionRepository.class), mock(Clock.class)
+        );
+
+        assertThat(port).isInstanceOf(VirtualCourseEntitlementService.class);
+    }
+
+    @Test
+    void wires_the_subscription_checkout_use_case_bean_transactionally() {
+        CreateSubscriptionCheckoutUseCase useCase = configuration.createSubscriptionCheckoutUseCase(
+            mock(PlanRepository.class), mock(PaymentRepository.class), mock(SubscriptionRepository.class),
+            mock(PaymentPreferencePort.class), mock(Clock.class), "merchant-1",
+            mock(CreateBankTransferSubscriptionUseCase.class)
+        );
+
+        assertThat(useCase).isInstanceOf(TransactionalCreateSubscriptionCheckoutUseCase.class);
+    }
+
+    /** Design D3: not wrapped in its own transactional decorator — see the bean's Javadoc. */
+    @Test
+    void wires_the_bank_transfer_subscription_use_case_bean() {
+        CreateBankTransferSubscriptionUseCase useCase = configuration.createBankTransferSubscriptionUseCase(
+            mock(PlanRepository.class), mock(PaymentRepository.class), mock(SubscriptionRepository.class),
+            mock(BankTransferRateLimitPort.class), mock(Clock.class), "cbu-1", "alias-1", "holder-1", "cuit-1"
+        );
+
+        assertThat(useCase).isInstanceOf(CreateBankTransferSubscriptionUseCaseImpl.class);
+    }
+
+    @Test
+    void wires_the_bank_transfer_rate_limit_port_bean() {
+        @SuppressWarnings("unchecked")
+        RedisTemplate<String, String> redisTemplate = mock(RedisTemplate.class);
+
+        BankTransferRateLimitPort port =
+            configuration.bankTransferRateLimitPort(redisTemplate, mock(Clock.class), 10, 26, 3, 72);
+
+        assertThat(port).isInstanceOf(RedisBankTransferRateLimitPort.class);
+    }
+
+    /** #31, P3c, design C12: wrapped transactionally — see the bean's Javadoc. */
+    @Test
+    void wires_the_submit_payment_proof_use_case_bean_transactionally() {
+        SubmitPaymentProofUseCase useCase = configuration.submitPaymentProofUseCase(
+            mock(PaymentRepository.class), mock(PaymentProofRepository.class),
+            mock(PaymentProofStoragePort.class), mock(PaymentProofNotificationPort.class),
+            mock(BankTransferRateLimitPort.class), mock(Clock.class)
+        );
+
+        assertThat(useCase).isInstanceOf(TransactionalSubmitPaymentProofUseCase.class);
+    }
+
+    /** #559: the read looks up the Purchase inside the decorator's transaction (MANDATORY repo). */
+    @Test
+    void wires_the_get_payment_use_case_bean_transactionally_with_the_purchase_lookup() {
+        GetPaymentUseCase useCase = configuration.getPaymentUseCase(
+            mock(PaymentRepository.class), mock(PurchaseRepository.class)
+        );
+
+        assertThat(useCase).isInstanceOf(TransactionalGetPaymentUseCase.class);
+    }
+
+    @Test
+    void wires_the_assign_trial_subscription_use_case_bean_transactionally_with_the_user_existence_port() {
+        AssignTrialSubscriptionUseCase useCase = configuration.assignTrialSubscriptionUseCase(
+            mock(SubscriptionRepository.class), mock(PlanRepository.class), mock(UserExistencePort.class),
+            mock(Clock.class)
+        );
+
+        assertThat(useCase).isInstanceOf(TransactionalAssignTrialSubscriptionUseCase.class);
+    }
+
+    @Test
+    void wires_the_resolve_exception_purchase_use_case_bean_transactionally() {
+        ResolveExceptionPurchaseUseCase useCase = configuration.resolveExceptionPurchaseUseCase(
+            mock(PurchaseRepository.class), mock(PaymentRepository.class),
+            mock(BillingOutboxAppenderPort.class), mock(Clock.class)
+        );
+
+        assertThat(useCase).isInstanceOf(TransactionalResolveExceptionPurchaseUseCase.class);
+    }
+
+    @Test
+    void wires_the_billing_plans_rate_limit_port_bean() {
+        @SuppressWarnings("unchecked")
+        RedisTemplate<String, String> redisTemplate = mock(RedisTemplate.class);
+
+        BillingPlansRateLimitPort port = configuration.billingPlansRateLimitPort(redisTemplate, 60, 60);
+
+        assertThat(port).isInstanceOf(RedisBillingPlansRateLimitPort.class);
+    }
+
+    @Test
+    void wires_the_list_plans_use_case_bean() {
+        ListPlansUseCase useCase = configuration.listPlansUseCase(
+            mock(PlanRepository.class), mock(CourseCatalogPort.class), mock(BillingPlansRateLimitPort.class)
+        );
+
+        assertThat(useCase).isInstanceOf(ListPlansUseCaseImpl.class);
+    }
+
+    @Test
+    void wires_the_get_plan_use_case_bean() {
+        GetPlanUseCase useCase = configuration.getPlanUseCase(
+            mock(PlanRepository.class), mock(CourseCatalogPort.class), mock(BillingPlansRateLimitPort.class)
+        );
+
+        assertThat(useCase).isInstanceOf(GetPlanUseCaseImpl.class);
+    }
+
+    @Test
+    void wires_the_get_current_subscription_use_case_bean() {
+        GetCurrentSubscriptionUseCase useCase = configuration.getCurrentSubscriptionUseCase(
+            mock(SubscriptionRepository.class), mock(Clock.class)
+        );
+
+        assertThat(useCase).isInstanceOf(GetCurrentSubscriptionUseCaseImpl.class);
+    }
+
+    @Test
+    void wires_the_get_subscription_history_use_case_bean() {
+        GetSubscriptionHistoryUseCase useCase = configuration.getSubscriptionHistoryUseCase(
+            mock(SubscriptionRepository.class)
+        );
+
+        assertThat(useCase).isInstanceOf(GetSubscriptionHistoryUseCaseImpl.class);
+    }
+
+    /** Design D7/C2, not wrapped in its own transactional decorator — same rationale as the subscription twin. */
+    @Test
+    void wires_the_bank_transfer_physical_purchase_use_case_bean() {
+        CreateBankTransferPhysicalPurchaseUseCase useCase = configuration.createBankTransferPhysicalPurchaseUseCase(
+            mock(PhysicalCourseQuoteRepository.class), mock(PaymentRepository.class),
+            mock(PhysicalCourseAvailabilityPort.class), mock(BankTransferRateLimitPort.class), mock(Clock.class),
+            "cbu-1", "alias-1", "holder-1", "cuit-1"
+        );
+
+        assertThat(useCase).isInstanceOf(CreateBankTransferPhysicalPurchaseUseCaseImpl.class);
+    }
+
+    /** #36, US-BILLING-008, design C3: the router now sits inside the transactional decorator. */
+    @Test
+    void wires_the_physical_purchase_checkout_use_case_bean_transactionally_with_the_router() {
+        CreatePhysicalPurchaseCheckoutUseCase useCase = configuration.createPhysicalPurchaseCheckoutUseCase(
+            mock(PhysicalCourseQuoteRepository.class), mock(PaymentRepository.class),
+            mock(PhysicalCourseAvailabilityPort.class), mock(PhysicalCapacityHoldPort.class),
+            mock(PaymentPreferencePort.class), mock(Clock.class), "merchant-1", 1_800_000L,
+            mock(CreateBankTransferPhysicalPurchaseUseCase.class)
+        );
+
+        assertThat(useCase).isInstanceOf(TransactionalCreatePhysicalPurchaseCheckoutUseCase.class);
+    }
+
+    @Test
+    void validateWebhookSecretNotDefaultInProduction_passes_outside_production_profiles() {
+        when(environment.getActiveProfiles()).thenReturn(new String[] {"dev"});
+
+        configuration.validateWebhookSecretNotDefaultInProduction();
+    }
+
+    @Test
+    void validateWebhookSecretNotDefaultInProduction_passes_in_production_with_a_custom_secret()
+        throws NoSuchFieldException, IllegalAccessException {
+        when(environment.getActiveProfiles()).thenReturn(new String[] {"staging"});
+        setWebhookHmacSecret(configuration, "a-real-production-secret");
+
+        configuration.validateWebhookSecretNotDefaultInProduction();
+    }
+
+    @Test
+    void validateWebhookSecretNotDefaultInProduction_rejects_the_dev_default_secret_in_production()
+        throws NoSuchFieldException, IllegalAccessException {
+        when(environment.getActiveProfiles()).thenReturn(new String[] {"production"});
+        setWebhookHmacSecret(configuration, devDefaultSecret());
+
+        assertThatThrownBy(configuration::validateWebhookSecretNotDefaultInProduction)
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("SECURITY");
+    }
+
+    @Test
+    void validateWebhookSecretNotDefaultInProduction_rejects_local_simulation_in_production()
+        throws NoSuchFieldException, IllegalAccessException {
+        when(environment.getActiveProfiles()).thenReturn(new String[] {"production", "e2e-mercadopago"});
+        setWebhookHmacSecret(configuration, "a-real-production-secret");
+
+        assertThatThrownBy(configuration::validateWebhookSecretNotDefaultInProduction)
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("local Mercado Pago simulation");
+    }
+
+    private static String devDefaultSecret() throws NoSuchFieldException, IllegalAccessException {
+        Field field = BillingConfiguration.class.getDeclaredField("DEV_DEFAULT_WEBHOOK_HMAC_SECRET");
+        field.setAccessible(true);
+        return (String) field.get(null);
+    }
+
+    private static void setWebhookHmacSecret(BillingConfiguration configuration, String secret)
+        throws NoSuchFieldException, IllegalAccessException {
+        Field field = BillingConfiguration.class.getDeclaredField("webhookHmacSecret");
+        field.setAccessible(true);
+        field.set(configuration, secret);
+    }
+}
