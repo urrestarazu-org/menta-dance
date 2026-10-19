@@ -521,7 +521,10 @@ Conviene comprobar la huella contra la del servidor (`ssh-keygen -lf
 quede visible en los logs del workflow cuando el repositorio sea público.
 
 En el Environment también conviene agregar al operador como *required reviewer*: el
-job de deploy espera una aprobación manual antes de tocar producción.
+job de deploy espera una aprobación manual antes de tocar producción. Con el repositorio
+privado esto falla (`HTTP 422`: el plan no soporta la regla), así que el Environment se creó
+sin reglas de protección y **queda pendiente agregar el revisor cuando el repositorio sea
+público**. Hasta entonces, un tag estable desde `main` se despliega sin aprobación.
 
 La primera vez que se publican las imágenes, GHCR crea los paquetes `menta-api` y
 `menta-bff` vinculados al repositorio por la etiqueta `org.opencontainers.image.source`.
