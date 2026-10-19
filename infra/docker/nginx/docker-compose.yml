@@ -58,6 +58,11 @@ services:
       # Signing secret for payment-proof access tokens: required, the API does not start without it.
       BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET: ${BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET:?Set BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET in .env}
 
+      # SMTP (Mailpit): without a reachable host the mail health indicator reports DOWN,
+      # /actuator/health fails and the container never turns healthy.
+      SMTP_HOST: ${SMTP_HOST:-menta-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+
       # Only the Docker bridge containing NGINX may supply X-Forwarded-For.
       AUTH_ACTIVATION_TRUSTED_PROXY_CIDRS: ${AUTH_ACTIVATION_TRUSTED_PROXY_CIDRS:-172.16.0.0/12}
 
@@ -79,6 +84,8 @@ services:
       mysql:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      mailpit:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8081/actuator/health"]
@@ -153,6 +160,23 @@ services:
       - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - menta-network
+
+  mailpit:
+    # Same image as infra/docker/app/docker-compose.yml. No published ports: only the API
+    # (same Compose network) talks to it.
+    image: axllent/mailpit:v1.21.8
+    container_name: menta-mailpit
+    restart: unless-stopped
+    expose:
+      - "1025"
+      - "8025"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8025/livez"]
       interval: 10s
       timeout: 3s
       retries: 5
