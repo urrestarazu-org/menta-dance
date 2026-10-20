@@ -367,8 +367,11 @@ Puntos a tener en cuenta:
   | `AUTH_ACTIVATION_DELIVERY_KEY`, `AUTH_PASSWORD_RESET_DELIVERY_KEY` | base64 de exactamente 32 bytes (AES-256) | `openssl rand -base64 32` |
   | `BILLING_WEBHOOK_MERCADOPAGO_HMAC_SECRET`, `BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET` | arbitrario | `openssl rand -hex 32` |
 
+  El secreto de los webhooks generado así solo sirve hasta que se conecta Mercado Pago real: la API verifica la firma `x-signature` con él, así que con pagos reales tiene que ser la clave secreta que muestra la consola de Mercado Pago para los webhooks de la aplicación (se reemplaza en `.env` y se redespliega).
+
 - Correo: **EnvialoSimple** por SMTP, puerto **587** con `SMTP_AUTH=true` y `SMTP_STARTTLS=true`. El compose solo mapea STARTTLS (no hay variable para TLS implícito, puerto 465), así que el puerto 587 es el único que sirve.
 - Quedan vacías a propósito cinco variables: `BILLING_MERCADOPAGO_ACCESS_TOKEN` (sin ese token no hay cobros) y los cuatro datos de transferencia bancaria (CBU, alias, titular, CUIT). Se cargan antes de habilitar pagos reales.
+- `BILLING_MERCADOPAGO_MERCHANT_ACCOUNT_ID` (#634): el ID de la cuenta vendedora de Mercado Pago. La API acepta un pago solo si coincide con el `collector_id` que devuelve Mercado Pago, así que hace falta cargarlo junto con el token. Se obtiene con ese mismo token: `curl -s -H "Authorization: Bearer <TOKEN>" https://api.mercadopago.com/users/me | jq .id`. No es el Client ID de la aplicación. No es secreto, pero tampoco se versiona.
 - `API_DIGEST` y `BFF_DIGEST` no están: las escribe `deploy.sh` en cada despliegue.
 - **Cómo revisar el archivo sin exponer valores:** `sed 's/=.*/=…/' /opt/menta/.env` lista los nombres, y `grep -cE '^[A-Z_]+=$' /opt/menta/.env` cuenta las vacías (deben ser 5). No usar `grep '=$'` a secas: las claves en base64 con relleno terminan en `=` y se imprimirían enteras. Pasó ese día con las dos claves de entrega; como la API todavía no había arrancado, se regeneraron en el momento y no hubo exposición real.
 
