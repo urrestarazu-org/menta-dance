@@ -54,7 +54,7 @@ El proyecto sigue Git Flow con las siguientes ramas:
 
 | Rama | Propósito | Protección |
 |------|-----------|------------|
-| `main` | Producción estable | Requiere PR, sin force push, historial lineal |
+| `main` | Producción estable | Requiere PR, sin force push (ver "Reglas" por el merge de releases) |
 | `develop` | Integración (rama default) | PRs apuntan acá por defecto |
 | `feature/*` | Desarrollo de funcionalidades | Temporal, se elimina post-merge |
 | `release/*` | Preparación de release | Temporal, se elimina post-merge |
@@ -74,6 +74,7 @@ El proyecto sigue Git Flow con las siguientes ramas:
 
 - **Commits**: Usar Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`).
 - **PRs**: Mergear via squash una vez que CI está verde. Nunca agregar atribuciones de AI.
+- **Release a `main`**: el PR `release/*` → `main` se mergea con merge commit, no con squash, para que `main` y `develop` compartan historia (detalle en `docs/16-CICD-PIPELINE.md`, "Git Flow y releases").
 - **Tags**: Releases se tagean `vMAJOR.MINOR.PATCH` y publican JAR + imágenes GHCR usando digests inmutables.
 - **Actions**: Los workflows de deployment deben pinear cada GitHub Action a un SHA completo (sin `latest`).
 
