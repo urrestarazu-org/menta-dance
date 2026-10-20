@@ -367,8 +367,11 @@ Puntos a tener en cuenta:
   | `AUTH_ACTIVATION_DELIVERY_KEY`, `AUTH_PASSWORD_RESET_DELIVERY_KEY` | base64 de exactamente 32 bytes (AES-256) | `openssl rand -base64 32` |
   | `BILLING_WEBHOOK_MERCADOPAGO_HMAC_SECRET`, `BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET` | arbitrario | `openssl rand -hex 32` |
 
+  El secreto de los webhooks generado así solo sirve hasta que se conecta Mercado Pago real: la API verifica la firma `x-signature` con él, así que con pagos reales tiene que ser la clave secreta que muestra la consola de Mercado Pago para los webhooks de la aplicación (se reemplaza en `.env` y se redespliega).
+
 - Correo: **EnvialoSimple** por SMTP, puerto **587** con `SMTP_AUTH=true` y `SMTP_STARTTLS=true`. El compose solo mapea STARTTLS (no hay variable para TLS implícito, puerto 465), así que el puerto 587 es el único que sirve.
 - Quedan vacías a propósito cinco variables: `BILLING_MERCADOPAGO_ACCESS_TOKEN` (sin ese token no hay cobros) y los cuatro datos de transferencia bancaria (CBU, alias, titular, CUIT). Se cargan antes de habilitar pagos reales.
+- `BILLING_MERCADOPAGO_MERCHANT_ACCOUNT_ID` (#634): el ID de la cuenta vendedora de Mercado Pago. La API acepta un pago solo si coincide con el `collector_id` que devuelve Mercado Pago, así que hace falta cargarlo junto con el token. Se obtiene con ese mismo token: `curl -s -H "Authorization: Bearer <TOKEN>" https://api.mercadopago.com/users/me | jq .id`. No es el Client ID de la aplicación. No es secreto, pero tampoco se versiona.
 - `API_DIGEST` y `BFF_DIGEST` no están: las escribe `deploy.sh` en cada despliegue.
 - **Cómo revisar el archivo sin exponer valores:** `sed 's/=.*/=…/' /opt/menta/.env` lista los nombres, y `grep -cE '^[A-Z_]+=$' /opt/menta/.env` cuenta las vacías (deben ser 5). No usar `grep '=$'` a secas: las claves en base64 con relleno terminan en `=` y se imprimirían enteras. Pasó ese día con las dos claves de entrega; como la API todavía no había arrancado, se regeneraron en el momento y no hubo exposición real.
 
@@ -415,7 +418,7 @@ Con el comando forzado, la clave de despliegue ya no abre una shell: la administ
 
 Se desplegó `v0.2.0-rc.2` a mano, con los pasos 1 a 4 de arriba. El camino hasta ahí, con lo que falló:
 
-1. **`v0.2.0-rc.1`: Trivy rechazó las imágenes.** El job `publish` de `release.yml` cortó antes de publicar nada en GHCR por CVE-2026-77214 (HIGH) en `libexpat` 2.8.5-r0, que viene en el Alpine 3.24 de la imagen base y entra por `fontconfig`. Todavía no hay una imagen de Temurin sobre Alpine 3.24 con `libexpat` 2.9.0. Se pasaron los Dockerfiles a `eclipse-temurin:21.0.12.1_1-jre-alpine-3.23` (#612, PR #613) y se volverá a 3.24 cuando Temurin publique con `libexpat` >= 2.9.0. El tag `v0.2.0-rc.1` quedó sin imágenes ni release.
+1. **`v0.2.0-rc.1`: Trivy rechazó las imágenes.** El job `publish` de `release.yml` cortó antes de publicar nada en GHCR por CVE-2026-77214 (HIGH) en `libexpat` 2.8.5-r0, que viene en el Alpine 3.24 de la imagen base y entra por `fontconfig`. Todavía no hay una imagen de Temurin sobre Alpine 3.24 con `libexpat` 2.9.0. Se pasaron los Dockerfiles a `eclipse-temurin:21.0.12.1_1-jre-alpine-3.23` (#612, PR #613) y se volverá a 3.24 cuando Temurin publique con `libexpat` >= 2.9.0. Después, aun en 3.23, la imagen de Temurin seguía trayendo `libexpat` 2.8.5-r0 (el repositorio de Alpine ya tenía 2.9.0-r0) y los Dockerfiles pasaron a correr `apk upgrade --no-cache libexpat` (#622, ver `docs/16-CICD-PIPELINE.md`, "Imágenes de contenedor"). El tag `v0.2.0-rc.1` quedó sin imágenes ni release.
 2. **`v0.2.0-rc.2`: un test intermitente.** El primer intento falló en `:api:app:test` (`PaymentExpirySweepIntegrationTest`, `a_stale_unproven_payment_expires_and_cancels_the_subscription`); al reintentar solo el job fallido (`gh run rerun --failed`) pasó con el mismo código. La causa no se investigó.
 3. **El release publicó** las dos imágenes por digest y la pre-release; el job `deploy` quedó omitido porque el tag tiene sufijo.
 4. **Autenticación SSH.** El primer intento no usó la clave de despliegue, `ssh` cayó a pedir contraseña (el usuario `deploy` no tiene) y fail2ban baneó la IP del operador (sección 2.4).
@@ -425,14 +428,36 @@ Se desplegó `v0.2.0-rc.2` a mano, con los pasos 1 a 4 de arriba. El camino hast
 
 Verificación desde fuera, el mismo día: `https://mentadance.com/` responde 200, `https://www.mentadance.com/` y `http://mentadance.com/` redirigen con 301 a `https://mentadance.com/`, `https://api.mentadance.com/actuator/health` responde 200 con `status: UP`, y el certificado es de Let's Encrypt y vence el 2027-01-14.
 
-#### Comando forzado y Environment `production` (ejecutado el 2026-10-18)
+#### Comando forzado y Environment `production` (ejecutado el 2026-10-18 y 2026-10-19)
 
 1. **Comando forzado** en la clave de despliegue, verificado (sección 2.5).
 2. **Huella del servidor.** Antes de guardar `DEPLOY_KNOWN_HOSTS` se comparó la huella de la clave de host del servidor (`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`, en el VPS) con la que presenta el puerto real (`ssh-keyscan -p <PUERTO> -t ed25519 <HOST> | ssh-keygen -lf -`, en la máquina del operador). Coincidían. Esa línea es lo único que impide aceptar un servidor falso, porque el workflow usa `StrictHostKeyChecking=yes`.
-3. **Environment `production` creado, sin reglas de protección.** Agregar al operador como *required reviewer* falló con `HTTP 422` (`Failed to create the environment protection rule. Please ensure the billing plan supports the required reviewers protection rule`): el repositorio es privado y el plan no lo permite, aunque la API reporte el plan de la organización como `team`. **Pendiente: agregar el *required reviewer* cuando el repositorio sea público**, para que el deploy de un tag estable espere una aprobación manual. Hasta entonces, un tag estable desde `main` se despliega sin aprobación.
+3. **Environment `production` creado, sin reglas de protección.** Agregar al operador como *required reviewer* falló con `HTTP 422` (`Failed to create the environment protection rule. Please ensure the billing plan supports the required reviewers protection rule`): el repositorio era privado y el plan no lo permite, aunque la API reporte el plan de la organización como `team`.
 4. **Cinco secretos cargados** con `gh secret set <NOMBRE> --env production` (el valor se pega en el prompt, nunca como argumento): `DEPLOY_HOST`, `DEPLOY_PORT`, `DEPLOY_USER`, `DEPLOY_SSH_KEY` y `DEPLOY_KNOWN_HOSTS`. `gh secret list --env production` los muestra con su fecha de actualización y sin los valores.
+5. **Required reviewer agregado el 2026-10-19**, una vez que el repositorio pasó a ser público: `gh api -X PUT repos/<ORG>/<REPO>/environments/production -F prevent_self_review=false -F "reviewers[][type]=User" -F "reviewers[][id]=<ID-DEL-USUARIO>"`. El `PUT` reemplaza la configuración del Environment, por eso conviene mirar antes qué tiene. `prevent_self_review` queda apagado: el proyecto lo mantiene una sola persona, que publica el tag y aprueba. Desde esa fecha el job `deploy` de un tag estable espera la aprobación ("Review deployments" en la página del run).
 
-Todavía pendiente: desplegar un tag estable desde `main` por `release.yml` y probar el rollback.
+#### Primer deploy estable: `v0.2.0` por `release.yml` (2026-10-19)
+
+El tag `v0.2.0` se publicó desde `main` (merge del PR #620). El workflow corrió `build`, `publish` (con el gate de Trivy), `release` y `deploy` (este último esperó la aprobación del *required reviewer*). Terminó en `Success`: el job `deploy` duró 50 s y el run completo, 24 min.
+
+- Digests desplegados (están en las notas del release): API `sha256:4e8b92742c2c4bdb3b0e8ff50c2ecc3efb39790b5affe1dcc930d92cb9ccdcb7`, BFF `sha256:ebaf51ec67d41d94b1bc68ecdd77e3b7a463153a4a2498a86159e2865be70c43`.
+- El log de `deploy.sh` terminó con `Stack saludable tras 0s` y `Deploy completado`, y dejó el backup previo `menta-20261019T224918Z.sql.gz`.
+- Desde fuera: `https://mentadance.com/health`, `https://mentadance.com/` y `https://api.mentadance.com/actuator/health` respondieron 200 (la API con `status: UP`, base incluida).
+
+#### Prueba de rollback (2026-10-20)
+
+Se probó en el servidor, como `deploy`, con `v0.2.0` corriendo y `previous-digests` apuntando a `v0.2.0-rc.2`:
+
+1. **Ida a `rc.2`.** `/opt/menta/deploy.sh $(cat /opt/menta/previous-digests)` imprimió `Desplegando API sha256:38c299c2…` y `BFF sha256:7c946291…` (los digests de `rc.2`), hizo el backup previo (`menta-20261020T141552Z.sql.gz`), levantó el stack y terminó con `Stack saludable tras 0s` y `Deploy completado`. `docker inspect` confirmó que `menta-api` y `menta-bff` corrían esas imágenes, `/health` respondió 200 y `/actuator/health` de la API dio `UP` (base, Redis y correo incluidos). La API de `rc.2` arrancó sobre la base que ya había migrado `v0.2.0`: en este caso no hubo migración incompatible.
+2. **Vuelta a `v0.2.0`.** El mismo comando, porque `deploy.sh` guarda lo que estaba corriendo en `previous-digests` antes de cada cambio. Desplegó `4e8b9274…` / `ebaf51ec…`, hizo su backup (`menta-20261020T141718Z.sql.gz`), terminó healthy y `/health` respondió 200.
+
+En ambos tramos la API y el BFF quedaron `Healthy` a los 23 a 31 s del `up`.
+
+Lo que conviene saber al usarlo:
+
+- **Repetir el comando alterna entre las dos versiones**, no retrocede más. Antes de ejecutarlo hay que mirar `cat /opt/menta/previous-digests` y comprobar que son las del release al que se quiere volver.
+- Si se ejecuta de más, el segundo run redesplega la versión de la que se venía. Ese día hubo antes de esta prueba dos deploys manuales más (backups `T125015Z` y `T135916Z`), cuyo detalle no quedó registrado; por eso se repitió el rollback con la salida a la vista. `docker inspect` antes y después permite saber qué quedó corriendo.
+- Cada ejecución hace un `mysqldump`, así que cada rollback suma un backup (se conservan 14).
 
 **Rollback manual.** Si el deploy termina con "no respondió UP", el script imprime el comando para volver atrás. Como `deploy`:
 
@@ -441,7 +466,7 @@ cat /opt/menta/previous-digests
 /opt/menta/deploy.sh $(cat /opt/menta/previous-digests)
 ```
 
-Las imágenes anteriores siguen en el servidor, así que no descarga nada. Esto **no revierte la base de datos**: si la release trajo una migración de Flyway incompatible con la versión anterior, hay que restaurar antes el backup que `deploy.sh` hizo justo antes de ese deploy.
+Las imágenes anteriores siguen en el servidor (el script conserva la actual y la anterior), así que el `pull` es corto (6 a 15 s en la prueba). Esto **no revierte la base de datos**: si la release trajo una migración de Flyway incompatible con la versión anterior, hay que restaurar antes el backup que `deploy.sh` hizo justo antes de ese deploy.
 
 **Restaurar un backup.** El volcado se probó restaurado sobre una base con datos modificados y sobre una base borrada y recreada (que además elimina las tablas que el backup no tiene). Para dejar el esquema exactamente como estaba (incluida la historia de Flyway), se borra y se recrea la base y se restaura, con la API y el BFF detenidos:
 
@@ -704,6 +729,6 @@ Se completa a medida que avancen los sub-issues de #380:
 - Mejoras al repositorio que dejó el primer despliegue, sin issue todavía: subir el `start_period` del healthcheck de MySQL en `docker-compose.prod.yml` (por ejemplo a 120 s) para que el primer despliegue en un servidor nuevo no falle, y revisar el test intermitente `PaymentExpirySweepIntegrationTest`.
 - Baneo de fail2ban: el `bantime` volvió a 3600 el 2026-10-19 con `fail2ban-client set sshd bantime 3600` (sección 2.4).
 - Correo (EnvialoSimple): agregar en el DNS de `mentadance.com` los registros SPF y DKIM que indica la pestaña "Registro DNS" de la cuenta, y probar un envío real (activación de cuenta). Sin esos registros los mails pueden caer en spam.
-- Despliegue y rollback (#593, sección 2.10): `deploy.sh` está instalado y el primer despliegue a mano con `v0.2.0-rc.2` ya se hizo (2026-10-18). La clave de despliegue ya tiene el comando forzado y el Environment `production` de GitHub tiene los cinco secretos que usa `release.yml` (#592; 2026-10-18). Falta el *required reviewer* del Environment (cuando el repositorio sea público), desplegar un tag estable desde `main` y probar el rollback. Anotar acá el resultado de cada paso.
+- Despliegue y rollback (#593, sección 2.10): `deploy.sh` está instalado y el primer despliegue a mano con `v0.2.0-rc.2` ya se hizo (2026-10-18). La clave de despliegue ya tiene el comando forzado y el Environment `production` de GitHub tiene los cinco secretos que usa `release.yml` (#592; 2026-10-18). El *required reviewer* del Environment se agregó el 2026-10-19 (sección 2.10). El tag estable `v0.2.0` se publicó el 2026-10-19 desde `main` y se desplegó por `release.yml` (job `deploy` de 50 s, URLs en 200). El rollback se probó el 2026-10-20 (`v0.2.0` → `rc.2` → `v0.2.0`, ambos healthy); el detalle está en la sección 2.10. Anotar acá el resultado de cada paso.
 - Backups y monitoreo (#594, sección 2.11): el bucket, los tokens, las claves de cifrado y `backup.env` ya están hechos y probados (2026-10-17). `backup.sh`, el timer, el primer backup real y el simulacro de restauración en el VPS se hicieron el 2026-10-19 (ver la tabla de la sección 2.11). El uptime externo (UptimeRobot) se configuró y se validó con la caída de la API el mismo día. El heartbeat del backup (`BACKUP_PING_URL`, healthchecks.io) también se configuró ese día; sin probar aún su camino de fallo. Anotar acá el resultado de cada paso.
 - Seguimiento de todos los pasos pendientes del servidor: #610.
