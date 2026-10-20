@@ -499,18 +499,46 @@ Así pasó con la `0.2.0`: `main` tenía dos PR de documentación squasheados qu
 había reescrito después, y el PR dio 45 conflictos (44 `add/add` y uno de contenido). Se
 resolvió integrando `main` en la rama de release con `git merge -s ours origin/main`, que
 conserva el árbol de `develop` y agrega a `main` como padre. Con el merge commit, `main`
-incluye todos los commits de `develop` y no hace falta un PR de vuelta (`main` → `develop`)
-mientras `develop` no tenga nada que `main` no tenga: se comprueba con
-`git rev-list --count origin/main..origin/develop`, que debe dar 0.
+incluye todos los commits de `develop`, pero `develop` no recibe el merge commit ni lo que `main`
+sumó por su cuenta (un hotfix, por ejemplo). Eso se corrige con el backport de abajo.
 
-**Pendiente de resolver:** la protección de `main` tiene activada "Require linear history"
-(`required_linear_history` en la API) y el PR de la `0.2.0` mostró "Merging is blocked: This
-branch must not contain merge commits". El merge commit llegó igual a `main` (comprobado: su
-punta tiene dos padres), pero no quedó registrado cómo se saltó la regla; la protección no
-aplica a administradores (`enforce_admins: false`), así que pudo ser la casilla "Merge
-without waiting for requirements". Antes del próximo release hay que decidir: desactivar
-"Require linear history" en Settings → Branches (lo coherente con Git Flow) o seguir
-saltándola a mano.
+### Backport de `main` a `develop`
+
+Después de cada merge de un release o de un hotfix a `main` hay que llevar `main` de vuelta a
+`develop`. Con "Require branches to be up to date before merging" (`strict: true`) activo en
+`main` y en `develop`, si `develop` no lo recibe el release siguiente aparece desactualizado
+respecto de `main` y obliga a actualizar la rama con un merge. Pasó con la `0.2.1`: el PR
+`release/0.2.1` → `main` salió marcado como desactualizado porque `main` tenía 8 commits que
+`develop` no tenía (dos PR de documentación squasheados y los merge commits de la `0.2.0`).
+Mergear `main` en la rama dio un árbol idéntico, así que no cambió ningún archivo, pero hizo
+falta rehacer los checks.
+
+Se hace con una rama de sincronización, no con un PR directo desde `main`:
+
+1. Con el release ya mergeado en `main` (y el tag creado): `git fetch origin`.
+2. `git checkout -b sync/main-to-develop-<versión> origin/develop`.
+3. `git merge origin/main`. Si el árbol de `main` coincide con el de `develop` el merge es
+   limpio y no cambia archivos; si hay conflictos, se resuelven a favor de `develop` salvo que
+   `main` traiga algo que `develop` no tenga (un hotfix), que hay que conservar.
+4. Push de la rama y PR a `develop` con título `chore(release): sincronizar main en develop
+   tras <versión>`. Los checks de `develop` corren como en cualquier PR.
+5. Se mergea con **"Create a merge commit"**, no con squash: un squash volvería a dejar la
+   historia de `main` fuera de `develop`.
+6. Se comprueba con `git rev-list --count origin/develop..origin/main`, que debe dar 0.
+
+Por qué una rama de sincronización y no un PR `main` → `develop`: con `strict: true` en
+`develop`, un PR cuya rama de origen es `main` quedaría desactualizado en cuanto `develop`
+recibe cualquier commit, y el botón "Update branch" haría lo contrario de lo que se quiere:
+mergear `develop` dentro de `main`. La rama de sincronización sale de `develop`, así que ya
+está al día con él.
+
+**"Require linear history".** La protección de `main` la tenía activada y bloqueaba el PR de
+la `0.2.0` ("This branch must not contain merge commits"); el merge commit llegó igual a
+`main`, pero no quedó registrado cómo se saltó la regla. El 2026-10-20 se desactivó en
+Settings → Branches (`required_linear_history: false`, comprobado con la API) porque Git Flow
+necesita el merge commit del release y del backport. `develop` tampoco la exige. El resto de
+la protección de `main` no cambió: PR obligatorio, los 7 checks, "Require branches to be up to
+date" y sin force push ni borrado.
 
 Los commits y títulos de PR siguen Conventional Commits 1.0.0. La versión de
 release es SemVer `vMAJOR.MINOR.PATCH` y etiqueta el mismo commit, JAR, imagen y
