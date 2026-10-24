@@ -8,9 +8,10 @@
         <h1 id="hero-title">Aprendé a tu ritmo y desarrollá tu propio estilo.</h1>
         <p class="hero-lead">Clases de baile online y presenciales para todos los niveles. Creá tu cuenta y empezá a bailar.</p>
         <div class="mt-8 flex flex-wrap justify-center gap-3">
-            <a class="btn btn-light btn-lg" sec:authorize="!isAuthenticated()" th:href="@{/registro}">Crear cuenta</a>
+            <a class="btn btn-light btn-lg" sec:authorize="!isAuthenticated()" th:href="@{/login}">Iniciar sesión</a>
+            <a class="btn btn-outline-light btn-lg" sec:authorize="!isAuthenticated()" th:href="@{/registro}">Crear cuenta</a>
             <a class="btn btn-light btn-lg" sec:authorize="isAuthenticated()" th:href="@{/dashboard}">Ir a mi panel</a>
-            <a class="btn btn-outline-light btn-lg" th:href="@{/classes}">Ver clases presenciales</a>
+            <a class="site-nav-link w-full text-lg" th:href="@{/classes}">Ver clases presenciales</a>
         </div>
     </div>
 </section>

@@ -183,9 +183,23 @@ class CatalogPurchaseLayoutIntegrationTest extends BaseIntegrationTest {
                 .contains("/images/brand/menta-m.png")
                 .contains("Menta Dance")
                 .contains("aria-label=\"Navegación principal\"")
-                .containsPattern("href=\"/login\"[^>]*>\\s*Iniciar sesión")
+                .containsPattern("class=\"btn btn-light[^\"]*\"[^>]*href=\"/login\"[^>]*>\\s*Iniciar sesión")
                 .containsPattern("href=\"/registro\"[^>]*>\\s*Crear cuenta")
                 .doesNotContain("Cerrar sesión");
+    }
+
+    @Test
+    @DisplayName("en celular el acceso queda a la vista fuera del menú desplegable")
+    void headerKeepsTheAccountLinkOutsideTheMenu() throws Exception {
+        String anonymous = outsideMenus(headerOf(body(get("/classes"))));
+
+        assertThat(anonymous)
+                .containsPattern("class=\"btn btn-light[^\"]*\"[^>]*href=\"/login\"[^>]*>\\s*Iniciar sesión");
+
+        logIn();
+        String signedIn = outsideMenus(headerOf(body(get("/classes").cookie(session))));
+
+        assertThat(signedIn).containsPattern("href=\"/dashboard\"[^>]*>\\s*Ir a mi panel");
     }
 
     @Test
@@ -202,6 +216,23 @@ class CatalogPurchaseLayoutIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("con sesión, el hero ofrece el panel y las clases; cerrar sesión queda en el header")
+    void heroForSignedInUserOffersThePanel() throws Exception {
+        logIn();
+
+        String html = body(get("/").cookie(session));
+        String hero = html.substring(html.indexOf("aria-labelledby=\"hero-title\""), html.indexOf("benefits-title"));
+
+        assertThat(hero)
+                .containsPattern("class=\"btn btn-light btn-lg\"[^>]*href=\"/dashboard\"[^>]*>\\s*Ir a mi panel")
+                .contains("href=\"/classes\"")
+                .doesNotContain("Cerrar sesión")
+                .doesNotContain("Iniciar sesión")
+                .doesNotContain("Crear cuenta");
+        assertThat(headerOf(html)).contains("Cerrar sesión");
+    }
+
+    @Test
     @DisplayName("el inicio abre con un hero con el único h1, una acción principal y el acceso a las clases")
     void homeHasAHero() throws Exception {
         String html = body(get("/"));
@@ -211,8 +242,11 @@ class CatalogPurchaseLayoutIntegrationTest extends BaseIntegrationTest {
         String hero = html.substring(html.indexOf("aria-labelledby=\"hero-title\""), html.indexOf("benefits-title"));
         assertThat(hero)
                 .containsPattern("<h1[^>]*id=\"hero-title\"[^>]*>\\s*Aprendé a tu ritmo")
+                .containsPattern("class=\"btn btn-light btn-lg\"[^>]*href=\"/login\"[^>]*>\\s*Iniciar sesión")
                 .containsPattern("href=\"/registro\"[^>]*>\\s*Crear cuenta")
                 .containsPattern("href=\"/classes\"[^>]*>\\s*Ver clases presenciales");
+        assertThat(hero.indexOf("href=\"/login\"")).as("login is the first action")
+                .isLessThan(hero.indexOf("href=\"/registro\""));
     }
 
     @Test
@@ -499,6 +533,11 @@ class CatalogPurchaseLayoutIntegrationTest extends BaseIntegrationTest {
 
     private static String headerOf(String html) {
         return html.substring(html.indexOf("<header"), html.indexOf("</header>"));
+    }
+
+    /** The header without the desktop navigation and the mobile disclosure menu. */
+    private static String outsideMenus(String header) {
+        return header.replaceAll("(?s)<details.*?</details>", "").replaceAll("(?s)<nav.*?</nav>", "");
     }
 
     private static void assertCommonLayout(String html) {
