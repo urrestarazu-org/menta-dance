@@ -4,6 +4,14 @@
 <body>
 <th:block th:fragment="main-content">
 <div class="mx-auto max-w-sm">
+    <div class="mb-6">
+        <video class="brand-motion" aria-hidden="true" autoplay muted loop playsinline preload="metadata" width="480" height="270"
+               th:poster="@{/images/brand/menta-wordmark.png}">
+            <source th:src="@{/images/brand/menta-animado.mp4}" type="video/mp4">
+        </video>
+        <img class="brand-still" th:src="@{/images/brand/menta-wordmark.png}" alt="Menta Dance" width="600" height="341">
+    </div>
+
     <h1 class="mb-6">No pudimos mostrar la página</h1>
 
     <div class="card space-y-2" role="alert">

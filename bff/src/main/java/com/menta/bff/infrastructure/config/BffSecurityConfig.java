@@ -68,6 +68,10 @@ public class BffSecurityConfig {
                         // Brand logo and hero photo (#649) shown on the anonymous home and
                         // login pages; same GET-only, path-scoped reasoning as /css/**.
                         .requestMatchers(HttpMethod.GET, "/images/**").permitAll()
+                        // Browser and crawler entry points at the site root (#654): the favicon is
+                        // requested on every page and robots.txt must be readable without a session.
+                        // Exact paths and GET-only, so nothing else at the root opens up.
+                        .requestMatchers(HttpMethod.GET, "/favicon.ico", "/robots.txt").permitAll()
                         // Legal and contact pages (#650): anonymous, one exact path each and GET-only.
                         .requestMatchers(HttpMethod.GET, "/terminos-condiciones", "/politica-privacidad",
                                 "/politica-cookies", "/politica-devolucion", "/propiedad-intelectual",
