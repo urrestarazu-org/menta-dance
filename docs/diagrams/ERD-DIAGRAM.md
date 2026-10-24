@@ -79,7 +79,10 @@ erDiagram
         bigint id PK
         varchar email UK
         varchar password_hash
-        varchar name
+        varchar first_name "NULL en cuentas sin perfil"
+        varchar last_name "NULL en cuentas sin perfil"
+        varchar phone "E.164, NULL en cuentas sin perfil"
+        date birth_date "opcional"
         int token_version
         boolean active
         timestamp created_at

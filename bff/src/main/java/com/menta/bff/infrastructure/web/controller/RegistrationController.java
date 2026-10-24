@@ -54,7 +54,8 @@ public class RegistrationController {
         }
         try {
             registerAccountUseCase.execute(RegisterCommand.student(
-                    form.getEmail(), form.getPassword(), clientOriginResolver.resolve(request)));
+                    form.getEmail(), form.getPassword(), form.getFirstName(), form.getLastName(),
+                    form.normalizedPhone(), form.parsedBirthDate(), clientOriginResolver.resolve(request)));
         } catch (AuthApiClient.RateLimitedException
                  | AuthApiClient.InvalidRequestException
                  | AuthApiClient.ServiceUnavailableException e) {

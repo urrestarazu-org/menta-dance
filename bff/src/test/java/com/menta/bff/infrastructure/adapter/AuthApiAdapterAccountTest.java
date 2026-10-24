@@ -5,6 +5,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath;
+import static com.github.tomakehurst.wiremock.client.WireMock.notMatching;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
@@ -22,6 +23,7 @@ import com.menta.bff.application.dto.ResendActivationCommand;
 import com.menta.bff.application.port.out.AuthApiClient;
 import com.menta.bff.infrastructure.config.AuthProperties;
 import java.time.Duration;
+import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -57,11 +59,12 @@ class AuthApiAdapterAccountTest {
     }
 
     private static RegisterCommand registration() {
-        return RegisterCommand.student("ana@example.com", "Secreta123", CLIENT_ADDRESS);
+        return RegisterCommand.student("ana@example.com", "Secreta123", "Ana", "Prueba", "+5491100000000", null,
+                CLIENT_ADDRESS);
     }
 
     @Test
-    @DisplayName("register sends email, password and the STUDENT role, forwarding the client origin")
+    @DisplayName("register sends email, password, personal data and the STUDENT role, forwarding the client origin")
     void registerSendsStudentRole() {
         stubStatus(REGISTER, 202);
 
@@ -71,7 +74,34 @@ class AuthApiAdapterAccountTest {
                 .withHeader("X-Forwarded-For", equalTo(CLIENT_ADDRESS))
                 .withRequestBody(matchingJsonPath("$.email", equalTo("ana@example.com")))
                 .withRequestBody(matchingJsonPath("$.password", equalTo("Secreta123")))
+                .withRequestBody(matchingJsonPath("$.firstName", equalTo("Ana")))
+                .withRequestBody(matchingJsonPath("$.lastName", equalTo("Prueba")))
+                .withRequestBody(matchingJsonPath("$.phone", equalTo("+5491100000000")))
                 .withRequestBody(matchingJsonPath("$.role", equalTo("STUDENT"))));
+    }
+
+    @Test
+    @DisplayName("register omits the birth date from the body when the person did not give one")
+    void registerOmitsAbsentBirthDate() {
+        stubStatus(REGISTER, 202);
+
+        adapter.register(registration());
+
+        verify(postRequestedFor(urlEqualTo(REGISTER))
+                .withRequestBody(notMatching(".*birthDate.*")));
+    }
+
+    @Test
+    @DisplayName("register sends the birth date as an ISO yyyy-MM-dd string when present")
+    void registerSendsBirthDateAsIso() {
+        stubStatus(REGISTER, 202);
+        RegisterCommand command = RegisterCommand.student("ana@example.com", "Secreta123", "Ana", "Prueba",
+                "+5491100000000", LocalDate.of(1990, 5, 17), CLIENT_ADDRESS);
+
+        adapter.register(command);
+
+        verify(postRequestedFor(urlEqualTo(REGISTER))
+                .withRequestBody(matchingJsonPath("$.birthDate", equalTo("1990-05-17"))));
     }
 
     @Test

@@ -3,6 +3,7 @@ package com.menta.auth.domain.model;
 import com.menta.shared.domain.vo.Email;
 import java.time.LocalDateTime;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * User domain entity.
@@ -18,6 +19,8 @@ public class User {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private long tokenVersion;
+    /** Personal data; absent for accounts that predate the profile (demo, admin, E2E and legacy rows). */
+    private UserProfile profile;
 
     public User(
         UserId id,
@@ -28,7 +31,7 @@ public class User {
         LocalDateTime createdAt,
         LocalDateTime updatedAt
     ) {
-        this(id, email, passwordHash, role, status, createdAt, updatedAt, DEFAULT_TOKEN_VERSION);
+        this(id, email, passwordHash, role, status, createdAt, updatedAt, DEFAULT_TOKEN_VERSION, null);
     }
 
     private User(
@@ -39,7 +42,8 @@ public class User {
         UserStatus status,
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
-        long tokenVersion
+        long tokenVersion,
+        UserProfile profile
     ) {
         this.id = id;
         this.email = email;
@@ -49,6 +53,7 @@ public class User {
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
         this.tokenVersion = tokenVersion;
+        this.profile = profile;
     }
 
     /** Default token_version for newly-minted auth_users rows (ADR-0025 V2 DDL). */
@@ -56,8 +61,11 @@ public class User {
 
     /**
      * Registers a public user that must prove email ownership before login.
+     *
+     * @param profile the personal data given at registration, never null
      */
-    public static User register(Email email, String passwordHash, Role role) {
+    public static User register(Email email, String passwordHash, Role role, UserProfile profile) {
+        Objects.requireNonNull(profile, "profile cannot be null");
         LocalDateTime now = LocalDateTime.now();
         return new User(
             UserId.generate(),
@@ -67,7 +75,8 @@ public class User {
             UserStatus.PENDING_ACTIVATION,
             now,
             now,
-            DEFAULT_TOKEN_VERSION
+            DEFAULT_TOKEN_VERSION,
+            profile
         );
     }
 
@@ -84,7 +93,8 @@ public class User {
             UserStatus.ACTIVE,
             now,
             now,
-            DEFAULT_TOKEN_VERSION
+            DEFAULT_TOKEN_VERSION,
+            null
         );
     }
 
@@ -106,7 +116,27 @@ public class User {
         LocalDateTime updatedAt,
         long tokenVersion
     ) {
-        return new User(id, email, passwordHash, role, status, createdAt, updatedAt, tokenVersion);
+        return new User(id, email, passwordHash, role, status, createdAt, updatedAt, tokenVersion, null);
+    }
+
+    /**
+     * Rebuilds a user from persisted state, including the personal data given at registration.
+     *
+     * @param profile the stored profile, or {@code null} for accounts that never had one
+     * @return the user as it was persisted
+     */
+    public static User rehydrate(
+        UserId id,
+        Email email,
+        String passwordHash,
+        Role role,
+        UserStatus status,
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt,
+        long tokenVersion,
+        UserProfile profile
+    ) {
+        return new User(id, email, passwordHash, role, status, createdAt, updatedAt, tokenVersion, profile);
     }
 
     /**
@@ -192,6 +222,15 @@ public class User {
 
     public long getTokenVersion() {
         return tokenVersion;
+    }
+
+    /**
+     * Personal data given at registration.
+     *
+     * @return the profile, or empty for accounts that never had one
+     */
+    public Optional<UserProfile> getProfile() {
+        return Optional.ofNullable(profile);
     }
 
     @Override

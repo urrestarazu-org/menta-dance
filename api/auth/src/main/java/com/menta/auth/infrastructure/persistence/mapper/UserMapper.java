@@ -2,6 +2,7 @@ package com.menta.auth.infrastructure.persistence.mapper;
 
 import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.model.UserId;
+import com.menta.auth.domain.model.UserProfile;
 import com.menta.auth.infrastructure.persistence.entity.UserJpaEntity;
 import com.menta.shared.domain.vo.Email;
 
@@ -16,7 +17,7 @@ public final class UserMapper {
     }
 
     /**
-     * Maps the user to its JPA entity, including status and token version.
+     * Maps the user to its JPA entity, including status, token version and profile (null columns when absent).
      *
      * @return the entity, or null when {@code user} is null
      */
@@ -24,6 +25,8 @@ public final class UserMapper {
         if (user == null) {
             return null;
         }
+
+        UserProfile profile = user.getProfile().orElse(null);
 
         return new UserJpaEntity(
             user.getId().getValue(),
@@ -33,7 +36,11 @@ public final class UserMapper {
             user.getStatus(),
             user.getCreatedAt(),
             user.getUpdatedAt(),
-            user.getTokenVersion()
+            user.getTokenVersion(),
+            profile == null ? null : profile.firstName(),
+            profile == null ? null : profile.lastName(),
+            profile == null ? null : profile.phone(),
+            profile == null ? null : profile.birthDate()
         );
     }
 
@@ -55,7 +62,18 @@ public final class UserMapper {
             entity.getStatus(),
             entity.getCreatedAt(),
             entity.getUpdatedAt(),
-            entity.getTokenVersion()
+            entity.getTokenVersion(),
+            toProfile(entity)
+        );
+    }
+
+    /** A row without the required profile columns belongs to an account that never had a profile. */
+    private static UserProfile toProfile(UserJpaEntity entity) {
+        if (entity.getFirstName() == null || entity.getLastName() == null || entity.getPhone() == null) {
+            return null;
+        }
+        return new UserProfile(
+            entity.getFirstName(), entity.getLastName(), entity.getPhone(), entity.getBirthDate()
         );
     }
 }

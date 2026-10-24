@@ -24,6 +24,7 @@ import com.menta.auth.application.port.out.TokenBlacklistPort;
 import com.menta.auth.domain.exception.AccountNotActivatedException;
 import com.menta.auth.domain.exception.ActivationTokenInvalidException;
 import com.menta.auth.domain.model.Role;
+import com.menta.auth.domain.model.UserProfile;
 import com.menta.auth.domain.model.UserStatus;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.auth.infrastructure.persistence.entity.OutboxRowJpaEntity;
@@ -31,6 +32,7 @@ import com.menta.auth.infrastructure.persistence.repository.ActivationTokenJpaRe
 import com.menta.auth.infrastructure.persistence.repository.OutboxRowJpaRepository;
 import com.menta.physical.application.port.out.CheckInRateLimitPort;
 import com.menta.shared.domain.vo.Email;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
@@ -97,6 +99,13 @@ class AccountActivationIntegrationTest extends AbstractAuthMySqlIntegrationTest 
     // ADR-0044: backed by a RedisTemplate this Redis-less context does not have.
     @MockitoBean private CheckInRateLimitPort checkInRateLimitPort;
 
+    private static RegisterUserCommand registrationCommand() {
+        return new RegisterUserCommand(
+            EMAIL, PASSWORD, Role.STUDENT, "Ada", "Lovelace", "+5491100000000", LocalDate.of(1990, 5, 17),
+            "client-fingerprint"
+        );
+    }
+
     @AfterEach
     void cleanUp() {
         outboxRowJpaRepository.deleteAll();
@@ -107,10 +116,12 @@ class AccountActivationIntegrationTest extends AbstractAuthMySqlIntegrationTest 
     @Test
     void registrationDeliveryActivationAndLoginFormOneDurableFlow() {
         allowRegistration();
-        registerUserUseCase.register(new RegisterUserCommand(EMAIL, PASSWORD, Role.STUDENT, "client-fingerprint"));
+        registerUserUseCase.register(registrationCommand());
 
         assertThat(userRepository.findByEmail(Email.of(EMAIL))).get()
             .extracting(user -> user.getStatus()).isEqualTo(UserStatus.PENDING_ACTIVATION);
+        assertThat(userRepository.findByEmail(Email.of(EMAIL)).orElseThrow().getProfile())
+            .contains(new UserProfile("Ada", "Lovelace", "+5491100000000", LocalDate.of(1990, 5, 17)));
         List<OutboxRowJpaEntity> outboxRows = outboxRowJpaRepository.findAll();
         assertThat(outboxRows).singleElement()
             .extracting(OutboxRowJpaEntity::getEventType).isEqualTo("auth.AccountActivationRequested");
@@ -137,7 +148,7 @@ class AccountActivationIntegrationTest extends AbstractAuthMySqlIntegrationTest 
 
         // This asserts the transactional boundary with a forced persistence failure.
         assertThatThrownBy(() -> registerUserUseCase.register(
-            new RegisterUserCommand(EMAIL, PASSWORD, Role.STUDENT, "client-fingerprint")
+            registrationCommand()
         )).isInstanceOf(RuntimeException.class);
         assertThat(userRepository.findByEmail(Email.of(EMAIL))).isEmpty();
         assertThat(outboxRowJpaRepository.findAll()).isEmpty();
@@ -156,7 +167,7 @@ class AccountActivationIntegrationTest extends AbstractAuthMySqlIntegrationTest 
     @Test
     void concurrentDoubleActivationAllowsExactlyOneTransition() throws Exception {
         allowRegistration();
-        registerUserUseCase.register(new RegisterUserCommand(EMAIL, PASSWORD, Role.STUDENT, "client-fingerprint"));
+        registerUserUseCase.register(registrationCommand());
         ExecutorService executor = Executors.newFixedThreadPool(2);
         try {
             CountDownLatch start = new CountDownLatch(1);

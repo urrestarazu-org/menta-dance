@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.menta.shared.domain.vo.Email;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -99,5 +101,52 @@ class UserTest {
             .contains("role=" + user.getRole())
             .contains("status=" + user.getStatus())
             .doesNotContain("old-hash");
+    }
+
+    @Test
+    void register_keeps_the_profile_and_waits_for_activation() {
+        UserProfile profile = new UserProfile("Ada", "Lovelace", "+5491100000000", LocalDate.of(1990, 5, 17));
+
+        User user = User.register(Email.of("student@example.com"), "hash", Role.STUDENT, profile);
+
+        assertThat(user.getStatus()).isEqualTo(UserStatus.PENDING_ACTIVATION);
+        assertThat(user.getProfile()).contains(profile);
+    }
+
+    @Test
+    void register_requires_a_profile() {
+        Email email = Email.of("student@example.com");
+
+        assertThatThrownBy(() -> User.register(email, "hash", Role.STUDENT, null))
+            .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void users_created_without_a_profile_report_it_as_absent() {
+        assertThat(activeUser().getProfile()).isEqualTo(Optional.empty());
+        assertThat(User.create(Email.of("student@example.com"), "hash", Role.STUDENT).getProfile()).isEmpty();
+    }
+
+    @Test
+    void rehydrate_with_a_profile_restores_it_and_without_one_leaves_it_absent() {
+        UserProfile profile = new UserProfile("Ada", "Lovelace", "+5491100000000", null);
+        LocalDateTime now = LocalDateTime.now();
+        UserId id = UserId.generate();
+        Email email = Email.of("student@example.com");
+
+        User withProfile = User.rehydrate(id, email, "hash", Role.STUDENT, UserStatus.ACTIVE, now, now, 3L, profile);
+        User withoutProfile = User.rehydrate(id, email, "hash", Role.STUDENT, UserStatus.ACTIVE, now, now, 3L);
+
+        assertThat(withProfile.getProfile()).contains(profile);
+        assertThat(withProfile.getTokenVersion()).isEqualTo(3L);
+        assertThat(withoutProfile.getProfile()).isEmpty();
+    }
+
+    @Test
+    void to_string_never_includes_the_profile() {
+        UserProfile profile = new UserProfile("Ada", "Lovelace", "+5491100000000", null);
+        User user = User.register(Email.of("student@example.com"), "hash", Role.STUDENT, profile);
+
+        assertThat(user.toString()).doesNotContain("Ada").doesNotContain("Lovelace").doesNotContain("+5491100000000");
     }
 }

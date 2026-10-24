@@ -75,7 +75,11 @@ test.describe('authentication pages', () => {
 
   test('register validation errors', async ({ page }) => {
     await page.goto('/registro');
+    // Fake personal data: only the email and password are wrong on purpose.
+    await page.getByLabel('Nombre', { exact: true }).fill('Ana');
+    await page.getByLabel('Apellido', { exact: true }).fill('Prueba');
     await page.getByLabel('Email', { exact: true }).fill('not-an-email');
+    await page.getByLabel('Teléfono', { exact: true }).fill('+54 9 11 0000 0000');
     await page.getByLabel('Contraseña', { exact: true }).fill('short');
     await page.getByRole('button', { name: 'Crear cuenta' }).click();
     await expect(page.locator('[aria-invalid="true"]').first()).toBeVisible();

@@ -8,6 +8,7 @@ import com.menta.bff.application.dto.TokenPairResponse;
 import com.menta.bff.application.port.out.AuthApiClient;
 import com.menta.bff.infrastructure.config.AuthProperties;
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Matcher;
@@ -172,11 +173,17 @@ public class AuthApiAdapter implements AuthApiClient {
 
         log.debug("Calling Auth API register endpoint");
 
-        Map<String, String> requestBody = Map.of(
-                "email", command.email(),
-                "password", command.password(),
-                "role", command.role()
-        );
+        // LinkedHashMap, not Map.of: the birth date is optional and is omitted (not sent as null) when absent.
+        Map<String, String> requestBody = new LinkedHashMap<>();
+        requestBody.put("email", command.email());
+        requestBody.put("password", command.password());
+        requestBody.put("firstName", command.firstName());
+        requestBody.put("lastName", command.lastName());
+        requestBody.put("phone", command.phone());
+        if (command.birthDate() != null) {
+            requestBody.put("birthDate", command.birthDate().toString());
+        }
+        requestBody.put("role", command.role());
 
         ApiReply reply = send(webClient.post()
                 .uri(REGISTER_ENDPOINT)

@@ -11,7 +11,11 @@
     </div>
 
     <form th:action="@{/registro}" th:object="${form}" method="post" novalidate class="card space-y-4">
-        <div th:replace="~{fragments/components :: field('email', 'Email', 'email', 'email', 'username', *{email}, null, true, ${#fields.errors('email')})}"></div>
+        <div th:replace="~{fragments/components :: field('firstName', 'Nombre', 'text', 'firstName', 'given-name', *{firstName}, null, true, ${#fields.errors('firstName')})}"></div>
+        <div th:replace="~{fragments/components :: field('lastName', 'Apellido', 'text', 'lastName', 'family-name', *{lastName}, null, false, ${#fields.errors('lastName')})}"></div>
+        <div th:replace="~{fragments/components :: field('email', 'Email', 'email', 'email', 'username', *{email}, null, false, ${#fields.errors('email')})}"></div>
+        <div th:replace="~{fragments/components :: field('phone', 'Teléfono', 'tel', 'phone', 'tel', *{phone}, 'Con código de país, por ejemplo +54 9 11 0000 0000', false, ${#fields.errors('phone')})}"></div>
+        <div th:replace="~{fragments/components :: optionalField('birthDate', 'Fecha de nacimiento (opcional)', 'date', 'birthDate', 'bday', *{birthDate}, null, false, ${#fields.errors('birthDate')})}"></div>
         <div th:replace="~{fragments/components :: field('password', 'Contraseña', 'password', 'password', 'new-password', null, 'Al menos 8 caracteres, una mayúscula y un número.', false, ${#fields.errors('password')})}"></div>
         <div th:replace="~{fragments/components :: field('passwordConfirmation', 'Repetí la contraseña', 'password', 'passwordConfirmation', 'new-password', null, null, false, ${#fields.errors('passwordConfirmed')})}"></div>
 

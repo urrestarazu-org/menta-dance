@@ -20,6 +20,7 @@ import com.menta.auth.domain.exception.DuplicateRegistrationException;
 import com.menta.auth.domain.model.ActivationToken;
 import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.User;
+import com.menta.auth.domain.model.UserProfile;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.shared.domain.vo.Email;
 import java.time.Duration;
@@ -79,6 +80,9 @@ public class RegisterUserUseCaseImpl implements RegisterUserUseCase {
     public UserResult register(RegisterUserCommand command) {
         Role role = publicRole(command.role());
         Email email = Email.of(command.email());
+        UserProfile profile = new UserProfile(
+            command.firstName(), command.lastName(), command.phone(), command.birthDate()
+        );
 
         RateLimitDecision decision = activationRateLimitPort.consume(
             emailFingerprint(email), command.clientFingerprint()
@@ -92,7 +96,7 @@ public class RegisterUserUseCaseImpl implements RegisterUserUseCase {
         }
 
         String passwordHash = passwordEncoder.encode(command.password());
-        User user = User.register(email, passwordHash, role);
+        User user = User.register(email, passwordHash, role, profile);
         User savedUser = userRepository.save(user);
 
         String rawActivationToken = activationTokenGenerator.generate();
