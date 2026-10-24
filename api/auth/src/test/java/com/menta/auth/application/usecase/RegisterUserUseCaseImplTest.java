@@ -25,11 +25,13 @@ import com.menta.auth.domain.exception.ActivationRateLimitedException;
 import com.menta.auth.domain.model.ActivationToken;
 import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.User;
+import com.menta.auth.domain.model.UserProfile;
 import com.menta.auth.domain.model.UserStatus;
 import com.menta.auth.domain.repository.UserRepository;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,6 +47,10 @@ class RegisterUserUseCaseImplTest {
         DeliveryEnvelope.of("cipher".getBytes(StandardCharsets.UTF_8), new byte[12], 1);
     private static final Instant FIXED_NOW = Instant.parse("2026-08-14T00:00:00Z");
     private static final Duration DEFAULT_TTL = Duration.ofHours(24);
+    private static final String FIRST_NAME = "Ada";
+    private static final String LAST_NAME = "Lovelace";
+    private static final String PHONE = "+5491100000000";
+    private static final LocalDate BIRTH_DATE = LocalDate.of(1990, 5, 17);
 
     @Mock private UserRepository userRepository;
     @Mock private PasswordEncoderPort passwordEncoder;
@@ -97,7 +103,7 @@ class RegisterUserUseCaseImplTest {
     @Test
     void rejects_admin_public_registration_before_any_write_or_lookup() {
         RegisterUserCommand command = new RegisterUserCommand(
-            "admin@example.com", "Sup3rSecret!", Role.ADMIN, "client-fp"
+            "admin@example.com", "Sup3rSecret!", Role.ADMIN, FIRST_NAME, LAST_NAME, PHONE, BIRTH_DATE, "client-fp"
         );
 
         assertThatThrownBy(() -> useCase.register(command))
@@ -114,7 +120,8 @@ class RegisterUserUseCaseImplTest {
     @Test
     void rejects_instructor_public_registration_before_any_write_or_lookup() {
         RegisterUserCommand command = new RegisterUserCommand(
-            "instructor@example.com", "Sup3rSecret!", Role.INSTRUCTOR, "client-fp"
+            "instructor@example.com", "Sup3rSecret!", Role.INSTRUCTOR,
+            FIRST_NAME, LAST_NAME, PHONE, BIRTH_DATE, "client-fp"
         );
 
         assertThatThrownBy(() -> useCase.register(command))
@@ -133,7 +140,7 @@ class RegisterUserUseCaseImplTest {
         when(activationRateLimitPort.consume(anyString(), any()))
             .thenReturn(RateLimitDecision.limited(Duration.ofSeconds(30)));
         RegisterUserCommand command = new RegisterUserCommand(
-            "student@example.com", "Sup3rSecret!", Role.STUDENT, "client-fp"
+            "student@example.com", "Sup3rSecret!", Role.STUDENT, FIRST_NAME, LAST_NAME, PHONE, BIRTH_DATE, "client-fp"
         );
 
         assertThatThrownBy(() -> useCase.register(command))
@@ -156,7 +163,7 @@ class RegisterUserUseCaseImplTest {
         allowRateLimit();
         when(userRepository.existsByEmail(any())).thenReturn(true);
         RegisterUserCommand command = new RegisterUserCommand(
-            "student@example.com", "Sup3rSecret!", Role.STUDENT, "client-fp"
+            "student@example.com", "Sup3rSecret!", Role.STUDENT, FIRST_NAME, LAST_NAME, PHONE, BIRTH_DATE, "client-fp"
         );
 
         assertThatThrownBy(() -> useCase.register(command))
@@ -176,7 +183,7 @@ class RegisterUserUseCaseImplTest {
         stubHappyPathCollaborators();
 
         UserResult result = useCase.register(new RegisterUserCommand(
-            "student@example.com", "Sup3rSecret!", null, "client-fp"
+            "student@example.com", "Sup3rSecret!", null, FIRST_NAME, LAST_NAME, PHONE, BIRTH_DATE, "client-fp"
         ));
 
         ArgumentCaptor<User> savedUser = ArgumentCaptor.forClass(User.class);
@@ -194,7 +201,7 @@ class RegisterUserUseCaseImplTest {
         stubHappyPathCollaborators();
 
         UserResult result = useCase.register(new RegisterUserCommand(
-            "student@example.com", "Sup3rSecret!", Role.STUDENT, "client-fp"
+            "student@example.com", "Sup3rSecret!", Role.STUDENT, FIRST_NAME, LAST_NAME, PHONE, BIRTH_DATE, "client-fp"
         ));
 
         assertThat(result.role()).isEqualTo(Role.STUDENT);
@@ -207,7 +214,7 @@ class RegisterUserUseCaseImplTest {
         stubHappyPathCollaborators();
 
         useCase.register(new RegisterUserCommand(
-            "student@example.com", "Sup3rSecret!", Role.STUDENT, "client-fp"
+            "student@example.com", "Sup3rSecret!", Role.STUDENT, FIRST_NAME, LAST_NAME, PHONE, BIRTH_DATE, "client-fp"
         ));
 
         ArgumentCaptor<ActivationToken> savedToken = ArgumentCaptor.forClass(ActivationToken.class);
@@ -224,7 +231,7 @@ class RegisterUserUseCaseImplTest {
         stubHappyPathCollaborators();
 
         useCase.register(new RegisterUserCommand(
-            "student@example.com", "Sup3rSecret!", Role.STUDENT, "client-fp"
+            "student@example.com", "Sup3rSecret!", Role.STUDENT, FIRST_NAME, LAST_NAME, PHONE, BIRTH_DATE, "client-fp"
         ));
 
         ArgumentCaptor<String> payload = ArgumentCaptor.forClass(String.class);
@@ -243,7 +250,7 @@ class RegisterUserUseCaseImplTest {
         stubHappyPathCollaborators();
 
         useCase.register(new RegisterUserCommand(
-            "student@example.com", "Sup3rSecret!", Role.STUDENT, "client-fp"
+            "student@example.com", "Sup3rSecret!", Role.STUDENT, FIRST_NAME, LAST_NAME, PHONE, BIRTH_DATE, "client-fp"
         ));
 
         ArgumentCaptor<String> plaintext = ArgumentCaptor.forClass(String.class);
@@ -258,7 +265,7 @@ class RegisterUserUseCaseImplTest {
         stubHappyPathCollaborators();
 
         useCase.register(new RegisterUserCommand(
-            "student@example.com", "Sup3rSecret!", Role.STUDENT, "client-fp"
+            "student@example.com", "Sup3rSecret!", Role.STUDENT, FIRST_NAME, LAST_NAME, PHONE, BIRTH_DATE, "client-fp"
         ));
 
         ArgumentCaptor<String> emailFingerprint = ArgumentCaptor.forClass(String.class);
@@ -275,7 +282,7 @@ class RegisterUserUseCaseImplTest {
         stubHappyPathCollaborators();
 
         customTtlUseCase.register(new RegisterUserCommand(
-            "student@example.com", "Sup3rSecret!", Role.STUDENT, "client-fp"
+            "student@example.com", "Sup3rSecret!", Role.STUDENT, FIRST_NAME, LAST_NAME, PHONE, BIRTH_DATE, "client-fp"
         ));
 
         ArgumentCaptor<ActivationToken> savedToken = ArgumentCaptor.forClass(ActivationToken.class);
@@ -283,5 +290,54 @@ class RegisterUserUseCaseImplTest {
         assertThat(Duration.between(savedToken.getValue().getCreatedAt(), savedToken.getValue().getExpiresAt()))
             .isEqualTo(Duration.ofHours(6))
             .isNotEqualTo(DEFAULT_TTL);
+    }
+
+    @Test
+    void persists_the_user_with_the_profile_from_the_command() {
+        allowRateLimit();
+        stubHappyPathCollaborators();
+
+        useCase.register(new RegisterUserCommand(
+            "student@example.com", "Sup3rSecret!", Role.STUDENT,
+            "  Ada ", " Lovelace", PHONE, BIRTH_DATE, "client-fp"
+        ));
+
+        ArgumentCaptor<User> savedUser = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(savedUser.capture());
+        assertThat(savedUser.getValue().getProfile())
+            .contains(new UserProfile("Ada", "Lovelace", PHONE, BIRTH_DATE));
+    }
+
+    @Test
+    void persists_the_user_without_a_birth_date_when_none_is_given() {
+        allowRateLimit();
+        stubHappyPathCollaborators();
+
+        useCase.register(new RegisterUserCommand(
+            "student@example.com", "Sup3rSecret!", Role.STUDENT,
+            FIRST_NAME, LAST_NAME, PHONE, null, "client-fp"
+        ));
+
+        ArgumentCaptor<User> savedUser = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(savedUser.capture());
+        assertThat(savedUser.getValue().getProfile().orElseThrow().birthDate()).isNull();
+    }
+
+    @Test
+    void rejects_an_invalid_profile_before_any_write_or_lookup() {
+        RegisterUserCommand command = new RegisterUserCommand(
+            "student@example.com", "Sup3rSecret!", Role.STUDENT,
+            FIRST_NAME, LAST_NAME, "not-a-phone", null, "client-fp"
+        );
+
+        assertThatThrownBy(() -> useCase.register(command))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Phone");
+
+        verifyNoInteractions(
+            userRepository, passwordEncoder, activationTokenRepository,
+            activationTokenGenerator, activationTokenHasher, activationDeliveryCipher,
+            activationRateLimitPort, outboxAppender, clock
+        );
     }
 }

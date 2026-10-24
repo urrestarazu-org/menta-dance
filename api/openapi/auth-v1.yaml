@@ -264,11 +264,16 @@ paths:
       summary: Registro público
       description: |
         Crea una cuenta `PENDING_ACTIVATION`, un token de un solo uso y un evento
-        durable de correo, todo en una transacción.
+        durable de correo, todo en una transacción. Además del email, la contraseña
+        y el rol, guarda los datos personales de la alumna o el alumno: `firstName`,
+        `lastName` y `phone` son obligatorios y `birthDate` es opcional.
 
-        **Responde siempre `202` vacío**, incluso si el email ya está registrado o
-        si se pide un rol distinto de `STUDENT`. Nunca devuelve el email, el ID ni
-        el estado de la cuenta: distinguir esos casos permitiría enumerar cuentas.
+        **Responde `202` vacío** cuando la solicitud es válida, incluso si el email ya
+        está registrado o si se pide un rol distinto de `STUDENT`. Nunca devuelve el
+        email, el ID ni el estado de la cuenta: distinguir esos casos permitiría
+        enumerar cuentas. Un cuerpo inválido (por ejemplo un teléfono que no está en
+        formato E.164, un nombre vacío o una fecha de nacimiento futura) responde
+        `400` genérico, sin eco de los valores enviados.
 
         Disponible también en `POST /api/v1/users/register`, alias temporal con el
         mismo comportamiento.
@@ -614,7 +619,7 @@ components:
 
     RegisterRequest:
       type: object
-      required: [email, password, role]
+      required: [email, password, role, firstName, lastName, phone]
       properties:
         email:
           type: string
@@ -626,6 +631,32 @@ components:
           example: SecurePass123!
         role:
           $ref: '#/components/schemas/Role'
+        firstName:
+          type: string
+          description: Nombre. Obligatorio; se recorta de espacios y admite hasta 100 caracteres.
+          minLength: 1
+          maxLength: 100
+          example: Ada
+        lastName:
+          type: string
+          description: Apellido. Obligatorio; se recorta de espacios y admite hasta 100 caracteres.
+          minLength: 1
+          maxLength: 100
+          example: Lovelace
+        phone:
+          type: string
+          description: |
+            Teléfono en formato E.164 ya normalizado: `+`, código de país y número,
+            sin espacios, guiones ni paréntesis (8 a 15 dígitos; el primero no puede
+            ser 0). El cliente web normaliza lo que escribe la persona antes de
+            enviarlo; la API lo valida de forma estricta y no lo reformatea.
+          pattern: '^\+[1-9]\d{7,14}$'
+          example: '+5491100000000'
+        birthDate:
+          type: string
+          format: date
+          description: Fecha de nacimiento (ISO 8601, `YYYY-MM-DD`). Opcional; si se envía debe ser anterior a hoy.
+          example: '1990-05-17'
       additionalProperties: false
 
     ResendActivationRequest:

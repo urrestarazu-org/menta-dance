@@ -58,14 +58,18 @@ class PageLayoutIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("/registro conserva el formulario, el CSRF y los campos email y password")
+    @DisplayName("/registro conserva el formulario, el CSRF y los campos de datos personales, email y password")
     void registerKeepsItsForm() throws Exception {
         String html = render("/registro");
 
         assertThat(html)
                 .contains("action=\"/registro\"")
                 .contains("name=\"_csrf\"")
+                .contains("name=\"firstName\"")
+                .contains("name=\"lastName\"")
                 .contains("name=\"email\"")
+                .contains("name=\"phone\"")
+                .contains("name=\"birthDate\"")
                 .contains("name=\"password\"")
                 .contains("href=\"/reenviar-activacion\"")
                 .contains("<title>Crear cuenta - Menta Dance</title>");

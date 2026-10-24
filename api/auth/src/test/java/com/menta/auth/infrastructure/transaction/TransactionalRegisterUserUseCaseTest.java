@@ -25,7 +25,7 @@ class TransactionalRegisterUserUseCaseTest {
     @Test
     void delegates_the_register_call_and_returns_its_result() {
         RegisterUserCommand command = new RegisterUserCommand(
-            "student@example.com", "Sup3rSecret!", Role.STUDENT, "client-fp"
+            "student@example.com", "Sup3rSecret!", Role.STUDENT, "Ada", "Lovelace", "+5491100000000", null, "client-fp"
         );
         UserResult expected = new UserResult(
             "user-id", "student@example.com", Role.STUDENT,

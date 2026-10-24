@@ -14,6 +14,7 @@ import com.menta.auth.domain.model.RefreshTokenStatus;
 import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.model.UserId;
+import com.menta.auth.domain.model.UserProfile;
 import com.menta.auth.domain.model.UserStatus;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.auth.infrastructure.persistence.entity.RefreshTokenJpaEntity;
@@ -214,7 +215,8 @@ class AuthFlowIntegrationTest {
         userRepository.save(User.register(
             Email.of(EMAIL),
             passwordEncoder.encode(RAW_PASSWORD),
-            Role.STUDENT
+            Role.STUDENT,
+            new UserProfile("Ada", "Lovelace", "+5491100000000", null)
         ));
 
         ResponseEntity<Map> wrongPassword = http.exchange(

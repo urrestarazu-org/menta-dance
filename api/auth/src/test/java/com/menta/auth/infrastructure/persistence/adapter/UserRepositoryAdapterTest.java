@@ -54,7 +54,7 @@ class UserRepositoryAdapterTest {
     void findById_maps_the_entity_when_found() {
         UserJpaEntity entity = new UserJpaEntity(
             USER_ID, "student@example.com", "hashed-password", Role.STUDENT,
-            UserStatus.ACTIVE, NOW, NOW, 1L
+            UserStatus.ACTIVE, NOW, NOW, 1L, null, null, null, null
         );
         when(jpaRepository.findById(USER_ID)).thenReturn(Optional.of(entity));
 
@@ -77,7 +77,7 @@ class UserRepositoryAdapterTest {
     void findByEmail_maps_the_entity_when_found() {
         UserJpaEntity entity = new UserJpaEntity(
             USER_ID, "student@example.com", "hashed-password", Role.STUDENT,
-            UserStatus.ACTIVE, NOW, NOW, 1L
+            UserStatus.ACTIVE, NOW, NOW, 1L, null, null, null, null
         );
         when(jpaRepository.findByEmail("student@example.com")).thenReturn(Optional.of(entity));
 

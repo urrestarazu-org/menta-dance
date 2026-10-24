@@ -8,8 +8,11 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
+import lombok.Getter;
+import lombok.Setter;
 
 /**
  * JPA entity for User.
@@ -46,6 +49,28 @@ public class UserJpaEntity {
     @Column(name = "token_version", nullable = false)
     private long tokenVersion;
 
+    /** Personal data given at registration; null for accounts created before the profile existed. */
+    @Getter
+    @Setter
+    @Column(name = "first_name", length = 100)
+    private String firstName;
+
+    @Getter
+    @Setter
+    @Column(name = "last_name", length = 100)
+    private String lastName;
+
+    /** Phone in E.164 format. */
+    @Getter
+    @Setter
+    @Column(name = "phone", length = 20)
+    private String phone;
+
+    @Getter
+    @Setter
+    @Column(name = "birth_date")
+    private LocalDate birthDate;
+
     // JPA requires default constructor
     protected UserJpaEntity() {
     }
@@ -58,7 +83,11 @@ public class UserJpaEntity {
         UserStatus status,
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
-        long tokenVersion
+        long tokenVersion,
+        String firstName,
+        String lastName,
+        String phone,
+        LocalDate birthDate
     ) {
         this.id = id;
         this.email = email;
@@ -68,6 +97,10 @@ public class UserJpaEntity {
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
         this.tokenVersion = tokenVersion;
+        this.firstName = firstName;
+        this.lastName = lastName;
+        this.phone = phone;
+        this.birthDate = birthDate;
     }
 
     // Getters and setters
