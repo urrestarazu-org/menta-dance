@@ -305,31 +305,65 @@
  */
 @layer components {
   .auth-shell {
-    @apply bg-gradient-to-br from-brand-action to-brand-bright px-4 py-10 sm:py-14;
+    @apply bg-brand-action px-4 py-10 sm:py-14;
   }
 
   .auth-card {
     @apply mx-auto grid w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-xl md:grid-cols-2;
   }
 
+  /* Brand name and logo centered, the welcome text at the bottom, as in the reference. */
   .auth-aside {
-    @apply flex flex-col items-center justify-center gap-4 bg-brand-deep p-8 text-center text-brand-surface;
+    @apply flex flex-col justify-between gap-8 bg-brand-deep p-8 text-brand-surface sm:p-12;
+  }
+
+  .auth-aside-brand {
+    @apply my-auto flex flex-col items-center gap-6 text-center;
   }
 
   .auth-aside .site-brand-logo {
-    @apply h-24 w-24;
+    @apply h-32 w-32;
   }
 
   .auth-aside-name {
-    @apply text-2xl font-bold;
+    @apply text-3xl font-bold text-white;
   }
 
   .auth-body {
     @apply p-6 sm:p-10;
   }
 
+  .auth-body h1 {
+    @apply text-2xl;
+  }
+
   .auth-body .card {
     @apply rounded-none border-0 bg-transparent p-0 shadow-none;
+  }
+
+  /* Softer controls than the rest of the site: grey fill, light border, smaller text. */
+  .auth-body .field-label {
+    @apply text-sm text-brand-deep;
+  }
+
+  .auth-body .field-input {
+    @apply border-gray-200 bg-gray-50;
+  }
+
+  .auth-body .field-input[aria-invalid='true'] {
+    @apply border-feedback-error;
+  }
+
+  .auth-body .btn-primary {
+    @apply py-3 text-lg;
+  }
+
+  .auth-body a {
+    @apply font-medium no-underline hover:underline;
+  }
+
+  .auth-body form ~ p {
+    @apply text-center text-sm;
   }
 }
 

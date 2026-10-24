@@ -67,8 +67,10 @@
 <main id="main" tabindex="-1" class="auth-shell flex-1 focus:outline-none">
     <div class="auth-card">
         <div class="auth-aside">
-            <span class="site-brand-logo"><img th:src="@{/images/brand/menta-m.png}" alt="" width="96" height="96"></span>
-            <p class="auth-aside-name">Menta Dance</p>
+            <div class="auth-aside-brand">
+                <p class="auth-aside-name">Menta Dance</p>
+                <span class="site-brand-logo"><img th:src="@{/images/brand/menta-m.png}" alt="" width="96" height="96"></span>
+            </div>
             <p th:text="${tagline}">Tagline</p>
         </div>
         <div class="auth-body" th:insert="${content}">Contenido</div>

@@ -14,7 +14,7 @@
     </div>
 
     <form th:action="@{/reenviar-activacion}" th:object="${form}" method="post" novalidate class="card space-y-4">
-        <div th:replace="~{fragments/components :: field('email', 'Email:', 'email', 'email', 'username', *{email}, null, true, ${#fields.errors('email')})}"></div>
+        <div th:replace="~{fragments/components :: field('email', 'Email', 'email', 'email', 'username', *{email}, null, true, ${#fields.errors('email')})}"></div>
 
         <button type="submit" class="btn btn-primary w-full">Reenviar activación</button>
     </form>

@@ -1,9 +1,11 @@
 package com.menta.bff.infrastructure.web.dto;
 
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import java.util.Objects;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -37,6 +39,19 @@ public class RegisterForm {
     @Pattern(regexp = "(?s).*\\p{javaUpperCase}.*", message = "La contraseña debe incluir al menos una mayúscula")
     @Pattern(regexp = "(?s).*\\p{javaDigit}.*", message = "La contraseña debe incluir al menos un número")
     private String password;
+
+    private String passwordConfirmation;
+
+    /**
+     * Checks that the confirmation repeats the password. It is a form-only check: the API never sees
+     * the confirmation.
+     *
+     * @return true when both values are equal
+     */
+    @AssertTrue(message = "Las contraseñas no coinciden")
+    public boolean isPasswordConfirmed() {
+        return Objects.equals(password, passwordConfirmation);
+    }
 
     /**
      * Stores the email without surrounding whitespace, which a paste often adds.

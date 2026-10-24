@@ -80,11 +80,24 @@ class RegistrationControllerTest {
     @Test
     @DisplayName("a valid submission registers a STUDENT and redirects to the pending screen")
     void validSubmissionRegistersAStudent() throws Exception {
-        mockMvc.perform(post("/registro").param("email", " ana@example.com ").param("password", "Secreta123"))
+        mockMvc.perform(post("/registro").param("email", " ana@example.com ")
+                        .param("password", "Secreta123").param("passwordConfirmation", "Secreta123"))
                 .andExpect(view().name("redirect:/registro/pendiente"));
 
         verify(registerAccountUseCase)
                 .execute(RegisterCommand.student("ana@example.com", "Secreta123", "127.0.0.1"));
+    }
+
+    @Test
+    @DisplayName("a confirmation that differs from the password re-renders the form and skips the API")
+    void mismatchedConfirmationNeverCallsTheApi() throws Exception {
+        mockMvc.perform(post("/registro").param("email", "ana@example.com")
+                        .param("password", "Secreta123").param("passwordConfirmation", "Otra12345"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("register"))
+                .andExpect(model().attributeHasFieldErrors("form", "passwordConfirmed"));
+
+        verifyNoInteractions(registerAccountUseCase);
     }
 
     @ParameterizedTest
@@ -93,7 +106,8 @@ class RegistrationControllerTest {
     void apiFailuresReRenderTheForm(RuntimeException failure, int expectedStatus) throws Exception {
         doThrow(failure).when(registerAccountUseCase).execute(any());
 
-        mockMvc.perform(post("/registro").param("email", "ana@example.com").param("password", "Secreta123"))
+        mockMvc.perform(post("/registro").param("email", "ana@example.com")
+                        .param("password", "Secreta123").param("passwordConfirmation", "Secreta123"))
                 .andExpect(status().is(expectedStatus))
                 .andExpect(view().name("register"))
                 .andExpect(model().attributeExists("formError"));

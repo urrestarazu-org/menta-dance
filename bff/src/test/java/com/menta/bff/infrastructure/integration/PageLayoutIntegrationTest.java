@@ -48,6 +48,16 @@ class PageLayoutIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("/login invita a crear una cuenta con un enlace a /registro dentro del contenido")
+    void loginLinksToRegistration() throws Exception {
+        String main = HtmlSections.mainOf(render("/login"));
+
+        assertThat(main)
+                .contains("¿No tenés una cuenta?")
+                .containsPattern("<a[^>]*href=\"/registro\"[^>]*>Registrate aquí</a>");
+    }
+
+    @Test
     @DisplayName("/registro conserva el formulario, el CSRF y los campos email y password")
     void registerKeepsItsForm() throws Exception {
         String html = render("/registro");

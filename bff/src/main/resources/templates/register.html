@@ -11,8 +11,9 @@
     </div>
 
     <form th:action="@{/registro}" th:object="${form}" method="post" novalidate class="card space-y-4">
-        <div th:replace="~{fragments/components :: field('email', 'Email:', 'email', 'email', 'username', *{email}, null, true, ${#fields.errors('email')})}"></div>
-        <div th:replace="~{fragments/components :: field('password', 'Contraseña:', 'password', 'password', 'new-password', null, 'Al menos 8 caracteres, una mayúscula y un número.', false, ${#fields.errors('password')})}"></div>
+        <div th:replace="~{fragments/components :: field('email', 'Email', 'email', 'email', 'username', *{email}, null, true, ${#fields.errors('email')})}"></div>
+        <div th:replace="~{fragments/components :: field('password', 'Contraseña', 'password', 'password', 'new-password', null, 'Al menos 8 caracteres, una mayúscula y un número.', false, ${#fields.errors('password')})}"></div>
+        <div th:replace="~{fragments/components :: field('passwordConfirmation', 'Repetí la contraseña', 'password', 'passwordConfirmation', 'new-password', null, null, false, ${#fields.errors('passwordConfirmed')})}"></div>
 
         <button type="submit" class="btn btn-primary w-full">Crear cuenta</button>
     </form>
