@@ -1,18 +1,56 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security"
-      th:replace="~{fragments/layout :: page('Inicio', ~{::main-content})}">
+      th:replace="~{fragments/layout :: landing('Inicio', ~{::main-content})}">
 <body>
 <th:block th:fragment="main-content">
-<h1 class="mb-4">Menta Dance</h1>
+<section class="hero" aria-labelledby="hero-title">
+    <div class="max-w-3xl">
+        <h1 id="hero-title">Aprendé a tu ritmo y desarrollá tu propio estilo.</h1>
+        <p class="hero-lead">Clases de baile online y presenciales para todos los niveles. Creá tu cuenta y empezá a bailar.</p>
+        <div class="mt-8 flex flex-wrap justify-center gap-3">
+            <a class="btn btn-light btn-lg" sec:authorize="!isAuthenticated()" th:href="@{/login}">Iniciar sesión</a>
+            <a class="btn btn-outline-light btn-lg" sec:authorize="!isAuthenticated()" th:href="@{/registro}">Crear cuenta</a>
+            <a class="btn btn-light btn-lg" sec:authorize="isAuthenticated()" th:href="@{/dashboard}">Ir a mi panel</a>
+            <a class="site-nav-link w-full text-lg" th:href="@{/classes}">Ver clases presenciales</a>
+        </div>
+    </div>
+</section>
 
-<nav aria-label="Accesos principales" class="mb-8 flex flex-wrap gap-3">
-    <a class="btn btn-primary" sec:authorize="isAuthenticated()" th:href="@{/dashboard}">Ir a mi panel</a>
-    <a class="btn btn-primary" sec:authorize="!isAuthenticated()" th:href="@{/login}">Iniciar sesión</a>
-    <a class="btn btn-secondary" sec:authorize="!isAuthenticated()" th:href="@{/registro}">Crear cuenta</a>
-    <a class="btn btn-secondary" th:href="@{/classes}">Clases presenciales</a>
-</nav>
+<section class="container-page py-12" aria-labelledby="benefits-title">
+    <div class="mb-10 text-center">
+        <h2 id="benefits-title">Beneficios de aprender en Menta Dance</h2>
+        <p class="mt-2 text-lg">Elegí cómo bailar: desde tu casa o en el salón.</p>
+    </div>
+    <ul class="grid gap-6 md:grid-cols-3">
+        <li class="card text-center">
+            <svg class="benefit-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M10 8.5l6 3.5-6 3.5v-7z"></path>
+            </svg>
+            <h3>Clases en video</h3>
+            <p class="mt-2">Cursos grabados con lecciones que podés ver desde cualquier lugar.</p>
+        </li>
+        <li class="card text-center">
+            <svg class="benefit-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 21s-6-5.33-6-10a6 6 0 1112 0c0 4.67-6 10-6 10z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M14 11a2 2 0 11-4 0 2 2 0 014 0z"></path>
+            </svg>
+            <h3>Clases presenciales</h3>
+            <p class="mt-2">Elegí tu sesión, mirá los lugares disponibles y reservá comprando online.</p>
+        </li>
+        <li class="card text-center">
+            <svg class="benefit-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 7v5l3 2"></path>
+            </svg>
+            <h3>A tu ritmo</h3>
+            <p class="mt-2">Avanzá a tu tiempo y retomá donde dejaste, con tu progreso guardado.</p>
+        </li>
+    </ul>
+</section>
 
-<h2 class="mb-4">Cursos</h2>
+<section class="container-page pb-12" aria-labelledby="courses-title">
+<h2 id="courses-title" class="mb-4">Cursos</h2>
 
 <nav aria-label="Filtrar por modalidad" class="mb-6 flex flex-wrap items-center gap-3">
     <a class="btn btn-secondary" th:href="@{/}" th:unless="${catalog.selected() == null}">Todos</a>
@@ -43,6 +81,7 @@
         </p>
     </li>
 </ul>
+</section>
 </th:block>
 </body>
 </html>

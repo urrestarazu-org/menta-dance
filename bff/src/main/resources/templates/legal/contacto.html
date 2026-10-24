@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('Contacto', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<article class="legal">
+    <h1 class="mb-4">Contacto</h1>
+    <p>Escribinos por cualquiera de estos medios. Para consultas sobre una compra, indicá el email de tu cuenta.</p>
+
+    <div class="alert alert-info mb-6" role="status" th:if="${contact.empty}">
+        <p>Datos de contacto pendientes de configuración.</p>
+    </div>
+
+    <ul class="grid list-none gap-4 pl-0 sm:grid-cols-2" th:unless="${contact.empty}">
+        <li class="card" th:if="${contact.hasEmail()}">
+            <h2 class="mt-0">Correo electrónico</h2>
+            <p><a th:href="|mailto:${contact.email}|" th:text="${contact.email}">email</a></p>
+        </li>
+        <li class="card" th:if="${contact.hasPhone()}">
+            <h2 class="mt-0">Teléfono</h2>
+            <p><a th:href="|tel:${contact.phoneHref()}|" th:text="${contact.phone}">teléfono</a></p>
+        </li>
+        <li class="card" th:if="${contact.hasAddress()}">
+            <h2 class="mt-0">Domicilio</h2>
+            <p th:text="${contact.address}">domicilio</p>
+        </li>
+    </ul>
+
+    <h2>Información legal</h2>
+    <ul>
+        <li><a th:href="@{/terminos-condiciones}">Términos y condiciones</a></li>
+        <li><a th:href="@{/politica-privacidad}">Política de privacidad</a></li>
+        <li><a th:href="@{/politica-devolucion}">Política de devolución</a></li>
+    </ul>
+</article>
+</th:block>
+</body>
+</html>

@@ -61,6 +61,7 @@ class RegistrationIntegrationTest extends BaseIntegrationTest {
         mockMvc.perform(post("/registro")
                         .param(fieldName(EMAIL_FIELD, html), "ana@example.com")
                         .param(fieldName(PASSWORD_FIELD, html), "Secreta123")
+                        .param("passwordConfirmation", "Secreta123")
                         .with(csrf()))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/registro/pendiente"));
@@ -88,6 +89,21 @@ class RegistrationIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("the form asks to repeat the password and flags a mismatch in Spanish")
+    void mismatchedConfirmationShowsSpanishError() throws Exception {
+        String body = mockMvc.perform(post("/registro")
+                        .param("email", "ana@example.com")
+                        .param("password", "Secreta123")
+                        .param("passwordConfirmation", "Otra12345")
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(body).contains("name=\"passwordConfirmation\"").contains("Las contraseñas no coinciden");
+        assertThat(WIRE_MOCK_SERVER.findAll(postRequestedFor(urlEqualTo(REGISTER_URL)))).isEmpty();
+    }
+
+    @Test
     @DisplayName("a rate-limited registration shows the Spanish 429 message without API internals")
     void rateLimitedRegistrationShowsSpanishMessage() throws Exception {
         WIRE_MOCK_SERVER.stubFor(WireMock.post(urlEqualTo(REGISTER_URL))
@@ -97,6 +113,7 @@ class RegistrationIntegrationTest extends BaseIntegrationTest {
         String body = mockMvc.perform(post("/registro")
                         .param("email", "ana@example.com")
                         .param("password", "Secreta123")
+                        .param("passwordConfirmation", "Secreta123")
                         .with(csrf()))
                 .andExpect(status().isTooManyRequests())
                 .andReturn().getResponse().getContentAsString();

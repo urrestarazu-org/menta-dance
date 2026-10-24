@@ -145,6 +145,11 @@ services:
 
       MENTA_TRUSTED_PROXY_CIDRS: ${MENTA_NETWORK_SUBNET:-172.29.250.0/24}
 
+      # Datos de la página /contacto (#650); vacío = no se muestra
+      MENTA_CONTACT_EMAIL: ${MENTA_CONTACT_EMAIL:-}
+      MENTA_CONTACT_PHONE: ${MENTA_CONTACT_PHONE:-}
+      MENTA_CONTACT_ADDRESS: ${MENTA_CONTACT_ADDRESS:-}
+
       JAVA_OPTS: ${BFF_JAVA_OPTS:--XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC}
     networks:
       - menta-network

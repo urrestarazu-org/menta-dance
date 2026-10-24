@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('Propiedad intelectual', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<article class="legal">
+    <h1 class="mb-4">Propiedad intelectual</h1>
+    <div th:replace="~{fragments/legal :: review-notice}"></div>
+
+    <p>Los contenidos de Menta Dance están protegidos por la Ley 11.723 de Propiedad Intelectual de la
+        República Argentina y por los tratados internacionales aplicables.</p>
+
+    <h2>1. A quién pertenecen</h2>
+    <p>Los videos, las coreografías, los textos, las imágenes, el logotipo, la marca y el diseño del sitio
+        pertenecen a Menta Dance o a sus autores, que han autorizado su uso.</p>
+
+    <h2>2. Qué podés hacer</h2>
+    <p>Al contratar un curso o un plan recibís una licencia personal, limitada y no transferible para ver los
+        contenidos con fines de aprendizaje propio, mientras tu acceso esté vigente.</p>
+
+    <h2>3. Qué no podés hacer</h2>
+    <ul>
+        <li>Copiar, descargar, grabar o redistribuir los videos y materiales.</li>
+        <li>Compartir tu cuenta o tus credenciales con otras personas.</li>
+        <li>Usar la marca, el logotipo o los contenidos con fines comerciales sin autorización escrita.</li>
+    </ul>
+
+    <h2>4. Imágenes y videos de las clases</h2>
+    <p>Las clases presenciales pueden registrarse en foto o video para difundir la actividad de la academia. Si
+        no querés aparecer, avisalo al equipo en la clase o desde la página de
+        <a th:href="@{/contacto}">contacto</a>.</p>
+
+    <h2>5. Infracciones</h2>
+    <p>Si creés que un contenido del sitio infringe derechos de terceros, escribinos y lo revisaremos. El uso
+        indebido puede implicar la suspensión de la cuenta, según los
+        <a th:href="@{/terminos-condiciones}">términos y condiciones</a>.</p>
+</article>
+</th:block>
+</body>
+</html>

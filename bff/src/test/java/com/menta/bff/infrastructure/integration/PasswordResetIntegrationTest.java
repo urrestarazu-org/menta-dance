@@ -5,6 +5,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static com.menta.bff.infrastructure.integration.HtmlSections.mainOf;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -258,7 +259,7 @@ class PasswordResetIntegrationTest extends BaseIntegrationTest {
                 page(submitReset(resetPage(), PASSWORD, PASSWORD)), resetPage());
 
         for (String html : pages) {
-            Matcher links = HREF.matcher(html);
+            Matcher links = HREF.matcher(mainOf(html));
             while (links.find()) {
                 int httpStatus = mockMvc.perform(get(links.group(1))).andReturn().getResponse().getStatus();
                 assertThat(httpStatus).withFailMessage("Dead link %s -> %s", links.group(1), httpStatus)

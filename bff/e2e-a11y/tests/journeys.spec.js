@@ -62,8 +62,8 @@ test.describe('authentication pages', () => {
   test('login error state', async ({ page }) => {
     await page.goto('/login');
     // Unknown account on purpose: never lock or rate-limit a real demo user.
-    await page.getByLabel('Email:').fill('no-such-user@example.invalid');
-    await page.getByLabel('Contraseña:').fill('Wrong-password-1');
+    await page.getByLabel('Email', { exact: true }).fill('no-such-user@example.invalid');
+    await page.getByLabel('Contraseña', { exact: true }).fill('Wrong-password-1');
     await page.getByRole('button', { name: 'Iniciar Sesión' }).click();
     await expect(page.getByRole('alert')).toBeVisible();
     await expectNoBlockingViolations(page, 'login error');
@@ -75,8 +75,8 @@ test.describe('authentication pages', () => {
 
   test('register validation errors', async ({ page }) => {
     await page.goto('/registro');
-    await page.getByLabel('Email:').fill('not-an-email');
-    await page.getByLabel('Contraseña:').fill('short');
+    await page.getByLabel('Email', { exact: true }).fill('not-an-email');
+    await page.getByLabel('Contraseña', { exact: true }).fill('short');
     await page.getByRole('button', { name: 'Crear cuenta' }).click();
     await expect(page.locator('[aria-invalid="true"]').first()).toBeVisible();
     await expectNoBlockingViolations(page, 'register errors');
@@ -94,8 +94,8 @@ test.describe('authentication pages', () => {
 test.describe('signed-in student', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/login');
-    await page.getByLabel('Email:').fill(DEMO_STUDENT.email);
-    await page.getByLabel('Contraseña:').fill(DEMO_STUDENT.password);
+    await page.getByLabel('Email', { exact: true }).fill(DEMO_STUDENT.email);
+    await page.getByLabel('Contraseña', { exact: true }).fill(DEMO_STUDENT.password);
     await page.getByRole('button', { name: 'Iniciar Sesión' }).click();
     await expect(page).toHaveURL(/\/dashboard$/);
   });

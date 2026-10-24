@@ -143,6 +143,7 @@ class AccountViewsLayoutIntegrationTest extends BaseIntegrationTest {
                 .contains("Código: 404")
                 .contains("role=\"alert\"")
                 .contains("Volver al inicio")
+                .containsPattern("<a[^>]*class=\"btn btn-primary\"[^>]*href=\"/\"[^>]*>\\s*Volver al inicio")
                 .doesNotContain("Go to Home")
                 .doesNotContain("Not Found")
                 .contains("href=\"/\"")

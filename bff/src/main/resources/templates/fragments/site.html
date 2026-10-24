@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<body>
+<!--
+  Site chrome shared by every page through fragments/layout: the dark header
+  with the brand and the account links, and the footer. No JavaScript: the
+  mobile menu is a <details> disclosure, and the icons are inline SVG, so the
+  CSP (default-src 'self') holds.
+-->
+
+<th:block th:fragment="account-links(linkClass)">
+    <a th:class="${linkClass}" sec:authorize="isAuthenticated()" th:href="@{/dashboard}">Ir a mi panel</a>
+    <form class="m-0" sec:authorize="isAuthenticated()" th:action="@{/logout}" method="post">
+        <button type="submit" th:class="${linkClass}">Cerrar sesión</button>
+    </form>
+    <a class="btn btn-light" sec:authorize="!isAuthenticated()" th:href="@{/login}">Iniciar sesión</a>
+    <a class="btn btn-outline-light" sec:authorize="!isAuthenticated()" th:href="@{/registro}">Crear cuenta</a>
+</th:block>
+
+<header class="site-header" th:fragment="header">
+    <div class="container-page relative flex items-center justify-between gap-4 py-3">
+        <a th:href="@{/}" class="site-brand">
+            <span class="site-brand-logo"><img th:src="@{/images/brand/menta-m.png}" alt="" width="40" height="40"></span>
+            <span class="max-[379px]:sr-only">Menta Dance</span>
+        </a>
+
+        <nav aria-label="Navegación principal" class="hidden items-center gap-3 md:flex">
+            <a class="site-nav-link" th:href="@{/classes}">Clases presenciales</a>
+            <a class="site-nav-link" th:href="@{/plans}">Planes</a>
+            <th:block th:replace="~{:: account-links('site-nav-link')}"></th:block>
+        </nav>
+
+        <div class="flex items-center gap-2 md:hidden">
+            <a class="btn btn-light px-4 py-1.5 text-sm" sec:authorize="!isAuthenticated()" th:href="@{/login}">Iniciar sesión</a>
+            <a class="site-nav-link" sec:authorize="isAuthenticated()" th:href="@{/dashboard}">Ir a mi panel</a>
+            <details class="site-menu">
+                <summary aria-label="Menú de navegación">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"></path>
+                    </svg>
+                </summary>
+                <nav aria-label="Navegación principal móvil" class="site-menu-panel">
+                    <a class="site-nav-link" th:href="@{/classes}">Clases presenciales</a>
+                    <a class="site-nav-link" th:href="@{/plans}">Planes</a>
+                    <th:block th:replace="~{:: account-links('site-nav-link')}"></th:block>
+                </nav>
+            </details>
+        </div>
+    </div>
+</header>
+
+<footer class="site-footer" th:fragment="footer">
+    <div class="container-page py-10">
+        <div class="grid gap-8 md:grid-cols-3">
+            <div>
+                <p class="text-lg font-semibold text-brand-surface">Menta Dance</p>
+                <p class="mt-2">Academia de danza con clases online y presenciales.</p>
+            </div>
+            <nav aria-label="Pie de página" class="grid gap-8 sm:grid-cols-2 md:col-span-2">
+                <div>
+                    <h2 class="site-footer-title">Explorar</h2>
+                    <ul class="space-y-2">
+                        <li><a th:href="@{/}">Inicio</a></li>
+                        <li><a th:href="@{/classes}">Clases presenciales</a></li>
+                        <li><a th:href="@{/plans}">Planes</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h2 class="site-footer-title">Tu cuenta</h2>
+                    <ul class="space-y-2">
+                        <li sec:authorize="isAuthenticated()"><a th:href="@{/dashboard}">Mi panel</a></li>
+                        <li sec:authorize="!isAuthenticated()"><a th:href="@{/login}">Iniciar sesión</a></li>
+                        <li sec:authorize="!isAuthenticated()"><a th:href="@{/registro}">Crear cuenta</a></li>
+                    </ul>
+                </div>
+            </nav>
+        </div>
+        <nav aria-label="Información legal" class="mt-8 border-t border-brand-light/20 pt-4">
+            <h2 class="site-footer-title">Información legal</h2>
+            <ul class="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+                <li><a th:href="@{/terminos-condiciones}">Términos y condiciones</a></li>
+                <li><a th:href="@{/politica-privacidad}">Política de privacidad</a></li>
+                <li><a th:href="@{/politica-cookies}">Política de cookies</a></li>
+                <li><a th:href="@{/politica-devolucion}">Política de devolución</a></li>
+                <li><a th:href="@{/propiedad-intelectual}">Propiedad intelectual</a></li>
+                <li><a th:href="@{/accesibilidad}">Accesibilidad</a></li>
+                <li><a th:href="@{/contacto}">Contacto</a></li>
+            </ul>
+        </nav>
+        <p class="mt-6 text-sm"
+           th:text="|© ${#temporals.year(#temporals.createNow())} Menta Dance. Todos los derechos reservados.|">&copy; 2026 Menta Dance</p>
+    </div>
+</footer>
+</body>
+</html>

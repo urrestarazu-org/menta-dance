@@ -208,3 +208,180 @@
     @apply border-brand-deep/40 bg-white text-brand-deep;
   }
 }
+
+/*
+ * Site chrome and landing blocks (#649): dark header, hero and footer.
+ * White (or brand-light) text on brand-deep keeps contrast above AA; links
+ * inside these blocks drop the global underline and are styled explicitly.
+ */
+@layer components {
+  .site-header {
+    @apply bg-brand-deep text-brand-surface;
+  }
+
+  .site-brand {
+    @apply flex items-center gap-3 text-xl font-semibold text-brand-surface no-underline;
+  }
+
+  /* The logo PNG has a white background: multiply it over the palette's off-white. */
+  .site-brand-logo {
+    @apply isolate inline-flex h-10 w-10 overflow-hidden rounded-full bg-brand-surface;
+  }
+
+  .site-brand-logo img {
+    @apply h-full w-full mix-blend-multiply;
+  }
+
+  .site-nav-link {
+    @apply rounded px-2 py-1 font-medium text-brand-surface underline-offset-4 hover:text-brand-light hover:underline;
+  }
+
+  /* Buttons that sit on the dark header, hero and footer. */
+  .btn-light {
+    @apply bg-brand-light text-brand-deep hover:bg-brand-bright;
+  }
+
+  .btn-outline-light {
+    @apply border border-brand-light bg-transparent text-brand-light hover:bg-brand-light/15;
+  }
+
+  .btn-lg {
+    @apply px-8 py-3 text-lg;
+  }
+
+  /* Mobile menu without JavaScript: a <details> disclosure. */
+  .site-menu > summary {
+    @apply flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded text-brand-surface;
+  }
+
+  .site-menu > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .site-menu-panel {
+    @apply absolute inset-x-0 top-full z-10 flex flex-col gap-2 bg-brand-deep px-4 py-4 shadow-lg;
+  }
+
+  .hero {
+    @apply flex min-h-[26rem] items-center justify-center bg-brand-deep bg-cover px-4 py-16 text-center text-brand-surface;
+    background-image: linear-gradient(rgb(4 63 46 / 0.55), rgb(4 63 46 / 0.85)), url('/images/hero/salon.jpg');
+  }
+
+  @media (max-width: 640px) {
+    .hero {
+      background-image: linear-gradient(rgb(4 63 46 / 0.55), rgb(4 63 46 / 0.85)), url('/images/hero/salon-960.jpg');
+    }
+  }
+
+  .hero h1 {
+    @apply text-4xl font-black text-brand-surface sm:text-5xl;
+  }
+
+  .hero-lead {
+    @apply mx-auto mt-4 max-w-2xl text-xl font-light;
+  }
+
+  .benefit-icon {
+    @apply mx-auto mb-4 h-12 w-12 text-brand-action;
+  }
+
+  .site-footer {
+    @apply bg-brand-deep text-brand-surface/90;
+  }
+
+  .site-footer a {
+    @apply text-brand-surface hover:text-brand-light;
+  }
+
+  .site-footer-title {
+    @apply mb-3 text-base font-semibold text-brand-light;
+  }
+}
+
+/*
+ * Account screens (#651): a card with a brand panel next to the form, over a
+ * green gradient built from the palette. Forms inside lose their own card so
+ * the two panels do not nest cards.
+ */
+@layer components {
+  .auth-shell {
+    @apply bg-brand-action px-4 py-10 sm:py-14;
+  }
+
+  .auth-card {
+    @apply mx-auto grid w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-xl md:grid-cols-2;
+  }
+
+  /* Brand name and logo centered, the welcome text at the bottom, as in the reference. */
+  .auth-aside {
+    @apply flex flex-col justify-between gap-8 bg-brand-deep p-8 text-brand-surface sm:p-12;
+  }
+
+  .auth-aside-brand {
+    @apply my-auto flex flex-col items-center gap-6 text-center;
+  }
+
+  .auth-aside .site-brand-logo {
+    @apply h-32 w-32;
+  }
+
+  .auth-aside-name {
+    @apply text-3xl font-bold text-white;
+  }
+
+  .auth-body {
+    @apply p-6 sm:p-10;
+  }
+
+  .auth-body h1 {
+    @apply text-2xl;
+  }
+
+  .auth-body .card {
+    @apply rounded-none border-0 bg-transparent p-0 shadow-none;
+  }
+
+  /* Softer controls than the rest of the site: grey fill, light border, smaller text. */
+  .auth-body .field-label {
+    @apply text-sm text-brand-deep;
+  }
+
+  .auth-body .field-input {
+    @apply border-gray-200 bg-gray-50;
+  }
+
+  .auth-body .field-input[aria-invalid='true'] {
+    @apply border-feedback-error;
+  }
+
+  .auth-body .btn-primary {
+    @apply py-3 text-lg;
+  }
+
+  .auth-body a {
+    @apply font-medium no-underline hover:underline;
+  }
+
+  .auth-body form ~ p {
+    @apply text-center text-sm;
+  }
+}
+
+@layer components {
+  /* Long-form text of the legal pages (#650): the base headings and links stay, only the rhythm is set. */
+  .legal {
+    @apply mx-auto max-w-3xl;
+  }
+
+  .legal h2 {
+    @apply mb-2 mt-8;
+  }
+
+  .legal p {
+    @apply mb-3;
+  }
+
+  .legal ul {
+    @apply mb-3 list-disc space-y-1 pl-6;
+  }
+}

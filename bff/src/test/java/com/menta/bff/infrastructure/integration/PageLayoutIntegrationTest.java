@@ -48,6 +48,16 @@ class PageLayoutIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("/login invita a crear una cuenta con un enlace a /registro dentro del contenido")
+    void loginLinksToRegistration() throws Exception {
+        String main = HtmlSections.mainOf(render("/login"));
+
+        assertThat(main)
+                .contains("¿No tenés una cuenta?")
+                .containsPattern("<a[^>]*href=\"/registro\"[^>]*>Registrate aquí</a>");
+    }
+
+    @Test
     @DisplayName("/registro conserva el formulario, el CSRF y los campos email y password")
     void registerKeepsItsForm() throws Exception {
         String html = render("/registro");
@@ -59,6 +69,27 @@ class PageLayoutIntegrationTest extends BaseIntegrationTest {
                 .contains("name=\"password\"")
                 .contains("href=\"/reenviar-activacion\"")
                 .contains("<title>Crear cuenta - Menta Dance</title>");
+    }
+
+    @ParameterizedTest(name = "{0} usa la tarjeta de dos paneles")
+    @ValueSource(strings = {"/login", "/registro", "/recuperar-contrasena", "/reenviar-activacion"})
+    @DisplayName("las pantallas de cuenta muestran un panel de marca con logo junto al formulario")
+    void accountPagesUseTheTwoPanelCard(String path) throws Exception {
+        String html = render(path);
+
+        assertThat(html).contains("auth-card").contains("auth-aside");
+        String aside = html.substring(html.indexOf("auth-aside"), html.indexOf("auth-body"));
+        assertThat(aside).contains("/images/brand/menta-m.png").contains("Menta Dance");
+        assertThat(html.indexOf("<form")).as("the form sits in the second panel")
+                .isGreaterThan(html.indexOf("auth-body"));
+        assertThat(html.split("<h1", -1)).as("single h1").hasSize(2);
+    }
+
+    @Test
+    @DisplayName("el login y el registro tienen cada uno su mensaje de bienvenida en el panel")
+    void loginAndRegisterHaveTheirOwnWelcome() throws Exception {
+        assertThat(render("/login")).contains("Iniciá sesión para continuar");
+        assertThat(render("/registro")).contains("Creá tu cuenta para empezar a bailar");
     }
 
     private String render(String path) throws Exception {

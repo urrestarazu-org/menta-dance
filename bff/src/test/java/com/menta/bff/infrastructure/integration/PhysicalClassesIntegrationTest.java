@@ -2,6 +2,7 @@ package com.menta.bff.infrastructure.integration;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static com.menta.bff.infrastructure.integration.HtmlSections.mainOf;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -88,7 +89,7 @@ class PhysicalClassesIntegrationTest extends BaseIntegrationTest {
     /** Follows every internal link of the page anonymously; none may answer 4xx or 5xx. */
     private void assertNoBrokenLinks(String body) throws Exception {
         List<String> links = new ArrayList<>();
-        Matcher matcher = HREF.matcher(body);
+        Matcher matcher = HREF.matcher(mainOf(body));
         while (matcher.find()) {
             links.add(matcher.group(1));
         }
@@ -131,7 +132,7 @@ class PhysicalClassesIntegrationTest extends BaseIntegrationTest {
         String body = page("/classes", 200);
 
         assertThat(body).contains("Todavía no hay clases presenciales disponibles.");
-        assertThat(body).doesNotContainPattern("<li[\s>]");
+        assertThat(mainOf(body)).doesNotContainPattern("<li[\s>]");
     }
 
     @Test

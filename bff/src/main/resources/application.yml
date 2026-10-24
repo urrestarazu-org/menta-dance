@@ -60,6 +60,12 @@ menta:
   # Time zone in which public pages show physical class sessions (#383).
   classes:
     display-zone: ${MENTA_CLASSES_DISPLAY_ZONE:America/Argentina/Buenos_Aires}
+  # Contact details shown on /contacto (#650). Blank means "not shown"; each
+  # environment sets its own, nothing real lives in the repository.
+  contact:
+    email: ${MENTA_CONTACT_EMAIL:}
+    phone: ${MENTA_CONTACT_PHONE:}
+    address: ${MENTA_CONTACT_ADDRESS:}
   api:
     base-url: http://localhost:8081
     timeout: 5s
