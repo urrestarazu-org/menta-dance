@@ -58,6 +58,13 @@ services:
       # Signing secret for payment-proof access tokens: required, the API does not start without it.
       BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET: ${BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET:?Set BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET in .env}
 
+      # SMTP (Mailpit): without a reachable host the mail health indicator reports DOWN,
+      # /actuator/health fails and the container never turns healthy.
+      # Fixed on purpose, not read from .env: .env.example sets SMTP_HOST=localhost for an API
+      # running on the host, and inside this container that would be the API itself.
+      SMTP_HOST: menta-mailpit
+      SMTP_PORT: 1025
+
       # Only the Docker bridge containing NGINX may supply X-Forwarded-For.
       AUTH_ACTIVATION_TRUSTED_PROXY_CIDRS: ${AUTH_ACTIVATION_TRUSTED_PROXY_CIDRS:-172.16.0.0/12}
 
@@ -79,6 +86,8 @@ services:
       mysql:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      mailpit:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8081/actuator/health"]
@@ -104,6 +113,14 @@ services:
 
       # API Backend (BFF solo consume API via HTTP)
       MENTA_API_BASE_URL: http://api:8081
+      AUTH_API_BASE_URL: http://api:8081
+      BILLING_API_BASE_URL: http://api:8081
+
+      # Redis (sessions): without it the Redis health indicator reports DOWN and the container
+      # never turns healthy. Fixed on purpose, like the API's SMTP host: the default is localhost,
+      # which inside this container is the BFF itself.
+      REDIS_HOST: menta-redis
+      REDIS_PORT: 6379
 
       # JVM Opts
       JAVA_OPTS: ${JAVA_OPTS:--XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC}
@@ -111,6 +128,8 @@ services:
       - menta-network
     depends_on:
       api:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
@@ -153,6 +172,23 @@ services:
       - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - menta-network
+
+  mailpit:
+    # Same image as infra/docker/app/docker-compose.yml. No published ports: only the API
+    # (same Compose network) talks to it.
+    image: axllent/mailpit:v1.21.8
+    container_name: menta-mailpit
+    restart: unless-stopped
+    expose:
+      - "1025"
+      - "8025"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8025/livez"]
       interval: 10s
       timeout: 3s
       retries: 5
