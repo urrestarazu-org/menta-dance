@@ -89,6 +89,8 @@ services:
 
       # Mercado Pago (la API arranca sin el token, pero no puede operar pagos sin él)
       BILLING_MERCADOPAGO_ACCESS_TOKEN: ${BILLING_MERCADOPAGO_ACCESS_TOKEN:-}
+      # ID de la cuenta vendedora (collector_id): la API exige que coincida con el que devuelve Mercado Pago
+      BILLING_MERCADOPAGO_MERCHANT_ACCOUNT_ID: ${BILLING_MERCADOPAGO_MERCHANT_ACCOUNT_ID:-}
       BILLING_MERCADOPAGO_NOTIFICATION_URL: ${BILLING_MERCADOPAGO_NOTIFICATION_URL:-https://api.mentadance.com/api/v1/billing/payments/mercadopago/webhook}
       BILLING_MERCADOPAGO_CHECKOUT_BACK_URL: ${BILLING_MERCADOPAGO_CHECKOUT_BACK_URL:-https://mentadance.com/compras/retorno}
 

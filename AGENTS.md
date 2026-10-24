@@ -54,7 +54,7 @@ El proyecto sigue Git Flow con las siguientes ramas:
 
 | Rama | Propósito | Protección |
 |------|-----------|------------|
-| `main` | Producción estable | Requiere PR, sin force push, historial lineal |
+| `main` | Producción estable | Requiere PR, sin force push (ver "Reglas" por el merge de releases) |
 | `develop` | Integración (rama default) | PRs apuntan acá por defecto |
 | `feature/*` | Desarrollo de funcionalidades | Temporal, se elimina post-merge |
 | `release/*` | Preparación de release | Temporal, se elimina post-merge |
@@ -67,13 +67,15 @@ El proyecto sigue Git Flow con las siguientes ramas:
 2. develop → release/vX.Y.Z       (preparar release)
 3. release/* → PR → main          (publicar)
 4. Crear tag vX.Y.Z en main       (versionar)
-5. main → PR → develop            (sync back)
+5. sync/main-to-develop-X.Y.Z → PR → develop   (backport de main, con merge commit)
 ```
 
 ### Reglas
 
 - **Commits**: Usar Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`).
 - **PRs**: Mergear via squash una vez que CI está verde. Nunca agregar atribuciones de AI.
+- **Release a `main`**: el PR `release/*` → `main` se mergea con merge commit, no con squash, para que `main` y `develop` compartan historia (detalle en `docs/16-CICD-PIPELINE.md`, "Git Flow y releases").
+- **Backport a `develop`**: después de cada release o hotfix a `main`, una rama `sync/main-to-develop-<versión>` (desde `develop`, mergeando `origin/main`) con PR a `develop` y merge commit. Se comprueba con `git rev-list --count origin/develop..origin/main` = 0. Con "Require branches to be up to date" activo, sin el backport el release siguiente sale desactualizado (detalle en `docs/16-CICD-PIPELINE.md`, "Backport de `main` a `develop`").
 - **Tags**: Releases se tagean `vMAJOR.MINOR.PATCH` y publican JAR + imágenes GHCR usando digests inmutables.
 - **Actions**: Los workflows de deployment deben pinear cada GitHub Action a un SHA completo (sin `latest`).
 

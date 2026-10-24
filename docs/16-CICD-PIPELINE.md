@@ -48,6 +48,28 @@ En cada PR contra `develop` o `main`:
 Además, el job `gitleaks` corre en `pr-develop.yml` y en `pr-main.yml` (ver
 [Detección de secretos](#detección-de-secretos)).
 
+### Job `nginx-integration`
+
+Corre solo en PRs a `main` (`pr-main.yml`). Compila los JAR, construye `menta-api:ci` y
+`menta-bff:ci`, levanta `infra/docker/nginx/docker-compose.yml` completo y comprueba por
+Nginx `/health`, `/api/actuator/health` y el header `X-Frame-Options`. Como solo corre en
+el PR de release, un error de este stack no aparece en `develop` y llega recién cuando se
+quiere publicar.
+
+El job hace `cp .env.example .env` y levanta el compose con ese `--env-file`. `.env.example`
+está pensado para correr la API en la máquina del desarrollador (`SMTP_HOST=localhost`), y
+una variable definida en el `.env` le gana al default `${VAR:-valor}` del compose; dentro de
+un contenedor, `localhost` es el propio contenedor. Por eso el compose de `nginx` **fija** los
+hosts internos del stack y no los lee del `.env`: `SMTP_HOST: menta-mailpit` en la API y
+`REDIS_HOST: menta-redis` en el BFF (#625, #627). Lo mismo vale para los secretos sin
+default: la API exige `BILLING_BANK_TRANSFER_PROOF_TOKEN_SECRET` (#622) y el stack incluye
+`mailpit` para que el indicador de correo de `/actuator/health` no dé DOWN (#623).
+
+Al cambiar ese compose, probarlo como lo hace el CI: con `--env-file .env.example` (o uno
+equivalente), no con las variables exportadas a mano, y con el stack levantado. Validar solo
+con `docker compose config` no alcanza: pasaron tres PR (#624, #626, #628) hasta que el
+stack quedó sano.
+
 ### Validación de contratos OpenAPI
 
 El job `openapi-validation` de `pr-develop.yml` corre `redocly lint` (imagen
@@ -159,7 +181,8 @@ patrón original solo cubría el primero y los reportes de Android se perdían.
   uno sin el otro.
 
 CI verde es obligatorio para mergear. Los PR son registro de trabajo individual:
-no requieren aprobación humana y se integran con **squash merge**.
+no requieren aprobación humana y los de `feature/*` a `develop` se integran con
+**squash merge**. El release a `main` es la excepción (ver "Git Flow y releases").
 
 ## Imágenes de contenedor
 
@@ -183,6 +206,13 @@ Dockerfiles de la API y el BFF usan hoy la variante `alpine-3.23` del mismo JRE:
 `3.24` trae `libexpat` 2.8.5-r0 (CVE-2026-77214, HIGH) y el escaneo de Trivy del
 release la rechaza. Se vuelve a `3.24` cuando `eclipse-temurin` la publique con
 `libexpat` 2.9.0 o superior.
+
+Aun en `3.23` la imagen de Temurin trae `libexpat` 2.8.5-r0, aunque el repositorio de
+Alpine 3.23 ya publica 2.9.0-r0. Por eso los Dockerfiles de la API y el BFF corren
+`apk upgrade --no-cache libexpat` antes de pasar al usuario no root (#622). Esa línea y
+sus comentarios se quitan cuando la imagen base ya traiga `libexpat` 2.9.0 o superior.
+La alternativa, una excepción en `.trivyignore.yaml`, se descartó: el propio archivo la
+define como último recurso.
 
 **Excepción:** `menta-api` y `menta-bff` pueden usar `latest` en los compose
 porque son imágenes que **se construyen localmente** y no se descargan de un
@@ -462,6 +492,54 @@ configuración del repositorio y son gratuitas en repositorios públicos.
 - Después, `main` se mergea de regreso a `develop`.
 - `hotfix/*` nace de `main`; su merge vuelve también a `develop`.
 
+**El PR `release/*` → `main` se mergea con "Create a merge commit", no con squash.** Un
+squash deja en `main` un commit que `develop` no conoce: las dos ramas quedan con
+historias separadas y el release siguiente choca en todos los archivos tocados por ambos.
+Así pasó con la `0.2.0`: `main` tenía dos PR de documentación squasheados que `develop`
+había reescrito después, y el PR dio 45 conflictos (44 `add/add` y uno de contenido). Se
+resolvió integrando `main` en la rama de release con `git merge -s ours origin/main`, que
+conserva el árbol de `develop` y agrega a `main` como padre. Con el merge commit, `main`
+incluye todos los commits de `develop`, pero `develop` no recibe el merge commit ni lo que `main`
+sumó por su cuenta (un hotfix, por ejemplo). Eso se corrige con el backport de abajo.
+
+### Backport de `main` a `develop`
+
+Después de cada merge de un release o de un hotfix a `main` hay que llevar `main` de vuelta a
+`develop`. Con "Require branches to be up to date before merging" (`strict: true`) activo en
+`main` y en `develop`, si `develop` no lo recibe el release siguiente aparece desactualizado
+respecto de `main` y obliga a actualizar la rama con un merge. Pasó con la `0.2.1`: el PR
+`release/0.2.1` → `main` salió marcado como desactualizado porque `main` tenía 8 commits que
+`develop` no tenía (dos PR de documentación squasheados y los merge commits de la `0.2.0`).
+Mergear `main` en la rama dio un árbol idéntico, así que no cambió ningún archivo, pero hizo
+falta rehacer los checks.
+
+Se hace con una rama de sincronización, no con un PR directo desde `main`:
+
+1. Con el release ya mergeado en `main` (y el tag creado): `git fetch origin`.
+2. `git checkout -b sync/main-to-develop-<versión> origin/develop`.
+3. `git merge origin/main`. Si el árbol de `main` coincide con el de `develop` el merge es
+   limpio y no cambia archivos; si hay conflictos, se resuelven a favor de `develop` salvo que
+   `main` traiga algo que `develop` no tenga (un hotfix), que hay que conservar.
+4. Push de la rama y PR a `develop` con título `chore(release): sincronizar main en develop
+   tras <versión>`. Los checks de `develop` corren como en cualquier PR.
+5. Se mergea con **"Create a merge commit"**, no con squash: un squash volvería a dejar la
+   historia de `main` fuera de `develop`.
+6. Se comprueba con `git rev-list --count origin/develop..origin/main`, que debe dar 0.
+
+Por qué una rama de sincronización y no un PR `main` → `develop`: con `strict: true` en
+`develop`, un PR cuya rama de origen es `main` quedaría desactualizado en cuanto `develop`
+recibe cualquier commit, y el botón "Update branch" haría lo contrario de lo que se quiere:
+mergear `develop` dentro de `main`. La rama de sincronización sale de `develop`, así que ya
+está al día con él.
+
+**"Require linear history".** La protección de `main` la tenía activada y bloqueaba el PR de
+la `0.2.0` ("This branch must not contain merge commits"); el merge commit llegó igual a
+`main`, pero no quedó registrado cómo se saltó la regla. El 2026-10-20 se desactivó en
+Settings → Branches (`required_linear_history: false`, comprobado con la API) porque Git Flow
+necesita el merge commit del release y del backport. `develop` tampoco la exige. El resto de
+la protección de `main` no cambió: PR obligatorio, los 7 checks, "Require branches to be up to
+date" y sin force push ni borrado.
+
 Los commits y títulos de PR siguen Conventional Commits 1.0.0. La versión de
 release es SemVer `vMAJOR.MINOR.PATCH` y etiqueta el mismo commit, JAR, imagen y
 GitHub Release.
@@ -520,8 +598,13 @@ Conviene comprobar la huella contra la del servidor (`ssh-keygen -lf
 `StrictHostKeyChecking=yes`. El puerto va como secreto y no como variable para que no
 quede visible en los logs del workflow cuando el repositorio sea público.
 
-En el Environment también conviene agregar al operador como *required reviewer*: el
-job de deploy espera una aprobación manual antes de tocar producción.
+El Environment tiene al operador como *required reviewer*: el job de deploy espera una
+aprobación manual ("Review deployments" en la página del run) antes de tocar producción.
+El revisor se agregó el 2026-10-19, cuando el repositorio pasó a ser público: con el
+repositorio privado la regla fallaba (`HTTP 422`: el plan no la soporta) y el Environment
+se había creado sin reglas de protección. `prevent_self_review` está apagado a propósito:
+el proyecto lo mantiene una sola persona, que es quien publica el tag y quien aprueba. Si
+se suma más gente, conviene encenderlo.
 
 La primera vez que se publican las imágenes, GHCR crea los paquetes `menta-api` y
 `menta-bff` vinculados al repositorio por la etiqueta `org.opencontainers.image.source`.
