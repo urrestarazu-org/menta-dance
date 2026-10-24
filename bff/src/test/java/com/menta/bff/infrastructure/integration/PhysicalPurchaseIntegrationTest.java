@@ -6,6 +6,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static com.menta.bff.infrastructure.integration.HtmlSections.mainOf;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -210,7 +211,7 @@ class PhysicalPurchaseIntegrationTest extends BaseIntegrationTest {
 
     private void assertLinksWork(String html) throws Exception {
         List<String> links = new ArrayList<>();
-        Matcher href = HREF.matcher(html);
+        Matcher href = HREF.matcher(mainOf(html));
         while (href.find()) {
             links.add(href.group(1));
         }
@@ -256,7 +257,7 @@ class PhysicalPurchaseIntegrationTest extends BaseIntegrationTest {
         for (String html : List.of(
                 body(mockMvc.perform(withSession(get("/classes/" + COURSE_ID))).andExpect(status().isOk())),
                 body(mockMvc.perform(get("/classes/" + COURSE_ID)).andExpect(status().isOk())))) {
-            assertThat(html).contains("Salsa en vivo", "5 lugares libres")
+            assertThat(mainOf(html)).contains("Salsa en vivo", "5 lugares libres")
                     .contains("Todavía no hay un precio publicado para esta clase.")
                     .doesNotContain("por mes").doesNotContain("Cotizar").doesNotContain("Ingresá para comprar")
                     .doesNotContain("<form").doesNotContain("PHYSICAL_COURSE_PRICING");
@@ -272,7 +273,7 @@ class PhysicalPurchaseIntegrationTest extends BaseIntegrationTest {
         for (String html : List.of(
                 body(mockMvc.perform(withSession(get("/classes/" + COURSE_ID))).andExpect(status().isOk())),
                 body(mockMvc.perform(get("/classes/" + COURSE_ID)).andExpect(status().isOk())))) {
-            assertThat(html).contains("Salsa en vivo", "5 lugares libres")
+            assertThat(mainOf(html)).contains("Salsa en vivo", "5 lugares libres")
                     .contains("No pudimos consultar el precio en este momento.")
                     .doesNotContain("por mes").doesNotContain("Cotizar").doesNotContain("Ingresá para comprar")
                     .doesNotContain("<form").doesNotContain("UNAVAILABLE");
@@ -285,7 +286,7 @@ class PhysicalPurchaseIntegrationTest extends BaseIntegrationTest {
     void detailInvitesAnonymousToSignIn() throws Exception {
         String html = body(mockMvc.perform(get("/classes/" + COURSE_ID)).andExpect(status().isOk()));
 
-        assertThat(html).contains("Ingresá para comprar").contains("href=\"/login\"")
+        assertThat(mainOf(html)).contains("Ingresá para comprar").contains("href=\"/login\"")
                 .doesNotContain("Cotizar").doesNotContain("<form");
     }
 
@@ -331,7 +332,7 @@ class PhysicalPurchaseIntegrationTest extends BaseIntegrationTest {
         String html = body(submit("/classes/" + COURSE_ID + "/cotizar", monthlyForm(detail))
                 .andExpect(status().isOk()));
 
-        assertThat(html).contains("Sin lugares disponibles").doesNotContain("Pagar con Mercado Pago")
+        assertThat(mainOf(html)).contains("Sin lugares disponibles").doesNotContain("Pagar con Mercado Pago")
                 .doesNotContain("<form");
     }
 

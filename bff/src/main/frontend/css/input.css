@@ -208,3 +208,92 @@
     @apply border-brand-deep/40 bg-white text-brand-deep;
   }
 }
+
+/*
+ * Site chrome and landing blocks (#649): dark header, hero and footer.
+ * White (or brand-light) text on brand-deep keeps contrast above AA; links
+ * inside these blocks drop the global underline and are styled explicitly.
+ */
+@layer components {
+  .site-header {
+    @apply bg-brand-deep text-brand-surface;
+  }
+
+  .site-brand {
+    @apply flex items-center gap-3 text-xl font-semibold text-brand-surface no-underline;
+  }
+
+  /* The logo PNG has a white background: multiply it over the palette's off-white. */
+  .site-brand-logo {
+    @apply isolate inline-flex h-10 w-10 overflow-hidden rounded-full bg-brand-surface;
+  }
+
+  .site-brand-logo img {
+    @apply h-full w-full mix-blend-multiply;
+  }
+
+  .site-nav-link {
+    @apply rounded px-2 py-1 font-medium text-brand-surface underline-offset-4 hover:text-brand-light hover:underline;
+  }
+
+  /* Buttons that sit on the dark header, hero and footer. */
+  .btn-light {
+    @apply bg-brand-light text-brand-deep hover:bg-brand-bright;
+  }
+
+  .btn-outline-light {
+    @apply border border-brand-light bg-transparent text-brand-light hover:bg-brand-light/15;
+  }
+
+  .btn-lg {
+    @apply px-8 py-3 text-lg;
+  }
+
+  /* Mobile menu without JavaScript: a <details> disclosure. */
+  .site-menu > summary {
+    @apply flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded text-brand-surface;
+  }
+
+  .site-menu > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .site-menu-panel {
+    @apply absolute inset-x-0 top-full z-10 flex flex-col gap-2 bg-brand-deep px-4 py-4 shadow-lg;
+  }
+
+  .hero {
+    @apply flex min-h-[26rem] items-center justify-center bg-brand-deep bg-cover px-4 py-16 text-center text-brand-surface;
+    background-image: linear-gradient(rgb(4 63 46 / 0.55), rgb(4 63 46 / 0.85)), url('/images/hero/salon.jpg');
+  }
+
+  @media (max-width: 640px) {
+    .hero {
+      background-image: linear-gradient(rgb(4 63 46 / 0.55), rgb(4 63 46 / 0.85)), url('/images/hero/salon-960.jpg');
+    }
+  }
+
+  .hero h1 {
+    @apply text-4xl font-black text-brand-surface sm:text-5xl;
+  }
+
+  .hero-lead {
+    @apply mx-auto mt-4 max-w-2xl text-xl font-light;
+  }
+
+  .benefit-icon {
+    @apply mx-auto mb-4 h-12 w-12 text-brand-action;
+  }
+
+  .site-footer {
+    @apply bg-brand-deep text-brand-surface/90;
+  }
+
+  .site-footer a {
+    @apply text-brand-surface hover:text-brand-light;
+  }
+
+  .site-footer-title {
+    @apply mb-3 text-base font-semibold text-brand-light;
+  }
+}

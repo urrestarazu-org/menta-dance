@@ -175,6 +175,74 @@ class CatalogPurchaseLayoutIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("el header muestra la marca con logo y, sin sesión, los accesos a ingresar y crear cuenta")
+    void headerForAnonymousVisitor() throws Exception {
+        String header = headerOf(body(get("/classes")));
+
+        assertThat(header)
+                .contains("/images/brand/menta-m.png")
+                .contains("Menta Dance")
+                .contains("aria-label=\"Navegación principal\"")
+                .containsPattern("href=\"/login\"[^>]*>\\s*Iniciar sesión")
+                .containsPattern("href=\"/registro\"[^>]*>\\s*Crear cuenta")
+                .doesNotContain("Cerrar sesión");
+    }
+
+    @Test
+    @DisplayName("el header con sesión muestra el panel y el cierre de sesión por POST, sin crear cuenta")
+    void headerForSignedInUser() throws Exception {
+        logIn();
+
+        String header = headerOf(body(get("/classes").cookie(session)));
+
+        assertThat(header)
+                .containsPattern("href=\"/dashboard\"[^>]*>\\s*Ir a mi panel")
+                .containsPattern("(?s)<form[^>]*action=\"/logout\"[^>]*method=\"post\".*Cerrar sesión")
+                .doesNotContain("Crear cuenta");
+    }
+
+    @Test
+    @DisplayName("el inicio abre con un hero con el único h1, una acción principal y el acceso a las clases")
+    void homeHasAHero() throws Exception {
+        String html = body(get("/"));
+
+        assertCommonLayout(html);
+        assertHeadingsInOrder(html);
+        String hero = html.substring(html.indexOf("aria-labelledby=\"hero-title\""), html.indexOf("benefits-title"));
+        assertThat(hero)
+                .containsPattern("<h1[^>]*id=\"hero-title\"[^>]*>\\s*Aprendé a tu ritmo")
+                .containsPattern("href=\"/registro\"[^>]*>\\s*Crear cuenta")
+                .containsPattern("href=\"/classes\"[^>]*>\\s*Ver clases presenciales");
+    }
+
+    @Test
+    @DisplayName("el inicio presenta tres beneficios y sigue mostrando el catálogo debajo")
+    void homeHasBenefitsAndKeepsTheCatalog() throws Exception {
+        String html = body(get("/"));
+
+        assertThat(html)
+                .containsPattern("<h2[^>]*id=\"benefits-title\"[^>]*>\\s*Beneficios")
+                .containsPattern("(?s)benefits-title.*Clases en video.*Clases presenciales.*A tu ritmo")
+                .containsPattern("(?s)Beneficios.*<h2[^>]*>\\s*Cursos\\s*</h2>.*Ballet Básico");
+    }
+
+    @Test
+    @DisplayName("el hero es solo del inicio: las demás páginas no lo incluyen")
+    void heroIsHomeOnly() throws Exception {
+        assertThat(body(get("/classes"))).doesNotContain("hero-title").doesNotContain("benefits-title");
+    }
+
+    @Test
+    @DisplayName("todas las páginas cierran con un footer con navegación propia y copyright")
+    void footerIsOnEveryPage() throws Exception {
+        String footer = body(get("/classes")).substring(body(get("/classes")).indexOf("<footer"));
+
+        assertThat(footer)
+                .containsPattern("(?s)<nav[^>]*aria-label=\"Pie de página\".*href=\"/classes\".*href=\"/plans\"")
+                .containsPattern("© \\d{4} Menta Dance");
+    }
+
+    @Test
     @DisplayName("el listado de clases usa lista semántica con enlaces a cada detalle")
     void classesListIsSemantic() throws Exception {
         String html = body(get("/classes"));
@@ -427,6 +495,10 @@ class CatalogPurchaseLayoutIntegrationTest extends BaseIntegrationTest {
 
     private String body(MockHttpServletRequestBuilder request) throws Exception {
         return mockMvc.perform(request).andReturn().getResponse().getContentAsString();
+    }
+
+    private static String headerOf(String html) {
+        return html.substring(html.indexOf("<header"), html.indexOf("</header>"));
     }
 
     private static void assertCommonLayout(String html) {

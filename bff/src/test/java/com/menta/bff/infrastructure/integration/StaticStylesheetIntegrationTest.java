@@ -133,4 +133,26 @@ class StaticStylesheetIntegrationTest extends BaseIntegrationTest {
         mockMvc.perform(post("/fonts/poppins-latin-400-normal.woff2"))
                 .andExpect(status().is4xxClientError());
     }
+
+    @ParameterizedTest(name = "GET {0}")
+    @ValueSource(strings = {"/images/brand/menta-m.png", "/images/hero/salon.jpg", "/images/hero/salon-960.jpg"})
+    @DisplayName("las imágenes de marca y del hero se sirven anónimas")
+    void brandImagesAreServedAnonymously(String path) throws Exception {
+        byte[] body = mockMvc.perform(get(path))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.parseMediaType(
+                        path.endsWith(".png") ? "image/png" : "image/jpeg")))
+                .andReturn()
+                .getResponse()
+                .getContentAsByteArray();
+
+        assertThat(body).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("el permiso público de /images es GET-only y no abre verbos que mutan")
+    void imagesPermitDoesNotWidenAccess() throws Exception {
+        mockMvc.perform(post("/images/brand/menta-m.png"))
+                .andExpect(status().is4xxClientError());
+    }
 }
