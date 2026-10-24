@@ -332,3 +332,22 @@
     @apply rounded-none border-0 bg-transparent p-0 shadow-none;
   }
 }
+
+@layer components {
+  /* Long-form text of the legal pages (#650): the base headings and links stay, only the rhythm is set. */
+  .legal {
+    @apply mx-auto max-w-3xl;
+  }
+
+  .legal h2 {
+    @apply mb-2 mt-8;
+  }
+
+  .legal p {
+    @apply mb-3;
+  }
+
+  .legal ul {
+    @apply mb-3 list-disc space-y-1 pl-6;
+  }
+}

@@ -71,7 +71,19 @@
                 </div>
             </nav>
         </div>
-        <p class="mt-8 border-t border-brand-light/20 pt-4 text-sm"
+        <nav aria-label="Información legal" class="mt-8 border-t border-brand-light/20 pt-4">
+            <h2 class="site-footer-title">Información legal</h2>
+            <ul class="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+                <li><a th:href="@{/terminos-condiciones}">Términos y condiciones</a></li>
+                <li><a th:href="@{/politica-privacidad}">Política de privacidad</a></li>
+                <li><a th:href="@{/politica-cookies}">Política de cookies</a></li>
+                <li><a th:href="@{/politica-devolucion}">Política de devolución</a></li>
+                <li><a th:href="@{/propiedad-intelectual}">Propiedad intelectual</a></li>
+                <li><a th:href="@{/accesibilidad}">Accesibilidad</a></li>
+                <li><a th:href="@{/contacto}">Contacto</a></li>
+            </ul>
+        </nav>
+        <p class="mt-6 text-sm"
            th:text="|© ${#temporals.year(#temporals.createNow())} Menta Dance. Todos los derechos reservados.|">&copy; 2026 Menta Dance</p>
     </div>
 </footer>

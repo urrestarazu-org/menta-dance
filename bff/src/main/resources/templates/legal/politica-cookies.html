@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('Política de cookies', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<article class="legal">
+    <h1 class="mb-4">Política de cookies</h1>
+    <div th:replace="~{fragments/legal :: review-notice}"></div>
+
+    <p>Una cookie es un pequeño archivo que el sitio guarda en tu navegador. Esta página explica cuáles usa
+        Menta Dance.</p>
+
+    <h2>1. Las cookies que usamos</h2>
+    <p>Solo usamos cookies estrictamente necesarias para que el sitio funcione:</p>
+    <ul>
+        <li><strong>Sesión (<code>SESSION</code>):</strong> te mantiene con la sesión iniciada mientras navegás.
+            Se elimina al cerrar sesión o cuando la sesión vence por inactividad.</li>
+    </ul>
+    <p>Además, los formularios incluyen un token de seguridad que protege contra el envío de pedidos desde otros
+        sitios. No es una cookie de seguimiento y no se comparte con nadie.</p>
+
+    <h2>2. Lo que no hacemos</h2>
+    <ul>
+        <li>No usamos cookies de publicidad ni de seguimiento entre sitios.</li>
+        <li>No cargamos analítica ni recursos de terceros en nuestras páginas.</li>
+    </ul>
+    <p>Por eso el sitio no muestra un aviso para aceptar cookies: las que usamos son indispensables y no
+        requieren consentimiento.</p>
+
+    <h2>3. Cómo controlarlas</h2>
+    <p>Podés borrar o bloquear las cookies desde la configuración de tu navegador. Si bloqueás la cookie de
+        sesión, no vas a poder iniciar sesión.</p>
+
+    <h2>4. Pagos</h2>
+    <p>Al pagar con Mercado Pago salís de nuestro sitio hacia el de ese proveedor, que aplica sus propias
+        políticas de cookies y de privacidad.</p>
+
+    <h2>5. Cambios</h2>
+    <p>Si empezáramos a usar otras cookies, actualizaremos esta página y, cuando corresponda, pediremos tu
+        consentimiento. Más información en la <a th:href="@{/politica-privacidad}">política de
+        privacidad</a>.</p>
+</article>
+</th:block>
+</body>
+</html>

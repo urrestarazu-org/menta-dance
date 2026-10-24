@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('Política de privacidad', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<article class="legal">
+    <h1 class="mb-4">Política de privacidad</h1>
+    <div th:replace="~{fragments/legal :: review-notice}"></div>
+
+    <p>Explicamos qué datos personales trata Menta Dance, para qué y qué derechos tiene cada persona sobre
+        ellos, conforme a la Ley 25.326 de Protección de Datos Personales de la República Argentina.</p>
+
+    <h2>1. Qué datos recopilamos</h2>
+    <ul>
+        <li><strong>De la cuenta:</strong> nombre, email y contraseña (que se guarda cifrada, nunca en texto
+            plano).</li>
+        <li><strong>De las compras:</strong> el plan o la clase elegidos, el estado del pago y, si pagás por
+            transferencia, el comprobante que subís.</li>
+        <li><strong>De uso:</strong> el progreso en los cursos y las clases presenciales a las que asistís.</li>
+        <li><strong>Técnicos:</strong> la cookie de sesión necesaria para mantener tu sesión iniciada (ver la
+            <a th:href="@{/politica-cookies}">política de cookies</a>).</li>
+    </ul>
+    <p>Los datos de tarjeta no pasan por nuestros servidores: el pago con tarjeta lo procesa Mercado Pago.</p>
+
+    <h2>2. Para qué los usamos</h2>
+    <ul>
+        <li>Crear y mantener tu cuenta y darte acceso a lo que contrataste.</li>
+        <li>Procesar y verificar los pagos y asignarte tus clases.</li>
+        <li>Enviarte los mensajes que el servicio necesita: activación de la cuenta, recuperación de contraseña
+            y novedades de tu compra.</li>
+        <li>Mantener la seguridad del sitio y prevenir fraudes.</li>
+    </ul>
+
+    <h2>3. Con quién los compartimos</h2>
+    <p>No vendemos tus datos. Los compartimos solo con los proveedores que hacen posible el servicio, como el
+        procesador de pagos (Mercado Pago) y el servicio de envío de emails, y con las autoridades cuando una
+        norma lo exige.</p>
+
+    <h2>4. Cuánto tiempo los conservamos</h2>
+    <p>Mientras la cuenta esté activa y durante los plazos que las obligaciones legales y contables requieran.
+        Después se eliminan o se anonimizan.</p>
+
+    <h2>5. Tus derechos</h2>
+    <p>Podés acceder a tus datos, rectificarlos, actualizarlos o pedir su supresión. Para ejercer estos
+        derechos escribinos desde la página de <a th:href="@{/contacto}">contacto</a>. La Agencia de Acceso a la
+        Información Pública, como órgano de control de la Ley 25.326, atiende las denuncias e incumplimientos
+        de esta ley.</p>
+
+    <h2>6. Seguridad</h2>
+    <p>Aplicamos medidas técnicas y organizativas razonables para proteger los datos: conexión cifrada,
+        contraseñas almacenadas con hash y acceso restringido a la información.</p>
+
+    <h2>7. Cambios</h2>
+    <p>Si esta política cambia, publicaremos la versión vigente en esta página.</p>
+</article>
+</th:block>
+</body>
+</html>
