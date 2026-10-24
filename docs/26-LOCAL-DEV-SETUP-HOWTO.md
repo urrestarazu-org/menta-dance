@@ -223,21 +223,23 @@ suben al repositorio):
 | `BILLING_MERCADOPAGO_MERCHANT_ACCOUNT_ID` | **ID del usuario vendedor** (número de unos 10 dígitos). La API lo compara con el `collector_id` que devuelve Mercado Pago | `id` de `GET https://api.mercadopago.com/users/me` con el token anterior. **No es el ID de la aplicación** (16 dígitos) |
 | `BILLING_WEBHOOK_MERCADOPAGO_HMAC_SECRET` | Clave con la que se valida la firma `x-signature` del webhook | Clave secreta de la pestaña **Modo productivo** (ver paso 2) |
 | `BILLING_MERCADOPAGO_NOTIFICATION_URL` | URL pública a la que Mercado Pago entrega el webhook | `https://<URL-DEL-TUNEL>/api/v1/billing/payments/mercadopago/webhook` |
-| `BILLING_MERCADOPAGO_CHECKOUT_BACK_URL` | URL del BFF a la que vuelve el comprador tras pagar | `http://localhost:8080/compras/retorno` (ver "Pendiente" más abajo) |
+| `BILLING_MERCADOPAGO_CHECKOUT_BACK_URL` | URL del BFF a la que vuelve el comprador tras pagar. **Tiene que ser HTTPS**: con `http://localhost` Mercado Pago no mostró el botón de volver | `https://<URL-DEL-TUNEL-BFF>/compras/retorno` (túnel del paso 1) |
 
 **Paso a paso:**
 
-1. **Túnel hacia la API.** En una terminal aparte y sin cerrarla durante toda la prueba:
+1. **Dos túneles**, uno hacia la API y otro hacia el BFF, cada uno en una terminal aparte y sin cerrarlas
+   durante toda la prueba:
 
    ```bash
    brew install cloudflared
-   cloudflared tunnel --url http://localhost:8081
+   cloudflared tunnel --url http://localhost:8081   # API: recibe el webhook
+   cloudflared tunnel --url http://localhost:8080   # BFF: a donde vuelve el comprador
    ```
 
-   Imprime una URL `https://….trycloudflare.com`. Cambia cada vez que se reinicia `cloudflared`; si
-   pasa, hay que repetir los pasos 2 y 3.
+   Cada uno imprime una URL `https://….trycloudflare.com`. Cambian cada vez que se reinicia
+   `cloudflared`; si pasa, hay que repetir los pasos 2 y 3.
 2. **Webhook en la consola.** En Webhooks → Configurar notificaciones, pestaña **Modo productivo**:
-   la URL del paso 1 más `/api/v1/billing/payments/mercadopago/webhook`, con el evento **Pagos (legacy)**
+   la URL del túnel de la API más `/api/v1/billing/payments/mercadopago/webhook`, con el evento **Pagos (legacy)**
    tildado. Copiá la clave secreta de esa misma pestaña al `.env`. En la prueba de #515 los eventos del
    vendedor de prueba llegaron con `live_mode: true` y ambiente "Productivo", y se entregaron con la URL
    de esa pestaña y no con la de **Modo de prueba**. Al terminar, restaurá la URL original.
@@ -259,12 +261,23 @@ suben al repositorio):
    ```
 
    El mail trae un enlace `http://localhost:8080/activar/<TOKEN>`; abrilo en el navegador.
-6. **Comprar.** En `http://localhost:8080` iniciá sesión con ese alumno, elegí una clase presencial,
-   cotizá (la cotización muestra hasta cuándo es válida; si vence, cotizá de nuevo) y elegí **Pagar con Mercado Pago**. En el checkout
-   ingresá con el **comprador de prueba**, o usá **Tarjeta** con una tarjeta de prueba.
+6. **Comprar.** Entrá por la **URL del túnel del BFF**, no por `localhost`: la cookie de sesión tiene que
+   quedar en el mismo sitio al que vuelve el comprador. Iniciá sesión con ese alumno, elegí una clase
+   presencial, cotizá (la cotización muestra hasta cuándo es válida; si vence, cotizá de nuevo) y elegí
+   **Pagar con Mercado Pago**. En el checkout ingresá con el **comprador de prueba**, o usá **Tarjeta** con
+   una tarjeta de prueba. Para repetir un caso, elegí otra clase o registrá otro alumno (paso 5).
 7. **Casos de pago.** En Argentina el resultado lo define el **nombre del titular** de la tarjeta de
    prueba (documentación oficial de Mercado Pago): `APRO` aprobado (DNI 12345678), `OTHE` rechazado por
-   error general (DNI 12345678) y `CONT` pendiente de pago.
+   error general (DNI 12345678) y `CONT` pendiente de pago. Lo que se vio en la prueba de #515 con cada
+   uno:
+
+   | Titular | Pantalla de Mercado Pago | Pago en la base | Pantalla del BFF (`/compras/retorno`) |
+   |---------|--------------------------|-----------------|---------------------------------------|
+   | `APRO` | "Tu pago ya se acreditó", con botón de volver al sitio | `COMPLETED`, compra `ASSIGNED` | "Pago confirmado" con las próximas sesiones |
+   | `OTHE` | "Tu tarjeta rechazó el pago", con botón de volver al sitio | `REJECTED`, sin compra | "Pago rechazado… No se te cobró nada" |
+   | `CONT` | "Estamos procesando tu pago", solo "Ok, entendido", que lleva al BFF | `AWAITING_PROVIDER`, sin compra | "Pago en proceso" con botón **Actualizar** |
+
+   En los tres casos el webhook llegó firmado y quedó `PROCESSED`.
 8. **Verificar** el efecto en la base local:
 
    ```bash
@@ -278,13 +291,16 @@ suben al repositorio):
    `PROCESSED` y la compra en `ASSIGNED`. En la consola, Webhooks → lista de notificaciones, ves cada
    entrega con su código HTTP.
 
-**Estado de la validación (#515, 2026-10-22):**
+**Estado de la validación (#515, 2026-10-24):**
 
-- Verificado: la preferencia se crea con `back_url` `http://localhost`; el pago aprobado con el comprador
-  de prueba y saldo disponible llega como webhook, valida la firma, se procesa y deja el pago
-  `COMPLETED` y la compra `ASSIGNED`.
-- Pendiente: el retorno a `/compras/retorno` con la cookie de sesión (ver más abajo) y los casos
-  rechazado y pendiente.
+- Verificado de punta a punta con los tres casos (`APRO`, `OTHE`, `CONT`): cotizar, pagar en el checkout
+  real, webhook firmado procesado y vuelta a `/compras/retorno` con la pantalla que corresponde a cada
+  resultado (tabla del paso 7).
+- Verificado: el comprador vuelve a `/compras/retorno` **con la sesión iniciada** (la pantalla de pago
+  confirmado muestra sus próximas sesiones). El navegador envía la cookie en la navegación que viene de
+  Mercado Pago, así que la suposición de `SameSite=Lax` se cumple.
+- Verificado: Mercado Pago acepta crear la preferencia con una `back_url` `http://localhost`, pero en esa
+  prueba no mostró el botón de volver. Con una `back_url` HTTPS (túnel hacia el BFF) el botón aparece.
 
 **Problemas conocidos y errores comunes:**
 
@@ -295,15 +311,12 @@ suben al repositorio):
 | `trycloudflare.com` deja de responder | `cloudflared` se reinició y la URL cambió | Repetir los pasos 2 y 3 con la URL nueva |
 | El BFF responde "ya tenés un lugar" | El alumno demo ya tiene cupo sembrado | Usar un alumno nuevo (paso 5) |
 | `dev.sh start` falla con "container name /menta-mailpit is already in use" | Hay un contenedor `menta-mailpit` creado a mano, fuera del compose | Borrarlo con `docker rm -f menta-mailpit` (solo guarda mails de prueba) |
-| Tras pagar no hay redirección ni botón **Volver al sitio** | Ver "Pendiente" a continuación | — |
+| Tras pagar no aparece el botón **Volver al sitio** | La `back_url` es `http://localhost`: Mercado Pago no la usa | Poner una URL HTTPS (túnel hacia el BFF) en `BILLING_MERCADOPAGO_CHECKOUT_BACK_URL` y reiniciar |
 
-**Pendiente (abierto en #515):** tras el pago, la pantalla de Mercado Pago no mostró el botón **Volver al
-sitio** ni redirigió. El adaptador envía `back_urls` pero no `auto_return`
-(`MercadoPagoPaymentPreferenceAdapter`), y la `back_url` de esta prueba era `http://localhost`. Se
-sospecha que Mercado Pago descarta una `back_url` que no es HTTPS, pero no está confirmado. Para
-comprobarlo se necesita un segundo túnel hacia el BFF (`cloudflared tunnel --url http://localhost:8080`),
-poner su URL en `BILLING_MERCADOPAGO_CHECKOUT_BACK_URL` y hacer toda la compra entrando por esa URL, para
-que la cookie de sesión quede en el mismo sitio al que vuelve el comprador.
+**Limitación conocida:** el comprador no vuelve solo al sitio: tiene que apretar el botón de la pantalla
+de Mercado Pago. El adaptador envía `back_urls` pero no `auto_return`
+(`MercadoPagoPaymentPreferenceAdapter`), que es lo que haría la redirección automática cuando el pago se
+aprueba. Queda como mejora fuera de esta validación.
 
 ### Adaptador local de Bunny.net (issue #129)
 
