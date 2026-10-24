@@ -297,3 +297,38 @@
     @apply mb-3 text-base font-semibold text-brand-light;
   }
 }
+
+/*
+ * Account screens (#651): a card with a brand panel next to the form, over a
+ * green gradient built from the palette. Forms inside lose their own card so
+ * the two panels do not nest cards.
+ */
+@layer components {
+  .auth-shell {
+    @apply bg-gradient-to-br from-brand-action to-brand-bright px-4 py-10 sm:py-14;
+  }
+
+  .auth-card {
+    @apply mx-auto grid w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-xl md:grid-cols-2;
+  }
+
+  .auth-aside {
+    @apply flex flex-col items-center justify-center gap-4 bg-brand-deep p-8 text-center text-brand-surface;
+  }
+
+  .auth-aside .site-brand-logo {
+    @apply h-24 w-24;
+  }
+
+  .auth-aside-name {
+    @apply text-2xl font-bold;
+  }
+
+  .auth-body {
+    @apply p-6 sm:p-10;
+  }
+
+  .auth-body .card {
+    @apply rounded-none border-0 bg-transparent p-0 shadow-none;
+  }
+}

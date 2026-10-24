@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{fragments/layout :: page('Crear cuenta', ~{::main-content})}">
+      th:replace="~{fragments/layout :: auth('Crear cuenta', ~{::main-content}, 'Creá tu cuenta para empezar a bailar, con clases online y presenciales.')}">
 <body>
 <th:block th:fragment="main-content">
 <div class="mx-auto max-w-sm">

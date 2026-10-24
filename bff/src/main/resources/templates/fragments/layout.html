@@ -13,6 +13,9 @@
   `landing(title, content)` is the same shell without the centered container,
   for pages whose sections span the full width (the home hero).
 
+  `auth(title, content, tagline)` is the shell of the account screens: a card with a
+  brand panel (logo, name and `tagline`) beside the content.
+
   `title` is shown as "<title> - Menta Dance"; `content` is placed inside
   <main id="main">.
 -->
@@ -45,6 +48,32 @@
    class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-10 focus:rounded focus:bg-white focus:px-4 focus:py-2">Saltar al contenido</a>
 <th:block th:replace="~{fragments/site :: header}"></th:block>
 <main id="main" tabindex="-1" class="flex-1 focus:outline-none" th:insert="${content}">Contenido</main>
+<th:block th:replace="~{fragments/site :: footer}"></th:block>
+</body>
+</html>
+
+<!-- Account screens: a card with a brand panel next to the form; `tagline` is the panel's welcome text. -->
+<html lang="es" th:fragment="auth(title, content, tagline)">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${title} + ' - Menta Dance'">Menta Dance</title>
+    <th:block th:replace="~{fragments/head :: assets}"></th:block>
+</head>
+<body class="flex min-h-screen flex-col">
+<a href="#main"
+   class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-10 focus:rounded focus:bg-white focus:px-4 focus:py-2">Saltar al contenido</a>
+<th:block th:replace="~{fragments/site :: header}"></th:block>
+<main id="main" tabindex="-1" class="auth-shell flex-1 focus:outline-none">
+    <div class="auth-card">
+        <div class="auth-aside">
+            <span class="site-brand-logo"><img th:src="@{/images/brand/menta-m.png}" alt="" width="96" height="96"></span>
+            <p class="auth-aside-name">Menta Dance</p>
+            <p th:text="${tagline}">Tagline</p>
+        </div>
+        <div class="auth-body" th:insert="${content}">Contenido</div>
+    </div>
+</main>
 <th:block th:replace="~{fragments/site :: footer}"></th:block>
 </body>
 </html>

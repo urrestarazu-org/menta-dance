@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{fragments/layout :: page('Iniciar Sesión', ~{::main-content})}">
+      th:replace="~{fragments/layout :: auth('Iniciar Sesión', ~{::main-content}, 'Iniciá sesión para continuar con tus clases. Nuevas clases y coreografías te esperan.')}">
 <body>
 <th:block th:fragment="main-content">
 <div class="mx-auto max-w-sm">
