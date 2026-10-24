@@ -285,6 +285,34 @@
     @apply mx-auto mb-4 h-12 w-12 text-brand-action;
   }
 
+  /* Photos of the home (#654): the width/height attributes reserve the space, the classes scale it. */
+  .photo {
+    @apply h-auto w-full rounded-lg object-cover shadow;
+  }
+
+  .studio {
+    @apply grid items-center gap-6 md:grid-cols-2;
+  }
+
+  /* Animated logo of the error page; with reduced motion the still wordmark replaces the video. */
+  .brand-motion {
+    @apply mx-auto block h-auto w-full max-w-xs;
+  }
+
+  .brand-still {
+    @apply mx-auto hidden h-auto w-full max-w-xs;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .brand-motion {
+      display: none;
+    }
+
+    .brand-still {
+      display: block;
+    }
+  }
+
   .site-footer {
     @apply bg-brand-deep text-brand-surface/90;
   }

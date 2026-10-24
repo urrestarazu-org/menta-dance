@@ -49,6 +49,44 @@
     </ul>
 </section>
 
+<section class="container-page pb-12" aria-labelledby="gallery-title">
+    <h2 id="gallery-title" class="mb-6 text-center">Viví el baile en Menta Dance</h2>
+    <ul class="grid gap-4 sm:grid-cols-3">
+        <li>
+            <img class="photo" th:src="@{/images/home/pareja-neon-800.jpg}"
+                 th:srcset="|@{/images/home/pareja-neon-480.jpg} 480w, @{/images/home/pareja-neon-800.jpg} 800w|"
+                 sizes="(min-width: 640px) 33vw, 100vw" width="800" height="533" loading="lazy"
+                 alt="Pareja bailando bachata frente al cartel luminoso de Menta Virtual Academy">
+        </li>
+        <li>
+            <img class="photo" th:src="@{/images/home/bailarina-salon-800.jpg}"
+                 th:srcset="|@{/images/home/bailarina-salon-480.jpg} 480w, @{/images/home/bailarina-salon-800.jpg} 800w|"
+                 sizes="(min-width: 640px) 33vw, 100vw" width="800" height="533" loading="lazy"
+                 alt="Bailarina en el salón de ensayo junto al cartel de neón de Menta Virtual Academy">
+        </li>
+        <li>
+            <img class="photo" th:src="@{/images/home/pareja-verde-800.jpg}"
+                 th:srcset="|@{/images/home/pareja-verde-480.jpg} 480w, @{/images/home/pareja-verde-800.jpg} 800w|"
+                 sizes="(min-width: 640px) 33vw, 100vw" width="800" height="533" loading="lazy"
+                 alt="Pareja bailando abrazada bajo las luces verdes de Menta Virtual Academy">
+        </li>
+    </ul>
+</section>
+
+<section class="container-page pb-12" aria-labelledby="studio-title">
+    <div class="studio">
+        <img class="photo" th:src="@{/images/home/salon-800.jpg}"
+             th:srcset="|@{/images/home/salon-480.jpg} 480w, @{/images/home/salon-800.jpg} 800w|"
+             sizes="(min-width: 768px) 50vw, 100vw" width="800" height="533" loading="lazy"
+             alt="Salón de baile con barras y el cartel de neón de Menta Virtual Academy">
+        <div>
+            <h2 id="studio-title">Bailá en nuestro salón</h2>
+            <p class="mt-2 text-lg">Elegí tu sesión, mirá los lugares disponibles y reservá comprando online.</p>
+            <p class="mt-6"><a class="btn btn-primary" th:href="@{/classes}">Ver clases presenciales</a></p>
+        </div>
+    </div>
+</section>
+
 <section class="container-page pb-12" aria-labelledby="courses-title">
 <h2 id="courses-title" class="mb-4">Cursos</h2>
 
