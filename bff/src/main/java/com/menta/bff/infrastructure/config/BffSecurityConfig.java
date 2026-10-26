@@ -65,6 +65,10 @@ public class BffSecurityConfig {
                         // Self-hosted Poppins (woff2) referenced by app.css via @font-face;
                         // same GET-only, path-scoped reasoning as /css/**.
                         .requestMatchers(HttpMethod.GET, "/fonts/**").permitAll()
+                        // Error-summary focus script (#529): a static file the anonymous forms
+                        // (registration, password recovery, activation) load; same GET-only,
+                        // path-scoped reasoning as /css/**.
+                        .requestMatchers(HttpMethod.GET, "/js/**").permitAll()
                         // Brand logo and hero photo (#649) shown on the anonymous home and
                         // login pages; same GET-only, path-scoped reasoning as /css/**.
                         .requestMatchers(HttpMethod.GET, "/images/**").permitAll()

@@ -166,6 +166,31 @@ class StylesheetContrastTest {
     }
 
     @Test
+    @DisplayName("el resumen de errores y sus enlaces llegan a 4,5:1 sobre su fondo y el borde a 3:1 sobre la tarjeta")
+    void errorSummaryReachesAa() {
+        int[] fill = colorOf(".error-summary", "background-color", token("white"));
+        int[] text = colorOf(".error-summary", "color", fill);
+        int[] link = colorOf(".error-summary a", "color", fill);
+        int[] border = colorOf(".error-summary", "border-color", token("white"));
+
+        assertThat(contrast(text, fill)).as("summary text").isGreaterThanOrEqualTo(TEXT_MINIMUM);
+        assertThat(contrast(link, fill)).as("summary links").isGreaterThanOrEqualTo(TEXT_MINIMUM);
+        assertThat(contrast(border, token("white"))).as("summary border against the white card")
+                .isGreaterThanOrEqualTo(NON_TEXT_MINIMUM);
+    }
+
+    @Test
+    @DisplayName("el resumen enfocado dibuja un contorno propio: el foco programático no depende de :focus-visible")
+    void errorSummaryDrawsItsOwnFocusOutline() {
+        String declarations = declarations(".error-summary:focus").orElse("");
+
+        assertThat(declarations).contains("outline-style:solid").doesNotContain("outline-style:none");
+        int[] outline = colorOf(".error-summary:focus", "outline-color", token("white"));
+        assertThat(contrast(outline, token("white"))).as("outline against the white card")
+                .isGreaterThanOrEqualTo(NON_TEXT_MINIMUM);
+    }
+
+    @Test
     @DisplayName("el enlace para saltar al contenido dibuja su foco en blanco sobre la cabecera oscura")
     void skipLinkFocusRingIsWhite() {
         assertThat(declarations(".focus\\:outline-white:focus").orElse(""))
