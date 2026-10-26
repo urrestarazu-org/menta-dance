@@ -166,6 +166,74 @@ class RegistrationIntegrationTest extends BaseIntegrationTest {
                 .doesNotContain("fecha de nacimiento válida");
     }
 
+    @Test
+    @DisplayName("every personal-data input declares a WCAG 1.3.5 purpose and a label")
+    void inputsDeclareTheirPurpose() throws Exception {
+        String html = registerPage();
+
+        assertThat(inputTag(html, "firstName")).contains("autocomplete=\"given-name\"");
+        assertThat(inputTag(html, "lastName")).contains("autocomplete=\"family-name\"");
+        assertThat(inputTag(html, "email")).contains("type=\"email\"").contains("autocomplete=\"username\"");
+        assertThat(inputTag(html, "phone")).contains("type=\"tel\"").contains("autocomplete=\"tel\"");
+        assertThat(inputTag(html, "birthDate")).contains("type=\"date\"").contains("autocomplete=\"bday\"");
+        assertThat(inputTag(html, "password")).contains("type=\"password\"").contains("autocomplete=\"new-password\"");
+        assertThat(inputTag(html, "passwordConfirmation"))
+                .contains("type=\"password\"").contains("autocomplete=\"new-password\"");
+        assertThat(html).containsPattern("<label[^>]*for=\"email\"[^>]*>Email</label>")
+                .containsPattern("<label[^>]*for=\"password\"[^>]*>Contraseña</label>")
+                .containsPattern("<label[^>]*for=\"passwordConfirmation\"[^>]*>Repetí la contraseña</label>");
+    }
+
+    @Test
+    @DisplayName("the optional birth date explains the accepted format and the field points to that help")
+    void birthDateHasAFormatHintLinkedToTheField() throws Exception {
+        String html = registerPage();
+
+        assertThat(inputTag(html, "birthDate")).contains("aria-describedby=\"birthDate-help\"");
+        assertThat(html)
+                .containsPattern("<div[^>]*id=\"birthDate-help\"[^>]*>\\s*<p[^>]*>[^<]*AAAA-MM-DD[^<]*</p>");
+        assertThat(inputTag(html, "phone")).contains("aria-describedby=\"phone-help\"");
+        assertThat(inputTag(html, "password")).contains("aria-describedby=\"password-help\"");
+    }
+
+    @Test
+    @DisplayName("an invalid birth date keeps the hint, adds the error to the same description and is aria-invalid")
+    void birthDateErrorJoinsTheHint() throws Exception {
+        String body = mockMvc.perform(registration()
+                        .param("birthDate", LocalDate.now().plusDays(1).toString())
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(inputTag(body, "birthDate"))
+                .contains("aria-invalid=\"true\"").contains("aria-describedby=\"birthDate-help\"");
+        String help = body.substring(body.indexOf("id=\"birthDate-help\""));
+        help = help.substring(0, help.indexOf("</div>"));
+        assertThat(help).contains("AAAA-MM-DD").contains("La fecha de nacimiento tiene que ser anterior a hoy");
+    }
+
+    @Test
+    @DisplayName("every aria-describedby on the invalid form points to an element that exists")
+    void describedByTargetsExist() throws Exception {
+        String body = mockMvc.perform(post("/registro").param("email", "no-es-un-email").with(csrf()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        Matcher references = Pattern.compile("aria-describedby=\"([^\"]+)\"").matcher(body);
+        int checked = 0;
+        while (references.find()) {
+            checked++;
+            assertThat(body).as("target of %s", references.group()).contains("id=\"" + references.group(1) + "\"");
+        }
+        assertThat(checked).isGreaterThanOrEqualTo(4);
+    }
+
+    private static String inputTag(String html, String id) {
+        Matcher input = Pattern.compile("<input[^>]*\\bid=\"" + id + "\"[^>]*>").matcher(html);
+        assertThat(input.find()).as("an <input id=\"%s\"> in the page", id).isTrue();
+        return input.group();
+    }
+
     private static MockHttpServletRequestBuilder registration() {
         return post("/registro")
                 .param("firstName", "Ana")
