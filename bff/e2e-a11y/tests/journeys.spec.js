@@ -90,6 +90,35 @@ test.describe('authentication pages', () => {
     await expectNoBlockingViolations(page, 'register errors');
   });
 
+  test('register error summary takes focus and its links reach each field', async ({ page }) => {
+    await page.goto('/registro');
+    // Fake data: the email and the password are wrong on purpose (WCAG 3.3.1, 3.3.3).
+    await page.getByLabel('Nombre', { exact: true }).fill('Ana');
+    await page.getByLabel('Apellido', { exact: true }).fill('Prueba');
+    await page.getByLabel('Email', { exact: true }).fill('not-an-email');
+    await page.getByLabel('Teléfono', { exact: true }).fill('+54 9 11 0000 0000');
+    await page.getByLabel('Contraseña', { exact: true }).fill('short');
+    await page.getByRole('button', { name: 'Crear cuenta' }).click();
+
+    const summary = page.locator('[data-error-summary]');
+    await expect(summary).toBeVisible();
+    await expect(summary.getByRole('heading', { level: 2 })).toHaveText(/^Hay \d+ errores? en el formulario$/);
+    // The script moved focus to the summary on load.
+    await expect.poll(() => page.evaluate(
+      () => document.activeElement && document.activeElement.hasAttribute('data-error-summary'),
+    )).toBe(true);
+    await expectNoBlockingViolations(page, 'register error summary');
+
+    // Each link moves focus to the input it names.
+    const links = summary.getByRole('link');
+    const targets = await links.evaluateAll((anchors) => anchors.map((a) => a.getAttribute('href').slice(1)));
+    expect(targets).toContain('email');
+    for (let i = 0; i < targets.length; i += 1) {
+      await links.nth(i).click();
+      await expect(page.locator(`#${targets[i]}`)).toBeFocused();
+    }
+  });
+
   test('register keeps its input purposes', async ({ page }) => {
     await page.goto('/registro');
     // WCAG 1.3.5: personal-data fields declare what they collect.

@@ -170,6 +170,31 @@
     @apply text-sm font-medium text-feedback-error;
   }
 
+  /*
+   * Error summary of a form with field errors (WCAG 3.3.1, 3.3.3): error text and links on the error
+   * surface (7.45:1), border against the white card well over 3:1. It is focused by script (or by a
+   * link back to it), where :focus-visible does not reliably match, so its focus ring is explicit.
+   */
+  .error-summary {
+    @apply rounded border-2 border-feedback-error bg-feedback-error-surface p-4 text-feedback-error;
+  }
+
+  .error-summary:focus {
+    @apply outline outline-2 outline-offset-2 outline-feedback-error;
+  }
+
+  .error-summary-title {
+    @apply mb-2 text-lg font-semibold;
+  }
+
+  .error-summary-list {
+    @apply list-disc space-y-1 pl-5;
+  }
+
+  .error-summary a {
+    @apply font-medium text-feedback-error underline;
+  }
+
   /* Badges: small status labels; color is never the only signal (text inside). */
   .badge {
     @apply inline-block rounded-full px-3 py-1 text-sm font-medium;

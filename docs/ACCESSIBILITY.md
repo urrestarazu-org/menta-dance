@@ -3,8 +3,8 @@
 Auditoría de accesibilidad de las vistas Thymeleaf del BFF (issue #529). Slice 1:
 auditoría y correcciones; slice 2: comprobaciones automáticas en CI; slice 3:
 re-auditoría tras el nuevo estilo visual, las fotos, el registro con datos
-personales y las páginas legales (#649 a #654). El objetivo de referencia es
-**WCAG 2.1 nivel AA**.
+personales y las páginas legales (#649 a #654); slice 4: resumen de errores de
+los formularios (hallazgo 23). El objetivo de referencia es **WCAG 2.1 nivel AA**.
 
 > Este documento registra lo que se midió y lo que se revisó. **No** declara
 > conformidad con WCAG ni cumplimiento legal: una herramienta automática detecta
@@ -28,14 +28,16 @@ personales y las páginas legales (#649 a #654). El objetivo de referencia es
 
 | Técnica | Detalle |
 |---|---|
-| Automática | axe-core 4.14.0 sobre Chromium (Playwright), tags `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`. Se registran *violations* e *incomplete* (revisión manual requerida). |
+| Automática | axe-core sobre Chromium (Playwright), tags `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`. Se registran *violations* e *incomplete* (revisión manual requerida). Versión: **4.13.0 en CI** (la fija `bff/e2e-a11y/package-lock.json`, que instala `npm ci`); la auditoría inicial usó **4.14.0** (herramienta externa al repositorio). |
 | Contraste | Cálculo de la razón de luminancia relativa (fórmula WCAG) para cada par texto/fondo de los tokens, los bordes de componentes y el indicador de foco. En el slice 3 se midió con un script descartable y, además, el cálculo quedó como prueba de build (`StylesheetContrastTest`) sobre el CSS compilado. El texto sobre la foto del hero se midió sobre los píxeles reales de la imagen. Axe `color-contrast` se usó en la auditoría inicial. |
 | Foco | Recorrido con Tab en `/login` y `/`, leyendo el estilo computado (`outline`, `box-shadow`, `border-color`) de cada control. |
 | Código | Revisión de plantillas: jerarquía de encabezados, `main` único, landmarks, errores de formulario, regiones vivas, nombres accesibles, `<video>`, `<img>` y `<svg>`, `autocomplete` de los campos (1.3.5). |
 
-La auditoría inicial usó herramientas instaladas fuera del repositorio. Las
-comprobaciones de regresión viven en `bff/e2e-a11y/` (paquete npm propio; su
-lockfile fija axe-core 4.13.0, mientras que la auditoría inicial registró 4.14.0).
+La auditoría inicial usó herramientas instaladas fuera del repositorio, con
+axe-core 4.14.0. Las comprobaciones de regresión viven en `bff/e2e-a11y/` (paquete
+npm propio): su lockfile fija `@axe-core/playwright` 4.13.0 y axe-core 4.13.0, y
+esa es la versión que corre en CI. Los resultados de la auditoría inicial y los de
+CI vienen, por lo tanto, de versiones distintas de axe-core.
 
 ### Páginas auditadas
 
@@ -101,6 +103,7 @@ Tokens: `brand-deep #043F2E`, `brand-action #2A6F2B`, `brand-bright #78C51C`,
 | Éxito `#043F2E` sobre `#E2F5BE` | 10,27 |
 | Advertencia `#78350F` sobre `#FEF3C7` | 8,15 |
 | Skip link: `#2A6F2B` sobre blanco | 6,16 |
+| Resumen de errores: texto y enlaces `#9B1C1C` sobre `#FEF2F2` | 7,45 |
 | Placeholder del plugin de formularios `#6B7280` sobre blanco / `#F9FAFB` | 4,83 / 4,63 |
 
 Notas: ninguna plantilla usa `placeholder` hoy (el valor base de Tailwind,
@@ -137,6 +140,7 @@ botones de 18 px) exige 4,5:1.
 | Borde de campo de las pantallas de cuenta sobre la card blanca: antes `#E5E7EB` | 1,24 (no cumplía; el relleno `#F9FAFB` mide 1,05) |
 | Ídem, ahora `brand-deep` al 60 % (contra el blanco / contra el relleno) | 3,71 / 3,55 |
 | Borde de campo inválido `#9B1C1C` sobre blanco / `#F9FAFB` | 8,15 / 7,80 |
+| Resumen de errores: borde y contorno de foco `#9B1C1C` sobre la card blanca | 8,15 |
 | Ícono de beneficios `#2A6F2B` sobre blanco | 6,16 |
 | Borde de `alert-success` / `alert-error` sobre su superficie | 5,29 / 7,45 |
 | Borde de `alert-info`: antes `brand-deep` al 40 % sobre blanco; ahora al 60 % | 2,24; 3,71 |
@@ -176,7 +180,7 @@ tecnología asistiva), **Media**, **Baja**.
 | 20 | Registro con datos personales (#652): `autocomplete` correcto en nombre (`given-name`), apellido (`family-name`), teléfono (`tel`, `type="tel"`), fecha de nacimiento (`bday`, `type="date"`) y contraseñas (`new-password`); el email usa `username` (válido en la lista de propósitos de 1.3.5). Etiquetas asociadas y campos obligatorios con `required`; el opcional lo dice en la etiqueta. Se agregaron pruebas de regresión. | 1.3.5, 1.3.1, 3.3.2 | Media | Verificado (sin cambios) |
 | 21 | La fecha de nacimiento no explicaba el formato: un navegador sin calendario muestra un campo de texto y el servidor espera `AAAA-MM-DD`. Se agregó una ayuda vinculada con `aria-describedby` (junto con el error, cuando lo hay). | 3.3.2 Etiquetas o instrucciones, 1.3.1 | Media | Resuelto (slice 3) |
 | 22 | Imágenes: las cuatro fotos de la home tienen texto alternativo descriptivo (revisado en el código); el logo, los íconos SVG de beneficios y del menú son decorativos (`alt=""` o `aria-hidden="true"`); el video de la página de error es `aria-hidden` y la imagen quieta de respaldo lleva `alt="Menta Dance"`. La pertinencia de los textos alternativos es un juicio editorial y no se verificó con usuarios. | 1.1.1 Contenido no textual | Media | Verificado (revisión de código) |
-| 23 | Tras enviar un formulario inválido la página se vuelve a cargar y los errores quedan junto a cada campo, sin resumen de errores ni foco movido a ellos. No se probó cómo lo anuncian los lectores de pantalla. | 3.3.1, 3.3.3, 4.1.3 | Media | Pendiente de prueba manual |
+| 23 | Tras enviar un formulario inválido la página se vuelve a cargar y los errores quedaban solo junto a cada campo, sin resumen y con el foco al comienzo de la página: había que recorrer los campos con Tab para encontrarlos. Ahora los formularios con errores de campo (`/registro`, `/recuperar-contrasena`, `/restablecer-contrasena`, `/reenviar-activacion`) muestran un resumen de errores (patrón *error summary*): un grupo enfocable con "Hay N errores en el formulario" y un enlace por error que lleva al campo. Un script estático (`/js/error-summary.js`) mueve el foco al resumen al cargar y hace que cada enlace enfoque su campo; sin JavaScript el resumen igual se muestra arriba y los enlaces saltan al campo. El resumen no es una región viva (`role="alert"`): la recarga de la página ya la anuncia el navegador y cada mensaje debe anunciarse una sola vez. El criterio 4.1.3 (mensajes de estado) no aplica: es una recarga completa de la página, no un mensaje de estado dentro de ella. Cubierto por pruebas de integración y un recorrido de Playwright (escrito, no ejecutado localmente). No se probó cómo lo anuncian los lectores de pantalla. | 3.3.1, 3.3.3 (patrón *error summary*) | Media | Resuelto (slice 4); pendiente de prueba manual con lector de pantalla |
 
 ### Revisión de código
 
@@ -189,6 +193,15 @@ tecnología asistiva), **Media**, **Baja**.
 - **Regiones vivas**: `alert` usa `role="alert"` para errores y `role="status"`
   para el resto; cada mensaje aparece una sola vez. En `/login` el error de
   credenciales se muestra en una única región `role="alert"`.
+- **Resumen de errores** (`components :: errorSummary`, hallazgo 23): `div` con
+  `tabindex="-1"`, `role="group"` nombrado por su `h2` y `data-error-summary`,
+  dentro del `<form>` y después del `h1` (un solo `h1`, sin saltos de nivel). No
+  usa `role="alert"` ni `aria-live`; los mensajes por campo tampoco son regiones
+  vivas. Los enlaces apuntan al `id` de cada `<input>` en el orden del
+  formulario (la plantilla pasa la correspondencia error → campo, por ejemplo
+  `passwordConfirmed` → `passwordConfirmation`). Con errores, el primer campo no
+  pide `autofocus`, para que el navegador no le quite el foco al resumen. El
+  login no lo usa: su único error es el de credenciales, en un `role="alert"`.
 - **Imágenes/SVG**: hay fotos (`<img>` con `alt`, tamaño y `srcset`), un logo
   decorativo (`alt=""` junto al nombre visible), íconos SVG con `aria-hidden="true"`
   y un `<video>` decorativo (ver hallazgos 19 y 22).
@@ -238,6 +251,21 @@ contenido; no se declara conformidad con ese criterio.
 
 Nada de esto declara conformidad con WCAG 2.1 AA.
 
+## Verificación del slice 4 (resumen de errores)
+
+| Qué | Cómo | Estado |
+|---|---|---|
+| Resumen presente con el conteo (singular y plural), enlaces a `<input>` existentes en orden de formulario, en los cuatro formularios con errores de campo; ausente en un GET sin errores; sin `role="alert"` ni `aria-live`; un solo `h1` y encabezados en orden; sin `autofocus` cuando hay resumen; script externo con hash de contenido | `ErrorSummaryIntegrationTest` | Cubierto por prueba de integración |
+| Contraste del resumen (texto, enlaces, borde) y contorno de foco propio | `StylesheetContrastTest` | Cubierto por prueba de build |
+| Foco en el resumen al cargar y enlaces que enfocan cada campo, en un navegador real | Recorrido `register error summary takes focus...` en `journeys.spec.js` | Escrito, **no ejecutado** localmente (primer resultado válido: CI) |
+| Anuncio con lector de pantalla (VoiceOver, NVDA) | Procedimiento de prueba manual (arriba) | **Pendiente de prueba manual** |
+
+Notas: el CSP no se modificó porque ni el BFF ni el NGINX del repositorio envían
+`Content-Security-Policy` hoy; el script es un archivo del mismo origen (sin
+código en línea), así que también cumple `script-src 'self'`. Como NGINX cachea
+`*.js` 30 días como inmutable, el script se sirve con hash de contenido
+(`/js/error-summary-<hash>.js`), igual que la hoja de estilos.
+
 ## Procedimiento de prueba manual
 
 Hacerlo antes de cada release que cambie plantillas o CSS.
@@ -251,6 +279,9 @@ Hacerlo antes de cada release que cambie plantillas o CSS.
    fondos claros; claro sobre la cabecera, el pie, el hero y el panel de marca).
 3. En `/login` y `/registro`: completar y enviar con teclado; los errores de
    validación deben mostrarse junto al campo y el foco no debe quedar atrapado.
+   En `/registro` enviado con datos inválidos, el foco debe quedar en el resumen
+   de errores y su contorno debe verse; Tab recorre sus enlaces y Enter en cada
+   uno mueve el foco al campo correspondiente, con su etiqueta a la vista.
 4. En una lección: llegar al reproductor con Tab y operarlo con teclado
    (espacio, flechas).
 5. Shift+Tab debe recorrer en sentido inverso sin saltos.
@@ -264,6 +295,12 @@ Hacerlo antes de cada release que cambie plantillas o CSS.
    mensaje de error / ayuda asociados.
 4. Enviar un formulario con error: el mensaje de `role="alert"` se anuncia
    una sola vez.
+   Enviar `/registro` con datos inválidos (hallazgo 23): el foco cae en el
+   resumen y se anuncia una sola vez (título "Hay N errores en el formulario" y
+   su lista de enlaces, sin repetirlo como alerta); cada enlace mueve el foco a
+   su campo, que se anuncia con su etiqueta, "no válido" y el mensaje de error.
+   Repetir con el JavaScript desactivado: el resumen sigue arriba de la página y
+   los enlaces saltan al campo.
 5. En una lección: el video se anuncia como "Video de la lección: ...".
 
 ### Zoom y ajustes
@@ -289,7 +326,7 @@ del pipeline de Tailwind (`bff/package.json`), con versiones exactas y
 
 | Qué | Detalle |
 |---|---|
-| Recorridos | Públicos (`/`, `/classes`, detalle de clase, detalle de curso, `/plans`, 404), legales (las siete páginas: términos, privacidad, cookies, devolución, propiedad intelectual, accesibilidad y contacto), autenticación (`/login` y su error, `/registro`, errores de validación del registro con nombre, apellido, teléfono y fecha de nacimiento inválida, propósito de los campos del registro, `/recuperar-contrasena`, `/reenviar-activacion`) y alumno demo (`/dashboard`, una lección). Los recorridos legales y los del registro con los campos nuevos se agregaron en el slice 3; no se ejecutaron localmente al escribirlos (sin stack ni `.env` disponibles), así que su primer resultado válido es el de CI. |
+| Recorridos | Públicos (`/`, `/classes`, detalle de clase, detalle de curso, `/plans`, 404), legales (las siete páginas: términos, privacidad, cookies, devolución, propiedad intelectual, accesibilidad y contacto), autenticación (`/login` y su error, `/registro`, errores de validación del registro con nombre, apellido, teléfono y fecha de nacimiento inválida, resumen de errores del registro con foco y enlaces a cada campo (slice 4), propósito de los campos del registro, `/recuperar-contrasena`, `/reenviar-activacion`) y alumno demo (`/dashboard`, una lección). Los recorridos legales y los del registro con los campos nuevos se agregaron en el slice 3, y el del resumen de errores en el slice 4; no se ejecutaron localmente al escribirlos (sin stack ni `.env` disponibles), así que su primer resultado válido es el de CI. |
 | Datos | Perfil `demo` (datos públicos de siembra, docs/26). Alumno `alumno@menta.dance`; no se usan otras credenciales ni secretos. |
 | Falla el job | Violaciones de impacto `critical` o `serious`. |
 | Solo informa | Violaciones `moderate`/`minor` y resultados `incomplete` no previstos: anotación `::warning` y resumen del job. |

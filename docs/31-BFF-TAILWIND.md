@@ -143,6 +143,7 @@ que ninguna vista usa todavía.
 | `.badge` + `.badge-success` / `-warning` / `-danger` / `-neutral` | Etiqueta de estado; el texto siempre lleva el significado, no solo el color. |
 | `.container-page` | Ancho máximo y gutter horizontal de la página. |
 | `.alert` + `.alert-error` / `-success` / `-info` | Mensaje en bloque; `role="alert"` para errores, `role="status"` para el resto. |
+| `.error-summary` (+ `-title`, `-list`) | Resumen de errores de un formulario con errores de campo; se usa a través del fragmento `errorSummary`. Tiene `tabindex="-1"` y su propio contorno de foco. |
 
 Tokens de feedback (contraste AA sobre su superficie): `feedback-error`,
 `feedback-success`, `feedback-warning` y sus variantes `-surface`.
@@ -185,6 +186,7 @@ Tokens de feedback (contraste AA sobre su superficie): `feedback-error`,
 |-----------|------------|-------|
 | `field` | `id, label, type, name, autocomplete, value, hint, autofocus, errors` | `value`, `hint` y `errors` pueden ser `null`; `errors` es una lista (`${#fields.errors('email')}`). Enlaza hint/errores con `aria-describedby`. |
 | `alert` | `kind, message` | `kind`: `error`, `success` o `info`. |
+| `errorSummary` | `fields` | Resumen de errores (WCAG 3.3.1, 3.3.3). Se llama dentro del `<form th:object>`, después del `<h1>`. `fields` es un mapa ordenado `campo con error → id del input`, en el orden de los inputs: `${ {'email':'email', 'passwordConfirmed':'passwordConfirmation'} }`. No muestra nada sin errores. No es una región viva. Carga `/js/error-summary.js` (con hash de contenido), que mueve el foco al resumen. Con errores, el primer campo pasa `${!#fields.hasErrors('*')}` como `autofocus`. |
 | `notice` | `heading, message` | Página informativa: `<h1>` más una `.card` con un párrafo ("revisá tu correo", "cuenta activada"). Los enlaces de salida van después, fuera del fragmento. |
 
 ```html
