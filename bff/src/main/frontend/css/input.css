@@ -205,7 +205,7 @@
   }
 
   .alert-info {
-    @apply border-brand-deep/40 bg-white text-brand-deep;
+    @apply border-brand-deep/60 bg-white text-brand-deep;
   }
 }
 
@@ -241,8 +241,9 @@
     @apply bg-brand-light text-brand-deep hover:bg-brand-bright;
   }
 
+  /* Hover fills solid: a translucent fill over the hero photo would depend on the photo for its contrast. */
   .btn-outline-light {
-    @apply border border-brand-light bg-transparent text-brand-light hover:bg-brand-light/15;
+    @apply border border-brand-light bg-transparent text-brand-light hover:bg-brand-light hover:text-brand-deep;
   }
 
   .btn-lg {
@@ -262,14 +263,19 @@
     @apply absolute inset-x-0 top-full z-10 flex flex-col gap-2 bg-brand-deep px-4 py-4 shadow-lg;
   }
 
+  /*
+   * The overlay (brand-deep at 78% to 90%) keeps the hero text at 4.5:1 or more even over a pure white
+   * photo (measured: surface 5.47:1, brand-light 4.82:1). Do not lighten it without re-measuring;
+   * StylesheetContrastTest enforces it.
+   */
   .hero {
     @apply flex min-h-[26rem] items-center justify-center bg-brand-deep bg-cover px-4 py-16 text-center text-brand-surface;
-    background-image: linear-gradient(rgb(4 63 46 / 0.55), rgb(4 63 46 / 0.85)), url('/images/hero/salon.jpg');
+    background-image: linear-gradient(rgb(4 63 46 / 0.78), rgb(4 63 46 / 0.9)), url('/images/hero/salon.jpg');
   }
 
   @media (max-width: 640px) {
     .hero {
-      background-image: linear-gradient(rgb(4 63 46 / 0.55), rgb(4 63 46 / 0.85)), url('/images/hero/salon-960.jpg');
+      background-image: linear-gradient(rgb(4 63 46 / 0.78), rgb(4 63 46 / 0.9)), url('/images/hero/salon-960.jpg');
     }
   }
 
@@ -324,6 +330,17 @@
   .site-footer-title {
     @apply mb-3 text-base font-semibold text-brand-light;
   }
+
+  /*
+   * The default green ring measures 1.94:1 against brand-deep, below the 3:1 of WCAG 1.4.11.
+   * On the dark surfaces the ring is brand-light (9.25:1).
+   */
+  .site-header :focus-visible,
+  .site-footer :focus-visible,
+  .hero :focus-visible,
+  .auth-aside :focus-visible {
+    @apply outline-brand-light;
+  }
 }
 
 /*
@@ -369,13 +386,16 @@
     @apply rounded-none border-0 bg-transparent p-0 shadow-none;
   }
 
-  /* Softer controls than the rest of the site: grey fill, light border, smaller text. */
+  /*
+   * Softer controls than the rest of the site: grey fill, smaller text. The border stays at 3:1 or more
+   * against the white card (brand-deep at 60%: 3.71:1); a light grey one measured 1.24:1 (WCAG 1.4.11).
+   */
   .auth-body .field-label {
     @apply text-sm text-brand-deep;
   }
 
   .auth-body .field-input {
-    @apply border-gray-200 bg-gray-50;
+    @apply border-brand-deep/60 bg-gray-50;
   }
 
   .auth-body .field-input[aria-invalid='true'] {
@@ -386,8 +406,9 @@
     @apply py-3 text-lg;
   }
 
+  /* Links keep the global underline: the green is only 1.94:1 against the surrounding text (WCAG 1.4.1). */
   .auth-body a {
-    @apply font-medium no-underline hover:underline;
+    @apply font-medium;
   }
 
   .auth-body form ~ p {
