@@ -13,7 +13,7 @@ android {
 
     defaultConfig {
         applicationId = "com.menta.android"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
@@ -28,12 +28,12 @@ android {
             // 10.0.2.2 es la dirección con la que el emulador alcanza el host.
             // El cleartext que esto implica queda habilitado únicamente para
             // debug, vía src/debug/res/xml/network_security_config.xml.
-            buildConfigField("String", "AUTH_API_BASE_URL", "\"http://10.0.2.2:8081\"")
+            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8081\"")
         }
 
         release {
             // HTTPS obligatorio: release no habilita cleartext en ninguna forma.
-            buildConfigField("String", "AUTH_API_BASE_URL", "\"https://api.mentadance.com\"")
+            buildConfigField("String", "API_BASE_URL", "\"https://api.mentadance.com\"")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
