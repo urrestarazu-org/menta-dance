@@ -3,6 +3,7 @@ package com.menta.auth.infrastructure.web.dto;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.time.Duration;
@@ -19,8 +20,10 @@ import org.junit.jupiter.api.Test;
  */
 class TokenResponseSerializationTest {
 
+    // Mirrors Spring Boot's default, which writes durations as ISO-8601 strings unless told otherwise.
     private final ObjectMapper objectMapper = JsonMapper.builder()
         .addModule(new JavaTimeModule())
+        .disable(SerializationFeature.WRITE_DURATIONS_AS_TIMESTAMPS)
         .build();
 
     @Test
