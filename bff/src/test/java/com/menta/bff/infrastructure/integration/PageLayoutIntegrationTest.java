@@ -33,6 +33,14 @@ class PageLayoutIntegrationTest extends BaseIntegrationTest {
                 .contains("lang=\"es\"");
     }
 
+    @ParameterizedTest(name = "{0} dibuja el foco del skip link en blanco")
+    @ValueSource(strings = {"/", "/login", "/contacto"})
+    @DisplayName("el skip link aparece sobre la cabecera oscura: su foco es blanco, no el verde de acción")
+    void skipLinkFocusRingContrastsWithTheDarkHeader(String path) throws Exception {
+        assertThat(render(path)).containsPattern(
+                "<a href=\"#main\"[^>]*class=\"[^\"]*\\bfocus:outline-white\\b[^\"]*\"");
+    }
+
     @Test
     @DisplayName("/login conserva el formulario, el CSRF y los campos email y password")
     void loginKeepsItsForm() throws Exception {
