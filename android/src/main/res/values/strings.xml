@@ -26,5 +26,15 @@
     <string name="home_greeting">¡Hola!</string>
     <string name="menu_open">Menú</string>
     <string name="menu_section_home">Inicio</string>
+    <string name="menu_section_my_sessions">Mis clases</string>
     <string name="menu_logout">Cerrar sesión</string>
+
+    <string name="common_retry">Reintentar</string>
+
+    <string name="my_sessions_title">Mis clases</string>
+    <string name="my_sessions_empty">No tenés clases próximas con lugar confirmado</string>
+    <string name="my_sessions_error">No pudimos cargar tus clases.</string>
+    <string name="my_sessions_show_qr">Mostrar QR</string>
+    <string name="my_sessions_check_in_closed">El QR se habilita cuando abre el check-in.</string>
+    <string name="my_sessions_instructor">Con %1$s</string>
 </resources>

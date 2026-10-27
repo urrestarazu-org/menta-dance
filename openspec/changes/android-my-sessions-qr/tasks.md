@@ -68,37 +68,37 @@ Specs: `android-my-sessions`, `android-auth-navigation` (delta).
 
 ### Phase 1.1 Data and domain (list)
 
-- [ ] 1.1 RED `T/data/repository/OkHttpPhysicalSessionsRepositoryTest.kt` (MockWebServer): GET `/api/v1/physical/sessions/me` path + `Accept: application/json, application/problem+json`; two sessions parsed in server order with `Instant` (Scenario "Sessions returned"); an already-started-today session is kept (Scenario "Session already started today"); `sessions: []` -> `Loaded(empty)`; extra fields incl. `assignmentType` tolerated (Scenario "Tolerant parsing"); malformed body / 500 / I/O failure / bad `Instant` -> `Unavailable`.
-- [ ] 1.2 GREEN create `A/domain/model/MySession.kt`, `A/domain/model/MySessionsResult.kt`, `A/domain/repository/PhysicalSessionsRepository.kt` (only `mySessions()` in this PR), `A/data/remote/PhysicalWireModels.kt` (`MySessionsResponseDto`, `MySessionDto`, internal `@Serializable`), `A/data/repository/OkHttpPhysicalSessionsRepository.kt` (blocking `execute()`, `HttpUrl` builder, no logging).
-- [ ] 1.3 Run `*DomainPurityTest` (Scenario "Domain purity"): `java.time` allowed, no `android.`/`androidx.` in domain.
-- [ ] 1.4 GREEN `A/di/PhysicalModule.kt`: `@Singleton PhysicalSessionsRepository = OkHttpPhysicalSessionsRepository(@ApiHttpClient client, BuildConfig.API_BASE_URL)` (glue; compile gate + manual).
+- [x] 1.1 RED `T/data/repository/OkHttpPhysicalSessionsRepositoryTest.kt` (MockWebServer): GET `/api/v1/physical/sessions/me` path + `Accept: application/json, application/problem+json`; two sessions parsed in server order with `Instant` (Scenario "Sessions returned"); an already-started-today session is kept (Scenario "Session already started today"); `sessions: []` -> `Loaded(empty)`; extra fields incl. `assignmentType` tolerated (Scenario "Tolerant parsing"); malformed body / 500 / I/O failure / bad `Instant` -> `Unavailable`.
+- [x] 1.2 GREEN create `A/domain/model/MySession.kt`, `A/domain/model/MySessionsResult.kt`, `A/domain/repository/PhysicalSessionsRepository.kt` (only `mySessions()` in this PR), `A/data/remote/PhysicalWireModels.kt` (`MySessionsResponseDto`, `MySessionDto`, internal `@Serializable`), `A/data/repository/OkHttpPhysicalSessionsRepository.kt` (blocking `execute()`, `HttpUrl` builder, no logging).
+- [x] 1.3 Run `*DomainPurityTest` (Scenario "Domain purity"): `java.time` allowed, no `android.`/`androidx.` in domain.
+- [x] 1.4 GREEN `A/di/PhysicalModule.kt`: `@Singleton PhysicalSessionsRepository = OkHttpPhysicalSessionsRepository(@ApiHttpClient client, BuildConfig.API_BASE_URL)` (glue; compile gate + manual).
 
 ### Phase 1.2 Presentation logic
 
-- [ ] 1.5 RED `T/presentation/mysessions/SessionTimeFormatterTest.kt`: `formatSessionTime(instant, fixed ZoneId, Locale es-AR)` yields the expected Spanish label (device-zone scenario in "Upcoming sessions list").
-- [ ] 1.6 GREEN `A/presentation/mysessions/SessionTimeFormatter.kt` (pure function).
-- [ ] 1.7 Create `T/testing/FakePhysicalSessionsRepository.kt` (scripted results, call counter, optional gate for in-flight tests); reuse `MainDispatcherRule`.
-- [ ] 1.8 RED `T/presentation/mysessions/MySessionsViewModelTest.kt`: Loading -> Loaded (Scenario "Loading then content"); Empty on empty list (Scenario "No sessions"); Error then retry issues a new request (Scenario "Network failure and retry"); each `refresh()` refetches and reflects `checkInOpen` false -> true (Scenario "Resume refreshes"); `refresh()` ignored while in flight; per-item `checkInOpen` exposed (Scenarios "Window open"/"Window closed", state level only); later refreshes keep content until the result arrives.
-- [ ] 1.9 GREEN `A/domain/usecase/GetMySessionsUseCase.kt` (thin, `@Inject`), `A/presentation/mysessions/MySessionsUiState.kt` (`Loading | Empty | Error | Loaded`), `A/presentation/mysessions/MySessionsViewModel.kt` (`refresh()`, no load in `init`).
+- [x] 1.5 RED `T/presentation/mysessions/SessionTimeFormatterTest.kt`: `formatSessionTime(instant, fixed ZoneId, Locale es-AR)` yields the expected Spanish label (device-zone scenario in "Upcoming sessions list").
+- [x] 1.6 GREEN `A/presentation/mysessions/SessionTimeFormatter.kt` (pure function).
+- [x] 1.7 Create `T/testing/FakePhysicalSessionsRepository.kt` (scripted results, call counter, optional gate for in-flight tests); reuse `MainDispatcherRule`.
+- [x] 1.8 RED `T/presentation/mysessions/MySessionsViewModelTest.kt`: Loading -> Loaded (Scenario "Loading then content"); Empty on empty list (Scenario "No sessions"); Error then retry issues a new request (Scenario "Network failure and retry"); each `refresh()` refetches and reflects `checkInOpen` false -> true (Scenario "Resume refreshes"); `refresh()` ignored while in flight; per-item `checkInOpen` exposed (Scenarios "Window open"/"Window closed", state level only); later refreshes keep content until the result arrives.
+- [x] 1.9 GREEN `A/domain/usecase/GetMySessionsUseCase.kt` (thin, `@Inject`), `A/presentation/mysessions/MySessionsUiState.kt` (`Loading | Empty | Error | Loaded`), `A/presentation/mysessions/MySessionsViewModel.kt` (`refresh()`, no load in `init`).
 
 ### Phase 1.3 Screen and navigation (GREEN-only glue)
 
-- [ ] 1.10 `R/values/strings.xml`: add S1 strings (`menu_section_my_sessions` "Mis clases", `my_sessions_title`, `my_sessions_empty` "No tenés clases próximas con lugar confirmado", `my_sessions_error`, `common_retry`, `my_sessions_show_qr`, `my_sessions_check_in_closed`, `my_sessions_instructor`). Empty state has no purchase link.
-- [ ] 1.11 `A/presentation/mysessions/MySessionsScreen.kt`: stateful route (`LifecycleResumeEffect { refresh() }`) + stateless content; `MySessionsScreen(onShowQr: ((String) -> Unit)?)` shows "Mostrar QR" only when `checkInOpen && onShowQr != null`, else neutral text without minutes/hours.
-- [ ] 1.12 `A/presentation/navigation/Routes.kt`: `@Serializable data object MySessions`. `A/presentation/navigation/AuthenticatedScaffold.kt`: `StudentSection.MySessions`, param `onNavigate: (StudentSection) -> Unit`; drawer click closes drawer and calls `onNavigate` when `section != selected`; drawer lists exactly Home and "Mis clases".
-- [ ] 1.13 `A/presentation/navigation/MentaNavHost.kt`: map section -> route with `when`; `navigate(route) { popUpTo(Home); launchSingleTop = true }`; register the `MySessions` destination passing `onShowQr = null` (A11).
+- [x] 1.10 `R/values/strings.xml`: add S1 strings (`menu_section_my_sessions` "Mis clases", `my_sessions_title`, `my_sessions_empty` "No tenés clases próximas con lugar confirmado", `my_sessions_error`, `common_retry`, `my_sessions_show_qr`, `my_sessions_check_in_closed`, `my_sessions_instructor`). Empty state has no purchase link.
+- [x] 1.11 `A/presentation/mysessions/MySessionsScreen.kt`: stateful route (`LifecycleResumeEffect { refresh() }`) + stateless content; `MySessionsScreen(onShowQr: ((String) -> Unit)?)` shows "Mostrar QR" only when `checkInOpen && onShowQr != null`, else neutral text without minutes/hours.
+- [x] 1.12 `A/presentation/navigation/Routes.kt`: `@Serializable data object MySessions`. `A/presentation/navigation/AuthenticatedScaffold.kt`: `StudentSection.MySessions`, param `onNavigate: (StudentSection) -> Unit`; drawer click closes drawer and calls `onNavigate` when `section != selected`; drawer lists exactly Home and "Mis clases".
+- [x] 1.13 `A/presentation/navigation/MentaNavHost.kt`: map section -> route with `when`; `navigate(route) { popUpTo(Home); launchSingleTop = true }`; register the `MySessions` destination passing `onShowQr = null` (A11).
 
-### Phase 1.4 Manual verification (emulator API 26, local stack `10.0.2.2:8081`, `alumno@menta.dance` / a student with confirmed capacity)
+### Phase 1.4 Manual verification (run on API 37, the only installed image; API 26 not exercised; local stack `10.0.2.2:8081`, `alumno@menta.dance` / a student with confirmed capacity)
 
-- [ ] 1.M1 Drawer navigation: Home -> "Mis clases" shows the list and closes the drawer; "Mis clases" -> Home works; drawer lists exactly those two entries (Scenarios "Navigate to Mis clases", "Navigate back to Home", "Home contents").
-- [ ] 1.M2 Back stack: Home -> Mis clases -> Back returns to Home; Back on Home exits and never returns to login (Scenario "Back from home").
-- [ ] 1.M3 Refetch on resume: send the app to background and back, confirm a new request (Scenario "Resume wiring"); empty state text exact; stop the API for the error state + "Reintentar".
-- [ ] 1.M4 Logout from "Mis clases" behaves as on Home (Scenario "Logout stays available"); no "Mostrar QR" button appears even for `checkInOpen: true` sessions.
+- [x] 1.M1 Drawer navigation: Home -> "Mis clases" shows the list and closes the drawer; "Mis clases" -> Home works; drawer lists exactly those two entries (Scenarios "Navigate to Mis clases", "Navigate back to Home", "Home contents").
+- [x] 1.M2 Back stack: Home -> Mis clases -> Back returns to Home; Back on Home exits and never returns to login (Scenario "Back from home").
+- [x] 1.M3 Refetch on resume (verified on API 37 emulator; the empty-state text was NOT seen on device because the seed student has 15 sessions, it is covered by `MySessionsViewModelTest`): send the app to background and back, confirm a new request (Scenario "Resume wiring"); empty state text exact; stop the API for the error state + "Reintentar".
+- [x] 1.M4 Logout from "Mis clases" behaves as on Home (Scenario "Logout stays available"); no "Mostrar QR" button appears even for `checkInOpen: true` sessions.
 
 ### Phase 1.5 Gate and size
 
-- [ ] 1.14 Gate: focused command above, then `./gradlew build :android:assembleDebugAndroidTest` and `./gradlew :android:lintDebug`.
-- [ ] 1.15 Size check (measured): `git diff --shortstat <PR0-branch>...HEAD`. Forecast ~650-700 vs 800. If over, the screen and nav glue (1.10-1.13) cannot be split off without shipping a dead screen; trim test duplication or ask for `size:exception`.
+- [x] 1.14 Gate: focused command above, then `./gradlew build :android:assembleDebugAndroidTest` and `./gradlew :android:lintDebug`.
+- [x] 1.15 Size check (measured): `git diff --shortstat origin/develop...HEAD` (PR0 is already merged): see PR body. Forecast ~650-700 vs 800. If over, the screen and nav glue (1.10-1.13) cannot be split off without shipping a dead screen; trim test duplication or ask for `size:exception`.
 
 ---
 
