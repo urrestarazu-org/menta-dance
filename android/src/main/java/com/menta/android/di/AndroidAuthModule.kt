@@ -25,7 +25,7 @@ object AndroidAuthModule {
 
     @Provides @Singleton
     fun authRemoteDataSource(@AuthHttpClient client: OkHttpClient): AuthRemoteDataSource =
-        OkHttpAuthRemoteDataSource(client, BuildConfig.AUTH_API_BASE_URL)
+        OkHttpAuthRemoteDataSource(client, BuildConfig.API_BASE_URL)
 
     // AuthSessionRepository is @Singleton with an @Inject constructor: both views below
     // resolve to the same instance, so the HTTP stack and the use cases share one lock.
