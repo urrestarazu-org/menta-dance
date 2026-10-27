@@ -144,7 +144,9 @@ class SiteImagesIntegrationTest extends BaseIntegrationTest {
 
         assertThat(video.find()).as("the error page has a <video>").isTrue();
         assertThat(video.group())
-                .contains("autoplay").contains("muted").contains("loop").contains("playsinline")
+                .contains("autoplay").contains("muted").contains("playsinline")
+                .as("a looping animation would last longer than 5 s (WCAG 2.2.2) and has no pause control")
+                .doesNotContainPattern("\\bloop\\b")
                 .contains("aria-hidden=\"true\"")
                 .containsPattern("poster=\"/images/brand/menta-wordmark\\.png\"")
                 .containsPattern("<source[^>]*src=\"/images/brand/menta-animado\\.mp4\"[^>]*type=\"video/mp4\"")
@@ -164,6 +166,28 @@ class SiteImagesIntegrationTest extends BaseIntegrationTest {
         // An MP4 carries the "ftyp" box right after its 4-byte size.
         assertThat(new String(body, 4, 4, java.nio.charset.StandardCharsets.US_ASCII)).isEqualTo("ftyp");
         assertThat(css).contains("prefers-reduced-motion").contains(".brand-motion").contains(".brand-still");
+    }
+
+    @Test
+    @DisplayName("el video que arranca solo dura 5 segundos o menos: no necesita control de pausa (WCAG 2.2.2)")
+    void autoplayingVideoLastsAtMostFiveSeconds() throws Exception {
+        byte[] body = mockMvc.perform(get("/images/brand/menta-animado.mp4")).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+
+        assertThat(mp4DurationSeconds(body)).isPositive().isLessThanOrEqualTo(5.0);
+    }
+
+    /** Duration from the {@code mvhd} box of an MP4: the version byte, then the timescale and duration fields. */
+    private static double mp4DurationSeconds(byte[] mp4) {
+        String boxes = new String(mp4, java.nio.charset.StandardCharsets.ISO_8859_1);
+        int mvhd = boxes.indexOf("mvhd");
+        assertThat(mvhd).as("the mp4 has a movie header (mvhd) box").isPositive();
+        java.nio.ByteBuffer header = java.nio.ByteBuffer.wrap(mp4);
+        int version = mp4[mvhd + 4];
+        int fields = mvhd + (version == 1 ? 24 : 16);
+        long timescale = Integer.toUnsignedLong(header.getInt(fields));
+        long duration = version == 1 ? header.getLong(fields + 4) : Integer.toUnsignedLong(header.getInt(fields + 4));
+        return (double) duration / timescale;
     }
 
     private String render(String path) throws Exception {
