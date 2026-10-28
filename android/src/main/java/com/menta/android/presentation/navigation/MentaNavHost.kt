@@ -14,6 +14,7 @@ import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import com.menta.android.presentation.home.HomeScreen
 import com.menta.android.presentation.login.LoginRoute
+import com.menta.android.presentation.mysessions.MySessionsScreen
 import com.menta.android.presentation.session.SessionGate
 import com.menta.android.presentation.session.SessionViewModel
 import com.menta.android.presentation.splash.SplashScreen
@@ -42,8 +43,22 @@ fun MentaNavHost(sessionViewModel: SessionViewModel = hiltViewModel()) {
         }
         navigation<Authenticated>(startDestination = Home) {
             composable<Home> {
-                AuthenticatedScaffold(selected = StudentSection.Home, onLogout = sessionViewModel::onLogout) { innerPadding ->
+                AuthenticatedScaffold(
+                    selected = StudentSection.Home,
+                    onNavigate = navController::navigateToSection,
+                    onLogout = sessionViewModel::onLogout,
+                ) { innerPadding ->
                     HomeScreen(modifier = Modifier.padding(innerPadding))
+                }
+            }
+            composable<MySessions> {
+                AuthenticatedScaffold(
+                    selected = StudentSection.MySessions,
+                    onNavigate = navController::navigateToSection,
+                    onLogout = sessionViewModel::onLogout,
+                ) { innerPadding ->
+                    // No QR destination exists yet, so no "Mostrar QR" button is offered.
+                    MySessionsScreen(onShowQr = null, modifier = Modifier.padding(innerPadding))
                 }
             }
         }
@@ -57,3 +72,17 @@ private fun NavController.replaceAll(destination: Any) {
         launchSingleTop = true
     }
 }
+
+/** Drawer navigation: Home stays at the bottom of the stack, so Back from any section returns to it. */
+private fun NavController.navigateToSection(section: StudentSection) {
+    navigate(section.route) {
+        popUpTo(Home)
+        launchSingleTop = true
+    }
+}
+
+private val StudentSection.route: Any
+    get() = when (this) {
+        StudentSection.Home -> Home
+        StudentSection.MySessions -> MySessions
+    }

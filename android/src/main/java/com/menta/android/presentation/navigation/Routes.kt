@@ -14,3 +14,6 @@ data object Authenticated
 
 @Serializable
 data object Home
+
+@Serializable
+data object MySessions
