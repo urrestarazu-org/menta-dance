@@ -109,33 +109,33 @@ Specs: `android-access-qr` (Credential custody, Renewal tied to visibility, Deni
 
 ### Phase 2.1 Domain model
 
-- [ ] 2.1 RED `T/domain/model/AccessCredentialTest.kt`: `renewalDelay` normal 30 s (Scenario "Server hint wins"), near expiry uses `expiresAt - now - 5 s` (Scenario "Expiry wins"), already-past expiry -> 5 s floor (Scenario "Floor"); `isExpiredAt`; `toString` omits the value (Scenario "Masked toString").
-- [ ] 2.2 GREEN `A/domain/model/AccessCredential.kt` (masked `toString`), `A/domain/model/AccessDenial.kt` (`OUTSIDE_CHECK_IN_WINDOW, SESSION_CANCELLED, CAPACITY_ASSIGNMENT_REQUIRED, SESSION_NOT_FOUND, OTHER`), `A/domain/model/AccessQrResult.kt` (`Issued | Denied | Unavailable`). Run `*DomainPurityTest`.
+- [x] 2.1 RED `T/domain/model/AccessCredentialTest.kt`: `renewalDelay` normal 30 s (Scenario "Server hint wins"), near expiry uses `expiresAt - now - 5 s` (Scenario "Expiry wins"), already-past expiry -> 5 s floor (Scenario "Floor"); `isExpiredAt`; `toString` omits the value (Scenario "Masked toString").
+- [x] 2.2 GREEN `A/domain/model/AccessCredential.kt` (masked `toString`), `A/domain/model/AccessDenial.kt` (`OUTSIDE_CHECK_IN_WINDOW, SESSION_CANCELLED, CAPACITY_ASSIGNMENT_REQUIRED, SESSION_NOT_FOUND, OTHER`), `A/domain/model/AccessQrResult.kt` (`Issued | Denied | Unavailable`). Run `*DomainPurityTest`.
 
 ### Phase 2.2 Data (access-qr endpoint)
 
-- [ ] 2.3 Guard: run `*OkHttpAuthRemoteDataSourceTest` green before the refactor (A3).
-- [ ] 2.4 RED extend `OkHttpPhysicalSessionsRepositoryTest`: POST `/api/v1/physical/sessions/{id}/access-qr` empty body + path segment encoding; 200 parsed to `Issued`; each 403 code -> its denial; 404 -> `SESSION_NOT_FOUND`; 400 -> `OTHER`; 401 / 408 / 429 / 5xx / I/O / malformed body -> `Unavailable`; non-problem Content-Type falls back to status mapping (Scenarios "Window closes while open", "Other denials").
-- [ ] 2.5 GREEN `A/data/remote/ProblemJson.kt` (`internal fun Response.problemCode(): String?`); `A/data/remote/OkHttpAuthRemoteDataSource.kt` `problem()` delegates to it (auth test stays green); `PhysicalWireModels.kt` adds `AccessQrResponseDto` with masked `toString`; `PhysicalSessionsRepository.kt` + `OkHttpPhysicalSessionsRepository.kt` add `issueAccessQr(sessionId)`; `FakePhysicalSessionsRepository.kt` gains scripted access results.
-- [ ] 2.6 GREEN `A/domain/usecase/IssueAccessQrUseCase.kt` (thin; covered by the ViewModel tests); `A/di/TimeModule.kt` providing `Clock.systemUTC()`.
+- [x] 2.3 Guard: run `*OkHttpAuthRemoteDataSourceTest` green before the refactor (A3).
+- [x] 2.4 RED extend `OkHttpPhysicalSessionsRepositoryTest`: POST `/api/v1/physical/sessions/{id}/access-qr` empty body + path segment encoding; 200 parsed to `Issued`; each 403 code -> its denial; 404 -> `SESSION_NOT_FOUND`; 400 -> `OTHER`; 401 / 408 / 429 / 5xx / I/O / malformed body -> `Unavailable`; non-problem Content-Type falls back to status mapping (Scenarios "Window closes while open", "Other denials").
+- [x] 2.5 GREEN `A/data/remote/ProblemJson.kt` (`internal fun Response.problemCode(): String?`); `A/data/remote/OkHttpAuthRemoteDataSource.kt` `problem()` delegates to it (auth test stays green); `PhysicalWireModels.kt` adds `AccessQrResponseDto` with masked `toString`; `PhysicalSessionsRepository.kt` + `OkHttpPhysicalSessionsRepository.kt` add `issueAccessQr(sessionId)`; `FakePhysicalSessionsRepository.kt` gains scripted access results.
+- [x] 2.6 GREEN `A/domain/usecase/IssueAccessQrUseCase.kt` (thin; covered by the ViewModel tests); `A/di/TimeModule.kt` providing `Clock.systemUTC()`.
 
 ### Phase 2.3 ViewModel (virtual time)
 
-- [ ] 2.7 Create `T/testing/TestClock.kt` (`instant()` derived from `testScheduler.currentTime` plus an origin).
-- [ ] 2.8 RED `T/presentation/accessqr/AccessQrViewModelTest.kt` part A (issue/renew/hide): issues on `onVisible` (Scenario "Open from list", VM level); renews exactly once at 30 s; `onHidden` cancels (no calls after `advanceTimeBy`) and drops the credential (Scenarios "Stop on hide", "Hidden clears state"); re-`onVisible` restarts; `Showing.toString` masks the value.
-- [ ] 2.9 GREEN `A/presentation/accessqr/AccessQrUiState.kt` (`Loading | Showing | Offline | Denied`), `A/presentation/accessqr/AccessQrViewModel.kt` (`@HiltViewModel(assistedFactory = AccessQrViewModel.Factory::class)`, constructor `(sessionId, useCase, clock, io)`, explicit `onVisible()/onHidden()` Job).
-- [ ] 2.10 RED part B (denials): each of the four denials and `OTHER` shows `Denied(reason)`, drops the QR immediately, schedules no retry (Scenarios "Window closes while open", "Other denials"). GREEN: denial branch in the loop.
-- [ ] 2.11 RED part C (transient): failure with 20 s of validity keeps the same QR after 10 s (Scenario "Failure before expiry"); after `expiresAt` -> `Offline` with retries at 2/4/8/16/30/30 s (Scenario "Failure past expiry"); success restores `Showing` (Scenario "Recovery"). GREEN: failure counter, backoff `min(2s*2^(n-1), 30s)`, `delay(min(b, expiresAt-now))` while valid.
+- [x] 2.7 Create `T/testing/TestClock.kt` (`instant()` derived from `testScheduler.currentTime` plus an origin).
+- [x] 2.8 RED `T/presentation/accessqr/AccessQrViewModelTest.kt` part A (issue/renew/hide): issues on `onVisible` (Scenario "Open from list", VM level); renews exactly once at 30 s; `onHidden` cancels (no calls after `advanceTimeBy`) and drops the credential (Scenarios "Stop on hide", "Hidden clears state"); re-`onVisible` restarts; `Showing.toString` masks the value.
+- [x] 2.9 GREEN `A/presentation/accessqr/AccessQrUiState.kt` (`Loading | Showing | Offline | Denied`), `A/presentation/accessqr/AccessQrViewModel.kt` (`@HiltViewModel(assistedFactory = AccessQrViewModel.Factory::class)`, constructor `(sessionId, useCase, clock, io)`, explicit `onVisible()/onHidden()` Job).
+- [x] 2.10 RED part B (denials): each of the four denials and `OTHER` shows `Denied(reason)`, drops the QR immediately, schedules no retry (Scenarios "Window closes while open", "Other denials"). GREEN: denial branch in the loop.
+- [x] 2.11 RED part C (transient): failure with 20 s of validity keeps the same QR after 10 s (Scenario "Failure before expiry"); after `expiresAt` -> `Offline` with retries at 2/4/8/16/30/30 s (Scenario "Failure past expiry"); success restores `Showing` (Scenario "Recovery"). GREEN: failure counter, backoff `min(2s*2^(n-1), 30s)`, `delay(min(b, expiresAt-now))` while valid.
 
 ### Phase 2.4 Optional / docs
 
-- [ ] 2.12 Optional: `bruno/API - Direct/physical/check-ins/Issue Access QR.bru` (+ run with `bru` against the local stack to confirm the wire contract). Skip if it costs more than ~20 lines.
-- [ ] 2.13 `docs/05-PHYSICAL-API.md`: update only if it contradicts the endpoints used (expected: no change).
+- [x] 2.12 Optional: skipped. The request was ~24 lines (over the ~20-line cap) and the local stack was down, so it could not be run with `bru`; the wire contract is covered by `OkHttpPhysicalSessionsRepositoryTest` (MockWebServer).
+- [x] 2.13 `docs/05-PHYSICAL-API.md`: checked, no contradiction, no change.
 
 ### Phase 2.5 Gate and size
 
-- [ ] 2.14 Gate: focused command above, then `./gradlew build :android:assembleDebugAndroidTest` and `./gradlew :android:lintDebug`.
-- [ ] 2.15 Size check (measured): `git diff --shortstat <PR1-branch>...HEAD`. Forecast ~600-650 vs 800.
+- [x] 2.14 Gate: focused command above, then `./gradlew build :android:assembleDebugAndroidTest` and `./gradlew :android:lintDebug`.
+- [x] 2.15 Size check (measured): `git diff --shortstat <PR1-branch>...HEAD`. Forecast ~600-650 vs 800.
 
 ---
 
