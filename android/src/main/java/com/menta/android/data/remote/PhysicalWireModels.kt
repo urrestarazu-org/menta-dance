@@ -17,3 +17,13 @@ internal data class MySessionDto(
     val scheduledAt: String,
     val checkInOpen: Boolean,
 )
+
+/** `qrCredentials` is a secret: [toString] masks it so it cannot leak through logs or crash reports. */
+@Serializable
+internal data class AccessQrResponseDto(
+    val qrCredentials: String,
+    val expiresAt: String,
+    val refreshAfterSeconds: Long,
+) {
+    override fun toString() = "AccessQrResponseDto(expiresAt=$expiresAt, refreshAfterSeconds=$refreshAfterSeconds)"
+}
