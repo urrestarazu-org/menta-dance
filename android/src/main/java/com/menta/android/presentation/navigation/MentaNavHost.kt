@@ -12,6 +12,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
+import com.menta.android.presentation.accessqr.AccessQrRoute
 import com.menta.android.presentation.home.HomeScreen
 import com.menta.android.presentation.login.LoginRoute
 import com.menta.android.presentation.mysessions.MySessionsScreen
@@ -57,9 +59,17 @@ fun MentaNavHost(sessionViewModel: SessionViewModel = hiltViewModel()) {
                     onNavigate = navController::navigateToSection,
                     onLogout = sessionViewModel::onLogout,
                 ) { innerPadding ->
-                    // No QR destination exists yet, so no "Mostrar QR" button is offered.
-                    MySessionsScreen(onShowQr = null, modifier = Modifier.padding(innerPadding))
+                    MySessionsScreen(
+                        onShowQr = { sessionId -> navController.navigate(AccessQr(sessionId)) },
+                        modifier = Modifier.padding(innerPadding),
+                    )
                 }
+            }
+            composable<AccessQr> { entry ->
+                AccessQrRoute(
+                    sessionId = entry.toRoute<AccessQr>().sessionId,
+                    onBack = { navController.popBackStack() },
+                )
             }
         }
     }

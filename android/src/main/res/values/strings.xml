@@ -37,4 +37,15 @@
     <string name="my_sessions_show_qr">Mostrar QR</string>
     <string name="my_sessions_check_in_closed">El QR se habilita cuando abre el check-in.</string>
     <string name="my_sessions_instructor">Con %1$s</string>
+
+    <string name="access_qr_title">Tu QR de acceso</string>
+    <string name="access_qr_hint">Mostrá este código en la entrada.</string>
+    <string name="access_qr_loading">Generando tu QR…</string>
+    <string name="access_qr_offline">Sin conexión. Reintentamos automáticamente.</string>
+    <string name="access_qr_denied_outside_window">El check-in de esta clase no está abierto.</string>
+    <string name="access_qr_denied_cancelled">Esta clase fue cancelada.</string>
+    <string name="access_qr_denied_no_capacity">No tenés lugar confirmado en esta clase.</string>
+    <string name="access_qr_denied_not_found">No encontramos esta clase.</string>
+    <string name="access_qr_error">No pudimos mostrar el QR.</string>
+    <string name="access_qr_back">Volver</string>
 </resources>

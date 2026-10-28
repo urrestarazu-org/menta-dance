@@ -146,22 +146,22 @@ Specs: `android-access-qr` (QR destination, Local rendering, Brightness, Screens
 
 ### Phase 3.1 Library verification (do first, compile-only)
 
-- [ ] 3.1 Verify `hiltViewModel<AccessQrViewModel, AccessQrViewModel.Factory>(creationCallback = { it.create(id) })` compiles with `hilt-lifecycle-viewmodel-compose:1.4.0`. Fallback if the overload is missing: constructor takes `SavedStateHandle`, tests build `SavedStateHandle(mapOf("sessionId" to id))` (adjust PR2's VM signature in a follow-up commit here).
-- [ ] 3.2 Verify `androidx.activity.compose.LocalActivity` exists in activity-compose 1.10.1. Fallback: unwrap `LocalContext.current` through `ContextWrapper` to the `Activity`.
+- [x] 3.1 Verify `hiltViewModel<AccessQrViewModel, AccessQrViewModel.Factory>(creationCallback = { it.create(id) })` compiles with `hilt-lifecycle-viewmodel-compose:1.4.0`. Fallback if the overload is missing: constructor takes `SavedStateHandle`, tests build `SavedStateHandle(mapOf("sessionId" to id))` (adjust PR2's VM signature in a follow-up commit here). Result: compiles as-is on `hilt-lifecycle-viewmodel-compose:1.4.0` (no fallback needed).
+- [x] 3.2 Verify `androidx.activity.compose.LocalActivity` exists in activity-compose 1.10.1. Fallback: unwrap `LocalContext.current` through `ContextWrapper` to the `Activity`. Result: `androidx.activity.compose.LocalActivity` exists in 1.10.1 (no fallback needed).
 
 ### Phase 3.2 Encoding (pure JVM)
 
-- [ ] 3.3 `gradle/libs.versions.toml` + `android/build.gradle.kts`: add `com.google.zxing:core:3.5.4` as `implementation`.
-- [ ] 3.4 RED `T/presentation/accessqr/QrEncoderTest.kt`: encode -> render `QrMatrix` + 4-module quiet zone into `RGBLuminanceSource` (4 px/module) -> `HybridBinarizer` -> `QRCodeReader().decode().text == input` for the placeholder format (Scenario "Round-trip") and a 512-char token (Scenario "Long credential"); square size; `QrMatrix.toString` is `QrMatrix(size=N)`; `qrCellSize(minPx, n)` = `floor(minPx / (n + 8))` and centering offset.
-- [ ] 3.5 GREEN `A/presentation/accessqr/QrMatrix.kt`, `A/presentation/accessqr/QrEncoder.kt` (`QRCodeWriter`, ECC M, margin 0, UTF-8; `WriterException` surfaced as an error value), `qrCellSize` helper.
+- [x] 3.3 `gradle/libs.versions.toml` + `android/build.gradle.kts`: add `com.google.zxing:core:3.5.4` as `implementation`.
+- [x] 3.4 RED `T/presentation/accessqr/QrEncoderTest.kt`: encode -> render `QrMatrix` + 4-module quiet zone into `RGBLuminanceSource` (4 px/module) -> `HybridBinarizer` -> `QRCodeReader().decode().text == input` for the placeholder format (Scenario "Round-trip") and a 512-char token (Scenario "Long credential"); square size; `QrMatrix.toString` is `QrMatrix(size=N)`; `qrCellSize(minPx, n)` = `floor(minPx / (n + 8))` and centering offset.
+- [x] 3.5 GREEN `A/presentation/accessqr/QrMatrix.kt`, `A/presentation/accessqr/QrEncoder.kt` (`QRCodeWriter`, ECC M, margin 0, UTF-8; `WriterException` surfaced as an error value), `qrCellSize` helper.
 
 ### Phase 3.3 Screen glue (GREEN-only, manual verification)
 
-- [ ] 3.6 `A/presentation/accessqr/QrCode.kt`: Canvas, white background, 4-module quiet zone, black modules, ignores dark theme (Scenario "Drawing and theme").
-- [ ] 3.7 `A/presentation/accessqr/WindowEffects.kt`: `SecureScreenEffect` (add `FLAG_SECURE`, clear on dispose only if it was not set before) and `BrightnessBoostEffect` (save `screenBrightness`, set `BRIGHTNESS_OVERRIDE_FULL`, `FLAG_KEEP_SCREEN_ON`; restore on dispose; active only while `Showing`).
-- [ ] 3.8 `R/values/strings.xml`: add S3 strings (`access_qr_title`, `access_qr_hint`, `access_qr_loading`, `access_qr_offline` "Sin conexión. Reintentamos automáticamente.", the four `access_qr_denied_*`, `access_qr_error`, `access_qr_back`).
-- [ ] 3.9 `A/presentation/accessqr/AccessQrScreen.kt`: `AccessQrRoute` (`hiltViewModel` with `creationCallback`, `LifecycleStartEffect` -> `onVisible`/`onHidden`), `remember(credential.value) { QrEncoder.encode(...) }`, own `Scaffold` with "Volver" `TextButton` -> `popBackStack()`; both effects scoped to the whole destination.
-- [ ] 3.10 `A/presentation/navigation/Routes.kt`: `@Serializable data class AccessQr(val sessionId: String)`; `MentaNavHost.kt`: register the destination and pass `onShowQr = { navController.navigate(AccessQr(it)) }` to `MySessionsScreen` (replaces `null`).
+- [x] 3.6 `A/presentation/accessqr/QrCode.kt`: Canvas, white background, 4-module quiet zone, black modules, ignores dark theme (Scenario "Drawing and theme").
+- [x] 3.7 `A/presentation/accessqr/WindowEffects.kt`: `SecureScreenEffect` (add `FLAG_SECURE`, clear on dispose only if it was not set before) and `BrightnessBoostEffect` (save `screenBrightness`, set `BRIGHTNESS_OVERRIDE_FULL`, `FLAG_KEEP_SCREEN_ON`; restore on dispose; active only while `Showing`).
+- [x] 3.8 `R/values/strings.xml`: add S3 strings (`access_qr_title`, `access_qr_hint`, `access_qr_loading`, `access_qr_offline` "Sin conexión. Reintentamos automáticamente.", the four `access_qr_denied_*`, `access_qr_error`, `access_qr_back`).
+- [x] 3.9 `A/presentation/accessqr/AccessQrScreen.kt`: `AccessQrRoute` (`hiltViewModel` with `creationCallback`, `LifecycleStartEffect` -> `onVisible`/`onHidden`), `remember(credential.value) { QrEncoder.encode(...) }`, own `Scaffold` with "Volver" `TextButton` -> `popBackStack()`; both effects scoped to the whole destination.
+- [x] 3.10 `A/presentation/navigation/Routes.kt`: `@Serializable data class AccessQr(val sessionId: String)`; `MentaNavHost.kt`: register the destination and pass `onShowQr = { navController.navigate(AccessQr(it)) }` to `MySessionsScreen` (replaces `null`).
 
 ### Phase 3.4 Manual verification (emulator API 26 + one newer device/emulator, local stack `10.0.2.2:8081`, student with confirmed capacity and an open check-in window)
 
@@ -173,9 +173,9 @@ Specs: `android-access-qr` (QR destination, Local rendering, Brightness, Screens
 
 ### Phase 3.5 Gate, docs and size
 
-- [ ] 3.11 Gate: `./gradlew build :android:assembleDebugAndroidTest` and `./gradlew :android:lintDebug`.
-- [ ] 3.12 Size check (measured): `git diff --shortstat <PR2-branch>...HEAD`. Forecast ~350-400 vs 800.
-- [ ] 3.13 Final pass: tick all tasks, confirm `docs/ADR.md` index and `docs/adr/README.md` list ADR-0046, and that `rg AUTH_API_BASE_URL android/` is empty.
+- [x] 3.11 Gate: `./gradlew build :android:assembleDebugAndroidTest` and `./gradlew :android:lintDebug`. Result: `./gradlew :android:build :android:assembleDebugAndroidTest :android:lintDebug` BUILD SUCCESSFUL (185 unit tests, 0 failures; scoped to `:android` because root `build` fails on backend Testcontainers when Docker is down).
+- [x] 3.12 Size check (measured): `git diff --shortstat <PR2-branch>...HEAD`. Forecast ~350-400 vs 800. Result: `git diff --shortstat origin/develop` (untracked included): 12 files, +375/-15 = 390 vs 800.
+- [x] 3.13 Final pass: tick all tasks, confirm `docs/ADR.md` index and `docs/adr/README.md` list ADR-0046, and that `rg AUTH_API_BASE_URL android/` is empty. Result: `rg AUTH_API_BASE_URL android/` is empty; ADR-0046 is in `docs/adr/README.md` (row 0046); `docs/ADR.md` does not exist, `docs/10-ADRS.md` only points to the README index.
 
 ---
 
