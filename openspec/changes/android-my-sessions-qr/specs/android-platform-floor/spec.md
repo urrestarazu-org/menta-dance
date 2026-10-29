@@ -2,18 +2,18 @@
 
 ## Purpose
 
-Platform floor and shared build configuration for the Android module (#375, ADR-0046).
+Platform floor and shared build configuration for the Android module (#375, ADR-0047; the floor was 26 under ADR-0046 until #668).
 
 ## Requirements
 
-### Requirement: minSdk 26
+### Requirement: minSdk 29
 
-The module MUST declare `minSdk = 26` and MUST NOT enable core library desugaring. `targetSdk` MUST remain 36. `openspec/config.yaml` MUST mention the floor.
+The module MUST declare `minSdk = 29` and MUST NOT enable core library desugaring. `targetSdk` MUST remain 36. `openspec/config.yaml` MUST mention the floor.
 
 #### Scenario: Build configuration
 - GIVEN `android/build.gradle.kts`
 - WHEN inspected
-- THEN `minSdk` is 26 AND `targetSdk` is 36 AND no desugaring dependency or option is present
+- THEN `minSdk` is 29 AND `targetSdk` is 36 AND no desugaring dependency or option is present
 
 #### Scenario: Build stays green
 - GIVEN the change applied

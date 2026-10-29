@@ -1,6 +1,6 @@
 # ADR-0046: Android exige API 26 (Android 8.0) como `minSdk`
 
-**Estado:** Aceptado
+**Estado:** Reemplazado por [ADR-0047](0047-android-min-sdk-29.md)
 **Fecha:** 2026-10-27
 **Implementado:** 2026-10-27 (#375)
 **Decisores:** Equipo Android / Arquitectura

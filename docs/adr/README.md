@@ -32,7 +32,8 @@
 | [0043](0043-checkstyle-policy-ratchet.md) | Política de Checkstyle y trinquete |
 | [0044](0044-physical-checkin-rate-limiting-and-input-caps.md) | Rate limiting y topes de entrada en el check-in QR de Physical |
 | [0045](0045-despliegue-vps-donweb.md) | Despliegue en un VPS de DonWeb con Docker Compose |
-| [0046](0046-android-min-sdk-26.md) | Android exige API 26 (Android 8.0) como `minSdk` |
+| [0046](0046-android-min-sdk-26.md) | Android exige API 26 (Android 8.0) como `minSdk` (reemplazado por 0047) |
+| [0047](0047-android-min-sdk-29.md) | Android exige API 29 (Android 10) como `minSdk` |
 
 Los ADRs no listados fueron eliminados por contener decisiones incompatibles con
 el diseño vigente. Sus números no se reutilizan.
