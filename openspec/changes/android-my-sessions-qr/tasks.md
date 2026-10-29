@@ -42,22 +42,22 @@ Specs: `android-platform-floor` (minSdk 26; Shared API base URL).
 
 ### Phase 0.1 Floor and rename
 
-- [ ] 0.1 Check: `docs/adr/0046-android-min-sdk-26.md` and the `docs/adr/README.md` row 0046 are present and consistent (already written); fix wording only if wrong.
-- [ ] 0.2 RED (config check): confirm `rg 'minSdk = 24|AUTH_API_BASE_URL' android/` matches in `android/build.gradle.kts` and `A/di/AndroidAuthModule.kt` (Scenario "Rename complete" fails today).
-- [ ] 0.3 GREEN `android/build.gradle.kts`: `minSdk = 26`; rename both `buildConfigField` entries to `API_BASE_URL` (debug `http://10.0.2.2:8081`, release `https://api.mentadance.com`); leave `targetSdk = 36`; add no desugaring option/dependency (Scenario "Build configuration").
-- [ ] 0.4 GREEN `A/di/AndroidAuthModule.kt`: `BuildConfig.AUTH_API_BASE_URL` -> `BuildConfig.API_BASE_URL`. Do not touch BFF/infra `AUTH_API_BASE_URL` env vars (unrelated).
-- [ ] 0.5 `openspec/config.yaml` line 15: change `minSdk 24` to `minSdk 26 (ADR-0046)` (spec: "`openspec/config.yaml` MUST mention the floor").
-- [ ] 0.6 Verify (Scenario "Rename complete"): `rg AUTH_API_BASE_URL android/` is empty; `rg 'desugar' android/` is empty.
+- [x] 0.1 Check: `docs/adr/0046-android-min-sdk-26.md` and the `docs/adr/README.md` row 0046 are present and consistent (already written); fix wording only if wrong. Result: shipped in #664. ADR-0046 was superseded by ADR-0047 in #668 (floor 29).
+- [x] 0.2 RED (config check): confirm `rg 'minSdk = 24|AUTH_API_BASE_URL' android/` matches in `android/build.gradle.kts` and `A/di/AndroidAuthModule.kt` (Scenario "Rename complete" fails today). Result: done as part of #664 (historical RED).
+- [x] 0.3 GREEN `android/build.gradle.kts`: `minSdk = 26`; rename both `buildConfigField` entries to `API_BASE_URL` (debug `http://10.0.2.2:8081`, release `https://api.mentadance.com`); leave `targetSdk = 36`; add no desugaring option/dependency (Scenario "Build configuration"). Result: shipped in #664; the floor is now 29 (#668).
+- [x] 0.4 GREEN `A/di/AndroidAuthModule.kt`: `BuildConfig.AUTH_API_BASE_URL` -> `BuildConfig.API_BASE_URL`. Do not touch BFF/infra `AUTH_API_BASE_URL` env vars (unrelated). Result: shipped in #664.
+- [x] 0.5 `openspec/config.yaml` line 15: change `minSdk 24` to `minSdk 26 (ADR-0046)` (spec: "`openspec/config.yaml` MUST mention the floor"). Result: shipped in #664; now `minSdk 29 per ADR-0047` (#668).
+- [x] 0.6 Verify (Scenario "Rename complete"): `rg AUTH_API_BASE_URL android/` is empty; `rg 'desugar' android/` is empty. Result: both empty, rechecked on 2026-10-29.
 
 ### Phase 0.2 Change artifacts (PR-A, `feature/375-pr-a-sdd-artifacts`, base `develop`)
 
-- [ ] 0.7 PR-A: commit `openspec/changes/android-my-sessions-qr/{proposal.md,design.md,tasks.md,specs/**}` alone, `Refs #375`, so no code PR carries ~670 lines of markdown. It is independent of PR0 (no shared files); tick-offs in later PRs touch only `tasks.md`.
+- [x] 0.7 PR-A: commit `openspec/changes/android-my-sessions-qr/{proposal.md,design.md,tasks.md,specs/**}` alone, `Refs #375`, so no code PR carries ~670 lines of markdown. It is independent of PR0 (no shared files); tick-offs in later PRs touch only `tasks.md`. Result: #663 merged, 7 files, +670/-0.
 
 ### Phase 0.3 Gate and size
 
-- [ ] 0.8 Gate: `./gradlew build :android:assembleDebugAndroidTest` and `./gradlew :android:lintDebug` green (Scenario "Build stays green").
-- [ ] 0.9 Manual: install the debug build on an API 26 emulator, log in as `alumno@menta.dance` against `10.0.2.2:8081` (proves the rename kept auth working).
-- [ ] 0.10 Size check (measured): `git diff --shortstat origin/develop...HEAD`. Forecast ~230 (ADR 115 + README 1 + `config.yaml` ~48 + code ~10 + diff context). Well under 800; no exception needed.
+- [x] 0.8 Gate: `./gradlew build :android:assembleDebugAndroidTest` and `./gradlew :android:lintDebug` green (Scenario "Build stays green"). Result: green in #664 and again with `minSdk = 29` in #668 (`:android:build :android:assembleDebugAndroidTest :android:lintDebug`, BUILD SUCCESSFUL, fresh execution).
+- [x] 0.9 Manual: install the debug build on an API 26 emulator, log in as `alumno@menta.dance` against `10.0.2.2:8081` (proves the rename kept auth working). Result: NOT RUN on API 26: Apple Silicon has no `arm64-v8a` system image below API 29, so the floor could not be exercised locally. Superseded by #668 (floor 29): install, login, "Mis clases" and the QR verified on an API 29 emulator on 2026-10-29.
+- [x] 0.10 Size check (measured): `git diff --shortstat origin/develop...HEAD`. Forecast ~230 (ADR 115 + README 1 + `config.yaml` ~48 + code ~10 + diff context). Well under 800; no exception needed. Result: #664 = 5 files, +159/-12.
 
 ---
 
@@ -165,11 +165,13 @@ Specs: `android-access-qr` (QR destination, Local rendering, Brightness, Screens
 
 ### Phase 3.4 Manual verification (emulator API 26 + one newer device/emulator, local stack `10.0.2.2:8081`, student with confirmed capacity and an open check-in window)
 
-- [ ] 3.M1 Open from list: tap "Mostrar QR" on a `checkInOpen` session shows the QR (Scenario "Open from list"); a real scanner reads it, in dark theme too (Scenario "Drawing and theme").
-- [ ] 3.M2 Brightness rises to max while visible and is restored on Back (Scenario "Boost and restore").
-- [ ] 3.M3 Screenshot is blocked and the Recents thumbnail is blank (Scenario "Secure window"); `FLAG_SECURE` is cleared after leaving the screen.
-- [ ] 3.M4 Renewal shows no visible flash; airplane mode shows "Sin conexión" only after expiry and the QR returns on reconnect (Scenarios "Failure past expiry", "Recovery"); backgrounding the app clears the QR.
-- [ ] 3.M5 Close the window server-side (or use a cancelled session) and confirm the denial message with no QR; logout from the list still works.
+Run on 2026-10-29 on an API 37 emulator (all five) and an API 29 emulator (3.M1, 3.M2 and the SECURE flag; the API 29 floor replaced API 26, see 0.9 and #668).
+
+- [x] 3.M1 Open from list: tap "Mostrar QR" on a `checkInOpen` session shows the QR (Scenario "Open from list"); a real scanner reads it, in dark theme too (Scenario "Drawing and theme"). Result: a phone scanner read the payload on API 37 and API 29: `qr:{studentId}:{sessionId}:{jti}:{expiresAtEpoch}`, matching `QrCredentialParser`. Dark theme not exercised: the app never goes dark (`MentaDanceTheme` is called without `isSystemInDarkTheme()`, palette #509); the QR is drawn on fixed white regardless.
+- [x] 3.M2 Brightness rises to max while visible and is restored on Back (Scenario "Boost and restore"). Result: `sbrt=1.0` while showing; after Back the override is gone and the display brightness returned to its default (API 37 and API 29).
+- [x] 3.M3 Screenshot is blocked and the Recents thumbnail is blank (Scenario "Secure window"); `FLAG_SECURE` is cleared after leaving the screen. Result: window has `SECURE` + `KEEP_SCREEN_ON` while showing, `adb screencap` returns black, Recents thumbnail is blank; both flags are gone after Back.
+- [x] 3.M4 Renewal shows no visible flash; airplane mode shows "Sin conexión" only after expiry and the QR returns on reconnect (Scenarios "Failure past expiry", "Recovery"); backgrounding the app clears the QR. Result: with a 10 s credential TTL (`app.qr.credential-ttl`) each renewal (~5 s) showed no flash or spinner; with the network cut the screen showed "Sin conexión" with its spinner and no QR; the QR returned by itself after reconnecting; hiding the app with the network off left no stale QR on return.
+- [x] 3.M5 Close the window server-side (or use a cancelled session) and confirm the denial message with no QR; logout from the list still works. Result: cancelling the session in the DB while the QR was open produced "Esta clase fue cancelada." with no QR; logout returned to the login screen.
 
 ### Phase 3.5 Gate, docs and size
 
@@ -181,5 +183,7 @@ Specs: `android-access-qr` (QR destination, Local rendering, Brightness, Screens
 
 ## Optional follow-ups (non-blocking, not in the chain)
 
-- [ ] F.1 `api/openapi/physical-v1.yaml`: `assignmentType` is documented as "pending" although the schema has it; align the description.
-- [ ] F.2 `docs/16-CICD-PIPELINE.md`: says "5 tests" for Android; update to the real count after PR3 (or drop the number).
+Deferred on 2026-10-29: neither is part of this change's scope, so they carry no checkbox and do not block verify or archive.
+
+- F.1 `api/openapi/physical-v1.yaml`: `assignmentType` is documented as "pending" although the schema has it; align the description.
+- F.2 `docs/16-CICD-PIPELINE.md`: says "5 tests" for Android; update to the real count after PR3 (or drop the number).

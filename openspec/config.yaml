@@ -12,7 +12,7 @@ context: |
   Persistence: MySQL 8.0 schema `menta` (Flyway, prefix-per-module tables), Redis 7.4 (`maxmemory-policy noeviction`).
   Observability: OTel Collector 0.131 + Loki 3.5.3 + Grafana 11.5.2; `correlationId`, 90-day retention.
   Web (BFF): Java + Spring Boot + Thymeleaf (`bff/`).
-  Mobile (Android): Kotlin 2.4.21 + AGP 9.4.1 + Compose BOM 2026.09.00 (Material3) + Hilt 2.60.1 (KSP) + Navigation Compose + OkHttp 5.5.0 + kotlinx-serialization; `android/` is a live Gradle module (compileSdk 37, minSdk 26 per ADR-0046, JVM 21), direct API client (ADR-0035), Clean Architecture `presentation/domain/data/di`.
+  Mobile (Android): Kotlin 2.4.21 + AGP 9.4.1 + Compose BOM 2026.09.00 (Material3) + Hilt 2.60.1 (KSP) + Navigation Compose + OkHttp 5.5.0 + kotlinx-serialization; `android/` is a live Gradle module (compileSdk 37, minSdk 29 per ADR-0047, JVM 21), direct API client (ADR-0035), Clean Architecture `presentation/domain/data/di`.
   Tooling: Gradle wrapper (Kotlin DSL), dependency locking, configuration cache, parallel builds.
   Quality: Checkstyle 13.8.0 (`config/checkstyle/google_checks.xml` — Google Java Style adapted to 4-space indentation to match existing codebase; LineLength=120, full Google ruleset otherwise), JaCoCo 0.8.12, SonarCloud (declared in CI), ArchUnit 1.3.0 (api:* only, except `shared`).
   CI: GitHub Actions on `ubuntu-latest`, Temurin JDK 21, gradle cache.
