@@ -1,0 +1,184 @@
+# Tasks: Android "Mi asistencia" (#376) + backend `kind` (#673)
+
+Conventions: `P` = `api/physical/src/main/java/com/menta/physical`, `PT` = `api/physical/src/test/java/com/menta/physical`, `A` = `android/src/main/java/com/menta/android`, `T` = `android/src/test/java/com/menta/android`, `R` = `android/src/main/res`.
+Strict TDD: every RED task is a failing test written first (a compile failure counts as RED; add only the signature stubs needed to compile, bodies `TODO()`), every GREEN task is the minimum code to pass, then a REFACTOR/verify task. Android runner: `./gradlew :android:testDebugUnitTest [--tests "<Class>"]`. Backend runner: `./gradlew :api:physical:test :api:app:test` plus `:api:physical:jacocoTestCoverageVerification` (gates 95 domain+application / 90 infrastructure). Android fakes only (no mockk/turbine/Compose UI tests). Android domain tasks are guarded by `DomainPurityTest`; backend layering by ArchUnit (`--tests "*ArchitectureTest"`). Glue with no JVM-testable logic (DI, composables, nav wiring, strings) is GREEN-only and covered by the manual tasks of its PR.
+Final wording (decision #1820, openspec files are authoritative): check-in line "Ingreso por QR · HH:mm" / "Ingreso en recepción · HH:mm" / "Ingreso HH:mm"; instructor line stays "Con Ana". Never start an origin string with "Con".
+
+## Review Workload Forecast
+
+| Field | Value |
+|-------|-------|
+| Estimated changed lines | ~1,700 total: PR-A ~670 (openspec artifacts only), PR1 ~160, PR2 ~510, PR3 ~330-400 |
+| 400-line budget risk | High as one PR; Medium per PR against the 400 guard (PR2 ~510 and PR3 ~400 sit above/at it), Low against the repo's 800 override |
+| Chained PRs recommended | Yes |
+| Suggested split | PR-A artifacts (docs only) -> PR1 backend `kind` (#673) -> PR2 Android core -> PR3 Android UI; verify/archive follow-up outside the chain |
+| Delivery strategy | auto-chain |
+| Chain strategy | stacked-to-main (Git Flow: PR-A and PR1 -> `develop`, independent of each other; PR2 stacked on PR1's branch; PR3 stacked on PR2's branch; each child retargeted to `develop` when its parent merges) |
+
+Decision needed before apply: No
+Chained PRs recommended: Yes
+Chain strategy: stacked-to-main
+400-line budget risk: High
+
+Budget for this repo is 800 changed lines per PR (`review_budget_lines`); the 400 guard line above is the skill's literal contract and is exceeded as a whole change and by PR2, accepted by the 800 override. Strategy is resolved (auto-chain + stacked-to-main), so no decision gates apply.
+
+**Where the SDD artifacts land (PR-A, chosen over bundling in PR1).** Artifacts weigh ~670 lines (proposal 77, design 111, three specs ~255, tasks ~230). Bundled with PR1 (~160) the first PR would be ~830, over the 800 budget, and a backend reviewer would have to read the Android specs. A docs-only PR-A (precedent #663 for #375) keeps PR1 at ~160 and reviewable alone. PR-A has no shared files with PR1, so the two target `develop` independently. Later PRs touch `tasks.md` only for tick-offs. The delta specs live in PR-A and are NOT edited again by PR3; main specs (`openspec/specs/**`) are merged at archive time (see Follow-up).
+
+**PR2 split point (only if over budget).** Forecast ~510 vs 800, so no split is planned. If measured size passes ~750 (task 2.18), split at the port boundary: PR2a = domain models + port + DTOs + adapter + DI + `OkHttpAttendanceHistoryRepositoryTest` (Phases 2.1-2.2, ~250); PR2b = use case + `ACADEMY_ZONE` + UiState + ViewModel + fake + `AttendanceHistoryViewModelTest` (Phase 2.3, ~260), stacked on PR2a. PR3 then stacks on PR2b.
+
+### Suggested Work Units
+
+| Unit | Goal | Likely PR | Focused test command | Runtime harness | Rollback boundary |
+|------|------|-----------|----------------------|-----------------|-------------------|
+| A | Change artifacts (proposal, design, specs, tasks); no code | PR-A `feature/376-pr-a-sdd-artifacts` (base `develop`) | N/A (markdown only) | `git diff --stat origin/develop...HEAD` touches only `openspec/changes/android-attendance-history/` | revert PR-A (docs only) |
+| 1 | Additive nullable `kind` on `GET /api/v1/physical/attendance/me` (+ OpenAPI, Bruno) | PR1 `feature/673-attendance-history-kind` (base `develop`) | `./gradlew :api:physical:test --tests "*MonthlyAttendanceAssemblerTest" --tests "*PhysicalAttendanceControllerTest" --tests "*GetPhysicalAttendanceHistoryUseCaseImplTest"` then `:api:app:test --tests "*PhysicalAttendanceHistoryIntegrationTest"` | `bru run` of `Attendance History (Me).bru` against the local stack (demo profile) shows `kind` on rows | revert PR1 alone (additive; Android clients ignore unknown keys; PR2 tolerates a missing `kind` -> `UNKNOWN`) |
+| 2 | Attendance port, adapter, DI, use case, ViewModel (no UI) | PR2 `feature/376-pr2-attendance-core` (base PR1 branch) | `./gradlew :android:testDebugUnitTest --tests "*OkHttpAttendanceHistoryRepositoryTest" --tests "*AttendanceHistoryViewModelTest" --tests "*DomainPurityTest"` | N/A (no UI yet; wire contract covered by MockWebServer; optional `bru` against local stack) | revert PR2 (adds code nothing reaches yet; `PhysicalModule` loses one binding) |
+| 3 | Screen, month selector, formatters, drawer entry, route, strings | PR3 `feature/376-pr3-attendance-ui` (base PR2 branch) | `./gradlew :android:testDebugUnitTest --tests "*AttendanceFormattersTest"` | emulator API 29 + API 37 against local stack `10.0.2.2:8081` (see 3.M1-3.M7) | revert PR3 (drawer returns to two entries; PR2 stays dormant) |
+| F | Verify report + archive (merge deltas into `openspec/specs/**`) | Follow-up issue + PR `docs/376-verify-archive`, outside the chain, base `develop` | N/A | N/A | revert the archive PR |
+
+Per-PR branch protocol (all PRs): open the PR with the base shown above; while the parent is open the child base is the parent branch so the diff shows only the current unit. When the parent merges to `develop`, retarget the child (`gh pr edit <n> --base develop`); if the parent was squash-merged, first `git rebase --onto origin/develop <old-parent-tip> <child-branch>` and push with `--force-with-lease` only after explicit user approval. Ordering is hard: PR2 merges only after PR1 (#673 must be on `develop` so `kind` exists), PR3 only after PR2. Every merge must leave `develop` green. Each PR body carries the Chain Context diagram with the current PR marked (skill `chained-pr`; the registry lists it as `chained-pr`, there is no `gentle-ai-chained-pr`). Note: `gh issue view 376` / `gh issue view 673` could not be run in this phase (no shell tool); acceptance criteria were traced from the spec scenarios and must be re-checked against the issues when opening each PR (tasks A.4, 1.15, 2.20, 3.20).
+
+PR conventions (all PRs): PR body in Spanish; conventional commits only, no `Co-Authored-By` or AI attribution; before creating, run `gh pr list --head <branch> --state open`; add the PR to project board 1 and set its fields (Status, Priority, Size, etc., as for #375's PRs); keyword per PR: PR-A `Refs #376`, PR1 `Closes #673`, PR2 `Refs #376`, PR3 `Closes #376`, follow-up `Refs #376`.
+
+---
+
+## PR-A - SDD artifacts  (`feature/376-pr-a-sdd-artifacts`, base `develop`)
+
+Scope: `openspec/changes/android-attendance-history/{proposal.md,design.md,tasks.md,specs/**}` only. Start: `develop`. End: artifacts reviewable on their own.
+
+- [ ] A.1 Commit the change folder alone (`docs(openspec): proponer el cambio android-attendance-history (#376)`), no code and no `openspec/specs/**` edits.
+- [ ] A.2 Verify: `git diff --stat origin/develop...HEAD` lists only files under `openspec/changes/android-attendance-history/`; size ~670 vs 800.
+- [ ] A.3 Open the PR (`Refs #376`), Spanish body, board project 1 fields set; confirm no open PR exists for the branch.
+- [ ] A.4 Trace issue acceptance criteria: `gh issue view 376` and `gh issue view 673` against spec scenarios; record gaps in the PR body.
+
+---
+
+## PR1 - Backend `kind`  (`feature/673-attendance-history-kind`, base `develop`)
+
+Scope: additive nullable `kind` (`QR`|`MANUAL`) on each `sessions[]` item; OpenAPI; Bruno; tests. Start: `develop`. End: the endpoint returns `kind` for ATTENDED rows and `null` for ABSENT rows; all backend gates green. Out of scope: any Android file, the admin endpoint behaviour (it shares the DTO and gains the field harmlessly), Lombok (touched types are records/interfaces, B3).
+Specs: `physical-attendance-history` (Self attendance for a calendar month; Status is derived live, never stored).
+
+### Phase 1.1 Application layer (assembler, view, row)
+
+- [ ] 1.1 RED `PT/application/usecase/MonthlyAttendanceAssemblerTest.java`: extend row helpers (lines 21 and 28) to the new `AttendanceHistoryRow(..., recordedAt, AttendanceKind kind)`; add tests: an attended row yields `view.kind() == QR` and another `MANUAL` (Scenario "Attended rows expose their origin"); an ABSENT row with `includeAbsent=true` yields `kind == null` (Scenarios "Absent rows have no origin", "An absent session has a null recordedAt"); counts/rate/order unchanged. Stubs only: add the `kind` component to the records.
+- [ ] 1.2 RED `PT/application/usecase/GetPhysicalAttendanceHistoryUseCaseImplTest.java` (line 57): update the `AttendanceHistoryRow` constructor call (extra `null`/`AttendanceKind` argument); assertions unchanged. Mechanical, compiles with 1.1.
+- [ ] 1.3 GREEN `P/application/dto/AttendanceHistoryRow.java` (+`AttendanceKind kind`, domain enum `P/domain/model/AttendanceKind.java`), `P/application/dto/AttendanceSessionView.java` (+`AttendanceKind kind` last), `P/application/usecase/MonthlyAttendanceAssembler.java` (line ~46): `kind = rowAttended ? row.kind() : null`, the single place enforcing "kind present iff recordedAt present" (B1, B2).
+- [ ] 1.4 Run `./gradlew :api:physical:test --tests "*MonthlyAttendanceAssemblerTest" --tests "*GetPhysicalAttendanceHistoryUseCaseImplTest"`: green.
+
+### Phase 1.2 Web layer (response)
+
+- [ ] 1.5 RED `PT/infrastructure/web/controller/PhysicalAttendanceControllerTest.java`: MockMvc payload with one ATTENDED view (`kind` QR) and one ABSENT view; assert `$.sessions[0].kind == "QR"` and `$.sessions[1].kind` is `nullValue()` with the key present (Scenarios "Attended rows expose their origin", "Absent rows have no origin").
+- [ ] 1.6 GREEN `P/infrastructure/web/dto/AttendanceSessionResponse.java`: add `String kind`, mapped `view.kind() == null ? null : view.kind().name()` (no `@JsonInclude`, same as `recordedAt`).
+
+### Phase 1.3 Persistence layer (projection, JPQL, adapter)
+
+- [ ] 1.7 RED `api/app/src/test/java/com/menta/app/integration/physical/PhysicalAttendanceHistoryIntegrationTest.java` (Testcontainers; needs Docker): the existing manual-row test asserts `$.sessions[i].kind == "MANUAL"`; add a QR attendance row asserting `"QR"`; add an ABSENT assignment (`includeAbsent=true`) asserting the key is present with a null value. This is the only real coverage of the JPQL and `toRows`. Counts, rate and ordering assertions stay as they are.
+- [ ] 1.8 GREEN `P/infrastructure/persistence/repository/MonthlyAttendanceRowProjection.java` (+`String getKind()`), `P/infrastructure/persistence/repository/PhysicalCapacityAssignmentJpaRepository.java` (`findMonthlyAttendance`, ~line 114: select `a.kind AS kind`), `P/infrastructure/persistence/adapter/PhysicalCapacityAssignmentRepositoryAdapter.java` (`toRows`, ~line 69: `kind == null ? null : AttendanceKind.valueOf(kind)`).
+- [ ] 1.9 REFACTOR/verify: `./gradlew :api:physical:test :api:app:test` green; unknown stored value fails in `AttendanceKind.valueOf`, same behaviour as `AttendanceJpaMapper.toDomain` (no extra branch, no extra test).
+
+### Phase 1.4 Contract and tooling
+
+- [ ] 1.10 `api/openapi/physical-v1.yaml` `AttendanceSessionResponse` (line ~1437): add optional (not in `required`) property `kind` with `type: [string, "null"]`, `enum: [QR, MANUAL, null]` (OpenAPI 3.1 nullable enum), description "Cómo se registró el check-in; null cuando status es ABSENT." Check against the repo's OpenAPI validation if one exists in CI.
+- [ ] 1.11 `bruno/API - Direct/physical/Attendance History (Me).bru`: docs mention `kind`; add `res.body.sessions: isArray` assertion; keep the request at most ~20 added lines.
+
+### Phase 1.5 Manual verification (local stack, demo profile `alumno@menta.dance` / `Alumno123!`)
+
+- [ ] 1.M1 `bru run "physical/Attendance History (Me).bru"` (or `curl` with a demo token) against `localhost:8081`: ATTENDED rows show `kind` `QR` or `MANUAL`; with `includeAbsent=true` an ABSENT row shows `"kind": null`; `scheduledSessionCount`, `attended`, `absent`, `attendanceRate` and ordering are unchanged.
+
+### Phase 1.6 Gate and close-out
+
+- [ ] 1.12 Gate (backend): `./gradlew :api:physical:test :api:app:test :api:physical:jacocoTestCoverageVerification` green (physical 95% domain+application / 90% infrastructure hold because every new branch has a test); `./gradlew :api:physical:test --tests "*ArchitectureTest"` green (`application` depends on `domain` only; `AttendanceKind` is a domain type).
+- [ ] 1.13 Size check (measured): `git diff --shortstat origin/develop...HEAD`; forecast ~160 (prod ~30, tests ~75, OpenAPI/Bruno ~55) vs 800.
+- [ ] 1.14 Commits: conventional, no AI attribution (e.g. `feat(physical): exponer kind en el historial de asistencia (#673)`).
+- [ ] 1.15 PR (`Closes #673`, base `develop`, Spanish body, Chain Context marking PR1, board project 1 fields set); check `gh pr list --head feature/673-attendance-history-kind`; compare against `gh issue view 673` acceptance criteria. Merge before PR2 is opened for review against `develop`.
+
+---
+
+## PR2 - Android core  (`feature/376-pr2-attendance-core`, base PR1 branch -> `develop` after PR1 merges)
+
+Scope: domain models, port, use case, OkHttp adapter, DTOs, DI binding, ViewModel and UiState, tests and fake. No UI, no navigation, no dependency changes; `PhysicalSessionsRepository` and `FakePhysicalSessionsRepository` untouched. Start: PR1 merged (or PR1 branch as base). End: ViewModel fully tested; nothing user-visible changes.
+Specs: `android-attendance-history` (Monthly attendance request; Month selector and default month; Attendance row content (parsing); Loading and error states; Month change replaces the in-flight load; Reload on resume; Layering).
+
+### Phase 2.1 Data (wire contract, RED first)
+
+- [ ] 2.1 RED `T/data/repository/OkHttpAttendanceHistoryRepositoryTest.kt` (MockWebServer, pattern of `OkHttpPhysicalSessionsRepositoryTest`): request is GET `/api/v1/physical/attendance/me` with query `month=2026-09`, `Accept: application/json, application/problem+json`, no `studentId`, no `includeAbsent` (Scenario "Request shape"); 12 attended rows parsed in one response, one request only (Scenario "Whole month in one response"); `kind` `QR`/`MANUAL` -> `AttendanceOrigin.QR`/`MANUAL`; `kind` null, missing or `"NFC"` -> `UNKNOWN` and parsing succeeds (Scenario "Unknown or missing kind"); server order preserved (Scenario "Server order and Buenos Aires month cut"); row with `recordedAt: null` is skipped (A3); `sessions: []` -> `Loaded(empty)`; unknown keys (`scheduledSessionCount`, `attended`, `absent`, `attendanceRate`, `status`) tolerated; 401 / 400 / 500 / I/O failure / malformed body / malformed `Instant` -> `Unavailable` (Scenarios "Failure and retry", "Session expired": 401 is left to the session gate, the adapter still returns `Unavailable`). Stubs for the port/adapter so it compiles.
+- [ ] 2.2 GREEN domain `A/domain/model/AttendanceOrigin.kt` (`QR, MANUAL, UNKNOWN`), `A/domain/model/AttendanceEntry.kt` (`sessionId, courseName, instructorName, scheduledAt: Instant, recordedAt: Instant, origin`), `A/domain/model/AttendanceHistoryResult.kt` (`Loaded(entries) | Unavailable`), `A/domain/repository/AttendanceHistoryRepository.kt` (`fun monthlyAttendance(month: YearMonth): AttendanceHistoryResult`, blocking).
+- [ ] 2.3 GREEN `A/data/remote/AttendanceWireModels.kt` (internal `@Serializable` `AttendanceHistoryResponseDto(sessions)`, `AttendanceSessionDto(sessionId, scheduledAt, courseName, instructorName, recordedAt: String?, kind: String? = null)`; aggregates ignored) and `A/data/repository/OkHttpAttendanceHistoryRepository.kt` (blocking `execute()`, `HttpUrl` builder with `addQueryParameter("month", month.toString())`, `Json { ignoreUnknownKeys = true }`, no logging per ADR-0025; any failure -> `Unavailable`).
+- [ ] 2.4 Run `./gradlew :android:testDebugUnitTest --tests "*OkHttpAttendanceHistoryRepositoryTest" --tests "*DomainPurityTest"` (Scenario "Domain purity": `java.time` allowed, no `android.`/`androidx.` in domain).
+- [ ] 2.5 GREEN glue `A/di/PhysicalModule.kt`: `attendanceHistoryRepository(@ApiHttpClient client)` as `@Singleton` returning `OkHttpAttendanceHistoryRepository(client, BuildConfig.API_BASE_URL)` (compile gate + PR3 manual).
+
+### Phase 2.2 Use case and test support
+
+- [ ] 2.6 GREEN `A/domain/usecase/GetMyAttendanceUseCase.kt` (`@Inject constructor(repo)`, `operator fun invoke(month: YearMonth)`; thin, covered by ViewModel tests).
+- [ ] 2.7 Create `T/testing/FakeAttendanceHistoryRepository.kt`: scripted results per month, records requested months and call count, optional gate to hold a call in flight, and an `onRequest` hook invoked during the (blocking) call so a test can change the ViewModel's month before the result returns (stale-result test). Reuse `MainDispatcherRule`; `TestClock` (`T/testing/TestClock.kt`) stays as is. Note `TestClock.withZone()` returns `this`, which is why the ViewModel must use `clock.instant().atZone(ACADEMY_ZONE)` (A4).
+
+### Phase 2.3 ViewModel (virtual time, RED first per slice)
+
+- [ ] 2.8 RED `T/presentation/myattendance/AttendanceHistoryViewModelTest.kt` part A (default month): with `Clock.fixed` at `2026-09-15T15:00:00Z` the month is `2026-09` (Scenario "Default is the current month"); at `2026-10-01T01:30:00Z` (UTC) it is `2026-09` (Scenario "Last evening of a month in Buenos Aires"); the design's boundary pair `2026-09-30T23:30-03:00` -> September and `2026-10-01T03:00Z` -> October; initial `content == Loading` and no request is issued in `init`.
+- [ ] 2.9 GREEN `A/presentation/myattendance/AttendanceHistoryUiState.kt` (`data class AttendanceHistoryUiState(month, isNextEnabled, content)`, `sealed interface AttendanceContent { Loading, Empty, Error, Loaded(entries) }`), `A/presentation/myattendance/AttendanceHistoryViewModel.kt` (`@HiltViewModel`, injects `GetMyAttendanceUseCase`, `Clock`, `@IoDispatcher`; `internal val ACADEMY_ZONE = ZoneId.of("America/Argentina/Buenos_Aires")` at top level of this package; `current() = YearMonth.from(clock.instant().atZone(ACADEMY_ZONE))`; no load in `init`).
+- [ ] 2.10 RED part B (load states): `refresh()` Loading -> `Loaded(entries)` (Scenario "Loading then content"); empty list -> `Empty` (Scenario "No attendances"); `Unavailable` -> `Error` and a second `refresh()` re-requests the same month with `Error -> Loading` (Scenario "Failure and retry"); refresh in flight for the same month is ignored (a single request, A5); after a resume `refresh()` on a loaded state requests the same month again and keeps it (Scenario "Resume refreshes"). GREEN: `refresh()` and `load(m)` per design.
+- [ ] 2.11 RED part C (month navigation): `isNextEnabled == false` at the current month and `showNextMonth()` is a no-op with no request (Scenario "Siguiente disabled at the current month"); `showPreviousMonth()` selects month-1, state `Loading`, `isNextEnabled == true`; 24 successive previous selections reach `2024-09` with next still enabled (Scenario "Navigating to earlier months"); `showNextMonth()` from a past month selects month+1 and re-disables next at the current month. GREEN: `showPreviousMonth()`, `showNextMonth()`, `select(m)` with `isNextEnabled = m < current()`.
+- [ ] 2.12 RED part D (last wins and staleness): while the 2026-09 load is in flight, `showPreviousMonth()` -> the fake records months [2026-09, 2026-08], and the 2026-09 result arriving afterwards is dropped (Scenario "Last request wins"); using the fake's `onRequest` hook to change the month during the first call, a stale success AND a stale failure (2026-09 fails after 2026-08 succeeded) leave the state `Loaded` for 2026-08 (Scenario "Stale failure dropped"). GREEN: `job?.cancel()` in `select`, guard `if (state.month == m)` after `withContext(io)`.
+- [ ] 2.13 RED part E (rollover): `isNextEnabled` is recomputed on `refresh()`: advance the `TestClock` across a month boundary (Buenos Aires midnight) and assert the next button and `current()` follow after a refresh (design A6/`isNextEnabled` note). GREEN: recompute in `refresh()`.
+- [ ] 2.14 REFACTOR: dedupe test helpers (fake scripting, row builders) and the ViewModel `launch`/`withContext` section; keep `AttendanceHistoryViewModelTest` green with `./gradlew :android:testDebugUnitTest --tests "*AttendanceHistoryViewModelTest"`.
+
+### Phase 2.4 Optional / docs
+
+- [ ] 2.15 Optional: `bru` request against the local stack for the wire contract; skip if the stack is down or the request exceeds ~20 lines (precedent #375 task 2.12).
+- [ ] 2.16 `docs/05-PHYSICAL-API.md`: check whether it documents `attendance/me`; add `kind` only if the doc lists session fields (otherwise no change).
+
+### Phase 2.5 Gate and close-out
+
+- [ ] 2.17 Gate: `./gradlew :android:build :android:assembleDebugAndroidTest :android:lintDebug` BUILD SUCCESSFUL (scoped to `:android`; root `build` fails on backend Testcontainers when Docker is down); `*DomainPurityTest` passes.
+- [ ] 2.18 Size check (measured): `git diff --shortstat <PR1-branch>...HEAD`; forecast ~510 (prod ~230, tests ~280) vs 800. If over ~750, apply the split point from the Forecast section.
+- [ ] 2.19 Commits: conventional, no AI attribution (e.g. `feat(android): agregar el historial de asistencia mensual (#376)`).
+- [ ] 2.20 PR (`Refs #376`, base PR1 branch -> `develop` after PR1 merges, Spanish body, Chain Context marking PR2, board project 1 fields set); verify PR1 is merged before requesting merge.
+
+---
+
+## PR3 - Android UI and navigation  (`feature/376-pr3-attendance-ui`, base PR2 branch -> `develop` after PR2 merges)
+
+Scope: formatters, screen, selector, drawer section, route, nav wiring, strings. The delta specs are already in the change folder (PR-A); no `openspec/specs/**` edit here. Start: PR2 applied. End: the feature works end to end. Out of scope: summary line, absences, month picker, icons, dark theme, Compose UI tests.
+Specs: `android-attendance-history` (Month selector; Attendance row content; Empty month; Loading and error states; Reload on resume); `android-auth-navigation` delta (drawer lists exactly three entries).
+
+### Phase 3.1 Formatters (RED first)
+
+- [ ] 3.1 RED `T/presentation/myattendance/AttendanceFormattersTest.kt`: `formatMonthLabel(YearMonth.of(2026, 9), es-AR) == "septiembre de 2026"` (pattern `MMMM 'de' yyyy`, lowercase); `formatCheckInTime(2026-09-03T22:02:00Z, ACADEMY_ZONE) == "19:02"` (Scenario "QR attendance"); `AttendanceOrigin.labelRes()` returns `R.string.my_attendance_check_in_qr` for `QR`, `..._manual` for `MANUAL`, and a null-origin result for `UNKNOWN` (Scenarios "Manual attendance", "Unknown or missing kind"); `formatSessionTime(2026-09-03T22:00:00Z, ACADEMY_ZONE, es-AR) == "jueves 3 de septiembre, 19:00"` and `2026-10-01T02:30:00Z` -> `"miércoles 30 de septiembre, 23:30"` (Scenario "Server order and Buenos Aires month cut"). Open question from design: if the JDK `es-AR` CLDR data renders `MMMM` capitalised, assert the JVM output and confirm on the emulator (3.M1).
+- [ ] 3.2 GREEN `A/presentation/myattendance/AttendanceFormatters.kt` (pure top-level functions `formatMonthLabel(YearMonth, Locale)`, `formatCheckInTime(Instant, ZoneId)`, `AttendanceOrigin.labelRes(): Int?` with `UNKNOWN -> null`); reuse the existing `formatSessionTime`.
+
+### Phase 3.2 Strings, screen, navigation (GREEN-only glue)
+
+- [ ] 3.3 `R/values/strings.xml`: `menu_section_my_attendance` "Mi asistencia", `my_attendance_previous` "Anterior", `my_attendance_next` "Siguiente", `my_attendance_empty` "No tenés asistencias registradas en este mes.", `my_attendance_error` "No pudimos cargar tu asistencia.", `my_attendance_check_in_qr` "Ingreso por QR · %1$s", `my_attendance_check_in_manual` "Ingreso en recepción · %1$s", `my_attendance_check_in` "Ingreso %1$s" (unknown/missing `kind`). Reuse `common_retry` and `my_sessions_instructor` ("Con %1$s"). No origin string starts with "Con". Empty state has no purchase link.
+- [ ] 3.4 `A/presentation/myattendance/MyAttendanceScreen.kt`: stateful `MyAttendanceScreen` (`hiltViewModel<AttendanceHistoryViewModel>()`, `LifecycleResumeEffect { refresh() }`) + stateless `MyAttendanceContent`; selector row "Anterior" `TextButton` (`showPreviousMonth`), month label, "Siguiente" `TextButton(enabled = isNextEnabled)`, visible in every content state; `Loading` spinner, `Empty` plain text, `Error` message + "Reintentar" (`refresh`), `Loaded` as `LazyColumn(key = sessionId)` of `ElevatedCard` (course, `formatSessionTime(scheduledAt, ACADEMY_ZONE, es-AR)`, "Con {instructor}", one check-in line from `labelRes()` + `formatCheckInTime(recordedAt, ACADEMY_ZONE)`, falling back to `my_attendance_check_in`).
+- [ ] 3.5 `A/presentation/navigation/Routes.kt`: `@Serializable data object MyAttendance`. `A/presentation/navigation/AuthenticatedScaffold.kt`: `StudentSection.MyAttendance(R.string.menu_section_my_attendance)` added third (Home, Mis clases, Mi asistencia).
+- [ ] 3.6 `A/presentation/navigation/MentaNavHost.kt`: `composable<MyAttendance>` wrapped in `AuthenticatedScaffold` with `selected = MyAttendance`, and a `route` `when` branch mapping the new section to `MyAttendance` (same `popUpTo(Home) { launchSingleTop = true }` navigation as the existing sections).
+- [ ] 3.7 Verify no stale assumptions: `rg 'exactly two|two entries' android/ docs/` and `rg 'StudentSection' android/src` show no other exhaustive `when`/test relying on two sections; fix any compile error from non-exhaustive `when`.
+
+### Phase 3.3 Manual verification (emulator: API 29 floor, ADR-0047, and API 37; local stack `10.0.2.2:8081`, PR1 backend running; demo profile `alumno@menta.dance` / `Alumno123!`; need a month with one QR attendance and one manual attendance row)
+
+- [ ] 3.M1 Real backend, current month: "Mi asistencia" opens on the current month with the Spanish lowercase label ("octubre de 2026"), shows the QR row ("Ingreso por QR · HH:mm") and the manual row ("Ingreso en recepción · HH:mm"), instructor line "Con ...", class date/time in Buenos Aires time (Scenarios "QR attendance", "Manual attendance"); confirm the label case matches 3.1.
+- [ ] 3.M2 Month navigation: "Anterior" pages back through several months (no lower bound), "Siguiente" is disabled at the current month and enabled on earlier ones; rapid taps end on the last selected month (Scenarios "Navigating to earlier months", "Last request wins").
+- [ ] 3.M3 Empty month: select a month with no attendances (e.g. far in the past) shows exactly "No tenés asistencias registradas en este mes." with no button or link (Scenario "No attendances").
+- [ ] 3.M4 Error and retry: enable airplane mode, change month or resume -> "No pudimos cargar tu asistencia." + "Reintentar"; disable airplane mode, tap "Reintentar" -> the same month loads (Scenario "Failure and retry"); the selector stays usable in the error state.
+- [ ] 3.M5 Buenos Aires month edge: on the emulator set device time zone to UTC and date/time to 01:30 on the 1st of a month (= 22:30 on the last day of the previous month in Buenos Aires); the default month is the previous month, not the current UTC month (Scenario "Last evening of a month in Buenos Aires"). Restore automatic date/time and zone afterwards. If the row at `2026-10-01T02:30Z` exists, it appears under September as "30 de septiembre, 23:30".
+- [ ] 3.M6 Drawer and navigation: drawer lists exactly Home, "Mis clases", "Mi asistencia", in that order, and closes on selection; Home -> Mi asistencia -> Back returns to Home; Back on Home exits and never returns to login; "Mis clases" <-> "Mi asistencia" navigation works; logout from "Mi asistencia" behaves as on Home (Scenarios "Home contents", "Navigate to Mi asistencia", "Navigate back to Home", "Back from home", "Logout stays available").
+- [ ] 3.M7 Resume: background the app and return -> a new request for the same selected month and the month is unchanged (Scenario "Resume wiring"); repeat on API 29 and API 37.
+
+### Phase 3.4 Gate, docs and close-out
+
+- [ ] 3.8 Gate: `./gradlew :android:build :android:assembleDebugAndroidTest :android:lintDebug` BUILD SUCCESSFUL; run full `./gradlew :android:testDebugUnitTest` (unit-test count reported in the PR body).
+- [ ] 3.9 Size check (measured): `git diff --shortstat <PR2-branch>...HEAD`; forecast ~330-400 (prod ~230, tests ~50, no spec edits) vs 800.
+- [ ] 3.10 Final pass: tick all tasks in this file; confirm no regression to `MySessions` (still two-entry assumptions gone) and `rg 'Con QR|Registrada en recepción' android/ openspec/changes/android-attendance-history/` is empty (old wording removed).
+- [ ] 3.11 Commits: conventional, no AI attribution (e.g. `feat(android): agregar la pantalla Mi asistencia (#376)`).
+- [ ] 3.12 PR (`Closes #376`, base PR2 branch -> `develop` after PR2 merges, Spanish body, Chain Context marking PR3, board project 1 fields set); `gh pr list --head feature/376-pr3-attendance-ui` first; compare against `gh issue view 376` acceptance criteria.
+
+---
+
+## Follow-up: verify and archive (outside the 3 PRs)
+
+Precedent: #670 / #671 for #375. Runs after PR3 merges.
+
+- [ ] F.1 Open a board issue (project 1, fields set) "Verificar y archivar android-attendance-history (#376)".
+- [ ] F.2 Run `sdd-verify` (fresh `:android:build :android:assembleDebugAndroidTest :android:lintDebug` and backend gates) against the merged `develop`; record the report.
+- [ ] F.3 Run `sdd-archive`: merge the delta specs into `openspec/specs/android-attendance-history/spec.md` (new), `openspec/specs/android-auth-navigation/spec.md` (drawer "exactly three") and `openspec/specs/physical-attendance-history/spec.md` (`kind`), then move the change folder to `openspec/changes/archive/2026-MM-DD-android-attendance-history/`.
+- [ ] F.4 Open the archive PR (`docs(openspec): archivar el cambio android-attendance-history (#376)`, `Refs` the follow-up issue, base `develop`, Spanish body, board fields set). Do not reopen #376.
