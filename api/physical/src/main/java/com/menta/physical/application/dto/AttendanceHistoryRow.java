@@ -1,5 +1,6 @@
 package com.menta.physical.application.dto;
 
+import com.menta.physical.domain.model.AttendanceKind;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -10,10 +11,12 @@ import java.util.UUID;
  * {@code LEFT JOIN} on the matching {@code physical_attendances} row.
  *
  * <p>{@code recordedAt} is {@code null} when no attendance row matched (D5) — {@link
- * #attended()} is derived from that presence, never a stored status column.</p>
+ * #attended()} is derived from that presence, never a stored status column. {@code kind} is the
+ * origin of that attendance row and is {@code null} exactly when {@code recordedAt} is.</p>
  */
 public record AttendanceHistoryRow(
-    UUID sessionId, Instant scheduledAt, String courseName, String instructorName, Instant recordedAt
+    UUID sessionId, Instant scheduledAt, String courseName, String instructorName, Instant recordedAt,
+    AttendanceKind kind
 ) {
 
     /**

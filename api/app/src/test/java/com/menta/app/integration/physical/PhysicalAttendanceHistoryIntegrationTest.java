@@ -300,6 +300,10 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
         );
     }
 
+    private static Map<String, Object> sessionAt(ResponseEntity<Map> response, int index) {
+        return (Map<String, Object>) ((List) response.getBody().get("sessions")).get(index);
+    }
+
     @Test
     void a_five_session_month_with_one_absence_round_trips_through_the_full_stack() {
         UUID studentId = issueUser(Role.STUDENT);
@@ -372,6 +376,42 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
         assertThat(response.getBody().get("attended")).isEqualTo(1);
         assertThat(response.getBody().get("absent")).isEqualTo(0);
         assertThat((List) response.getBody().get("sessions")).hasSize(1);
+        assertThat(sessionAt(response, 0).get("kind")).isEqualTo("MANUAL");
+    }
+
+    /**
+     * #673: the stored {@code kind} reaches the response through the real JPQL projection and
+     * {@code toRows}; an absent assignment carries the key with a {@code null} value (Scenarios
+     * "Attended rows expose their origin", "Absent rows have no origin").
+     */
+    @Test
+    void sessions_expose_kind_per_row_with_an_explicit_null_for_the_absent_one() {
+        UUID studentId = issueUser(Role.STUDENT);
+        UUID courseId = seedCourse();
+        UUID qrSession = seedSession(courseId, instantAt(FIRST_MONTH, 3));
+        UUID manualSession = seedSession(courseId, instantAt(FIRST_MONTH, 10));
+        UUID absentSession = seedSession(courseId, instantAt(FIRST_MONTH, 17));
+        seedAssignment(qrSession, studentId);
+        seedAssignment(manualSession, studentId);
+        seedAssignment(absentSession, studentId);
+        seedAttendance(qrSession, studentId, instantAt(FIRST_MONTH, 3).plusSeconds(120));
+        UUID receptionistId = issueUser(Role.RECEPTIONIST);
+        seedManualAttendance(
+            manualSession, studentId, instantAt(FIRST_MONTH, 10).plusSeconds(300), receptionistId
+        );
+
+        ResponseEntity<Map> response = readOwnMonth(studentId, monthQuery(FIRST_MONTH), true);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat((List) response.getBody().get("sessions")).hasSize(3);
+        assertThat(sessionAt(response, 0).get("kind")).isEqualTo("QR");
+        assertThat(sessionAt(response, 1).get("kind")).isEqualTo("MANUAL");
+        assertThat(sessionAt(response, 2).get("status")).isEqualTo("ABSENT");
+        assertThat(sessionAt(response, 2)).containsKey("kind");
+        assertThat(sessionAt(response, 2).get("kind")).isNull();
+        assertThat(response.getBody().get("scheduledSessionCount")).isEqualTo(3);
+        assertThat(response.getBody().get("attended")).isEqualTo(2);
+        assertThat(response.getBody().get("absent")).isEqualTo(1);
     }
 
     @Test
