@@ -1,13 +1,15 @@
 package com.menta.physical.application.dto;
 
+import com.menta.physical.domain.model.AttendanceKind;
 import java.time.Instant;
 import java.util.UUID;
 
 /**
  * One session row in {@code AttendanceHistoryView#sessions()} (#39, US-PHYSICAL-002, design C6).
- * {@code recordedAt} is {@code null} for {@link AttendanceStatus#ABSENT} rows (D5).
+ * {@code recordedAt} and {@code kind} are {@code null} for {@link AttendanceStatus#ABSENT} rows
+ * (D5).
  */
 public record AttendanceSessionView(
     UUID sessionId, Instant scheduledAt, String courseName, String instructorName,
-    AttendanceStatus status, Instant recordedAt
+    AttendanceStatus status, Instant recordedAt, AttendanceKind kind
 ) {}

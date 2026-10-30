@@ -26,4 +26,7 @@ public interface MonthlyAttendanceRowProjection {
 
     /** Instant the check-in was recorded; {@code null} when the student has no attendance for the session. */
     Instant getRecordedAt();
+
+    /** Stored origin of the check-in ({@code QR} or {@code MANUAL}); {@code null} when there is no attendance row. */
+    String getKind();
 }

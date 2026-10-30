@@ -1455,6 +1455,10 @@ components:
           type: [string, "null"]
           format: date-time
           description: Null cuando status es ABSENT.
+        kind:
+          type: [string, "null"]
+          enum: [QR, MANUAL, null]
+          description: Cómo se registró el check-in; null cuando status es ABSENT.
 
     RegisterPhysicalDeviceRequest:
       type: object

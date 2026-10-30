@@ -1,6 +1,8 @@
 package com.menta.physical.infrastructure.web.controller;
 
+import static org.hamcrest.Matchers.hasKey;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -11,9 +13,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.menta.physical.application.dto.AttendanceHistoryView;
+import com.menta.physical.application.dto.AttendanceSessionView;
+import com.menta.physical.application.dto.AttendanceStatus;
 import com.menta.physical.application.dto.AttendanceViewer;
 import com.menta.physical.application.port.in.GetPhysicalAttendanceHistoryUseCase;
+import com.menta.physical.domain.model.AttendanceKind;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.UUID;
@@ -63,6 +69,41 @@ class PhysicalAttendanceControllerTest {
             .andExpect(jsonPath("$.attendanceRate", is(80.00)));
 
         verify(useCase).history(AttendanceViewer.self(studentId), YearMonth.of(2026, 9), false);
+    }
+
+    /** Scenarios "Attended rows expose their origin" and "Absent rows have no origin" (#673). */
+    @Test
+    void sessions_render_kind_by_name_for_attended_rows_and_as_an_explicit_null_for_absent_rows() throws Exception {
+        UUID studentId = UUID.randomUUID();
+        Instant scheduledAt = Instant.parse("2026-09-03T22:00:00Z");
+        AttendanceHistoryView view = new AttendanceHistoryView(
+            "2026-09", 3, 2, 1, new BigDecimal("66.67"), List.of(
+                new AttendanceSessionView(
+                    UUID.randomUUID(), scheduledAt, "Salsa", "Ana", AttendanceStatus.ATTENDED,
+                    scheduledAt.plusSeconds(120), AttendanceKind.QR
+                ),
+                new AttendanceSessionView(
+                    UUID.randomUUID(), scheduledAt.plusSeconds(86400), "Salsa", "Ana",
+                    AttendanceStatus.ATTENDED, scheduledAt.plusSeconds(86520), AttendanceKind.MANUAL
+                ),
+                new AttendanceSessionView(
+                    UUID.randomUUID(), scheduledAt.plusSeconds(172800), "Salsa", "Ana",
+                    AttendanceStatus.ABSENT, null, null
+                )
+            )
+        );
+        when(useCase.history(eq(AttendanceViewer.self(studentId)), eq(YearMonth.of(2026, 9)), eq(true)))
+            .thenReturn(view);
+
+        mockMvc.perform(get("/api/v1/physical/attendance/me")
+                .param("month", "2026-09")
+                .param("includeAbsent", "true")
+                .principal(authOf(studentId)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.sessions[0].kind", is("QR")))
+            .andExpect(jsonPath("$.sessions[1].kind", is("MANUAL")))
+            .andExpect(jsonPath("$.sessions[2]", hasKey("kind")))
+            .andExpect(jsonPath("$.sessions[2].kind", nullValue()));
     }
 
     @Test

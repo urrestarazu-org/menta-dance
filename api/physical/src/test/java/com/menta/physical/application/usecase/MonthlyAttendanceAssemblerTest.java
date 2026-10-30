@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.menta.physical.application.dto.AttendanceHistoryRow;
 import com.menta.physical.application.dto.AttendanceHistoryView;
 import com.menta.physical.application.dto.AttendanceStatus;
+import com.menta.physical.domain.model.AttendanceKind;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -18,14 +19,18 @@ import org.junit.jupiter.api.Test;
 class MonthlyAttendanceAssemblerTest {
 
     private static AttendanceHistoryRow attendedRow(Instant scheduledAt) {
+        return attendedRow(scheduledAt, AttendanceKind.QR);
+    }
+
+    private static AttendanceHistoryRow attendedRow(Instant scheduledAt, AttendanceKind kind) {
         return new AttendanceHistoryRow(
             UUID.randomUUID(), scheduledAt, "Salsa Intermedio", "Ana Perez",
-            scheduledAt.minusSeconds(300)
+            scheduledAt.minusSeconds(300), kind
         );
     }
 
     private static AttendanceHistoryRow absentRow(Instant scheduledAt) {
-        return new AttendanceHistoryRow(UUID.randomUUID(), scheduledAt, "Salsa Intermedio", "Ana Perez", null);
+        return new AttendanceHistoryRow(UUID.randomUUID(), scheduledAt, "Salsa Intermedio", "Ana Perez", null, null);
     }
 
     @Test
@@ -123,5 +128,47 @@ class MonthlyAttendanceAssemblerTest {
         assertThat(view.sessions().get(0).recordedAt()).isEqualTo(attended.recordedAt());
         assertThat(view.sessions().get(1).status()).isEqualTo(AttendanceStatus.ABSENT);
         assertThat(view.sessions().get(1).recordedAt()).isNull();
+    }
+
+    @Test
+    void attended_rows_expose_their_origin_qr_and_manual() {
+        AttendanceHistoryRow qr = attendedRow(Instant.parse("2026-09-03T22:00:00Z"), AttendanceKind.QR);
+        AttendanceHistoryRow manual = attendedRow(Instant.parse("2026-09-10T22:00:00Z"), AttendanceKind.MANUAL);
+
+        AttendanceHistoryView view = MonthlyAttendanceAssembler.assemble("2026-09", List.of(qr, manual), true);
+
+        assertThat(view.sessions().get(0).kind()).isEqualTo(AttendanceKind.QR);
+        assertThat(view.sessions().get(1).kind()).isEqualTo(AttendanceKind.MANUAL);
+        assertThat(view.scheduledSessionCount()).isEqualTo(2);
+        assertThat(view.attended()).isEqualTo(2);
+        assertThat(view.absent()).isEqualTo(0);
+        assertThat(view.attendanceRate()).isEqualByComparingTo("100.00");
+    }
+
+    @Test
+    void absent_row_has_no_origin_while_the_attended_row_next_to_it_keeps_it() {
+        AttendanceHistoryRow attended = attendedRow(Instant.parse("2026-09-03T22:00:00Z"), AttendanceKind.MANUAL);
+        AttendanceHistoryRow absent = absentRow(Instant.parse("2026-09-10T22:00:00Z"));
+
+        AttendanceHistoryView view = MonthlyAttendanceAssembler.assemble("2026-09", List.of(attended, absent), true);
+
+        assertThat(view.sessions()).hasSize(2);
+        assertThat(view.sessions().get(0).kind()).isEqualTo(AttendanceKind.MANUAL);
+        assertThat(view.sessions().get(1).status()).isEqualTo(AttendanceStatus.ABSENT);
+        assertThat(view.sessions().get(1).kind()).isNull();
+    }
+
+    /** The assembler is the single place enforcing "kind present iff recordedAt present" (design B2). */
+    @Test
+    void kind_is_dropped_when_the_row_has_no_recorded_at_even_if_a_kind_slipped_in() {
+        AttendanceHistoryRow inconsistent = new AttendanceHistoryRow(
+            UUID.randomUUID(), Instant.parse("2026-09-10T22:00:00Z"), "Salsa Intermedio", "Ana Perez",
+            null, AttendanceKind.QR
+        );
+
+        AttendanceHistoryView view = MonthlyAttendanceAssembler.assemble("2026-09", List.of(inconsistent), true);
+
+        assertThat(view.sessions().get(0).status()).isEqualTo(AttendanceStatus.ABSENT);
+        assertThat(view.sessions().get(0).kind()).isNull();
     }
 }

@@ -45,7 +45,8 @@ public final class MonthlyAttendanceAssembler {
             if (rowAttended || includeAbsent) {
                 sessions.add(new AttendanceSessionView(
                     row.sessionId(), row.scheduledAt(), row.courseName(), row.instructorName(),
-                    rowAttended ? AttendanceStatus.ATTENDED : AttendanceStatus.ABSENT, row.recordedAt()
+                    rowAttended ? AttendanceStatus.ATTENDED : AttendanceStatus.ABSENT,
+                    row.recordedAt(), rowAttended ? row.kind() : null
                 ));
             }
         }

@@ -26,11 +26,14 @@ docs {
   is no studentId parameter to abuse.
 
   Success contract: 200 with { period, scheduledSessionCount, attended,
-  absent, attendanceRate, sessions[] }.
+  absent, attendanceRate, sessions[] }. Each session carries `kind` (`QR` or
+  `MANUAL`, the origin of the check-in) when ATTENDED and `kind: null` when
+  ABSENT (visible with `includeAbsent=true`).
   Error contract: 400 (`INVALID_REQUEST`) on a malformed month; 401 when
   unauthenticated.
 }
 
 assert {
   res.status: eq 200
+  res.body.sessions: isArray
 }
