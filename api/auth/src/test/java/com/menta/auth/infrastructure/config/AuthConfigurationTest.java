@@ -264,7 +264,7 @@ class AuthConfigurationTest {
     void wires_the_login_use_case_bean() {
         LoginUseCase useCase = configuration.loginUseCase(
             mock(UserRepository.class), mock(PasswordEncoderPort.class), mock(AccessTokenIssuer.class),
-            mock(TokenHasher.class), mock(RefreshTokenRepository.class), mock(OutboxAppender.class),
+            mock(TokenHasher.class), mock(RefreshTokenRepository.class),
             mock(AuthDegradedGuard.class), mock(LoginRateLimitPort.class), mock(LoginAttemptAuditPort.class)
         );
 

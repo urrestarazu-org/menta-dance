@@ -442,7 +442,6 @@ public class AuthConfiguration {
         AccessTokenIssuer accessTokenIssuer,
         TokenHasher tokenHasher,
         RefreshTokenRepository refreshTokenRepository,
-        OutboxAppender outboxAppender,
         AuthDegradedGuard authDegradedGuard,
         LoginRateLimitPort loginRateLimitPort,
         LoginAttemptAuditPort loginAttemptAuditPort
@@ -453,7 +452,6 @@ public class AuthConfiguration {
             accessTokenIssuer,
             tokenHasher,
             refreshTokenRepository,
-            outboxAppender,
             authDegradedGuard,
             loginRateLimitPort,
             loginAttemptAuditPort

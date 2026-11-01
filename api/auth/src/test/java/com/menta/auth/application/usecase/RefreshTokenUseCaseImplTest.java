@@ -9,6 +9,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.menta.auth.application.contract.AuthOutboxEventTypes;
@@ -139,11 +140,8 @@ class RefreshTokenUseCaseImplTest {
 
             // New refresh persisted, same family, status=ACTIVE.
             verify(refreshTokenRepository, times(2)).save(any(RefreshToken.class));
-            verify(outboxAppender).append(
-                eq(AuthOutboxEventTypes.REFRESH_ROTATED),
-                anyString(),
-                anyString()
-            );
+            // #672: a plain rotation has no consumer; it must not write any outbox row.
+            verifyNoInteractions(outboxAppender);
         }
     }
 

@@ -2,6 +2,7 @@ package com.menta.app.integration.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
@@ -14,6 +15,7 @@ import com.menta.auth.application.dto.TokenPair;
 import com.menta.auth.application.port.in.LoginUseCase;
 import com.menta.auth.application.port.in.LogoutUseCase;
 import com.menta.auth.application.port.in.RefreshTokenUseCase;
+import com.menta.auth.application.port.out.AccessTokenIssuer;
 import com.menta.auth.application.port.out.AuthDegradedGuard;
 import com.menta.auth.application.port.out.OutboxAppender;
 import com.menta.auth.application.port.out.TokenBlacklistPort;
@@ -28,7 +30,6 @@ import com.menta.auth.infrastructure.persistence.entity.RefreshTokenJpaEntity;
 import com.menta.auth.infrastructure.persistence.repository.OutboxRowJpaRepository;
 import com.menta.auth.infrastructure.persistence.repository.RefreshTokenJpaRepository;
 import com.menta.shared.domain.vo.Email;
-import com.menta.shared.outbox.OutboxStatus;
 import jakarta.persistence.EntityManager;
 import java.util.List;
 import java.util.UUID;
@@ -105,6 +106,9 @@ class TransactionalAuthIntegrationTest extends AbstractAuthMySqlIntegrationTest 
     @MockitoSpyBean
     private OutboxAppender outboxAppender;
 
+    @MockitoSpyBean
+    private AccessTokenIssuer accessTokenIssuer;
+
     private static final String EMAIL = "student@example.com";
     private static final String PASSWORD = "SecurePass123!";
     private static final String CLIENT_FINGERPRINT = "0".repeat(64);
@@ -132,7 +136,7 @@ class TransactionalAuthIntegrationTest extends AbstractAuthMySqlIntegrationTest 
     }
 
     @Test
-    void successful_login_commits_refresh_and_outbox_atomically() {
+    void successful_login_commits_the_refresh_token_and_writes_no_outbox_row() {
         LoginCommand command = new LoginCommand(EMAIL, PASSWORD, CLIENT_FINGERPRINT);
 
         TokenPair tokens = loginUseCase.execute(command);
@@ -145,15 +149,12 @@ class TransactionalAuthIntegrationTest extends AbstractAuthMySqlIntegrationTest 
         assertThat(refreshTokens).hasSize(1);
         assertThat(refreshTokens.get(0).getStatus()).isEqualTo(RefreshTokenStatus.ACTIVE);
 
-        // Verify outbox row was created in the SAME transaction
-        List<OutboxRowJpaEntity> outboxRows = outboxRowJpaRepository.findAll();
-        assertThat(outboxRows).hasSize(1);
-        assertThat(outboxRows.get(0).getEventType()).isEqualTo("auth.AuthUserLoggedIn");
-        assertThat(outboxRows.get(0).getStatus()).isEqualTo(OutboxStatus.PENDING);
+        // #672: auth.AuthUserLoggedIn had no consumer and was removed; login writes no outbox row.
+        assertThat(outboxRowJpaRepository.findAll()).isEmpty();
     }
 
     @Test
-    void successful_refresh_commits_rotation_and_outbox_atomically() {
+    void successful_refresh_commits_the_rotation_and_writes_no_outbox_row() {
         // Setup: login first
         LoginCommand loginCmd = new LoginCommand(EMAIL, PASSWORD, CLIENT_FINGERPRINT);
         TokenPair initial = loginUseCase.execute(loginCmd);
@@ -185,10 +186,8 @@ class TransactionalAuthIntegrationTest extends AbstractAuthMySqlIntegrationTest 
             .orElseThrow();
         assertThat(newToken.getFamilyId()).isEqualTo(originalToken.getFamilyId());
 
-        // Verify outbox row for successful rotation
-        List<OutboxRowJpaEntity> outboxRows = outboxRowJpaRepository.findAll();
-        assertThat(outboxRows).hasSize(1);
-        assertThat(outboxRows.get(0).getEventType()).isEqualTo("auth.RefreshRotated");
+        // #672: auth.RefreshRotated had no consumer and was removed; a plain rotation writes no row.
+        assertThat(outboxRowJpaRepository.findAll()).isEmpty();
     }
 
     @Test
@@ -216,28 +215,32 @@ class TransactionalAuthIntegrationTest extends AbstractAuthMySqlIntegrationTest 
     }
 
     @Test
-    void login_outbox_failure_rolls_back_refresh_mutation() {
-        doThrow(new IllegalStateException("outbox unavailable"))
-            .when(outboxAppender).append(anyString(), anyString(), anyString());
+    void login_failure_after_the_refresh_insert_rolls_back_the_refresh_token() {
+        // The last step of the login, after the refresh row is saved. Login no longer writes an
+        // outbox row (#672), so atomicity is proven with the step that still follows the insert.
+        doThrow(new IllegalStateException("rate limiter unavailable"))
+            .when(loginRateLimitPort).resetEmail(anyString());
 
         assertThatThrownBy(() -> loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD, CLIENT_FINGERPRINT)))
             .isInstanceOf(IllegalStateException.class)
-            .hasMessage("outbox unavailable");
+            .hasMessage("rate limiter unavailable");
 
         assertThat(refreshTokenJpaRepository.findAll()).isEmpty();
         assertThat(outboxRowJpaRepository.findAll()).isEmpty();
     }
 
     @Test
-    void refresh_outbox_failure_rolls_back_rotation() {
+    void refresh_failure_after_the_rotation_rolls_back_the_rotation() {
         TokenPair initial = loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD, CLIENT_FINGERPRINT));
         outboxRowJpaRepository.deleteAll();
-        doThrow(new IllegalStateException("outbox unavailable"))
-            .when(outboxAppender).append(anyString(), anyString(), anyString());
+        // Issuing the new access token is the step after both refresh rows are saved. A plain
+        // rotation writes no outbox row any more (#672), so atomicity is proven with that step.
+        doThrow(new IllegalStateException("token issuer unavailable"))
+            .when(accessTokenIssuer).issue(any(User.class));
 
         assertThatThrownBy(() -> refreshTokenUseCase.execute(new RefreshCommand(initial.refreshToken())))
             .isInstanceOf(IllegalStateException.class)
-            .hasMessage("outbox unavailable");
+            .hasMessage("token issuer unavailable");
 
         List<RefreshTokenJpaEntity> tokens = refreshTokenJpaRepository.findAll();
         assertThat(tokens).hasSize(1);
@@ -331,8 +334,8 @@ class TransactionalAuthIntegrationTest extends AbstractAuthMySqlIntegrationTest 
         // Verify family revocation outbox event exists
         List<OutboxRowJpaEntity> outboxRows = outboxRowJpaRepository.findAll();
 
-        // Should have login + rotation + revocation events
-        assertThat(outboxRows).hasSizeGreaterThanOrEqualTo(3);
+        // Only the revocation: login and a plain rotation write no outbox row (#672)
+        assertThat(outboxRows).hasSize(1);
 
         // Verify RefreshRevoked event was persisted
         boolean hasRevokeEvent = outboxRows.stream()

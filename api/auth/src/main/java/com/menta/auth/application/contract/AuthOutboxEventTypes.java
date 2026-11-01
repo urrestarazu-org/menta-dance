@@ -19,11 +19,17 @@ package com.menta.auth.application.contract;
  * <p>Event types follow the pattern {@code <module>.<EventName>}:
  * </p>
  * <ul>
- *   <li>{@code auth.AuthUserLoggedIn} — user successfully authenticated</li>
- *   <li>{@code auth.RefreshRotated} — refresh token was rotated (new family)</li>
  *   <li>{@code auth.RefreshRevoked} — refresh token was explicitly revoked</li>
  *   <li>{@code auth.UserLoggedOut} — user logged out (all tokens invalidated)</li>
  * </ul>
+ *
+ * <h2>Retired event types (#672)</h2>
+ *
+ * <p>{@code auth.AuthUserLoggedIn} and {@code auth.RefreshRotated} are no longer produced and
+ * their constants were removed: no handler ever consumed them after #88, so every login and
+ * refresh persisted a row that failed forever. Rows of those types may still exist in databases
+ * created by older builds; the reconciler's attempt cap parks them as {@code DEAD} on their first
+ * retry. Do not reintroduce a constant without a handler that claims it.
  *
  * <h2>Stability contract</h2>
  *
@@ -37,8 +43,6 @@ package com.menta.auth.application.contract;
  */
 public final class AuthOutboxEventTypes {
 
-    public static final String AUTH_USER_LOGGED_IN = "auth.AuthUserLoggedIn";
-    public static final String REFRESH_ROTATED = "auth.RefreshRotated";
     public static final String REFRESH_REVOKED = "auth.RefreshRevoked";
     public static final String USER_LOGGED_OUT = "auth.UserLoggedOut";
 

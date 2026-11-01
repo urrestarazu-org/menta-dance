@@ -42,7 +42,6 @@ class PasswordResetOutboxEventHandlerTest {
             new PasswordResetOutboxEventHandler(notificationPort);
 
         assertThat(handler.supports(AuthOutboxEventTypes.ACCOUNT_ACTIVATION_REQUESTED)).isFalse();
-        assertThat(handler.supports(AuthOutboxEventTypes.AUTH_USER_LOGGED_IN)).isFalse();
         assertThat(handler.supports(AuthOutboxEventTypes.REFRESH_REVOKED)).isFalse();
         assertThat(handler.supports(AuthOutboxEventTypes.USER_LOGGED_OUT)).isFalse();
     }

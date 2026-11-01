@@ -11,9 +11,9 @@ import java.util.Optional;
  * `jti` UUID, `tokenVersion` claim, `sub/userId/role`, and `exp`. The same
  * adapter parses incoming bearer tokens during request authentication.
  *
- * <p>The issuer MUST be deterministic given the same user + invocation time —
- * callers can use it as the `aggregate_id` for AuthUserLoggedIn outbox events
- * (jti ties the event to the side-effect the reconciler later projects).
+ * <p>Each issued token carries a fresh `jti`. Nothing persists it today: the
+ * AuthUserLoggedIn outbox event that used it as `aggregate_id` was removed
+ * (#672) because no consumer existed.
  */
 public interface AccessTokenIssuer {
 

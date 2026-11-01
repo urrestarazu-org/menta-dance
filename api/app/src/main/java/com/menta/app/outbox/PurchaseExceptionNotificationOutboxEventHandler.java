@@ -63,7 +63,7 @@ public class PurchaseExceptionNotificationOutboxEventHandler implements OutboxEv
         try {
             return objectMapper.readValue(row.getPayload(), type);
         } catch (JsonProcessingException e) {
-            throw new IllegalStateException(
+            throw new OutboxDispatchException(
                 "Failed to deserialize " + row.getEventType() + " payload", e
             );
         }

@@ -11,7 +11,7 @@ import java.time.Instant;
  *
  * <p>Fields:
  * - eventId: ULID-style opaque string (26 chars). Globally unique per producer.
- * - eventType: dotted path, e.g. "auth.AuthUserLoggedIn".
+ * - eventType: dotted path, e.g. "auth.RefreshRevoked".
  * - aggregateId: domain aggregate root identifier (jti UUID or familyId hash, etc).
  * - payload: JSON-serialized event body.
  * - status: lifecycle state.

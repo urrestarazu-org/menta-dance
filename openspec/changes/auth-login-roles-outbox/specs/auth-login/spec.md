@@ -1,5 +1,7 @@
 # auth-login Specification
 
+> **Superado parcialmente por #672 (2026-11-01).** Login ya no emite `AuthUserLoggedIn`: el evento no tenía consumidor (handler inactivo desde #88) y dejaba filas que fallaban para siempre, lo que degradaba el login con `503 AUTH_DEGRADED`. Los requisitos y escenarios de abajo que lo mencionan quedan sin efecto; el resto sigue vigente. Ver ADR-0030 ("Decisión 2026-11-01").
+
 ## Purpose
 Inicio de sesión y auto-registro en `:api:auth`. Emite el par de tokens
 definido en ADR-0025 (access JWT + refresh opaco) y restringe el auto-registro

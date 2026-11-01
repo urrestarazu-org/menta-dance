@@ -37,7 +37,7 @@ public enum RefreshTokenStatus { VALID, REVOKED, COMPROMISED }
 **Anti-pattern:**
 ```java
 // ❌ Incorrecto: event types que se persisten en BD
-public enum OutboxEventType { AUTH_USER_LOGGED_IN, ... }
+public enum OutboxEventType { REFRESH_REVOKED, ... }
 // Problema: cambiar el nombre del enum rompe datos históricos
 ```
 
@@ -54,13 +54,18 @@ public enum OutboxEventType { AUTH_USER_LOGGED_IN, ... }
 ```java
 // ✅ Correcto: event types del outbox
 public final class AuthOutboxEventTypes {
-    public static final String AUTH_USER_LOGGED_IN = "auth.AuthUserLoggedIn";
-    public static final String REFRESH_ROTATED = "auth.RefreshRotated";
-    // El string "auth.AuthUserLoggedIn" es el contrato,
+    public static final String REFRESH_REVOKED = "auth.RefreshRevoked";
+    public static final String USER_LOGGED_OUT = "auth.UserLoggedOut";
+    // El string "auth.RefreshRevoked" es el contrato,
     // otros módulos consumirán este valor literal
     private AuthOutboxEventTypes() {}
 }
 ```
+
+> **Nota (2026-11-01, #672):** los ejemplos de este ADR usaban `AUTH_USER_LOGGED_IN` y
+> `REFRESH_ROTATED`. Ambos eventos se dejaron de persistir y sus constantes se eliminaron:
+> ningún consumidor los leía (ver ADR-0030). Una constante de event type sólo debe existir
+> mientras haya un handler que la reclame.
 
 **Patrón:** Clase final con constructor privado + constantes `public static final String`.
 

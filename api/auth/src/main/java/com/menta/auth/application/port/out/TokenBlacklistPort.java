@@ -5,8 +5,11 @@ import java.time.Duration;
 /**
  * Cross-module port for the Redis JTI blacklist (ADR-0026).
  *
- * <p>The outbox reconciler in :api:app projects PENDING AuthUserLoggedIn /
- * RefreshRevoked / UserLoggedOut events into Redis side-effects via this port.
+ * <p>The outbox reconciler in :api:app projects PENDING RefreshRevoked /
+ * UserLoggedOut / PasswordResetCompleted events into Redis side-effects via
+ * this port. Heartbeat semantics: {@link #writeHeartbeat()} means "Redis
+ * responds"; the reconciler skips it only when a row's side effect failed, not
+ * when a row could not be dispatched at all (#672).
  * Conversely, the LoginUseCase / RefreshTokenUseCase fail-closed guard depends
  * on the AuthDegradedGuard implementation that shares the same Redis client
  * and degraded-state derivation.

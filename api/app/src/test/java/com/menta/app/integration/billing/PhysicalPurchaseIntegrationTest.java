@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.menta.app.integration.support.AbstractBillingMySqlIntegrationTest;
+import com.menta.app.outbox.OutboxProcessResult;
 import com.menta.app.outbox.OutboxReconciliationWorker;
 import com.menta.auth.application.port.out.AccessTokenIssuer;
 import com.menta.auth.application.port.out.ActivationRateLimitPort;
@@ -369,7 +370,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
     private void processPhysicalPaymentCompletedFor(UUID paymentId) {
         List<OutboxRowJpaEntity> rows = outboxRowsFor(BillingOutboxEventTypes.PHYSICAL_PAYMENT_COMPLETED, paymentId);
         assertThat(rows).hasSize(1);
-        assertThat(outboxWorker.process(rows.get(0))).isFalse();
+        assertThat(outboxWorker.process(rows.get(0))).isEqualTo(OutboxProcessResult.COMPLETED);
     }
 
     /** Drives the confirmation half: real webhook verification, then returns the resulting outbox row. */
@@ -492,7 +493,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         UUID paymentId = UUID.fromString((String) checkout.getBody().get("paymentId"));
 
         OutboxRowJpaEntity event = confirmPayment("mp-monthly-1", externalReference, MONTHLY_PRICE);
-        assertThat(outboxWorker.process(event)).isFalse();
+        assertThat(outboxWorker.process(event)).isEqualTo(OutboxProcessResult.COMPLETED);
 
         assertThat(paymentRepository.findById(paymentId).orElseThrow().getStatusType()).isEqualTo("COMPLETED");
         var purchase = purchaseRepository.findByPaymentId(paymentId).orElseThrow();
@@ -537,7 +538,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         UUID paymentId = UUID.fromString((String) checkout.getBody().get("paymentId"));
 
         OutboxRowJpaEntity event = confirmPayment("mp-monthly-owned-1", externalReference, MONTHLY_PRICE);
-        assertThat(outboxWorker.process(event)).isFalse();
+        assertThat(outboxWorker.process(event)).isEqualTo(OutboxProcessResult.COMPLETED);
 
         var purchase = purchaseRepository.findByPaymentId(paymentId).orElseThrow();
         assertThat(purchase.getStatus()).isEqualTo("ASSIGNED");
@@ -683,7 +684,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         UUID paymentId = UUID.fromString((String) checkout.getBody().get("paymentId"));
 
         OutboxRowJpaEntity event = confirmPayment("mp-individual-1", externalReference, INDIVIDUAL_PRICE);
-        assertThat(outboxWorker.process(event)).isFalse();
+        assertThat(outboxWorker.process(event)).isEqualTo(OutboxProcessResult.COMPLETED);
 
         var purchase = purchaseRepository.findByPaymentId(paymentId).orElseThrow();
         assertThat(purchase.getStatus()).isEqualTo("ASSIGNED");
@@ -709,7 +710,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         UUID paymentId = UUID.fromString((String) checkout.getBody().get("paymentId"));
 
         OutboxRowJpaEntity event = confirmPayment("mp-duplicate-1", externalReference, MONTHLY_PRICE);
-        assertThat(outboxWorker.process(event)).isFalse();
+        assertThat(outboxWorker.process(event)).isEqualTo(OutboxProcessResult.COMPLETED);
         assertThat(purchaseRepository.findByPaymentId(paymentId).orElseThrow().getStatus()).isEqualTo("ASSIGNED");
         for (UUID sessionId : sessionIds) {
             assertThat(assignmentRepository.countBySessionId(sessionId)).isEqualTo(1);
@@ -753,7 +754,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         UUID paymentId = UUID.fromString((String) checkout.getBody().get("paymentId"));
 
         OutboxRowJpaEntity event = confirmPayment("mp-five-1", externalReference, MONTHLY_PRICE);
-        assertThat(outboxWorker.process(event)).isFalse();
+        assertThat(outboxWorker.process(event)).isEqualTo(OutboxProcessResult.COMPLETED);
         assertThat(purchaseRepository.findByPaymentId(paymentId).orElseThrow().getStatus()).isEqualTo("ASSIGNED");
         for (UUID sessionId : sessionIds) {
             assertThat(assignmentRepository.countBySessionId(sessionId)).isEqualTo(1);
@@ -816,7 +817,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         ));
 
         OutboxRowJpaEntity event = confirmPayment("mp-capacity-trip-1", externalReference, MONTHLY_PRICE);
-        assertThat(outboxWorker.process(event)).isFalse();
+        assertThat(outboxWorker.process(event)).isEqualTo(OutboxProcessResult.COMPLETED);
 
         assertThat(paymentRepository.findById(paymentId).orElseThrow().getStatusType()).isEqualTo("COMPLETED");
         assertThat(purchaseRepository.findByPaymentId(paymentId).orElseThrow().getStatus()).isEqualTo("EXCEPTION");
@@ -855,7 +856,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         ));
 
         OutboxRowJpaEntity event = confirmPayment("mp-already-assigned-hold-1", externalReference, INDIVIDUAL_PRICE);
-        assertThat(outboxWorker.process(event)).isFalse();
+        assertThat(outboxWorker.process(event)).isEqualTo(OutboxProcessResult.COMPLETED);
 
         assertThat(paymentRepository.findById(paymentId).orElseThrow().getStatusType()).isEqualTo("COMPLETED");
         assertThat(purchaseRepository.findByPaymentId(paymentId).orElseThrow().getStatus()).isEqualTo("EXCEPTION");
@@ -893,7 +894,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         ));
 
         OutboxRowJpaEntity event = confirmPayment("mp-monthly-window-1", externalReference, MONTHLY_PRICE);
-        assertThat(outboxWorker.process(event)).isFalse();
+        assertThat(outboxWorker.process(event)).isEqualTo(OutboxProcessResult.COMPLETED);
 
         assertThat(paymentRepository.findById(paymentId).orElseThrow().getStatusType()).isEqualTo("COMPLETED");
         assertThat(purchaseRepository.findByPaymentId(paymentId).orElseThrow().getStatus()).isEqualTo("EXCEPTION");
@@ -1130,7 +1131,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         ));
 
         OutboxRowJpaEntity event = confirmPayment("mp-d1-exception-1", externalReference, MONTHLY_PRICE);
-        assertThat(outboxWorker.process(event)).isFalse();
+        assertThat(outboxWorker.process(event)).isEqualTo(OutboxProcessResult.COMPLETED);
 
         assertThat(purchaseRepository.findByPaymentId(paymentId).orElseThrow().getStatus()).isEqualTo("EXCEPTION");
         List<OutboxRowJpaEntity> exceptionedRows =
@@ -1138,7 +1139,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         assertThat(exceptionedRows).hasSize(1);
 
         // Dispatch the notification — Phase C's consumer.
-        assertThat(outboxWorker.process(exceptionedRows.get(0))).isFalse();
+        assertThat(outboxWorker.process(exceptionedRows.get(0))).isEqualTo(OutboxProcessResult.COMPLETED);
         ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);
         verify(mailSender, times(2)).send(captor.capture());
         assertThat(captor.getAllValues()).extracting(message -> message.getTo()[0])
@@ -1153,7 +1154,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         // purposes) — #245 fixed the proxy-boundary mechanic that used to
         // surface an unhandled UnexpectedRollbackException here (same root
         // cause as #242). The retry must now no-op cleanly.
-        assertThat(outboxWorker.process(event)).isFalse();
+        assertThat(outboxWorker.process(event)).isEqualTo(OutboxProcessResult.COMPLETED);
         assertThat(purchaseRepository.findByPaymentId(paymentId).orElseThrow().getStatus()).isEqualTo("EXCEPTION");
         assertThat(outboxRowsFor(BillingOutboxEventTypes.PURCHASE_EXCEPTIONED, paymentId)).hasSize(1);
         verifyNoMoreInteractions(mailSender);
@@ -1308,7 +1309,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
 
         // #238: the fixed worker transaction commits cleanly — no exception
         // escapes, unlike the previous C1 defect.
-        assertThat(outboxWorker.process(event)).isFalse();
+        assertThat(outboxWorker.process(event)).isEqualTo(OutboxProcessResult.COMPLETED);
 
         // The positive proof this defect required: a REAL Purchase row now
         // exists, built directly at EXCEPTION (never via an intermediate
@@ -1323,7 +1324,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         assertThat(fallbackRows).hasSize(1);
 
         // Dispatch it — buyer + ops are both notified.
-        assertThat(outboxWorker.process(fallbackRows.get(0))).isFalse();
+        assertThat(outboxWorker.process(fallbackRows.get(0))).isEqualTo(OutboxProcessResult.COMPLETED);
         ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);
         verify(mailSender, times(2)).send(captor.capture());
         assertThat(captor.getAllValues()).extracting(message -> message.getTo()[0])
@@ -1335,7 +1336,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         // UnexpectedRollbackException here (same root cause as #242). The
         // retry must now no-op cleanly: no second Purchase row, no second
         // fallback row, no second pair of emails.
-        assertThat(outboxWorker.process(event)).isFalse();
+        assertThat(outboxWorker.process(event)).isEqualTo(OutboxProcessResult.COMPLETED);
         assertThat(purchaseRepository.findByPaymentId(paymentId).orElseThrow().getStatus())
             .isEqualTo("EXCEPTION");
         assertThat(outboxRowsFor(BillingOutboxEventTypes.PAYMENT_FULFILLMENT_FAILED, paymentId)).hasSize(1);
@@ -1525,7 +1526,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
             outboxRowsFor(BillingOutboxEventTypes.PURCHASE_EXCEPTIONED, paymentId.getValue());
         assertThat(exceptionedRows).hasSize(1);
         assertExceptionedWithReason(paymentId.getValue(), "CAPACITY_BELOW_ASSIGNED");
-        assertThat(outboxWorker.process(exceptionedRows.get(0))).isFalse();
+        assertThat(outboxWorker.process(exceptionedRows.get(0))).isEqualTo(OutboxProcessResult.COMPLETED);
         // 3 total: the admin-approve decision email to the student (ResolvePaymentProofUseCaseImpl,
         // unmodified) PLUS the #209 EXCEPTION pair (student + ops) this assertion targets.
         ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);

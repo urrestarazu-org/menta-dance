@@ -21,10 +21,13 @@ import org.springframework.stereotype.Component;
  *       {@code blacklist:jti:{familyId}} — a key no real jti can match.</li>
  *   <li>{@code USER_LOGGED_OUT} carries the refresh token id — same dead
  *       key.</li>
- *   <li>{@code AUTH_USER_LOGGED_IN} and {@code REFRESH_ROTATED} carry a real
- *       jti, but it is the token minted by that very operation: had anything
- *       read the blacklist, every login would have produced a born-revoked
- *       access token.</li>
+ *   <li>{@code auth.AuthUserLoggedIn} and {@code auth.RefreshRotated} carried a
+ *       real jti, but it is the token minted by that very operation: had
+ *       anything read the blacklist, every login would have produced a
+ *       born-revoked access token. Both events were stopped at the source in
+ *       #672 (no consumer, so each login and refresh left a row that failed
+ *       forever); rows already stored by older builds are parked as
+ *       {@code DEAD} by the reconciler's attempt cap.</li>
  * </ul>
  *
  * <p>No event transports a revocable jti today — {@code LogoutCommand} does

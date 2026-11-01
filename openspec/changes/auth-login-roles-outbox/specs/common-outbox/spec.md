@@ -1,5 +1,7 @@
 # common-outbox Specification
 
+> **Superado parcialmente por #672 (2026-11-01).** `AuthUserLoggedIn` y `RefreshRotated` ya no se persisten (sin consumidor desde #88). Además, el latido del reconciler significa "Redis responde": una fila que no se puede despachar (sin handler, payload ilegible) no lo bloquea, y toda fila con fallos pasa a `DEAD` al llegar a `auth.outbox.max-attempts`. Los escenarios que dependen de esos eventos quedan sin efecto. Ver ADR-0030.
+
 ## Purpose
 Bus durable-local de eventos cross-module. Tabla `common_outbox_events` MySQL
 post-commit (ADR-0027) + reconciliador scheduled `OutboxBlacklistReconciler`

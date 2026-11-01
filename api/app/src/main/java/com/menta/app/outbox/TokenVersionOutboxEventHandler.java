@@ -67,7 +67,7 @@ public class TokenVersionOutboxEventHandler implements OutboxEventHandler {
         } catch (Exception malformed) {
             // Failing loudly is correct: a row we cannot read is a row whose
             // revocation never reaches Redis. The worker retries it.
-            throw new IllegalStateException(
+            throw new OutboxDispatchException(
                 "Unreadable outbox payload for event " + row.getEventType(), malformed
             );
         }
@@ -76,7 +76,7 @@ public class TokenVersionOutboxEventHandler implements OutboxEventHandler {
     private static String requiredText(JsonNode payload, OutboxRowJpaEntity row) {
         JsonNode value = payload.get(USER_ID_FIELD);
         if (value == null || value.asText().isBlank()) {
-            throw new IllegalStateException(
+            throw new OutboxDispatchException(
                 "Missing userId in payload for event " + row.getEventType()
             );
         }
@@ -89,7 +89,7 @@ public class TokenVersionOutboxEventHandler implements OutboxEventHandler {
             value = payload.get(TOKEN_VERSION_FIELD);
         }
         if (value == null || !value.canConvertToLong()) {
-            throw new IllegalStateException(
+            throw new OutboxDispatchException(
                 "Missing tokenVersion in payload for event " + row.getEventType()
             );
         }
