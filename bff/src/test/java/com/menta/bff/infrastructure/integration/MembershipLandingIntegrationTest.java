@@ -190,6 +190,16 @@ class MembershipLandingIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("the hero says the year of bachata runs from January to November")
+    void heroSaysTheYearRunsFromJanuaryToNovember() throws Exception {
+        String main = HtmlSections.mainOf(landingOn(LocalDate.of(2026, 11, 1)));
+
+        assertThat(main).contains("Todas las propuestas de Menta. Un año entero de bachata sensual y tradicional, "
+                + "desde enero a noviembre")
+                .doesNotContain("tradicional, de enero a noviembre");
+    }
+
+    @Test
     @DisplayName("the hero sells the price without quoting an amount that changes with the date")
     void heroSellsThePriceWithoutAFigure() throws Exception {
         String main = HtmlSections.mainOf(landingOn(LocalDate.of(2026, 11, 1)));
