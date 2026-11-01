@@ -510,6 +510,35 @@ conserva el árbol de `develop` y agrega a `main` como padre. Con el merge commi
 incluye todos los commits de `develop`, pero `develop` no recibe el merge commit ni lo que `main`
 sumó por su cuenta (un hotfix, por ejemplo). Eso se corrige con el backport de abajo.
 
+### Actualizar una rama de release con `develop`
+
+Si con el PR `release/*` → `main` abierto falla algo que viene de `develop` (un CVE nuevo
+en Trivy, por ejemplo), el arreglo se hace en `develop` con un PR normal y después se lleva
+a la rama de release. No se commitea directo en `release/*`: la rama de release solo recibe
+lo que `develop` ya tiene, así las dos no divergen y no hace falta un backport extra.
+
+1. Se mergea el PR del arreglo a `develop`.
+2. `git fetch origin`.
+3. `git switch release/<versión>`.
+4. `git merge --ff-only origin/develop`.
+5. `git push origin release/<versión>`. El push reinicia los checks del PR a `main`.
+
+Si la rama de release no tiene commits propios, el paso 4 es un fast-forward: no crea merge
+commit y las dos ramas quedan idénticas (`git rev-list --left-right --count
+origin/develop...origin/release/<versión>` da `0 0`). `--ff-only` falla a propósito si la
+rama de release tiene algo propio (la `0.2.1` llevó cambios de documentación): en ese caso
+se decide a mano, normalmente con `git merge origin/develop`, que sí crea un merge commit.
+
+El botón "Update branch" del PR no sirve para esto: trae la rama base (`main`) a la rama de
+release, no `develop`.
+
+Pasó con la `0.3.0`: el PR #689 falló en `trivy-image` por CVE-2026-111497 (CRITICAL) en
+`brotli-libs`, publicado después de que `develop` pasara el escaneo. El arreglo entró a
+`develop` por el PR #691 (#690) y se llevó a `release/0.3.0` con este procedimiento. Un
+escaneo en verde en `develop` no garantiza que el release siga en verde días después: Trivy
+baja la base de datos de vulnerabilidades en cada corrida, así que un CVE publicado entremedio
+aparece recién en el escaneo siguiente.
+
 ### Backport de `main` a `develop`
 
 Después de cada merge de un release o de un hotfix a `main` hay que llevar `main` de vuelta a
