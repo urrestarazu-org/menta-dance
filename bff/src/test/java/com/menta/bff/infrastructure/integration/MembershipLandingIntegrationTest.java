@@ -176,6 +176,120 @@ class MembershipLandingIntegrationTest extends BaseIntegrationTest {
         assertThat(count(main, "data-pay-button")).isZero();
     }
 
+    private static List<String> tagsOf(String html, String regex) {
+        return Pattern.compile(regex).matcher(html).results().map(match -> match.group()).toList();
+    }
+
+    @Test
+    @DisplayName("the hero presents one membership with all the proposals of Menta")
+    void heroPresentsAllTheProposals() throws Exception {
+        String main = HtmlSections.mainOf(landingOn(LocalDate.of(2026, 11, 1)));
+
+        assertThat(main).contains("Una sola membresía. Todas las propuestas de Menta.")
+                .doesNotContain("Todo Menta");
+    }
+
+    @Test
+    @DisplayName("the hero sells the price without quoting an amount that changes with the date")
+    void heroSellsThePriceWithoutAFigure() throws Exception {
+        String main = HtmlSections.mainOf(landingOn(LocalDate.of(2026, 11, 1)));
+        String lead = main.substring(main.indexOf("hero-lead"), main.indexOf("</p>", main.indexOf("hero-lead")));
+
+        assertThat(lead)
+                .contains("te anotás una sola vez")
+                .contains("a un precio que parece una locura")
+                .doesNotContain("sin tener que decidir cada mes si te anotás o no")
+                .doesNotContain("$");
+    }
+
+    @Test
+    @DisplayName("the hero presents the July and December recess as time to recharge and balance dance with life")
+    void heroPresentsTheRecessAsTimeToRecharge() throws Exception {
+        String main = HtmlSections.mainOf(landingOn(LocalDate.of(2026, 11, 1)));
+
+        assertThat(main).contains("Incluye clases regulares, eventos, intensivos y clases online, con receso en "
+                + "julio y diciembre para recargar energías y equilibrar tus metas de baile con tu vida personal.");
+    }
+
+    @Test
+    @DisplayName("the value block says the membership adds every event of the year to the individual formats")
+    void valueBlockMentionsEveryEventOfTheYear() throws Exception {
+        String main = HtmlSections.mainOf(landingOn(LocalDate.of(2026, 11, 1)));
+
+        assertThat(main).contains("La membresía incluye todo eso más todos los eventos del año, en una sola cuota "
+                        + "mensual: te anotás una vez y bailás todo el año.")
+                .doesNotContain("y mucho más");
+    }
+
+    @Test
+    @DisplayName("the events block says the Saturday falls between the 10th and the 20th of each month")
+    void eventsBlockStatesTheDayOfEachMonth() throws Exception {
+        String main = HtmlSections.mainOf(landingOn(LocalDate.of(2026, 11, 1)));
+
+        assertThat(main)
+                .contains("Un sábado por mes, entre el 10 y el 20 de cada mes, de 19 a 21 hs, de enero a octubre")
+                .doesNotContain("entre el 10 y el 20, de 19 a 21 hs");
+    }
+
+    @Test
+    @DisplayName("the regular classes block promises a gradual, deep training that builds confidence")
+    void regularClassesBlockPromisesConfidence() throws Exception {
+        String main = HtmlSections.mainOf(landingOn(LocalDate.of(2026, 11, 1)));
+
+        assertThat(main)
+                .contains("Lunes de 19:30 a 21:00, de abril a noviembre. Una formación paulatina y profunda, "
+                        + "ideal para reforzar bases y ganar seguridad en cada clase.")
+                .doesNotContain("entender lo que hacés");
+    }
+
+    @Test
+    @DisplayName("the blocks lift when the pointer is over them")
+    void blocksLiftOnHover() throws Exception {
+        String main = HtmlSections.mainOf(landingOn(LocalDate.of(2026, 11, 1)));
+
+        // 4 formats + "Por qué conviene" + conditions
+        assertThat(count(main, "hover-lift")).isEqualTo(6);
+    }
+
+    @Test
+    @DisplayName("every price row changes tint smoothly; the rows in force also show an accent bar")
+    void rowsHighlightOnHover() throws Exception {
+        String main = HtmlSections.mainOf(landingOn(LocalDate.of(2026, 11, 1)));
+
+        List<String> rows = tagsOf(main, "<tr\\b[^>]*data-price-row[^>]*>");
+        assertThat(rows).hasSize(13).allSatisfy(row -> assertThat(row)
+                .contains("transition-colors").containsPattern("(^|[\\s\"])group[\\s\"]"));
+        // Locked rows (11 on Nov 1): grey; rows in force: the exclusive one in bright green, the other in light green
+        assertThat(count(main, "hover:bg-gray-200")).isEqualTo(11);
+        assertThat(count(main, "hover:bg-brand-bright/40")).isEqualTo(1);
+        assertThat(count(main, "hover:bg-brand-light/50")).isEqualTo(1);
+        // The accent bar only appears on the two rows in force
+        assertThat(count(main, "group-hover:border-brand-action")).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("the pay button grows, darkens, moves its arrow and pulses a ring that stops on hover and focus")
+    void payButtonGivesFeedback() throws Exception {
+        String main = HtmlSections.mainOf(landingOn(LocalDate.of(2026, 11, 1)));
+
+        List<String> buttons = tagsOf(main, "<a[^>]*data-pay-button[^>]*>");
+        assertThat(buttons).hasSize(2).allSatisfy(tag -> assertThat(tag).contains("hover-pop").contains("group/pay"));
+        assertThat(count(main, "animate-pay-ring")).isEqualTo(2);
+        assertThat(count(main, "group-hover/pay:hidden")).isEqualTo(2);
+        assertThat(count(main, "group-focus-visible/pay:hidden")).isEqualTo(2);
+        assertThat(count(main, "motion-reduce:animate-none")).isEqualTo(2);
+        assertThat(count(main, "group-hover/pay:translate-x-1")).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("the \"Ver precios\" buttons also react to the pointer")
+    void seePricesButtonsReact() throws Exception {
+        String main = HtmlSections.mainOf(landingOn(LocalDate.of(2026, 11, 1)));
+
+        assertThat(tagsOf(main, "<a[^>]*href=\"#precios\"[^>]*>")).hasSize(2)
+                .allSatisfy(tag -> assertThat(tag).contains("hover-pop"));
+    }
+
     @Test
     @DisplayName("keeps only the brand in the header: no navigation, no account links, no mobile menu")
     void headerHasOnlyTheBrand() throws Exception {
