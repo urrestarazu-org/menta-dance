@@ -63,6 +63,7 @@ menta:
   # Contact details shown on /contacto (#650). Blank means "not shown"; each
   # environment sets its own, nothing real lives in the repository.
   contact:
+    name: ${MENTA_CONTACT_NAME:}
     email: ${MENTA_CONTACT_EMAIL:}
     phone: ${MENTA_CONTACT_PHONE:}
     address: ${MENTA_CONTACT_ADDRESS:}
