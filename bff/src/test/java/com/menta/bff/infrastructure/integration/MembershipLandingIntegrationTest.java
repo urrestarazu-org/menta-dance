@@ -319,6 +319,17 @@ class MembershipLandingIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("the online block promises monthly challenges, summaries and personalised corrections")
+    void onlineBlockPromisesPersonalisedCorrections() throws Exception {
+        String main = HtmlSections.mainOf(landingOn(LocalDate.of(2026, 11, 1)));
+
+        assertThat(main)
+                .contains("quedan grabadas y tenés desafíos mensuales, resúmenes de cada clase y correcciones "
+                        + "personalizadas.")
+                .doesNotContain("resúmenes de cada clase.");
+    }
+
+    @Test
     @DisplayName("the blocks lift when the pointer is over them")
     void blocksLiftOnHover() throws Exception {
         String main = HtmlSections.mainOf(landingOn(LocalDate.of(2026, 11, 1)));
