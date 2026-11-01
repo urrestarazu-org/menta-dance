@@ -208,7 +208,8 @@ class MembershipLandingIntegrationTest extends BaseIntegrationTest {
 
         assertThat(lead)
                 .contains("te anotás una sola vez")
-                .contains("a un precio que parece una locura")
+                .contains("¡y a un precio absurdo!")
+                .doesNotContain("parece una locura")
                 .doesNotContain("sin tener que decidir cada mes si te anotás o no")
                 .doesNotContain("$");
     }
