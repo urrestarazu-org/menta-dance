@@ -214,6 +214,14 @@ sus comentarios se quitan cuando la imagen base ya traiga `libexpat` 2.9.0 o sup
 La alternativa, una excepción en `.trivyignore.yaml`, se descartó: el propio archivo la
 define como último recurso.
 
+El mismo `RUN` actualiza también `brotli-libs` (#690): la imagen de Temurin trae
+1.2.0-r0, con CVE-2026-111497 (CRITICAL, escritura fuera de límites en el decodificador),
+y Alpine 3.23 ya publica 1.2.1-r0, que lo corrige. El CVE apareció después de que
+`develop` pasara el escaneo y frenó el PR `release/0.3.0` → `main` (#689), así que un
+escaneo en verde en `develop` no garantiza que el release lo siga estando días después.
+Esa parte de la línea se quita cuando la imagen base traiga `brotli-libs` 1.2.1-r0 o
+superior.
+
 **Excepción:** `menta-api` y `menta-bff` pueden usar `latest` en los compose
 porque son imágenes que **se construyen localmente** y no se descargan de un
 registro. En producción se despliega el **digest inmutable** de la imagen
