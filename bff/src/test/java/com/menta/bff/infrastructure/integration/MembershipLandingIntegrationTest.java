@@ -330,6 +330,15 @@ class MembershipLandingIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("the online block opens with \"En vivo con contenido nuevo en cada clase\"")
+    void onlineBlockSaysLiveWithNewContentInEveryClass() throws Exception {
+        String main = HtmlSections.mainOf(landingOn(LocalDate.of(2026, 11, 1)));
+
+        assertThat(main).contains("de abril a noviembre. En vivo con contenido nuevo en cada clase; quedan grabadas")
+                .doesNotContain("Clases en vivo con contenido nuevo en cada una");
+    }
+
+    @Test
     @DisplayName("the blocks lift when the pointer is over them")
     void blocksLiftOnHover() throws Exception {
         String main = HtmlSections.mainOf(landingOn(LocalDate.of(2026, 11, 1)));
