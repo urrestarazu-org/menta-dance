@@ -253,6 +253,16 @@ class MembershipLandingIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("the start condition says the charge begins on the 16th of each month after the sign-up")
+    void startConditionStatesTheChargeDay() throws Exception {
+        String main = HtmlSections.mainOf(landingOn(LocalDate.of(2026, 11, 1)));
+
+        assertThat(main).contains("La membresía comienza en enero de 2027, aunque aceptes el link antes. "
+                + "Se empezará a cobrar a partir del día 16 de cada mes, desde el alta de la suscripción "
+                + "en Mercado Pago.");
+    }
+
+    @Test
     @DisplayName("the blocks lift when the pointer is over them")
     void blocksLiftOnHover() throws Exception {
         String main = HtmlSections.mainOf(landingOn(LocalDate.of(2026, 11, 1)));
