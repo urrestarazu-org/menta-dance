@@ -253,6 +253,16 @@ class MembershipLandingIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("the payment condition says the automatic debit happens on the 16th of each month")
+    void paymentConditionStatesTheDebitDay() throws Exception {
+        String main = HtmlSections.mainOf(landingOn(LocalDate.of(2026, 11, 1)));
+
+        assertThat(main).contains("El pago se realiza únicamente mediante suscripción de Mercado Pago, con "
+                        + "débito automático mensual los días 16 de cada mes.")
+                .doesNotContain("desde que aceptás el link");
+    }
+
+    @Test
     @DisplayName("the start condition says the charge begins on the 16th of each month after the sign-up")
     void startConditionStatesTheChargeDay() throws Exception {
         String main = HtmlSections.mainOf(landingOn(LocalDate.of(2026, 11, 1)));
