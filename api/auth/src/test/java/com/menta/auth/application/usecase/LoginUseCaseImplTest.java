@@ -11,7 +11,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.menta.auth.application.contract.AuthOutboxEventTypes;
 import com.menta.auth.application.dto.LoginCommand;
 import com.menta.auth.application.dto.TokenPair;
 import com.menta.auth.application.port.out.AccessTokenIssuer;
@@ -20,7 +19,6 @@ import com.menta.auth.application.port.out.IssuedAccessToken;
 import com.menta.auth.application.port.out.LoginAttemptAuditPort;
 import com.menta.auth.application.port.out.LoginAttemptOutcome;
 import com.menta.auth.application.port.out.LoginRateLimitPort;
-import com.menta.auth.application.port.out.OutboxAppender;
 import com.menta.auth.application.port.out.PasswordEncoderPort;
 import com.menta.auth.application.port.out.RateLimitDecision;
 import com.menta.auth.application.port.out.RefreshTokenRepository;
@@ -86,7 +84,6 @@ class LoginUseCaseImplTest {
     @Mock private AccessTokenIssuer accessTokenIssuer;
     @Mock private TokenHasher tokenHasher;
     @Mock private RefreshTokenRepository refreshTokenRepository;
-    @Mock private OutboxAppender outboxAppender;
     @Mock private AuthDegradedGuard authDegradedGuard;
     @Mock private LoginRateLimitPort loginRateLimitPort;
     @Mock private LoginAttemptAuditPort loginAttemptAuditPort;
@@ -108,7 +105,6 @@ class LoginUseCaseImplTest {
             accessTokenIssuer,
             tokenHasher,
             refreshTokenRepository,
-            outboxAppender,
             authDegradedGuard,
             loginRateLimitPort,
             loginAttemptAuditPort
@@ -120,7 +116,7 @@ class LoginUseCaseImplTest {
     class ValidCredentialsScenario {
 
         @Test
-        void issues_token_pair_and_emits_outbox_event() {
+        void issues_token_pair_and_persists_the_new_refresh_family() {
             User user = activeUser(USER_ID, Role.STUDENT, HASHED_PASSWORD, 1L);
             IssuedAccessToken access = new IssuedAccessToken("jwt.compact.string", JTI.toString(), ACCESS_TTL);
 
@@ -141,13 +137,9 @@ class LoginUseCaseImplTest {
 
             // Refresh persisted in ACTIVE state with token_version matching user.
             verify(refreshTokenRepository).save(any(RefreshToken.class));
-            // Outbox event mirrors spec shape (auth.AuthUserLoggedIn + jti + token_version).
-            verify(outboxAppender, times(1))
-                .append(
-                    eq(AuthOutboxEventTypes.AUTH_USER_LOGGED_IN),
-                    eq(JTI.toString()),
-                    eq("{\"tokenVersion\":1}")
-                );
+            // #672: no auth.AuthUserLoggedIn outbox row any more — LoginUseCaseImpl does not
+            // even receive an OutboxAppender. Integration coverage lives in
+            // TransactionalAuthIntegrationTest.
         }
     }
 
@@ -156,7 +148,7 @@ class LoginUseCaseImplTest {
     class LockedUserScenario {
 
         @Test
-        void correct_password_on_locked_account_raises_dedicated_exception_and_no_outbox() {
+        void correct_password_on_locked_account_raises_dedicated_exception() {
             User locked = lockedUser(USER_ID, HASHED_PASSWORD);
 
             when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(locked));
@@ -168,7 +160,6 @@ class LoginUseCaseImplTest {
                 .isInstanceOf(LockedUserException.class)
                 .hasMessageContaining(USER_ID.toString());
 
-            verify(outboxAppender, never()).append(anyString(), anyString(), anyString());
             verify(refreshTokenRepository, never()).save(any());
             verify(accessTokenIssuer, never()).issue(any());
         }
@@ -280,7 +271,6 @@ class LoginUseCaseImplTest {
         }
 
         private void verifyNothingIssuedOrEmitted() {
-            verify(outboxAppender, never()).append(anyString(), anyString(), anyString());
             verify(accessTokenIssuer, never()).issue(any());
             verify(refreshTokenRepository, never()).save(any());
         }
@@ -302,7 +292,6 @@ class LoginUseCaseImplTest {
             )
                 .isInstanceOf(InvalidCredentialsException.class);
 
-            verify(outboxAppender, never()).append(anyString(), anyString(), anyString());
             verify(accessTokenIssuer, never()).issue(any());
             verify(refreshTokenRepository, never()).save(any());
         }
@@ -317,7 +306,6 @@ class LoginUseCaseImplTest {
                 .isInstanceOf(InvalidCredentialsException.class);
 
             verify(passwordEncoder, never()).matches(anyString(), anyString());
-            verify(outboxAppender, never()).append(anyString(), anyString(), anyString());
         }
 
         @Test
@@ -352,7 +340,6 @@ class LoginUseCaseImplTest {
             verify(accessTokenIssuer, never()).issue(any());
             verify(tokenHasher, never()).hash(anyString());
             verify(refreshTokenRepository, never()).save(any());
-            verify(outboxAppender, never()).append(anyString(), anyString(), anyString());
         }
     }
 
@@ -378,7 +365,6 @@ class LoginUseCaseImplTest {
             verify(passwordEncoder, never()).matches(anyString(), anyString());
             verify(accessTokenIssuer, never()).issue(any());
             verify(refreshTokenRepository, never()).save(any());
-            verify(outboxAppender, never()).append(anyString(), anyString(), anyString());
         }
 
         @Test

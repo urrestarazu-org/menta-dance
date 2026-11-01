@@ -38,12 +38,17 @@ import org.springframework.transaction.annotation.Transactional;
  *      - Account activation / password-reset-request events go through their
  *        own dedicated handlers.
  *   3. Update the row:
- *      - Redis OK → status=COMPLETED, processed_at=now, attempts unchanged.
- *      - Redis exception → status=FAILED, attempts+=1, last_error=message,
- *        next_retry_at=now+backoff.
- *   4. Write heartbeat key `auth:health:last_tick_at` to Redis ONLY when
- *      no Redis errors occurred in this tick. This ensures AuthDegradedGuard
- *      sees degraded state when Redis is actually down.
+ *      - Handler OK → status=COMPLETED, processed_at=now, attempts unchanged.
+ *      - Handler exception → status=FAILED, attempts+=1, last_error=message,
+ *        next_retry_at=now+backoff; at {@code auth.outbox.max-attempts} the row
+ *        becomes the terminal DEAD instead (#672).
+ *   4. Write heartbeat key `auth:health:last_tick_at` to Redis unless a row's
+ *      side effect failed in this tick (see {@link OutboxProcessResult}). The
+ *      heartbeat means "Redis responds": a row that cannot be dispatched at all
+ *      (no handler, unreadable payload) is unrelated to Redis and does not block
+ *      it, otherwise one poison row degrades every login (#672). A failed side
+ *      effect might be Redis itself, so it keeps AuthDegradedGuard fail-closed
+ *      (ADR-0026).
  *
  * <p>This is the <em>worker</em>: it owns the reconciliation logic and is always present in the
  * context, so anything that needs to reconcile on demand can autowire it and call
@@ -101,14 +106,15 @@ public class OutboxBlacklistReconciler {
             return 0;
         }
         int completedOrFailed = 0;
-        boolean hadRedisFailure = false;
+        boolean sideEffectFailed = false;
         for (var row : rows) {
-            hadRedisFailure |= worker.process(row);
+            sideEffectFailed |= worker.process(row).blocksHeartbeat();
             completedOrFailed++;
         }
-        // PR3: Write heartbeat ONLY when no Redis failures occurred.
-        // If Redis is down, writing heartbeat would fail or give false signal.
-        if (!hadRedisFailure) {
+        // The heartbeat means "Redis responds and projections are applied". A row that cannot be
+        // dispatched at all (no handler, unreadable payload) says nothing about Redis and must not
+        // starve it (#672); a failed side effect might be Redis, so it stays fail-closed.
+        if (!sideEffectFailed) {
             tokenBlacklistPort.writeHeartbeat();
         }
         return completedOrFailed;
@@ -123,8 +129,9 @@ public class OutboxBlacklistReconciler {
      * Runs once per day at 3:00 AM server time. The cron expression is configurable
      * via {@code auth.outbox.cleanup-cron}.
      *
-     * <p>FAILED events are intentionally kept for manual inspection. A separate
-     * alerting mechanism should notify operators when FAILED count grows.</p>
+     * <p>FAILED and DEAD events are intentionally kept for manual inspection. The
+     * {@link OutboxStatusMetrics} gauge and the {@code auth-outbox-dead} Grafana rule notify
+     * operators when either count grows.</p>
      */
     @Scheduled(cron = "${auth.outbox.cleanup-cron:0 0 3 * * *}")
     @Transactional(propagation = Propagation.REQUIRES_NEW)

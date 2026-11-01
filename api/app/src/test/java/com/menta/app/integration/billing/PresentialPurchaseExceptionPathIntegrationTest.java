@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 import com.menta.app.integration.support.AbstractBillingMySqlIntegrationTest;
+import com.menta.app.outbox.OutboxProcessResult;
 import com.menta.app.outbox.OutboxReconciliationWorker;
 import com.menta.auth.application.port.out.ActivationRateLimitPort;
 import com.menta.auth.application.port.out.AuthDegradedGuard;
@@ -138,7 +139,7 @@ class PresentialPurchaseExceptionPathIntegrationTest extends AbstractBillingMySq
         // Goes through the real (transactional) bean, so the MANDATORY purchase lookup is exercised.
         assertThat(getPaymentUseCase.getPayment(paymentId.toString(), studentId).fulfillment()).isNull();
         OutboxRowJpaEntity event = outboxRepository.findAll().getFirst();
-        assertThat(outboxWorker.process(event)).isFalse();
+        assertThat(outboxWorker.process(event)).isEqualTo(OutboxProcessResult.COMPLETED);
         assertThat(getPaymentUseCase.getPayment(paymentId.toString(), studentId).fulfillment())
             .isEqualTo(FulfillmentStatus.EXCEPTION);
 
@@ -178,7 +179,7 @@ class PresentialPurchaseExceptionPathIntegrationTest extends AbstractBillingMySq
 
         webhookWorker.process(inbox);
         OutboxRowJpaEntity event = outboxRepository.findAll().getFirst();
-        assertThat(outboxWorker.process(event)).isFalse();
+        assertThat(outboxWorker.process(event)).isEqualTo(OutboxProcessResult.COMPLETED);
 
         assertThat(assignmentRepository.countBySessionId(sessionId)).isEqualTo(1);
         assertThat(getPaymentUseCase.getPayment(paymentId.toString(), studentId).fulfillment())

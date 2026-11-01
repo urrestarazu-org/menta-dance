@@ -1,0 +1,64 @@
+apiVersion: 1
+
+# Log-based alert for outbox rows that exhausted their retries and became DEAD (#672).
+#
+# The query consumes the ERROR line written by OutboxReconciliationWorker when a row reaches
+# `auth.outbox.max-attempts`. Its marker is pinned by AuthOutboxDeadAlertRuleContractTest: change
+# them together. The gauge `auth.outbox.rows{status="DEAD"|"FAILED"}` (OutboxStatusMetrics) shows
+# the current backlog; this rule only fires when a row dies.
+#
+# No contact point or notification policy is defined on purpose (same follow-up as the billing
+# rule). The rule is visible in the Grafana UI only.
+groups:
+  - orgId: 1
+    name: auth
+    folder: Menta Dance
+    interval: 1m
+    rules:
+      - uid: auth-outbox-dead
+        title: Auth outbox row marked DEAD
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: loki
+            model:
+              refId: A
+              queryType: instant
+              expr: 'sum by (eventType) (count_over_time({service_name="menta-dance-api"} |= "alarm=auth_outbox_dead" | logfmt eventType [1h]))'
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              settings:
+                mode: dropNN
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 0
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        isPaused: false
+        labels:
+          severity: warning
+          module: auth
+        annotations:
+          summary: 'Outbox row of type {{ $labels.eventType }} stopped retrying (DEAD)'
+          description: >-
+            An outbox row reached auth.outbox.max-attempts and was parked as DEAD: it is no longer
+            retried. Search Loki for alarm=auth_outbox_dead to see its id and last error. Inspect
+            with SELECT ... FROM common_outbox_events WHERE status = 'DEAD'; once the cause is
+            fixed, requeue it with status = 'PENDING' and attempts = 0.

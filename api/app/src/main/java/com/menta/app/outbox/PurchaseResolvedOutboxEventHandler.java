@@ -44,7 +44,7 @@ public class PurchaseResolvedOutboxEventHandler implements OutboxEventHandler {
         try {
             return objectMapper.readValue(row.getPayload(), PurchaseResolvedOutboxPayload.class);
         } catch (JsonProcessingException e) {
-            throw new IllegalStateException("Failed to deserialize " + row.getEventType() + " payload", e);
+            throw new OutboxDispatchException("Failed to deserialize " + row.getEventType() + " payload", e);
         }
     }
 }

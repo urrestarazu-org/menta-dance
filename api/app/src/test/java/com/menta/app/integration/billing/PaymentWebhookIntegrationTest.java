@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import com.menta.app.integration.support.AbstractBillingMySqlIntegrationTest;
+import com.menta.app.outbox.OutboxProcessResult;
 import com.menta.app.outbox.OutboxReconciliationWorker;
 import com.menta.auth.application.port.out.ActivationRateLimitPort;
 import com.menta.auth.application.port.out.AuthDegradedGuard;
@@ -240,7 +241,7 @@ class PaymentWebhookIntegrationTest extends AbstractBillingMySqlIntegrationTest 
 
     private void dispatchPendingOutboxEvent() {
         OutboxRowJpaEntity event = outboxRepository.findAll().getFirst();
-        assertThat(outboxWorker.process(event)).isFalse();
+        assertThat(outboxWorker.process(event)).isEqualTo(OutboxProcessResult.COMPLETED);
     }
 
     /** Counts {@code common_outbox_events} rows for a given (aggregateId, eventType) pair. */

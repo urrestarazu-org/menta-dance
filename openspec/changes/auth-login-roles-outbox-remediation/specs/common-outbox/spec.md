@@ -1,5 +1,7 @@
 # Delta for common-outbox
 
+> **Partially superseded by #672 (2026-11-01).** `AuthUserLoggedIn` and `RefreshRotated` are no longer persisted (no consumer since #88). The reconciler heartbeat now means "Redis responds": a row that cannot be dispatched (no handler, unreadable payload) does not block it, and any repeatedly failing row becomes `DEAD` at `auth.outbox.max-attempts`. Scenarios that rely on those events no longer apply. See ADR-0030.
+
 ## MODIFIED Requirements
 
 ### Requirement: Auth events persist atomically with their mutation

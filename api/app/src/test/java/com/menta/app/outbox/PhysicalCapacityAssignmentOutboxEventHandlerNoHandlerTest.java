@@ -16,7 +16,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerNoHandlerTest {
     @Test
     void missing_presential_handler_marks_the_row_failed_with_a_literal_diagnostic() {
         OutboxRowJpaRepository repository = Mockito.mock(OutboxRowJpaRepository.class);
-        OutboxReconciliationWorker worker = new OutboxReconciliationWorker(repository, List.of(), 30L);
+        OutboxReconciliationWorker worker = new OutboxReconciliationWorker(repository, List.of(), 30L, 100);
         OutboxRowJpaEntity row = new OutboxRowJpaEntity(
             "01HFPRESENTIAL0000000000000000",
             "billing.PhysicalPaymentCompleted",
@@ -30,9 +30,9 @@ class PhysicalCapacityAssignmentOutboxEventHandlerNoHandlerTest {
             null
         );
 
-        boolean failed = worker.process(row);
+        OutboxProcessResult result = worker.process(row);
 
-        assertThat(failed).isTrue();
+        assertThat(result).isEqualTo(OutboxProcessResult.DISPATCH_FAILED);
         assertThat(row.getStatus()).isEqualTo(OutboxStatus.FAILED);
         assertThat(row.getAttempts()).isEqualTo(1);
         assertThat(row.getLastError()).isEqualTo(

@@ -1,6 +1,5 @@
 package com.menta.auth.application.usecase;
 
-import com.menta.auth.application.contract.AuthOutboxEventTypes;
 import com.menta.auth.application.dto.LoginCommand;
 import com.menta.auth.application.dto.TokenPair;
 import com.menta.auth.application.port.in.LoginUseCase;
@@ -10,7 +9,6 @@ import com.menta.auth.application.port.out.IssuedAccessToken;
 import com.menta.auth.application.port.out.LoginAttemptAuditPort;
 import com.menta.auth.application.port.out.LoginAttemptOutcome;
 import com.menta.auth.application.port.out.LoginRateLimitPort;
-import com.menta.auth.application.port.out.OutboxAppender;
 import com.menta.auth.application.port.out.PasswordEncoderPort;
 import com.menta.auth.application.port.out.RateLimitDecision;
 import com.menta.auth.application.port.out.RefreshTokenRepository;
@@ -46,8 +44,9 @@ import java.util.UUID;
  *   5. Correct password, decision by status (revealed only now, never without the password):
  *      PENDING_ACTIVATION → AccountNotActivatedException (403); LOCKED →
  *      LockedUserException (423); INACTIVE / SUSPENDED → InvalidCredentialsException (401).
- *      None of these consume the failure budget and none emit an outbox event.
- *   6. ACTIVE: issue access, mint refresh in new family, append outbox.
+ *      None of these consume the failure budget.
+ *   6. ACTIVE: issue access, mint refresh in new family. No outbox event is written: the former
+ *      {@code auth.AuthUserLoggedIn} had no consumer (#672).
  *
  * <p>Budgets count failures, never attempts (ADR-0035). Step 2 only reads, so a
  * successful login costs nothing; the counters move in the failure branches.
@@ -60,7 +59,7 @@ import java.util.UUID;
  *
  * <p>Every judged attempt is audited through LoginAttemptAuditPort, which writes
  * outside transactional control — a failed login rolls the transaction back,
- * so the outbox cannot carry that trail.
+ * so a transactional write could not carry that trail.
  */
 public class LoginUseCaseImpl implements LoginUseCase {
 
@@ -75,7 +74,6 @@ public class LoginUseCaseImpl implements LoginUseCase {
     private final AccessTokenIssuer accessTokenIssuer;
     private final TokenHasher tokenHasher;
     private final RefreshTokenRepository refreshTokenRepository;
-    private final OutboxAppender outboxAppender;
     private final AuthDegradedGuard authDegradedGuard;
     private final LoginRateLimitPort loginRateLimitPort;
     private final LoginAttemptAuditPort loginAttemptAuditPort;
@@ -86,7 +84,6 @@ public class LoginUseCaseImpl implements LoginUseCase {
         AccessTokenIssuer accessTokenIssuer,
         TokenHasher tokenHasher,
         RefreshTokenRepository refreshTokenRepository,
-        OutboxAppender outboxAppender,
         AuthDegradedGuard authDegradedGuard,
         LoginRateLimitPort loginRateLimitPort,
         LoginAttemptAuditPort loginAttemptAuditPort
@@ -96,7 +93,6 @@ public class LoginUseCaseImpl implements LoginUseCase {
         this.accessTokenIssuer = accessTokenIssuer;
         this.tokenHasher = tokenHasher;
         this.refreshTokenRepository = refreshTokenRepository;
-        this.outboxAppender = outboxAppender;
         this.authDegradedGuard = authDegradedGuard;
         this.loginRateLimitPort = loginRateLimitPort;
         this.loginAttemptAuditPort = loginAttemptAuditPort;
@@ -139,8 +135,6 @@ public class LoginUseCaseImpl implements LoginUseCase {
 
         rejectNonOperationalAccount(user, emailFingerprint, clientFingerprint);
 
-        IssuedAccessToken access = accessTokenIssuer.issue(user);
-
         UUID refreshId = UUID.randomUUID();
         String refreshHash = tokenHasher.hash(refreshId.toString());
         Instant refreshExpiresAt = Instant.now().plus(REFRESH_TTL);
@@ -153,15 +147,7 @@ public class LoginUseCaseImpl implements LoginUseCase {
         );
         refreshTokenRepository.save(newRefresh);
 
-        // ADR-0027: outbox row in the SAME transaction as the refresh insert.
-        // The reconciler pulls PENDING rows asynchronously and projects the
-        // blacklist side-effect to Redis.
-        String payload = "{\"tokenVersion\":" + user.getTokenVersion() + "}";
-        outboxAppender.append(
-            AuthOutboxEventTypes.AUTH_USER_LOGGED_IN,
-            access.jti(),
-            payload
-        );
+        IssuedAccessToken access = accessTokenIssuer.issue(user);
 
         // Only the email budget is cleared. The origin budget deliberately
         // survives: clearing it would let an attacker with one valid account
