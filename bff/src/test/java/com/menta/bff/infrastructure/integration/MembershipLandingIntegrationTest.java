@@ -263,13 +263,15 @@ class MembershipLandingIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("the start condition says the charge begins on the 16th of each month after the sign-up")
-    void startConditionStatesTheChargeDay() throws Exception {
+    @DisplayName("the start date and the first debit are two separate conditions")
+    void startAndFirstDebitAreSeparateConditions() throws Exception {
         String main = HtmlSections.mainOf(landingOn(LocalDate.of(2026, 11, 1)));
 
-        assertThat(main).contains("La membresía comienza en enero de 2027, aunque aceptes el link antes. "
-                + "Se empezará a cobrar a partir del día 16 de cada mes, desde el alta de la suscripción "
-                + "en Mercado Pago.");
+        assertThat(main)
+                .contains("<li>La membresía comienza en enero de 2027, aunque te suscribas antes.</li>")
+                .contains("<li>El primer débito se hace el primer día 16 que sigue a tu alta en Mercado Pago, "
+                        + "y después los 16 de cada mes.</li>")
+                .doesNotContain("Se empezará a cobrar");
     }
 
     @Test
