@@ -127,14 +127,15 @@ class MembershipLandingIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("states the payment conditions of the document and nothing the document does not say")
+    @DisplayName("states the payment conditions of the document, plus the receipt reminder the owner asked for")
     void statesTheConditions() throws Exception {
         String main = HtmlSections.mainOf(landingOn(LocalDate.of(2026, 11, 1)));
 
         assertThat(main).contains("suscripción de Mercado Pago", "débito automático",
                 "La membresía comienza en enero de 2027", "julio y diciembre",
                 "se da de baja y finaliza automáticamente");
-        assertThat(main).doesNotContain("comprobante").doesNotContain("Guadarrama");
+        // The owner added the receipt reminder after the document; the mock-up's address stays out.
+        assertThat(main).contains("comprobante").doesNotContain("Guadarrama");
     }
 
     @Test
@@ -272,6 +273,16 @@ class MembershipLandingIntegrationTest extends BaseIntegrationTest {
                 .contains("<li>El primer débito se hace el primer día 16 que sigue a tu alta en Mercado Pago, "
                         + "y después los 16 de cada mes.</li>")
                 .doesNotContain("Se empezará a cobrar");
+    }
+
+    @Test
+    @DisplayName("the conditions ask for the receipt and the Mercado Pago email, and say where to send them")
+    void conditionsRemindToAttachTheReceipt() throws Exception {
+        String main = HtmlSections.mainOf(landingOn(LocalDate.of(2026, 11, 1)));
+
+        assertThat(main).contains("<li>No te olvides de adjuntar el comprobante o la captura del pago realizado, "
+                + "junto con el mail con el que te registraste en Mercado Pago. Enviáselos a la Profe Lina: "
+                + "sus datos están en <a href=\"/contacto\">contacto</a>.</li>");
     }
 
     @Test
