@@ -249,7 +249,7 @@ class MembershipLandingIntegrationTest extends BaseIntegrationTest {
         String main = HtmlSections.mainOf(landingOn(LocalDate.of(2026, 11, 1)));
 
         assertThat(main)
-                .contains("Lunes de 19:30 a 21:00, de abril a noviembre. Una formación paulatina y profunda, "
+                .contains("Lunes de 19:30 a 21:00 hs., de abril a noviembre. Una formación paulatina y profunda, "
                         + "ideal para reforzar bases y ganar seguridad en cada clase.")
                 .doesNotContain("entender lo que hacés");
     }
@@ -284,6 +284,38 @@ class MembershipLandingIntegrationTest extends BaseIntegrationTest {
         assertThat(main).contains("<li>No te olvides de adjuntar el comprobante o la captura del pago realizado, "
                 + "junto con el mail con el que te registraste en Mercado Pago. Enviáselos a la Profe Lina: "
                 + "sus datos están en <a href=\"/contacto\">contacto</a>.</li>");
+    }
+
+    @Test
+    @DisplayName("the events block sells new choreographies, photos and sharing with women who love to dance")
+    void eventsBlockSellsTheExperience() throws Exception {
+        String main = HtmlSections.mainOf(landingOn(LocalDate.of(2026, 11, 1)));
+
+        assertThat(main)
+                .contains("diez encuentros para desafiarte con nuevas coreografías, lucir tu mejor outfit, "
+                        + "sacarte fotos, disfrutar y compartir con mujeres que también aman bailar.")
+                .doesNotContain("diez encuentros para aprender")
+                .doesNotContain("compartir con la comunidad");
+    }
+
+    @Test
+    @DisplayName("the online block writes the time as \"18:30 hs.\"")
+    void onlineBlockWritesTheTimeWithHs() throws Exception {
+        String main = HtmlSections.mainOf(landingOn(LocalDate.of(2026, 11, 1)));
+
+        assertThat(main).contains("Los últimos dos domingos de cada mes, a las 18:30 hs., de abril a noviembre.")
+                .doesNotContain("a las 18:30, de abril");
+    }
+
+    @Test
+    @DisplayName("the intensive block writes both schedules with \"hs.\"")
+    void intensiveBlockWritesTheTimesWithHs() throws Exception {
+        String main = HtmlSections.mainOf(landingOn(LocalDate.of(2026, 11, 1)));
+
+        assertThat(main)
+                .contains("Durante enero, febrero y marzo, presenciales: lunes de 19:30 a 21:00 hs. y miércoles "
+                        + "de 19:30 a 21:30 hs. Cada curso intensivo dura un mes")
+                .doesNotContain("21:00 y miércoles");
     }
 
     @Test
