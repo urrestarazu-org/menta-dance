@@ -77,20 +77,25 @@ If the API rejects the token (401, REFRESH_TOKEN_COMPROMISED, or 400 INVALID_AUT
 
 ### Requirement: Authenticated home and navigation (AC3)
 
-The authenticated destination MUST show a greeting and a logout action. The navigation drawer MUST list exactly two entries, Home and "Mis clases", and selecting an entry MUST navigate to its destination (`onNavigate`) and close the drawer. It MUST NOT show placeholder or "coming soon" entries. Navigation MUST use Navigation Compose and be extensible with one entry per later section.
+The authenticated destination MUST show a greeting and a logout action. The navigation drawer MUST list exactly three entries, Home, "Mis clases" and "Mi asistencia", in that order, and selecting an entry MUST navigate to its destination (`onNavigate`) and close the drawer. It MUST NOT show placeholder or "coming soon" entries. Navigation MUST use Navigation Compose and be extensible with one entry per later section.
 
 #### Scenario: Home contents
 - GIVEN an authenticated student
 - WHEN home is shown
-- THEN the greeting and logout are present AND the drawer lists Home and "Mis clases" and no other entry
+- THEN the greeting and logout are present AND the drawer lists Home, "Mis clases" and "Mi asistencia" and no other entry
 
 #### Scenario: Navigate to Mis clases
 - GIVEN the drawer open on Home
 - WHEN the user selects "Mis clases"
 - THEN the My Sessions destination is shown and the drawer closes (manual verification)
 
+#### Scenario: Navigate to Mi asistencia
+- GIVEN the drawer open on Home
+- WHEN the user selects "Mi asistencia"
+- THEN the Mi asistencia destination is shown on the current month and the drawer closes (manual verification)
+
 #### Scenario: Navigate back to Home
-- GIVEN My Sessions shown
+- GIVEN My Sessions or Mi asistencia shown
 - WHEN the user selects Home in the drawer
 - THEN Home is shown (manual verification)
 
@@ -100,7 +105,7 @@ The authenticated destination MUST show a greeting and a logout action. The navi
 - THEN the app does not return to login
 
 #### Scenario: Logout stays available
-- GIVEN any authenticated destination
+- GIVEN any authenticated destination, including Mi asistencia
 - WHEN the user chooses logout
 - THEN the existing logout behaviour applies (manual verification; logic covered by Logout requirement)
 
