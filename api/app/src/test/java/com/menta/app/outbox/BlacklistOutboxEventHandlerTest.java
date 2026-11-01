@@ -20,10 +20,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
  *       {@code blacklist:jti:{familyId}}, a key no jti can ever match.</li>
  *   <li>{@code USER_LOGGED_OUT} carries the <em>refresh token id</em>, not a
  *       jti — same dead key.</li>
- *   <li>{@code AUTH_USER_LOGGED_IN} carries a real jti, but it is the token
+ *   <li>{@code auth.AuthUserLoggedIn} carried a real jti, but it is the token
  *       that was just minted: had anything read the blacklist, every
  *       successful login would have produced a born-revoked access token.</li>
- *   <li>{@code REFRESH_ROTATED} likewise.</li>
+ *   <li>{@code auth.RefreshRotated} likewise.</li>
  * </ul>
  *
  * <p>No jti reaches any event today — {@code LogoutCommand} does not even
@@ -47,14 +47,15 @@ class BlacklistOutboxEventHandlerTest {
 
         assertThat(handler.supports(AuthOutboxEventTypes.REFRESH_REVOKED)).isFalse();
         assertThat(handler.supports(AuthOutboxEventTypes.USER_LOGGED_OUT)).isFalse();
-        assertThat(handler.supports(AuthOutboxEventTypes.REFRESH_ROTATED)).isFalse();
+        // Retired by #672 (no longer produced); still must not be claimed for legacy rows.
+        assertThat(handler.supports("auth.RefreshRotated")).isFalse();
     }
 
     @Test
     void no_longer_blacklists_a_freshly_minted_access_token() {
-        // The worst of the four: AUTH_USER_LOGGED_IN carries the jti of the
-        // token issued by that very login.
-        assertThat(handler().supports(AuthOutboxEventTypes.AUTH_USER_LOGGED_IN)).isFalse();
+        // The worst of the four: auth.AuthUserLoggedIn carried the jti of the
+        // token issued by that very login (event retired in #672).
+        assertThat(handler().supports("auth.AuthUserLoggedIn")).isFalse();
     }
 
     @Test

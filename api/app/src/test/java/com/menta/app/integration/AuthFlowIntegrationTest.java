@@ -14,6 +14,7 @@ import com.menta.auth.domain.model.RefreshTokenStatus;
 import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.model.UserId;
+import com.menta.auth.domain.model.UserProfile;
 import com.menta.auth.domain.model.UserStatus;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.auth.infrastructure.persistence.entity.RefreshTokenJpaEntity;
@@ -131,6 +132,9 @@ class AuthFlowIntegrationTest {
         Map<String, Object> body = loginResponse.getBody();
         assertThat(body).isNotNull();
         assertThat(body).containsKeys("access_token", "token_type", "expires_in");
+        // The contract says seconds as a number; Spring Boot's mapper would emit "PT15M" otherwise.
+        assertThat(body.get("expires_in")).isInstanceOf(Number.class);
+        assertThat(((Number) body.get("expires_in")).doubleValue()).isEqualTo(900.0);
         String refreshToken = loginResponse.getHeaders().getFirst("X-Refresh-Token");
         assertThat(refreshToken).isNotBlank();
         String accessToken = (String) body.get("access_token");
@@ -147,6 +151,8 @@ class AuthFlowIntegrationTest {
         Map<String, Object> rotateBody = refreshResponse.getBody();
         assertThat(rotateBody).isNotNull();
         assertThat((String) rotateBody.get("access_token")).isNotBlank();
+        assertThat(rotateBody.get("expires_in")).isInstanceOf(Number.class);
+        assertThat(((Number) rotateBody.get("expires_in")).doubleValue()).isEqualTo(900.0);
         String rotatedRefresh = refreshResponse.getHeaders().getFirst("X-Refresh-Token");
         assertThat(rotatedRefresh).isNotBlank();
         assertThat(rotatedRefresh).isNotEqualTo(refreshToken);
@@ -214,7 +220,8 @@ class AuthFlowIntegrationTest {
         userRepository.save(User.register(
             Email.of(EMAIL),
             passwordEncoder.encode(RAW_PASSWORD),
-            Role.STUDENT
+            Role.STUDENT,
+            new UserProfile("Ada", "Lovelace", "+5491100000000", null)
         ));
 
         ResponseEntity<Map> wrongPassword = http.exchange(

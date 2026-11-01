@@ -1,5 +1,6 @@
 package com.menta.auth.infrastructure.web.dto;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.Duration;
 
@@ -21,7 +22,10 @@ public record TokenResponse(
     @JsonProperty("token_type")
     String tokenType,
 
+    // Spring Boot disables WRITE_DURATIONS_AS_TIMESTAMPS, which would emit "PT15M";
+    // the shape is pinned here so the wire contract does not depend on mapper defaults.
     @JsonProperty("expires_in")
+    @JsonFormat(shape = JsonFormat.Shape.NUMBER_FLOAT)
     Duration expiresIn
 ) {
 }

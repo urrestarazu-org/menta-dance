@@ -56,8 +56,8 @@ class TokenVersionOutboxEventHandlerTest {
             // not invalidate previously issued ones.
             TokenVersionOutboxEventHandler handler = handler();
 
-            assertThat(handler.supports(AuthOutboxEventTypes.AUTH_USER_LOGGED_IN)).isFalse();
-            assertThat(handler.supports(AuthOutboxEventTypes.REFRESH_ROTATED)).isFalse();
+            assertThat(handler.supports("auth.AuthUserLoggedIn")).isFalse();
+            assertThat(handler.supports("auth.RefreshRotated")).isFalse();
             assertThat(handler.supports(AuthOutboxEventTypes.PASSWORD_RESET_REQUESTED)).isFalse();
         }
     }
@@ -146,7 +146,7 @@ class TokenVersionOutboxEventHandlerTest {
             );
 
             assertThatThrownBy(() -> handler().handle(row))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(OutboxDispatchException.class);
             verify(tokenBlacklistPort, never()).projectTokenVersion(anyString(), anyLong());
         }
 
@@ -158,7 +158,7 @@ class TokenVersionOutboxEventHandlerTest {
             );
 
             assertThatThrownBy(() -> handler().handle(row))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(OutboxDispatchException.class);
         }
 
         @Test
@@ -170,7 +170,7 @@ class TokenVersionOutboxEventHandlerTest {
             );
 
             assertThatThrownBy(() -> handler().handle(row))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(OutboxDispatchException.class);
         }
     }
 

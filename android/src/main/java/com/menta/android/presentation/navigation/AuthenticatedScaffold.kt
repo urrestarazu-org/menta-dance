@@ -26,12 +26,15 @@ import kotlinx.coroutines.launch
 /** One drawer entry per student section; later features add theirs here. */
 enum class StudentSection(@StringRes val label: Int) {
     Home(R.string.menu_section_home),
+    MySessions(R.string.menu_section_my_sessions),
+    MyAttendance(R.string.menu_section_my_attendance),
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AuthenticatedScaffold(
     selected: StudentSection,
+    onNavigate: (StudentSection) -> Unit,
     onLogout: () -> Unit,
     content: @Composable (PaddingValues) -> Unit,
 ) {
@@ -47,7 +50,10 @@ fun AuthenticatedScaffold(
                         NavigationDrawerItem(
                             label = { Text(stringResource(section.label)) },
                             selected = section == selected,
-                            onClick = { scope.launch { drawerState.close() } },
+                            onClick = {
+                                scope.launch { drawerState.close() }
+                                if (section != selected) onNavigate(section)
+                            },
                             modifier = Modifier.padding(horizontal = 12.dp),
                         )
                     }

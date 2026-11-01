@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('Accesibilidad', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<article class="legal">
+    <h1 class="mb-4">Accesibilidad</h1>
+    <div th:replace="~{fragments/legal :: review-notice}"></div>
+
+    <p>Queremos que cualquier persona pueda usar el sitio de Menta Dance. Esta página cuenta qué hacemos para
+        lograrlo y cómo avisarnos si algo no funciona.</p>
+
+    <h2>1. Qué tenemos en cuenta</h2>
+    <ul>
+        <li>Un enlace para saltar directo al contenido principal al navegar con teclado.</li>
+        <li>Una estructura de títulos ordenada y secciones identificadas, para lectores de pantalla.</li>
+        <li>Formularios con etiquetas asociadas a cada campo y mensajes de error que se anuncian.</li>
+        <li>Un menú móvil que funciona sin JavaScript y se maneja con teclado.</li>
+        <li>Texto que se adapta al tamaño de la pantalla y al zoom del navegador.</li>
+    </ul>
+
+    <h2>2. Nuestro compromiso</h2>
+    <p>Tomamos como referencia las pautas WCAG 2.1 nivel AA. Todavía no hicimos una auditoría completa, así que
+        puede haber partes del sitio que no las cumplan.</p>
+
+    <h2>3. Cómo avisarnos</h2>
+    <p>Si encontrás una barrera de accesibilidad, o necesitás un contenido en otro formato, escribinos desde la
+        página de <a th:href="@{/contacto}">contacto</a> contándonos qué página y qué dispositivo o ayuda técnica
+        usás. Vamos a responderte y a buscar una alternativa.</p>
+
+    <h2>4. Clases presenciales</h2>
+    <p>Si necesitás algún ajuste para participar de una clase presencial, consultanos antes de reservarla y lo
+        coordinamos con el equipo.</p>
+</article>
+</th:block>
+</body>
+</html>

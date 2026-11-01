@@ -30,7 +30,7 @@ class ActivationOutboxEventHandlerTest {
         handler.handle(row);
 
         assertThat(handler.supports(AuthOutboxEventTypes.ACCOUNT_ACTIVATION_REQUESTED)).isTrue();
-        assertThat(handler.supports(AuthOutboxEventTypes.AUTH_USER_LOGGED_IN)).isFalse();
+        assertThat(handler.supports(AuthOutboxEventTypes.REFRESH_REVOKED)).isFalse();
         verify(notificationPort).sendActivationEmail(TOKEN_ID);
     }
 

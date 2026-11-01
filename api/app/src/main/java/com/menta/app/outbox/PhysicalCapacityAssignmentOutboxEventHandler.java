@@ -393,7 +393,7 @@ public class PhysicalCapacityAssignmentOutboxEventHandler implements OutboxEvent
         try {
             return objectMapper.readValue(row.getPayload(), PaymentCompletedOutboxPayload.class);
         } catch (Exception e) {
-            throw new IllegalStateException(
+            throw new OutboxDispatchException(
                 "Failed to deserialize billing.PhysicalPaymentCompleted payload", e
             );
         }

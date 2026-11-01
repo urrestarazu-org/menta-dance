@@ -1,5 +1,7 @@
 # auth-refresh Specification
 
+> **Superado parcialmente por #672 (2026-11-01).** Una rotación de refresh ya no emite `RefreshRotated`: el evento no tenía consumidor (handler inactivo desde #88) y dejaba filas que fallaban para siempre, lo que degradaba el login con `503 AUTH_DEGRADED`. Los requisitos y escenarios de abajo que lo mencionan quedan sin efecto; el resto sigue vigente. Ver ADR-0030 ("Decisión 2026-11-01").
+
 ## Purpose
 Define la rotación del refresh token y la revocación de familia completa cuando
 se detecta compromiso (ADR-0025). Estrategia **strict per-family**: cualquier

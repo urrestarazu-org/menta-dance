@@ -9,7 +9,8 @@ import com.menta.auth.application.dto.TokenPair;
  * <p>Side-effects in the same transaction (ADR-0027):
  * - Refresh marked USED on rotation.
  * - New refresh row inserted in the same family.
- * - Outbox RefreshRotated appended with new refresh id as aggregate_id.
+ * - No outbox row on a plain rotation: the former RefreshRotated event had no
+ *   consumer and was removed (#672).
  *
  * <p>On compromise (presented in USED, with stale token_version, or unknown hash):
  * - User token_version bumped (only when stale was caused by the current event, not

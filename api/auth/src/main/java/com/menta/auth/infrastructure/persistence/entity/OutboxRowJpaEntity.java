@@ -27,17 +27,17 @@ import java.time.Instant;
  * <ul>
  *   <li><b>id</b>: Auto-increment PK for fast writes (no UUID generation overhead)</li>
  *   <li><b>event_id</b>: ULID (26 chars) for producer-side idempotency and ordering</li>
- *   <li><b>event_type</b>: Dotted path like "auth.AuthUserLoggedIn" for routing</li>
+ *   <li><b>event_type</b>: Dotted path like "auth.RefreshRevoked" for routing</li>
  *   <li><b>aggregate_id</b>: Business key (e.g., jti, userId) for correlation</li>
  *   <li><b>payload</b>: JSON body with event details</li>
- *   <li><b>status</b>: Lifecycle state (PENDING → PROCESSED or FAILED)</li>
+ *   <li><b>status</b>: Lifecycle state (PENDING → COMPLETED, FAILED or DEAD)</li>
  * </ul>
  *
  * <h2>Lifecycle</h2>
  * <pre>{@code
- * PENDING ──(reconciler processes)──→ PROCESSED
+ * PENDING ──(reconciler processes)──→ COMPLETED
  *    │
- *    └──(error)──→ retry with backoff ──(max retries)──→ FAILED
+ *    └──(error)──→ FAILED (retry with backoff) ──(auth.outbox.max-attempts)──→ DEAD
  * }</pre>
  *
  * <h2>Ownership</h2>

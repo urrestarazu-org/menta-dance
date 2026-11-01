@@ -70,7 +70,7 @@ class PurchaseResolvedOutboxEventHandlerTest {
     @Test
     void fails_on_an_unreadable_payload_so_the_worker_marks_the_row_failed() {
         assertThatThrownBy(() -> handler.handle(row("not json")))
-            .isInstanceOf(IllegalStateException.class)
+            .isInstanceOf(OutboxDispatchException.class)
             .hasMessageContaining(BillingOutboxEventTypes.PURCHASE_RESOLVED);
     }
 

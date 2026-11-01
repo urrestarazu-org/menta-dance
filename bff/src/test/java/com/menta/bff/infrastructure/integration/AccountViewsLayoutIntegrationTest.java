@@ -143,6 +143,7 @@ class AccountViewsLayoutIntegrationTest extends BaseIntegrationTest {
                 .contains("Código: 404")
                 .contains("role=\"alert\"")
                 .contains("Volver al inicio")
+                .containsPattern("<a[^>]*class=\"btn btn-primary\"[^>]*href=\"/\"[^>]*>\\s*Volver al inicio")
                 .doesNotContain("Go to Home")
                 .doesNotContain("Not Found")
                 .contains("href=\"/\"")
@@ -155,10 +156,21 @@ class AccountViewsLayoutIntegrationTest extends BaseIntegrationTest {
     @DisplayName("/registro con errores marca cada campo aria-invalid y lo vincula a su mensaje con aria-describedby")
     void registrationErrorsAreLinkedToTheirFields() throws Exception {
         String html = mockMvc.perform(post("/registro").with(csrf())
-                        .param("email", "not-an-email").param("password", "x"))
+                        .param("email", "not-an-email").param("password", "x")
+                .param("phone", "123").param("birthDate", "not-a-date"))
                 .andReturn().getResponse().getContentAsString();
 
         assertThat(html)
+                .containsPattern("<input[^>]*id=\"firstName\"[^>]*aria-invalid=\"true\""
+                        + "[^>]*aria-describedby=\"firstName-help\"")
+                .containsPattern("<input[^>]*id=\"lastName\"[^>]*aria-invalid=\"true\""
+                        + "[^>]*aria-describedby=\"lastName-help\"")
+                .containsPattern("<input[^>]*id=\"phone\"[^>]*aria-invalid=\"true\""
+                        + "[^>]*aria-describedby=\"phone-help\"")
+                .containsPattern("<input[^>]*id=\"birthDate\"[^>]*aria-invalid=\"true\""
+                        + "[^>]*aria-describedby=\"birthDate-help\"")
+                .contains("id=\"phone-help\"")
+                .contains("id=\"birthDate-help\"")
                 .containsPattern(
                         "<input[^>]*id=\"email\"[^>]*aria-invalid=\"true\"[^>]*aria-describedby=\"email-help\"")
                 .containsPattern("<input[^>]*id=\"password\"[^>]*aria-invalid=\"true\""

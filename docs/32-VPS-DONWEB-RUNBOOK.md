@@ -370,10 +370,31 @@ Puntos a tener en cuenta:
   El secreto de los webhooks generado así solo sirve hasta que se conecta Mercado Pago real: la API verifica la firma `x-signature` con él, así que con pagos reales tiene que ser la clave secreta que muestra la consola de Mercado Pago para los webhooks de la aplicación (se reemplaza en `.env` y se redespliega).
 
 - Correo: **EnvialoSimple** por SMTP, puerto **587** con `SMTP_AUTH=true` y `SMTP_STARTTLS=true`. El compose solo mapea STARTTLS (no hay variable para TLS implícito, puerto 465), así que el puerto 587 es el único que sirve.
-- Quedan vacías a propósito cinco variables: `BILLING_MERCADOPAGO_ACCESS_TOKEN` (sin ese token no hay cobros) y los cuatro datos de transferencia bancaria (CBU, alias, titular, CUIT). Se cargan antes de habilitar pagos reales.
+- Quedaron vacías a propósito cinco variables: `BILLING_MERCADOPAGO_ACCESS_TOKEN` (sin ese token no hay cobros) y los cuatro datos de transferencia bancaria (CBU, alias, titular, CUIT). El token se cargó el 2026-10-20 (abajo); los datos de transferencia siguen vacíos (#633) y se cargan antes de habilitar esa forma de pago.
 - `BILLING_MERCADOPAGO_MERCHANT_ACCOUNT_ID` (#634): el ID de la cuenta vendedora de Mercado Pago. La API acepta un pago solo si coincide con el `collector_id` que devuelve Mercado Pago, así que hace falta cargarlo junto con el token. Se obtiene con ese mismo token: `curl -s -H "Authorization: Bearer <TOKEN>" https://api.mercadopago.com/users/me | jq .id`. No es el Client ID de la aplicación. No es secreto, pero tampoco se versiona.
 - `API_DIGEST` y `BFF_DIGEST` no están: las escribe `deploy.sh` en cada despliegue.
-- **Cómo revisar el archivo sin exponer valores:** `sed 's/=.*/=…/' /opt/menta/.env` lista los nombres, y `grep -cE '^[A-Z_]+=$' /opt/menta/.env` cuenta las vacías (deben ser 5). No usar `grep '=$'` a secas: las claves en base64 con relleno terminan en `=` y se imprimirían enteras. Pasó ese día con las dos claves de entrega; como la API todavía no había arrancado, se regeneraron en el momento y no hubo exposición real.
+- **Cómo revisar el archivo sin exponer valores:** `sed 's/=.*/=…/' /opt/menta/.env` lista los nombres, y `grep -cE '^[A-Z_]+=$' /opt/menta/.env` cuenta las vacías (eran 5; desde el 2026-10-20 deben ser 4, las de transferencia). Ojo: una variable que **no está** en el archivo no aparece como vacía (ver el error de `set_var` abajo). No usar `grep '=$'` a secas: las claves en base64 con relleno terminan en `=` y se imprimirían enteras. Pasó ese día con las dos claves de entrega; como la API todavía no había arrancado, se regeneraron en el momento y no hubo exposición real.
+
+**Ejecutado el 2026-10-20 (VPS): credenciales de Mercado Pago de pruebas** (#633, #634).
+
+- **Webhooks en la consola de Mercado Pago.** La aplicación tiene dos pestañas, "Modo de prueba" y "Modo productivo", y cada una se configura por separado (URL, eventos y clave secreta). Ese día se configuró la de prueba, URL `https://api.mentadance.com/api/v1/billing/payments/mercadopago/webhook` y evento "Pagos (legacy)", pero con un vendedor de prueba **no es la que corresponde** (ver la corrección de abajo). El controlador de la API (`PaymentWebhookController`) lee `data.id` de la query y `x-request-id` y `x-signature` de los headers, y ignora el cuerpo; que "Pagos (legacy)" sea el evento correcto se confirma con la compra de prueba (#515).
+- **Qué se cargó en `/opt/menta/.env`:** `BILLING_MERCADOPAGO_ACCESS_TOKEN` (el del usuario vendedor de prueba), `BILLING_MERCADOPAGO_MERCHANT_ACCOUNT_ID` (el ID de ese usuario, que se obtuvo con `GET /users/me`; el `nickname` de un usuario de prueba empieza con `TEST_USER`) y `BILLING_WEBHOOK_MERCADOPAGO_HMAC_SECRET` (la clave secreta del webhook, que reemplazó al valor aleatorio del primer arranque; se cargó la de la pestaña "Modo de prueba", suponiendo que era la que corresponde al token y al usuario de prueba; la validación contra el sandbox real (#515) mostró que no).
+- **Corrección (#515, 2026-10-24): con un vendedor de prueba los pagos llegan como "Modo productivo".** En la validación local contra el sandbox real, el webhook se entregó a la URL de la pestaña "Modo productivo" y venía firmado con la clave secreta de esa pestaña, no con la de "Modo de prueba". Para que el VPS acepte pagos del vendedor de prueba hay que configurar la URL y el evento en la pestaña "Modo productivo" y cargar **su** clave en `BILLING_WEBHOOK_MERCADOPAGO_HMAC_SECRET` (con `set_var` y redespliegue, como arriba). Mientras el `.env` tenga la clave de "Modo de prueba", la API rechaza esos webhooks por firma inválida. No se verificó si la `notification_url` que la API manda en cada preferencia pisa la URL de la consola; si tras el cambio el webhook llega pero la firma falla, probar con la clave de la otra pestaña.
+- **Pendiente antes de probar compras en el VPS.** El VPS corre con perfil `prod`, sin datos demo (`DemoProfileGuard` no permite combinar `demo` con `prod`), así que no hay clases ni precios. La prueba espera a poder entrar como administrador o profesor y crear y modificar clases.
+- **Cómo se cargan sin exponer los valores**, como `deploy` y con `read -s` (no muestra lo que se escribe ni lo guarda en el historial). La función agrega la variable si no existe:
+
+  ```bash
+  set_var() { local k="$1" v="$2" tmp; tmp="$(mktemp /opt/menta/.env.XXXXXX)"
+    awk -v key="$k" -v value="$v" 'index($0, key "=") == 1 { print key "=" value; done = 1; next } { print } END { if (!done) print key "=" value }' /opt/menta/.env > "$tmp"
+    chmod 600 "$tmp"; mv "$tmp" /opt/menta/.env; }
+
+  read -rsp 'Access token de pruebas: ' T; echo
+  set_var BILLING_MERCADOPAGO_ACCESS_TOKEN "$T"; unset T
+  ```
+
+- **Cómo se aplican.** El contenedor lee el entorno al crearse, así que hay que redesplegar. Se usa `deploy.sh` con los digests que ya corren, que salen del propio `.env` (no son secretos): `/opt/menta/deploy.sh "$(awk -F= '/^API_DIGEST=/{print $2}' /opt/menta/.env)" "$(awk -F= '/^BFF_DIGEST=/{print $2}' /opt/menta/.env)"`. Hace el backup previo y recrea la API; con los mismos digests no cambia `previous-digests`. Ese día se hizo dos veces (backups `T173021Z` y `T173504Z`).
+- **Cómo se comprueba que la API recibió los valores**, sin mostrarlos: `docker exec menta-api sh -c 'eval "val=\${BILLING_MERCADOPAGO_MERCHANT_ACCOUNT_ID}"; [ -n "$val" ] && echo con valor || echo VACÍA'` (repetir con cada variable).
+- **Al pasar a cobros reales** hay que reemplazar los tres valores a la vez (token, ID de la cuenta vendedora y clave secreta, los de producción) y dar de alta el webhook en la pestaña "Modo productivo". El `.env` guarda un solo juego, no uno por modo; si hace falta tener ambos a la vez, está en análisis en #641.
 
 ### 2.10 Despliegue con deploy.sh (#593)
 
@@ -481,7 +502,17 @@ gzip -dc /opt/menta/backups/menta-<fecha>.sql.gz \
 
 El usuario de la aplicación conserva sus permisos porque son sobre el nombre de la base. Este backup (el previo a cada deploy) es solo de la base y solo local; el diario con copia fuera del servidor, que incluye los comprobantes de transferencia, es el de la sección 2.11.
 
-**Errores comunes:**
+#### Deploy de `v0.2.1` por `release.yml` (2026-10-20)
+
+Se publicó para llevar al VPS el compose con `BILLING_MERCADOPAGO_MERCHANT_ACCOUNT_ID` (#634, #635): un `deploy.sh` a mano con los mismos digests no trae el compose nuevo, porque sin entrada estándar usa el ya instalado; solo lo instala el `tar.gz` que manda `release.yml`.
+
+- El PR `release/0.2.1` → `main` (#636) salió marcado como desactualizado por la regla "Require branches to be up to date" y se actualizó con el botón "Update branch" (el árbol resultante era idéntico); se mergeó con merge commit (ver `docs/16-CICD-PIPELINE.md`, "Backport de `main` a `develop`"). El tag `v0.2.1` se creó a mano sobre el merge; automatizarlo es #639.
+- El job `deploy` esperó la aprobación del revisor del Environment `production` y duró 53 s. Digests desplegados: API `sha256:3160a44df6201486a85dd4940249bc15f4563fac640e41baf8920111c6e8fc50`, BFF `sha256:77543160860b0647092b5ea0344c5b21f4932e85a471f10ddbdc6f600692f0b9`.
+- El log trae el backup previo (`menta-20261020T161213Z.sql.gz`), `La configuración cambió: se recrea Nginx` (el compose nuevo quedó instalado), `Stack saludable tras 0s` y `Deploy completado`. No apareció el aviso de que `deploy.sh` esté desactualizado.
+- Desde fuera: `https://mentadance.com/health`, `https://mentadance.com/` y `https://api.mentadance.com/actuator/health` respondieron 200 (API `UP`, base incluida).
+- Por la lógica de `deploy.sh`, `previous-digests` quedó con los digests de `v0.2.0` (no se leyó el archivo después).
+
+#### Errores comunes del despliegue
 
 - `No se pudieron descargar las imágenes`: venció o falta el login a GHCR del usuario `deploy` (sección 2.7; el token dura 12 meses). El estado del servidor no cambia.
 - `Hay otro deploy en curso`: otro `deploy.sh` tiene el lock (`/opt/menta/deploy.lock`); el lock se libera solo cuando ese proceso termina.
@@ -490,6 +521,7 @@ El usuario de la aplicación conserva sus permisos porque son sobre el nombre de
 - `Ruta inesperada en la configuración del stack: ._...`: el `tar` es de macOS y agregó entradas AppleDouble; usar `COPYFILE_DISABLE=1 tar --no-xattrs` (paso 3 de arriba). No se tocó nada en el servidor.
 - `container menta-mysql is unhealthy` en el primer `compose up`: la inicialización del volumen nuevo tarda más que la ventana del healthcheck. Con `docker inspect menta-mysql` en `healthy` y sin errores en `docker logs menta-mysql`, alcanza con repetir el mismo comando de despliegue.
 - `Permission denied` pidiendo contraseña y luego `Connection refused`: `ssh` no usó la clave de despliegue y fail2ban baneó la IP (sección 2.4). Pasar `-i <clave> -o IdentitiesOnly=yes`.
+- Una variable nueva del `.env` queda **vacía en el contenedor** aunque "se cargó": la primera versión de `set_var` solo reemplazaba líneas existentes, así que con una variable que no estaba en el archivo (`BILLING_MERCADOPAGO_MERCHANT_ACCOUNT_ID`, agregada al compose después de crear el `.env`) no hacía nada y no avisaba. El chequeo de variables vacías tampoco la detecta, porque ausente no es vacía. Se vio al comprobar dentro de `menta-api`; se corrigió con la versión de arriba, que agrega la línea si falta, y un segundo deploy.
 
 ### 2.11 Backups diarios y monitoreo (#594)
 
@@ -695,6 +727,32 @@ stat -c '%a %U:%G' /opt/menta/backup.env                                     # s
 
 Un backup a mano (`systemctl start menta-backup.service`) terminó con `Backup completado` y el check pasó a verde con el último aviso de hace un minuto. **No se probó** el camino de fallo (`BACKUP_PING_URL/fail`) ni la alerta por falta de aviso a tiempo. Para probar la alerta de fallo se puede ejecutar `curl -fsS "$URL/fail"` desde una terminal que ya tenga la URL en una variable (sin escribirla en el historial).
 
+### 2.12 Landing temporal de la membresía Full Pass (#685)
+
+Para usar `https://mentadance.com/` en la propaganda de la membresía durante un evento, el BFF puede servir en `/` una landing de la **Membresía Full Pass Menta 2027** en lugar de la home del catálogo. Es **temporal** y viene **apagada**: con la propiedad apagada, `/` es la home de siempre. El resto del sitio (login, registro, clases, planes) no cambia en ningún caso; no se anula ninguna otra ruta.
+
+**Qué muestra.** Qué incluye la membresía, la tabla de precios y las condiciones, tal como figuran en el documento de la membresía (el PDF es la fuente de verdad). La tabla tiene 13 tramos (cuota, cantidad de cuotas y total) y se recalcula en cada request con la fecha de Argentina: el tramo vigente tiene botón de pago y cuenta regresiva, los futuros se ven bloqueados y los vencidos tachados con "Finalizado". El día límite ("Alta hasta") es inclusivo: el precio rige hasta las 23:59 de ese día y a las 00:00 pasa al siguiente. Los dos primeros tramos (asistencia perfecta 2026 y sábado 7 de noviembre) vencen el mismo día y están vigentes a la vez. Pasado el último plazo la página dice que la inscripción finalizó.
+
+**Variables de entorno** (el BFF las lee de su entorno; valores por defecto en `bff/src/main/resources/application.yml`, `menta.landing.membership`):
+
+| Variable | Qué hace |
+|---|---|
+| `MENTA_LANDING_MEMBERSHIP_ENABLED` | `true` enciende la landing en `/`. Por defecto `false` |
+| `MENTA_LANDING_MEMBERSHIP_PAY_URL_01` a `_13` | Opcional: pisa o agrega el link de suscripción de Mercado Pago de un tramo, en el orden de la tabla (01 = asistencia perfecta 2026, 13 = 11 de octubre de 2027). Si no se define, rige el valor por defecto de `application.yml` |
+
+Los links de suscripción son públicos (se ven en el HTML de la página), así que los conocidos están en `application.yml` como valor por defecto de `pay-url` de cada tramo (`${MENTA_LANDING_MEMBERSHIP_PAY_URL_01:https://mpago.la/...}`): hoy los tramos 01 a 05 (hasta el 11 de enero de 2027). Para los demás hay dos caminos: pegar el link en `application.yml` y hacer un nuevo release, o definir la variable de entorno del tramo sin tocar el código. La variable, si existe, pisa al valor por defecto. Cada link debe ser `https`. Con la landing encendida, el BFF aplica estas reglas al arrancar (el mensaje del error nombra el tramo y la variable):
+
+- Un link presente que no sea `https` válido **impide arrancar**, sea de un tramo vigente o futuro.
+- Un tramo **vigente hoy** sin link **impide arrancar**: la página no tendría cómo suscribirse.
+- Un tramo **futuro** sin link **no impide arrancar**: se registra un `WARN` que lo nombra y, cuando le llega el turno, su fila muestra "Link de pago próximamente" en lugar del botón. Los links de los tramos siguientes se pueden cargar a medida que se acercan sus fechas, pero hay que **reiniciar el BFF** después de cargarlos.
+- Un tramo vencido no necesita link.
+
+Con la landing apagada no se valida nada. Los precios, cuotas y fechas se cambian en `application.yml`; solo los links van por entorno.
+
+**Para activarla en el VPS.** El `docker-compose.prod.yml` ya pasa al BFF `MENTA_LANDING_MEMBERSHIP_ENABLED` (con `${VAR:-false}`, #687) y los datos de contacto (`MENTA_CONTACT_*`). Con el tag desplegado, en `/opt/menta/.env` (nunca en el repositorio ni en el historial del shell) hay que cargar `MENTA_LANDING_MEMBERSHIP_ENABLED=true`, `MENTA_CONTACT_NAME` y `MENTA_CONTACT_PHONE`, y reiniciar el BFF (sección 2.10). Se verifica con `curl -s https://mentadance.com/ | grep -c data-price-row`, que debe dar 13. Las `MENTA_LANDING_MEMBERSHIP_PAY_URL_NN` **no** están declaradas en el compose a propósito: un valor vacío en el entorno pisaría el link que trae `application.yml`. Los links de los tramos 06 a 13 se agregan en `application.yml` (y un nuevo release) o, si se prefiere el entorno, declarando esa variable en el compose.
+
+**Cómo volver atrás.** Poner `MENTA_LANDING_MEMBERSHIP_ENABLED=false` (o quitar la variable) y reiniciar el BFF: `/` vuelve a la home del catálogo. Cuando termine la campaña se puede borrar la funcionalidad revirtiendo el PR de #685. No hay migraciones ni cambios en la API.
+
 ### Decisiones diferidas
 
 - **SSH con `root` y contraseña** (descartado por ahora, decisión del operador del 2026-10-16): sigue permitido. Endurecerlo (solo clave, sin `root`, puerto 22 cerrado en `sshd`) se descarta porque un error de configuración puede dejar al operador sin acceso al servidor, y el beneficio para esta demo no lo justifica. La defensa es fail2ban y el firewall del panel, que bloquea el 22. Si se retoma: en `/etc/ssh/sshd_config.d/` hay `custom.conf` (`PermitRootLogin yes`) y `80-step.conf` (origen desconocido, parece Smallstep); SSH arranca por socket de systemd (`ssh.socket`), así que cerrar el 22 se hace ahí y no en `sshd_config`. Antes de cambiar nada, confirmar el acceso con clave de `mentaadmin` desde otra terminal y mantener abierta la sesión actual.
@@ -725,10 +783,10 @@ El puerto 22 y el 3306 no tienen regla, es decir, están bloqueados desde afuera
 
 Se completa a medida que avancen los sub-issues de #380:
 
-- Compose de producción (#589): `/opt/menta/.env` ya está completo (2026-10-17, sección 2.9), salvo el token de producción de Mercado Pago y los datos de transferencia, que se cargan antes de habilitar pagos. El primer arranque y la renovación por `webroot` están hechos y documentados (2026-10-18, secciones 2.8 y 2.10). El endurecimiento de SSH quedó descartado (ver "Decisiones diferidas").
+- Compose de producción (#589): `/opt/menta/.env` ya está completo (2026-10-17, sección 2.9), con las credenciales de Mercado Pago **de pruebas** cargadas el 2026-10-20; faltan los datos de transferencia bancaria (#633) y, para cobros reales, las credenciales de producción. El primer arranque y la renovación por `webroot` están hechos y documentados (2026-10-18, secciones 2.8 y 2.10). El endurecimiento de SSH quedó descartado (ver "Decisiones diferidas").
 - Mejoras al repositorio que dejó el primer despliegue, sin issue todavía: subir el `start_period` del healthcheck de MySQL en `docker-compose.prod.yml` (por ejemplo a 120 s) para que el primer despliegue en un servidor nuevo no falle, y revisar el test intermitente `PaymentExpirySweepIntegrationTest`.
 - Baneo de fail2ban: el `bantime` volvió a 3600 el 2026-10-19 con `fail2ban-client set sshd bantime 3600` (sección 2.4).
 - Correo (EnvialoSimple): agregar en el DNS de `mentadance.com` los registros SPF y DKIM que indica la pestaña "Registro DNS" de la cuenta, y probar un envío real (activación de cuenta). Sin esos registros los mails pueden caer en spam.
-- Despliegue y rollback (#593, sección 2.10): `deploy.sh` está instalado y el primer despliegue a mano con `v0.2.0-rc.2` ya se hizo (2026-10-18). La clave de despliegue ya tiene el comando forzado y el Environment `production` de GitHub tiene los cinco secretos que usa `release.yml` (#592; 2026-10-18). El *required reviewer* del Environment se agregó el 2026-10-19 (sección 2.10). El tag estable `v0.2.0` se publicó el 2026-10-19 desde `main` y se desplegó por `release.yml` (job `deploy` de 50 s, URLs en 200). El rollback se probó el 2026-10-20 (`v0.2.0` → `rc.2` → `v0.2.0`, ambos healthy); el detalle está en la sección 2.10. Anotar acá el resultado de cada paso.
+- Despliegue y rollback (#593, sección 2.10): `deploy.sh` está instalado y el primer despliegue a mano con `v0.2.0-rc.2` ya se hizo (2026-10-18). La clave de despliegue ya tiene el comando forzado y el Environment `production` de GitHub tiene los cinco secretos que usa `release.yml` (#592; 2026-10-18). El *required reviewer* del Environment se agregó el 2026-10-19 (sección 2.10). El tag estable `v0.2.0` se publicó el 2026-10-19 desde `main` y se desplegó por `release.yml` (job `deploy` de 50 s, URLs en 200). El rollback se probó el 2026-10-20 (`v0.2.0` → `rc.2` → `v0.2.0`, ambos healthy) y ese día se desplegó `v0.2.1` por `release.yml`; el detalle está en la sección 2.10. Anotar acá el resultado de cada paso.
 - Backups y monitoreo (#594, sección 2.11): el bucket, los tokens, las claves de cifrado y `backup.env` ya están hechos y probados (2026-10-17). `backup.sh`, el timer, el primer backup real y el simulacro de restauración en el VPS se hicieron el 2026-10-19 (ver la tabla de la sección 2.11). El uptime externo (UptimeRobot) se configuró y se validó con la caída de la API el mismo día. El heartbeat del backup (`BACKUP_PING_URL`, healthchecks.io) también se configuró ese día; sin probar aún su camino de fallo. Anotar acá el resultado de cada paso.
 - Seguimiento de todos los pasos pendientes del servidor: #610.

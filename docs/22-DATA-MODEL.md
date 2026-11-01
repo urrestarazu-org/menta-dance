@@ -10,6 +10,11 @@ como valor y se validan mediante puertos; no se crean FKs ni `JOIN`s cruzados.
 
 - `auth_users` incluye `token_version` y datos de recuperación; `auth_roles`,
   `auth_users_roles`.
+- `auth_users` guarda también los datos personales del alta (V27, #652):
+  `first_name VARCHAR(100)`, `last_name VARCHAR(100)`, `phone VARCHAR(20)` (E.164)
+  y `birth_date DATE`. Las cuatro columnas admiten `NULL` porque las cuentas
+  anteriores (admin, demo, E2E) no tienen perfil; el registro público exige
+  nombre, apellido y teléfono, y la fecha de nacimiento es opcional.
 - Roles iniciales: `ALUMNO`, `PROFESOR`, `RECEPCIONISTA`, `ADMIN`.
 - `auth_refresh_tokens`: `token_hash CHAR(64) UNIQUE`, `family_id`, `issued_at`,
   `expires_at`, `revoked_at`, `rotated_at` y metadatos de dispositivo.

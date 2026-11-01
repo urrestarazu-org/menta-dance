@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 import com.menta.app.integration.support.AbstractPhysicalMySqlIntegrationTest;
+import com.menta.app.outbox.OutboxProcessResult;
 import com.menta.app.outbox.OutboxReconciliationWorker;
 import com.menta.auth.application.port.out.AccessTokenIssuer;
 import com.menta.auth.application.port.out.ActivationRateLimitPort;
@@ -229,7 +230,7 @@ class PhysicalSessionManagementIntegrationTest extends AbstractPhysicalMySqlInte
         ));
         webhookWorker.process(inbox);
         OutboxRowJpaEntity outbox = outboxRepository.findAll().getLast();
-        assertThat(outboxWorker.process(outbox)).isFalse();
+        assertThat(outboxWorker.process(outbox)).isEqualTo(OutboxProcessResult.COMPLETED);
     }
 
     private ResponseEntity<Map> issueAccessQr(UUID sessionId, UUID studentId) {
@@ -647,12 +648,12 @@ class PhysicalSessionManagementIntegrationTest extends AbstractPhysicalMySqlInte
 
         CountDownLatch start = new CountDownLatch(1);
         CountDownLatch done = new CountDownLatch(2);
-        boolean[] sideEffectFailed = new boolean[2];
+        OutboxProcessResult[] results = new OutboxProcessResult[2];
         try (ExecutorService pool = Executors.newFixedThreadPool(2)) {
             pool.submit(() -> {
                 try {
                     start.await();
-                    sideEffectFailed[0] = outboxWorker.process(events.get(0));
+                    results[0] = outboxWorker.process(events.get(0));
                 } catch (InterruptedException interrupted) {
                     Thread.currentThread().interrupt();
                 } finally {
@@ -662,7 +663,7 @@ class PhysicalSessionManagementIntegrationTest extends AbstractPhysicalMySqlInte
             pool.submit(() -> {
                 try {
                     start.await();
-                    sideEffectFailed[1] = outboxWorker.process(events.get(1));
+                    results[1] = outboxWorker.process(events.get(1));
                 } catch (InterruptedException interrupted) {
                     Thread.currentThread().interrupt();
                 } finally {
@@ -677,8 +678,8 @@ class PhysicalSessionManagementIntegrationTest extends AbstractPhysicalMySqlInte
         // (CannotAcquireLockException/PessimisticLockingFailureException)
         // would be caught by OutboxReconciliationWorker.process and reported
         // as `true` here, exactly like an assertion failure would surface.
-        assertThat(sideEffectFailed[0]).isFalse();
-        assertThat(sideEffectFailed[1]).isFalse();
+        assertThat(results[0]).isEqualTo(OutboxProcessResult.COMPLETED);
+        assertThat(results[1]).isEqualTo(OutboxProcessResult.COMPLETED);
 
         assertThat(assignmentRepository.countBySessionId(sessionOne)).isEqualTo(1);
         assertThat(assignmentRepository.countBySessionId(sessionTwo)).isEqualTo(1);

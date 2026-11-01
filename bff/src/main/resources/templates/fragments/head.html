@@ -9,6 +9,8 @@
       /css/app-<md5>.css, which is what makes NGINX's 30-day immutable cache safe.
     -->
     <th:block th:fragment="assets">
+        <link rel="icon" th:href="@{/favicon.ico}" sizes="any">
+        <link rel="apple-touch-icon" th:href="@{/images/brand/apple-touch-icon.png}">
         <link rel="stylesheet" th:href="@{/css/app.css}">
     </th:block>
 </head>

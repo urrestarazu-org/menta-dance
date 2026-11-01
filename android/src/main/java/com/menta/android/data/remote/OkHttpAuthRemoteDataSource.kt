@@ -65,11 +65,7 @@ class OkHttpAuthRemoteDataSource(
     }
 
     private fun problem(response: Response): AuthRemoteResult {
-        val isProblemJson = response.header("Content-Type").orEmpty().startsWith(PROBLEM_JSON, ignoreCase = true)
-        val code = if (isProblemJson) {
-            runCatching { json.decodeFromString(ProblemBody.serializer(), response.body.string()).code }
-                .getOrNull()?.takeIf(String::isNotBlank)
-        } else null
+        val code = response.problemCode()
         val retryAfter = if (response.code == HTTP_TOO_MANY_REQUESTS) {
             response.header("Retry-After")?.toLongOrNull()?.takeIf { it > 0 }
         } else null
@@ -78,7 +74,6 @@ class OkHttpAuthRemoteDataSource(
 
     private companion object {
         const val REFRESH_TOKEN_HEADER = "X-Refresh-Token"
-        const val PROBLEM_JSON = "application/problem+json"
         const val HTTP_NO_CONTENT = 204
         const val HTTP_TOO_MANY_REQUESTS = 429
         val JSON_MEDIA_TYPE = "application/json".toMediaType()

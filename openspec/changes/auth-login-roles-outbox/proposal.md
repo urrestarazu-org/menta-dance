@@ -1,5 +1,7 @@
 # Proposal: auth (login + roles + outbox)
 
+> **Superado parcialmente por #672 (2026-11-01).** Los eventos `AuthUserLoggedIn` y `RefreshRotated` descritos aquí ya no se persisten (sin consumidor). Ver ADR-0030 ("Decisión 2026-11-01").
+
 ## Intent
 Cerrar `:api:auth` con tokens (JWT + refresh), enforcement de roles y outbox durable. Hoy solo se registran usuarios; ningún consumidor puede iniciar sesión sin cruzar boundaries prohibidos.
 

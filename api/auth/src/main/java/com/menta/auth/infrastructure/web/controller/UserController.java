@@ -36,7 +36,11 @@ public class UserController {
     ) {
         String clientFingerprint = this.clientFingerprint.from(servletRequest);
         registerUserUseCase.register(
-            new RegisterUserCommand(request.email(), request.password(), request.role(), clientFingerprint)
+            new RegisterUserCommand(
+                request.email(), request.password(), request.role(),
+                request.firstName(), request.lastName(), request.phone(), request.birthDate(),
+                clientFingerprint
+            )
         );
         return ResponseEntity.status(HttpStatus.ACCEPTED).build();
     }

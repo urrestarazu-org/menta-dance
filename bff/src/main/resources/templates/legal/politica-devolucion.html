@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('Política de devolución', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<article class="legal">
+    <h1 class="mb-4">Política de devolución</h1>
+    <div th:replace="~{fragments/legal :: review-notice}"></div>
+
+    <p>Cómo pedir la cancelación de una compra y el reembolso del dinero.</p>
+
+    <h2>1. Derecho de revocación</h2>
+    <p>Las compras hechas a distancia pueden revocarse dentro de los diez días corridos contados desde la
+        contratación, según el artículo 34 de la Ley 24.240 de Defensa del Consumidor, siempre que el servicio
+        no se haya usado de forma sustancial. Para ejercerlo escribinos desde la página de
+        <a th:href="@{/contacto}">contacto</a> indicando el email de tu cuenta y la compra.</p>
+
+    <h2>2. Planes de suscripción</h2>
+    <ul>
+        <li>Si pediste la revocación dentro del plazo y todavía no usaste el contenido, se reintegra el importe
+            completo.</li>
+        <li>Pasado el plazo, o una vez usado el contenido, no se reintegra el período ya habilitado.</li>
+    </ul>
+
+    <h2>3. Clases presenciales</h2>
+    <ul>
+        <li>Si cancelás con anticipación suficiente para que el cupo se libere, se reintegra la sesión.</li>
+        <li>Si Menta Dance cancela o reprograma una clase, se reintegra la sesión o se ofrece otra fecha.</li>
+        <li>Las sesiones a las que no asistís sin avisar no se reintegran.</li>
+    </ul>
+
+    <h2>4. Pagos rechazados o duplicados</h2>
+    <p>Si un pago fue rechazado, no se te cobra. Si por un error se cobró dos veces, el excedente se devuelve
+        por el mismo medio de pago.</p>
+
+    <h2>5. Cómo se devuelve el dinero</h2>
+    <p>El reembolso se hace por el mismo medio con el que pagaste. Los plazos de acreditación dependen de
+        Mercado Pago o del banco.</p>
+
+    <h2>6. Más información</h2>
+    <p>Ver los <a th:href="@{/terminos-condiciones}">términos y condiciones</a>.</p>
+</article>
+</th:block>
+</body>
+</html>

@@ -1,0 +1,17 @@
+# robots.txt de Menta Dance
+User-agent: *
+Allow: /
+
+# Pantallas privadas de cada cuenta
+Disallow: /dashboard
+Disallow: /compras
+Disallow: /suscripciones
+
+# Flujos de cuenta que no deben indexarse
+Disallow: /activar
+Disallow: /recuperar-contrasena
+Disallow: /restablecer-contrasena
+Disallow: /reenviar-activacion
+
+# Monitoreo
+Disallow: /actuator/

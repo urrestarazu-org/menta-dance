@@ -28,7 +28,7 @@ import org.springframework.dao.DataIntegrityViolationException;
  * GREEN provides the impl, so it must not compile until the impl exists.
  *
  * <p>Covers common-outbox spec scenarios:
- *   - "Login emite AuthUserLoggedIn post-commit" — adapter inserts with
+ *   - "Evento de auth se agrega post-commit" — adapter inserts with
  *     event_id ULID, status=PENDING, payload verbatim from caller.
  *   - "Inserción duplicada rechazada por la base" — adapter propagates
  *     UNIQUE constraint violations so the reconciler / caller can decide.
@@ -40,8 +40,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 class OutboxJpaAppenderTest {
 
     private static final String AGGREGATE_ID = "88888888-8888-8888-8888-888888888888";
-    private static final String PAYLOAD = "{\"tokenVersion\":1}";
-    private static final String EVENT_TYPE = AuthOutboxEventTypes.AUTH_USER_LOGGED_IN;
+    private static final String PAYLOAD = "{\"userId\":\"u\",\"newTokenVersion\":1}";
+    private static final String EVENT_TYPE = AuthOutboxEventTypes.REFRESH_REVOKED;
     private static final String EVENT_ID = "01H9X3F4Z9YJ7K5Q6T2R8V1N4Q";
     private static final Instant CREATED_AT = Instant.parse("2026-07-29T12:00:00Z");
 
@@ -59,7 +59,7 @@ class OutboxJpaAppenderTest {
     }
 
     @Nested
-    @DisplayName("Spec: Login emite AuthUserLoggedIn post-commit")
+    @DisplayName("Spec: Evento de auth se agrega post-commit")
     class AppendsRow {
 
         @Test

@@ -6,6 +6,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static com.menta.bff.infrastructure.integration.HtmlSections.mainOf;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -200,7 +201,7 @@ class SubscriptionCheckoutIntegrationTest extends BaseIntegrationTest {
 
         String html = returnPage(session);
 
-        assertThat(html).contains("Tu suscripción se está activando.")
+        assertThat(mainOf(html)).contains("Tu suscripción se está activando.")
                 .contains("href=\"/plans\"").doesNotContain("href=\"/classes\"");
         WIRE_MOCK_SERVER.verify(getRequestedFor(urlEqualTo(PAYMENT)));
         WIRE_MOCK_SERVER.verify(0, getRequestedFor(urlEqualTo("/api/v1/physical/sessions/me")));

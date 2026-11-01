@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Chrome of campaign pages (membership landing, #685): the brand and the legal links, no site navigation.
+
+  These fragments live in their own file on purpose. Thymeleaf resolves `fragments/site :: header` both as the
+  fragment named "header" and as any <header> element of that file, so a second <header> or <footer> in
+  fragments/site.html would be inserted in every page of the site. The fragment names here (brand-header,
+  brand-footer) match no HTML element.
+-->
+
+<!-- Brand only: for campaign pages (membership landing) that must not offer site navigation. -->
+<header class="site-header" th:fragment="brand-header">
+    <div class="container-page flex items-center justify-between gap-4 py-3">
+        <a th:href="@{/}" class="site-brand">
+            <span class="site-brand-logo"><img th:src="@{/images/brand/menta-m.png}" alt="" width="40" height="40"></span>
+            <span>Menta Dance</span>
+        </a>
+    </div>
+</header>
+
+<!-- Brand and legal information only: for campaign pages that must not offer site navigation. -->
+<footer class="site-footer" th:fragment="brand-footer">
+    <div class="container-page py-10">
+        <div>
+            <p class="text-lg font-semibold text-brand-surface">Menta Dance</p>
+            <p class="mt-2">Academia de danza con clases online y presenciales.</p>
+        </div>
+        <nav aria-label="Información legal" class="mt-8 border-t border-brand-light/20 pt-4">
+            <h2 class="site-footer-title">Información legal</h2>
+            <ul class="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+                <li><a th:href="@{/terminos-condiciones}">Términos y condiciones</a></li>
+                <li><a th:href="@{/politica-privacidad}">Política de privacidad</a></li>
+                <li><a th:href="@{/politica-cookies}">Política de cookies</a></li>
+                <li><a th:href="@{/politica-devolucion}">Política de devolución</a></li>
+                <li><a th:href="@{/propiedad-intelectual}">Propiedad intelectual</a></li>
+                <li><a th:href="@{/accesibilidad}">Accesibilidad</a></li>
+                <li><a th:href="@{/contacto}">Contacto</a></li>
+            </ul>
+        </nav>
+        <p class="mt-6 text-sm"
+           th:text="|© ${#temporals.year(#temporals.createNow())} Menta Dance. Todos los derechos reservados.|">&copy; 2026 Menta Dance</p>
+    </div>
+</footer>
+
+</body>
+</html>

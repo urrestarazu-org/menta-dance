@@ -3,6 +3,7 @@ package com.menta.bff.infrastructure.integration;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static com.menta.bff.infrastructure.integration.HtmlSections.mainOf;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -495,7 +496,7 @@ class VirtualLearningViewIntegrationTest extends BaseIntegrationTest {
                 .andReturn();
         String authenticatedBody = authenticatedResult.getResponse().getContentAsString();
 
-        assertThat(authenticatedBody).isEqualTo(anonymousBody);
+        assertThat(mainOf(authenticatedBody)).isEqualTo(mainOf(anonymousBody));
     }
 
     @Test

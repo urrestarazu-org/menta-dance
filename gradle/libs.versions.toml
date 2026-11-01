@@ -6,7 +6,7 @@ tomcat = "10.1.61"
 jackson = "2.21.7"
 netty = "4.1.137.Final"
 spring-dependency-management = "1.1.7"
-spotbugs-gradle-plugin = "6.5.12"
+spotbugs-gradle-plugin = "6.5.13"
 node-gradle-plugin = "7.1.0"
 spotbugs-tool = "4.10.4"
 findsecbugs = "1.14.0"
@@ -29,11 +29,12 @@ junit = "4.13.2"
 androidx-test-core = "1.7.0"
 androidx-test-runner = "1.7.0"
 androidx-test-ext-junit = "1.3.0"
-okhttp = "5.5.0"
-kotlinx-serialization-json = "1.11.0"
+okhttp = "5.5.1"
+kotlinx-serialization-json = "1.12.0"
 kotlinx-coroutines = "1.11.0"
 navigation-compose = "2.10.2"
 hilt-lifecycle-viewmodel-compose = "1.4.0"
+zxing = "3.5.4"
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "android-gradle-plugin" }
@@ -74,6 +75,7 @@ kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutine
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinx-coroutines" }
 androidx-navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigation-compose" }
 androidx-hilt-lifecycle-viewmodel-compose = { module = "androidx.hilt:hilt-lifecycle-viewmodel-compose", version.ref = "hilt-lifecycle-viewmodel-compose" }
+zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 lombok = { module = "org.projectlombok:lombok", version.ref = "lombok" }
 mapstruct = { module = "org.mapstruct:mapstruct", version.ref = "mapstruct" }
 mapstruct-processor = { module = "org.mapstruct:mapstruct-processor", version.ref = "mapstruct" }

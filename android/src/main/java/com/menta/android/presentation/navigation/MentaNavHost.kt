@@ -12,8 +12,12 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
+import com.menta.android.presentation.accessqr.AccessQrRoute
 import com.menta.android.presentation.home.HomeScreen
 import com.menta.android.presentation.login.LoginRoute
+import com.menta.android.presentation.myattendance.MyAttendanceScreen
+import com.menta.android.presentation.mysessions.MySessionsScreen
 import com.menta.android.presentation.session.SessionGate
 import com.menta.android.presentation.session.SessionViewModel
 import com.menta.android.presentation.splash.SplashScreen
@@ -42,9 +46,40 @@ fun MentaNavHost(sessionViewModel: SessionViewModel = hiltViewModel()) {
         }
         navigation<Authenticated>(startDestination = Home) {
             composable<Home> {
-                AuthenticatedScaffold(selected = StudentSection.Home, onLogout = sessionViewModel::onLogout) { innerPadding ->
+                AuthenticatedScaffold(
+                    selected = StudentSection.Home,
+                    onNavigate = navController::navigateToSection,
+                    onLogout = sessionViewModel::onLogout,
+                ) { innerPadding ->
                     HomeScreen(modifier = Modifier.padding(innerPadding))
                 }
+            }
+            composable<MySessions> {
+                AuthenticatedScaffold(
+                    selected = StudentSection.MySessions,
+                    onNavigate = navController::navigateToSection,
+                    onLogout = sessionViewModel::onLogout,
+                ) { innerPadding ->
+                    MySessionsScreen(
+                        onShowQr = { sessionId -> navController.navigate(AccessQr(sessionId)) },
+                        modifier = Modifier.padding(innerPadding),
+                    )
+                }
+            }
+            composable<MyAttendance> {
+                AuthenticatedScaffold(
+                    selected = StudentSection.MyAttendance,
+                    onNavigate = navController::navigateToSection,
+                    onLogout = sessionViewModel::onLogout,
+                ) { innerPadding ->
+                    MyAttendanceScreen(modifier = Modifier.padding(innerPadding))
+                }
+            }
+            composable<AccessQr> { entry ->
+                AccessQrRoute(
+                    sessionId = entry.toRoute<AccessQr>().sessionId,
+                    onBack = { navController.popBackStack() },
+                )
             }
         }
     }
@@ -57,3 +92,18 @@ private fun NavController.replaceAll(destination: Any) {
         launchSingleTop = true
     }
 }
+
+/** Drawer navigation: Home stays at the bottom of the stack, so Back from any section returns to it. */
+private fun NavController.navigateToSection(section: StudentSection) {
+    navigate(section.route) {
+        popUpTo(Home)
+        launchSingleTop = true
+    }
+}
+
+private val StudentSection.route: Any
+    get() = when (this) {
+        StudentSection.Home -> Home
+        StudentSection.MySessions -> MySessions
+        StudentSection.MyAttendance -> MyAttendance
+    }

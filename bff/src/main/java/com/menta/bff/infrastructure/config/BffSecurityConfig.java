@@ -65,6 +65,21 @@ public class BffSecurityConfig {
                         // Self-hosted Poppins (woff2) referenced by app.css via @font-face;
                         // same GET-only, path-scoped reasoning as /css/**.
                         .requestMatchers(HttpMethod.GET, "/fonts/**").permitAll()
+                        // Error-summary focus script (#529): a static file the anonymous forms
+                        // (registration, password recovery, activation) load; same GET-only,
+                        // path-scoped reasoning as /css/**.
+                        .requestMatchers(HttpMethod.GET, "/js/**").permitAll()
+                        // Brand logo and hero photo (#649) shown on the anonymous home and
+                        // login pages; same GET-only, path-scoped reasoning as /css/**.
+                        .requestMatchers(HttpMethod.GET, "/images/**").permitAll()
+                        // Browser and crawler entry points at the site root (#654): the favicon is
+                        // requested on every page and robots.txt must be readable without a session.
+                        // Exact paths and GET-only, so nothing else at the root opens up.
+                        .requestMatchers(HttpMethod.GET, "/favicon.ico", "/robots.txt").permitAll()
+                        // Legal and contact pages (#650): anonymous, one exact path each and GET-only.
+                        .requestMatchers(HttpMethod.GET, "/terminos-condiciones", "/politica-privacidad",
+                                "/politica-cookies", "/politica-devolucion", "/propiedad-intelectual",
+                                "/accesibilidad", "/contacto").permitAll()
                         // Course detail is access-agnostic (design D2, #170) — a single
                         // "*" does not cross "/", so future subpaths (e.g. a course's
                         // settings page) stay authenticated by default, and GET-only

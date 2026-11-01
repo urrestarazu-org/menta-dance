@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{fragments/layout :: page('Reenviar activación', ~{::main-content})}">
+      th:replace="~{fragments/layout :: auth('Reenviar activación', ~{::main-content}, 'Academia de danza con clases online y presenciales.')}">
 <body>
 <th:block th:fragment="main-content">
 <div class="mx-auto max-w-sm">
@@ -14,7 +14,9 @@
     </div>
 
     <form th:action="@{/reenviar-activacion}" th:object="${form}" method="post" novalidate class="card space-y-4">
-        <div th:replace="~{fragments/components :: field('email', 'Email:', 'email', 'email', 'username', *{email}, null, true, ${#fields.errors('email')})}"></div>
+        <div th:replace="~{fragments/components :: errorSummary(${ {'email':'email'} })}"></div>
+
+        <div th:replace="~{fragments/components :: field('email', 'Email', 'email', 'email', 'username', *{email}, null, ${!#fields.hasErrors('*')}, ${#fields.errors('email')})}"></div>
 
         <button type="submit" class="btn btn-primary w-full">Reenviar activación</button>
     </form>

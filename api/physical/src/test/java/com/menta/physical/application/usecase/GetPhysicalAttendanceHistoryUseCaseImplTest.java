@@ -54,7 +54,7 @@ class GetPhysicalAttendanceHistoryUseCaseImplTest {
 
         PhysicalCapacityAssignmentRepository buenosAiresRepository = mock(PhysicalCapacityAssignmentRepository.class);
         when(buenosAiresRepository.findMonthlyAttendance(any(), any(), any())).thenReturn(List.of(
-            new AttendanceHistoryRow(UUID.randomUUID(), lateEveningInstant, "Salsa", "Ana", null)
+            new AttendanceHistoryRow(UUID.randomUUID(), lateEveningInstant, "Salsa", "Ana", null, null)
         ));
         GetPhysicalAttendanceHistoryUseCaseImpl buenosAiresUseCase =
             new GetPhysicalAttendanceHistoryUseCaseImpl(buenosAiresRepository, BUENOS_AIRES);

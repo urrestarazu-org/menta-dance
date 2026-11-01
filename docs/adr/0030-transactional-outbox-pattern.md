@@ -19,7 +19,7 @@ a otros sistemas (eventos, mensajes), surge un dilema:
 
 En el contexto de Menta Dance, el módulo `auth` necesita:
 - Persistir tokens de refresh en MySQL
-- Notificar eventos (`auth.AuthUserLoggedIn`, `auth.RefreshRevoked`, etc.) para que
+- Notificar eventos (`auth.RefreshRevoked`, `auth.UserLoggedOut`, etc.) para que
   otros módulos puedan reaccionar (ej: blacklist de tokens, auditoría)
 
 ## Decisión
@@ -69,12 +69,24 @@ Adoptamos el **Transactional Outbox Pattern** con procesamiento interno.
 ### Ciclo de Vida de un Evento
 
 ```
-PENDING → PROCESSED
+PENDING → COMPLETED
     │
-    └──(si falla)──→ PENDING (retry con backoff)
+    └──(si falla)──→ FAILED (retry con backoff)
                          │
-                         └──(max retries)──→ FAILED (requiere intervención)
+                         └──(auth.outbox.max-attempts)──→ DEAD (terminal, requiere intervención)
 ```
+
+`DEAD` es terminal: el reconciler no vuelve a seleccionar la fila y la limpieza de retención
+tampoco la borra (#672). Para reencolarla tras arreglar la causa:
+`UPDATE common_outbox_events SET status = 'PENDING', attempts = 0, next_retry_at = NULL WHERE id = ?`.
+
+Una fila `DEAD` **no deja abiertos tokens revocados**. La proyección de `tokenVersion` solo
+protege a los access tokens emitidos *antes* de la revocación, y esos expiran a los
+`auth.access-token-ttl-seconds` (15 min por defecto); el refresh asociado ya fue revocado y un
+login nuevo toma la versión vigente desde SQL. Mientras Redis está caído, `JwtAuthenticationFilter`
+rechaza todo (fail-closed, ADR-0026). Por eso, si una fila muere después de ese plazo, la
+revocación que no llegó a proyectarse ya no tiene ningún token que cerrar. Reencolarla sigue
+siendo útil para que Redis quede consistente, pero no es urgente por seguridad.
 
 ### Esquema de la Tabla
 
@@ -82,7 +94,7 @@ PENDING → PROCESSED
 CREATE TABLE common_outbox_events (
     id            BIGINT AUTO_INCREMENT PRIMARY KEY,  -- PK para write performance
     event_id      CHAR(26) NOT NULL UNIQUE,           -- ULID, idempotencia productor
-    event_type    VARCHAR(100) NOT NULL,              -- ej: "auth.AuthUserLoggedIn"
+    event_type    VARCHAR(100) NOT NULL,              -- ej: "auth.RefreshRevoked"
     aggregate_id  VARCHAR(64) NOT NULL,               -- ej: jti del token
     payload       JSON NOT NULL,                      -- cuerpo serializado
     status        VARCHAR(20) NOT NULL DEFAULT 'PENDING',
@@ -139,8 +151,8 @@ externo será transparente: solo cambia el reconciler, no los productores.
 
 - **Retención automática**: Un job diario (`cleanupProcessedEvents`) borra eventos
   COMPLETED más antiguos que el período de retención (default: 7 días). Configurable
-  via `auth.outbox.retention-days` y `auth.outbox.cleanup-cron`. Eventos FAILED se
-  mantienen para inspección manual.
+  via `auth.outbox.retention-days` y `auth.outbox.cleanup-cron`. Eventos FAILED y DEAD
+  se mantienen para inspección manual.
 
 ### Neutrales
 
@@ -190,6 +202,14 @@ WHERE status = 'COMPLETED'
 |-----------|---------|-------------|
 | `auth.outbox.retention-days` | `7` | Días de retención para eventos COMPLETED |
 | `auth.outbox.cleanup-cron` | `0 0 3 * * *` | Expresión cron (3:00 AM diario) |
+| `auth.outbox.max-attempts` | `100` | Intentos fallidos tras los cuales la fila pasa a `DEAD` (con el backoff de 30 s, ~50 min). Ver el piso más abajo |
+
+**Piso de `auth.outbox.max-attempts`.** El tope nunca debería ser menor que
+`auth.access-token-ttl-seconds / auth.outbox.reconcile-backoff-seconds` (hoy `900 / 30 = 30`
+intentos). Con un valor menor, una fila de revocación podría pasar a `DEAD` mientras un access
+token emitido antes de la revocación todavía es válido, y esa revocación no llegaría a Redis a
+tiempo. El valor por defecto (100) triplica ese piso. Si se sube el TTL del access token o se
+reduce el backoff, hay que recalcular el piso.
 
 **Ejemplo de override** (`application.yml`):
 
@@ -200,13 +220,19 @@ auth:
     cleanup-cron: "0 30 2 * * *"  # 2:30 AM
 ```
 
-### Política de Eventos FAILED
+### Política de Eventos FAILED y DEAD
 
-Los eventos con `status = 'FAILED'` **NO** se borran automáticamente. Razones:
+Los eventos con `status = 'FAILED'` o `'DEAD'` **NO** se borran automáticamente. `FAILED` se
+reintenta con backoff hasta `auth.outbox.max-attempts`; al alcanzarlo pasa a `DEAD` y deja de
+reintentarse (una fila envenenada no gira para siempre). Razones para conservarlas:
 
 1. **Post-mortem**: Investigar por qué falló el side-effect (ej: Redis caído por 3 días)
 2. **Re-procesamiento manual**: Después de arreglar el issue, marcar como PENDING para retry
-3. **Alerting**: Un contador de FAILED creciente indica un problema operacional
+3. **Alerting**: Un contador de FAILED creciente indica un problema operacional. Hay un gauge
+   `auth.outbox.rows{status="FAILED"|"DEAD"}` (`OutboxStatusMetrics`) y una regla de Grafana
+   (`observability/grafana/provisioning/alerting/auth-outbox-dead.yml`) que avisa cuando una
+   fila pasa a `DEAD` (línea de log `alarm=auth_outbox_dead`). Un `DEAD` distinto de cero
+   siempre merece revisión.
 
 **Cleanup manual** (cuando sea necesario):
 
@@ -249,6 +275,29 @@ WHERE id IN (
 );
 -- Repetir hasta affected_rows = 0
 ```
+
+## Heartbeat del reconciler (#672)
+
+La clave `auth:health:last_tick_at` significa "Redis responde y las proyecciones se aplican".
+El reconciler la escribe en cada tick, salvo que el efecto de alguna fila haya **fallado**
+(`SIDE_EFFECT_FAILED`): ahí puede ser Redis caído, y `AuthDegradedGuard` debe seguir
+fail-closed (ADR-0026). Una fila que **no se puede despachar** (`DISPATCH_FAILED`: sin
+handler, handler ambiguo o payload ilegible) no dice nada sobre Redis y no bloquea el latido;
+queda `FAILED` y se reintenta hasta `DEAD`. Antes de #672 cualquier fallo bloqueaba el latido,
+y una sola fila sin handler dejaba `POST /auth/login` en `503 AUTH_DEGRADED`.
+
+## Decisión 2026-11-01: eventos sin consumidor (#672)
+
+`auth.AuthUserLoggedIn` y `auth.RefreshRotated` **dejaron de persistirse**. Desde #88 el
+`BlacklistOutboxEventHandler` no reclama ningún tipo y ningún otro handler los declaraba, así que
+cada login y cada refresh dejaba una fila que fallaba para siempre (el incidente del 2026-10-29
+mostró filas con más de 9000 intentos y `503 AUTH_DEGRADED` en `/auth/login`). Se eligió no
+persistirlos, en vez de declararlos no-op o marcarlos terminales, porque no sirven a ningún
+consumidor y escribir claves `blacklist:jti:*` que ningún jti real puede leer fue justamente el
+motivo de #88. Las constantes `AUTH_USER_LOGGED_IN` y `REFRESH_ROTATED` se eliminaron de
+`AuthOutboxEventTypes`. Las filas de esos tipos que ya existen en bases creadas por builds
+anteriores (`PENDING` o `FAILED`) no tienen handler: el tope de intentos las lleva a `DEAD` en
+su primer reintento y dejan de girar; pueden borrarse a mano.
 
 ## Referencias
 

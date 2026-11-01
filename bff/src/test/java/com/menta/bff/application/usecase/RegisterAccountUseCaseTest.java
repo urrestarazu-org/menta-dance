@@ -18,7 +18,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class RegisterAccountUseCaseTest {
 
     private static final RegisterCommand COMMAND =
-            RegisterCommand.student("ana@example.com", "Secreta123", "203.0.113.9");
+            RegisterCommand.student("ana@example.com", "Secreta123", "Ana", "Prueba", "+5491100000000", null,
+                    "203.0.113.9");
 
     @Mock
     private AuthApiClient authApiClient;

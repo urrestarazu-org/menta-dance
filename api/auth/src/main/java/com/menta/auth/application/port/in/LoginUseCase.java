@@ -8,8 +8,8 @@ import com.menta.auth.application.dto.TokenPair;
  *
  * <p>Contract side-effects after commit (within the caller's transaction):
  * - Refresh token persisted in ACTIVE state in a new family (auth_refresh_tokens).
- * - Outbox AuthUserLoggedIn row appended with aggregate_id=jti and
- *   payload={token_version}.
+ * - No outbox row: the former AuthUserLoggedIn event had no consumer and was
+ *   removed (#672).
  *
  * <p>Failure outcomes each map to a specific exception type so the controller
  * can render them without leaking information:

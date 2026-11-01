@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 import com.menta.app.integration.support.AbstractBillingMySqlIntegrationTest;
+import com.menta.app.outbox.OutboxProcessResult;
 import com.menta.app.outbox.OutboxReconciliationWorker;
 import com.menta.auth.application.port.out.AccessTokenIssuer;
 import com.menta.auth.application.port.out.ActivationRateLimitPort;
@@ -192,7 +193,7 @@ class PurchaseAdminResolutionIntegrationTest extends AbstractBillingMySqlIntegra
         List<OutboxRowJpaEntity> events = resolvedEvents();
         assertThat(events).hasSize(1);
         assertThat(events.getFirst().getPayload()).doesNotContain(NOTE);
-        assertThat(outboxWorker.process(events.getFirst())).isFalse();
+        assertThat(outboxWorker.process(events.getFirst())).isEqualTo(OutboxProcessResult.COMPLETED);
         assertThat(outboxRepository.findById(events.getFirst().getId()).orElseThrow().getStatus())
             .isEqualTo(OutboxStatus.COMPLETED);
     }

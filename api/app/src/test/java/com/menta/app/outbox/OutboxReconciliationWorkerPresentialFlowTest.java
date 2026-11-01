@@ -48,7 +48,7 @@ class OutboxReconciliationWorkerPresentialFlowTest {
         repository = mock(OutboxRowJpaRepository.class);
         presentialHandler = mock(PhysicalCapacityAssignmentOutboxEventHandler.class);
         when(presentialHandler.supports("billing.PhysicalPaymentCompleted")).thenReturn(true);
-        worker = new OutboxReconciliationWorker(repository, List.of(presentialHandler), 30L);
+        worker = new OutboxReconciliationWorker(repository, List.of(presentialHandler), 30L, 100);
     }
 
     @Test
@@ -56,9 +56,10 @@ class OutboxReconciliationWorkerPresentialFlowTest {
     void capacityTrippedToException_path_completes_the_row() {
         OutboxRowJpaEntity row = newRow();
 
-        boolean failed = worker.process(row);
+        OutboxProcessResult result = worker.process(row);
 
-        assertThat(failed).as("handler chain absorbs CapacityBelowAssignedException").isFalse();
+        assertThat(result).as("handler chain absorbs CapacityBelowAssignedException")
+            .isEqualTo(OutboxProcessResult.COMPLETED);
         assertThat(row.getStatus()).isEqualTo(OutboxStatus.COMPLETED);
         assertThat(row.getAttempts()).isZero();
         assertThat(row.getNextRetryAt()).isNull();
@@ -73,9 +74,9 @@ class OutboxReconciliationWorkerPresentialFlowTest {
         doThrow(new RuntimeException("downstream DB went away"))
             .when(presentialHandler).handle(any());
 
-        boolean failed = worker.process(row);
+        OutboxProcessResult result = worker.process(row);
 
-        assertThat(failed).isTrue();
+        assertThat(result).isEqualTo(OutboxProcessResult.SIDE_EFFECT_FAILED);
         assertThat(row.getStatus()).isEqualTo(OutboxStatus.FAILED);
         assertThat(row.getAttempts()).isEqualTo(1);
         assertThat(row.getLastError()).isEqualTo("downstream DB went away");

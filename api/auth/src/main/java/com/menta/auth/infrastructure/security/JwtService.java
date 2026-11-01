@@ -26,8 +26,8 @@ import javax.crypto.SecretKey;
  *                  English identifier (STUDENT / INSTRUCTOR / ADMIN).
  *   - tokenVersion: numeric snapshot of the user tokenVersion at issue time;
  *                  verification fails when the user tokenVersion advances.
- *   - jti (id)   : UUID v4 — also serves as outbox aggregate_id for the
- *                  AuthUserLoggedIn event projected by the reconciler.
+ *   - jti (id)   : UUID v4, unique per token. No outbox event is keyed on it
+ *                  (AuthUserLoggedIn was removed in #672).
  *   - iat / exp  : standard JWT timestamps; exp = now + ttl.
  *
  * <p>Secret MUST be at least 32 bytes (HS256 requires 256-bit key material);

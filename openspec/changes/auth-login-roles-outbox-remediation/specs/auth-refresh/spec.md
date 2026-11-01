@@ -1,5 +1,7 @@
 # Delta for auth-refresh
 
+> **Partially superseded by #672 (2026-11-01).** A plain refresh rotation no longer writes a `RefreshRotated` row: it had no consumer (handler dormant since #88) and its permanently failing rows degraded login with `503 AUTH_DEGRADED`. Requirements and scenarios below that mention it no longer apply; the rest stays in force. See ADR-0030 ("Decisión 2026-11-01").
+
 ## MODIFIED Requirements
 
 ### Requirement: Valid refresh rotates the pair atomically

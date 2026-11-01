@@ -35,8 +35,9 @@ docs {
 
   The endpoint atomically:
     - marks the presented refresh as USED;
-    - mints a new pair in the same family;
-    - publishes common_outbox_events with event_type=RefreshRotated.
+    - mints a new pair in the same family.
+  A plain rotation writes no outbox row (#672); only a compromised or stale
+  refresh publishes common_outbox_events with event_type=RefreshRevoked.
 
   A 4xx/5xx error is RFC 9457 application/problem+json and never includes the
   presented token.

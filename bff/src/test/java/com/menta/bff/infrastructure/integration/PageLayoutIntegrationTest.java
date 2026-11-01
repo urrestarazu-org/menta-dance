@@ -33,6 +33,14 @@ class PageLayoutIntegrationTest extends BaseIntegrationTest {
                 .contains("lang=\"es\"");
     }
 
+    @ParameterizedTest(name = "{0} dibuja el foco del skip link en blanco")
+    @ValueSource(strings = {"/", "/login", "/contacto"})
+    @DisplayName("el skip link aparece sobre la cabecera oscura: su foco es blanco, no el verde de acción")
+    void skipLinkFocusRingContrastsWithTheDarkHeader(String path) throws Exception {
+        assertThat(render(path)).containsPattern(
+                "<a href=\"#main\"[^>]*class=\"[^\"]*\\bfocus:outline-white\\b[^\"]*\"");
+    }
+
     @Test
     @DisplayName("/login conserva el formulario, el CSRF y los campos email y password")
     void loginKeepsItsForm() throws Exception {
@@ -48,17 +56,52 @@ class PageLayoutIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("/registro conserva el formulario, el CSRF y los campos email y password")
+    @DisplayName("/login invita a crear una cuenta con un enlace a /registro dentro del contenido")
+    void loginLinksToRegistration() throws Exception {
+        String main = HtmlSections.mainOf(render("/login"));
+
+        assertThat(main)
+                .contains("¿No tenés una cuenta?")
+                .containsPattern("<a[^>]*href=\"/registro\"[^>]*>Registrate aquí</a>");
+    }
+
+    @Test
+    @DisplayName("/registro conserva el formulario, el CSRF y los campos de datos personales, email y password")
     void registerKeepsItsForm() throws Exception {
         String html = render("/registro");
 
         assertThat(html)
                 .contains("action=\"/registro\"")
                 .contains("name=\"_csrf\"")
+                .contains("name=\"firstName\"")
+                .contains("name=\"lastName\"")
                 .contains("name=\"email\"")
+                .contains("name=\"phone\"")
+                .contains("name=\"birthDate\"")
                 .contains("name=\"password\"")
                 .contains("href=\"/reenviar-activacion\"")
                 .contains("<title>Crear cuenta - Menta Dance</title>");
+    }
+
+    @ParameterizedTest(name = "{0} usa la tarjeta de dos paneles")
+    @ValueSource(strings = {"/login", "/registro", "/recuperar-contrasena", "/reenviar-activacion"})
+    @DisplayName("las pantallas de cuenta muestran un panel de marca con logo junto al formulario")
+    void accountPagesUseTheTwoPanelCard(String path) throws Exception {
+        String html = render(path);
+
+        assertThat(html).contains("auth-card").contains("auth-aside");
+        String aside = html.substring(html.indexOf("auth-aside"), html.indexOf("auth-body"));
+        assertThat(aside).contains("/images/brand/menta-m.png").contains("Menta Dance");
+        assertThat(html.indexOf("<form")).as("the form sits in the second panel")
+                .isGreaterThan(html.indexOf("auth-body"));
+        assertThat(html.split("<h1", -1)).as("single h1").hasSize(2);
+    }
+
+    @Test
+    @DisplayName("el login y el registro tienen cada uno su mensaje de bienvenida en el panel")
+    void loginAndRegisterHaveTheirOwnWelcome() throws Exception {
+        assertThat(render("/login")).contains("Iniciá sesión para continuar");
+        assertThat(render("/registro")).contains("Creá tu cuenta para empezar a bailar");
     }
 
     private String render(String path) throws Exception {

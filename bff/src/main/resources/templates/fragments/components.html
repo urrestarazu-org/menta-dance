@@ -5,15 +5,42 @@
   Reusable UI fragments. Classes are defined in input.css (@layer components).
 
   field(id, label, type, name, autocomplete, value, hint, autofocus, errors)
-    Label + input + optional hint + errors. `value`, `hint` and `errors` may be
-    null; `errors` is a list of messages (e.g. ${#fields.errors('email')}).
+    Label + required input + optional hint + errors. `value`, `hint` and `errors`
+    may be null; `errors` is a list of messages (e.g. ${#fields.errors('email')}).
     The input points to its hint/errors through aria-describedby and is
     flagged aria-invalid when there are errors.
+
+  optionalField(...same parameters...)
+    Same as field but the input is NOT required. Put "(opcional)" in the label.
+
+  fieldBase(..., required)
+    The shared markup; use field or optionalField instead of calling it.
+
+  errorSummary(fields)
+    Summary of the field errors of a form (WCAG 3.3.1, 3.3.3). Call it INSIDE the
+    <form th:object>, right after the page's <h1>, so it reads the form's errors.
+    `fields` is an ordered map: error field name -> id of the input the error
+    belongs to, in the order the inputs appear, e.g.
+    ${ {'email':'email', 'passwordConfirmed':'passwordConfirmation'} }.
+    It renders nothing when there are no errors. Otherwise it renders a focusable
+    group (tabindex="-1", NOT a live region: the page reload is announced once by
+    the browser) with the count, and one link per error to its input, and loads
+    /js/error-summary.js, which moves focus to the group on load. Without
+    JavaScript the summary is still at the top and the links still work.
+    The page's first field must not ask for autofocus when there are errors (the
+    browser could take the focus from the summary): pass
+    ${!#fields.hasErrors('*')} as its `autofocus`.
 -->
-<div class="field" th:fragment="field(id, label, type, name, autocomplete, value, hint, autofocus, errors)">
+<div th:fragment="field(id, label, type, name, autocomplete, value, hint, autofocus, errors)"
+     th:replace="~{fragments/components :: fieldBase(${id}, ${label}, ${type}, ${name}, ${autocomplete}, ${value}, ${hint}, ${autofocus}, ${errors}, true)}"></div>
+
+<div th:fragment="optionalField(id, label, type, name, autocomplete, value, hint, autofocus, errors)"
+     th:replace="~{fragments/components :: fieldBase(${id}, ${label}, ${type}, ${name}, ${autocomplete}, ${value}, ${hint}, ${autofocus}, ${errors}, false)}"></div>
+
+<div class="field" th:fragment="fieldBase(id, label, type, name, autocomplete, value, hint, autofocus, errors, required)">
     <label class="field-label" th:for="${id}" th:text="${label}">Label</label>
     <input class="field-input" th:id="${id}" th:type="${type}" th:name="${name}"
-           th:autocomplete="${autocomplete}" th:value="${value}" required
+           th:autocomplete="${autocomplete}" th:value="${value}" th:required="${required}"
            th:autofocus="${autofocus}"
            th:attr="aria-invalid=${!#lists.isEmpty(errors)} ? 'true' : null,
                     aria-describedby=${!#lists.isEmpty(errors) or hint != null} ? ${id} + '-help' : null"/>
@@ -22,6 +49,22 @@
         <p class="field-error" th:each="message : ${errors}" th:text="${message}">Error</p>
     </div>
 </div>
+
+<th:block th:fragment="errorSummary(fields)"
+          th:with="total=${#aggregates.sum(fields.keySet().![#fields.errors(#this).size()])}">
+    <th:block th:if="${total > 0}">
+        <div class="error-summary" tabindex="-1" role="group" aria-labelledby="error-summary-title" data-error-summary>
+            <h2 class="error-summary-title" id="error-summary-title"
+                th:text="${total == 1} ? 'Hay 1 error en el formulario' : 'Hay ' + ${total} + ' errores en el formulario'">Hay 2 errores en el formulario</h2>
+            <ul class="error-summary-list">
+                <th:block th:each="entry : ${fields}">
+                    <li th:each="message : ${#fields.errors(entry.key)}"><a th:href="${'#' + entry.value}" th:text="${message}">Error</a></li>
+                </th:block>
+            </ul>
+        </div>
+        <script th:src="@{/js/error-summary.js}" defer></script>
+    </th:block>
+</th:block>
 
 <!--
   alert(kind, message): kind is error | success | info. Errors use

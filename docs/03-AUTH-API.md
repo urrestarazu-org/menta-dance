@@ -45,7 +45,7 @@ que la ruta canónica.
 | `POST /login` | JSON `{ "email", "password" }` | `200` con el par de tokens para el cliente de confianza (BFF o Android). El estado de la cuenta se revela sólo con la contraseña correcta: `403 ACCOUNT_NOT_ACTIVATED` (pendiente), `423 USER_LOCKED` (bloqueada); `INACTIVE`/`SUSPENDED` y toda contraseña incorrecta responden `401 INVALID_CREDENTIALS` |
 | `POST /refresh` | `X-Refresh-Token` obligatorio; nunca body JSON | `200` con el par rotado |
 | `POST /logout` | `Authorization: Bearer <access>` y `X-Refresh-Token` obligatorios | `204 No Content` |
-| `POST /register` | JSON `{ "email", "password", "role": "STUDENT" }` | `202 Accepted`, sin cuerpo y siempre genérico |
+| `POST /register` | JSON `{ "email", "password", "role": "STUDENT", "firstName", "lastName", "phone", "birthDate"? }` (`birthDate` es opcional) | `202 Accepted`, sin cuerpo y siempre genérico; un cuerpo inválido responde `400 INVALID_REQUEST` |
 | `GET /activate/{token}` | token opaco en el path; sólo valida sin consumir | `204 No Content` |
 | `POST /activate` | JSON `{ "token" }` | `204 No Content`; consume el token y activa la cuenta |
 | `POST /resend-activation` | JSON `{ "email" }` | `202 Accepted`, sin cuerpo y siempre genérico |
@@ -53,7 +53,14 @@ que la ruta canónica.
 | `POST /reset-password` | JSON `{ "token", "newPassword" }` | `200 OK`, sin cuerpo |
 
 Registro público crea una cuenta `PENDING_ACTIVATION`, un token de un uso y un
-evento durable de correo en una sola transacción. El enlace del correo no apunta
+evento durable de correo en una sola transacción. También guarda los datos
+personales del alta: `firstName` y `lastName` (obligatorios, sin espacios en los
+extremos, hasta 100 caracteres), `phone` (obligatorio, formato E.164 ya
+normalizado: `+` y 8 a 15 dígitos, el primero distinto de 0; el BFF quita
+espacios, guiones y paréntesis antes de enviarlo y la API lo valida de forma
+estricta) y `birthDate` (opcional, `YYYY-MM-DD`, anterior a hoy). Son datos
+personales: no se registran en logs. Por ahora sólo se almacenan; ninguna
+pantalla los muestra. El enlace del correo no apunta
 a la API sino a la pantalla del BFF `GET /activar/{token}`
 (`auth.activation.link-path`, por defecto `/activar/`): esa pantalla valida el
 token con `GET /activate/{token}` y muestra el botón «Activar cuenta», que hace

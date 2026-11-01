@@ -127,6 +127,11 @@ auth:
     reconcile-rate-ms: ${AUTH_OUTBOX_RECONCILE_RATE_MS:5000}
     reconcile-backoff-seconds: ${AUTH_OUTBOX_RECONCILE_BACKOFF_SECONDS:30}
     degraded-window-seconds: ${AUTH_OUTBOX_DEGRADED_WINDOW_SECONDS:30}
+    # Tope de intentos por fila (#672): al alcanzarlo la fila pasa a DEAD y deja de reintentarse.
+    # 100 intentos con el backoff por defecto (30 s) son ~50 min antes de rendirse. Una fila DEAD no deja
+    # tokens revocados abiertos (expiran con access-token-ttl-seconds), pero el tope no debe bajar de
+    # access-token-ttl-seconds / reconcile-backoff-seconds (900 / 30 = 30). Ver ADR-0030.
+    max-attempts: ${AUTH_OUTBOX_MAX_ATTEMPTS:100}
 
 # Billing module configuration (US-BILLING-012)
 billing:

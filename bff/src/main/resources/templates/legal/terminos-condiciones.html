@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('Términos y condiciones', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<article class="legal">
+    <h1 class="mb-4">Términos y condiciones</h1>
+    <div th:replace="~{fragments/legal :: review-notice}"></div>
+
+    <p>Estos términos regulan el uso del sitio de Menta Dance y la contratación de sus servicios. Al crear una
+        cuenta o realizar una compra, la persona usuaria declara haberlos leído y aceptarlos.</p>
+
+    <h2>1. Qué ofrece Menta Dance</h2>
+    <ul>
+        <li><strong>Cursos y clases en video</strong>, a los que se accede con una cuenta y, según el caso, con un
+            plan de suscripción.</li>
+        <li><strong>Clases presenciales</strong>, con fecha, horario y cupo limitado, que se reservan comprando
+            sesiones.</li>
+    </ul>
+
+    <h2>2. Cuenta de usuario</h2>
+    <p>Para comprar o acceder a los contenidos hay que registrarse con un email propio y activar la cuenta desde
+        el enlace que se envía a esa dirección. La persona usuaria es responsable de mantener la confidencialidad
+        de su contraseña y de la actividad que ocurra en su cuenta.</p>
+    <p>Los datos que se declaran al registrarse deben ser verdaderos y mantenerse actualizados.</p>
+
+    <h2>3. Precios y medios de pago</h2>
+    <p>Los precios se muestran en pesos argentinos en cada plan o clase. El pago puede hacerse por Mercado Pago
+        o por transferencia bancaria. En las transferencias, la compra queda pendiente hasta que se verifica el
+        comprobante.</p>
+
+    <h2>4. Suscripciones y clases presenciales</h2>
+    <ul>
+        <li>Un plan da acceso a los contenidos durante el período indicado y no se renueva automáticamente.</li>
+        <li>Las clases presenciales se asignan según el cupo disponible al momento de confirmarse el pago.</li>
+        <li>Menta Dance puede reprogramar o cancelar una clase por causas de organización; en ese caso se
+            informará a las personas inscriptas.</li>
+    </ul>
+
+    <h2>5. Uso permitido</h2>
+    <p>El acceso es personal e intransferible. No está permitido compartir las credenciales, copiar, grabar o
+        redistribuir los contenidos ni usar el sitio para fines ilícitos. Ver también la
+        <a th:href="@{/propiedad-intelectual}">política de propiedad intelectual</a>.</p>
+
+    <h2>6. Devoluciones</h2>
+    <p>Las condiciones de cancelación y reembolso están en la
+        <a th:href="@{/politica-devolucion}">política de devolución</a>.</p>
+
+    <h2>7. Datos personales</h2>
+    <p>El tratamiento de los datos se explica en la <a th:href="@{/politica-privacidad}">política de
+        privacidad</a>.</p>
+
+    <h2>8. Limitación de responsabilidad</h2>
+    <p>Menta Dance procura que el sitio esté disponible de forma continua, pero no garantiza que no haya
+        interrupciones por mantenimiento o por causas ajenas. La práctica de danza implica esfuerzo físico: cada
+        persona es responsable de evaluar su estado de salud antes de participar.</p>
+
+    <h2>9. Cambios en estos términos</h2>
+    <p>Los términos pueden actualizarse. La versión vigente es la publicada en esta página.</p>
+
+    <h2>10. Ley aplicable y contacto</h2>
+    <p>Estos términos se rigen por las leyes de la República Argentina. Para consultas, usá la página de
+        <a th:href="@{/contacto}">contacto</a>.</p>
+</article>
+</th:block>
+</body>
+</html>

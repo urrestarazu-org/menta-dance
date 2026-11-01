@@ -27,17 +27,20 @@ import org.junit.jupiter.api.Test;
 class OutboxMarkerTest {
 
     @Test
-    void outbox_status_has_pending_completed_failed() {
+    void outbox_status_has_pending_completed_failed_dead() {
         Set<String> names = Set.of(
             OutboxStatus.PENDING.name(),
             OutboxStatus.COMPLETED.name(),
-            OutboxStatus.FAILED.name()
+            OutboxStatus.FAILED.name(),
+            OutboxStatus.DEAD.name()
         );
 
-        assertEquals(3, names.size(), "OutboxStatus MUST expose exactly three states");
+        assertEquals(4, names.size(), "OutboxStatus MUST expose exactly four states");
+        assertEquals(4, OutboxStatus.values().length);
         assertTrue(names.contains("PENDING"));
         assertTrue(names.contains("COMPLETED"));
         assertTrue(names.contains("FAILED"));
+        assertTrue(names.contains("DEAD"));
     }
 
     @Test

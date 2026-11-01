@@ -1,5 +1,7 @@
 # Proposal: Auth Login, Roles, and Outbox Remediation
 
+> **Partially superseded by #672 (2026-11-01).** The `AuthUserLoggedIn` and `RefreshRotated` events described here are no longer persisted (no consumer). See ADR-0030 ("Decisión 2026-11-01").
+
 ## Intent
 
 Restore five verified auth/outbox guarantees: durable token versions, atomic outbox writes, reconciler health, Redis retry handling, and STUDENT-only public registration.

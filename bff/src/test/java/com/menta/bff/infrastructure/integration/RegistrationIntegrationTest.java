@@ -3,6 +3,7 @@ package com.menta.bff.infrastructure.integration;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath;
+import static com.github.tomakehurst.wiremock.client.WireMock.notMatching;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -13,10 +14,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.github.tomakehurst.wiremock.client.WireMock;
+import java.time.LocalDate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 /**
  * Registration through the rendered {@code /registro} page. Field names are
@@ -30,6 +33,10 @@ class RegistrationIntegrationTest extends BaseIntegrationTest {
     private static final Pattern EMAIL_FIELD = Pattern.compile("<input[^>]*type=\"email\"[^>]*name=\"([^\"]+)\"");
     private static final Pattern PASSWORD_FIELD =
             Pattern.compile("<input[^>]*type=\"password\"[^>]*name=\"([^\"]+)\"");
+    private static final Pattern PHONE_FIELD = Pattern.compile("<input[^>]*type=\"tel\"[^>]*name=\"([^\"]+)\"");
+    private static final Pattern BIRTH_DATE_FIELD =
+            Pattern.compile("<input[^>]*type=\"date\"[^>]*name=\"([^\"]+)\"");
+    private static final Pattern BIRTH_DATE_INPUT = Pattern.compile("<input[^>]*type=\"date\"[^>]*>");
 
     private String registerPage() throws Exception {
         return mockMvc.perform(get("/registro"))
@@ -59,15 +66,182 @@ class RegistrationIntegrationTest extends BaseIntegrationTest {
         String html = registerPage();
 
         mockMvc.perform(post("/registro")
+                        .param("firstName", "Ana")
+                        .param("lastName", "Prueba")
                         .param(fieldName(EMAIL_FIELD, html), "ana@example.com")
+                        .param(fieldName(PHONE_FIELD, html), "+54 9 11 0000-0000")
+                        .param(fieldName(BIRTH_DATE_FIELD, html), "1990-05-17")
                         .param(fieldName(PASSWORD_FIELD, html), "Secreta123")
+                        .param("passwordConfirmation", "Secreta123")
                         .with(csrf()))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/registro/pendiente"));
 
         WIRE_MOCK_SERVER.verify(postRequestedFor(urlEqualTo(REGISTER_URL))
                 .withRequestBody(matchingJsonPath("$.email", equalTo("ana@example.com")))
+                .withRequestBody(matchingJsonPath("$.firstName", equalTo("Ana")))
+                .withRequestBody(matchingJsonPath("$.lastName", equalTo("Prueba")))
+                .withRequestBody(matchingJsonPath("$.phone", equalTo("+5491100000000")))
+                .withRequestBody(matchingJsonPath("$.birthDate", equalTo("1990-05-17")))
                 .withRequestBody(matchingJsonPath("$.role", equalTo("STUDENT"))));
+    }
+
+    @Test
+    @DisplayName("the birth date can be left out: it is not sent to the API")
+    void birthDateIsOptional() throws Exception {
+        WIRE_MOCK_SERVER.stubFor(WireMock.post(urlEqualTo(REGISTER_URL)).willReturn(aResponse().withStatus(202)));
+
+        mockMvc.perform(registration().with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/registro/pendiente"));
+
+        WIRE_MOCK_SERVER.verify(postRequestedFor(urlEqualTo(REGISTER_URL))
+                .withRequestBody(matchingJsonPath("$.phone", equalTo("+5491100000000")))
+                .withRequestBody(notMatching(".*birthDate.*")));
+    }
+
+    @Test
+    @DisplayName("the form asks for first name, last name and phone as required fields and the birth date as optional")
+    void personalDataFieldsAreRendered() throws Exception {
+        String html = registerPage();
+
+        assertThat(html)
+                .containsPattern("<label[^>]*for=\"firstName\"[^>]*>Nombre</label>")
+                .containsPattern("<label[^>]*for=\"lastName\"[^>]*>Apellido</label>")
+                .containsPattern("<label[^>]*for=\"phone\"[^>]*>Teléfono</label>")
+                .containsPattern("<label[^>]*for=\"birthDate\"[^>]*>Fecha de nacimiento \\(opcional\\)</label>")
+                .containsPattern("<input[^>]*id=\"firstName\"[^>]*autocomplete=\"given-name\"[^>]*required")
+                .containsPattern("<input[^>]*id=\"lastName\"[^>]*autocomplete=\"family-name\"[^>]*required")
+                .containsPattern("<input[^>]*id=\"phone\"[^>]*type=\"tel\"[^>]*autocomplete=\"tel\"[^>]*required")
+                .contains("Con código de país, por ejemplo +54 9 11 0000 0000");
+        Matcher birthDate = BIRTH_DATE_INPUT.matcher(html);
+        assertThat(birthDate.find()).isTrue();
+        assertThat(birthDate.group()).contains("id=\"birthDate\"").doesNotContain("required");
+        assertThat(html.indexOf("id=\"firstName\"")).isLessThan(html.indexOf("id=\"lastName\""));
+        assertThat(html.indexOf("id=\"lastName\"")).isLessThan(html.indexOf("id=\"email\""));
+        assertThat(html.indexOf("id=\"email\"")).isLessThan(html.indexOf("id=\"phone\""));
+        assertThat(html.indexOf("id=\"phone\"")).isLessThan(html.indexOf("id=\"birthDate\""));
+        assertThat(html.indexOf("id=\"birthDate\"")).isLessThan(html.indexOf("id=\"password\""));
+    }
+
+    @Test
+    @DisplayName("missing or malformed personal data shows Spanish errors, keeps what was typed and skips the API")
+    void invalidPersonalDataShowsSpanishErrorsAndKeepsValues() throws Exception {
+        String body = mockMvc.perform(post("/registro")
+                        .param("firstName", "Ana")
+                        .param("lastName", " ")
+                        .param("email", "ana@example.com")
+                        .param("phone", "11 5555 0000")
+                        .param("birthDate", LocalDate.now().plusDays(1).toString())
+                        .param("password", "Secreta123")
+                        .param("passwordConfirmation", "Otra12345")
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(body)
+                .contains("Ingresá tu apellido")
+                .contains("Ingresá el teléfono con código de país")
+                .contains("La fecha de nacimiento tiene que ser anterior a hoy")
+                .containsPattern("<input[^>]*id=\"firstName\"[^>]*value=\"Ana\"")
+                .containsPattern("<input[^>]*id=\"email\"[^>]*value=\"ana@example.com\"")
+                .containsPattern("<input[^>]*id=\"phone\"[^>]*value=\"11 5555 0000\"")
+                .containsPattern("<input[^>]*id=\"birthDate\"[^>]*value=\"" + LocalDate.now().plusDays(1) + "\"")
+                .doesNotContain("Secreta123")
+                .doesNotContain("Otra12345");
+        assertThat(WIRE_MOCK_SERVER.findAll(postRequestedFor(urlEqualTo(REGISTER_URL)))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("an empty form asks for each required field and nothing is requested of the optional birth date")
+    void emptyFormAsksForRequiredFields() throws Exception {
+        String body = mockMvc.perform(post("/registro").with(csrf()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(body)
+                .contains("Ingresá tu nombre")
+                .contains("Ingresá tu apellido")
+                .contains("Ingresá tu teléfono")
+                .doesNotContain("fecha de nacimiento válida");
+    }
+
+    @Test
+    @DisplayName("every personal-data input declares a WCAG 1.3.5 purpose and a label")
+    void inputsDeclareTheirPurpose() throws Exception {
+        String html = registerPage();
+
+        assertThat(inputTag(html, "firstName")).contains("autocomplete=\"given-name\"");
+        assertThat(inputTag(html, "lastName")).contains("autocomplete=\"family-name\"");
+        assertThat(inputTag(html, "email")).contains("type=\"email\"").contains("autocomplete=\"username\"");
+        assertThat(inputTag(html, "phone")).contains("type=\"tel\"").contains("autocomplete=\"tel\"");
+        assertThat(inputTag(html, "birthDate")).contains("type=\"date\"").contains("autocomplete=\"bday\"");
+        assertThat(inputTag(html, "password")).contains("type=\"password\"").contains("autocomplete=\"new-password\"");
+        assertThat(inputTag(html, "passwordConfirmation"))
+                .contains("type=\"password\"").contains("autocomplete=\"new-password\"");
+        assertThat(html).containsPattern("<label[^>]*for=\"email\"[^>]*>Email</label>")
+                .containsPattern("<label[^>]*for=\"password\"[^>]*>Contraseña</label>")
+                .containsPattern("<label[^>]*for=\"passwordConfirmation\"[^>]*>Repetí la contraseña</label>");
+    }
+
+    @Test
+    @DisplayName("the optional birth date explains the accepted format and the field points to that help")
+    void birthDateHasAFormatHintLinkedToTheField() throws Exception {
+        String html = registerPage();
+
+        assertThat(inputTag(html, "birthDate")).contains("aria-describedby=\"birthDate-help\"");
+        assertThat(html)
+                .containsPattern("<div[^>]*id=\"birthDate-help\"[^>]*>\\s*<p[^>]*>[^<]*AAAA-MM-DD[^<]*</p>");
+        assertThat(inputTag(html, "phone")).contains("aria-describedby=\"phone-help\"");
+        assertThat(inputTag(html, "password")).contains("aria-describedby=\"password-help\"");
+    }
+
+    @Test
+    @DisplayName("an invalid birth date keeps the hint, adds the error to the same description and is aria-invalid")
+    void birthDateErrorJoinsTheHint() throws Exception {
+        String body = mockMvc.perform(registration()
+                        .param("birthDate", LocalDate.now().plusDays(1).toString())
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(inputTag(body, "birthDate"))
+                .contains("aria-invalid=\"true\"").contains("aria-describedby=\"birthDate-help\"");
+        String help = body.substring(body.indexOf("id=\"birthDate-help\""));
+        help = help.substring(0, help.indexOf("</div>"));
+        assertThat(help).contains("AAAA-MM-DD").contains("La fecha de nacimiento tiene que ser anterior a hoy");
+    }
+
+    @Test
+    @DisplayName("every aria-describedby on the invalid form points to an element that exists")
+    void describedByTargetsExist() throws Exception {
+        String body = mockMvc.perform(post("/registro").param("email", "no-es-un-email").with(csrf()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        Matcher references = Pattern.compile("aria-describedby=\"([^\"]+)\"").matcher(body);
+        int checked = 0;
+        while (references.find()) {
+            checked++;
+            assertThat(body).as("target of %s", references.group()).contains("id=\"" + references.group(1) + "\"");
+        }
+        assertThat(checked).isGreaterThanOrEqualTo(4);
+    }
+
+    private static String inputTag(String html, String id) {
+        Matcher input = Pattern.compile("<input[^>]*\\bid=\"" + id + "\"[^>]*>").matcher(html);
+        assertThat(input.find()).as("an <input id=\"%s\"> in the page", id).isTrue();
+        return input.group();
+    }
+
+    private static MockHttpServletRequestBuilder registration() {
+        return post("/registro")
+                .param("firstName", "Ana")
+                .param("lastName", "Prueba")
+                .param("email", "ana@example.com")
+                .param("phone", "+54 9 11 0000-0000")
+                .param("password", "Secreta123")
+                .param("passwordConfirmation", "Secreta123");
     }
 
     @Test
@@ -88,16 +262,30 @@ class RegistrationIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("the form asks to repeat the password and flags a mismatch in Spanish")
+    void mismatchedConfirmationShowsSpanishError() throws Exception {
+        String body = mockMvc.perform(post("/registro")
+                        .param("firstName", "Ana").param("lastName", "Prueba")
+                        .param("phone", "+5491100000000")
+                        .param("email", "ana@example.com")
+                        .param("password", "Secreta123")
+                        .param("passwordConfirmation", "Otra12345")
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(body).contains("name=\"passwordConfirmation\"").contains("Las contraseñas no coinciden");
+        assertThat(WIRE_MOCK_SERVER.findAll(postRequestedFor(urlEqualTo(REGISTER_URL)))).isEmpty();
+    }
+
+    @Test
     @DisplayName("a rate-limited registration shows the Spanish 429 message without API internals")
     void rateLimitedRegistrationShowsSpanishMessage() throws Exception {
         WIRE_MOCK_SERVER.stubFor(WireMock.post(urlEqualTo(REGISTER_URL))
                 .willReturn(aResponse().withStatus(429).withHeader("Retry-After", "60")
                         .withBody("{\"code\":\"ACTIVATION_RATE_LIMITED\"}")));
 
-        String body = mockMvc.perform(post("/registro")
-                        .param("email", "ana@example.com")
-                        .param("password", "Secreta123")
-                        .with(csrf()))
+        String body = mockMvc.perform(registration().with(csrf()))
                 .andExpect(status().isTooManyRequests())
                 .andReturn().getResponse().getContentAsString();
 

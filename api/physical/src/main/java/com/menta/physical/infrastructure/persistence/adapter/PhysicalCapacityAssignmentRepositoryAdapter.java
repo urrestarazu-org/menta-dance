@@ -3,6 +3,7 @@ package com.menta.physical.infrastructure.persistence.adapter;
 import com.menta.physical.application.dto.AssignedSessionRow;
 import com.menta.physical.application.dto.AttendanceHistoryRow;
 import com.menta.physical.application.port.out.PhysicalCapacityAssignmentRepository;
+import com.menta.physical.domain.model.AttendanceKind;
 import com.menta.physical.domain.model.SessionId;
 import com.menta.physical.infrastructure.persistence.repository.AssignedSessionRowProjection;
 import com.menta.physical.infrastructure.persistence.repository.MonthlyAttendanceRowProjection;
@@ -68,7 +69,7 @@ public class PhysicalCapacityAssignmentRepositoryAdapter
         return projections.stream()
             .map(row -> new AttendanceHistoryRow(
                 row.getSessionId(), row.getScheduledAt(), row.getCourseName(), row.getInstructorName(),
-                row.getRecordedAt()
+                row.getRecordedAt(), row.getKind() == null ? null : AttendanceKind.valueOf(row.getKind())
             ))
             .toList();
     }

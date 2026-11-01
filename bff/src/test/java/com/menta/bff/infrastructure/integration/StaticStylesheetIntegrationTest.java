@@ -66,6 +66,26 @@ class StaticStylesheetIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("la hoja compilada incluye el realce al pasar el mouse y lo apaga con movimiento reducido")
+    void compiledStylesheetContainsHoverFeedback() throws Exception {
+        String css = mockMvc.perform(get("/css/app.css"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertThat(css).contains(".hover-lift:hover").contains(".hover-pop:hover").contains(".animate-pay-ring")
+                .contains("@keyframes pay-ring");
+        // Each moving effect is switched off for people who ask for less motion (WCAG 2.3.3).
+        for (String effect : new String[] {".hover-lift", ".hover-pop"}) {
+            assertThat(Pattern.compile("@media \\(prefers-reduced-motion:\\s*reduce\\)\\{[^@]*"
+                    + Pattern.quote(effect) + ":hover").matcher(css).find())
+                    .withFailMessage("%s has no reduced-motion override in the compiled stylesheet", effect)
+                    .isTrue();
+        }
+    }
+
+    @Test
     @DisplayName("/login enlaza una versión del stylesheet con hash de contenido y esa URL responde 200")
     void loginLinksTheVersionedStylesheet() throws Exception {
         String html = mockMvc.perform(get("/login"))
@@ -131,6 +151,28 @@ class StaticStylesheetIntegrationTest extends BaseIntegrationTest {
     @DisplayName("el permiso público de /fonts es GET-only y no abre verbos que mutan")
     void fontsPermitDoesNotWidenAccess() throws Exception {
         mockMvc.perform(post("/fonts/poppins-latin-400-normal.woff2"))
+                .andExpect(status().is4xxClientError());
+    }
+
+    @ParameterizedTest(name = "GET {0}")
+    @ValueSource(strings = {"/images/brand/menta-m.png", "/images/hero/salon.jpg", "/images/hero/salon-960.jpg"})
+    @DisplayName("las imágenes de marca y del hero se sirven anónimas")
+    void brandImagesAreServedAnonymously(String path) throws Exception {
+        byte[] body = mockMvc.perform(get(path))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.parseMediaType(
+                        path.endsWith(".png") ? "image/png" : "image/jpeg")))
+                .andReturn()
+                .getResponse()
+                .getContentAsByteArray();
+
+        assertThat(body).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("el permiso público de /images es GET-only y no abre verbos que mutan")
+    void imagesPermitDoesNotWidenAccess() throws Exception {
+        mockMvc.perform(post("/images/brand/menta-m.png"))
                 .andExpect(status().is4xxClientError());
     }
 }

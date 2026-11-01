@@ -50,6 +50,7 @@ class OutboxBlacklistReconcilerTest {
     private static final long ACCESS_TTL_SECONDS = 900L;
     private static final long BACKOFF_SECONDS = 30L;
     private static final int RETENTION_DAYS = 7;
+    private static final int MAX_ATTEMPTS = 3;
     private static final Duration ACCESS_TTL = Duration.ofSeconds(ACCESS_TTL_SECONDS);
 
     private static final String PROJECTED_USER_ID = "55555555-5555-5555-5555-555555555555";
@@ -72,7 +73,7 @@ class OutboxBlacklistReconcilerTest {
                 tokenBlacklistPort, new com.fasterxml.jackson.databind.ObjectMapper()
             );
         OutboxReconciliationWorker worker = new OutboxReconciliationWorker(
-            repository, List.of(tokenVersionHandler), BACKOFF_SECONDS);
+            repository, List.of(tokenVersionHandler), BACKOFF_SECONDS, MAX_ATTEMPTS);
         reconciler = new OutboxBlacklistReconciler(
             repository, tokenBlacklistPort, worker, BATCH_SIZE, RETENTION_DAYS);
     }
@@ -301,6 +302,23 @@ class OutboxBlacklistReconcilerTest {
 
             verify(tokenBlacklistPort).projectTokenVersion(eq(PROJECTED_USER_ID), anyLong());
             verify(tokenBlacklistPort).writeHeartbeat();
+        }
+
+        @Test
+        void writes_heartbeat_when_a_pending_row_has_no_handler() {
+            // #672: a row nobody consumes (a leftover auth.AuthUserLoggedIn) is a
+            // dispatch failure that says nothing about Redis. It must not leave
+            // the heartbeat unwritten, or AuthDegradedGuard turns login into 503.
+            OutboxRowJpaEntity orphan = pendingRow(503L, "auth.AuthUserLoggedIn", "jti-orphan");
+            when(repository.findPendingOrDueFailedOrderByIdAsc(any(Instant.class), any(Pageable.class)))
+                .thenReturn(List.of(orphan));
+            when(repository.save(any(OutboxRowJpaEntity.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            reconciler.tick();
+
+            verify(tokenBlacklistPort).writeHeartbeat();
+            assertThat(orphan.getStatus()).isEqualTo(OutboxStatus.FAILED);
         }
 
         @Test

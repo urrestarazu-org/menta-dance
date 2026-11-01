@@ -32,7 +32,8 @@ import java.util.UUID;
  *   6. tokenVersion mismatch → family revoke + REFRESH_REVOKED event (user
  *      stays at its current higher version; we do NOT down-bump).
  *   7. ACTIVE valid → mark USED, mint next refresh in same family, mint
- *      access token, append REFRESH_ROTATED event.
+ *      access token. No outbox event: the former REFRESH_ROTATED had no
+ *      consumer (#672).
  */
 public class RefreshTokenUseCaseImpl implements RefreshTokenUseCase {
 
@@ -130,12 +131,6 @@ public class RefreshTokenUseCaseImpl implements RefreshTokenUseCase {
             nextExpiresAt
         );
         refreshTokenRepository.save(next);
-
-        outboxAppender.append(
-            AuthOutboxEventTypes.REFRESH_ROTATED,
-            nextRefreshId.toString(),
-            "{\"familyId\":\"" + presented.getFamilyId() + "\",\"tokenVersion\":" + user.getTokenVersion() + "}"
-        );
 
         IssuedAccessToken access = accessTokenIssuer.issue(user);
         return new TokenPair(
