@@ -16,6 +16,7 @@ import androidx.navigation.toRoute
 import com.menta.android.presentation.accessqr.AccessQrRoute
 import com.menta.android.presentation.home.HomeScreen
 import com.menta.android.presentation.login.LoginRoute
+import com.menta.android.presentation.myattendance.MyAttendanceScreen
 import com.menta.android.presentation.mysessions.MySessionsScreen
 import com.menta.android.presentation.session.SessionGate
 import com.menta.android.presentation.session.SessionViewModel
@@ -65,6 +66,15 @@ fun MentaNavHost(sessionViewModel: SessionViewModel = hiltViewModel()) {
                     )
                 }
             }
+            composable<MyAttendance> {
+                AuthenticatedScaffold(
+                    selected = StudentSection.MyAttendance,
+                    onNavigate = navController::navigateToSection,
+                    onLogout = sessionViewModel::onLogout,
+                ) { innerPadding ->
+                    MyAttendanceScreen(modifier = Modifier.padding(innerPadding))
+                }
+            }
             composable<AccessQr> { entry ->
                 AccessQrRoute(
                     sessionId = entry.toRoute<AccessQr>().sessionId,
@@ -95,4 +105,5 @@ private val StudentSection.route: Any
     get() = when (this) {
         StudentSection.Home -> Home
         StudentSection.MySessions -> MySessions
+        StudentSection.MyAttendance -> MyAttendance
     }

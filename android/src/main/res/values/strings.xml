@@ -27,6 +27,7 @@
     <string name="menu_open">Menú</string>
     <string name="menu_section_home">Inicio</string>
     <string name="menu_section_my_sessions">Mis clases</string>
+    <string name="menu_section_my_attendance">Mi asistencia</string>
     <string name="menu_logout">Cerrar sesión</string>
 
     <string name="common_retry">Reintentar</string>
@@ -37,6 +38,14 @@
     <string name="my_sessions_show_qr">Mostrar QR</string>
     <string name="my_sessions_check_in_closed">El QR se habilita cuando abre el check-in.</string>
     <string name="my_sessions_instructor">Con %1$s</string>
+
+    <string name="my_attendance_previous">Anterior</string>
+    <string name="my_attendance_next">Siguiente</string>
+    <string name="my_attendance_empty">No tenés asistencias registradas en este mes.</string>
+    <string name="my_attendance_error">No pudimos cargar tu asistencia.</string>
+    <string name="my_attendance_check_in_qr">Ingreso por QR · %1$s</string>
+    <string name="my_attendance_check_in_manual">Ingreso en recepción · %1$s</string>
+    <string name="my_attendance_check_in">Ingreso %1$s</string>
 
     <string name="access_qr_title">Tu QR de acceso</string>
     <string name="access_qr_hint">Mostrá este código en la entrada.</string>

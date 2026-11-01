@@ -18,6 +18,9 @@ data object Home
 @Serializable
 data object MySessions
 
+@Serializable
+data object MyAttendance
+
 /** Only the non-secret session id travels as an argument; the credential never does. */
 @Serializable
 data class AccessQr(val sessionId: String)
