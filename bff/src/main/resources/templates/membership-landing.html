@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: campaign('Membresía Full Pass Menta', ~{::main-content})}">
+<body>
+<!--/*
+  Temporary landing of the Membresía Full Pass Menta (#685). It replaces the home page only while
+  menta.landing.membership.enabled is true; see docs/32-VPS-DONWEB-RUNBOOK.md (section 2.12). The copy comes from the
+  membership document. CSP: no external fonts or icons, inline SVG only, and the one script is same-origin.
+*/-->
+<th:block th:fragment="main-content">
+<section class="hero" aria-labelledby="hero-title">
+    <div class="max-w-3xl">
+        <h1 id="hero-title">Membresía Full Pass Menta 2027</h1>
+        <p class="hero-lead">Una sola membresía. Todo Menta. Un año entero de bachata sensual y tradicional, de enero a noviembre, sin tener que decidir cada mes si te anotás o no.</p>
+        <p class="mt-4 text-lg">Clases regulares, eventos, intensivos y clases online, con receso en julio y diciembre.</p>
+        <div class="mt-8 flex flex-wrap justify-center gap-3">
+            <a class="btn btn-light btn-lg" href="#precios">Ver precios</a>
+        </div>
+    </div>
+</section>
+
+<section class="container-page py-12" aria-labelledby="incluye-title">
+    <div class="mb-10 text-center">
+        <h2 id="incluye-title">¿Qué incluye la membresía?</h2>
+        <p class="mt-2 text-lg">Acceso mensual a todos estos formatos.</p>
+    </div>
+    <ul class="grid gap-6 md:grid-cols-2">
+        <li class="card text-center">
+            <svg class="benefit-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3M4 11h16M5 5h14a1 1 0 011 1v13a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1z"></path>
+            </svg>
+            <h3>Menta Eventos</h3>
+            <p class="mt-2">Un sábado por mes, entre el 10 y el 20, de 19 a 21 hs, de enero a octubre: diez encuentros para aprender, lucir tu mejor outfit, disfrutar y compartir con la comunidad.</p>
+        </li>
+        <li class="card text-center">
+            <svg class="benefit-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M10 8.5l6 3.5-6 3.5v-7z"></path>
+            </svg>
+            <h3>Menta Online</h3>
+            <p class="mt-2">Los últimos dos domingos de cada mes, a las 18:30, de abril a noviembre. Clases en vivo con contenido nuevo en cada una; quedan grabadas y tenés desafíos mensuales y resúmenes de cada clase.</p>
+        </li>
+        <li class="card text-center">
+            <svg class="benefit-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+            </svg>
+            <h3>Menta Intensivos</h3>
+            <p class="mt-2">Durante enero, febrero y marzo, presenciales: lunes de 19:30 a 21:00 y miércoles de 19:30 a 21:30. Cada curso intensivo dura un mes y, al terminar, tenés de regalo una filmación.</p>
+        </li>
+        <li class="card text-center">
+            <svg class="benefit-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 14l9-5-9-5-9 5 9 5z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 14l6.16-3.42A12 12 0 0112 21a12 12 0 01-6.16-10.42L12 14z"></path>
+            </svg>
+            <h3>Menta Clases Regulares</h3>
+            <p class="mt-2">Lunes de 19:30 a 21:00, de abril a noviembre. Una formación paulatina y profunda, ideal para reforzar bases y entender lo que hacés, no solo copiar pasos.</p>
+        </li>
+    </ul>
+</section>
+
+<section class="container-page pb-12" aria-labelledby="conviene-title">
+    <div class="card text-center">
+        <h2 id="conviene-title">Por qué conviene</h2>
+        <p class="mx-auto mt-3 max-w-3xl">Las clases regulares solas cuestan $40.000 por mes, Menta Online sola $25.000 y un intensivo $55.000. La membresía incluye todo eso, y mucho más, en una sola cuota mensual: te anotás una vez y bailás todo el año.</p>
+        <p class="mx-auto mt-3 max-w-3xl font-semibold">Cuanto antes te sumás, menos pagás por mes: la cuota sube con cada fecha y, desde febrero de 2027, además tenés menos meses de clases.</p>
+    </div>
+</section>
+
+<section id="precios" class="container-page pb-12" aria-labelledby="precios-title">
+    <h2 id="precios-title" class="mb-8 text-center">Precios y suscripción</h2>
+
+    <!-- Countdown to the price in force. Without JavaScript the date stays. -->
+    <div th:if="${!salesClosed}" th:with="current=${priceRows.^[current()]}" class="mb-5">
+        <div data-promo-countdown role="timer" aria-live="off"
+             th:attr="data-expires-at=${current.expiresAt()},data-server-now=${serverNow}"
+             class="inline-flex items-center gap-2 rounded-xl bg-brand-deep px-4 py-2.5 text-sm font-semibold text-brand-surface shadow-md md:text-base">
+            <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <span data-countdown-text
+                  th:text="|Esta promoción termina el ${#temporals.format(current.deadline(), 'dd/MM/yyyy')}|">Esta promoción termina el</span>
+        </div>
+    </div>
+
+    <div class="overflow-hidden rounded-xl border border-brand-deep/20 bg-white">
+        <table class="block w-full text-left md:table" role="table">
+            <caption class="sr-only">Cuota, cantidad de cuotas y total de la membresía según la fecha de alta</caption>
+            <thead class="hidden bg-brand-deep text-brand-surface md:table-header-group" role="rowgroup">
+            <tr role="row">
+                <th scope="col" class="p-4 font-semibold" role="columnheader">Alta hasta</th>
+                <th scope="col" class="whitespace-nowrap p-4 font-semibold" role="columnheader">Cuota mensual</th>
+                <th scope="col" class="p-4 font-semibold" role="columnheader">Cuotas</th>
+                <th scope="col" class="whitespace-nowrap p-4 font-semibold" role="columnheader">Total</th>
+                <th scope="col" class="p-4" role="columnheader"><span class="sr-only">Suscribirse</span></th>
+            </tr>
+            </thead>
+            <tbody class="block divide-y divide-brand-deep/15 md:table-row-group" role="rowgroup">
+            <!-- Rows are computed on the server from the date (Argentina time) -->
+            <tr th:each="row : ${priceRows}" data-price-row role="row"
+                th:classappend="${row.locked()} ? 'bg-gray-100 text-gray-600' : (${row.exclusive()} ? 'bg-brand-light/40' : 'bg-brand-surface')"
+                class="block md:table-row">
+                <td class="block p-4 pb-1 md:table-cell md:pb-4" role="cell"
+                    th:classappend="${row.expired()} ? 'line-through' : (${row.exclusive()} ? 'font-semibold' : '')">
+                    <span class="font-semibold md:hidden">Alta hasta: </span><span th:text="${row.label()}">Alta hasta</span>
+                </td>
+                <td class="block px-4 py-1 md:table-cell md:p-4" role="cell"
+                    th:classappend="${row.expired()} ? 'line-through' : (${row.locked()} ? '' : 'text-xl font-extrabold text-brand-deep')">
+                    <span class="font-normal md:hidden">Cuota mensual: </span><span th:text="${row.formattedPrice()}">$ 0</span>
+                </td>
+                <td class="block px-4 py-1 md:table-cell md:p-4" role="cell"
+                    th:classappend="${row.expired()} ? 'line-through' : ''">
+                    <span class="md:hidden">Cuotas: </span><span th:text="${row.installments()}">12</span>
+                </td>
+                <td class="block px-4 py-1 md:table-cell md:whitespace-nowrap md:p-4" role="cell"
+                    th:classappend="${row.expired()} ? 'line-through' : (${row.locked()} ? '' : 'font-bold')">
+                    <span class="font-normal md:hidden">Total: </span><span th:text="${row.formattedTotal()}">$ 0</span>
+                </td>
+                <td class="block px-4 pb-4 pt-2 md:table-cell md:p-4 md:text-right" role="cell">
+                    <a th:if="${row.payable()}" data-pay-button th:href="${row.payUrl()}"
+                       target="_blank" rel="noopener noreferrer"
+                       class="btn btn-primary w-full text-center md:w-72">
+                        <span th:text="${row.exclusive()} ? 'Suscribirme (asistencia perfecta)' : 'Suscribirme con Mercado Pago'">Suscribirme con Mercado Pago</span>
+                        <span class="sr-only">(se abre en una pestaña nueva)</span>
+                    </a>
+                    <span th:if="${row.awaitingLink()}" class="text-sm font-semibold">Link de pago próximamente</span>
+                    <span th:if="${row.expired()}" class="text-xs font-semibold uppercase tracking-wide">Finalizado</span>
+                    <span th:if="${row.locked() and !row.expired()}" class="inline-flex items-center gap-1">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                        </svg>
+                        <span class="sr-only">Disponible más adelante</span>
+                    </span>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <p th:if="${salesClosed}" role="status" class="alert alert-info mt-4 text-center font-semibold">El período de inscripción a la membresía finalizó.</p>
+
+    <aside class="card mx-auto mt-8 max-w-3xl" aria-labelledby="condiciones-title">
+        <h3 id="condiciones-title">Condiciones de la membresía</h3>
+        <ul class="mt-4 list-disc space-y-3 pl-5">
+            <li>El pago se realiza únicamente mediante suscripción de Mercado Pago, con débito automático mensual desde que aceptás el link.</li>
+            <li>“Alta hasta” indica la fecha límite para suscribirte con esa cuota.</li>
+            <li>La membresía comienza en enero de 2027, aunque aceptes el link antes.</li>
+            <li>Quienes se suman entre noviembre de 2026 y enero de 2027 abonan 12 cuotas. Desde febrero de 2027, la cantidad de cuotas disminuye mes a mes hasta diciembre de 2027.</li>
+            <li>Las cuotas de julio y diciembre se abonan aunque haya receso de actividades. Quienes se suman a partir del 13 de septiembre de 2027 tienen bonificada la cuota de diciembre.</li>
+            <li>La suscripción se da de baja y finaliza automáticamente al completarse las cuotas.</li>
+        </ul>
+        <p class="mt-4">¿Dudas? Mirá los datos de <a th:href="@{/contacto}">contacto</a>.</p>
+    </aside>
+</section>
+
+<section class="container-page pb-12" aria-labelledby="cierre-title">
+    <div class="band-dark">
+        <h2 id="cierre-title" class="text-brand-surface">Una sola membresía, un año entero</h2>
+        <p class="mx-auto mt-3 max-w-2xl text-lg">Bailar no es un lujo. Es el espacio donde volvés a ser vos. En 2027, bailamos todo el año. Juntas.</p>
+        <div class="mt-6">
+            <a class="btn btn-light btn-lg" href="#precios">Ver precios</a>
+        </div>
+    </div>
+</section>
+
+<script th:src="@{/js/promo-countdown.js}" defer></script>
+</th:block>
+</body>
+</html>

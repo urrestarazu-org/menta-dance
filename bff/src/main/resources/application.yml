@@ -66,6 +66,84 @@ menta:
     email: ${MENTA_CONTACT_EMAIL:}
     phone: ${MENTA_CONTACT_PHONE:}
     address: ${MENTA_CONTACT_ADDRESS:}
+  # Temporary landing of the "Membresía Full Pass Menta" served at "/" for the event (#685). Off by default: with
+  # it off, "/" is the regular catalog home. Tiers and dates come from the membership document; "deadline" is the
+  # last day (inclusive, Argentina time) to subscribe at that installment. "pay-url" is the Mercado Pago subscription
+  # link of each tier: the value after the colon is the default (those links are public) and the environment
+  # variable MENTA_LANDING_MEMBERSHIP_PAY_URL_01..13 (in tier order) overrides it. A tier without a link is
+  # loaded the same way once its link exists. With the landing enabled the application refuses to start if a link
+  # is not https or if a tier IN FORCE today has none; a future tier without its link only logs a warning and its
+  # row reads "Link de pago próximamente". To revert: disable it.
+  landing:
+    membership:
+      enabled: ${MENTA_LANDING_MEMBERSHIP_ENABLED:false}
+      tiers:
+        - label: "Asistencia perfecta 2026 (hasta sáb. 7 de noviembre)"
+          price: 25000
+          installments: 12
+          deadline: "2026-11-07"
+          exclusive: true
+          pay-url: ${MENTA_LANDING_MEMBERSHIP_PAY_URL_01:https://mpago.la/2aMPPhW}
+        - label: "Sábado 7 de noviembre 2026"
+          price: 26000
+          installments: 12
+          deadline: "2026-11-07"
+          pay-url: ${MENTA_LANDING_MEMBERSHIP_PAY_URL_02:https://mpago.la/2hsJjN6}
+        - label: "16 de noviembre 2026"
+          price: 28000
+          installments: 12
+          deadline: "2026-11-16"
+          pay-url: ${MENTA_LANDING_MEMBERSHIP_PAY_URL_03:https://mpago.la/2HyTR5v}
+        - label: "14 de diciembre 2026"
+          price: 30000
+          installments: 12
+          deadline: "2026-12-14"
+          pay-url: ${MENTA_LANDING_MEMBERSHIP_PAY_URL_04:https://mpago.la/1JzoqKD}
+        - label: "11 de enero 2027"
+          price: 32000
+          installments: 12
+          deadline: "2027-01-11"
+          pay-url: ${MENTA_LANDING_MEMBERSHIP_PAY_URL_05:https://mpago.la/1uYYMr2}
+        - label: "15 de febrero 2027"
+          price: 34000
+          installments: 11
+          deadline: "2027-02-15"
+          pay-url: ${MENTA_LANDING_MEMBERSHIP_PAY_URL_06:}
+        - label: "15 de marzo 2027"
+          price: 36000
+          installments: 10
+          deadline: "2027-03-15"
+          pay-url: ${MENTA_LANDING_MEMBERSHIP_PAY_URL_07:}
+        - label: "12 de abril 2027"
+          price: 38000
+          installments: 9
+          deadline: "2027-04-12"
+          pay-url: ${MENTA_LANDING_MEMBERSHIP_PAY_URL_08:}
+        - label: "17 de mayo 2027"
+          price: 40000
+          installments: 8
+          deadline: "2027-05-17"
+          pay-url: ${MENTA_LANDING_MEMBERSHIP_PAY_URL_09:}
+        - label: "14 de junio 2027"
+          price: 40000
+          installments: 7
+          deadline: "2027-06-14"
+          pay-url: ${MENTA_LANDING_MEMBERSHIP_PAY_URL_10:}
+        - label: "16 de agosto 2027"
+          price: 40000
+          installments: 5
+          deadline: "2027-08-16"
+          pay-url: ${MENTA_LANDING_MEMBERSHIP_PAY_URL_11:}
+        - label: "13 de septiembre 2027 (diciembre bonificada)"
+          price: 40000
+          installments: 3
+          deadline: "2027-09-13"
+          pay-url: ${MENTA_LANDING_MEMBERSHIP_PAY_URL_12:}
+        - label: "11 de octubre 2027 (diciembre bonificada)"
+          price: 40000
+          installments: 2
+          deadline: "2027-10-11"
+          pay-url: ${MENTA_LANDING_MEMBERSHIP_PAY_URL_13:}
   api:
     base-url: http://localhost:8081
     timeout: 5s

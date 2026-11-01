@@ -344,6 +344,18 @@
     }
   }
 
+  /*
+   * Dark call-to-action band of the temporary membership landing (#685). Like the hero, its focus ring is
+   * brand-light: the default green measures 1.94:1 against brand-deep.
+   */
+  .band-dark {
+    @apply rounded-xl bg-brand-deep p-8 text-center text-brand-surface;
+  }
+
+  .band-dark :focus-visible {
+    @apply outline-brand-light;
+  }
+
   .site-footer {
     @apply bg-brand-deep text-brand-surface/90;
   }

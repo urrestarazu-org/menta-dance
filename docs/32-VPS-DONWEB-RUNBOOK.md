@@ -727,6 +727,32 @@ stat -c '%a %U:%G' /opt/menta/backup.env                                     # s
 
 Un backup a mano (`systemctl start menta-backup.service`) terminó con `Backup completado` y el check pasó a verde con el último aviso de hace un minuto. **No se probó** el camino de fallo (`BACKUP_PING_URL/fail`) ni la alerta por falta de aviso a tiempo. Para probar la alerta de fallo se puede ejecutar `curl -fsS "$URL/fail"` desde una terminal que ya tenga la URL en una variable (sin escribirla en el historial).
 
+### 2.12 Landing temporal de la membresía Full Pass (#685)
+
+Para usar `https://mentadance.com/` en la propaganda de la membresía durante un evento, el BFF puede servir en `/` una landing de la **Membresía Full Pass Menta 2027** en lugar de la home del catálogo. Es **temporal** y viene **apagada**: con la propiedad apagada, `/` es la home de siempre. El resto del sitio (login, registro, clases, planes) no cambia en ningún caso; no se anula ninguna otra ruta.
+
+**Qué muestra.** Qué incluye la membresía, la tabla de precios y las condiciones, tal como figuran en el documento de la membresía (el PDF es la fuente de verdad). La tabla tiene 13 tramos (cuota, cantidad de cuotas y total) y se recalcula en cada request con la fecha de Argentina: el tramo vigente tiene botón de pago y cuenta regresiva, los futuros se ven bloqueados y los vencidos tachados con "Finalizado". El día límite ("Alta hasta") es inclusivo: el precio rige hasta las 23:59 de ese día y a las 00:00 pasa al siguiente. Los dos primeros tramos (asistencia perfecta 2026 y sábado 7 de noviembre) vencen el mismo día y están vigentes a la vez. Pasado el último plazo la página dice que la inscripción finalizó.
+
+**Variables de entorno** (el BFF las lee de su entorno; valores por defecto en `bff/src/main/resources/application.yml`, `menta.landing.membership`):
+
+| Variable | Qué hace |
+|---|---|
+| `MENTA_LANDING_MEMBERSHIP_ENABLED` | `true` enciende la landing en `/`. Por defecto `false` |
+| `MENTA_LANDING_MEMBERSHIP_PAY_URL_01` a `_13` | Opcional: pisa o agrega el link de suscripción de Mercado Pago de un tramo, en el orden de la tabla (01 = asistencia perfecta 2026, 13 = 11 de octubre de 2027). Si no se define, rige el valor por defecto de `application.yml` |
+
+Los links de suscripción son públicos (se ven en el HTML de la página), así que los conocidos están en `application.yml` como valor por defecto de `pay-url` de cada tramo (`${MENTA_LANDING_MEMBERSHIP_PAY_URL_01:https://mpago.la/...}`): hoy los tramos 01 a 05 (hasta el 11 de enero de 2027). Para los demás hay dos caminos: pegar el link en `application.yml` y hacer un nuevo release, o definir la variable de entorno del tramo sin tocar el código. La variable, si existe, pisa al valor por defecto. Cada link debe ser `https`. Con la landing encendida, el BFF aplica estas reglas al arrancar (el mensaje del error nombra el tramo y la variable):
+
+- Un link presente que no sea `https` válido **impide arrancar**, sea de un tramo vigente o futuro.
+- Un tramo **vigente hoy** sin link **impide arrancar**: la página no tendría cómo suscribirse.
+- Un tramo **futuro** sin link **no impide arrancar**: se registra un `WARN` que lo nombra y, cuando le llega el turno, su fila muestra "Link de pago próximamente" en lugar del botón. Los links de los tramos siguientes se pueden cargar a medida que se acercan sus fechas, pero hay que **reiniciar el BFF** después de cargarlos.
+- Un tramo vencido no necesita link.
+
+Con la landing apagada no se valida nada. Los precios, cuotas y fechas se cambian en `application.yml`; solo los links van por entorno.
+
+**Para activarla en el VPS.** El `docker-compose.prod.yml` pasa al BFF solo las variables que declara, así que primero hay que agregar al bloque `environment` del BFF `MENTA_LANDING_MEMBERSHIP_ENABLED` (con `${VAR:-false}`) y, solo si se van a cargar o cambiar links por entorno, las `MENTA_LANDING_MEMBERSHIP_PAY_URL_NN` que hagan falta (con `${VAR:-}` como `MENTA_CONTACT_*`; un valor vacío cuenta como "sin link" y pisa el valor por defecto, así que no se declaran las que no se usan). Los valores se cargan en `/opt/menta/.env`. Luego se redespliega el BFF (sección 2.10) y se verifica con `curl -s https://mentadance.com/ | grep -c data-price-row`, que debe dar 13.
+
+**Cómo volver atrás.** Poner `MENTA_LANDING_MEMBERSHIP_ENABLED=false` (o quitar la variable) y reiniciar el BFF: `/` vuelve a la home del catálogo. Cuando termine la campaña se puede borrar la funcionalidad revirtiendo el PR de #685. No hay migraciones ni cambios en la API.
+
 ### Decisiones diferidas
 
 - **SSH con `root` y contraseña** (descartado por ahora, decisión del operador del 2026-10-16): sigue permitido. Endurecerlo (solo clave, sin `root`, puerto 22 cerrado en `sshd`) se descarta porque un error de configuración puede dejar al operador sin acceso al servidor, y el beneficio para esta demo no lo justifica. La defensa es fail2ban y el firewall del panel, que bloquea el 22. Si se retoma: en `/etc/ssh/sshd_config.d/` hay `custom.conf` (`PermitRootLogin yes`) y `80-step.conf` (origen desconocido, parece Smallstep); SSH arranca por socket de systemd (`ssh.socket`), así que cerrar el 22 se hace ahí y no en `sshd_config`. Antes de cambiar nada, confirmar el acceso con clave de `mentaadmin` desde otra terminal y mantener abierta la sesión actual.
