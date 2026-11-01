@@ -13,6 +13,9 @@
   `landing(title, content)` is the same shell without the centered container,
   for pages whose sections span the full width (the home hero).
 
+  `campaign(title, content)` is `landing` with a brand-only header and a footer without navigation, for
+  temporary campaign pages such as the membership landing.
+
   `auth(title, content, tagline)` is the shell of the account screens: a card with a
   brand panel (logo, name and `tagline`) beside the content.
 
@@ -49,6 +52,23 @@
 <th:block th:replace="~{fragments/site :: header}"></th:block>
 <main id="main" tabindex="-1" class="flex-1 focus:outline-none" th:insert="${content}">Contenido</main>
 <th:block th:replace="~{fragments/site :: footer}"></th:block>
+</body>
+</html>
+
+<!-- Campaign pages: the landing shell with a brand-only header and a footer with only the brand and the legal links. -->
+<html lang="es" th:fragment="campaign(title, content)">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${title} + ' - Menta Dance'">Menta Dance</title>
+    <th:block th:replace="~{fragments/head :: assets}"></th:block>
+</head>
+<body class="flex min-h-screen flex-col">
+<a href="#main"
+   class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-10 focus:rounded focus:bg-white focus:px-4 focus:py-2 focus:outline-white">Saltar al contenido</a>
+<th:block th:replace="~{fragments/campaign :: brand-header}"></th:block>
+<main id="main" tabindex="-1" class="flex-1 focus:outline-none" th:insert="${content}">Contenido</main>
+<th:block th:replace="~{fragments/campaign :: brand-footer}"></th:block>
 </body>
 </html>
 

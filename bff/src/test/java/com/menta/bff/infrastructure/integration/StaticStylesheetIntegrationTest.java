@@ -66,6 +66,26 @@ class StaticStylesheetIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("la hoja compilada incluye el realce al pasar el mouse y lo apaga con movimiento reducido")
+    void compiledStylesheetContainsHoverFeedback() throws Exception {
+        String css = mockMvc.perform(get("/css/app.css"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertThat(css).contains(".hover-lift:hover").contains(".hover-pop:hover").contains(".animate-pay-ring")
+                .contains("@keyframes pay-ring");
+        // Each moving effect is switched off for people who ask for less motion (WCAG 2.3.3).
+        for (String effect : new String[] {".hover-lift", ".hover-pop"}) {
+            assertThat(Pattern.compile("@media \\(prefers-reduced-motion:\\s*reduce\\)\\{[^@]*"
+                    + Pattern.quote(effect) + ":hover").matcher(css).find())
+                    .withFailMessage("%s has no reduced-motion override in the compiled stylesheet", effect)
+                    .isTrue();
+        }
+    }
+
+    @Test
     @DisplayName("/login enlaza una versión del stylesheet con hash de contenido y esa URL responde 200")
     void loginLinksTheVersionedStylesheet() throws Exception {
         String html = mockMvc.perform(get("/login"))

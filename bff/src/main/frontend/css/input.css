@@ -344,6 +344,18 @@
     }
   }
 
+  /*
+   * Dark call-to-action band of the temporary membership landing (#685). Like the hero, its focus ring is
+   * brand-light: the default green measures 1.94:1 against brand-deep.
+   */
+  .band-dark {
+    @apply rounded-xl bg-brand-deep p-8 text-center text-brand-surface;
+  }
+
+  .band-dark :focus-visible {
+    @apply outline-brand-light;
+  }
+
   .site-footer {
     @apply bg-brand-deep text-brand-surface/90;
   }
@@ -457,5 +469,22 @@
 
   .legal ul {
     @apply mb-3 list-disc space-y-1 pl-6;
+  }
+}
+
+/*
+ * Hover feedback of the campaign pages (#685): what is under the pointer stands out a little. They are
+ * separate classes, used only by the membership landing, so the site-wide .card and .btn do not change.
+ * Both stop moving for people who ask for less motion (WCAG 2.3.3).
+ */
+@layer components {
+  /* Blocks: a slight lift with a brand-green glow and a lighter border. */
+  .hover-lift {
+    @apply transition-all duration-300 ease-out hover:-translate-y-1 hover:border-brand-bright hover:shadow-lg hover:shadow-brand-action/20 motion-reduce:transition-none motion-reduce:hover:translate-y-0;
+  }
+
+  /* Buttons: a slight grow while hovered, and a press feedback when clicked. */
+  .hover-pop {
+    @apply transition-all duration-300 ease-out hover:-translate-y-0.5 hover:scale-[1.03] hover:shadow-lg active:translate-y-0 active:scale-95 motion-reduce:transition-none motion-reduce:hover:transform-none motion-reduce:active:transform-none;
   }
 }

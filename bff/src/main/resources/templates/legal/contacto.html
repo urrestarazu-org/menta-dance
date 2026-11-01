@@ -18,6 +18,7 @@
         </li>
         <li class="card" th:if="${contact.hasPhone()}">
             <h2 class="mt-0">Teléfono</h2>
+            <p class="font-semibold" th:if="${contact.hasName()}" th:text="${contact.name}">nombre</p>
             <p><a th:href="|tel:${contact.phoneHref()}|" th:text="${contact.phone}">teléfono</a></p>
         </li>
         <li class="card" th:if="${contact.hasAddress()}">

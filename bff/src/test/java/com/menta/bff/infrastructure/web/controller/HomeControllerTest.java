@@ -1,6 +1,7 @@
 package com.menta.bff.infrastructure.web.controller;
 
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
@@ -9,8 +10,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.menta.bff.application.usecase.CatalogView;
 import com.menta.bff.application.usecase.GetCatalogViewUseCase;
+import com.menta.bff.application.usecase.GetMembershipLandingViewUseCase;
+import com.menta.bff.application.usecase.MembershipLandingView;
 import com.menta.bff.domain.model.CourseModality;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -65,5 +69,44 @@ class HomeControllerTest {
                 .andExpect(model().attribute("catalog", catalog));
 
         verify(getCatalogViewUseCase).execute("physical");
+    }
+
+    @Test
+    @DisplayName("serves the membership landing instead of the catalog while the landing use case exists")
+    void servesTheMembershipLandingWhenEnabled() throws Exception {
+        GetMembershipLandingViewUseCase landingUseCase =
+                org.mockito.Mockito.mock(GetMembershipLandingViewUseCase.class);
+        MembershipLandingView landing = new MembershipLandingView(List.of(), false, "2026-11-01T15:30:00Z");
+        when(landingUseCase.execute()).thenReturn(landing);
+        View noOpView = (model, request, response) -> {};
+        MockMvc landingMvc = MockMvcBuilders
+                .standaloneSetup(new HomeController(getCatalogViewUseCase, Optional.of(landingUseCase)))
+                .setSingleView(noOpView)
+                .build();
+
+        landingMvc.perform(get("/"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("membership-landing"))
+                .andExpect(model().attribute("priceRows", landing.priceRows()))
+                .andExpect(model().attribute("salesClosed", false))
+                .andExpect(model().attribute("serverNow", "2026-11-01T15:30:00Z"));
+
+        verifyNoInteractions(getCatalogViewUseCase);
+    }
+
+    @Test
+    @DisplayName("keeps serving the catalog when there is no landing use case")
+    void servesTheCatalogWhenThereIsNoLanding() throws Exception {
+        CatalogView catalog = new CatalogView(List.of(), null, false);
+        when(getCatalogViewUseCase.execute(null)).thenReturn(catalog);
+        View noOpView = (model, request, response) -> {};
+        MockMvc plainMvc = MockMvcBuilders
+                .standaloneSetup(new HomeController(getCatalogViewUseCase, Optional.empty()))
+                .setSingleView(noOpView)
+                .build();
+
+        plainMvc.perform(get("/"))
+                .andExpect(view().name("index"))
+                .andExpect(model().attribute("catalog", catalog));
     }
 }

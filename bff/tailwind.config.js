@@ -59,6 +59,17 @@ module.exports = {
         subtitle: '24px',
         title: '36px',
       },
+      // Ring that pulses around the pay buttons of the membership landing (#685): it grows and fades,
+      // then rests for the rest of the cycle. Switched off with motion-reduce:animate-none.
+      animation: {
+        'pay-ring': 'pay-ring 2.8s ease-out infinite',
+      },
+      keyframes: {
+        'pay-ring': {
+          '0%': { transform: 'scale(1, 1)', opacity: '0.55' },
+          '55%, 100%': { transform: 'scale(1.06, 1.35)', opacity: '0' },
+        },
+      },
       fontFamily: {
         // Poppins is self-hosted (@font-face in input.css); the system stack
         // is the fallback while it loads or if it fails.

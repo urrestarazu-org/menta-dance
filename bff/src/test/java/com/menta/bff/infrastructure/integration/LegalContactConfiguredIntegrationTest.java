@@ -14,20 +14,22 @@ import org.springframework.test.context.TestPropertySource;
  */
 @DisplayName("Contact page with configured details Integration Tests")
 @TestPropertySource(properties = {
+    "menta.contact.name=Profe Ejemplo Apellido",
     "menta.contact.email=hola@example.test",
-    "menta.contact.phone=+00 0 000 000-0000",
+    "menta.contact.phone=cel. 000-0000000",
     "menta.contact.address=Calle Falsa 123, Ciudad Ejemplo"
 })
 class LegalContactConfiguredIntegrationTest extends BaseIntegrationTest {
 
     @Test
-    @DisplayName("muestra el email, el teléfono y el domicilio configurados")
+    @DisplayName("muestra el nombre, el email, el teléfono y el domicilio configurados")
     void showsTheConfiguredDetails() throws Exception {
         String main = HtmlSections.mainOf(mockMvc.perform(get("/contacto")).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
 
         assertThat(main).contains("href=\"mailto:hola@example.test\"");
-        assertThat(main).contains("href=\"tel:+0000000000000\"");
+        assertThat(main).contains("href=\"tel:0000000000\"").contains("cel. 000-0000000");
+        assertThat(main).contains("Profe Ejemplo Apellido");
         assertThat(main).contains("Calle Falsa 123, Ciudad Ejemplo");
         assertThat(main).doesNotContain("Datos de contacto pendientes");
     }

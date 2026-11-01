@@ -17,9 +17,15 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "menta.contact")
 public class ContactProperties {
 
+    private String name = "";
     private String email = "";
     private String phone = "";
     private String address = "";
+
+    /** Whether a contact person's name is configured. It is shown with the phone, never on its own. */
+    public boolean hasName() {
+        return !name.isBlank();
+    }
 
     /** Whether an email address is configured. */
     public boolean hasEmail() {
