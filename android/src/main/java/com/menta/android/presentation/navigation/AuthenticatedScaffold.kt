@@ -27,6 +27,7 @@ import kotlinx.coroutines.launch
 enum class StudentSection(@StringRes val label: Int) {
     Home(R.string.menu_section_home),
     MySessions(R.string.menu_section_my_sessions),
+    MyAttendance(R.string.menu_section_my_attendance),
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
