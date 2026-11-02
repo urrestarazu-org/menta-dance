@@ -21,8 +21,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * Proves V28 adds the NOT NULL {@code demo} flag to {@code auth_users} (default false), leaves every existing row
- * unflagged (even one whose email is a demo seed email: no email is hardcoded in a migration), and that the operator-only V28.1 rollback removes
- * the column again.
+ * unflagged (even one whose email is a demo seed email: no email is hardcoded in a migration), and that the
+ * operator-only V28.1 rollback removes the column again.
  *
  * <p>Drives Flyway directly (not a {@code @SpringBootTest}) because the app's
  * {@code integration-test} profile replaces Flyway with Hibernate {@code create-drop}.</p>

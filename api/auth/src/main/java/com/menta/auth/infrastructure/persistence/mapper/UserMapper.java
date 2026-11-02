@@ -17,7 +17,8 @@ public final class UserMapper {
     }
 
     /**
-     * Maps the user to its JPA entity, including status, token version, demo marker and profile (null columns when absent).
+     * Maps the user to its JPA entity, including status, token version, demo marker and profile (null columns
+     * when absent).
      *
      * @return the entity, or null when {@code user} is null
      */

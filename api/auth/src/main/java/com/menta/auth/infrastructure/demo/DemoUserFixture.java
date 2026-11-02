@@ -26,7 +26,8 @@ import org.springframework.stereotype.Component;
  * <p>Each user is upserted by email and keeps a fixed id from {@link DemoIds}, so other modules can refer to
  * it. Users it creates are flagged as demo, so no outgoing email is addressed to them. An existing user is never
  * modified: its password is not reset and its flag is left as is (a demo database seeded before V28
- * must be recreated, or flagged by hand). If the email exists with a different id, startup aborts because the database was not created by the demo seed. Passwords come from the
+ * must be recreated, or flagged by hand). If the email exists with a different id, startup aborts because the
+ * database was not created by the demo seed. Passwords come from the
  * {@code demo.users.*-password} properties (see {@code application-demo.yml}); no outbox event or email is
  * produced. The runner is intentionally not transactional.
  */
