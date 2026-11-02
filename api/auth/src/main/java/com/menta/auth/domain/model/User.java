@@ -21,6 +21,8 @@ public class User {
     private long tokenVersion;
     /** Personal data; absent for accounts that predate the profile (demo, admin, E2E and legacy rows). */
     private UserProfile profile;
+    /** Marks demo/test accounts so no outgoing email is addressed to them. Never set by registration. */
+    private boolean demo;
 
     public User(
         UserId id,
@@ -31,7 +33,7 @@ public class User {
         LocalDateTime createdAt,
         LocalDateTime updatedAt
     ) {
-        this(id, email, passwordHash, role, status, createdAt, updatedAt, DEFAULT_TOKEN_VERSION, null);
+        this(id, email, passwordHash, role, status, createdAt, updatedAt, DEFAULT_TOKEN_VERSION, null, false);
     }
 
     private User(
@@ -43,7 +45,8 @@ public class User {
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
         long tokenVersion,
-        UserProfile profile
+        UserProfile profile,
+        boolean demo
     ) {
         this.id = id;
         this.email = email;
@@ -54,6 +57,7 @@ public class User {
         this.updatedAt = updatedAt;
         this.tokenVersion = tokenVersion;
         this.profile = profile;
+        this.demo = demo;
     }
 
     /** Default token_version for newly-minted auth_users rows (ADR-0025 V2 DDL). */
@@ -76,7 +80,8 @@ public class User {
             now,
             now,
             DEFAULT_TOKEN_VERSION,
-            profile
+            profile,
+            false
         );
     }
 
@@ -94,7 +99,8 @@ public class User {
             now,
             now,
             DEFAULT_TOKEN_VERSION,
-            null
+            null,
+            false
         );
     }
 
@@ -116,7 +122,7 @@ public class User {
         LocalDateTime updatedAt,
         long tokenVersion
     ) {
-        return new User(id, email, passwordHash, role, status, createdAt, updatedAt, tokenVersion, null);
+        return new User(id, email, passwordHash, role, status, createdAt, updatedAt, tokenVersion, null, false);
     }
 
     /**
@@ -136,7 +142,29 @@ public class User {
         long tokenVersion,
         UserProfile profile
     ) {
-        return new User(id, email, passwordHash, role, status, createdAt, updatedAt, tokenVersion, profile);
+        return new User(id, email, passwordHash, role, status, createdAt, updatedAt, tokenVersion, profile, false);
+    }
+
+    /**
+     * Rebuilds a user from persisted state, including the demo/test marker.
+     *
+     * @param profile the stored profile, or {@code null} for accounts that never had one
+     * @param demo whether the account is a demo/test account that must receive no outgoing email
+     * @return the user as it was persisted
+     */
+    public static User rehydrate(
+        UserId id,
+        Email email,
+        String passwordHash,
+        Role role,
+        UserStatus status,
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt,
+        long tokenVersion,
+        UserProfile profile,
+        boolean demo
+    ) {
+        return new User(id, email, passwordHash, role, status, createdAt, updatedAt, tokenVersion, profile, demo);
     }
 
     /**
@@ -222,6 +250,13 @@ public class User {
 
     public long getTokenVersion() {
         return tokenVersion;
+    }
+
+    /**
+     * Whether this is a demo/test account. Demo accounts are never addressed by outgoing emails.
+     */
+    public boolean isDemo() {
+        return demo;
     }
 
     /**

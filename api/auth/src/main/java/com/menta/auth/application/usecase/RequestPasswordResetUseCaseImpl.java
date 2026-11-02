@@ -22,6 +22,8 @@ import com.menta.shared.domain.vo.Email;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Implementation of RequestPasswordResetUseCase (US-AUTH-005).
@@ -35,10 +37,14 @@ import java.util.Optional;
  * of statuses to exclude. Only an ACTIVE account causes a persistence
  * side-effect: prior active tokens are invalidated and a fresh one is issued,
  * mirroring {@code RegisterUserUseCaseImpl}'s generate/hash/encrypt/persist/
- * outbox sequence. Atomicity is NOT provided here: the caller MUST wrap this
+ * outbox sequence. A demo account (see {@link User#isDemo()}) is treated like a
+ * non-deliverable one: nothing is issued or enqueued, yet the response is the same.
+ * Atomicity is NOT provided here: the caller MUST wrap this
  * use case with a transactional decorator.</p>
  */
 public class RequestPasswordResetUseCaseImpl implements RequestPasswordResetUseCase {
+
+    private static final Logger log = LoggerFactory.getLogger(RequestPasswordResetUseCaseImpl.class);
 
     private final UserRepository userRepository;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
@@ -86,7 +92,13 @@ public class RequestPasswordResetUseCaseImpl implements RequestPasswordResetUseC
 
         Optional<User> maybeUser = userRepository.findByEmail(email);
         if (maybeUser.isPresent() && maybeUser.get().getStatus() == UserStatus.ACTIVE) {
-            issueResetToken(maybeUser.get());
+            if (maybeUser.get().isDemo()) {
+                // Demo accounts receive no email: issue no token and enqueue nothing. The caller still gets
+                // the uniform response, and the log line carries no identity data.
+                log.info("Password reset email skipped for a demo account");
+            } else {
+                issueResetToken(maybeUser.get());
+            }
         }
 
         // Uniform outcome: identical for nonexistent and any non-ACTIVE

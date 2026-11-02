@@ -71,6 +71,12 @@ public class UserJpaEntity {
     @Column(name = "birth_date")
     private LocalDate birthDate;
 
+    /** Demo/test account marker (V28); such accounts receive no outgoing email. */
+    @Getter
+    @Setter
+    @Column(name = "demo", nullable = false)
+    private boolean demo;
+
     // JPA requires default constructor
     protected UserJpaEntity() {
     }
@@ -89,6 +95,25 @@ public class UserJpaEntity {
         String phone,
         LocalDate birthDate
     ) {
+        this(id, email, passwordHash, role, status, createdAt, updatedAt, tokenVersion,
+            firstName, lastName, phone, birthDate, false);
+    }
+
+    public UserJpaEntity(
+        UUID id,
+        String email,
+        String passwordHash,
+        Role role,
+        UserStatus status,
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt,
+        long tokenVersion,
+        String firstName,
+        String lastName,
+        String phone,
+        LocalDate birthDate,
+        boolean demo
+    ) {
         this.id = id;
         this.email = email;
         this.passwordHash = passwordHash;
@@ -101,6 +126,7 @@ public class UserJpaEntity {
         this.lastName = lastName;
         this.phone = phone;
         this.birthDate = birthDate;
+        this.demo = demo;
     }
 
     // Getters and setters

@@ -227,6 +227,29 @@ class RequestPasswordResetUseCaseImplTest {
     }
 
     @Nested
+    @DisplayName("Cuenta demo")
+    class DemoAccount {
+
+        @Test
+        void active_demo_account_gets_the_same_acknowledged_result_but_no_token_and_no_email() {
+            allowRateLimit();
+            User demo = User.rehydrate(
+                UserId.generate(), Email.of(EMAIL), "hash", Role.STUDENT, UserStatus.ACTIVE,
+                LocalDateTime.now(), LocalDateTime.now(), 1L, null, true
+            );
+            when(userRepository.findByEmail(any())).thenReturn(Optional.of(demo));
+
+            RequestPasswordResetResult result = useCase.request(command());
+
+            assertThat(result).isEqualTo(RequestPasswordResetResult.ACKNOWLEDGED);
+            verify(passwordResetTokenRepository, never()).invalidateActiveByUserId(any(), any());
+            verify(passwordResetTokenRepository, never()).save(any(), any());
+            verify(passwordResetTokenGenerator, never()).generate();
+            verify(outboxAppender, never()).append(anyString(), anyString(), anyString());
+        }
+    }
+
+    @Nested
     @DisplayName("Rate limiting")
     class RateLimiting {
 

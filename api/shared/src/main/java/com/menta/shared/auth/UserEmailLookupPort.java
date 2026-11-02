@@ -19,7 +19,8 @@ public interface UserEmailLookupPort {
      * Email only: never a {@code User}, a name, a role, or a status.
      *
      * @param userId the candidate user identifier
-     * @return the resolved email, or {@code Optional.empty()} if no user with this id exists
+     * @return the resolved email, or {@code Optional.empty()} if no user with this id exists or the user
+     *     has no deliverable email (e.g. a demo user)
      */
     Optional<String> findEmailById(UUID userId);
 }

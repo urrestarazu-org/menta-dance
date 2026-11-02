@@ -28,6 +28,7 @@ public class UserEmailLookupAdapter implements UserEmailLookupPort {
     @Override
     public Optional<String> findEmailById(UUID userId) {
         return userRepository.findById(UserId.of(userId))
+            .filter(user -> !user.isDemo())
             .map(user -> user.getEmail().getValue());
     }
 }
