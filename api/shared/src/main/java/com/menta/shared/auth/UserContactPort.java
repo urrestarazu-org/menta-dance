@@ -23,7 +23,8 @@ public interface UserContactPort {
      * empty result so the caller can decide whether to skip the notification.</p>
      *
      * @param userId the user whose contact address is requested
-     * @return the user's current email, or {@link Optional#empty()} when no such user exists
+     * @return the user's current email, or {@link Optional#empty()} when no such user exists or the user
+     *     has no deliverable email (e.g. a demo user)
      */
     Optional<String> emailOf(UUID userId);
 }

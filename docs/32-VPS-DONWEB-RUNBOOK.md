@@ -753,6 +753,22 @@ Con la landing apagada no se valida nada. Los precios, cuotas y fechas se cambia
 
 **Cómo volver atrás.** Poner `MENTA_LANDING_MEMBERSHIP_ENABLED=false` (o quitar la variable) y reiniciar el BFF: `/` vuelve a la home del catálogo. Cuando termine la campaña se puede borrar la funcionalidad revirtiendo el PR de #685. No hay migraciones ni cambios en la API.
 
+### 2.13 Marcar o desmarcar un usuario de prueba (#698)
+
+`auth_users.demo` (migración V28) marca las cuentas de prueba: a un usuario con `demo = TRUE` no se le envía ningún correo saliente (avisos de pago de billing, activación de cuenta y recuperación de contraseña). Por defecto es `FALSE` y la migración no marca ninguna fila existente (no infiere nada del email). El perfil demo marca los usuarios que crea; una base demo local sembrada antes de V28 hay que recrearla o marcar a mano con el `UPDATE` de abajo. Un usuario de prueba creado a mano en producción **no** se marca solo: hay que hacerlo con SQL.
+
+El correo que va al buzón de operaciones por una compra en excepción **no** depende de esta marca y se sigue enviando. Hoy la marca **solo silencia correos**; la exclusión de los reportes llegará cuando exista el primer reporte a nivel de usuario.
+
+```bash
+# 1. Verificar la fila ANTES de tocar nada (que sea una sola y la cuenta correcta)
+docker exec menta-mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --user=root menta -e "SELECT email, role, status, demo FROM auth_users WHERE email = '"'"'prueba@ejemplo.com'"'"'"'
+
+# 2. Marcar (o desmarcar con FALSE); la consulta debe informar 1 fila afectada
+docker exec menta-mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --user=root menta -e "UPDATE auth_users SET demo = TRUE WHERE email = '"'"'prueba@ejemplo.com'"'"'"'
+```
+
+Equivalente en SQL: `UPDATE auth_users SET demo = TRUE WHERE email = '...'`. Cuidado: una cuenta marcada tampoco recibe el correo de recuperación de contraseña, así que antes de marcarla hay que tener a mano su contraseña. Para volver atrás, `SET demo = FALSE`. El cambio rige en el siguiente envío, sin reiniciar la API.
+
 ### Decisiones diferidas
 
 - **SSH con `root` y contraseña** (descartado por ahora, decisión del operador del 2026-10-16): sigue permitido. Endurecerlo (solo clave, sin `root`, puerto 22 cerrado en `sshd`) se descarta porque un error de configuración puede dejar al operador sin acceso al servidor, y el beneficio para esta demo no lo justifica. La defensa es fail2ban y el firewall del panel, que bloquea el 22. Si se retoma: en `/etc/ssh/sshd_config.d/` hay `custom.conf` (`PermitRootLogin yes`) y `80-step.conf` (origen desconocido, parece Smallstep); SSH arranca por socket de systemd (`ssh.socket`), así que cerrar el 22 se hace ahí y no en `sshd_config`. Antes de cambiar nada, confirmar el acceso con clave de `mentaadmin` desde otra terminal y mantener abierta la sesión actual.

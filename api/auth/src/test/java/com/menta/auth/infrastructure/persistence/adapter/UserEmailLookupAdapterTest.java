@@ -60,4 +60,17 @@ class UserEmailLookupAdapterTest {
 
         assertThat(email).isEmpty();
     }
+
+    @Test
+    void findEmailById_returns_empty_for_a_demo_user_because_it_has_no_deliverable_email() {
+        User demo = User.rehydrate(
+            UserId.of(USER_ID), Email.of("admin@menta.dance"), "hash", Role.ADMIN,
+            UserStatus.ACTIVE, LocalDateTime.now(), LocalDateTime.now(), 1L, null, true
+        );
+        when(userRepository.findById(UserId.of(USER_ID))).thenReturn(Optional.of(demo));
+
+        Optional<String> email = adapter.findEmailById(USER_ID);
+
+        assertThat(email).isEmpty();
+    }
 }

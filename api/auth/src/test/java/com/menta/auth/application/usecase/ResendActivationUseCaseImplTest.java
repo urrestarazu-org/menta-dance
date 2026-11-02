@@ -182,4 +182,19 @@ class ResendActivationUseCaseImplTest {
             .isEqualTo(pending)
             .isEqualTo(ResendActivationResult.ACKNOWLEDGED);
     }
+
+    @Test
+    void a_pending_demo_account_gets_the_same_response_but_no_token_and_no_email() {
+        allowRateLimit();
+        User demo = User.rehydrate(
+            UserId.generate(), Email.of(EMAIL), "hash", Role.STUDENT, UserStatus.PENDING_ACTIVATION,
+            LocalDateTime.now(), LocalDateTime.now(), 1L, null, true
+        );
+        when(userRepository.findByEmail(any())).thenReturn(Optional.of(demo));
+
+        ResendActivationResult result = useCase.resend(new ResendActivationCommand(EMAIL, "client-fp"));
+
+        assertThat(result).isEqualTo(ResendActivationResult.ACKNOWLEDGED);
+        verifyNoTokenIssuance();
+    }
 }

@@ -27,6 +27,8 @@ public class UserContactAdapter implements UserContactPort {
 
     @Override
     public Optional<String> emailOf(UUID userId) {
-        return userRepository.findById(UserId.of(userId)).map(user -> user.getEmail().getValue());
+        return userRepository.findById(UserId.of(userId))
+            .filter(user -> !user.isDemo())
+            .map(user -> user.getEmail().getValue());
     }
 }

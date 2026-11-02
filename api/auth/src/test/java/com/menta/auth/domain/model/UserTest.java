@@ -149,4 +149,30 @@ class UserTest {
 
         assertThat(user.toString()).doesNotContain("Ada").doesNotContain("Lovelace").doesNotContain("+5491100000000");
     }
+
+    @Test
+    void registered_and_created_users_are_never_demo() {
+        UserProfile profile = new UserProfile("Ada", "Lovelace", "+5491100000000", null);
+
+        assertThat(User.register(Email.of("student@example.com"), "hash", Role.STUDENT, profile).isDemo()).isFalse();
+        assertThat(User.create(Email.of("student@example.com"), "hash", Role.STUDENT).isDemo()).isFalse();
+        assertThat(activeUser().isDemo()).isFalse();
+    }
+
+    @Test
+    void rehydrate_without_the_flag_yields_a_non_demo_user_and_with_it_restores_it() {
+        LocalDateTime now = LocalDateTime.now();
+        UserId id = UserId.generate();
+        Email email = Email.of("student@example.com");
+
+        User withoutFlag = User.rehydrate(id, email, "hash", Role.STUDENT, UserStatus.ACTIVE, now, now, 3L);
+        User withProfileOnly = User.rehydrate(id, email, "hash", Role.STUDENT, UserStatus.ACTIVE, now, now, 3L, null);
+        User demo = User.rehydrate(id, email, "hash", Role.STUDENT, UserStatus.ACTIVE, now, now, 3L, null, true);
+        User notDemo = User.rehydrate(id, email, "hash", Role.STUDENT, UserStatus.ACTIVE, now, now, 3L, null, false);
+
+        assertThat(withoutFlag.isDemo()).isFalse();
+        assertThat(withProfileOnly.isDemo()).isFalse();
+        assertThat(demo.isDemo()).isTrue();
+        assertThat(notDemo.isDemo()).isFalse();
+    }
 }

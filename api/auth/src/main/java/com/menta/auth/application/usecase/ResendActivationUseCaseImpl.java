@@ -23,6 +23,8 @@ import com.menta.shared.domain.vo.Email;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Implementation of ResendActivationUseCase.
@@ -39,6 +41,8 @@ import java.util.Optional;
  * {@code TransactionalResendActivationUseCase}).</p>
  */
 public class ResendActivationUseCaseImpl implements ResendActivationUseCase {
+
+    private static final Logger log = LoggerFactory.getLogger(ResendActivationUseCaseImpl.class);
 
     private final UserRepository userRepository;
     private final ActivationTokenRepository activationTokenRepository;
@@ -86,7 +90,13 @@ public class ResendActivationUseCaseImpl implements ResendActivationUseCase {
 
         Optional<User> maybeUser = userRepository.findByEmail(email);
         if (maybeUser.isPresent() && maybeUser.get().getStatus() == UserStatus.PENDING_ACTIVATION) {
-            reissueActivationToken(maybeUser.get());
+            if (maybeUser.get().isDemo()) {
+                // Demo accounts receive no email: issue no token and enqueue nothing. The caller still gets
+                // the uniform response, and the log line carries no identity data.
+                log.info("Activation email skipped for a demo account");
+            } else {
+                reissueActivationToken(maybeUser.get());
+            }
         }
 
         // Uniform outcome: identical for nonexistent, already-active and

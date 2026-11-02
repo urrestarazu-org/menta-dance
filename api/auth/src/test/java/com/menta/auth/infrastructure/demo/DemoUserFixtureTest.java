@@ -66,6 +66,15 @@ class DemoUserFixtureTest {
     }
 
     @Test
+    void every_user_it_creates_is_flagged_as_demo() throws Exception {
+        fixture.run(new DefaultApplicationArguments());
+
+        ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+        verify(users, org.mockito.Mockito.times(4)).save(saved.capture());
+        assertThat(saved.getAllValues()).extracting(User::isDemo).containsOnly(true);
+    }
+
+    @Test
     void second_run_saves_nothing_and_does_not_reset_existing_passwords() throws Exception {
         for (User existing : List.of(
             existing(DemoIds.ADMIN_USER_ID, "admin@menta.dance", Role.ADMIN),

@@ -15,6 +15,11 @@ como valor y se validan mediante puertos; no se crean FKs ni `JOIN`s cruzados.
   y `birth_date DATE`. Las cuatro columnas admiten `NULL` porque las cuentas
   anteriores (admin, demo, E2E) no tienen perfil; el registro público exige
   nombre, apellido y teléfono, y la fecha de nacimiento es opcional.
+- `auth_users.demo BOOLEAN NOT NULL DEFAULT FALSE` (V28, #698) marca las cuentas
+  de prueba o demo: no reciben correos salientes. La migración no marca ninguna
+  fila (no hay backfill ni emails fijos en migraciones): el perfil demo marca los
+  usuarios que crea, así que una base demo local sembrada antes de V28 hay que
+  recrearla o marcarla a mano con el `UPDATE` de la sección 2.13 del runbook del VPS.
 - Roles iniciales: `ALUMNO`, `PROFESOR`, `RECEPCIONISTA`, `ADMIN`.
 - `auth_refresh_tokens`: `token_hash CHAR(64) UNIQUE`, `family_id`, `issued_at`,
   `expires_at`, `revoked_at`, `rotated_at` y metadatos de dispositivo.

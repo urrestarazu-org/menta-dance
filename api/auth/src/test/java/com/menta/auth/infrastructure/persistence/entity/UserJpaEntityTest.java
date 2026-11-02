@@ -71,4 +71,22 @@ class UserJpaEntityTest {
         assertThat(entity.getPhone()).isEqualTo("+12025550100");
         assertThat(entity.getBirthDate()).isEqualTo(BIRTH_DATE.plusDays(1));
     }
+
+    @Test
+    void the_demo_flag_defaults_to_false_and_is_supplied_by_the_demo_constructor() {
+        UserJpaEntity regular = new UserJpaEntity(
+            ID, "student@example.com", "hashed-password", Role.STUDENT, UserStatus.ACTIVE,
+            CREATED_AT, UPDATED_AT, 1L, null, null, null, null
+        );
+        UserJpaEntity demo = new UserJpaEntity(
+            ID, "demo@example.com", "hashed-password", Role.STUDENT, UserStatus.ACTIVE,
+            CREATED_AT, UPDATED_AT, 1L, null, null, null, null, true
+        );
+
+        assertThat(regular.isDemo()).isFalse();
+        assertThat(demo.isDemo()).isTrue();
+
+        regular.setDemo(true);
+        assertThat(regular.isDemo()).isTrue();
+    }
 }

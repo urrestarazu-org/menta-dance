@@ -132,4 +132,34 @@ class UserMapperTest {
         assertThat(reloaded.getProfile())
             .contains(new UserProfile("Ada", "Lovelace", "+5491100000000", LocalDate.of(1990, 5, 17)));
     }
+
+    @Test
+    void maps_the_demo_flag_in_both_directions() {
+        User demoUser = User.rehydrate(
+            UserId.of(USER_ID), Email.of("demo@example.com"), "password-hash", Role.ADMIN,
+            UserStatus.ACTIVE, CREATED_AT, UPDATED_AT, 1L, null, true
+        );
+
+        UserJpaEntity persisted = UserMapper.toJpaEntity(demoUser);
+        User reloaded = UserMapper.toDomain(persisted);
+
+        assertThat(persisted.isDemo()).isTrue();
+        assertThat(reloaded.isDemo()).isTrue();
+    }
+
+    @Test
+    void a_user_without_the_flag_maps_to_a_non_demo_column_and_back() {
+        User user = User.rehydrate(
+            UserId.of(USER_ID), Email.of("student@example.com"), "password-hash", Role.STUDENT,
+            UserStatus.ACTIVE, CREATED_AT, UPDATED_AT, 1L
+        );
+        UserJpaEntity legacyConstructor = new UserJpaEntity(
+            USER_ID, "student@example.com", "password-hash", Role.STUDENT, UserStatus.ACTIVE,
+            CREATED_AT, UPDATED_AT, 1L, null, null, null, null
+        );
+
+        assertThat(UserMapper.toJpaEntity(user).isDemo()).isFalse();
+        assertThat(legacyConstructor.isDemo()).isFalse();
+        assertThat(UserMapper.toDomain(legacyConstructor).isDemo()).isFalse();
+    }
 }
