@@ -1,5 +1,6 @@
 package com.menta.app.integration.support;
 
+import com.menta.testsupport.MySqlTestImage;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.MySQLContainer;
@@ -28,7 +29,7 @@ import org.testcontainers.utility.MountableFile;
  */
 public abstract class AbstractBillingMySqlIntegrationTest {
 
-    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.46")
+    static final MySQLContainer<?> MYSQL = new MySQLContainer<>(MySqlTestImage.NAME)
         .withDatabaseName("menta_test")
         .withUsername("test")
         .withPassword("test")

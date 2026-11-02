@@ -3,6 +3,7 @@ package com.menta.app.integration.billing;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.menta.testsupport.MySqlTestImage;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.sql.Connection;
@@ -43,7 +44,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class PurchaseSessionsMigrationIntegrationTest {
 
     @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.46")
+    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>(MySqlTestImage.NAME)
         .withDatabaseName("menta_migration_test")
         .withUsername("test")
         .withPassword("test");

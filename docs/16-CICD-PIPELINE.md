@@ -187,7 +187,7 @@ no requieren aprobación humana y los de `feature/*` a `develop` se integran con
 ## Imágenes de contenedor
 
 Las imágenes que se **descargan** de un registro se fijan a un **tag de versión
-exacta** (`mysql:8.0.46`, `redis:7.4.11-alpine`,
+exacta** (`mysql:8.4.11`, `redis:7.4.11-alpine`,
 `eclipse-temurin:21.0.12.1_1-jre-alpine-3.23`), no a una línea flotante
 (`mysql:8.0`, `redis:7-alpine`, `21-jre-alpine`) ni a `latest`. Rige en todos los
 lugares donde aparece una imagen: los `docker-compose*.yml`, los `FROM` de los
@@ -227,10 +227,16 @@ porque son imágenes que **se construyen localmente** y no se descargan de un
 registro. En producción se despliega el **digest inmutable** de la imagen
 publicada, nunca un tag (ver "Release a producción").
 
-**Deuda conocida:** `mysql:8.0.46` es la última versión de una línea que llegó a
-fin de vida el 2026-04-30 (#449). El tag exacto solo da reproducibilidad; no
-resuelve el soporte. Además, el literal de la imagen de MySQL está repetido en
-15 tests de integración y Dependabot no lo ve (#409).
+**MySQL único en todos los entornos (#449).** Producción, los `docker-compose*.yml`
+locales y los tests de Testcontainers usan la misma imagen, `mysql:8.4.11` (línea LTS).
+La imagen de los tests vive en una sola constante, `MySqlTestImage`
+(`config/test-support/java/`), que Gradle compila en el código de test de cada módulo
+`:api:*`. `scripts/verify-local-infrastructure-contract.sh` (parte de `./gradlew check`)
+falla si algún compose se separa de esa constante o vuelve a `8.0`. Ver ADR-0027.
+
+**Deuda conocida:** Dependabot no ve el literal de la imagen de MySQL ni en la
+constante de tests (#409); subir de versión es un cambio manual en los cuatro compose, el
+compose de producción y `MySqlTestImage`.
 
 ## Escaneo de imágenes (Trivy)
 

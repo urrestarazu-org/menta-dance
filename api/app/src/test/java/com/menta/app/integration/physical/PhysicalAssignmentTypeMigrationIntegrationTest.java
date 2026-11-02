@@ -3,6 +3,7 @@ package com.menta.app.integration.physical;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.menta.testsupport.MySqlTestImage;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -31,7 +32,7 @@ class PhysicalAssignmentTypeMigrationIntegrationTest {
     private static final String TABLE = "physical_capacity_assignments";
 
     @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.46")
+    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>(MySqlTestImage.NAME)
         .withDatabaseName("menta_migration_test")
         .withUsername("test")
         .withPassword("test");

@@ -6,6 +6,7 @@ import com.menta.billing.domain.model.PaymentId;
 import com.menta.billing.domain.model.PaymentProof;
 import com.menta.billing.infrastructure.persistence.entity.PaymentProofJpaEntity;
 import com.menta.billing.infrastructure.persistence.repository.PaymentProofJpaRepository;
+import com.menta.testsupport.MySqlTestImage;
 import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,7 +38,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class PaymentProofRepositoryAdapterTest {
 
     @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.46")
+    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>(MySqlTestImage.NAME)
         .withDatabaseName("menta_billing_payment_proofs_test")
         .withUsername("test")
         .withPassword("test");

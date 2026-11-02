@@ -8,6 +8,7 @@ import com.menta.physical.domain.model.DeviceStatus;
 import com.menta.physical.domain.model.PhysicalDevice;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalDeviceJpaEntity;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalDeviceJpaRepository;
+import com.menta.testsupport.MySqlTestImage;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,7 +26,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
- * #44, US-PHYSICAL-007, design C3/C8 -- real MySQL 8.0, mirrors {@code
+ * #44, US-PHYSICAL-007, design C3/C8 -- real MySQL, mirrors {@code
  * PhysicalCapacityAssignmentRepositoryAdapterTest}: the {@code uq_physical_devices_secret_hash}
  * unique-constraint round trip needs real database semantics, not Mockito.
  */
@@ -36,7 +37,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class PhysicalDeviceRepositoryAdapterTest {
 
     @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.46")
+    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>(MySqlTestImage.NAME)
         .withDatabaseName("menta_physical_device_test")
         .withUsername("test")
         .withPassword("test");

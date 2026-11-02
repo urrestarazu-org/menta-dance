@@ -2,6 +2,7 @@ package com.menta.app.integration.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.menta.testsupport.MySqlTestImage;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -36,7 +37,7 @@ class AuthUserDemoFlagMigrationIntegrationTest {
         "admin@menta.dance", "profesor@menta.dance", "alumno@menta.dance", "recepcion@menta.dance");
 
     @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.46")
+    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>(MySqlTestImage.NAME)
         .withDatabaseName("menta_migration_test")
         .withUsername("test")
         .withPassword("test");

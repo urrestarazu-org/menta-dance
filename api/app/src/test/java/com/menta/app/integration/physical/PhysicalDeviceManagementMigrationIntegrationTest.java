@@ -2,6 +2,7 @@ package com.menta.app.integration.physical;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.menta.testsupport.MySqlTestImage;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -31,7 +32,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class PhysicalDeviceManagementMigrationIntegrationTest {
 
     @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.46")
+    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>(MySqlTestImage.NAME)
         .withDatabaseName("menta_device_migration_test")
         .withUsername("test")
         .withPassword("test");
