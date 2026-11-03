@@ -4,7 +4,8 @@ Esta carpeta contiene los workflows de CI/CD optimizados para GitFlow.
 
 ## Estrategia
 
-Tenemos dos workflows de PR, que se ejecutan según el branch target, y uno de release, que se ejecuta con un tag:
+Tenemos dos workflows de PR, que se ejecutan según el branch target; uno que crea el tag al mergear un
+release a `main`, y uno de release, que se ejecuta sobre ese tag:
 
 ### 1. `pr-develop.yml` - Fast Feedback
 
@@ -59,7 +60,9 @@ rama debe permitir únicamente `release/*` y `hotfix/*` como ramas fuente.
 
 ### 3. `release.yml` - Release a producción
 
-**Triggers**: push de un tag `v*.*.*` (el workflow valida `vX.Y.Z[-sufijo]`).
+**Triggers**: push de un tag `v*.*.*` (tags manuales, como los pre-releases) o
+`workflow_dispatch` sobre un tag (`gh workflow run release.yml --ref vX.Y.Z`), que es como lo
+lanza `release-tag.yml`. El workflow valida `vX.Y.Z[-sufijo]` y falla si se lanza sobre una rama.
 
 **Objetivo**: construir una vez, escanear, publicar por digest y desplegar.
 
@@ -80,6 +83,27 @@ secretos y contrato con `deploy.sh` en `docs/16-CICD-PIPELINE.md`.
 
 ---
 
+### 4. `release-tag.yml` - Tag de release automático
+
+**Triggers**: PR hacia `main` cerrado (`pull_request: closed`); el job solo corre si se
+mergeó, desde una rama `release/*` o `hotfix/*` del propio repositorio.
+
+**Objetivo**: que el tag de un release estable no se cree a mano (#639).
+
+**Job** `tag`:
+- ✅ Comprueba que el commit del merge está en `main`.
+- ✅ Saca la versión del nombre de la rama con `scripts/resolve-release-version.sh`
+  (`release/X.Y.Z` o `hotfix/X.Y.Z`, sin sufijo); un nombre inválido falla sin crear nada.
+- ✅ Falla si el tag ya existe: nunca lo pisa, lo mueve ni lo borra.
+- ✅ Crea el tag anotado `vX.Y.Z` sobre el commit del merge, lo empuja y lanza
+  `release.yml` con `workflow_dispatch` (un tag empujado con el `GITHUB_TOKEN` no dispara
+  `on: push`). No usa PAT ni GitHub App.
+
+Los pre-releases (`vX.Y.Z-rc.N`) siguen siendo manuales. Detalle y recuperación si
+`release.yml` no arranca en `docs/16-CICD-PIPELINE.md`, "Crear y publicar el tag".
+
+---
+
 ## Flujo GitFlow
 
 ```
@@ -87,8 +111,10 @@ feature/* → develop (pr-develop.yml ejecuta)
               ↓
           release/* → main (pr-main.yml ejecuta)
           hotfix/*  → main (pr-main.yml ejecuta)
-                       ↓
-                    tag vX.Y.Z (release.yml ejecuta)
+                       ↓ merge
+                    tag vX.Y.Z (release-tag.yml lo crea)
+                       ↓ workflow_dispatch
+                    release.yml ejecuta
 ```
 
 ## Migración de branch protection

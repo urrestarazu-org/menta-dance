@@ -290,7 +290,8 @@ jobs:
             koalaman/shellcheck:v0.11.0 \
             infra/docker/manage.sh infra/docker/deploy.sh infra/docker/quick-deploy.sh \
             infra/docker/prod/deploy.sh infra/docker/prod/deploy.test.sh \
-            infra/docker/prod/backup.sh infra/docker/prod/backup.test.sh
+            infra/docker/prod/backup.sh infra/docker/prod/backup.test.sh \
+            scripts/resolve-release-version.sh scripts/resolve-release-version.test.sh
 
       - name: Test production deploy script
         # Prueba infra/docker/prod/deploy.sh (#593) con un docker falso: validación de digests,
@@ -301,6 +302,11 @@ jobs:
         # Prueba infra/docker/prod/backup.sh (#594) con docker y curl falsos: verificación del volcado,
         # retención, orden de los pasos, aviso al monitor y lock. No usa Docker real ni la red.
         run: bash infra/docker/prod/backup.test.sh
+
+      - name: Test release version script
+        # Prueba scripts/resolve-release-version.sh (#639): la versión que release-tag.yml saca del
+        # nombre de la rama release/* o hotfix/*, y el rechazo de nombres inválidos o con comandos.
+        run: bash scripts/resolve-release-version.test.sh
 
   # Hadolint: Dockerfile linter (best practices + security)
   hadolint:
