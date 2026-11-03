@@ -697,11 +697,26 @@ para un release estable o el `rc.N` siguiente para un pre-release. Así pasó co
 Trivy rechazó las imágenes, el tag quedó sin Release y la prueba siguió en `v0.2.0-rc.2`
 (runbook, sección 2.10).
 
-El repositorio no tiene rulesets (la consulta a la API de rulesets devolvió una lista vacía
-el 2026-11-03) y la consulta a la protección legada de tags respondió 404, que no
-alcanza para afirmar que no exista. No se comprobó, entonces, que algo impida técnicamente
-mover o borrar un tag `v*`: la regla anterior se cumple por proceso. Proteger esos tags con un
-ruleset está pendiente de decidir.
+**Protección de los tags `v*`.** Un ruleset de GitHub ("Proteger tags de release (v*)", tipo
+tag, sobre `refs/tags/v*`) bloquea borrar un tag (`deletion`), moverlo (`update`) y reescribirlo
+con force push (`non_fast_forward`). No tiene actores de bypass, así que rige también para
+quien administra el repositorio: se probó el 2026-11-03 con un tag de prueba y tanto
+`git push origin :refs/tags/<tag>` como `git push --force` fueron rechazados
+(`push declined due to repository rule violations`). No incluye la regla `creation`, para que
+`git push origin vX.Y.Z` de un tag nuevo, el que dispara `release.yml`, siga funcionando (también
+se probó). Antes de este ruleset (#703) no había ninguna protección: no existían rulesets y la
+protección legada de tags, que GitHub migró a rulesets en agosto de 2024, ya no responde por API.
+
+La definición está en `.github/rulesets/protect-release-tags.json`. Para recrearla en otro
+repositorio o tras borrarla: `gh api -X POST repos/<owner>/<repo>/rulesets --input
+.github/rulesets/protect-release-tags.json`. Si hay que cambiarla, se edita en Settings → Rules →
+Rulesets y se actualiza ese archivo. Si de verdad hay que borrar un tag (uno de prueba, por
+ejemplo), se desactiva el ruleset a propósito
+(`gh api -X PUT repos/<owner>/<repo>/rulesets/<id> -f enforcement=disabled`; el `<id>` sale de
+`gh api repos/<owner>/<repo>/rulesets`), se borra y se vuelve a activar con
+`-f enforcement=active` (así se limpiaron los tags de prueba de #703). Consecuencia buscada: un tag de
+release publicado con un error no se puede borrar y el error queda en el historial; se corrige
+con la versión siguiente.
 
 ### Configuración en GitHub (una vez)
 
