@@ -591,9 +591,20 @@ GitHub Release.
 
 > **Estado:** `release.yml` (#592) y `deploy.sh` (#593) están en el repositorio. El job `deploy` necesita además que `deploy.sh` esté instalado en el servidor y los secretos del Environment `production` (ver "Configuración en GitHub" y el runbook, sección 2.10); hasta entonces solo se puede probar con un tag con sufijo (`v0.1.0-rc.1`), que publica sin desplegar.
 
+**El camino completo, en pocas líneas.** El tag `vX.Y.Z` dispara `release.yml`: compila
+los JAR de la API y del BFF una sola vez, construye las imágenes copiándolos, las escanea con
+Trivy y recién entonces las publica en GHCR, donde se lee el digest de cada una. Con esos
+digests crea la GitHub Release (con los dos JAR) y el job `deploy` entra por SSH al VPS y
+ejecuta `deploy.sh`, que levanta las imágenes por digest, nunca por tag. Cada tramo se detalla
+en otro lado: [Crear y publicar el tag](#crear-y-publicar-el-tag),
+[Contrato con `deploy.sh`](#contrato-con-deploysh), [Rollback](#rollback) y, en el runbook del
+VPS, [2.7 Lectura de imágenes desde GHCR](32-VPS-DONWEB-RUNBOOK.md#27-lectura-de-imágenes-desde-ghcr)
+y [2.10 Despliegue con deploy.sh](32-VPS-DONWEB-RUNBOOK.md#210-despliegue-con-deploysh-593).
+
 Tras el merge `release/* -> main` o `hotfix/* -> main`, se crea el tag SemVer
-`vX.Y.Z` sobre `main`. Ese tag dispara el workflow de release
-(`.github/workflows/release.yml`), que encadena cuatro jobs:
+`vX.Y.Z` sobre `main` (procedimiento en [Crear y publicar el tag](#crear-y-publicar-el-tag)).
+Ese tag dispara el workflow de release (`.github/workflows/release.yml`), que encadena
+cuatro jobs:
 
 1. **`build`**: valida el formato del tag, comprueba que un tag estable apunta a un
    commit de `main` y corre `build` (tests, Checkstyle y cobertura) de los módulos
@@ -622,6 +633,75 @@ empujarlo.
 Cada job declara los permisos mínimos: `build` y `publish` leen el contenido,
 `publish` además escribe paquetes, `release` escribe contenido y `deploy` no usa el
 `GITHUB_TOKEN`. Las acciones están fijadas por SHA.
+
+### Crear y publicar el tag
+
+El tag se crea a mano, después de mergear a `main` el PR `release/*` o `hotfix/*` (con
+"Create a merge commit", ver "Git Flow y releases"). Quien lo publica necesita permiso de
+push al repositorio. Es el último paso antes del backport de `main` a `develop`.
+
+```bash
+git fetch origin --tags
+git rev-list --parents -n1 origin/main      # <hash del merge> <padre 1> <padre 2>
+git tag -a vX.Y.Z <hash del merge> -m "vX.Y.Z"
+git push origin vX.Y.Z
+```
+
+1. `git fetch origin --tags` trae `main` y los tags existentes, para no etiquetar sobre una
+   copia vieja de `main` ni repetir un número.
+2. `git rev-list --parents -n1 origin/main` imprime el commit en el que está `main` seguido
+   de sus padres. Tienen que aparecer **tres hashes**: el primero es el merge commit del
+   release y los otros dos, los padres (la punta de `main` anterior y la de la rama de
+   release). Si aparecen dos, el último commit de `main` no es un merge: algo se mergeó con
+   squash o con rebase, o `main` avanzó después del release, y hay que revisar antes de
+   etiquetar. El primer hash es el que va en el comando siguiente.
+3. `git tag -a vX.Y.Z <hash> -m "vX.Y.Z"` crea el tag **anotado** sobre ese commit.
+4. `git push origin vX.Y.Z` lo sube. Para seguir el release:
+   `gh run list --workflow release.yml --limit 1`.
+
+**Por qué anotado (`-a`).** Los seis tags del repositorio (`v0.1.0` a `v0.3.0`, incluidos los
+`rc`) son anotados, y se mantiene la convención: un tag anotado es un objeto con autor,
+fecha y mensaje, y es el que `git describe` toma por defecto; uno liviano es solo un puntero
+a un commit. `release.yml` funciona con los dos (`gh release create --verify-tag` solo
+comprueba que el tag exista), así que es una regla de consistencia, no del workflow.
+
+**Por qué el hash explícito.** Sin él, `git tag` etiqueta el `HEAD` de la copia local, que
+puede ser `develop`, una rama de trabajo o un `main` desactualizado. El workflow no lo
+atrapa: para un tag estable solo exige que el commit sea **ancestro** de `main`
+(`git merge-base --is-ancestor`), no que sea el merge commit ni la punta. Como la rama
+de release sale de `develop` y se mergea a `main`, la punta de `develop` (si no avanzó desde
+entonces) es ancestro de `main`: pasa la verificación y la versión se publicaría sobre el
+commit equivocado. Por eso el
+paso 2 se hace a mano.
+
+**`git push` no sube los tags.** Un `git push` común envía ramas, no tags: el tag solo viaja
+si se nombra (`git push origin vX.Y.Z`). No conviene `git push --tags`, que sube todos los
+tags locales, incluidos los que no se quieren publicar. El push del tag es lo que dispara
+`release.yml` (`on.push.tags: v*.*.*`); el workflow además valida el formato
+`vX.Y.Z[-sufijo]` y rechaza un tag estable cuyo commit no esté en `main`, y en ese caso falla
+el job `build` y no se publica nada.
+
+**Pre-releases.** Un tag con sufijo, `vX.Y.Z-rc.N`, publica las imágenes y una GitHub Release
+marcada como pre-release, pero no despliega: sirve para probar el pipeline sin tocar
+producción. Puede salir de una rama `release/*`, así que en vez del merge commit de `main`
+se etiqueta la punta de la rama (`git rev-parse origin/release/X.Y.Z`). El procedimiento es
+el mismo, con `-m "vX.Y.Z-rc.N"`.
+
+**Un tag publicado no se mueve ni se reescribe.** No se usa `git tag -f`, ni se borra y se
+vuelve a subir, ni `git push --force` sobre un tag. La imagen, los JAR y la GitHub Release ya
+salieron de ese commit y el deploy referencia digests; un tag que cambia de commit hace que
+el nombre diga una cosa y lo publicado, otra. Además `git fetch` no actualiza un tag que ya
+existe en la copia local, así que cada clon quedaría apuntando a un commit distinto. Si el tag
+quedó mal, o el workflow falló, se corrige lo que haga falta y se crea uno nuevo: `vX.Y.Z+1`
+para un release estable o el `rc.N` siguiente para un pre-release. Así pasó con `v0.2.0-rc.1`:
+Trivy rechazó las imágenes, el tag quedó sin Release y la prueba siguió en `v0.2.0-rc.2`
+(runbook, sección 2.10).
+
+El repositorio no tiene rulesets (la consulta a la API de rulesets devolvió una lista vacía
+el 2026-11-03) y la consulta a la protección legada de tags respondió 404, que no
+alcanza para afirmar que no exista. No se comprobó, entonces, que algo impida técnicamente
+mover o borrar un tag `v*`: la regla anterior se cumple por proceso. Proteger esos tags con un
+ruleset está pendiente de decidir.
 
 ### Configuración en GitHub (una vez)
 
@@ -652,6 +732,13 @@ se suma más gente, conviene encenderlo.
 La primera vez que se publican las imágenes, GHCR crea los paquetes `menta-api` y
 `menta-bff` vinculados al repositorio por la etiqueta `org.opencontainers.image.source`.
 El servidor las lee con el PAT de solo lectura de la sección 2.7 del runbook.
+
+Los paquetes no se pueden descargar sin credenciales. El 2026-11-03 se pidió al registro un
+token anónimo de lectura (`https://ghcr.io/token?scope=repository:urrestarazu-org/menta-api:pull`,
+y lo mismo para `menta-bff`): respondió `401 authentication required`, mientras que un
+paquete público de control (`github/super-linter`) devolvió 200. La configuración exacta de
+visibilidad de cada paquete no se consultó por la API de paquetes, porque pide un token con
+`read:packages` que la sesión de `gh` no tenía.
 
 ### Contrato con `deploy.sh`
 
