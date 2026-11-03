@@ -247,6 +247,8 @@ chmod 600 ~/.docker/config.json
 
 Verificado el 2026-10-18, antes del primer despliegue: como `deploy`, `grep -c 'ghcr.io' ~/.docker/config.json` dio `1`. Al desplegar, `docker compose pull` bajó las dos imágenes de GHCR sin errores de autenticación.
 
+**Por qué hace falta el token.** Los paquetes `menta-api` y `menta-bff` no se pueden descargar sin credenciales: el 2026-11-03 el registro respondió `401` a un token anónimo de lectura, mientras que un paquete público de control respondió 200. La comprobación y su alcance (no se consultó la visibilidad exacta por la API de paquetes) están en `docs/16-CICD-PIPELINE.md`, sección "Configuración en GitHub". Si `docker compose pull` falla por autenticación, lo primero que hay que revisar es que el token siga vigente y que `~/.docker/config.json` conserve la entrada de `ghcr.io`.
+
 #### Docker Hub (límite de descargas anónimas)
 
 **Qué pasó (2026-10-17).** La primera descarga de `rclone/rclone` en el VPS falló con `toomanyrequests: You have reached your unauthenticated pull rate limit`. Según la documentación de Docker Hub, sin iniciar sesión el límite es de **100 descargas cada 6 horas por dirección IPv4 (o subred IPv6 /64)**, y de **200 por cuenta** gratuita autenticada. En un VPS la IP puede estar compartida o ya consumida, así que el límite se agota sin haber descargado nada. Importa más allá de `rclone`: el compose de producción baja `mysql`, `redis` y `nginx` de Docker Hub en el primer despliegue, y podría fallar igual.
