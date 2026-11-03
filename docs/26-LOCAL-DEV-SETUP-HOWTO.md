@@ -461,7 +461,7 @@ Ejecutar el script de inicio:
 ```
 
 Esto levantará:
-- **MySQL 8.0** en puerto `3306`
+- **MySQL 8.4** en puerto `3306`
 - **Redis 7.4** en puerto `6379`
 - **OpenTelemetry Collector** en puertos `4317` (gRPC) y `4318` (HTTP)
 - **Loki** en puerto `3100` (logs)

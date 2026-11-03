@@ -14,6 +14,7 @@ import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacity
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
 import com.menta.shared.physical.AssignmentType;
+import com.menta.testsupport.MySqlTestImage;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
@@ -33,7 +34,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
- * #39, US-PHYSICAL-002, design C1/C5 — real MySQL 8.0, mirrors {@code
+ * #39, US-PHYSICAL-002, design C1/C5 — real MySQL, mirrors {@code
  * LessonProgressRepositoryAdapterProjectionTest} in {@code api/virtual}: half-open {@code
  * Instant} bounds and the explicit entity join with a nullable {@code professorId} parameter
  * need real database semantics, not Mockito.
@@ -45,7 +46,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class PhysicalCapacityAssignmentRepositoryAdapterTest {
 
     @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.46")
+    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>(MySqlTestImage.NAME)
         .withDatabaseName("menta_physical_attendance_test")
         .withUsername("test")
         .withPassword("test");

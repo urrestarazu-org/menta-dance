@@ -33,6 +33,7 @@ import com.menta.billing.infrastructure.proof.ProofAccessTokenSigner;
 import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
 import com.menta.physical.application.port.out.CheckInRateLimitPort;
 import com.menta.shared.domain.vo.Email;
+import com.menta.testsupport.MySqlTestImage;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
@@ -79,7 +80,7 @@ class PaymentProofIntegrationTest {
     private static final byte[] PROOF_CONTENT = {(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A};
 
     @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.46")
+    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>(MySqlTestImage.NAME)
         .withDatabaseName("menta_test")
         .withUsername("test")
         .withPassword("test");

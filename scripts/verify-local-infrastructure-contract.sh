@@ -43,4 +43,17 @@ require 'schemas: menta' api/app/src/main/resources/application.yml
 require 'CREATE TABLE auth_users' api/app/src/main/resources/db/migration/V1__baseline.sql
 reject 'name: admin|password: admin' bff/src/main/resources/application.yml
 
+# MySQL engine alignment (#449): production, local compose files and Testcontainers tests must run the
+# same pinned image. The test image lives in one constant; every compose file must match it.
+test_image=$(grep -Eo 'NAME = "mysql:[0-9]+\.[0-9]+\.[0-9]+"' config/test-support/java/com/menta/testsupport/MySqlTestImage.java | grep -Eo 'mysql:[0-9.]+')
+if [ -z "$test_image" ]; then
+    echo "Local infrastructure contract violation: pinned MySQL image not found in MySqlTestImage.java" >&2
+    exit 1
+fi
+for compose in docker-compose.yml infra/docker/app/docker-compose.yml infra/docker/database/docker-compose.yml \
+    infra/docker/nginx/docker-compose.yml infra/docker/prod/docker-compose.prod.yml; do
+    require "^[[:space:]]+image: ${test_image}$" "$compose"
+    reject 'image: mysql:(latest|8\.0\.)' "$compose"
+done
+
 printf '%s\n' 'Local infrastructure contract verified.'

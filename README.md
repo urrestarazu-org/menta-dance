@@ -36,9 +36,9 @@ Las academias de danza suelen operar con herramientas fragmentadas: WhatsApp par
 | Java | 21 (LTS) | Lenguaje principal |
 | Spring Boot | 3.x | Framework de aplicación |
 | Gradle | 8.x (Kotlin DSL) | Build system |
-| MySQL | 8.0 | Base de datos principal |
+| MySQL | 8.4 LTS | Base de datos principal |
 | Redis | 7.x | Cache, locks y blacklist de tokens |
-| Flyway | 10.x | Migraciones de base de datos |
+| Flyway | 11.x | Migraciones de base de datos |
 | JUnit 5 | 5.x | Testing unitario |
 | Testcontainers | 1.x | Testing de integración |
 | ArchUnit | 1.x | Validación de arquitectura |
@@ -156,7 +156,7 @@ BUNNY_LIBRARY_ID=xxx
 ```
 
 Esto levanta:
-- **Infraestructura**: MySQL 8, Redis, OpenTelemetry, Loki, Grafana
+- **Infraestructura**: MySQL 8.4, Redis, OpenTelemetry, Loki, Grafana
 - **API**: Spring Boot en puerto `8081`
 - **BFF**: Frontend web en puerto `8080`
 

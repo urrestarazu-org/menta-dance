@@ -10,6 +10,7 @@ import com.menta.physical.infrastructure.persistence.entity.PhysicalDeviceJpaEnt
 import com.menta.physical.infrastructure.persistence.mapper.PhysicalDeviceJpaMapper;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalDeviceAuditJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalDeviceJpaRepository;
+import com.menta.testsupport.MySqlTestImage;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -28,7 +29,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
- * #44, US-PHYSICAL-007, design C4/C8 -- real MySQL 8.0, mirrors {@code
+ * #44, US-PHYSICAL-007, design C4/C8 -- real MySQL, mirrors {@code
  * VirtualCourseAuditRepositoryAdapterTest}: append-only semantics and the {@code
  * fk_physical_device_audit_device} foreign key need real database semantics, not Mockito.
  */
@@ -39,7 +40,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class PhysicalDeviceAuditRepositoryAdapterTest {
 
     @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.46")
+    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>(MySqlTestImage.NAME)
         .withDatabaseName("menta_physical_device_audit_test")
         .withUsername("test")
         .withPassword("test");

@@ -16,7 +16,7 @@ Instalación: `brew install bruno` (macOS) o descarga desde [usebruno.com](https
 
 `docker compose up -d` debe iniciar como mínimo:
 
-- MySQL 8.0 con database `menta`, usuario de aplicación no-root y volumen local;
+- MySQL 8.4 con database `menta`, usuario de aplicación no-root y volumen local;
 - Redis con `maxmemory-policy noeviction`;
 - Mailpit SMTP en `localhost:1025` y UI en `http://localhost:8025` para revisar
   enlaces de activación locales; los tokens se copian sólo a variables runtime

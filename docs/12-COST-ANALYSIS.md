@@ -6,7 +6,7 @@ observabilidad. No incluye microservicios ni broker.
 | Componente | Uso estimado |
 |---|---|
 | VPS/compute | API, BFF y proxy |
-| MySQL 8.0 | schema único `menta`, backups/PITR según proveedor |
+| MySQL 8.4 | schema único `menta`, backups/PITR según proveedor |
 | Redis 7 | blacklist, locks y rate limiting; `noeviction` |
 | GHCR y GitHub Releases | imágenes versionadas por digest y JARs adjuntos a cada release |
 | Grafana/Loki/OTel | logs y trazas del MVP |

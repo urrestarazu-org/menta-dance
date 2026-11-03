@@ -193,6 +193,20 @@ subprojects {
             useJUnitPlatform()
         }
 
+        // One shared test-only source root for every :api module: today it holds the pinned MySQL
+        // image (MySqlTestImage) that all Testcontainers tests use, so the engine under test is
+        // declared in a single place. It is compiled into each module's own test classes, so it
+        // adds no dependency, no published artifact and no dependency-lock entries.
+        // Trailing colon on purpose: ":api" itself is an aggregator with no tests, and Gradle fails a test
+        // task that has test sources but discovers no tests.
+        if (project.path.startsWith(":api:")) {
+            extensions.configure<SourceSetContainer> {
+                named("test") {
+                    java.srcDir(rootProject.file("config/test-support/java"))
+                }
+            }
+        }
+
         // Every Checkstyle finding is an error (default severity in google_checks.xml) and
         // maxWarnings = 0 is kept as a second line of defense (#298, ADR-0043).
         checkstyle {

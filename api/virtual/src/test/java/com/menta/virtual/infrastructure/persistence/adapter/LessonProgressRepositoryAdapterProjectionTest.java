@@ -2,6 +2,7 @@ package com.menta.virtual.infrastructure.persistence.adapter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.menta.testsupport.MySqlTestImage;
 import com.menta.virtual.application.port.out.CourseProgressRowProjection;
 import com.menta.virtual.infrastructure.persistence.entity.LessonProgressJpaEntity;
 import com.menta.virtual.infrastructure.persistence.entity.VirtualLessonJpaEntity;
@@ -29,14 +30,14 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 /**
  * The ONE deliberate Testcontainers case in this whole change (US-VIRTUAL-005, Slice 3;
  * design.md "Testing strategy"): proves {@link LessonProgressJpaRepository#findRowsForUserAndCourse}
- * behaves correctly under real MySQL 8.0 {@code ORDER BY ... DESC} NULL-ordering semantics, which
+ * behaves correctly under real MySQL {@code ORDER BY ... DESC} NULL-ordering semantics, which
  * H2 (used by every other {@code @DataJpaTest} in this codebase, e.g. {@code
  * SubscriptionJpaRepositoryTest}, {@code ActivationTokenJpaRepositoryTest}) does not reliably
  * reproduce and Mockito cannot verify at all.
  *
  * <p>Scenario: a student saves position in one lesson, then marks a DIFFERENT, never-played
  * lesson complete. {@code position_updated_at} is NULL for the completed-but-never-played row and
- * non-NULL for the played row. Under MySQL 8.0, {@code ORDER BY ... DESC} sorts NULL last, so the
+ * non-NULL for the played row. Under MySQL 8.x, {@code ORDER BY ... DESC} sorts NULL last, so the
  * played lesson must win resume selection — and it must win despite the completed lesson having a
  * LOWER curriculum {@code display_order}, proving the query orders by timestamp first, falling
  * back to curriculum order only on a tie (design.md decision 10), not the reverse.</p>
@@ -48,7 +49,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class LessonProgressRepositoryAdapterProjectionTest {
 
     @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.46")
+    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>(MySqlTestImage.NAME)
         .withDatabaseName("menta_virtual_progress_test")
         .withUsername("test")
         .withPassword("test");

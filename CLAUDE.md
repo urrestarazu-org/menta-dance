@@ -29,7 +29,7 @@ menta-dance/
 
 - **API/BFF**: Java 21, Spring Boot 3, Gradle (Kotlin DSL)
 - **Android**: Kotlin, Jetpack Compose, Hilt, Clean Architecture (`presentation/domain/data/di`)
-- **Base de datos**: MySQL 8.0
+- **Base de datos**: MySQL 8.4 LTS
 - **Testing**: JUnit 5, Mockito, Testcontainers, ArchUnit
 
 ## Clean Architecture (Obligatoria)
