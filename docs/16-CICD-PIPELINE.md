@@ -589,9 +589,10 @@ GitHub Release.
 
 ## Release a producción
 
-> **Estado:** `release.yml` (#592) y `deploy.sh` (#593) están en el repositorio. El job `deploy` necesita además que `deploy.sh` esté instalado en el servidor y los secretos del Environment `production` (ver "Configuración en GitHub" y el runbook, sección 2.10); hasta entonces solo se puede probar con un tag con sufijo (`v0.1.0-rc.1`), que publica sin desplegar.
+> **Estado:** `release.yml` (#592), `release-tag.yml` (#639) y `deploy.sh` (#593) están en el repositorio. El job `deploy` necesita además que `deploy.sh` esté instalado en el servidor y los secretos del Environment `production` (ver "Configuración en GitHub" y el runbook, sección 2.10); hasta entonces solo se puede probar con un tag con sufijo (`v0.1.0-rc.1`), que publica sin desplegar.
 
-**El camino completo, en pocas líneas.** El tag `vX.Y.Z` dispara `release.yml`: compila
+**El camino completo, en pocas líneas.** Al mergear el PR `release/X.Y.Z` → `main`, se crea
+solo el tag `vX.Y.Z`, y ese tag lanza `release.yml`: compila
 los JAR de la API y del BFF una sola vez, construye las imágenes copiándolos, las escanea con
 Trivy y recién entonces las publica en GHCR, donde se lee el digest de cada una. Con esos
 digests crea la GitHub Release (con los dos JAR) y el job `deploy` entra por SSH al VPS y
@@ -601,10 +602,12 @@ en otro lado: [Crear y publicar el tag](#crear-y-publicar-el-tag),
 VPS, [2.7 Lectura de imágenes desde GHCR](32-VPS-DONWEB-RUNBOOK.md#27-lectura-de-imágenes-desde-ghcr)
 y [2.10 Despliegue con deploy.sh](32-VPS-DONWEB-RUNBOOK.md#210-despliegue-con-deploysh-593).
 
-Tras el merge `release/* -> main` o `hotfix/* -> main`, se crea el tag SemVer
-`vX.Y.Z` sobre `main` (procedimiento en [Crear y publicar el tag](#crear-y-publicar-el-tag)).
-Ese tag dispara el workflow de release (`.github/workflows/release.yml`), que encadena
-cuatro jobs:
+Tras el merge `release/X.Y.Z -> main` o `hotfix/X.Y.Z -> main`, el workflow
+`.github/workflows/release-tag.yml` crea el tag SemVer `vX.Y.Z` sobre el commit del merge, con
+la versión tomada del nombre de la rama, y lanza el workflow de release
+(`.github/workflows/release.yml`) para ese tag. Los pre-releases (`vX.Y.Z-rc.N`) se siguen
+creando a mano (todo en [Crear y publicar el tag](#crear-y-publicar-el-tag)). `release.yml`
+encadena cuatro jobs:
 
 1. **`build`**: valida el formato del tag, comprueba que un tag estable apunta a un
    commit de `main` y corre `build` (tests, Checkstyle y cobertura) de los módulos
@@ -628,17 +631,80 @@ queda marcada como pre-release) pero no `deploy`, y puede salir de una rama
 `release/*`. `concurrency: production` sin cancelación impide dos releases a la vez;
 GitHub conserva una sola ejecución en espera, así que si llegan dos tags mientras
 otro corre, el más viejo de los dos pendientes se descarta y hay que volver a
-empujarlo.
+lanzarlo (`gh workflow run release.yml --ref vX.Y.Z`; el tag ya existe y no se vuelve a
+empujar).
 
 Cada job declara los permisos mínimos: `build` y `publish` leen el contenido,
 `publish` además escribe paquetes, `release` escribe contenido y `deploy` no usa el
-`GITHUB_TOKEN`. Las acciones están fijadas por SHA.
+`GITHUB_TOKEN`. En `release-tag.yml`, el único job escribe contenido (empuja el tag) y
+acciones (lanza `release.yml`). Los dos workflows declaran `permissions: {}` arriba y los
+permisos en cada job, porque el `GITHUB_TOKEN` del repositorio es de solo lectura por defecto
+(`default_workflow_permissions: read`). Las acciones están fijadas por SHA.
 
 ### Crear y publicar el tag
 
-El tag se crea a mano, después de mergear a `main` el PR `release/*` o `hotfix/*` (con
-"Create a merge commit", ver "Git Flow y releases"). Quien lo publica necesita permiso de
-push al repositorio. Es el último paso antes del backport de `main` a `develop`.
+**Release estable: automático (#639).** Al mergear a `main` un PR cuya rama de origen es
+`release/X.Y.Z` o `hotfix/X.Y.Z` (con "Create a merge commit", ver "Git Flow y releases"),
+`.github/workflows/release-tag.yml` crea el tag **anotado** `vX.Y.Z` sobre el commit del merge
+(el `merge_commit_sha` del PR) y lanza `release.yml` para ese tag. La versión sale del nombre
+de la rama (`scripts/resolve-release-version.sh`, probado en el job `shellcheck` de los dos
+workflows de PR): nadie la escribe a mano ni elige el commit. Es el último paso antes del
+backport de `main` a `develop`. Para seguirlo, el resumen de la ejecución de `release-tag.yml`
+muestra el tag, el commit y el enlace a la ejecución de `release.yml`.
+
+Salvaguardas de `release-tag.yml`:
+
+- Solo corre con el PR **mergeado** (cerrarlo sin mergear no hace nada), con base `main` y
+  desde una rama del propio repositorio, nunca desde un fork.
+- La rama tiene que ser exactamente `release/X.Y.Z` o `hotfix/X.Y.Z`, con `X`, `Y` y `Z`
+  numéricos (el mismo patrón que valida `release.yml`) y sin sufijo. Una rama `release/foo`,
+  `release/0.4` o `release/0.4.0-rc.1` hace fallar el workflow con un mensaje que explica el
+  formato, sin crear nada. El nombre de la rama lo elige el autor del PR: viaja como variable
+  de entorno y solo se compara con una expresión regular, nunca se ejecuta.
+- El commit del merge tiene que estar en `main` (`git merge-base --is-ancestor`).
+- Si el tag ya existe en el remoto, falla sin tocarlo. El push es solo de ese tag
+  (`git push origin refs/tags/vX.Y.Z`) y sin `--force`, así que tampoco pisa uno creado
+  entremedio. Dos merges de la misma rama no corren en paralelo (`concurrency` por rama, sin
+  cancelación).
+- El tag queda a nombre de `github-actions[bot]`.
+- El job `deploy` de `release.yml` sigue esperando la aprobación del Environment `production`
+  (ver "Configuración en GitHub"): crear el tag no despliega por sí solo.
+
+**Por qué `workflow_dispatch` y no el push del tag.** Un tag empujado con el `GITHUB_TOKEN` no
+dispara `release.yml` por `on: push`: según la documentación de GitHub ("Triggering a workflow
+from a workflow"), los eventos que genera el `GITHUB_TOKEN` no crean ejecuciones nuevas, con
+una excepción: `workflow_dispatch` y `repository_dispatch` siempre las crean. Por eso
+`release.yml` acepta también `workflow_dispatch` (sin inputs) y `release-tag.yml` lo lanza con
+`gh workflow run release.yml --ref vX.Y.Z`; la API acepta un tag como `ref`, y con un tag
+`github.ref_name` es el tag y `GITHUB_SHA` su commit, igual que con el push. Si se lanza sobre
+una rama, `release.yml` falla en el primer paso de `build` con un mensaje que lo explica. Así
+no hace falta un PAT ni una GitHub App: **no hay una credencial nueva** que venza o haya que
+rotar, solo el `GITHUB_TOKEN` del job. Que todo esto funcione de punta a punta (el evento del
+merge, el push del tag con el ruleset de abajo y el `workflow_dispatch` sobre un tag) es el
+comportamiento documentado de GitHub y se comprueba con el primer release automático.
+
+**Desde cuándo rige.** `release-tag.yml` llega a `main` con el merge de un release que lo
+incluya, y según la documentación de GitHub un `workflow_dispatch` solo llega si el workflow
+está en la rama por defecto del repositorio (`develop`). El primer release automático es,
+entonces, el primero cuya rama `release/*` ya incluya este cambio; hasta ese merge, el tag se
+crea a mano como se explica abajo.
+
+**Si el tag se creó pero `release.yml` no arrancó.** El paso que lo lanza falla y deja en el
+log y en el resumen el comando para lanzarlo a mano:
+
+```bash
+gh workflow run release.yml --ref vX.Y.Z
+```
+
+El tag no se borra (además, el ruleset de los tags `v*` lo impide): es correcto, solo falta
+el release. El mismo comando sirve si un release quedó descartado en la cola de
+`concurrency: production`.
+
+**Pre-releases y respaldo: a mano.** Los tags con sufijo (`vX.Y.Z-rc.N`) se siguen creando a
+mano y nunca despliegan (ver "Pre-releases" más abajo). El procedimiento manual también queda
+como respaldo para un release estable si `release-tag.yml` no creó el tag (por ejemplo, si el
+PR se mergeó desde una rama con un nombre inválido). Quien lo publica necesita permiso de push
+al repositorio, y el push de una persona sí dispara `release.yml` por `on: push`.
 
 ```bash
 git fetch origin --tags
@@ -662,8 +728,9 @@ git push origin vX.Y.Z
 **Por qué anotado (`-a`).** Los seis tags del repositorio (`v0.1.0` a `v0.3.0`, incluidos los
 `rc`) son anotados, y se mantiene la convención: un tag anotado es un objeto con autor,
 fecha y mensaje, y es el que `git describe` toma por defecto; uno liviano es solo un puntero
-a un commit. `release.yml` funciona con los dos (`gh release create --verify-tag` solo
-comprueba que el tag exista), así que es una regla de consistencia, no del workflow.
+a un commit. `release-tag.yml` también crea tags anotados. `release.yml` funciona con los dos
+(`gh release create --verify-tag` solo comprueba que el tag exista), así que es una regla de
+consistencia, no del workflow.
 
 **Por qué el hash explícito.** Sin él, `git tag` etiqueta el `HEAD` de la copia local, que
 puede ser `develop`, una rama de trabajo o un `main` desactualizado. El workflow no lo
@@ -672,12 +739,13 @@ atrapa: para un tag estable solo exige que el commit sea **ancestro** de `main`
 de release sale de `develop` y se mergea a `main`, la punta de `develop` (si no avanzó desde
 entonces) es ancestro de `main`: pasa la verificación y la versión se publicaría sobre el
 commit equivocado. Por eso el
-paso 2 se hace a mano.
+paso 2 se hace a mano. `release-tag.yml` no tiene ese problema: etiqueta el `merge_commit_sha`
+que GitHub informa para el PR, no el `HEAD` de una copia.
 
 **`git push` no sube los tags.** Un `git push` común envía ramas, no tags: el tag solo viaja
 si se nombra (`git push origin vX.Y.Z`). No conviene `git push --tags`, que sube todos los
-tags locales, incluidos los que no se quieren publicar. El push del tag es lo que dispara
-`release.yml` (`on.push.tags: v*.*.*`); el workflow además valida el formato
+tags locales, incluidos los que no se quieren publicar. En el camino manual, el push del tag
+es lo que dispara `release.yml` (`on.push.tags: v*.*.*`); el workflow además valida el formato
 `vX.Y.Z[-sufijo]` y rechaza un tag estable cuyo commit no esté en `main`, y en ese caso falla
 el job `build` y no se publica nada.
 
@@ -704,7 +772,9 @@ quien administra el repositorio: se probó el 2026-11-03 con un tag de prueba y 
 `git push origin :refs/tags/<tag>` como `git push --force` fueron rechazados
 (`push declined due to repository rule violations`). No incluye la regla `creation`, para que
 `git push origin vX.Y.Z` de un tag nuevo, el que dispara `release.yml`, siga funcionando (también
-se probó). Antes de este ruleset (#703) no había ninguna protección: no existían rulesets y la
+se probó con una persona). Por la misma razón no bloquea a `release-tag.yml`, que crea el tag
+con el `GITHUB_TOKEN`; con `github-actions[bot]` se comprueba en el primer release automático.
+Antes de este ruleset (#703) no había ninguna protección: no existían rulesets y la
 protección legada de tags, que GitHub migró a rulesets en agosto de 2024, ya no responde por API.
 
 La definición está en `.github/rulesets/protect-release-tags.json`. Para recrearla en otro
@@ -741,7 +811,8 @@ aprobación manual ("Review deployments" en la página del run) antes de tocar p
 El revisor se agregó el 2026-10-19, cuando el repositorio pasó a ser público: con el
 repositorio privado la regla fallaba (`HTTP 422`: el plan no la soporta) y el Environment
 se había creado sin reglas de protección. `prevent_self_review` está apagado a propósito:
-el proyecto lo mantiene una sola persona, que es quien publica el tag y quien aprueba. Si
+el proyecto lo mantiene una sola persona, que es quien mergea el release (lo que crea el tag)
+y quien aprueba. Si
 se suma más gente, conviene encenderlo.
 
 La primera vez que se publican las imágenes, GHCR crea los paquetes `menta-api` y

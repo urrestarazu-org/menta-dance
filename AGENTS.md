@@ -66,7 +66,7 @@ El proyecto sigue Git Flow con las siguientes ramas:
 1. feature/* → PR → develop       (desarrollo normal)
 2. develop → release/vX.Y.Z       (preparar release)
 3. release/* → PR → main          (publicar)
-4. Crear tag vX.Y.Z en main       (versionar)
+4. Tag vX.Y.Z automático al mergear (release-tag.yml; versión = nombre de la rama)
 5. sync/main-to-develop-X.Y.Z → PR → develop   (backport de main, con merge commit)
 ```
 
@@ -76,7 +76,7 @@ El proyecto sigue Git Flow con las siguientes ramas:
 - **PRs**: Mergear via squash una vez que CI está verde. Nunca agregar atribuciones de AI.
 - **Release a `main`**: el PR `release/*` → `main` se mergea con merge commit, no con squash, para que `main` y `develop` compartan historia (detalle en `docs/16-CICD-PIPELINE.md`, "Git Flow y releases").
 - **Backport a `develop`**: después de cada release o hotfix a `main`, una rama `sync/main-to-develop-<versión>` (desde `develop`, mergeando `origin/main`) con PR a `develop` y merge commit. Se comprueba con `git rev-list --count origin/develop..origin/main` = 0. Con "Require branches to be up to date" activo, sin el backport el release siguiente sale desactualizado (detalle en `docs/16-CICD-PIPELINE.md`, "Backport de `main` a `develop`").
-- **Tags**: Releases se tagean `vMAJOR.MINOR.PATCH` y publican JAR + imágenes GHCR usando digests inmutables.
+- **Tags**: Releases se tagean `vMAJOR.MINOR.PATCH` y publican JAR + imágenes GHCR usando digests inmutables. El tag de un release estable lo crea `release-tag.yml` al mergear a `main` el PR `release/X.Y.Z` o `hotfix/X.Y.Z` (la versión sale del nombre de la rama) y lanza `release.yml`; no se crea a mano. Los pre-releases (`vX.Y.Z-rc.N`) siguen siendo manuales. Un tag publicado nunca se mueve ni se borra (detalle en `docs/16-CICD-PIPELINE.md`, "Crear y publicar el tag").
 - **Actions**: Los workflows de deployment deben pinear cada GitHub Action a un SHA completo (sin `latest`).
 
 ### Sincronización con origen

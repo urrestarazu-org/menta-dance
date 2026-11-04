@@ -1,0 +1,145 @@
+name: Release Tag
+
+# Tag de release automático (#639). Al mergear a main un PR cuya rama de origen es release/X.Y.Z o
+# hotfix/X.Y.Z, crea el tag anotado vX.Y.Z sobre el commit del merge y lanza release.yml para ese
+# tag. La versión sale del nombre de la rama (scripts/resolve-release-version.sh), no se escribe a
+# mano. Los pre-releases (vX.Y.Z-rc.N) siguen siendo manuales: este workflow nunca los crea.
+#
+# Por qué se lanza release.yml con workflow_dispatch y no con el push del tag: un tag empujado con
+# el GITHUB_TOKEN no dispara workflows `on: push`, pero un workflow_dispatch creado con el
+# GITHUB_TOKEN sí crea la ejecución (excepción documentada por GitHub). Así no hace falta un PAT
+# ni una GitHub App: no hay credencial propia que rotar.
+#
+# Salvaguardas: solo PR mergeado (no cerrado sin merge), solo hacia main, solo ramas del propio
+# repositorio (nunca un fork), nombre de rama válido, el commit del merge tiene que estar en main
+# y el tag no puede existir. Nunca se pisa, se mueve ni se borra un tag.
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+# Sin permisos por defecto: el job declara los suyos.
+permissions: {}
+
+# Dos merges de la misma rama no compiten por el mismo tag; ninguno se cancela a mitad. Ramas
+# distintas crean tags distintos y no necesitan esperar (release.yml ya serializa los deploys).
+concurrency:
+  group: release-tag-${{ github.event.pull_request.head.ref }}
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    # Una rama release/* o hotfix/* con un nombre inválido (release/foo) sí entra al job: falla en
+    # el paso de la versión con un mensaje claro y sin crear nada.
+    if: >-
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (startsWith(github.event.pull_request.head.ref, 'release/') ||
+       startsWith(github.event.pull_request.head.ref, 'hotfix/'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      # Empujar el tag
+      contents: write
+      # Lanzar release.yml (workflow_dispatch) y buscar la ejecución creada
+      actions: write
+    env:
+      # El nombre de la rama lo elige el autor del PR: viaja por env y entre comillas, nunca se
+      # interpola en el script del paso.
+      HEAD_REF: ${{ github.event.pull_request.head.ref }}
+      MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+    steps:
+      - name: Checkout merge commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          # Historial completo: hace falta para comprobar que el commit del merge está en main
+          fetch-depth: 0
+          # Necesario para `git push` del tag con el GITHUB_TOKEN del job (contents: write). Del
+          # checkout solo se ejecuta scripts/resolve-release-version.sh, y después de comprobar que
+          # el commit ya está en main.
+          persist-credentials: true
+
+      - name: Verify merge commit is on main
+        run: |
+          if [[ ! "$MERGE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::El PR no tiene un commit de merge válido"
+            exit 1
+          fi
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor "$MERGE_SHA" refs/remotes/origin/main; then
+            echo "::error::El commit del merge (${MERGE_SHA}) no está en main"
+            exit 1
+          fi
+
+      - name: Resolve version from branch name
+        id: version
+        run: |
+          if ! version="$(bash scripts/resolve-release-version.sh "$HEAD_REF")"; then
+            echo "::error::La rama de origen no es release/X.Y.Z ni hotfix/X.Y.Z: no se crea ningún tag. Los pre-releases (vX.Y.Z-rc.N) se crean a mano."
+            exit 1
+          fi
+          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify tag does not exist
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          # --exit-code: 0 si el tag existe, 2 si no existe, otro valor si falló la consulta
+          set +e
+          git ls-remote --exit-code --tags origin "refs/tags/${TAG}" > /dev/null
+          status=$?
+          set -e
+          if [[ "$status" -eq 0 ]]; then
+            echo "::error::El tag ${TAG} ya existe: no se pisa. Si falta su release, lanzarlo con: gh workflow run release.yml --ref ${TAG}"
+            exit 1
+          fi
+          if [[ "$status" -ne 2 ]]; then
+            echo "::error::No se pudo consultar si el tag ${TAG} existe (código ${status})"
+            exit 1
+          fi
+
+      - name: Create and push annotated tag
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git -c user.name='github-actions[bot]' \
+            -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            tag -a "$TAG" "$MERGE_SHA" -m "$TAG"
+          # Solo este tag y sin --force: si alguien lo creó después de la comprobación anterior,
+          # el push falla y el tag existente queda intacto.
+          git push origin "refs/tags/${TAG}"
+
+      - name: Launch release workflow
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          workflow_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/workflows/release.yml"
+          {
+            echo "### Tag de release"
+            echo "- Tag: \`${TAG}\`"
+            echo "- Commit: \`${MERGE_SHA}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if ! gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "$TAG"; then
+            # El tag ya está publicado y no se borra (además, el ruleset de los tags v* lo impide)
+            echo "::error::El tag ${TAG} se creó, pero no se pudo lanzar release.yml. Lanzarlo a mano con: gh workflow run release.yml --ref ${TAG}"
+            echo "- release.yml: **no se pudo lanzar**. Lanzarlo a mano con \`gh workflow run release.yml --ref ${TAG}\`" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          # La ejecución tarda unos segundos en aparecer; si no se encuentra, queda el enlace al workflow
+          run_url=""
+          for _ in 1 2 3 4 5 6; do
+            sleep 5
+            run_url="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow release.yml \
+              --event workflow_dispatch --branch "$TAG" --limit 1 \
+              --json url --jq '.[0].url // empty' || true)"
+            if [[ -n "$run_url" ]]; then
+              break
+            fi
+          done
+          echo "- release.yml: ${run_url:-${workflow_url}}" >> "$GITHUB_STEP_SUMMARY"

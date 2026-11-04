@@ -1,6 +1,14 @@
 name: Release
 
-# Release a producción (#592, ADR-0018, ADR-0045). Se dispara al empujar un tag vX.Y.Z[-sufijo]:
+# Release a producción (#592, ADR-0018, ADR-0045). Se dispara de dos formas, siempre sobre un tag
+# vX.Y.Z[-sufijo]:
+#
+#   - push del tag, cuando se crea a mano (pre-releases o respaldo);
+#   - workflow_dispatch sobre el tag (`gh workflow run release.yml --ref vX.Y.Z`): es lo que hace
+#     release-tag.yml al mergear un PR release/* o hotfix/* a main (#639), porque un tag empujado
+#     con el GITHUB_TOKEN no dispara `on: push`.
+#
+# En los dos casos github.ref_name es el tag y GITHUB_SHA su commit; lanzado sobre una rama, falla.
 #
 #   build -> publish (Trivy + push a GHCR por digest) -> release (GitHub Release) y deploy (VPS)
 #
@@ -15,6 +23,8 @@ on:
   push:
     tags:
       - 'v*.*.*'
+  # Sin inputs: el tag es el ref con el que se lanza (--ref vX.Y.Z)
+  workflow_dispatch:
 
 # Un solo release a la vez y ninguno se cancela a mitad: un deploy interrumpido deja el VPS a medias.
 # GitHub conserva una sola ejecución en espera: si llegan dos tags mientras otro corre, el más viejo
@@ -39,6 +49,17 @@ jobs:
       version: ${{ steps.meta.outputs.version }}
       prerelease: ${{ steps.meta.outputs.prerelease }}
     steps:
+      - name: Require a tag ref
+        # workflow_dispatch se puede lanzar sobre una rama; el release solo sale de un tag
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [[ "$REF_TYPE" != "tag" ]]; then
+            echo "::error::release.yml se lanzó sobre la rama '${REF_NAME}'; solo corre sobre un tag vX.Y.Z. Lanzarlo con: gh workflow run release.yml --ref vX.Y.Z"
+            exit 1
+          fi
+
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
