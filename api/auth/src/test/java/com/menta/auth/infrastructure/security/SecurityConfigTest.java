@@ -236,6 +236,37 @@ class SecurityConfigTest {
             .andExpect(status().isNotFound());
     }
 
+    private static final String ADMIN_USERS_URL = "/api/v1/admin/users";
+
+    /**
+     * #378. The user administration routes need no new matcher: the generic {@code /api/v1/admin/**} rule
+     * already requires ADMIN. These tests pin it, because granting any other role here would let it reach
+     * the user administration.
+     */
+    @Test
+    void an_unauthenticated_get_of_the_admin_user_listing_is_rejected() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get(ADMIN_USERS_URL)).andExpect(status().isUnauthorized());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"INSTRUCTOR", "STUDENT", "RECEPTIONIST"})
+    void a_non_admin_get_of_the_admin_user_listing_is_forbidden(String role) throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get(ADMIN_USERS_URL).with(user("someone").roles(role)))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void an_admin_reaches_the_admin_user_listing_past_the_security_layer() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get(ADMIN_USERS_URL).with(user("admin").roles("ADMIN")))
+            .andExpect(status().isNotFound());
+    }
+
     /**
      * US-BILLING-012 (#131), Phase 4 — confirms the trial-grant route also needs no new matcher:
      * it is covered by the same generic {@code /api/v1/admin/**} → {@code hasRole("ADMIN")} rule.

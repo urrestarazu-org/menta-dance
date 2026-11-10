@@ -1,0 +1,64 @@
+meta {
+  name: List Users (Admin)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admin/users?role=STUDENT&q=&page=0&size=20
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+params:query {
+  role: STUDENT
+  q:
+  page: 0
+  size: 20
+}
+
+docs {
+  #378. Requiere un access token de ADMIN. Listado paginado de cuentas,
+  ordenado por email (y por id a igual email). No hay parámetro sort.
+
+  Filtros opcionales:
+    role → ADMIN | INSTRUCTOR | STUDENT | RECEPTIONIST
+    q    → busca en email, nombre y apellido, sin distinguir mayúsculas; el
+           texto es literal (%, _ y \ no son comodines). Vacío = sin filtro.
+           Máximo 100 caracteres.
+
+  size mayor a 50 se rechaza con 400, nunca se recorta.
+
+  Contrato de éxito (200):
+    { items: [{ id, email, firstName, lastName, role, status, demo, createdAt }],
+      page, size, totalElements, totalPages }
+  La respuesta nunca incluye passwordHash ni tokenVersion.
+
+  Contrato de error:
+    400 INVALID_REQUEST → size > 50, q > 100 caracteres, role inválido, page < 0
+    401                 → sin access token
+    403                 → el usuario autenticado no es ADMIN
+}
+
+tests {
+  test("Devuelve una página con items y totales", function() {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody()).to.have.property("items");
+    expect(res.getBody()).to.have.property("totalElements");
+  });
+
+  test("Nunca expone credenciales", function() {
+    res.getBody().items.forEach(function(user) {
+      expect(user).to.not.have.property("passwordHash");
+      expect(user).to.not.have.property("tokenVersion");
+    });
+  });
+}
+
+assert {
+  res.status: eq 200
+}

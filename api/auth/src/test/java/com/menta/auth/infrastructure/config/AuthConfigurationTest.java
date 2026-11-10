@@ -7,6 +7,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.menta.auth.application.port.in.ActivateAccountUseCase;
+import com.menta.auth.application.port.in.ListUsersUseCase;
 import com.menta.auth.application.port.in.LoginUseCase;
 import com.menta.auth.application.port.in.LogoutUseCase;
 import com.menta.auth.application.port.in.RefreshTokenUseCase;
@@ -35,6 +36,8 @@ import com.menta.auth.application.port.out.PasswordResetTokenHasher;
 import com.menta.auth.application.port.out.PasswordResetTokenRepository;
 import com.menta.auth.application.port.out.RefreshTokenRepository;
 import com.menta.auth.application.port.out.TokenHasher;
+import com.menta.auth.application.port.out.UserAdminRepository;
+import com.menta.auth.application.usecase.ListUsersUseCaseImpl;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.auth.infrastructure.activation.AesGcmActivationDeliveryCipher;
 import com.menta.auth.infrastructure.activation.RedisActivationRateLimitPort;
@@ -244,6 +247,13 @@ class AuthConfigurationTest {
         );
 
         assertThat(useCase).isInstanceOf(TransactionalResetPasswordUseCase.class);
+    }
+
+    @Test
+    void wires_the_list_users_use_case_bean() {
+        ListUsersUseCase useCase = configuration.listUsersUseCase(mock(UserAdminRepository.class));
+
+        assertThat(useCase).isInstanceOf(ListUsersUseCaseImpl.class);
     }
 
     @Test

@@ -121,6 +121,30 @@ por ejemplo:
 }
 ```
 
+## Administración de usuarios (#378)
+
+La ruta está bajo `/api/v1/admin/users` y exige un access token con rol `ADMIN`:
+la cubre la regla genérica `/api/v1/admin/**` de `SecurityConfig`, sin una regla
+propia. Sin token responde `401`; con otro rol, `403`.
+
+| Endpoint | Entrada | Respuesta exitosa |
+| --- | --- | --- |
+| `GET /api/v1/admin/users` | query opcional: `role`, `q`, `page` (0), `size` (20) | `200` con `{ items, page, size, totalElements, totalPages }` |
+
+**Listado.** El orden es fijo: email y, a igual email, id; no hay `sort`. `size`
+máximo es 50 y un valor mayor se rechaza con `400 INVALID_REQUEST`, nunca se
+recorta. `role` filtra por rol. `q` busca por email, nombre o apellido sin
+distinguir mayúsculas; el texto se toma de forma literal (`%`, `_` y `\` no son
+comodines), un `q` vacío o en blanco equivale a no filtrar y más de 100
+caracteres es `400`. Cada item es `{ id, email, firstName, lastName, role, status,
+demo, createdAt }`; los nombres son `null` en cuentas sin perfil. La respuesta
+nunca incluye el hash de la contraseña ni `token_version`. No hay índice para la
+búsqueda: la tabla es chica y un `LIKE '%…%'` no lo aprovecharía.
+
+Quedan fuera de este cambio y llegan en PRs posteriores: el cambio de rol
+(`PATCH /api/v1/admin/users/{userId}/role`), el alta de cuentas de staff
+(`POST /api/v1/admin/users`) y la pantalla del BFF.
+
 ## Renovación y reutilización
 
 `POST /api/v1/auth/refresh` rota obligatoriamente el refresh: revoca el token presentado y

@@ -4,6 +4,7 @@ import com.menta.auth.infrastructure.persistence.entity.UserJpaEntity;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -11,7 +12,8 @@ import org.springframework.stereotype.Repository;
  * Infrastructure layer - uses Spring annotations.
  */
 @Repository
-public interface UserJpaRepository extends JpaRepository<UserJpaEntity, UUID> {
+public interface UserJpaRepository
+    extends JpaRepository<UserJpaEntity, UUID>, JpaSpecificationExecutor<UserJpaEntity> {
 
     /**
      * Finds a user by its stored email value.
