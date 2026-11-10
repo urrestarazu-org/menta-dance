@@ -372,17 +372,17 @@ Puntos a tener en cuenta:
   El secreto de los webhooks generado así solo sirve hasta que se conecta Mercado Pago real: la API verifica la firma `x-signature` con él, así que con pagos reales tiene que ser la clave secreta que muestra la consola de Mercado Pago para los webhooks de la aplicación (se reemplaza en `.env` y se redespliega).
 
 - Correo: **EnvialoSimple** por SMTP, puerto **587** con `SMTP_AUTH=true` y `SMTP_STARTTLS=true`. El compose solo mapea STARTTLS (no hay variable para TLS implícito, puerto 465), así que el puerto 587 es el único que sirve.
-- Quedaron vacías a propósito cinco variables: `BILLING_MERCADOPAGO_ACCESS_TOKEN` (sin ese token no hay cobros) y los cuatro datos de transferencia bancaria (CBU, alias, titular, CUIT). El token se cargó el 2026-10-20 (abajo); los datos de transferencia siguen vacíos (#633) y se cargan antes de habilitar esa forma de pago.
+- Quedaron vacías a propósito cinco variables: `BILLING_MERCADOPAGO_ACCESS_TOKEN` (sin ese token no hay cobros) y los cuatro datos de transferencia bancaria (CBU, alias, titular, CUIT). El token se cargó el 2026-10-20 y los datos de transferencia el 2026-11-09 (ambos abajo, #633).
 - `BILLING_MERCADOPAGO_MERCHANT_ACCOUNT_ID` (#634): el ID de la cuenta vendedora de Mercado Pago. La API acepta un pago solo si coincide con el `collector_id` que devuelve Mercado Pago, así que hace falta cargarlo junto con el token. Se obtiene con ese mismo token: `curl -s -H "Authorization: Bearer <TOKEN>" https://api.mercadopago.com/users/me | jq .id`. No es el Client ID de la aplicación. No es secreto, pero tampoco se versiona.
 - `API_DIGEST` y `BFF_DIGEST` no están: las escribe `deploy.sh` en cada despliegue.
-- **Cómo revisar el archivo sin exponer valores:** `sed 's/=.*/=…/' /opt/menta/.env` lista los nombres, y `grep -cE '^[A-Z_]+=$' /opt/menta/.env` cuenta las vacías (eran 5; desde el 2026-10-20 deben ser 4, las de transferencia). Ojo: una variable que **no está** en el archivo no aparece como vacía (ver el error de `set_var` abajo). No usar `grep '=$'` a secas: las claves en base64 con relleno terminan en `=` y se imprimirían enteras. Pasó ese día con las dos claves de entrega; como la API todavía no había arrancado, se regeneraron en el momento y no hubo exposición real.
+- **Cómo revisar el archivo sin exponer valores:** `sed 's/=.*/=…/' /opt/menta/.env` lista los nombres, y `grep -cE '^[A-Z_]+=$' /opt/menta/.env` cuenta las vacías (eran 5; desde el 2026-10-20 eran 4, las de transferencia; desde el 2026-11-09 deben ser 0). La API no valida que los datos de transferencia estén completos (`BankAccountDetails` no comprueba que no estén en blanco): con el titular vacío arranca igual y muestra el dato en blanco, por eso este conteo es la comprobación. Ojo: una variable que **no está** en el archivo no aparece como vacía (ver el error de `set_var` abajo). No usar `grep '=$'` a secas: las claves en base64 con relleno terminan en `=` y se imprimirían enteras. Pasó ese día con las dos claves de entrega; como la API todavía no había arrancado, se regeneraron en el momento y no hubo exposición real.
 
 **Ejecutado el 2026-10-20 (VPS): credenciales de Mercado Pago de pruebas** (#633, #634).
 
 - **Webhooks en la consola de Mercado Pago.** La aplicación tiene dos pestañas, "Modo de prueba" y "Modo productivo", y cada una se configura por separado (URL, eventos y clave secreta). Ese día se configuró la de prueba, URL `https://api.mentadance.com/api/v1/billing/payments/mercadopago/webhook` y evento "Pagos (legacy)", pero con un vendedor de prueba **no es la que corresponde** (ver la corrección de abajo). El controlador de la API (`PaymentWebhookController`) lee `data.id` de la query y `x-request-id` y `x-signature` de los headers, y ignora el cuerpo; que "Pagos (legacy)" sea el evento correcto se confirma con la compra de prueba (#515).
 - **Qué se cargó en `/opt/menta/.env`:** `BILLING_MERCADOPAGO_ACCESS_TOKEN` (el del usuario vendedor de prueba), `BILLING_MERCADOPAGO_MERCHANT_ACCOUNT_ID` (el ID de ese usuario, que se obtuvo con `GET /users/me`; el `nickname` de un usuario de prueba empieza con `TEST_USER`) y `BILLING_WEBHOOK_MERCADOPAGO_HMAC_SECRET` (la clave secreta del webhook, que reemplazó al valor aleatorio del primer arranque; se cargó la de la pestaña "Modo de prueba", suponiendo que era la que corresponde al token y al usuario de prueba; la validación contra el sandbox real (#515) mostró que no).
 - **Corrección (#515, 2026-10-24): con un vendedor de prueba los pagos llegan como "Modo productivo".** En la validación local contra el sandbox real, el webhook se entregó a la URL de la pestaña "Modo productivo" y venía firmado con la clave secreta de esa pestaña, no con la de "Modo de prueba". Para que el VPS acepte pagos del vendedor de prueba hay que configurar la URL y el evento en la pestaña "Modo productivo" y cargar **su** clave en `BILLING_WEBHOOK_MERCADOPAGO_HMAC_SECRET` (con `set_var` y redespliegue, como arriba). Mientras el `.env` tenga la clave de "Modo de prueba", la API rechaza esos webhooks por firma inválida. No se verificó si la `notification_url` que la API manda en cada preferencia pisa la URL de la consola; si tras el cambio el webhook llega pero la firma falla, probar con la clave de la otra pestaña.
-- **Pendiente antes de probar compras en el VPS.** El VPS corre con perfil `prod`, sin datos demo (`DemoProfileGuard` no permite combinar `demo` con `prod`), así que no hay clases ni precios. La prueba espera a poder entrar como administrador o profesor y crear y modificar clases.
+- **Pendiente antes de probar compras en el VPS.** El VPS corre con perfil `prod`, sin datos demo (`DemoProfileGuard` no permite combinar `demo` con `prod`), así que no hay clases ni precios. Ya existe un administrador (sección 2.14, 2026-11-09), pero la web todavía no tiene pantallas para crear ni modificar clases (#354, #367, #368); la prueba espera a eso.
 - **Cómo se cargan sin exponer los valores**, como `deploy` y con `read -s` (no muestra lo que se escribe ni lo guarda en el historial). La función agrega la variable si no existe:
 
   ```bash
@@ -397,6 +397,17 @@ Puntos a tener en cuenta:
 - **Cómo se aplican.** El contenedor lee el entorno al crearse, así que hay que redesplegar. Se usa `deploy.sh` con los digests que ya corren, que salen del propio `.env` (no son secretos): `/opt/menta/deploy.sh "$(awk -F= '/^API_DIGEST=/{print $2}' /opt/menta/.env)" "$(awk -F= '/^BFF_DIGEST=/{print $2}' /opt/menta/.env)"`. Hace el backup previo y recrea la API; con los mismos digests no cambia `previous-digests`. Ese día se hizo dos veces (backups `T173021Z` y `T173504Z`).
 - **Cómo se comprueba que la API recibió los valores**, sin mostrarlos: `docker exec menta-api sh -c 'eval "val=\${BILLING_MERCADOPAGO_MERCHANT_ACCOUNT_ID}"; [ -n "$val" ] && echo con valor || echo VACÍA'` (repetir con cada variable).
 - **Al pasar a cobros reales** hay que reemplazar los tres valores a la vez (token, ID de la cuenta vendedora y clave secreta, los de producción) y dar de alta el webhook en la pestaña "Modo productivo". El `.env` guarda un solo juego, no uno por modo; si hace falta tener ambos a la vez, está en análisis en #641.
+
+**Ejecutado el 2026-11-09 (VPS): datos de transferencia, Bunny.net y SMTP** (#633).
+
+- **Qué quedó cargado en `/opt/menta/.env`:** los cuatro datos de transferencia (`BILLING_BANK_TRANSFER_CBU`, `_ALIAS`, `_HOLDER`, `_CUIT`), los dos de Bunny.net (`APP_CDN_BUNNYNET_PULLZONEHOSTNAME`, `APP_CDN_BUNNYNET_VIDEOLIBRARYID`) y las credenciales de SMTP (`SMTP_USERNAME`, `SMTP_PASSWORD`; `SMTP_HOST`, `SMTP_PORT`, `SMTP_AUTH` y `SMTP_STARTTLS` ya estaban, ver arriba). Sin los valores de Bunny.net el compose usa `invalid-missing-config`, y sin los de transferencia la API muestra esos datos en blanco.
+- **Cómo se cargaron:** editando el archivo con `nano` como `deploy`, previa copia con `cp -p /opt/menta/.env /opt/menta/.env.bak`. La copia tiene los mismos secretos, así que se borra al terminar. En ese archivo el valor va sin comillas ni espacios alrededor del `=` (Docker Compose toma las comillas como parte del valor), y `API_DIGEST` y `BFF_DIGEST` no se tocan. Para una contraseña conviene `read -s` con `set_var` (arriba), porque `nano` deja el valor en pantalla.
+- **Revisión previa al despliegue:** permisos `-rw-------` con dueño `deploy`, y las variables presentes en el listado de nombres. El conteo de vacías dio 1: era `BILLING_BANK_TRANSFER_HOLDER`. Se identificó con `grep -E '^[A-Z_]+=$' /opt/menta/.env | sed 's/=$//'` (imprime solo nombres, porque la línea no tiene valor), se completó y el conteo pasó a 0.
+- **Despliegue:** `deploy.sh` con los digests que ya corrían, como en la sección anterior. Backup previo `menta-20261109T231457Z`, los cinco contenedores `Healthy` y "Deploy completado".
+- **Comprobación en el contenedor** (`docker exec menta-api …`, sin mostrar valores): las ocho variables llegaron con valor. Las de SMTP se miran con el nombre que les da el compose, `SPRING_MAIL_USERNAME` y `SPRING_MAIL_PASSWORD`; mirar `SMTP_USERNAME` daría "VACÍA" aunque esté bien cargada.
+- **Salud:** `https://mentadance.com/` y `https://api.mentadance.com/actuator/health` devolvieron 200.
+- **Qué no se comprobó:** que la variable llegue con valor prueba que está cargada, no que sea correcta. No se verificó el CBU ni el alias contra el banco, el pull zone y la librería de video contra Bunny.net, ni que las credenciales de SMTP autentiquen: no se envió ningún correo real. Esa prueba queda pendiente.
+- **Mercado Pago** no cambió en este paso: sigue con las credenciales de pruebas del 2026-10-20. Pasar a cobros reales y el webhook de producción se siguen en #641 y #647.
 
 ### 2.10 Despliegue con deploy.sh (#593)
 
@@ -761,6 +772,8 @@ Con la landing apagada no se valida nada. Los precios, cuotas y fechas se cambia
 
 El correo que va al buzón de operaciones por una compra en excepción **no** depende de esta marca y se sigue enviando. Hoy la marca **solo silencia correos**; la exclusión de los reportes llegará cuando exista el primer reporte a nivel de usuario.
 
+**Estado en el VPS (2026-11-09):** `DESCRIBE auth_users` no mostró la columna `demo`, así que la versión desplegada es anterior a V28. Es una inferencia a partir de la tabla; no se verificó el tag que corre. Esta sección se puede aplicar solo después de desplegar una versión que incluya esa migración.
+
 ```bash
 # 1. Verificar la fila ANTES de tocar nada (que sea una sola y la cuenta correcta)
 docker exec menta-mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --user=root menta -e "SELECT email, role, status, demo FROM auth_users WHERE email = '"'"'prueba@ejemplo.com'"'"'"'
@@ -770,6 +783,50 @@ docker exec menta-mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --user=roo
 ```
 
 Equivalente en SQL: `UPDATE auth_users SET demo = TRUE WHERE email = '...'`. Cuidado: una cuenta marcada tampoco recibe el correo de recuperación de contraseña, así que antes de marcarla hay que tener a mano su contraseña. Para volver atrás, `SET demo = FALSE`. El cambio rige en el siguiente envío, sin reiniciar la API.
+
+### 2.14 Primer administrador de la aplicación (#709)
+
+El perfil `prod` no siembra usuarios (`DemoProfileGuard` impide el perfil `demo`), ninguna migración inserta un admin, no hay una propiedad de arranque que lo cree y el registro público (`POST /api/v1/auth/register`) siempre crea alumnos (`STUDENT`). Mientras no exista el alta de staff desde la web (#378), el primer admin se crea a mano en la base.
+
+**Ejecutado el 2026-11-09 (VPS): opción `INSERT` manual.** Como `deploy`, con el acceso a MySQL de la sección 2.13.
+
+1. **Confirmar el esquema real:** `docker exec menta-mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --user=root menta -e "DESCRIBE auth_users"'`. Obligatorias sin valor por defecto: `id` (`BINARY(16)`), `email` (único), `password_hash`, `role`, `status`, `created_at`, `updated_at`. `token_version` tiene valor por defecto 1. Admiten `NULL`: `first_name`, `last_name`, `phone`, `birth_date`.
+2. **Generar el hash bcrypt** (costo 10) sin instalar nada en el servidor. `htpasswd` corre dentro de un contenedor descartable (`httpd:2.4-alpine`, `--rm`) y la contraseña entra por `stdin`, así que no queda en el historial ni en la lista de procesos. Se pega **todo el bloque junto, con la llamada a la función en la última línea**:
+
+   ```bash
+   unset E P HASH
+   mk_hash() {
+     read -rp 'Email del admin: ' E
+     read -rsp 'Contraseña (una fuerte): ' P; echo
+     [ -n "$P" ] && [[ "$E" == *@*.* && "$E" != *" "* ]] || { echo "email o contraseña inválidos"; unset E P; return 1; }
+     HASH="$(printf '%s' "$P" | docker run --rm -i httpd:2.4-alpine htpasswd -niBC 10 x | cut -d: -f2)"; unset P
+     case "$HASH" in '$2y$10$'*) echo "hash ok";; *) echo "hash MAL"; unset HASH;; esac
+   }
+   mk_hash
+   ```
+
+   **No pegar varios `read` seguidos sin la función:** el primer `read` se come las líneas pegadas como si fueran lo que se tipea, y la contraseña queda vacía. Pasó en el primer intento de ese día; `hash ok` solo comprueba el formato, no la contraseña. La guarda `[ -n "$P" ]` evita ese caso.
+3. **Insertar el usuario** (con `$E` y `$HASH` de la sesión; `demo` no existe en esta versión de la tabla, ver la nota de 2.13):
+
+   ```bash
+   docker exec -i menta-mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --user=root menta' <<SQL
+   INSERT INTO auth_users (id, email, password_hash, role, status, created_at, updated_at)
+   VALUES (UNHEX(REPLACE(UUID(),'-','')), '$E', '$HASH', 'ADMIN', 'ACTIVE', NOW(), NOW());
+   SQL
+   unset E HASH
+   ```
+
+   El estado tiene que ser `ACTIVE`: con otro, el inicio de sesión falla (`PENDING_ACTIVATION` da 403, `LOCKED` 423, `INACTIVE` y `SUSPENDED` 401). El email se interpola en el SQL, así que solo se usa uno tipeado por el operador.
+4. **Comprobar:** iniciar sesión en `https://mentadance.com/` con ese email y la contraseña elegida.
+
+**Qué se comprobó y qué no.**
+
+- Se comprobó que el inicio de sesión web funciona con el usuario insertado (el hash `$2y$` lo acepta la API) y aterriza en `/dashboard`.
+- El rol `ADMIN` se escribió en el `INSERT`, pero **no se comprobó desde la aplicación**: el BFF todavía no tiene pantallas de gestión y `/dashboard` es la misma vista que ve un alumno. Se podrá comprobar con las rutas `/gestion/**` de #354.
+- No se probó la opción alternativa: registrar el usuario por la API (queda `STUDENT` y `PENDING_ACTIVATION`), activarlo por correo y subir el rol con `UPDATE auth_users SET role = 'ADMIN' WHERE email = '…'`. Depende del correo de activación en producción, que sigue sin probarse con un envío real (sección 2.9, #633).
+- Cuando se despliegue una versión con la migración V28, la columna `demo` se agrega con valor `FALSE` para las filas existentes, así que este usuario no queda marcado como de prueba. Se puede confirmar con el `SELECT` de la sección 2.13.
+
+Un mecanismo de arranque que cree el primer admin desde variables de entorno quedó fuera de alcance de #709.
 
 ### Decisiones diferidas
 
@@ -801,7 +858,7 @@ El puerto 22 y el 3306 no tienen regla, es decir, están bloqueados desde afuera
 
 Se completa a medida que avancen los sub-issues de #380:
 
-- Compose de producción (#589): `/opt/menta/.env` ya está completo (2026-10-17, sección 2.9), con las credenciales de Mercado Pago **de pruebas** cargadas el 2026-10-20; faltan los datos de transferencia bancaria (#633) y, para cobros reales, las credenciales de producción. El primer arranque y la renovación por `webroot` están hechos y documentados (2026-10-18, secciones 2.8 y 2.10). El endurecimiento de SSH quedó descartado (ver "Decisiones diferidas").
+- Compose de producción (#589): `/opt/menta/.env` ya está completo (2026-10-17, sección 2.9), con las credenciales de Mercado Pago **de pruebas** cargadas el 2026-10-20; los datos de transferencia, Bunny.net y SMTP se cargaron el 2026-11-09 (#633); para cobros reales faltan las credenciales de producción. El primer arranque y la renovación por `webroot` están hechos y documentados (2026-10-18, secciones 2.8 y 2.10). El endurecimiento de SSH quedó descartado (ver "Decisiones diferidas").
 - Mejoras al repositorio que dejó el primer despliegue, sin issue todavía: subir el `start_period` del healthcheck de MySQL en `docker-compose.prod.yml` (por ejemplo a 120 s) para que el primer despliegue en un servidor nuevo no falle, y revisar el test intermitente `PaymentExpirySweepIntegrationTest`.
 - Baneo de fail2ban: el `bantime` volvió a 3600 el 2026-10-19 con `fail2ban-client set sshd bantime 3600` (sección 2.4).
 - Correo (EnvialoSimple): agregar en el DNS de `mentadance.com` los registros SPF y DKIM que indica la pestaña "Registro DNS" de la cuenta, y probar un envío real (activación de cuenta). Sin esos registros los mails pueden caer en spam.
