@@ -6,11 +6,15 @@ import com.menta.auth.application.dto.ListUsersQuery;
 import com.menta.auth.application.dto.UserPage;
 import com.menta.auth.application.dto.UserSummary;
 import com.menta.auth.domain.model.Role;
+import com.menta.auth.domain.model.User;
+import com.menta.auth.domain.model.UserId;
 import com.menta.auth.domain.model.UserStatus;
 import com.menta.auth.infrastructure.persistence.entity.UserJpaEntity;
 import com.menta.auth.infrastructure.persistence.repository.UserJpaRepository;
 import com.menta.testsupport.MySqlTestImage;
 import java.time.LocalDateTime;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,8 +32,8 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
- * The listing query needs real MySQL semantics (LIKE escaping, collation), so this runs on Testcontainers like the
- * other repository tests that depend on the engine.
+ * The listing query and the row locks need real MySQL semantics (LIKE escaping, collation, {@code FOR UPDATE}),
+ * so this runs on Testcontainers like the other repository tests that depend on the engine.
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -217,5 +221,35 @@ class UserAdminRepositoryAdapterTest {
 
         assertThat(summary.firstName()).isNull();
         assertThat(summary.lastName()).isNull();
+    }
+
+    @Test
+    void locks_only_the_active_administrators() {
+        UserJpaEntity activeAdmin = seed("a1@example.com", Role.ADMIN);
+        UserJpaEntity otherActiveAdmin = seed("a2@example.com", Role.ADMIN);
+        seed("a3@example.com", Role.ADMIN, UserStatus.INACTIVE, "Nombre", "Apellido");
+        seed("i1@example.com", Role.INSTRUCTOR);
+
+        Set<UserId> locked = adapter.lockActiveAdminIds();
+
+        assertThat(locked).containsExactlyInAnyOrder(
+            UserId.of(activeAdmin.getId()), UserId.of(otherActiveAdmin.getId())
+        );
+    }
+
+    @Test
+    void finds_a_user_for_update_when_it_exists() {
+        UserJpaEntity stored = seed("a@example.com", Role.STUDENT);
+
+        Optional<User> found = adapter.findByIdForUpdate(UserId.of(stored.getId()));
+
+        assertThat(found).isPresent();
+        assertThat(found.get().getId()).isEqualTo(UserId.of(stored.getId()));
+        assertThat(found.get().getRole()).isEqualTo(Role.STUDENT);
+    }
+
+    @Test
+    void finds_nothing_for_update_when_the_user_does_not_exist() {
+        assertThat(adapter.findByIdForUpdate(UserId.generate())).isEmpty();
     }
 }

@@ -17,6 +17,7 @@ import com.menta.auth.application.port.out.TokenBlacklistPort;
 import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.repository.UserRepository;
+import com.menta.auth.infrastructure.persistence.repository.OutboxRowJpaRepository;
 import com.menta.physical.application.port.out.CheckInRateLimitPort;
 import com.menta.shared.domain.vo.Email;
 import java.time.Duration;
@@ -33,9 +34,9 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
- * Shared setup for the user administration integration tests (#378): real MySQL (Testcontainers) and the same
- * in-memory stand-in for the Redis token-version projection that {@code AuthRevocationIntegrationTest} uses, since
- * the {@code integration-test} profile has no Redis.
+ * Shared setup for the user administration integration tests (#378): real MySQL (Testcontainers), the real outbox
+ * and reconciler, and the same in-memory stand-in for the Redis token-version projection that
+ * {@code AuthRevocationIntegrationTest} uses, since the {@code integration-test} profile has no Redis.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("integration-test")
@@ -45,6 +46,7 @@ abstract class AbstractAdminUserIntegrationTest extends AbstractAuthMySqlIntegra
 
     @Autowired protected UserRepository userRepository;
     @Autowired protected PasswordEncoder passwordEncoder;
+    @Autowired protected OutboxRowJpaRepository outboxRowJpaRepository;
     @Autowired protected JdbcTemplate jdbcTemplate;
 
     @MockitoBean private AuthDegradedGuard authDegradedGuard;
@@ -67,8 +69,10 @@ abstract class AbstractAdminUserIntegrationTest extends AbstractAuthMySqlIntegra
     void cleanDatabaseAndWireFakes() {
         // The MySQL schema is shared by every test of the context: every test starts from an empty user table so
         // the "at least one active admin" rule only ever sees the users the test created.
+        jdbcTemplate.update("DELETE FROM auth_user_audit");
         jdbcTemplate.update("DELETE FROM auth_refresh_tokens");
         jdbcTemplate.update("DELETE FROM auth_users");
+        outboxRowJpaRepository.deleteAll();
 
         when(authDegradedGuard.isDegraded()).thenReturn(false);
         when(loginRateLimitPort.check(anyString(), anyString())).thenReturn(RateLimitDecision.allowed());

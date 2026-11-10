@@ -1,22 +1,30 @@
 package com.menta.auth.infrastructure.web.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.menta.auth.application.dto.ChangeUserRoleCommand;
 import com.menta.auth.application.dto.ListUsersQuery;
 import com.menta.auth.application.dto.UserPage;
 import com.menta.auth.application.dto.UserSummary;
+import com.menta.auth.application.port.in.ChangeUserRoleUseCase;
 import com.menta.auth.application.port.in.ListUsersUseCase;
+import com.menta.auth.domain.exception.LastAdminCannotBeDemotedException;
+import com.menta.auth.domain.exception.UserNotFoundException;
 import com.menta.auth.domain.model.Role;
+import com.menta.auth.domain.model.UserId;
 import com.menta.auth.domain.model.UserStatus;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -34,7 +42,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
- * MockMvc slice for the user administration listing endpoint (#378). The coarse ADMIN gate belongs to
+ * MockMvc slice for the user administration endpoints (#378). The coarse ADMIN gate belongs to
  * {@code SecurityConfig}, not to this controller (see {@code SecurityConfigTest}).
  */
 class AdminUserControllerTest {
@@ -44,12 +52,14 @@ class AdminUserControllerTest {
     private static final UUID USER_ID = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
 
     private ListUsersUseCase listUsersUseCase;
+    private ChangeUserRoleUseCase changeUserRoleUseCase;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         listUsersUseCase = mock(ListUsersUseCase.class);
-        mockMvc = MockMvcBuilders.standaloneSetup(new AdminUserController(listUsersUseCase))
+        changeUserRoleUseCase = mock(ChangeUserRoleUseCase.class);
+        mockMvc = MockMvcBuilders.standaloneSetup(new AdminUserController(listUsersUseCase, changeUserRoleUseCase))
             .setControllerAdvice(new AdminUserExceptionHandler())
             .build();
     }
@@ -149,5 +159,68 @@ class AdminUserControllerTest {
         mockMvc.perform(get(BASE_URL).param(pair[0], pair[1]).principal(admin()))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code", is("INVALID_REQUEST")));
+    }
+
+    @Test
+    void change_role_returns_the_updated_user_and_acts_on_behalf_of_the_authenticated_admin() throws Exception {
+        when(changeUserRoleUseCase.changeRole(any())).thenReturn(summary(Role.INSTRUCTOR));
+
+        mockMvc.perform(patch(BASE_URL + "/{userId}/role", USER_ID)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"role\":\"INSTRUCTOR\"}")
+                .principal(admin()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.id", is(USER_ID.toString())))
+            .andExpect(jsonPath("$.role", is("INSTRUCTOR")))
+            .andExpect(jsonPath("$.passwordHash").doesNotExist())
+            .andExpect(jsonPath("$.tokenVersion").doesNotExist());
+
+        verify(changeUserRoleUseCase).changeRole(new ChangeUserRoleCommand(ADMIN_ID, USER_ID, Role.INSTRUCTOR));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"{}", "{\"role\":null}", "{\"role\":\"SUPERADMIN\"}", "{\"role\":\"instructor\"}",
+        "{\"role\":", "not json", ""})
+    void change_role_rejects_an_invalid_body(String body) throws Exception {
+        mockMvc.perform(patch(BASE_URL + "/{userId}/role", USER_ID)
+                .contentType(MediaType.APPLICATION_JSON).content(body).principal(admin()))
+            .andExpect(status().isBadRequest())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.code", is("INVALID_REQUEST")));
+
+        verifyNoInteractions(changeUserRoleUseCase);
+    }
+
+    @Test
+    void change_role_rejects_a_user_id_that_is_not_a_uuid() throws Exception {
+        mockMvc.perform(patch(BASE_URL + "/not-a-uuid/role")
+                .contentType(MediaType.APPLICATION_JSON).content("{\"role\":\"STUDENT\"}").principal(admin()))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code", is("INVALID_REQUEST")));
+
+        verifyNoInteractions(changeUserRoleUseCase);
+    }
+
+    @Test
+    void change_role_maps_an_unknown_user_to_404() throws Exception {
+        when(changeUserRoleUseCase.changeRole(any())).thenThrow(new UserNotFoundException(UserId.of(USER_ID)));
+
+        mockMvc.perform(patch(BASE_URL + "/{userId}/role", USER_ID)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"role\":\"STUDENT\"}").principal(admin()))
+            .andExpect(status().isNotFound())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.code", is("USER_NOT_FOUND")))
+            .andExpect(jsonPath("$.detail", not(containsString(USER_ID.toString()))));
+    }
+
+    @Test
+    void change_role_maps_the_last_admin_rule_to_409() throws Exception {
+        when(changeUserRoleUseCase.changeRole(any())).thenThrow(new LastAdminCannotBeDemotedException());
+
+        mockMvc.perform(patch(BASE_URL + "/{userId}/role", USER_ID)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"role\":\"STUDENT\"}").principal(admin()))
+            .andExpect(status().isConflict())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.code", is("LAST_ADMIN_CANNOT_BE_DEMOTED")));
     }
 }

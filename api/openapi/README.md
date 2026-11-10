@@ -4,7 +4,7 @@ Contratos HTTP versionados de la API, escritos a mano.
 
 | Archivo | Alcance |
 |---------|---------|
-| `auth-v1.yaml` | Auth v1: sesión (login, refresh, logout), activación de cuentas, recuperación de contraseña y administración de usuarios (listado) |
+| `auth-v1.yaml` | Auth v1: sesión (login, refresh, logout), activación de cuentas, recuperación de contraseña y administración de usuarios (listado y cambio de rol) |
 | `billing-v1.yaml` | Billing v1: catálogo público de planes de suscripción (US-BILLING-001) |
 
 ## Por qué a mano y no generado

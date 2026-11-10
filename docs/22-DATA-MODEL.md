@@ -20,6 +20,13 @@ como valor y se validan mediante puertos; no se crean FKs ni `JOIN`s cruzados.
   fila (no hay backfill ni emails fijos en migraciones): el perfil demo marca los
   usuarios que crea, así que una base demo local sembrada antes de V28 hay que
   recrearla o marcarla a mano con el `UPDATE` de la sección 2.13 del runbook del VPS.
+- `auth_user_audit` (V29, #378): registro de solo inserción de los cambios que un
+  administrador hace sobre una cuenta. Columnas: `id`, `user_id` (FK a
+  `auth_users`, con índice), `actor_id` (el admin que hizo el cambio, sin FK),
+  `action VARCHAR(50)`, `previous_value` y `new_value` (`VARCHAR(255)`, nulos) y
+  `created_at DATETIME(3)`. Hoy la única acción es `ROLE_CHANGED`, con el rol
+  anterior y el nuevo. El rollback del operador es `V29_1`, fuera de
+  `db/migration`.
 - Roles iniciales: `ALUMNO`, `PROFESOR`, `RECEPCIONISTA`, `ADMIN`.
 - `auth_refresh_tokens`: `token_hash CHAR(64) UNIQUE`, `family_id`, `issued_at`,
   `expires_at`, `revoked_at`, `rotated_at` y metadatos de dispositivo.

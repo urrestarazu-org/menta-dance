@@ -28,9 +28,10 @@ individual, una vez que el jti se transporte desde la capa HTTP.
 El mecanismo que efectivamente invalida access tokens ya emitidos es la
 proyección de `tokenVersion` en Redis vía outbox:
 
-- `TokenVersionOutboxEventHandler` proyecta `REFRESH_REVOKED`, `USER_LOGGED_OUT`
-  y `PASSWORD_RESET_COMPLETED` (reuso de refresh, logout normal y reset de
-  contraseña bumpean `tokenVersion` y publican el valor nuevo).
+- `TokenVersionOutboxEventHandler` proyecta `REFRESH_REVOKED`, `USER_LOGGED_OUT`,
+  `PASSWORD_RESET_COMPLETED` y `USER_ROLE_CHANGED` (reuso de refresh, logout
+  normal, reset de contraseña y cambio de rol por un admin bumpean
+  `tokenVersion` y publican el valor nuevo).
 - La escritura en Redis es monotónica: un script Lua sólo aplica el `SET` si
   la versión entrante es estrictamente mayor a la proyectada, para que un
   replay del outbox fuera de orden (retry con backoff que llega después de

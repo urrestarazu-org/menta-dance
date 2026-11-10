@@ -215,6 +215,25 @@ public class User {
         this.updatedAt = LocalDateTime.now();
     }
 
+    /**
+     * Replaces the role and bumps tokenVersion in the same call: the role travels in the access token, so a
+     * caller cannot persist a role change without also invalidating the tokens that carry the old one.
+     *
+     * <p>Assigning the role the user already has changes nothing (no bump, no timestamp update).
+     * Persisted by the caller via UserRepository#save.
+     *
+     * @param newRole the role to assign, never null
+     */
+    public void changeRole(Role newRole) {
+        Objects.requireNonNull(newRole, "newRole cannot be null");
+        if (this.role == newRole) {
+            return;
+        }
+        this.role = newRole;
+        this.tokenVersion += 1;
+        this.updatedAt = LocalDateTime.now();
+    }
+
     public boolean isActive() {
         return this.status == UserStatus.ACTIVE;
     }

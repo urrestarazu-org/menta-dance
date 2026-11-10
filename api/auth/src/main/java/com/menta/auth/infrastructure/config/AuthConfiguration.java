@@ -1,6 +1,7 @@
 package com.menta.auth.infrastructure.config;
 
 import com.menta.auth.application.port.in.ActivateAccountUseCase;
+import com.menta.auth.application.port.in.ChangeUserRoleUseCase;
 import com.menta.auth.application.port.in.ListUsersUseCase;
 import com.menta.auth.application.port.in.LoginUseCase;
 import com.menta.auth.application.port.in.LogoutUseCase;
@@ -32,7 +33,9 @@ import com.menta.auth.application.port.out.RefreshTokenRepository;
 import com.menta.auth.application.port.out.TokenBlacklistPort;
 import com.menta.auth.application.port.out.TokenHasher;
 import com.menta.auth.application.port.out.UserAdminRepository;
+import com.menta.auth.application.port.out.UserAuditRepository;
 import com.menta.auth.application.usecase.ActivateAccountUseCaseImpl;
+import com.menta.auth.application.usecase.ChangeUserRoleUseCaseImpl;
 import com.menta.auth.application.usecase.ListUsersUseCaseImpl;
 import com.menta.auth.application.usecase.LoginUseCaseImpl;
 import com.menta.auth.application.usecase.LogoutUseCaseImpl;
@@ -58,6 +61,7 @@ import com.menta.auth.infrastructure.security.RedisLoginRateLimitPort;
 import com.menta.auth.infrastructure.security.Sha256TokenHasher;
 import com.menta.auth.infrastructure.security.TokenBlacklistPortImpl;
 import com.menta.auth.infrastructure.transaction.TransactionalActivateAccountUseCase;
+import com.menta.auth.infrastructure.transaction.TransactionalChangeUserRoleUseCase;
 import com.menta.auth.infrastructure.transaction.TransactionalLoginUseCase;
 import com.menta.auth.infrastructure.transaction.TransactionalLogoutUseCase;
 import com.menta.auth.infrastructure.transaction.TransactionalRefreshTokenUseCase;
@@ -505,6 +509,26 @@ public class AuthConfiguration {
     @Bean
     public ListUsersUseCase listUsersUseCase(UserAdminRepository userAdminRepository) {
         return new ListUsersUseCaseImpl(userAdminRepository);
+    }
+
+    @Bean
+    public ChangeUserRoleUseCase changeUserRoleUseCase(
+        UserAdminRepository userAdminRepository,
+        UserRepository userRepository,
+        RefreshTokenRepository refreshTokenRepository,
+        OutboxAppender outboxAppender,
+        UserAuditRepository userAuditRepository,
+        Clock clock
+    ) {
+        ChangeUserRoleUseCaseImpl implementation = new ChangeUserRoleUseCaseImpl(
+            userAdminRepository,
+            userRepository,
+            refreshTokenRepository,
+            outboxAppender,
+            userAuditRepository,
+            clock
+        );
+        return new TransactionalChangeUserRoleUseCase(implementation);
     }
 
     /**

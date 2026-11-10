@@ -4,10 +4,17 @@ import com.menta.auth.application.dto.ListUsersQuery;
 import com.menta.auth.application.dto.UserPage;
 import com.menta.auth.application.dto.UserSummary;
 import com.menta.auth.application.port.out.UserAdminRepository;
+import com.menta.auth.domain.model.Role;
+import com.menta.auth.domain.model.User;
+import com.menta.auth.domain.model.UserId;
+import com.menta.auth.domain.model.UserStatus;
 import com.menta.auth.infrastructure.persistence.entity.UserJpaEntity;
 import com.menta.auth.infrastructure.persistence.mapper.UserMapper;
 import com.menta.auth.infrastructure.persistence.repository.UserJpaRepository;
 import com.menta.auth.infrastructure.persistence.repository.UserSearchSpecifications;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -39,5 +46,17 @@ public class UserAdminRepositoryAdapter implements UserAdminRepository {
             page.getContent().stream().map(UserMapper::toDomain).map(UserSummary::from).toList(),
             page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages()
         );
+    }
+
+    @Override
+    public Optional<User> findByIdForUpdate(UserId id) {
+        return jpaRepository.findByIdForUpdate(id.getValue()).map(UserMapper::toDomain);
+    }
+
+    @Override
+    public Set<UserId> lockActiveAdminIds() {
+        return jpaRepository.lockAllByRoleAndStatusOrderById(Role.ADMIN, UserStatus.ACTIVE).stream()
+            .map(entity -> UserId.of(entity.getId()))
+            .collect(Collectors.toUnmodifiableSet());
     }
 }

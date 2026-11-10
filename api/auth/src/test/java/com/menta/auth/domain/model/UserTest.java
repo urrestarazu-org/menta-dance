@@ -175,4 +175,41 @@ class UserTest {
         assertThat(demo.isDemo()).isTrue();
         assertThat(notDemo.isDemo()).isFalse();
     }
+
+    @Test
+    void change_role_replaces_the_role_and_bumps_the_token_version_in_the_same_call() {
+        // The role travels in the access token: changing it without bumping tokenVersion would let a
+        // token carrying the old role keep authorizing until it expires.
+        LocalDateTime past = LocalDateTime.now().minusDays(1);
+        User user = User.rehydrate(
+            UserId.generate(), Email.of("student@example.com"), "hash", Role.STUDENT, UserStatus.ACTIVE,
+            past, past, 4L
+        );
+
+        user.changeRole(Role.INSTRUCTOR);
+
+        assertThat(user.getRole()).isEqualTo(Role.INSTRUCTOR);
+        assertThat(user.getTokenVersion()).isEqualTo(5L);
+        assertThat(user.getUpdatedAt()).isAfter(past);
+        assertThat(user.getCreatedAt()).isEqualTo(past);
+    }
+
+    @Test
+    void change_role_rejects_a_null_role() {
+        assertThatThrownBy(() -> activeUser().changeRole(null)).isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void change_role_to_the_current_role_changes_nothing() {
+        LocalDateTime past = LocalDateTime.now().minusDays(1);
+        User user = User.rehydrate(
+            UserId.generate(), Email.of("student@example.com"), "hash", Role.STUDENT, UserStatus.ACTIVE,
+            past, past, 4L
+        );
+
+        user.changeRole(Role.STUDENT);
+
+        assertThat(user.getTokenVersion()).isEqualTo(4L);
+        assertThat(user.getUpdatedAt()).isEqualTo(past);
+    }
 }

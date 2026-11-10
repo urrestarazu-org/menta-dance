@@ -75,7 +75,7 @@ tags:
   - name: Recuperación de contraseña
     description: Solicitud y consumo del enlace de recuperación de contraseña.
   - name: Administración de usuarios
-    description: Listado de cuentas. Requiere el rol `ADMIN`.
+    description: Listado de cuentas y cambio de rol. Requiere el rol `ADMIN`.
 
 paths:
   /api/v1/auth/login:
@@ -625,6 +625,91 @@ paths:
         '403':
           $ref: '#/components/responses/AccessDenied'
 
+  /api/v1/admin/users/{userId}/role:
+    patch:
+      tags: [Administración de usuarios]
+      summary: Cambiar el rol de un usuario
+      description: |
+        Asigna otro rol al usuario. El destino puede ser cualquiera de los cuatro
+        roles y el origen puede estar en cualquier estado.
+
+        Cambiar el rol **cierra todas las sesiones del usuario**: se revocan sus
+        refresh tokens y se incrementa su `token_version`, de modo que un access
+        token emitido con el rol anterior deja de autorizar apenas el outbox
+        proyecta la versión a Redis (no hay que esperar a que expire).
+
+        Asignar el rol que el usuario ya tiene es un no-op idempotente: responde
+        `200` con el usuario sin tocar sesiones ni auditoría.
+
+        El sistema no puede quedarse sin un `ADMIN` activo: quitarle el rol al
+        último administrador activo (aunque sea uno mismo) responde `409
+        LAST_ADMIN_CANNOT_BE_DEMOTED`. La regla se aplica bajo bloqueo de filas,
+        así que dos administradores que se degradan entre sí a la vez no pueden
+        dejar el sistema sin ninguno.
+
+        Cada cambio se audita: quién, cuándo, rol anterior y rol nuevo.
+      operationId: changeUserRole
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeUserRoleRequest'
+      responses:
+        '200':
+          description: El usuario con su rol actual.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSummary'
+        '400':
+          description: Cuerpo inválido, rol desconocido o `userId` que no es un UUID.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://menta.dance/problems/invalid_request
+                title: Bad Request
+                status: 400
+                detail: La solicitud contiene datos inválidos.
+                code: INVALID_REQUEST
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          description: El usuario no existe.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://menta.dance/problems/user_not_found
+                title: Not Found
+                status: 404
+                detail: El usuario no existe.
+                code: USER_NOT_FOUND
+        '409':
+          description: El cambio dejaría al sistema sin un administrador activo.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://menta.dance/problems/last_admin_cannot_be_demoted
+                title: Conflict
+                status: 409
+                detail: No se puede quitar el rol de administrador al último administrador activo.
+                code: LAST_ADMIN_CANNOT_BE_DEMOTED
+
 components:
 
   securitySchemes:
@@ -812,6 +897,14 @@ components:
       enum: [PENDING_ACTIVATION, ACTIVE, INACTIVE, SUSPENDED, LOCKED]
       example: ACTIVE
 
+    ChangeUserRoleRequest:
+      type: object
+      required: [role]
+      properties:
+        role:
+          $ref: '#/components/schemas/UserRole'
+      additionalProperties: false
+
     UserSummary:
       type: object
       description: |
@@ -914,6 +1007,8 @@ components:
         - SAME_PASSWORD
         - AUTHENTICATION_REQUIRED
         - ACCESS_DENIED
+        - USER_NOT_FOUND
+        - LAST_ADMIN_CANNOT_BE_DEMOTED
 
   responses:
 

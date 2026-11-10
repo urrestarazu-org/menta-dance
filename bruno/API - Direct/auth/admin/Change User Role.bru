@@ -1,0 +1,61 @@
+meta {
+  name: Change User Role (Admin)
+  type: http
+  seq: 2
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/admin/users/{{targetUserId}}/role
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "role": "INSTRUCTOR"
+  }
+}
+
+docs {
+  #378. Requiere un access token de ADMIN. Cambia el rol del usuario
+  {{targetUserId}} (definilo en el entorno con un id de "List Users").
+
+  Cambiar el rol cierra todas las sesiones del usuario: se revocan sus refresh
+  tokens y los access tokens con el rol anterior dejan de autorizar apenas el
+  outbox proyecta la nueva versión de token. Cada cambio queda auditado (quién,
+  cuándo, rol anterior y nuevo).
+
+  Asignar el rol que el usuario ya tiene es un no-op: 200 sin tocar sesiones.
+
+  El sistema no puede quedarse sin un ADMIN activo: quitarle el rol al último
+  administrador activo (incluido uno mismo) devuelve 409.
+
+  Contrato de éxito (200): { id, email, firstName, lastName, role, status, demo, createdAt }
+
+  Contrato de error:
+    400 INVALID_REQUEST              → body sin role, role desconocido o userId que no es UUID
+    401                              → sin access token
+    403                              → el usuario autenticado no es ADMIN
+    404 USER_NOT_FOUND               → el usuario no existe
+    409 LAST_ADMIN_CANNOT_BE_DEMOTED → dejaría al sistema sin un ADMIN activo
+}
+
+tests {
+  test("Devuelve el usuario con el rol pedido", function() {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().role).to.equal("INSTRUCTOR");
+  });
+
+  test("Nunca expone credenciales", function() {
+    expect(res.getBody()).to.not.have.property("passwordHash");
+    expect(res.getBody()).to.not.have.property("tokenVersion");
+  });
+}
+
+assert {
+  res.status: eq 200
+}
