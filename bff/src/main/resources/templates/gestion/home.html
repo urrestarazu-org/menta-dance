@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/management :: page('Gestión', 'home', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<h1 class="mb-4">Gestión</h1>
+
+<p class="mb-6">Hola, <span th:text="${username}">User</span>.</p>
+
+<p class="mb-6">Las secciones de gestión se irán habilitando a medida que estén disponibles.</p>
+</th:block>
+</body>
+</html>

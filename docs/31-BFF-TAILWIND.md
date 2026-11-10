@@ -196,6 +196,60 @@ Tokens de feedback (contraste AA sobre su superficie): `feedback-error`,
 
 Los tests que recorren enlaces ignoran los anchors internos (`#main`) del skip link.
 
+## Área de gestión (`/gestion`)
+
+Base del área web para el personal (issue #354). Todavía no hay pantallas de negocio: solo el inicio
+`GET /gestion`. La autorización real la decide la API; el BFF solo evita mostrar pantallas que un rol no
+puede usar.
+
+### Prefijos y roles
+
+Las reglas viven en `BffSecurityConfig`, de la más específica a la más general (gana la primera que coincide).
+Sin sesión, el navegador va a `/login`; con sesión pero sin el rol, recibe un 403.
+
+| Ruta | Roles con acceso |
+|------|------------------|
+| `GET /gestion` (inicio) | `ADMIN`, `INSTRUCTOR`, `RECEPTIONIST` |
+| `/gestion/contenido/**`, `/gestion/sesiones/**` | `ADMIN`, `INSTRUCTOR` |
+| `/gestion/recepcion/**` | `RECEPTIONIST`, `ADMIN` |
+| `/gestion/billing/**`, `/gestion/dispositivos/**` | `ADMIN` |
+| Cualquier otra ruta bajo `/gestion/**` | `ADMIN` (cierra por defecto: un prefijo no previsto no queda abierto al resto del personal) |
+
+### Aterrizaje después del login
+
+`RoleBasedAuthenticationSuccessHandler` aplica la decisión de `PostLoginLanding` (capa `application`):
+`ADMIN`, `INSTRUCTOR` y `RECEPTIONIST` van a `/gestion`; `STUDENT` y cualquier otro rol, a `/dashboard`. Si
+hay una solicitud guardada (hoy solo `GET /plans/suscribirme`, #361), esa tiene prioridad.
+
+### Página 403
+
+Spring Boot sirve `templates/error/403.html` para cualquier 403. Muestra "No tenés acceso a esta página", no
+incluye detalles de la API ni del stack, y ofrece volver a `/gestion` (personal), a `/dashboard` (otro usuario
+con sesión) o a `/` (sin sesión). El resto de los errores sigue usando `error.html`.
+
+### Layout y navegación
+
+`fragments/management.html :: page(title, active, content)` envuelve `fragments/layout :: page` (no duplica
+header ni footer) y agrega `<nav aria-label="Gestión">` con "Inicio" y las secciones del rol. `active` es la
+clave de la sección de la página (`home` para el inicio) y marca ese enlace con `aria-current="page"`.
+
+```html
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/management :: page('Contenido', 'content', ~{::main-content})}">
+```
+
+Las secciones salen del bean `managementNavigation` (`ManagementNavigationConfig`), que usa la clase
+`ManagementNavigation` de la capa `application`: ofrece solo las secciones **habilitadas** cuyos roles
+coinciden con los del usuario, en el orden declarado. Los roles se declaran sin el prefijo `ROLE_`.
+
+### Cómo habilitar una sección nueva
+
+1. Agregar el controller de la pantalla bajo su prefijo (por ejemplo `/gestion/contenido`) y su vista con
+   `fragments/management :: page(..., '<clave>', ...)`.
+2. En `ManagementNavigationConfig`, pasar `enabled` de esa sección a `true` (así nunca hay un enlace sin pantalla).
+3. Si el prefijo es nuevo, agregarlo en `BffSecurityConfig` antes de `/gestion/**` y sumar su caso a
+   `ManagementAccessIntegrationTest`.
+
 ## Accesibilidad base
 
 `input.css` define `:focus-visible` global (outline `brand-action`, 2px) y reduce

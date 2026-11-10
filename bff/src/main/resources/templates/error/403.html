@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security"
+      th:replace="~{fragments/layout :: page('Acceso denegado', ~{::main-content})}">
+<body>
+<!--
+  Spring Boot serves this page by itself for any 403 (error/<status>). It shows no upstream or stack detail
+  and sends the user back to the home that fits their role; the staff roles are the ones of ManagementRoles.
+-->
+<th:block th:fragment="main-content">
+<div class="mx-auto max-w-sm">
+    <h1 class="mb-6">No tenés acceso a esta página</h1>
+
+    <div class="card space-y-2">
+        <p>Tu cuenta no tiene permiso para ver esta página.</p>
+        <p>Si creés que se trata de un error, consultá con quien administra la academia.</p>
+    </div>
+
+    <p class="mt-6">
+        <a class="btn btn-primary" sec:authorize="hasAnyRole('ADMIN', 'INSTRUCTOR', 'RECEPTIONIST')"
+           th:href="@{/gestion}">Volver a gestión</a>
+        <a class="btn btn-primary"
+           sec:authorize="isAuthenticated() and !hasAnyRole('ADMIN', 'INSTRUCTOR', 'RECEPTIONIST')"
+           th:href="@{/dashboard}">Volver a mi panel</a>
+        <a class="btn btn-primary" sec:authorize="!isAuthenticated()" th:href="@{/}">Volver al inicio</a>
+    </p>
+</div>
+</th:block>
+</body>
+</html>

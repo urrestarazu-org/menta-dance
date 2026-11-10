@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Shell of the management area (#354): the common page layout plus a labelled navigation with the home link
+  and the sections the signed-in roles can open. Adopt it like the common layout, with the management one:
+
+    <html xmlns:th="http://www.thymeleaf.org"
+          th:replace="~{fragments/management :: page('Page title', 'home', ~{::main-content})}">
+    <body>
+    <th:block th:fragment="main-content"> ...page content... </th:block>
+    </body>
+    </html>
+
+  `active` is the key of the section the page belongs to (`home` for the area's home); that entry is marked
+  with aria-current="page". The sections come from the `managementNavigation` bean: disabled sections are
+  never listed, so there are no dead links.
+-->
+
+<th:block th:fragment="page(title, active, content)">
+    <th:block th:replace="~{fragments/layout :: page(${title}, ~{:: shell(${content}, ${active})})}"></th:block>
+</th:block>
+
+<th:block th:fragment="shell(body, active)">
+    <nav aria-label="Gestión" class="mb-8 border-b border-brand-deep/20 pb-4"
+         th:with="sections=${@managementNavigation.sectionsFor(#authentication?.authorities?.![authority])}">
+        <ul class="m-0 flex list-none flex-wrap gap-2 p-0">
+            <li>
+                <a th:href="@{/gestion}" th:aria-current="${active == 'home'} ? 'page'"
+                   th:classappend="${active == 'home'} ? 'bg-brand-deep text-brand-surface no-underline'"
+                   class="inline-block rounded px-3 py-1 font-medium">Inicio</a>
+            </li>
+            <li th:each="section : ${sections}">
+                <a th:href="@{${section.path}}" th:text="${section.label}"
+                   th:aria-current="${active == section.key} ? 'page'"
+                   th:classappend="${active == section.key} ? 'bg-brand-deep text-brand-surface no-underline'"
+                   class="inline-block rounded px-3 py-1 font-medium">Sección</a>
+            </li>
+        </ul>
+    </nav>
+    <th:block th:insert="${body}"></th:block>
+</th:block>
+</body>
+</html>

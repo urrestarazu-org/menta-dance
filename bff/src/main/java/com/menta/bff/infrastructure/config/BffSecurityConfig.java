@@ -4,6 +4,7 @@ import com.menta.bff.infrastructure.security.BffAuthenticationProvider;
 import com.menta.bff.infrastructure.security.BffLogoutHandler;
 import com.menta.bff.infrastructure.security.BffLogoutSuccessHandler;
 import com.menta.bff.infrastructure.security.ClientAuthenticationDetailsSource;
+import com.menta.bff.infrastructure.security.RoleBasedAuthenticationSuccessHandler;
 import com.menta.bff.infrastructure.web.filter.TokenRefreshFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -16,6 +17,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.savedrequest.HttpSessionRequestCache;
+import org.springframework.security.web.savedrequest.RequestCache;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 
 /**
@@ -23,7 +25,9 @@ import org.springframework.security.web.servlet.util.matcher.PathPatternRequestM
  *
  * <p>Configures:
  * - Custom AuthenticationProvider (validates against Auth API)
- * - Form-based login (custom login page); only the subscribe entry path is remembered across it
+ * - Form-based login (custom login page); only the subscribe entry path is remembered across it, and
+ *   every other login lands by role (staff on /gestion, everyone else on /dashboard)
+ * - Management area (/gestion/**) authorized by role prefix; the API makes the real decision
  * - Custom LogoutHandler (revokes refresh token BEFORE session invalidation)
  * - Custom LogoutSuccessHandler (redirects AFTER session invalidation)
  * - CSRF protection (session-stored tokens; only /actuator/health is exempt)
@@ -50,6 +54,7 @@ public class BffSecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        HttpSessionRequestCache requestCache = subscribeEntryRequestCache();
         http
                 // Custom authentication provider (validates against Auth API)
                 .authenticationProvider(authenticationProvider)
@@ -125,6 +130,19 @@ public class BffSecurityConfig {
                         // Subscription checkout (#361): students only. Any other role gets 403
                         // before the controller runs; anonymous callers go to /login.
                         .requestMatchers(HttpMethod.POST, "/suscripciones").hasRole("STUDENT")
+                        // Management area (#354), from the most specific rule to the most general: the
+                        // first match wins. The Management API decides the real authorization; these
+                        // rules only keep the BFF from showing screens a role cannot use. Anonymous
+                        // callers go to /login; an authenticated one without the role gets a 403.
+                        // Home of the area: any staff role.
+                        .requestMatchers(HttpMethod.GET, "/gestion").hasAnyRole("ADMIN", "INSTRUCTOR", "RECEPTIONIST")
+                        .requestMatchers("/gestion/contenido/**", "/gestion/sesiones/**")
+                        .hasAnyRole("ADMIN", "INSTRUCTOR")
+                        .requestMatchers("/gestion/recepcion/**").hasAnyRole("RECEPTIONIST", "ADMIN")
+                        .requestMatchers("/gestion/billing/**", "/gestion/dispositivos/**").hasRole("ADMIN")
+                        // Fail closed: a prefix nobody planned (or any other verb on the exact
+                        // /gestion path) is administrator-only, never open to the rest of the staff.
+                        .requestMatchers("/gestion/**").hasRole("ADMIN")
                         // Physical class purchase (#365): POST /classes/{id}/cotizar, POST /compras and
                         // GET /compras/retorno are deliberately not listed above, so they fall under
                         // anyRequest().authenticated();
@@ -144,15 +162,15 @@ public class BffSecurityConfig {
                         // has to reach for it out of band.
                         .authenticationDetailsSource(clientAuthenticationDetailsSource)
                         // Only the anonymous "Suscribirme" entry point is remembered across the
-                        // login (see subscribeEntryRequestCache); without alwaysUse, any other
-                        // login still lands on the dashboard.
-                        .defaultSuccessUrl("/dashboard")
+                        // login (see subscribeEntryRequestCache) and it wins; any other login lands
+                        // by role: staff on /gestion, everyone else on /dashboard (#354).
+                        .successHandler(roleBasedSuccessHandler(requestCache))
                         .failureUrl("/login?error=true")
                         .permitAll()
                 )
 
                 // Login return (#361): the saved request is honored only for the subscribe entry path
-                .requestCache(cache -> cache.requestCache(subscribeEntryRequestCache()))
+                .requestCache(cache -> cache.requestCache(requestCache))
 
                 // Logout configuration with custom handlers
                 .logout(logout -> logout
@@ -187,6 +205,16 @@ public class BffSecurityConfig {
                 .addFilterBefore(tokenRefreshFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    /**
+     * Success handler that honors the saved request first and otherwise lands the user by role. It reads
+     * the same request cache the login filter saves into, so the two never disagree.
+     */
+    private static RoleBasedAuthenticationSuccessHandler roleBasedSuccessHandler(RequestCache requestCache) {
+        RoleBasedAuthenticationSuccessHandler handler = new RoleBasedAuthenticationSuccessHandler();
+        handler.setRequestCache(requestCache);
+        return handler;
     }
 
     /**
