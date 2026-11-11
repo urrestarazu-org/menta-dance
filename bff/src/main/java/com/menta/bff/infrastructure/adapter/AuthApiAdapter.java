@@ -1,5 +1,6 @@
 package com.menta.bff.infrastructure.adapter;
 
+import com.menta.bff.application.dto.ActivationRequirement;
 import com.menta.bff.application.dto.LoginCommand;
 import com.menta.bff.application.dto.RegisterCommand;
 import com.menta.bff.application.dto.RequestPasswordResetCommand;
@@ -50,6 +51,7 @@ public class AuthApiAdapter implements AuthApiClient {
     private static final String FORGOT_PASSWORD_ENDPOINT = "/api/v1/auth/forgot-password";
     private static final String RESET_PASSWORD_ENDPOINT = "/api/v1/auth/reset-password";
     private static final Pattern PROBLEM_CODE = Pattern.compile("\"code\"\\s*:\\s*\"([A-Z_]{1,64})\"");
+    private static final Pattern PASSWORD_REQUIRED_FLAG = Pattern.compile("\"passwordRequired\"\\s*:\\s*true");
 
     private static final String FORWARDED_FOR_HEADER = "X-Forwarded-For";
 
@@ -197,7 +199,7 @@ public class AuthApiAdapter implements AuthApiClient {
     }
 
     @Override
-    public void validateActivationToken(String token) {
+    public ActivationRequirement validateActivationToken(String token) {
         Objects.requireNonNull(token, "token cannot be null");
 
         log.debug("Calling Auth API activation token validation endpoint");
@@ -205,24 +207,40 @@ public class AuthApiAdapter implements AuthApiClient {
         // The token is a URI template variable, so it is percent-encoded as one path segment.
         ApiReply reply = send(webClient.get().uri(ACTIVATE_ENDPOINT + "/{token}", token), "validate-activation");
 
-        if (reply.status() != HttpStatus.NO_CONTENT.value()) {
-            throw activationFailure(reply, "validate-activation");
+        if (reply.status() == HttpStatus.NO_CONTENT.value()) {
+            return ActivationRequirement.NONE;
         }
+        if (reply.status() == HttpStatus.OK.value() && reply.passwordRequired()) {
+            return ActivationRequirement.PASSWORD;
+        }
+        throw activationFailure(reply, "validate-activation");
     }
 
     @Override
     public void activate(String token) {
         Objects.requireNonNull(token, "token cannot be null");
 
+        submitActivation(Map.of("token", token));
+    }
+
+    @Override
+    public void activate(String token, String password) {
+        Objects.requireNonNull(token, "token cannot be null");
+        Objects.requireNonNull(password, "password cannot be null");
+
+        submitActivation(Map.of("token", token, "password", password));
+    }
+
+    private void submitActivation(Map<String, String> body) {
         log.debug("Calling Auth API activate endpoint");
 
         ApiReply reply = send(webClient.post()
                 .uri(ACTIVATE_ENDPOINT)
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(Map.of("token", token)), "activate");
+                .bodyValue(body), "activate");
 
         if (reply.status() != HttpStatus.NO_CONTENT.value()) {
-            throw activationFailure(reply, "activate");
+            throw activateFailure(reply);
         }
     }
 
@@ -278,13 +296,14 @@ public class AuthApiAdapter implements AuthApiClient {
     }
 
     /**
-     * Sends a request and keeps only what the callers need: status, Retry-After and, for a 400,
-     * the problem {@code code}.
+     * Sends a request and keeps only what the callers need: status, Retry-After and, for a 400 or a
+     * 200, the body from which they read a single field.
      *
-     * <p>The body is released unread — the public account endpoints answer with empty
+     * <p>Any other body is released unread — the public account endpoints answer with empty
      * bodies on success and RFC 9457 problems on failure, and neither is ever shown to
-     * the browser. Only the {@code code} of a 400 is read, so password recovery can tell a weak
-     * password from a malformed request. Transport errors are reported by class only: their message can carry
+     * the browser. Only the {@code code} of a 400 is read, so password recovery and activation can tell
+     * a weak password from a malformed request, and only the {@code passwordRequired} flag of the 200 of
+     * the token validation. Transport errors are reported by class only: their message can carry
      * the request URI, which for activation contains the single-use token.
      * </p>
      */
@@ -292,9 +311,9 @@ public class AuthApiAdapter implements AuthApiClient {
         ApiReply reply;
         try {
             reply = request
-                    .exchangeToMono(response -> problemCode(response).map(code -> new ApiReply(
+                    .exchangeToMono(response -> readBody(response).map(body -> new ApiReply(
                             response.statusCode().value(),
-                            response.headers().asHttpHeaders().getFirst(HttpHeaders.RETRY_AFTER), code)))
+                            response.headers().asHttpHeaders().getFirst(HttpHeaders.RETRY_AFTER), body)))
                     .timeout(authProperties.getTimeout())
                     .block();
         } catch (RuntimeException e) {
@@ -307,15 +326,12 @@ public class AuthApiAdapter implements AuthApiClient {
         return reply;
     }
 
-    private static Mono<String> problemCode(ClientResponse response) {
-        if (response.statusCode().value() != HttpStatus.BAD_REQUEST.value()) {
+    private static Mono<String> readBody(ClientResponse response) {
+        int status = response.statusCode().value();
+        if (status != HttpStatus.BAD_REQUEST.value() && status != HttpStatus.OK.value()) {
             return response.releaseBody().thenReturn("");
         }
         return response.bodyToMono(String.class)
-                .map(body -> {
-                    Matcher matcher = PROBLEM_CODE.matcher(body);
-                    return matcher.find() ? matcher.group(1) : "";
-                })
                 .defaultIfEmpty("")
                 .onErrorReturn("");
     }
@@ -346,6 +362,22 @@ public class AuthApiAdapter implements AuthApiClient {
             return new InvalidActivationTokenException("Auth API rejected the activation token");
         }
         return failure(reply, operation);
+    }
+
+    /**
+     * Activation with a password also tells the two password verdicts apart from the token verdict; everything
+     * else follows {@link #activationFailure}.
+     */
+    private static RuntimeException activateFailure(ApiReply reply) {
+        if (reply.status() == HttpStatus.BAD_REQUEST.value()) {
+            if ("PASSWORD_REQUIRED".equals(reply.code())) {
+                return new PasswordRequiredException();
+            }
+            if ("WEAK_PASSWORD".equals(reply.code())) {
+                return new PasswordRejectedException(PasswordRejectedException.Reason.WEAK);
+            }
+        }
+        return activationFailure(reply, "activate");
     }
 
     /**
@@ -380,7 +412,19 @@ public class AuthApiAdapter implements AuthApiClient {
         }
     }
 
-    private record ApiReply(int status, String retryAfter, String code) {
+    /**
+     * What the Auth API answered. {@code body} is only kept for a 400 and a 200, and only to read one field
+     * from it: it is never shown nor logged.
+     */
+    private record ApiReply(int status, String retryAfter, String body) {
+
+        String code() {
+            return problemCodeOf(body);
+        }
+
+        boolean passwordRequired() {
+            return PASSWORD_REQUIRED_FLAG.matcher(body).find();
+        }
     }
 
     /**

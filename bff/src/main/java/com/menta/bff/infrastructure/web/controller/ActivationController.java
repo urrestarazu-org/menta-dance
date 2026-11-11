@@ -1,5 +1,6 @@
 package com.menta.bff.infrastructure.web.controller;
 
+import com.menta.bff.application.dto.ActivationRequirement;
 import com.menta.bff.application.port.out.AuthApiClient;
 import com.menta.bff.application.usecase.AccountActivationUseCase;
 import jakarta.servlet.http.HttpServletResponse;
@@ -41,9 +42,12 @@ public class ActivationController {
     public String confirm(@PathVariable String token, Model model, HttpServletResponse response) {
         keepTokenOutOfCachesAndReferrers(response);
         try {
-            if (!accountActivationUseCase.isTokenValid(token)) {
+            if (accountActivationUseCase.checkToken(token) == ActivationRequirement.PASSWORD) {
+                // This page cannot ask for a password yet: do not offer a button that could not succeed.
                 return invalidLink(model, response);
             }
+        } catch (AuthApiClient.InvalidActivationTokenException e) {
+            return invalidLink(model, response);
         } catch (AuthApiClient.RateLimitedException | AuthApiClient.ServiceUnavailableException e) {
             // The token could not be checked, not rejected: keep the button so the user can retry.
             AuthFlowErrors.apply(e, model, response);
@@ -58,7 +62,7 @@ public class ActivationController {
         keepTokenOutOfCachesAndReferrers(response);
         try {
             accountActivationUseCase.activate(token);
-        } catch (AuthApiClient.InvalidActivationTokenException e) {
+        } catch (AuthApiClient.InvalidActivationTokenException | AuthApiClient.PasswordRequiredException e) {
             return invalidLink(model, response);
         } catch (AuthApiClient.RateLimitedException | AuthApiClient.ServiceUnavailableException e) {
             AuthFlowErrors.apply(e, model, response);

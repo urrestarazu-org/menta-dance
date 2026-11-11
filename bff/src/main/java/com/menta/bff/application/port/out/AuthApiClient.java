@@ -1,5 +1,6 @@
 package com.menta.bff.application.port.out;
 
+import com.menta.bff.application.dto.ActivationRequirement;
 import com.menta.bff.application.dto.LoginCommand;
 import com.menta.bff.application.dto.RegisterCommand;
 import com.menta.bff.application.dto.RequestPasswordResetCommand;
@@ -15,7 +16,8 @@ import java.time.Duration;
  * - Refresh (exchange refresh token for new access token)
  * - Logout (revoke refresh token)
  * - Registration (public account sign-up)
- * - Account activation (token validation and consumption)
+ * - Account activation (token validation and consumption, choosing the password when the
+ *   account was created by an administrator)
  * - Resend of the activation email
  * - Password recovery (request email, then reset with the emailed token)
  * </p>
@@ -96,28 +98,52 @@ public interface AuthApiClient {
      * Checks that an activation token is still usable, without consuming it.
      *
      * <p>Calls GET /api/v1/auth/activate/{token}. The token is a credential: it travels in
-     * the path of this single call and must never be logged.
+     * the path of this single call and must never be logged. The API answers 204 for an account
+     * that already has its password and 200 {@code {"passwordRequired": true}} for one created by an
+     * administrator, whose holder must choose the password while activating.
      * </p>
      *
      * @param token Opaque activation token received by email
+     * @return what the holder still has to provide to activate the account
      * @throws InvalidActivationTokenException if the token is invalid, expired or already used (400)
      * @throws RateLimitedException            if the API rate limit was hit (429)
-     * @throws ServiceUnavailableException     if Auth API is unreachable or degraded (503)
+     * @throws ServiceUnavailableException     if Auth API is unreachable, degraded (503) or answers
+     *                                         with a status or body the contract does not list
      */
-    void validateActivationToken(String token);
+    ActivationRequirement validateActivationToken(String token);
 
     /**
-     * Consumes an activation token and activates its account.
+     * Consumes an activation token and activates its account, which must not need a password.
      *
      * <p>Calls POST /api/v1/auth/activate with the token in the JSON body, never in the URL.
      * </p>
      *
      * @param token Opaque activation token received by email
      * @throws InvalidActivationTokenException if the token is invalid, expired or already used (400)
+     * @throws PasswordRequiredException       if the account was created by an administrator and its holder
+     *                                         must choose a password (400 PASSWORD_REQUIRED); the token is
+     *                                         not consumed
      * @throws RateLimitedException            if the API rate limit was hit (429)
      * @throws ServiceUnavailableException     if Auth API is unreachable or degraded (503)
      */
     void activate(String token);
+
+    /**
+     * Consumes an activation token and activates its account, setting the password the holder chose.
+     *
+     * <p>Calls POST /api/v1/auth/activate with both values in the JSON body, never in the URL. The API
+     * ignores the password for an account that already has one.
+     * </p>
+     *
+     * @param token    Opaque activation token received by email
+     * @param password The password the holder chose, in raw form
+     * @throws InvalidActivationTokenException if the token is invalid, expired or already used (400)
+     * @throws PasswordRejectedException       if the password does not meet the policy (400 WEAK_PASSWORD);
+     *                                         the token is not consumed
+     * @throws RateLimitedException            if the API rate limit was hit (429)
+     * @throws ServiceUnavailableException     if Auth API is unreachable or degraded (503)
+     */
+    void activate(String token, String password);
 
     /**
      * Asks for a new activation email.
@@ -241,6 +267,16 @@ public interface AuthApiClient {
     class InvalidActivationTokenException extends RuntimeException {
         public InvalidActivationTokenException(String message) {
             super(message);
+        }
+    }
+
+    /**
+     * Exception thrown when an account created by an administrator is activated without a password
+     * (400 PASSWORD_REQUIRED). The token is not consumed, so the holder can retry with the same link.
+     */
+    class PasswordRequiredException extends RuntimeException {
+        public PasswordRequiredException() {
+            super("Auth API requires a password to activate the account");
         }
     }
 

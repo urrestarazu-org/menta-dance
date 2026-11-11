@@ -18,6 +18,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.github.tomakehurst.wiremock.http.Fault;
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
+import com.menta.bff.application.dto.ActivationRequirement;
 import com.menta.bff.application.dto.RegisterCommand;
 import com.menta.bff.application.dto.ResendActivationCommand;
 import com.menta.bff.application.port.out.AuthApiClient;
@@ -42,6 +43,7 @@ class AuthApiAdapterAccountTest {
     private static final String ACTIVATE = "/api/v1/auth/activate";
     private static final String RESEND = "/api/v1/auth/resend-activation";
     private static final String TOKEN = "activation-token-abc";
+    private static final String PASSWORD = "Secreta123";
 
     private AuthApiAdapter adapter;
 
@@ -56,6 +58,12 @@ class AuthApiAdapterAccountTest {
 
     private static void stubStatus(String path, int status) {
         stubFor(post(urlEqualTo(path)).willReturn(aResponse().withStatus(status)));
+    }
+
+    private static void stubProblem(String path, String code) {
+        stubFor(post(urlEqualTo(path)).willReturn(aResponse().withStatus(400)
+                .withHeader("Content-Type", "application/problem+json")
+                .withBody("{\"status\":400,\"code\":\"" + code + "\",\"detail\":\"x\"}")));
     }
 
     private static RegisterCommand registration() {
@@ -143,13 +151,42 @@ class AuthApiAdapterAccountTest {
     }
 
     @Test
-    @DisplayName("validateActivationToken calls GET with the token in the path and accepts 204")
+    @DisplayName("validateActivationToken calls GET with the token in the path; 204 means no password is needed")
     void validateAccepts204() {
         stubFor(get(urlEqualTo(ACTIVATE + "/" + TOKEN)).willReturn(aResponse().withStatus(204)));
 
-        assertThatCode(() -> adapter.validateActivationToken(TOKEN)).doesNotThrowAnyException();
+        assertThat(adapter.validateActivationToken(TOKEN)).isEqualTo(ActivationRequirement.NONE);
 
         verify(getRequestedFor(urlEqualTo(ACTIVATE + "/" + TOKEN)));
+    }
+
+    @Test
+    @DisplayName("validateActivationToken reads 200 {passwordRequired: true} as a password the holder must choose")
+    void validateAccepts200WithPasswordRequired() {
+        stubFor(get(urlEqualTo(ACTIVATE + "/" + TOKEN)).willReturn(aResponse().withStatus(200)
+                .withHeader("Content-Type", "application/json").withBody("{\"passwordRequired\": true}")));
+
+        assertThat(adapter.validateActivationToken(TOKEN)).isEqualTo(ActivationRequirement.PASSWORD);
+    }
+
+    @Test
+    @DisplayName("validateActivationToken treats a 200 that does not say passwordRequired as an unusable answer")
+    void validateRejects200WithoutTheFlag() {
+        stubFor(get(urlEqualTo(ACTIVATE + "/" + TOKEN)).willReturn(aResponse().withStatus(200)
+                .withHeader("Content-Type", "application/json").withBody("{\"passwordRequired\": false}")));
+
+        assertThatThrownBy(() -> adapter.validateActivationToken(TOKEN))
+                .isInstanceOf(AuthApiClient.ServiceUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("validateActivationToken never reads a password verdict into a token verdict")
+    void validateIgnoresPasswordCodes() {
+        stubFor(get(urlEqualTo(ACTIVATE + "/" + TOKEN)).willReturn(aResponse().withStatus(400)
+                .withBody("{\"code\":\"WEAK_PASSWORD\"}")));
+
+        assertThatThrownBy(() -> adapter.validateActivationToken(TOKEN))
+                .isInstanceOf(AuthApiClient.InvalidActivationTokenException.class);
     }
 
     @Test
@@ -180,6 +217,85 @@ class AuthApiAdapterAccountTest {
 
         verify(postRequestedFor(urlEqualTo(ACTIVATE))
                 .withRequestBody(matchingJsonPath("$.token", equalTo(TOKEN))));
+    }
+
+    @Test
+    @DisplayName("activate with a password sends it in the JSON body next to the token and accepts 204")
+    void activateWithPasswordSendsItInTheBody() {
+        stubStatus(ACTIVATE, 204);
+
+        adapter.activate(TOKEN, PASSWORD);
+
+        verify(postRequestedFor(urlEqualTo(ACTIVATE))
+                .withRequestBody(matchingJsonPath("$.token", equalTo(TOKEN)))
+                .withRequestBody(matchingJsonPath("$.password", equalTo(PASSWORD))));
+    }
+
+    @Test
+    @DisplayName("activate without a password sends no password field")
+    void activateWithoutPasswordSendsNone() {
+        stubStatus(ACTIVATE, 204);
+
+        adapter.activate(TOKEN);
+
+        verify(postRequestedFor(urlEqualTo(ACTIVATE)).withRequestBody(notMatching(".*password.*")));
+    }
+
+    @Test
+    @DisplayName("activate maps 400 PASSWORD_REQUIRED to PasswordRequiredException")
+    void activateMapsPasswordRequired() {
+        stubProblem(ACTIVATE, "PASSWORD_REQUIRED");
+
+        assertThatThrownBy(() -> adapter.activate(TOKEN))
+                .isInstanceOf(AuthApiClient.PasswordRequiredException.class)
+                .hasMessageNotContaining(TOKEN);
+    }
+
+    @Test
+    @DisplayName("activate maps 400 WEAK_PASSWORD to a WEAK PasswordRejectedException without echoing secrets")
+    void activateMapsWeakPassword() {
+        stubProblem(ACTIVATE, "WEAK_PASSWORD");
+
+        assertThatThrownBy(() -> adapter.activate(TOKEN, PASSWORD))
+                .isInstanceOfSatisfying(AuthApiClient.PasswordRejectedException.class,
+                        e -> assertThat(e.reason()).isEqualTo(AuthApiClient.PasswordRejectedException.Reason.WEAK))
+                .hasMessageNotContaining(TOKEN)
+                .hasMessageNotContaining(PASSWORD);
+    }
+
+    @Test
+    @DisplayName("activate maps a 400 with the token verdict or an unknown code to InvalidActivationTokenException")
+    void activateMapsOtherProblemsToAnInvalidToken() {
+        stubProblem(ACTIVATE, "ACTIVATION_TOKEN_INVALID");
+        assertThatThrownBy(() -> adapter.activate(TOKEN, PASSWORD))
+                .isInstanceOf(AuthApiClient.InvalidActivationTokenException.class);
+
+        stubProblem(ACTIVATE, "SOMETHING_ELSE");
+        assertThatThrownBy(() -> adapter.activate(TOKEN, PASSWORD))
+                .isInstanceOf(AuthApiClient.InvalidActivationTokenException.class);
+    }
+
+    @Test
+    @DisplayName("activate with a password maps 429 and 503 like the plain activation")
+    void activateWithPasswordMapsAvailabilityFailures() {
+        stubFor(post(urlEqualTo(ACTIVATE)).willReturn(aResponse().withStatus(429).withHeader("Retry-After", "15")));
+        assertThatThrownBy(() -> adapter.activate(TOKEN, PASSWORD))
+                .isInstanceOf(AuthApiClient.RateLimitedException.class);
+
+        stubStatus(ACTIVATE, 503);
+        assertThatThrownBy(() -> adapter.activate(TOKEN, PASSWORD))
+                .isInstanceOf(AuthApiClient.ServiceUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("a transport failure while activating reports unavailable without the password in the message")
+    void activateTransportFailureDoesNotLeakThePassword() {
+        stubFor(post(urlEqualTo(ACTIVATE)).willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)));
+
+        assertThatThrownBy(() -> adapter.activate(TOKEN, PASSWORD))
+                .isInstanceOf(AuthApiClient.ServiceUnavailableException.class)
+                .hasMessageNotContaining(PASSWORD)
+                .hasMessageNotContaining(TOKEN);
     }
 
     @Test
