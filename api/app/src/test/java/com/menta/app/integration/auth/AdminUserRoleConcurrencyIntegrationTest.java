@@ -73,10 +73,10 @@ class AdminUserRoleConcurrencyIntegrationTest extends AbstractAdminUserIntegrati
                 User c = newUser(Role.ADMIN);
                 CyclicBarrier startTogether = new CyclicBarrier(2);
 
-                Future<Boolean> aDemotesB = executor.submit(demote(startTogether, a, b));
-                Future<Boolean> cDemotesA = executor.submit(demote(startTogether, c, a));
-                aDemotesB.get(30, TimeUnit.SECONDS);
-                cDemotesA.get(30, TimeUnit.SECONDS);
+                Future<Boolean> firstDemotion = executor.submit(demote(startTogether, a, b));
+                Future<Boolean> secondDemotion = executor.submit(demote(startTogether, c, a));
+                firstDemotion.get(30, TimeUnit.SECONDS);
+                secondDemotion.get(30, TimeUnit.SECONDS);
 
                 assertThat(countActiveAdmins()).as("round %d: active admins left", round).isGreaterThanOrEqualTo(1);
             }

@@ -110,7 +110,7 @@ class AdminUserRoleIntegrationTest extends AbstractAdminUserIntegrationTest {
         );
 
         assertThat(response.statusCode()).isEqualTo(200);
-        Map<String, Object> body = objectMapper.readValue(response.body(), new TypeReference<>() { });
+        Map<String, Object> body = objectMapper.readValue(response.body(), new TypeReference<>() {});
         assertThat(body.get("id")).isEqualTo(student.getId().getValue().toString());
         assertThat(body.get("role")).isEqualTo("INSTRUCTOR");
         assertThat(body.keySet()).doesNotContain("passwordHash", "tokenVersion");
@@ -148,7 +148,7 @@ class AdminUserRoleIntegrationTest extends AbstractAdminUserIntegrationTest {
     void assigning_the_current_role_is_a_no_op_that_leaves_sessions_audit_and_events_alone() throws Exception {
         User admin = newUser(Role.ADMIN);
         User student = newUser(Role.STUDENT);
-        Session studentSession = login(student);
+        final Session studentSession = login(student);
         long versionBefore = userRepository.findById(student.getId()).orElseThrow().getTokenVersion();
 
         HttpResponse<String> response = patchRole(
@@ -242,10 +242,10 @@ class AdminUserRoleIntegrationTest extends AbstractAdminUserIntegrationTest {
 
     @Test
     void lists_users_filtered_by_role_and_search_and_paged() {
-        User admin = newUser(Role.ADMIN);
         newUser(Role.STUDENT);
         newUser(Role.STUDENT);
         newUser(Role.INSTRUCTOR);
+        User admin = newUser(Role.ADMIN);
         String token = login(admin).accessToken();
 
         ResponseEntity<Map> all = list(token, "");
