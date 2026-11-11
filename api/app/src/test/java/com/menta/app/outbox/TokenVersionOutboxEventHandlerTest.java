@@ -48,6 +48,7 @@ class TokenVersionOutboxEventHandlerTest {
             assertThat(handler.supports(AuthOutboxEventTypes.REFRESH_REVOKED)).isTrue();
             assertThat(handler.supports(AuthOutboxEventTypes.USER_LOGGED_OUT)).isTrue();
             assertThat(handler.supports(AuthOutboxEventTypes.PASSWORD_RESET_COMPLETED)).isTrue();
+            assertThat(handler.supports(AuthOutboxEventTypes.USER_ROLE_CHANGED)).isTrue();
         }
 
         @Test
@@ -91,6 +92,18 @@ class TokenVersionOutboxEventHandlerTest {
             handler().handle(row);
 
             verify(tokenBlacklistPort).projectTokenVersion(USER_ID.toString(), 5L);
+        }
+
+        @Test
+        void projects_the_new_version_from_a_user_role_changed_payload() {
+            OutboxRowJpaEntity row = row(
+                AuthOutboxEventTypes.USER_ROLE_CHANGED, USER_ID.toString(),
+                "{\"userId\":\"" + USER_ID + "\",\"newTokenVersion\":6}"
+            );
+
+            handler().handle(row);
+
+            verify(tokenBlacklistPort).projectTokenVersion(USER_ID.toString(), 6L);
         }
 
         @Test

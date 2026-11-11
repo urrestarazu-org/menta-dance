@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -237,17 +238,26 @@ class SecurityConfigTest {
     }
 
     private static final String ADMIN_USERS_URL = "/api/v1/admin/users";
+    private static final String ADMIN_USER_ROLE_URL =
+        "/api/v1/admin/users/00000000-0000-0000-0000-000000000001/role";
 
     /**
      * #378. The user administration routes need no new matcher: the generic {@code /api/v1/admin/**} rule
-     * already requires ADMIN. These tests pin it, because granting any other role here would let it reach
-     * the user administration.
+     * already requires ADMIN. These tests pin it, because granting any other role here would let it promote
+     * itself to ADMIN.
      */
     @Test
     void an_unauthenticated_get_of_the_admin_user_listing_is_rejected() throws Exception {
         MockMvc mockMvc = buildSecurityFilterChainMockMvc();
 
         mockMvc.perform(get(ADMIN_USERS_URL)).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void an_unauthenticated_patch_of_the_admin_user_role_route_is_rejected() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(patch(ADMIN_USER_ROLE_URL)).andExpect(status().isUnauthorized());
     }
 
     @ParameterizedTest
@@ -259,11 +269,22 @@ class SecurityConfigTest {
             .andExpect(status().isForbidden());
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"INSTRUCTOR", "STUDENT", "RECEPTIONIST"})
+    void a_non_admin_patch_of_the_admin_user_role_route_is_forbidden(String role) throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(patch(ADMIN_USER_ROLE_URL).with(user("someone").roles(role)))
+            .andExpect(status().isForbidden());
+    }
+
     @Test
-    void an_admin_reaches_the_admin_user_listing_past_the_security_layer() throws Exception {
+    void an_admin_reaches_the_admin_user_routes_past_the_security_layer() throws Exception {
         MockMvc mockMvc = buildSecurityFilterChainMockMvc();
 
         mockMvc.perform(get(ADMIN_USERS_URL).with(user("admin").roles("ADMIN")))
+            .andExpect(status().isNotFound());
+        mockMvc.perform(patch(ADMIN_USER_ROLE_URL).with(user("admin").roles("ADMIN")))
             .andExpect(status().isNotFound());
     }
 

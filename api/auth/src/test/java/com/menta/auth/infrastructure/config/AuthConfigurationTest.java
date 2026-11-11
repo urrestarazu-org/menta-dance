@@ -7,6 +7,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.menta.auth.application.port.in.ActivateAccountUseCase;
+import com.menta.auth.application.port.in.ChangeUserRoleUseCase;
 import com.menta.auth.application.port.in.ListUsersUseCase;
 import com.menta.auth.application.port.in.LoginUseCase;
 import com.menta.auth.application.port.in.LogoutUseCase;
@@ -37,6 +38,7 @@ import com.menta.auth.application.port.out.PasswordResetTokenRepository;
 import com.menta.auth.application.port.out.RefreshTokenRepository;
 import com.menta.auth.application.port.out.TokenHasher;
 import com.menta.auth.application.port.out.UserAdminRepository;
+import com.menta.auth.application.port.out.UserAuditRepository;
 import com.menta.auth.application.usecase.ListUsersUseCaseImpl;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.auth.infrastructure.activation.AesGcmActivationDeliveryCipher;
@@ -53,6 +55,7 @@ import com.menta.auth.infrastructure.security.LoggingLoginAttemptAuditPort;
 import com.menta.auth.infrastructure.security.RedisLoginRateLimitPort;
 import com.menta.auth.infrastructure.security.Sha256TokenHasher;
 import com.menta.auth.infrastructure.transaction.TransactionalActivateAccountUseCase;
+import com.menta.auth.infrastructure.transaction.TransactionalChangeUserRoleUseCase;
 import com.menta.auth.infrastructure.transaction.TransactionalLoginUseCase;
 import com.menta.auth.infrastructure.transaction.TransactionalLogoutUseCase;
 import com.menta.auth.infrastructure.transaction.TransactionalRefreshTokenUseCase;
@@ -247,6 +250,16 @@ class AuthConfigurationTest {
         );
 
         assertThat(useCase).isInstanceOf(TransactionalResetPasswordUseCase.class);
+    }
+
+    @Test
+    void wires_the_change_user_role_use_case_bean() {
+        ChangeUserRoleUseCase useCase = configuration.changeUserRoleUseCase(
+            mock(UserAdminRepository.class), mock(UserRepository.class), mock(RefreshTokenRepository.class),
+            mock(OutboxAppender.class), mock(UserAuditRepository.class), mock(Clock.class)
+        );
+
+        assertThat(useCase).isInstanceOf(TransactionalChangeUserRoleUseCase.class);
     }
 
     @Test

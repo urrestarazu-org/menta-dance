@@ -30,7 +30,8 @@ import org.springframework.transaction.annotation.Transactional;
  *   2. For each row, dispatch to the one {@link OutboxEventHandler} that
  *      claims its event type (see {@link OutboxReconciliationWorker}):
  *      - {@code REFRESH_REVOKED} / {@code USER_LOGGED_OUT} /
- *        {@code PASSWORD_RESET_COMPLETED} → {@link TokenVersionOutboxEventHandler}
+ *        {@code PASSWORD_RESET_COMPLETED} / {@code USER_ROLE_CHANGED} →
+ *        {@link TokenVersionOutboxEventHandler}
  *        projects the bumped {@code tokenVersion} to Redis (#88). This is
  *        what actually closes already-issued access tokens — no event
  *        carries a revocable jti today, so {@link BlacklistOutboxEventHandler}

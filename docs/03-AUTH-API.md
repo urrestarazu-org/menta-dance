@@ -123,13 +123,14 @@ por ejemplo:
 
 ## Administración de usuarios (#378)
 
-La ruta está bajo `/api/v1/admin/users` y exige un access token con rol `ADMIN`:
-la cubre la regla genérica `/api/v1/admin/**` de `SecurityConfig`, sin una regla
-propia. Sin token responde `401`; con otro rol, `403`.
+Todas las rutas están bajo `/api/v1/admin/users` y exigen un access token con rol
+`ADMIN`: las cubre la regla genérica `/api/v1/admin/**` de `SecurityConfig`, sin
+una regla propia. Sin token responden `401`; con otro rol, `403`.
 
 | Endpoint | Entrada | Respuesta exitosa |
 | --- | --- | --- |
 | `GET /api/v1/admin/users` | query opcional: `role`, `q`, `page` (0), `size` (20) | `200` con `{ items, page, size, totalElements, totalPages }` |
+| `PATCH /api/v1/admin/users/{userId}/role` | JSON `{ "role" }` con `ADMIN`, `INSTRUCTOR`, `STUDENT` o `RECEPTIONIST` | `200` con el usuario actualizado |
 
 **Listado.** El orden es fijo: email y, a igual email, id; no hay `sort`. `size`
 máximo es 50 y un valor mayor se rechaza con `400 INVALID_REQUEST`, nunca se
@@ -141,15 +142,40 @@ demo, createdAt }`; los nombres son `null` en cuentas sin perfil. La respuesta
 nunca incluye el hash de la contraseña ni `token_version`. No hay índice para la
 búsqueda: la tabla es chica y un `LIKE '%…%'` no lo aprovecharía.
 
-Quedan fuera de este cambio y llegan en PRs posteriores: el cambio de rol
-(`PATCH /api/v1/admin/users/{userId}/role`), el alta de cuentas de staff
-(`POST /api/v1/admin/users`) y la pantalla del BFF.
+**Cambio de rol.** El destino puede ser cualquiera de los cuatro roles y el
+origen puede estar en cualquier estado. En una sola transacción se cambia el rol,
+se incrementa `token_version`, se revocan todos los refresh tokens del usuario, se
+publica el evento `auth.UserRoleChanged` en el outbox y se registra la auditoría.
+El evento lo proyecta el mismo handler que el logout y el reset de contraseña, de
+modo que un access token emitido con el rol anterior deja de autorizar apenas el
+worker proyecta la versión a Redis, sin esperar a que expire. Asignar el rol que
+el usuario ya tiene es un no-op idempotente: `200` sin tocar sesiones, evento ni
+auditoría.
+
+**Regla del último administrador.** El sistema no puede quedarse sin un `ADMIN`
+activo. Quitarle el rol a un administrador `ACTIVE` cuando no queda otro responde
+`409 LAST_ADMIN_CANNOT_BE_DEMOTED`, también si se lo quita a sí mismo. Un
+administrador `INACTIVE` no cuenta. Para que dos administradores que se degradan
+entre sí a la vez no puedan dejar el sistema sin ninguno, la transacción bloquea
+(`SELECT … FOR UPDATE`, en orden de id) todas las filas de administradores activos
+y después la del usuario objetivo, y cuenta sobre lo bloqueado. Un usuario
+inexistente responde `404 USER_NOT_FOUND`; un body inválido, un rol desconocido o
+un `userId` que no es UUID, `400 INVALID_REQUEST`.
+
+**Auditoría.** Cada cambio efectivo agrega una fila a `auth_user_audit` (solo
+inserción, ver [modelo de datos](22-DATA-MODEL.md)) con el usuario afectado, el
+administrador que lo hizo, la acción `ROLE_CHANGED`, el rol anterior y el nuevo y
+el instante, que fija la aplicación.
+
+Quedan fuera de este cambio y llegan en PRs posteriores: el alta de cuentas de
+staff (`POST /api/v1/admin/users`) y la pantalla del BFF.
 
 ## Renovación y reutilización
 
 `POST /api/v1/auth/refresh` rota obligatoriamente el refresh: revoca el token presentado y
-emite un UUID nuevo. La reutilización de un token rotado, `POST /logout-all` y
-todo reset/cambio de contraseña revocan **todas** las sesiones, incrementan
+emite un UUID nuevo. La reutilización de un token rotado, `POST /logout-all`,
+todo reset/cambio de contraseña y todo cambio de rol hecho por un administrador
+revocan **todas** las sesiones, incrementan
 `auth_users.token_version` y exigen login nuevo. MySQL es la autoridad absoluta:
 la transacción de revocación se confirma primero en MySQL y los filtros consultan
 su versión/estado antes de aceptar un JWT. Redis sólo refleja blacklist y versión.

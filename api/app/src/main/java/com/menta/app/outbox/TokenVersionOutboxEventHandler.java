@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
  * without a SQL read per request (#88).
  *
  * <p>This is the mechanism that actually closes access tokens on logout,
- * refresh-reuse detection and password reset. The jti blacklist cannot do it:
+ * refresh-reuse detection, password reset and role changes. The jti blacklist cannot do it:
  * no access-token identifier is persisted anywhere, so those events carry a
  * familyId or a refresh id, never a revocable jti.</p>
  *
@@ -30,11 +30,15 @@ public class TokenVersionOutboxEventHandler implements OutboxEventHandler {
     private static final Set<String> SUPPORTED_EVENT_TYPES = Set.of(
         AuthOutboxEventTypes.REFRESH_REVOKED,
         AuthOutboxEventTypes.USER_LOGGED_OUT,
-        AuthOutboxEventTypes.PASSWORD_RESET_COMPLETED
+        AuthOutboxEventTypes.PASSWORD_RESET_COMPLETED,
+        AuthOutboxEventTypes.USER_ROLE_CHANGED
     );
 
     private static final String USER_ID_FIELD = "userId";
-    /** REFRESH_REVOKED and PASSWORD_RESET_COMPLETED name it newTokenVersion; USER_LOGGED_OUT, tokenVersion. */
+    /**
+     * REFRESH_REVOKED, PASSWORD_RESET_COMPLETED and USER_ROLE_CHANGED name it newTokenVersion; USER_LOGGED_OUT,
+     * tokenVersion.
+     */
     private static final String NEW_TOKEN_VERSION_FIELD = "newTokenVersion";
     private static final String TOKEN_VERSION_FIELD = "tokenVersion";
 

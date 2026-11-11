@@ -21,6 +21,8 @@ package com.menta.auth.application.contract;
  * <ul>
  *   <li>{@code auth.RefreshRevoked} — refresh token was explicitly revoked</li>
  *   <li>{@code auth.UserLoggedOut} — user logged out (all tokens invalidated)</li>
+ *   <li>{@code auth.UserRoleChanged} — an administrator changed a user's role (access tokens with the old
+ *       role are invalidated)</li>
  * </ul>
  *
  * <h2>Retired event types (#672)</h2>
@@ -70,6 +72,14 @@ public final class AuthOutboxEventTypes {
      * so {@code TokenVersionOutboxEventHandler} can project it.
      */
     public static final String PASSWORD_RESET_COMPLETED = "auth.PasswordResetCompleted";
+
+    /**
+     * An administrator changed a user's role (#378). The domain method that changes the role also bumps the
+     * user's tokenVersion, and this event publishes it, carrying {@code userId} and {@code newTokenVersion}, so
+     * {@code TokenVersionOutboxEventHandler} can project it and access tokens issued with the old role stop
+     * authorizing.
+     */
+    public static final String USER_ROLE_CHANGED = "auth.UserRoleChanged";
 
     private AuthOutboxEventTypes() {
         // Constant holder.
