@@ -66,6 +66,11 @@ a la API sino a la pantalla del BFF `GET /activar/{token}`
 token con `GET /activate/{token}` y muestra el botón «Activar cuenta», que hace
 `POST /activar` al BFF; el BFF llama a `POST /activate` con el token en el cuerpo
 y redirige a `/cuenta-activada`, de modo que el token deja de estar en la URL.
+Si `GET /activate/{token}` responde `200 { "passwordRequired": true }` (cuenta creada
+por un administrador), la misma pantalla pide además «Contraseña» y «Repetir
+contraseña», las valida con la política del registro y las envía en el cuerpo de
+`POST /activate`; una contraseña débil o ausente vuelve a mostrar el formulario con
+el mensaje en español y el mismo enlace sigue sirviendo (la API no consume el token).
 La recuperación de contraseña sigue el mismo criterio: el correo enlaza a la
 pantalla del BFF `GET /restablecer-contrasena/{token}`
 (`auth.password-reset.link-path`, por defecto `/restablecer-contrasena/`), que

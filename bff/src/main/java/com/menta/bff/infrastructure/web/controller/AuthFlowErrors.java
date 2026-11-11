@@ -17,6 +17,8 @@ import org.springframework.ui.Model;
 final class AuthFlowErrors {
 
     static final String RATE_LIMITED = "Hiciste demasiados intentos. Esperá unos minutos e intentá de nuevo.";
+    static final String WEAK_PASSWORD = "La contraseña no cumple los requisitos. Elegí una de al menos 8 "
+            + "caracteres, con una mayúscula y un número.";
     private static final long SECONDS_PER_MINUTE = 60;
     static final String INVALID_REQUEST = "No pudimos procesar los datos ingresados. Revisalos e intentá de nuevo.";
     static final String UNAVAILABLE =

@@ -18,9 +18,19 @@
         <p class="mt-2">Si ya activaste tu cuenta, podés <a th:href="@{/login}">iniciar sesión</a>.</p>
     </div>
 
-    <form th:unless="${invalidToken}" th:action="@{/activar}" method="post" class="card space-y-4">
-        <input type="hidden" name="token" th:value="${token}"/>
-        <p>Confirmá la activación de tu cuenta de Menta Dance.</p>
+    <form th:unless="${invalidToken}" th:action="@{/activar}" th:object="${form}" method="post" novalidate class="card space-y-4">
+        <input type="hidden" name="token" th:value="*{token}"/>
+
+        <th:block th:if="${passwordRequired}">
+            <p>Elegí la contraseña con la que vas a ingresar a Menta Dance.</p>
+
+            <div th:replace="~{fragments/components :: errorSummary(${ {'password':'password', 'passwordConfirmed':'passwordConfirmation'} })}"></div>
+
+            <div th:replace="~{fragments/components :: field('password', 'Contraseña', 'password', 'password', 'new-password', null, 'Al menos 8 caracteres, una mayúscula y un número.', ${!#fields.hasErrors('*')}, ${#fields.errors('password')})}"></div>
+            <div th:replace="~{fragments/components :: field('passwordConfirmation', 'Repetí la contraseña', 'password', 'passwordConfirmation', 'new-password', null, null, false, ${#fields.errors('passwordConfirmed')})}"></div>
+        </th:block>
+        <p th:unless="${passwordRequired}">Confirmá la activación de tu cuenta de Menta Dance.</p>
+
         <button type="submit" class="btn btn-primary w-full">Activar cuenta</button>
     </form>
 </div>

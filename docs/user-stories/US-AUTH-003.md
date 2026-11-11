@@ -29,8 +29,23 @@ correo para poder iniciar sesión.
   `password` (misma política que el registro y el reseteo), la guarda y activa
   la cuenta en una sola transacción. Sin `password` responde `400
   PASSWORD_REQUIRED`; con una débil, `400 WEAK_PASSWORD`; en ambos casos el
-  token no se consume. Para cuentas del registro público nada cambia. El campo
-  de contraseña en la pantalla del BFF llega en el PR de `/gestion/usuarios`.
+  token no se consume. Para cuentas del registro público nada cambia.
+- La pantalla del BFF `GET /activar/{token}` distingue ambos casos por la respuesta de
+  la validación del token. Con `204` queda exactamente como antes (sólo el botón
+  «Activar cuenta»). Con `200 { "passwordRequired": true }` muestra además
+  «Contraseña» y «Repetir contraseña» (`autocomplete="new-password"`, etiquetas,
+  política asociada con `aria-describedby`, resumen de errores y `aria-invalid`), las
+  valida en el BFF con la misma política que el registro y la recuperación (8
+  caracteres como mínimo, una mayúscula y un número) y confirma que coinciden antes de
+  llamar a la API. Una contraseña débil, ausente o que no coincide (en el BFF o
+  rechazada por la API con `WEAK_PASSWORD`/`PASSWORD_REQUIRED`) vuelve a mostrar el
+  formulario con un mensaje en español y los campos de contraseña vacíos; el enlace
+  sigue siendo reutilizable. Si el `POST /activar` llega sin los campos de contraseña
+  para una cuenta que la requiere, la pantalla pasa a mostrar el formulario con
+  contraseña en vez de fallar. Un token inválido, vencido o usado conserva el
+  mensaje de siempre. La contraseña no se registra en logs, no se guarda en la sesión
+  ni se vuelve a escribir en la página; el formulario lleva CSRF y las páginas que
+  contienen el token no se cachean ni envían `Referer`.
 - El envío de correo usa un puerto/worker interno, sin RabbitMQ ni HTTP interno.
 - Errores siguen `application/problem+json`; tokens y datos personales no se
   incluyen en logs.
