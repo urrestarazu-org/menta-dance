@@ -1,5 +1,6 @@
 package com.menta.bff.application.dto;
 
+import java.util.List;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
@@ -16,4 +17,14 @@ public enum UserRole {
     STUDENT("Alumno/a");
 
     private final String label;
+
+    /**
+     * Roles an administrator can give to a new account, in the order the creation form lists them.
+     * {@code STUDENT} is not one of them: students register themselves.
+     *
+     * @return the staff roles
+     */
+    public static List<UserRole> staffRoles() {
+        return List.of(INSTRUCTOR, RECEPTIONIST, ADMIN);
+    }
 }

@@ -12,6 +12,8 @@ import com.menta.bff.application.port.out.SubscriptionApiClient;
 import com.menta.bff.application.port.out.VirtualApiClient;
 import com.menta.bff.application.usecase.AccountActivationUseCase;
 import com.menta.bff.application.usecase.AccountActivationUseCaseImpl;
+import com.menta.bff.application.usecase.CreateUserUseCase;
+import com.menta.bff.application.usecase.CreateUserUseCaseImpl;
 import com.menta.bff.application.usecase.GetAssignedSessionsUseCase;
 import com.menta.bff.application.usecase.GetAssignedSessionsUseCaseImpl;
 import com.menta.bff.application.usecase.GetCatalogViewUseCase;
@@ -196,5 +198,10 @@ public class UseCaseConfig {
     @Bean
     public ListUsersUseCase listUsersUseCase(AdminUsersApiClient adminUsersApiClient) {
         return new ListUsersUseCaseImpl(adminUsersApiClient);
+    }
+
+    @Bean
+    public CreateUserUseCase createUserUseCase(AdminUsersApiClient adminUsersApiClient) {
+        return new CreateUserUseCaseImpl(adminUsersApiClient);
     }
 }
