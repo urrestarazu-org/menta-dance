@@ -216,10 +216,11 @@ administrador que lo hizo, la acción (`USER_CREATED` en el alta, con rol anteri
 `NULL`, o `ROLE_CHANGED` en el cambio de rol), el rol anterior y el nuevo y el
 instante, que fija la aplicación.
 
-La pantalla del BFF `/gestion/usuarios` ya muestra el listado de solo lectura
-(ver [BFF y Tailwind](31-BFF-TAILWIND.md#usuarios-gestionusuarios)). Queda fuera y
-llega en un PR posterior: el alta y el cambio de rol desde la web, incluido el
-campo de contraseña de la pantalla de activación.
+La pantalla del BFF `/gestion/usuarios` muestra el listado y el formulario de alta de
+cuentas de staff, que llama a `POST /api/v1/admin/users` y traduce `409
+EMAIL_ALREADY_REGISTERED` en un error del campo email (ver
+[BFF y Tailwind](31-BFF-TAILWIND.md#usuarios-gestionusuarios)). Queda fuera y llega en
+un PR posterior: el cambio de rol desde la lista.
 
 ## Renovación y reutilización
 

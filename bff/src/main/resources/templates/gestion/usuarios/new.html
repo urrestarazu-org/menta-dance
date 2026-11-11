@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/management :: page('Nueva cuenta', 'users', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<div class="max-w-xl">
+    <h1 class="mb-6">Nueva cuenta</h1>
+
+    <p class="mb-6">Creá una cuenta del personal. Le enviamos un correo a la persona para que la active y elija su
+        contraseña: no hace falta que vos se la des.</p>
+
+    <div th:if="${formError}" class="mb-4">
+        <div th:replace="~{fragments/components :: alert('error', ${formError})}"></div>
+    </div>
+
+    <form th:action="@{/gestion/usuarios}" th:object="${form}" method="post" novalidate class="card space-y-4">
+        <div th:replace="~{fragments/components :: errorSummary(${ {'firstName':'firstName', 'lastName':'lastName', 'email':'email', 'roleAllowed':'role'} })}"></div>
+
+        <div th:replace="~{fragments/components :: field('firstName', 'Nombre', 'text', 'firstName', 'off', *{firstName}, null, ${!#fields.hasErrors('*')}, ${#fields.errors('firstName')})}"></div>
+        <div th:replace="~{fragments/components :: field('lastName', 'Apellido', 'text', 'lastName', 'off', *{lastName}, null, false, ${#fields.errors('lastName')})}"></div>
+        <div th:replace="~{fragments/components :: field('email', 'Email', 'email', 'email', 'off', *{email}, 'Ahí llega el enlace para activar la cuenta.', false, ${#fields.errors('email')})}"></div>
+
+        <div class="field">
+            <label class="field-label" for="role">Rol</label>
+            <select class="field-input" id="role" name="role" required
+                    th:attr="aria-invalid=${#fields.hasErrors('roleAllowed')} ? 'true' : null,
+                             aria-describedby=${#fields.hasErrors('roleAllowed')} ? 'role-help' : null">
+                <option value="">Elegí un rol</option>
+                <option th:each="option : ${roles}" th:value="${option.name()}" th:text="${option.label}"
+                        th:selected="${option.name() == form.role}">Rol</option>
+            </select>
+            <div id="role-help" th:if="${#fields.hasErrors('roleAllowed')}">
+                <p class="field-error" th:each="message : ${#fields.errors('roleAllowed')}" th:text="${message}">Error</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-4">
+            <button type="submit" class="btn btn-primary">Crear cuenta</button>
+            <a th:href="@{/gestion/usuarios}">Cancelar</a>
+        </div>
+    </form>
+</div>
+</th:block>
+</body>
+</html>
