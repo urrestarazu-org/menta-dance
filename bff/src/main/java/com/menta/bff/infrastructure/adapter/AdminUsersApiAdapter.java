@@ -1,5 +1,6 @@
 package com.menta.bff.infrastructure.adapter;
 
+import com.menta.bff.application.dto.CreateUserCommand;
 import com.menta.bff.application.dto.UserListQuery;
 import com.menta.bff.application.dto.UserPage;
 import com.menta.bff.application.dto.UserRole;
@@ -15,6 +16,8 @@ import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -22,15 +25,20 @@ import org.springframework.web.util.UriBuilder;
 import reactor.core.publisher.Mono;
 
 /**
- * WebClient adapter for {@code GET /api/v1/admin/users} of the Auth API.
+ * WebClient adapter for {@code GET} and {@code POST /api/v1/admin/users} of the Auth API.
  *
- * <p>The call sends {@code Authorization: Bearer <token>}. The token only ever travels in that header:
+ * <p>The calls send {@code Authorization: Bearer <token>}. The token only ever travels in that header:
  * it is never put in a log line or an exception message, and neither are the request parameters (search
- * text typed by the administrator) or the response (emails and names). A 400 becomes an
- * {@link AdminUsersApiClient.InvalidRequestException}; every other outcome that is not a usable page (401,
- * 403, 429, 5xx, an unexpected status, an unreadable or incomplete body, a transport error, a timeout)
- * becomes an {@link AdminUsersApiClient.ServiceUnavailableException}, as the other authenticated adapters
- * do: the page degrades the same way for all of them, and the API makes the real authorization decision.
+ * text typed by the administrator), the data of the account being created or the response (emails and
+ * names). A 400 becomes an {@link AdminUsersApiClient.InvalidRequestException}; every other outcome that is
+ * not a usable answer (401, 403, 429, 5xx, an unexpected status, an unreadable or incomplete body, a transport
+ * error, a timeout) becomes an {@link AdminUsersApiClient.ServiceUnavailableException}, as the other
+ * authenticated adapters do: the page degrades the same way for all of them, and the API makes the real
+ * authorization decision.
+ * </p>
+ *
+ * <p>The creation reads one field of one error body: the {@code code} of a 409, to tell an email that
+ * already has an account from any other conflict. Every other error body is released unread.
  * </p>
  *
  * <p>Part of Clean Architecture infrastructure layer. Uses an explicit constructor because
@@ -42,6 +50,7 @@ import reactor.core.publisher.Mono;
 public class AdminUsersApiAdapter implements AdminUsersApiClient {
 
     private static final String USERS_ENDPOINT = "/api/v1/admin/users";
+    private static final String EMAIL_TAKEN_CODE = "EMAIL_ALREADY_REGISTERED";
 
     private final WebClient webClient;
     private final AuthProperties properties;
@@ -66,6 +75,28 @@ public class AdminUsersApiAdapter implements AdminUsersApiClient {
         } catch (RuntimeException e) {
             // Class name only: nothing from the request (headers, parameters) or the response may reach a log.
             log.warn("Auth API users list call failed: {}", e.getClass().getSimpleName());
+            throw new ServiceUnavailableException("Auth API unavailable", e);
+        }
+    }
+
+    @Override
+    public void createUser(String accessToken, CreateUserCommand command) {
+        CreateUserWire body = new CreateUserWire(
+                command.email(), command.firstName(), command.lastName(), command.role().name());
+        try {
+            webClient.post()
+                    .uri(USERS_ENDPOINT)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(body)
+                    .exchangeToMono(this::readCreation)
+                    .timeout(properties.getTimeout())
+                    .block();
+        } catch (EmailAlreadyRegisteredException | InvalidRequestException | ServiceUnavailableException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            // Class name only: nothing from the request (headers, body) or the response may reach a log.
+            log.warn("Auth API user creation call failed: {}", e.getClass().getSimpleName());
             throw new ServiceUnavailableException("Auth API unavailable", e);
         }
     }
@@ -101,6 +132,24 @@ public class AdminUsersApiAdapter implements AdminUsersApiClient {
                 : unavailable("answered " + status)));
     }
 
+    /** Only a 201 is success, and its body is not read; the error bodies are released, bar the code of a 409. */
+    private Mono<Void> readCreation(ClientResponse response) {
+        int status = response.statusCode().value();
+        if (status == HttpStatus.CREATED.value()) {
+            return response.releaseBody();
+        }
+        if (status == HttpStatus.CONFLICT.value()) {
+            return response.bodyToMono(ProblemWire.class)
+                    .flatMap(problem -> Mono.<Void>error(EMAIL_TAKEN_CODE.equals(problem.code())
+                            ? new EmailAlreadyRegisteredException("Auth API: the email already has an account")
+                            : unavailable("answered 409")))
+                    .switchIfEmpty(Mono.error(unavailable("answered 409 without a body")));
+        }
+        return response.releaseBody().then(Mono.error(status == HttpStatus.BAD_REQUEST.value()
+                ? new InvalidRequestException("Auth API rejected the account data")
+                : unavailable("answered " + status)));
+    }
+
     private static UserPage toDomain(UserPageWire wire) {
         if (wire == null || wire.items() == null || wire.page() == null || wire.size() == null
                 || wire.totalElements() == null || wire.totalPages() == null) {
@@ -126,6 +175,14 @@ public class AdminUsersApiAdapter implements AdminUsersApiClient {
     /** Wire shape of the response: only the fields the BFF shows are read. */
     private record UserPageWire(
             List<UserWire> items, Integer page, Integer size, Long totalElements, Integer totalPages) {
+    }
+
+    /** Request body of the creation, as {@code CreateUserRequest} in {@code auth-v1.yaml} names it. */
+    private record CreateUserWire(String email, String firstName, String lastName, String role) {
+    }
+
+    /** The only field read from an error body. */
+    private record ProblemWire(String code) {
     }
 
     private record UserWire(
