@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.LocalDate;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EmptySource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -93,7 +94,7 @@ class UserProfileTest {
     }
 
     @ParameterizedTest
-    @NullAndEmptySource
+    @EmptySource
     @ValueSource(strings = {
         "5491100000000",
         "+54 9 11 0000 0000",
@@ -148,5 +149,13 @@ class UserProfileTest {
             .doesNotContain("Lovelace")
             .doesNotContain(PHONE)
             .doesNotContain("1990");
+    }
+
+    @Test
+    void the_phone_is_optional_for_accounts_created_by_an_administrator() {
+        UserProfile profile = new UserProfile("Ada", "Lovelace", null, null);
+
+        assertThat(profile.phone()).isNull();
+        assertThat(profile.toString()).doesNotContain("Ada");
     }
 }

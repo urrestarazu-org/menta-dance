@@ -130,6 +130,7 @@ una regla propia. Sin token responden `401`; con otro rol, `403`.
 | Endpoint | Entrada | Respuesta exitosa |
 | --- | --- | --- |
 | `GET /api/v1/admin/users` | query opcional: `role`, `q`, `page` (0), `size` (20) | `200` con `{ items, page, size, totalElements, totalPages }` |
+| `POST /api/v1/admin/users` | JSON `{ "email", "firstName", "lastName", "role" }` con `ADMIN`, `INSTRUCTOR` o `RECEPTIONIST` | `201` con el usuario creado (`PENDING_ACTIVATION`), sin `Location` |
 | `PATCH /api/v1/admin/users/{userId}/role` | JSON `{ "role" }` con `ADMIN`, `INSTRUCTOR`, `STUDENT` o `RECEPTIONIST` | `200` con el usuario actualizado |
 
 **Listado.** El orden es fijo: email y, a igual email, id; no hay `sort`. `size`
@@ -142,14 +143,22 @@ demo, createdAt }`; los nombres son `null` en cuentas sin perfil. La respuesta
 nunca incluye el hash de la contraseña ni `token_version`. No hay índice para la
 búsqueda: la tabla es chica y un `LIKE '%…%'` no lo aprovecharía.
 
-**Activación con contraseña elegida por el titular.** Las cuentas que crea un
-administrador no tienen contraseña utilizable: se guardan con el hash de un secreto
-aleatorio descartado, distinto por cuenta, y con `must_set_password = TRUE` (V30).
-Hasta activar no se puede iniciar sesión. Esa marca la pone el alta de cuentas de
-staff (`POST /api/v1/admin/users`), que llega en un PR posterior; este cambio deja
-lista la activación que la consume. El componente que emite el token y el correo
-de activación es compartido entre el registro y el reenvío (`ActivationTokenIssuer`),
-sin cambio de comportamiento.
+**Alta de cuentas de staff.** Crea una cuenta `INSTRUCTOR`, `RECEPTIONIST` o `ADMIN`
+(`STUDENT` es `400`: los alumnos se registran solos) y le envía al titular el correo
+de activación del registro (US-AUTH-003), con el mismo token, cifrado de entrega y
+evento de outbox; el componente que arma ese envío es compartido con el registro y
+con el reenvío (`ActivationTokenIssuer`), por lo que `resend-activation` funciona
+igual para estas cuentas. La cuenta nace `PENDING_ACTIVATION`, `demo = false`, con
+nombre y apellido y sin teléfono (el teléfono es opcional en el perfil; el registro
+público lo sigue exigiendo).
+
+*No existe contraseña por defecto, ni constante compartida.* La cuenta se guarda
+con el hash de un secreto aleatorio de 32 bytes (`SecureRandom`), distinto por
+cuenta, que se descarta en el mismo instante: nadie lo conoce y no se registra ni
+se devuelve. Además la fila lleva `must_set_password = TRUE` (V30). Hasta activar
+no se puede iniciar sesión: el login responde `401 INVALID_CREDENTIALS` para
+cualquier contraseña, porque el hash es inutilizable y además el estado es
+`PENDING_ACTIVATION`.
 
 *El titular elige su contraseña al activar.* El enlace del correo lleva a la
 pantalla de activación del BFF, que valida el token con `GET /activate/{token}`: si
@@ -163,6 +172,18 @@ o débil se rechaza **antes** de consumir el token, así que el titular reintent
 el mismo enlace. Para una cuenta con `must_set_password = FALSE` el comportamiento
 de `POST /activate` es exactamente el anterior y cualquier `password` enviado se
 ignora.
+
+*Errores.* Email ya registrado (sin distinguir mayúsculas): `409
+EMAIL_ALREADY_REGISTERED` (a diferencia del registro público, que responde `202`
+para no enumerar cuentas, acá el llamante es un administrador); cuerpo inválido,
+email mal formado, nombre vacío o de más de 100 caracteres, rol desconocido o
+`STUDENT`: `400 INVALID_REQUEST`. No hay rate limit propio: la ruta es
+sólo para administradores autenticados.
+
+*Atomicidad y auditoría.* La cuenta, el token de activación, el evento de outbox
+del correo y la fila de auditoría `USER_CREATED` (administrador, cuenta, rol
+anterior `NULL` y rol nuevo) se confirman en una sola transacción. La contraseña
+elegida y el hash nunca aparecen en logs, respuestas, auditoría ni eventos.
 
 **Cambio de rol.** El destino puede ser cualquiera de los cuatro roles y el
 origen puede estar en cualquier estado. En una sola transacción se cambia el rol,
@@ -184,14 +205,15 @@ y después la del usuario objetivo, y cuenta sobre lo bloqueado. Un usuario
 inexistente responde `404 USER_NOT_FOUND`; un body inválido, un rol desconocido o
 un `userId` que no es UUID, `400 INVALID_REQUEST`.
 
-**Auditoría.** Cada cambio efectivo agrega una fila a `auth_user_audit` (solo
+**Auditoría.** Cada alta y cada cambio efectivo agrega una fila a `auth_user_audit` (solo
 inserción, ver [modelo de datos](22-DATA-MODEL.md)) con el usuario afectado, el
-administrador que lo hizo, la acción `ROLE_CHANGED`, el rol anterior y el nuevo y
-el instante, que fija la aplicación.
+administrador que lo hizo, la acción (`USER_CREATED` en el alta, con rol anterior
+`NULL`, o `ROLE_CHANGED` en el cambio de rol), el rol anterior y el nuevo y el
+instante, que fija la aplicación.
 
-Quedan fuera de este cambio y llegan en PRs posteriores: el alta de cuentas de
-staff (`POST /api/v1/admin/users`) y la pantalla del BFF, incluido el campo de
-contraseña de la pantalla de activación.
+Queda fuera de este cambio y llega en un PR posterior: la pantalla del BFF
+(`/gestion/usuarios`), incluido el campo de contraseña de la pantalla de
+activación.
 
 ## Renovación y reutilización
 

@@ -192,4 +192,18 @@ class UserMapperTest {
         assertThat(row.isMustSetPassword()).isFalse();
         assertThat(UserMapper.toDomain(row).isMustSetPassword()).isFalse();
     }
+
+    @Test
+    void a_profile_without_phone_survives_the_round_trip() {
+        UserProfile profile = new UserProfile("Ada", "Lovelace", null, null);
+        User user = User.rehydrate(
+            UserId.of(USER_ID), Email.of("staff@example.com"), "unusable-hash", Role.INSTRUCTOR,
+            UserStatus.PENDING_ACTIVATION, CREATED_AT, UPDATED_AT, 1L, profile
+        );
+
+        UserJpaEntity persisted = UserMapper.toJpaEntity(user);
+
+        assertThat(persisted.getPhone()).isNull();
+        assertThat(UserMapper.toDomain(persisted).getProfile()).contains(profile);
+    }
 }

@@ -13,7 +13,7 @@ docs {
   Validates a runtime-only activation token without consuming it or changing the
   account. Never save this token in an environment file or commit it.
   An account that registered itself returns 204 with no body. An account created
-  by an administrator returns 200 with
+  by an administrator (POST /api/v1/admin/users) returns 200 with
   { "passwordRequired": true }: the holder must choose a password when activating.
 }
 

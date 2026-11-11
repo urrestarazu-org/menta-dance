@@ -16,7 +16,7 @@ import lombok.RequiredArgsConstructor;
 /**
  * Issues an activation token for a pending account and queues the email that carries it: generate, hash, encrypt
  * the delivery envelope, persist and append the outbox event. It is the one place this sequence lives, shared by
- * registration and resend.
+ * registration, resend and account creation by an administrator.
  *
  * <p>Nothing here is atomic on its own: the caller MUST run inside a transaction, so the token and the outbox
  * event commit together with whatever else the caller writes. The outbox event carries only the token id, never

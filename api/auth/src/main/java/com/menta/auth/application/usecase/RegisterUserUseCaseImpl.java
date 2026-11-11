@@ -52,6 +52,7 @@ public class RegisterUserUseCaseImpl implements RegisterUserUseCase {
 
     @Override
     public UserResult register(RegisterUserCommand command) {
+        requirePhone(command.phone());
         Role role = publicRole(command.role());
         Email email = Email.of(command.email());
         UserProfile profile = new UserProfile(
@@ -89,6 +90,13 @@ public class RegisterUserUseCaseImpl implements RegisterUserUseCase {
             return Role.STUDENT;
         }
         throw new IllegalArgumentException("Public registration only supports the STUDENT role");
+    }
+
+    /** The profile accepts a missing phone (administrator-created accounts), public registration does not. */
+    private void requirePhone(String phone) {
+        if (phone == null) {
+            throw new IllegalArgumentException("Phone is required");
+        }
     }
 
     /**

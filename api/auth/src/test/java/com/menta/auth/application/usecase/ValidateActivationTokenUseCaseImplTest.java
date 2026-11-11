@@ -16,6 +16,7 @@ import com.menta.auth.domain.model.ActivationToken;
 import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.model.UserId;
+import com.menta.auth.domain.model.UserProfile;
 import com.menta.auth.domain.model.UserStatus;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.shared.domain.vo.Email;
@@ -79,9 +80,9 @@ class ValidateActivationTokenUseCaseImplTest {
         ActivationToken token = ActivationToken.issue(
             userId, TOKEN_HASH, NOW.plus(Duration.ofHours(24)), NOW
         );
-        User user = User.rehydrate(
-            userId, Email.of("staff@example.com"), "unusable-hash", Role.INSTRUCTOR, UserStatus.PENDING_ACTIVATION,
-            LocalDateTime.now(), LocalDateTime.now(), 1L, null, false, true
+        User user = User.invite(
+            Email.of("staff@example.com"), "unusable-hash", Role.INSTRUCTOR,
+            new UserProfile("Ada", "Lovelace", null, null)
         );
         when(activationTokenRepository.findByHash(TOKEN_HASH)).thenReturn(Optional.of(token));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));

@@ -11,16 +11,20 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.menta.auth.application.dto.ChangeUserRoleCommand;
+import com.menta.auth.application.dto.CreateUserCommand;
 import com.menta.auth.application.dto.ListUsersQuery;
 import com.menta.auth.application.dto.UserPage;
 import com.menta.auth.application.dto.UserSummary;
 import com.menta.auth.application.port.in.ChangeUserRoleUseCase;
+import com.menta.auth.application.port.in.CreateUserUseCase;
 import com.menta.auth.application.port.in.ListUsersUseCase;
+import com.menta.auth.domain.exception.EmailAlreadyRegisteredException;
 import com.menta.auth.domain.exception.LastAdminCannotBeDemotedException;
 import com.menta.auth.domain.exception.UserNotFoundException;
 import com.menta.auth.domain.model.Role;
@@ -53,13 +57,16 @@ class AdminUserControllerTest {
 
     private ListUsersUseCase listUsersUseCase;
     private ChangeUserRoleUseCase changeUserRoleUseCase;
+    private CreateUserUseCase createUserUseCase;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         listUsersUseCase = mock(ListUsersUseCase.class);
         changeUserRoleUseCase = mock(ChangeUserRoleUseCase.class);
-        mockMvc = MockMvcBuilders.standaloneSetup(new AdminUserController(listUsersUseCase, changeUserRoleUseCase))
+        createUserUseCase = mock(CreateUserUseCase.class);
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                new AdminUserController(listUsersUseCase, changeUserRoleUseCase, createUserUseCase))
             .setControllerAdvice(new AdminUserExceptionHandler())
             .build();
     }
@@ -222,5 +229,87 @@ class AdminUserControllerTest {
             .andExpect(status().isConflict())
             .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
             .andExpect(jsonPath("$.code", is("LAST_ADMIN_CANNOT_BE_DEMOTED")));
+    }
+
+    private static final String CREATE_BODY =
+        "{\"email\":\"staff@example.com\",\"firstName\":\"Ada\",\"lastName\":\"Lovelace\",\"role\":\"RECEPTIONIST\"}";
+
+    @Test
+    void create_returns_201_with_the_pending_account_and_acts_on_behalf_of_the_authenticated_admin()
+        throws Exception {
+        when(createUserUseCase.create(any())).thenReturn(new UserSummary(
+            USER_ID.toString(), "staff@example.com", "Ada", "Lovelace", Role.RECEPTIONIST,
+            UserStatus.PENDING_ACTIVATION, false, LocalDateTime.of(2026, 11, 10, 9, 30)
+        ));
+
+        mockMvc.perform(post(BASE_URL)
+                .contentType(MediaType.APPLICATION_JSON).content(CREATE_BODY).principal(admin()))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.id", is(USER_ID.toString())))
+            .andExpect(jsonPath("$.email", is("staff@example.com")))
+            .andExpect(jsonPath("$.role", is("RECEPTIONIST")))
+            .andExpect(jsonPath("$.status", is("PENDING_ACTIVATION")))
+            .andExpect(jsonPath("$.demo", is(false)))
+            .andExpect(jsonPath("$.password").doesNotExist())
+            .andExpect(jsonPath("$.passwordHash").doesNotExist());
+
+        verify(createUserUseCase).create(
+            new CreateUserCommand(ADMIN_ID, "staff@example.com", "Ada", "Lovelace", Role.RECEPTIONIST)
+        );
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "{}",
+        "{\"email\":\"staff@example.com\",\"firstName\":\"Ada\",\"lastName\":\"L\"}",
+        "{\"email\":\"not-an-email\",\"firstName\":\"Ada\",\"lastName\":\"L\",\"role\":\"ADMIN\"}",
+        "{\"email\":\"\",\"firstName\":\"Ada\",\"lastName\":\"L\",\"role\":\"ADMIN\"}",
+        "{\"email\":\"a@b.com\",\"firstName\":\" \",\"lastName\":\"L\",\"role\":\"ADMIN\"}",
+        "{\"email\":\"a@b.com\",\"firstName\":\"Ada\",\"lastName\":\"\",\"role\":\"ADMIN\"}",
+        "{\"email\":\"a@b.com\",\"firstName\":\"Ada\",\"lastName\":\"L\",\"role\":\"SUPERADMIN\"}",
+        "{\"email\":\"a@b.com\",\"firstName\":\"Ada\",\"lastName\":\"L\",\"role\":null}",
+        "not json", ""})
+    void create_rejects_an_invalid_body(String body) throws Exception {
+        mockMvc.perform(post(BASE_URL).contentType(MediaType.APPLICATION_JSON).content(body).principal(admin()))
+            .andExpect(status().isBadRequest())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.code", is("INVALID_REQUEST")));
+
+        verifyNoInteractions(createUserUseCase);
+    }
+
+    @Test
+    void create_rejects_names_longer_than_one_hundred_characters() throws Exception {
+        String body = "{\"email\":\"a@b.com\",\"firstName\":\"" + "a".repeat(101)
+            + "\",\"lastName\":\"L\",\"role\":\"ADMIN\"}";
+
+        mockMvc.perform(post(BASE_URL).contentType(MediaType.APPLICATION_JSON).content(body).principal(admin()))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code", is("INVALID_REQUEST")));
+
+        verifyNoInteractions(createUserUseCase);
+    }
+
+    @Test
+    void create_maps_a_semantic_rejection_such_as_the_student_role_to_invalid_request() throws Exception {
+        when(createUserUseCase.create(any())).thenThrow(new IllegalArgumentException("STUDENT is not allowed"));
+
+        mockMvc.perform(post(BASE_URL)
+                .contentType(MediaType.APPLICATION_JSON).content(CREATE_BODY).principal(admin()))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code", is("INVALID_REQUEST")))
+            .andExpect(jsonPath("$.detail", not(containsString("STUDENT"))));
+    }
+
+    @Test
+    void create_maps_a_duplicated_email_to_409_with_a_stable_code() throws Exception {
+        when(createUserUseCase.create(any())).thenThrow(new EmailAlreadyRegisteredException());
+
+        mockMvc.perform(post(BASE_URL)
+                .contentType(MediaType.APPLICATION_JSON).content(CREATE_BODY).principal(admin()))
+            .andExpect(status().isConflict())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.code", is("EMAIL_ALREADY_REGISTERED")))
+            .andExpect(jsonPath("$.detail", not(containsString("staff@example.com"))));
     }
 }

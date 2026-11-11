@@ -4,15 +4,16 @@ import java.time.LocalDate;
 import java.util.regex.Pattern;
 
 /**
- * Personal data a student provides when registering.
+ * Personal data of an account holder: given when a student registers, or entered by an administrator for staff.
  *
- * <p>The names are trimmed and required, the phone must already be normalized to E.164 (callers strip spaces,
- * dashes and parentheses before it gets here) and the birth date is optional but, when present, must be in the
- * past. This is personal data: {@link #toString()} never prints it.
+ * <p>The names are trimmed and required, the phone, when present, must already be normalized to E.164 (callers
+ * strip spaces, dashes and parentheses before it gets here) and the birth date is optional but, when present, must
+ * be in the past. The phone is absent for accounts an administrator creates; public registration still requires
+ * it. This is personal data: {@link #toString()} never prints it.
  *
  * @param firstName given name, trimmed, 1 to {@value #NAME_MAX_LENGTH} characters
  * @param lastName family name, trimmed, 1 to {@value #NAME_MAX_LENGTH} characters
- * @param phone phone number in E.164 format
+ * @param phone phone number in E.164 format, or {@code null} when not provided
  * @param birthDate date of birth, or {@code null} when not provided
  */
 public record UserProfile(String firstName, String lastName, String phone, LocalDate birthDate) {
@@ -28,13 +29,13 @@ public record UserProfile(String firstName, String lastName, String phone, Local
     /**
      * Validates and normalizes the profile.
      *
-     * @throws IllegalArgumentException when a name is blank or too long, the phone is not E.164 or the birth date
-     *     is not in the past
+     * @throws IllegalArgumentException when a name is blank or too long, a given phone is not E.164 or the birth
+     *     date is not in the past
      */
     public UserProfile {
         firstName = requireName(firstName, "First name");
         lastName = requireName(lastName, "Last name");
-        if (phone == null || !PHONE_PATTERN.matcher(phone).matches()) {
+        if (phone != null && !PHONE_PATTERN.matcher(phone).matches()) {
             throw new IllegalArgumentException("Phone must be in E.164 format");
         }
         if (birthDate != null && !birthDate.isBefore(LocalDate.now())) {

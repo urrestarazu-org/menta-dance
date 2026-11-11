@@ -9,6 +9,9 @@ import java.util.UUID;
  */
 public interface UserAuditRepository {
 
+    /** Action recorded when an administrator creates an account. */
+    String USER_CREATED = "USER_CREATED";
+
     /** Action recorded when an administrator changes a user's role. */
     String ROLE_CHANGED = "ROLE_CHANGED";
 
@@ -18,7 +21,7 @@ public interface UserAuditRepository {
      *
      * @param userId the user the change applies to
      * @param actorId the administrator who made the change
-     * @param action what happened, e.g. {@link #ROLE_CHANGED}
+     * @param action what happened, e.g. {@link #ROLE_CHANGED} or {@link #USER_CREATED}
      * @param previousValue the value before the change, or {@code null}
      * @param newValue the value after the change, or {@code null}
      * @param occurredAt when the change happened, as decided by the application

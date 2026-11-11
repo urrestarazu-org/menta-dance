@@ -72,9 +72,12 @@ public final class UserMapper {
         );
     }
 
-    /** A row without the required profile columns belongs to an account that never had a profile. */
+    /**
+     * A row without the names belongs to an account that never had a profile; the phone is optional, since the
+     * accounts an administrator creates have none.
+     */
     private static UserProfile toProfile(UserJpaEntity entity) {
-        if (entity.getFirstName() == null || entity.getLastName() == null || entity.getPhone() == null) {
+        if (entity.getFirstName() == null || entity.getLastName() == null) {
             return null;
         }
         return new UserProfile(

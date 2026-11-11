@@ -1,5 +1,6 @@
 package com.menta.auth.infrastructure.web.controller;
 
+import com.menta.auth.domain.exception.EmailAlreadyRegisteredException;
 import com.menta.auth.domain.exception.LastAdminCannotBeDemotedException;
 import com.menta.auth.domain.exception.UserNotFoundException;
 import com.menta.auth.infrastructure.web.ProblemDetails;
@@ -27,6 +28,13 @@ public class AdminUserExceptionHandler {
     @ExceptionHandler(UserNotFoundException.class)
     ResponseEntity<ProblemDetail> userNotFound(UserNotFoundException exception) {
         return ProblemDetails.response(HttpStatus.NOT_FOUND, "El usuario no existe.", exception.getErrorCode());
+    }
+
+    @ExceptionHandler(EmailAlreadyRegisteredException.class)
+    ResponseEntity<ProblemDetail> emailAlreadyRegistered(EmailAlreadyRegisteredException exception) {
+        return ProblemDetails.response(
+            HttpStatus.CONFLICT, "Ya existe una cuenta con ese email.", exception.getErrorCode()
+        );
     }
 
     @ExceptionHandler(LastAdminCannotBeDemotedException.class)

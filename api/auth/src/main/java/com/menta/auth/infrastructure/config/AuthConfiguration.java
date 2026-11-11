@@ -2,6 +2,7 @@ package com.menta.auth.infrastructure.config;
 
 import com.menta.auth.application.port.in.ActivateAccountUseCase;
 import com.menta.auth.application.port.in.ChangeUserRoleUseCase;
+import com.menta.auth.application.port.in.CreateUserUseCase;
 import com.menta.auth.application.port.in.ListUsersUseCase;
 import com.menta.auth.application.port.in.LoginUseCase;
 import com.menta.auth.application.port.in.LogoutUseCase;
@@ -37,6 +38,7 @@ import com.menta.auth.application.port.out.UserAuditRepository;
 import com.menta.auth.application.usecase.ActivateAccountUseCaseImpl;
 import com.menta.auth.application.usecase.ActivationTokenIssuer;
 import com.menta.auth.application.usecase.ChangeUserRoleUseCaseImpl;
+import com.menta.auth.application.usecase.CreateUserUseCaseImpl;
 import com.menta.auth.application.usecase.ListUsersUseCaseImpl;
 import com.menta.auth.application.usecase.LoginUseCaseImpl;
 import com.menta.auth.application.usecase.LogoutUseCaseImpl;
@@ -63,6 +65,7 @@ import com.menta.auth.infrastructure.security.Sha256TokenHasher;
 import com.menta.auth.infrastructure.security.TokenBlacklistPortImpl;
 import com.menta.auth.infrastructure.transaction.TransactionalActivateAccountUseCase;
 import com.menta.auth.infrastructure.transaction.TransactionalChangeUserRoleUseCase;
+import com.menta.auth.infrastructure.transaction.TransactionalCreateUserUseCase;
 import com.menta.auth.infrastructure.transaction.TransactionalLoginUseCase;
 import com.menta.auth.infrastructure.transaction.TransactionalLogoutUseCase;
 import com.menta.auth.infrastructure.transaction.TransactionalRefreshTokenUseCase;
@@ -245,8 +248,8 @@ public class AuthConfiguration {
     }
 
     /**
-     * The shared generate/hash/encrypt/persist/outbox sequence behind every activation email: registration and
-     * resend.
+     * The shared generate/hash/encrypt/persist/outbox sequence behind every activation email: registration,
+     * resend and account creation by an administrator.
      */
     @Bean
     public ActivationTokenIssuer activationTokenIssuer(
@@ -509,6 +512,20 @@ public class AuthConfiguration {
     @Bean
     public ListUsersUseCase listUsersUseCase(UserAdminRepository userAdminRepository) {
         return new ListUsersUseCaseImpl(userAdminRepository);
+    }
+
+    @Bean
+    public CreateUserUseCase createUserUseCase(
+        UserRepository userRepository,
+        PasswordEncoderPort passwordEncoder,
+        ActivationTokenIssuer activationTokenIssuer,
+        UserAuditRepository userAuditRepository,
+        Clock clock
+    ) {
+        CreateUserUseCaseImpl implementation = new CreateUserUseCaseImpl(
+            userRepository, passwordEncoder, activationTokenIssuer, userAuditRepository, clock
+        );
+        return new TransactionalCreateUserUseCase(implementation);
     }
 
     @Bean

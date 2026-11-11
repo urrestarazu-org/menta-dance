@@ -24,8 +24,9 @@ docs {
   Token first when testing the read-only GET contract.
   A valid token returns 204; expired, reused, or invalid tokens return the same
   RFC 9457 ACTIVATION_TOKEN_INVALID problem.
-  `password` is only used for an account created by an administrator: set the
-  runtime-only `activationPassword` variable to the password the holder chooses (8+ characters, an uppercase letter and a
+  `password` is only used for an account created by an administrator
+  (POST /api/v1/admin/users): set the runtime-only `activationPassword` variable
+  to the password the holder chooses (8+ characters, an uppercase letter and a
   digit). Without it that account answers 400 PASSWORD_REQUIRED, with a weak one
   400 WEAK_PASSWORD, and the token is not consumed. For an account that
   registered itself the field is ignored. Never save the password in an

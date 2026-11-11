@@ -1,0 +1,69 @@
+meta {
+  name: Create User (Admin)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/admin/users
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "email": "recepcion@example.com",
+    "firstName": "Ada",
+    "lastName": "Lovelace",
+    "role": "RECEPTIONIST"
+  }
+}
+
+docs {
+  #378. Requiere un access token de ADMIN. Da de alta una cuenta de staff
+  (INSTRUCTOR, RECEPTIONIST o ADMIN; STUDENT no, los alumnos se registran
+  solos) y le envía al titular el correo de activación (miralo en Mailpit).
+
+  No hay contraseña por defecto: la cuenta se guarda con un hash aleatorio e
+  inutilizable y queda PENDING_ACTIVATION, así que nadie puede iniciar sesión
+  hasta que el titular active la cuenta y elija su contraseña. Para probarlo,
+  pegá el token del correo en la variable de runtime `activationToken` y usá
+  "Validate Activation Token" (responde 200 { "passwordRequired": true }) y
+  después "Activate Account" con `activationPassword`.
+
+  El alta queda auditada (acción USER_CREATED: quién, cuándo y rol). La
+  cuenta, el token, el correo encolado y la auditoría se confirman juntos.
+
+  Contrato de éxito (201): { id, email, firstName, lastName, role, status, demo, createdAt }
+  con status PENDING_ACTIVATION y demo false. No hay header Location.
+
+  Contrato de error:
+    400 INVALID_REQUEST             → body incompleto, email mal formado, nombre vacío o de más de 100
+                                      caracteres, rol desconocido o STUDENT
+    401                             → sin access token
+    403                             → el usuario autenticado no es ADMIN
+    409 EMAIL_ALREADY_REGISTERED    → ya existe una cuenta con ese email (sin distinguir mayúsculas)
+}
+
+tests {
+  test("Devuelve la cuenta pendiente de activación", function() {
+    expect(res.getStatus()).to.equal(201);
+    expect(res.getBody().role).to.equal("RECEPTIONIST");
+    expect(res.getBody().status).to.equal("PENDING_ACTIVATION");
+    expect(res.getBody().demo).to.equal(false);
+  });
+
+  test("Nunca expone credenciales", function() {
+    expect(res.getBody()).to.not.have.property("password");
+    expect(res.getBody()).to.not.have.property("passwordHash");
+    expect(res.getBody()).to.not.have.property("tokenVersion");
+  });
+}
+
+assert {
+  res.status: eq 201
+}

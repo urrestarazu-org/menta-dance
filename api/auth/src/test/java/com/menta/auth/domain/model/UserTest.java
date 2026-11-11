@@ -213,13 +213,35 @@ class UserTest {
         assertThat(user.getUpdatedAt()).isEqualTo(past);
     }
 
-    /** A pending account whose holder still has to choose a password, as an administrator-created one is stored. */
-    private static User mustChoosePasswordUser() {
-        LocalDateTime now = LocalDateTime.now();
-        return User.rehydrate(
-            UserId.generate(), Email.of("staff@example.com"), "unusable-hash", Role.RECEPTIONIST,
-            UserStatus.PENDING_ACTIVATION, now, now, 1L, null, false, true
+    private static User invitedUser() {
+        return User.invite(
+            Email.of("staff@example.com"), "unusable-hash", Role.RECEPTIONIST,
+            new UserProfile("Ada", "Lovelace", null, null)
         );
+    }
+
+    @Test
+    void invite_creates_a_pending_account_that_must_choose_its_own_password() {
+        User user = invitedUser();
+
+        assertThat(user.getStatus()).isEqualTo(UserStatus.PENDING_ACTIVATION);
+        assertThat(user.isMustSetPassword()).isTrue();
+        assertThat(user.isDemo()).isFalse();
+        assertThat(user.getRole()).isEqualTo(Role.RECEPTIONIST);
+        assertThat(user.getPasswordHash()).isEqualTo("unusable-hash");
+        assertThat(user.getProfile()).contains(new UserProfile("Ada", "Lovelace", null, null));
+        assertThat(user.getTokenVersion()).isEqualTo(1L);
+    }
+
+    @Test
+    void invite_requires_a_profile_and_a_hash() {
+        Email email = Email.of("staff@example.com");
+        UserProfile profile = new UserProfile("Ada", "Lovelace", null, null);
+
+        assertThatThrownBy(() -> User.invite(email, "hash", Role.INSTRUCTOR, null))
+            .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> User.invite(email, null, Role.INSTRUCTOR, profile))
+            .isInstanceOf(NullPointerException.class);
     }
 
     @Test
@@ -254,7 +276,7 @@ class UserTest {
 
     @Test
     void activate_refuses_an_account_that_must_choose_its_password() {
-        User user = mustChoosePasswordUser();
+        User user = invitedUser();
 
         assertThatThrownBy(user::activate).isInstanceOf(IllegalStateException.class);
 
@@ -263,7 +285,7 @@ class UserTest {
 
     @Test
     void activate_with_password_stores_the_chosen_hash_clears_the_marker_and_activates() {
-        User user = mustChoosePasswordUser();
+        User user = invitedUser();
 
         user.activateWithPassword("chosen-hash");
 
@@ -279,7 +301,7 @@ class UserTest {
             UserId.generate(), Email.of("student@example.com"), "hash", Role.STUDENT,
             UserStatus.PENDING_ACTIVATION, now, now
         );
-        User alreadyActive = mustChoosePasswordUser();
+        User alreadyActive = invitedUser();
         alreadyActive.activateWithPassword("first-hash");
 
         assertThatThrownBy(() -> ordinaryPending.activateWithPassword("h"))
@@ -291,7 +313,7 @@ class UserTest {
 
     @Test
     void activate_with_password_rejects_a_null_hash() {
-        User user = mustChoosePasswordUser();
+        User user = invitedUser();
 
         assertThatThrownBy(() -> user.activateWithPassword(null)).isInstanceOf(NullPointerException.class);
         assertThat(user.getStatus()).isEqualTo(UserStatus.PENDING_ACTIVATION);

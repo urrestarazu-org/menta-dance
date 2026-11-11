@@ -94,6 +94,32 @@ public class User {
     }
 
     /**
+     * Creates a pending account on behalf of an administrator. The holder has not chosen a password yet: the
+     * given hash is an unusable placeholder that nobody can authenticate with, and activation must replace it.
+     *
+     * @param unusablePasswordHash a hash of a random secret that is never disclosed, never null
+     * @param profile the personal data the administrator entered, never null
+     */
+    public static User invite(Email email, String unusablePasswordHash, Role role, UserProfile profile) {
+        Objects.requireNonNull(unusablePasswordHash, "unusablePasswordHash cannot be null");
+        Objects.requireNonNull(profile, "profile cannot be null");
+        LocalDateTime now = LocalDateTime.now();
+        return new User(
+            UserId.generate(),
+            email,
+            unusablePasswordHash,
+            role,
+            UserStatus.PENDING_ACTIVATION,
+            now,
+            now,
+            DEFAULT_TOKEN_VERSION,
+            profile,
+            false,
+            true
+        );
+    }
+
+    /**
      * Creates an already-active user for trusted provisioning flows.
      */
     public static User create(Email email, String passwordHash, Role role) {
