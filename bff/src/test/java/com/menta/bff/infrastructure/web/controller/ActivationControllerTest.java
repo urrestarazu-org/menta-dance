@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
+import com.menta.bff.application.dto.ActivationRequirement;
 import com.menta.bff.application.port.out.AuthApiClient;
 import com.menta.bff.application.usecase.AccountActivationUseCase;
 import java.util.stream.Stream;
@@ -60,7 +61,7 @@ class ActivationControllerTest {
     @Test
     @DisplayName("GET /activar/{token} with a valid token renders the button page and forbids caching and Referer")
     void validTokenRendersTheButtonPage() throws Exception {
-        when(accountActivationUseCase.isTokenValid(TOKEN)).thenReturn(true);
+        when(accountActivationUseCase.checkToken(TOKEN)).thenReturn(ActivationRequirement.NONE);
 
         mockMvc.perform(get("/activar/" + TOKEN))
                 .andExpect(status().isOk())
@@ -74,7 +75,8 @@ class ActivationControllerTest {
     @Test
     @DisplayName("GET /activar/{token} with an invalid token renders the invalid state without echoing the token")
     void invalidTokenRendersTheInvalidState() throws Exception {
-        when(accountActivationUseCase.isTokenValid(TOKEN)).thenReturn(false);
+        when(accountActivationUseCase.checkToken(TOKEN))
+                .thenThrow(new AuthApiClient.InvalidActivationTokenException("no"));
 
         mockMvc.perform(get("/activar/" + TOKEN))
                 .andExpect(status().isBadRequest())
@@ -85,11 +87,23 @@ class ActivationControllerTest {
                 .andExpect(header().string("Referrer-Policy", "no-referrer"));
     }
 
+    @Test
+    @DisplayName("GET /activar/{token} of an account that must choose a password gets no button")
+    void passwordRequiringAccountIsNotOfferedTheButton() throws Exception {
+        when(accountActivationUseCase.checkToken(TOKEN)).thenReturn(ActivationRequirement.PASSWORD);
+
+        mockMvc.perform(get("/activar/" + TOKEN))
+                .andExpect(status().isBadRequest())
+                .andExpect(view().name("activate"))
+                .andExpect(model().attribute("invalidToken", true))
+                .andExpect(model().attributeDoesNotExist("token"));
+    }
+
     @ParameterizedTest
     @MethodSource("retryableFailures")
     @DisplayName("GET /activar/{token} keeps the button available when the API cannot answer")
     void validationFailureKeepsTheButton(RuntimeException failure, int expectedStatus) throws Exception {
-        when(accountActivationUseCase.isTokenValid(TOKEN)).thenThrow(failure);
+        when(accountActivationUseCase.checkToken(TOKEN)).thenThrow(failure);
 
         mockMvc.perform(get("/activar/" + TOKEN))
                 .andExpect(status().is(expectedStatus))
@@ -115,6 +129,18 @@ class ActivationControllerTest {
     void invalidTokenOnSubmitRendersTheInvalidState() throws Exception {
         doThrow(new AuthApiClient.InvalidActivationTokenException("no")).when(accountActivationUseCase)
                 .activate(any());
+
+        mockMvc.perform(post("/activar").param("token", TOKEN))
+                .andExpect(status().isBadRequest())
+                .andExpect(view().name("activate"))
+                .andExpect(model().attribute("invalidToken", true))
+                .andExpect(model().attributeDoesNotExist("token"));
+    }
+
+    @Test
+    @DisplayName("POST /activar of an account that must choose a password renders the invalid state")
+    void passwordRequiredOnSubmitRendersTheInvalidState() throws Exception {
+        doThrow(new AuthApiClient.PasswordRequiredException()).when(accountActivationUseCase).activate(TOKEN);
 
         mockMvc.perform(post("/activar").param("token", TOKEN))
                 .andExpect(status().isBadRequest())

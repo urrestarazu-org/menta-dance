@@ -5,7 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
+import com.menta.bff.application.dto.ActivationRequirement;
 import com.menta.bff.application.port.out.AuthApiClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -22,6 +24,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class AccountActivationUseCaseTest {
 
     private static final String TOKEN = "activation-token-abc";
+    private static final String PASSWORD = "Secreta123";
 
     @Mock
     private AuthApiClient authApiClient;
@@ -34,29 +37,32 @@ class AccountActivationUseCaseTest {
     }
 
     @Test
-    @DisplayName("a token the API accepts is valid")
-    void acceptedTokenIsValid() {
-        assertThat(useCase.isTokenValid(TOKEN)).isTrue();
+    @DisplayName("a token the API accepts without a password check needs nothing else")
+    void acceptedTokenNeedsNoPassword() {
+        when(authApiClient.validateActivationToken(TOKEN)).thenReturn(ActivationRequirement.NONE);
 
-        verify(authApiClient).validateActivationToken(TOKEN);
+        assertThat(useCase.checkToken(TOKEN)).isEqualTo(ActivationRequirement.NONE);
     }
 
     @Test
-    @DisplayName("a token the API rejects is not valid")
-    void rejectedTokenIsNotValid() {
+    @DisplayName("a token of an account created by an admin reports that a password is required")
+    void adminAccountTokenRequiresAPassword() {
+        when(authApiClient.validateActivationToken(TOKEN)).thenReturn(ActivationRequirement.PASSWORD);
+
+        assertThat(useCase.checkToken(TOKEN)).isEqualTo(ActivationRequirement.PASSWORD);
+    }
+
+    @Test
+    @DisplayName("validation lets a rejected token and availability failures reach the caller")
+    void validationPropagatesFailures() {
         doThrow(new AuthApiClient.InvalidActivationTokenException("no")).when(authApiClient)
                 .validateActivationToken(TOKEN);
+        assertThatThrownBy(() -> useCase.checkToken(TOKEN))
+                .isInstanceOf(AuthApiClient.InvalidActivationTokenException.class);
 
-        assertThat(useCase.isTokenValid(TOKEN)).isFalse();
-    }
-
-    @Test
-    @DisplayName("validation lets availability failures reach the caller")
-    void validationPropagatesAvailabilityFailures() {
         doThrow(new AuthApiClient.ServiceUnavailableException("down")).when(authApiClient)
                 .validateActivationToken(TOKEN);
-
-        assertThatThrownBy(() -> useCase.isTokenValid(TOKEN))
+        assertThatThrownBy(() -> useCase.checkToken(TOKEN))
                 .isInstanceOf(AuthApiClient.ServiceUnavailableException.class);
     }
 
@@ -65,8 +71,11 @@ class AccountActivationUseCaseTest {
     @ValueSource(strings = {" ", "a/b", "..", "a b", "tok?en=1", "tok.en"})
     @DisplayName("a malformed token is invalid and never reaches the API")
     void malformedTokenNeverReachesTheApi(String malformed) {
-        assertThat(useCase.isTokenValid(malformed)).isFalse();
+        assertThatThrownBy(() -> useCase.checkToken(malformed))
+                .isInstanceOf(AuthApiClient.InvalidActivationTokenException.class);
         assertThatThrownBy(() -> useCase.activate(malformed))
+                .isInstanceOf(AuthApiClient.InvalidActivationTokenException.class);
+        assertThatThrownBy(() -> useCase.activate(malformed, PASSWORD))
                 .isInstanceOf(AuthApiClient.InvalidActivationTokenException.class);
 
         verifyNoInteractions(authApiClient);
@@ -75,7 +84,8 @@ class AccountActivationUseCaseTest {
     @Test
     @DisplayName("an over-long token is invalid and never reaches the API")
     void overLongTokenNeverReachesTheApi() {
-        assertThat(useCase.isTokenValid("a".repeat(257))).isFalse();
+        assertThatThrownBy(() -> useCase.checkToken("a".repeat(257)))
+                .isInstanceOf(AuthApiClient.InvalidActivationTokenException.class);
 
         verifyNoInteractions(authApiClient);
     }
@@ -94,5 +104,40 @@ class AccountActivationUseCaseTest {
         doThrow(new AuthApiClient.RateLimitedException("limit", null)).when(authApiClient).activate(TOKEN);
 
         assertThatThrownBy(() -> useCase.activate(TOKEN)).isInstanceOf(AuthApiClient.RateLimitedException.class);
+    }
+
+    @Test
+    @DisplayName("activate with a password submits both to the Auth API")
+    void activateSubmitsTheChosenPassword() {
+        useCase.activate(TOKEN, PASSWORD);
+
+        verify(authApiClient).activate(TOKEN, PASSWORD);
+    }
+
+    @Test
+    @DisplayName("activate with a password lets the API verdicts reach the caller")
+    void activateWithPasswordPropagatesVerdicts() {
+        doThrow(new AuthApiClient.PasswordRejectedException(AuthApiClient.PasswordRejectedException.Reason.WEAK))
+                .when(authApiClient).activate(TOKEN, PASSWORD);
+
+        assertThatThrownBy(() -> useCase.activate(TOKEN, PASSWORD))
+                .isInstanceOf(AuthApiClient.PasswordRejectedException.class);
+    }
+
+    @Test
+    @DisplayName("activate without a password lets the API ask for one")
+    void activateWithoutPasswordPropagatesPasswordRequired() {
+        doThrow(new AuthApiClient.PasswordRequiredException()).when(authApiClient).activate(TOKEN);
+
+        assertThatThrownBy(() -> useCase.activate(TOKEN))
+                .isInstanceOf(AuthApiClient.PasswordRequiredException.class);
+    }
+
+    @Test
+    @DisplayName("activate with a null password is a programming error and never reaches the API")
+    void activateRejectsANullPassword() {
+        assertThatThrownBy(() -> useCase.activate(TOKEN, null)).isInstanceOf(NullPointerException.class);
+
+        verifyNoInteractions(authApiClient);
     }
 }

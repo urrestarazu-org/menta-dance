@@ -1,5 +1,6 @@
 package com.menta.bff.application.usecase;
 
+import com.menta.bff.application.dto.ActivationRequirement;
 import com.menta.bff.application.port.out.AuthApiClient;
 import java.util.Objects;
 import java.util.regex.Pattern;
@@ -28,27 +29,25 @@ public class AccountActivationUseCaseImpl implements AccountActivationUseCase {
     }
 
     @Override
-    public boolean isTokenValid(String token) {
-        if (!hasTokenFormat(token)) {
-            return false;
-        }
-        try {
-            authApiClient.validateActivationToken(token);
-            return true;
-        } catch (AuthApiClient.InvalidActivationTokenException e) {
-            return false;
-        }
+    public ActivationRequirement checkToken(String token) {
+        return authApiClient.validateActivationToken(requireTokenFormat(token));
     }
 
     @Override
     public void activate(String token) {
-        if (!hasTokenFormat(token)) {
-            throw new AuthApiClient.InvalidActivationTokenException("Malformed activation token");
-        }
-        authApiClient.activate(token);
+        authApiClient.activate(requireTokenFormat(token));
     }
 
-    private static boolean hasTokenFormat(String token) {
-        return token != null && TOKEN_FORMAT.matcher(token).matches();
+    @Override
+    public void activate(String token, String password) {
+        Objects.requireNonNull(password, "password cannot be null");
+        authApiClient.activate(requireTokenFormat(token), password);
+    }
+
+    private static String requireTokenFormat(String token) {
+        if (token == null || !TOKEN_FORMAT.matcher(token).matches()) {
+            throw new AuthApiClient.InvalidActivationTokenException("Malformed activation token");
+        }
+        return token;
     }
 }
