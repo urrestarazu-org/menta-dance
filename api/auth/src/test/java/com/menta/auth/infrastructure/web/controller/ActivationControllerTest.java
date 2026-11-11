@@ -1,6 +1,9 @@
 package com.menta.auth.infrastructure.web.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -23,6 +26,11 @@ import com.menta.auth.application.port.in.ValidateActivationTokenUseCase;
 import com.menta.auth.domain.exception.ActivationRateLimitedException;
 import com.menta.auth.domain.exception.ActivationTokenInvalidException;
 import com.menta.auth.domain.exception.AuthDegradedException;
+import com.menta.auth.domain.exception.PasswordRequiredException;
+import com.menta.auth.domain.exception.WeakPasswordException;
+import com.menta.auth.domain.model.PasswordPolicyViolation;
+import com.menta.auth.infrastructure.web.dto.ActivateAccountRequest;
+import java.util.EnumSet;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -60,7 +68,7 @@ class ActivationControllerTest {
             .andExpect(status().isNoContent())
             .andExpect(content().string(""));
 
-        verify(activateAccountUseCase).activate(new ActivateAccountCommand("valid-token"));
+        verify(activateAccountUseCase).activate(new ActivateAccountCommand("valid-token", null));
     }
 
     @Test
@@ -93,7 +101,7 @@ class ActivationControllerTest {
             .andExpect(status().isNoContent())
             .andExpect(content().string(""));
 
-        verify(validateActivationTokenUseCase).validate(new ActivateAccountCommand("valid-token"));
+        verify(validateActivationTokenUseCase).validate(new ActivateAccountCommand("valid-token", null));
         verify(activateAccountUseCase, never()).activate(any());
     }
 
@@ -179,5 +187,65 @@ class ActivationControllerTest {
             .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
             .andExpect(jsonPath("$.code", is("INVALID_ACTIVATION_REQUEST")))
             .andExpect(jsonPath("$.detail", is("La solicitud de activación no es válida.")));
+    }
+
+    @Test
+    void activation_passes_the_chosen_password_to_the_use_case_without_echoing_it() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/activate")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"token\":\"valid-token\",\"password\":\"Chosen1Pass\"}"))
+            .andExpect(status().isNoContent())
+            .andExpect(content().string(""));
+
+        verify(activateAccountUseCase).activate(new ActivateAccountCommand("valid-token", "Chosen1Pass"));
+    }
+
+    @Test
+    void activation_without_the_required_password_is_a_typed_400() throws Exception {
+        doThrow(new PasswordRequiredException()).when(activateAccountUseCase).activate(any());
+
+        mockMvc.perform(post("/api/v1/auth/activate")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"token\":\"valid-token\"}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.type", is("https://menta.dance/problems/password_required")))
+            .andExpect(jsonPath("$.code", is("PASSWORD_REQUIRED")));
+    }
+
+    @Test
+    void activation_with_a_weak_password_lists_every_unmet_rule_and_never_echoes_it() throws Exception {
+        doThrow(new WeakPasswordException(EnumSet.of(
+            PasswordPolicyViolation.TOO_SHORT, PasswordPolicyViolation.MISSING_DIGIT
+        ))).when(activateAccountUseCase).activate(any());
+
+        mockMvc.perform(post("/api/v1/auth/activate")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"token\":\"valid-token\",\"password\":\"weakpw\"}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.code", is("WEAK_PASSWORD")))
+            .andExpect(jsonPath("$.detail", is(
+                "La contraseña no cumple los requisitos: al menos 8 caracteres, al menos un número."
+            )))
+            .andExpect(content().string(not(containsString("weakpw"))));
+    }
+
+    @Test
+    void validation_tells_the_client_when_the_account_needs_a_password() throws Exception {
+        when(validateActivationTokenUseCase.validate(new ActivateAccountCommand("staff-token", null)))
+            .thenReturn(true);
+
+        mockMvc.perform(get("/api/v1/auth/activate/staff-token"))
+            .andExpect(status().isOk())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+            .andExpect(jsonPath("$.passwordRequired", is(true)));
+    }
+
+    @Test
+    void the_activation_request_never_prints_the_token_or_the_password() {
+        String printed = new ActivateAccountRequest("secret-token", "Chosen1Pass").toString();
+
+        assertThat(printed).doesNotContain("secret-token").doesNotContain("Chosen1Pass");
     }
 }

@@ -72,9 +72,12 @@ class ResendActivationUseCaseImplTest {
     @BeforeEach
     void setUp() {
         useCase = new ResendActivationUseCaseImpl(
-            userRepository, activationTokenRepository, activationTokenGenerator,
-            activationTokenHasher, activationDeliveryCipher, activationRateLimitPort, outboxAppender,
-            clock, Duration.ofHours(24)
+            userRepository, activationTokenRepository, activationRateLimitPort,
+            new ActivationTokenIssuer(
+                activationTokenRepository, activationTokenGenerator, activationTokenHasher,
+                activationDeliveryCipher, outboxAppender, Duration.ofHours(24)
+            ),
+            clock
         );
     }
 
@@ -137,6 +140,23 @@ class ResendActivationUseCaseImplTest {
 
         assertThat(result).isEqualTo(ResendActivationResult.ACKNOWLEDGED);
         verifyNoTokenIssuance();
+    }
+
+    @Test
+    void reissues_a_fresh_token_for_a_pending_account_created_by_an_administrator() {
+        allowRateLimit();
+        User invited = User.rehydrate(
+            UserId.generate(), Email.of(EMAIL), "unusable-hash", Role.RECEPTIONIST, UserStatus.PENDING_ACTIVATION,
+            LocalDateTime.now(), LocalDateTime.now(), 1L, null, false, true
+        );
+        when(userRepository.findByEmail(any())).thenReturn(Optional.of(invited));
+        stubTokenIssuance();
+
+        useCase.resend(new ResendActivationCommand(EMAIL, "client-fp"));
+
+        verify(activationTokenRepository).invalidateActiveByUserId(eq(invited.getId()), any(Instant.class));
+        verify(activationTokenRepository).save(any(ActivationToken.class), any(DeliveryEnvelope.class));
+        verify(outboxAppender).append(eq("auth.AccountActivationRequested"), anyString(), anyString());
     }
 
     @Test

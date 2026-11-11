@@ -23,6 +23,11 @@ public class User {
     private UserProfile profile;
     /** Marks demo/test accounts so no outgoing email is addressed to them. Never set by registration. */
     private boolean demo;
+    /**
+     * True while an account created by an administrator has not yet had its holder choose a password: its stored
+     * hash is a random, unusable placeholder and activation must collect the real one.
+     */
+    private boolean mustSetPassword;
 
     public User(
         UserId id,
@@ -33,7 +38,7 @@ public class User {
         LocalDateTime createdAt,
         LocalDateTime updatedAt
     ) {
-        this(id, email, passwordHash, role, status, createdAt, updatedAt, DEFAULT_TOKEN_VERSION, null, false);
+        this(id, email, passwordHash, role, status, createdAt, updatedAt, DEFAULT_TOKEN_VERSION, null, false, false);
     }
 
     private User(
@@ -46,7 +51,8 @@ public class User {
         LocalDateTime updatedAt,
         long tokenVersion,
         UserProfile profile,
-        boolean demo
+        boolean demo,
+        boolean mustSetPassword
     ) {
         this.id = id;
         this.email = email;
@@ -58,6 +64,7 @@ public class User {
         this.tokenVersion = tokenVersion;
         this.profile = profile;
         this.demo = demo;
+        this.mustSetPassword = mustSetPassword;
     }
 
     /** Default token_version for newly-minted auth_users rows (ADR-0025 V2 DDL). */
@@ -81,6 +88,7 @@ public class User {
             now,
             DEFAULT_TOKEN_VERSION,
             profile,
+            false,
             false
         );
     }
@@ -100,6 +108,7 @@ public class User {
             now,
             DEFAULT_TOKEN_VERSION,
             null,
+            false,
             false
         );
     }
@@ -122,7 +131,7 @@ public class User {
         LocalDateTime updatedAt,
         long tokenVersion
     ) {
-        return new User(id, email, passwordHash, role, status, createdAt, updatedAt, tokenVersion, null, false);
+        return new User(id, email, passwordHash, role, status, createdAt, updatedAt, tokenVersion, null, false, false);
     }
 
     /**
@@ -142,7 +151,9 @@ public class User {
         long tokenVersion,
         UserProfile profile
     ) {
-        return new User(id, email, passwordHash, role, status, createdAt, updatedAt, tokenVersion, profile, false);
+        return new User(
+            id, email, passwordHash, role, status, createdAt, updatedAt, tokenVersion, profile, false, false
+        );
     }
 
     /**
@@ -164,18 +175,69 @@ public class User {
         UserProfile profile,
         boolean demo
     ) {
-        return new User(id, email, passwordHash, role, status, createdAt, updatedAt, tokenVersion, profile, demo);
+        return new User(
+            id, email, passwordHash, role, status, createdAt, updatedAt, tokenVersion, profile, demo, false
+        );
+    }
+
+    /**
+     * Rebuilds a user from persisted state, including whether its holder still has to choose a password.
+     *
+     * @param profile the stored profile, or {@code null} for accounts that never had one
+     * @param demo whether the account is a demo/test account that must receive no outgoing email
+     * @param mustSetPassword whether the stored hash is an unusable placeholder awaiting the holder's choice
+     * @return the user as it was persisted
+     */
+    public static User rehydrate(
+        UserId id,
+        Email email,
+        String passwordHash,
+        Role role,
+        UserStatus status,
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt,
+        long tokenVersion,
+        UserProfile profile,
+        boolean demo,
+        boolean mustSetPassword
+    ) {
+        return new User(
+            id, email, passwordHash, role, status, createdAt, updatedAt, tokenVersion, profile, demo,
+            mustSetPassword
+        );
     }
 
     /**
      * Moves a pending account to {@code ACTIVE}.
      *
-     * @throws IllegalStateException when the account is not pending activation
+     * @throws IllegalStateException when the account is not pending activation, or when its holder still has to
+     *     choose a password (use {@link #activateWithPassword})
      */
     public void activate() {
         if (this.status != UserStatus.PENDING_ACTIVATION) {
             throw new IllegalStateException("Only a user pending activation can be activated");
         }
+        if (this.mustSetPassword) {
+            throw new IllegalStateException("A user that must choose a password cannot be activated without one");
+        }
+        this.status = UserStatus.ACTIVE;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    /**
+     * Activates an account created by an administrator, replacing the unusable placeholder with the password its
+     * holder chose. Storing the password, clearing the marker and activating are one business event.
+     *
+     * @param chosenPasswordHash the hash of the password the holder chose, never null
+     * @throws IllegalStateException when the account is not pending activation or did not need a password
+     */
+    public void activateWithPassword(String chosenPasswordHash) {
+        Objects.requireNonNull(chosenPasswordHash, "chosenPasswordHash cannot be null");
+        if (this.status != UserStatus.PENDING_ACTIVATION || !this.mustSetPassword) {
+            throw new IllegalStateException("Only a pending user that must choose a password takes one on activation");
+        }
+        this.passwordHash = chosenPasswordHash;
+        this.mustSetPassword = false;
         this.status = UserStatus.ACTIVE;
         this.updatedAt = LocalDateTime.now();
     }
@@ -232,6 +294,14 @@ public class User {
         this.role = newRole;
         this.tokenVersion += 1;
         this.updatedAt = LocalDateTime.now();
+    }
+
+    /**
+     * Whether the holder still has to choose a password, because an administrator created the account and its
+     * stored hash is an unusable placeholder.
+     */
+    public boolean isMustSetPassword() {
+        return mustSetPassword;
     }
 
     public boolean isActive() {

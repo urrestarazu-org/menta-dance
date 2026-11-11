@@ -7,6 +7,7 @@ import com.menta.auth.application.port.in.ResendActivationUseCase;
 import com.menta.auth.application.port.in.ValidateActivationTokenUseCase;
 import com.menta.auth.infrastructure.web.ProblemDetails;
 import com.menta.auth.infrastructure.web.dto.ActivateAccountRequest;
+import com.menta.auth.infrastructure.web.dto.ActivationTokenValidationResponse;
 import com.menta.auth.infrastructure.web.dto.ResendActivationRequest;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -44,15 +45,23 @@ public class ActivationController {
         this.clientFingerprint = clientFingerprint;
     }
 
+    /**
+     * Answers an empty {@code 204} for an ordinary account, exactly as before, and {@code 200} with
+     * {@code {"passwordRequired": true}} when an administrator created the account and activation will ask for a
+     * password.
+     */
     @GetMapping("/activate/{token}")
-    public ResponseEntity<Void> validateActivation(@PathVariable String token) {
-        validateActivationTokenUseCase.validate(new ActivateAccountCommand(token));
+    public ResponseEntity<ActivationTokenValidationResponse> validateActivation(@PathVariable String token) {
+        boolean passwordRequired = validateActivationTokenUseCase.validate(new ActivateAccountCommand(token, null));
+        if (passwordRequired) {
+            return ResponseEntity.ok(new ActivationTokenValidationResponse(true));
+        }
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/activate")
     public ResponseEntity<Void> activate(@Valid @RequestBody ActivateAccountRequest request) {
-        activateAccountUseCase.activate(new ActivateAccountCommand(request.token()));
+        activateAccountUseCase.activate(new ActivateAccountCommand(request.token(), request.password()));
         return ResponseEntity.noContent().build();
     }
 

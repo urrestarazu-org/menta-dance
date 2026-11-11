@@ -70,12 +70,14 @@ abstract class AbstractAdminUserIntegrationTest extends AbstractAuthMySqlIntegra
         // The MySQL schema is shared by every test of the context: every test starts from an empty user table so
         // the "at least one active admin" rule only ever sees the users the test created.
         jdbcTemplate.update("DELETE FROM auth_user_audit");
+        jdbcTemplate.update("DELETE FROM auth_activation_tokens");
         jdbcTemplate.update("DELETE FROM auth_refresh_tokens");
         jdbcTemplate.update("DELETE FROM auth_users");
         outboxRowJpaRepository.deleteAll();
 
         when(authDegradedGuard.isDegraded()).thenReturn(false);
         when(loginRateLimitPort.check(anyString(), anyString())).thenReturn(RateLimitDecision.allowed());
+        lenient().when(activationRateLimitPort.consume(anyString(), any())).thenReturn(RateLimitDecision.allowed());
         projectedVersions.clear();
         blacklistedJtis.clear();
         lenient().when(tokenBlacklistPort.currentTokenVersion(anyString())).thenAnswer(invocation -> {

@@ -19,7 +19,7 @@ class TransactionalActivateAccountUseCaseTest {
 
     @Test
     void delegates_the_activate_call() {
-        ActivateAccountCommand command = new ActivateAccountCommand("raw-token");
+        ActivateAccountCommand command = new ActivateAccountCommand("raw-token", null);
 
         TransactionalActivateAccountUseCase decorator = new TransactionalActivateAccountUseCase(delegate);
         decorator.activate(command);

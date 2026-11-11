@@ -35,6 +35,7 @@ import com.menta.auth.application.port.out.TokenHasher;
 import com.menta.auth.application.port.out.UserAdminRepository;
 import com.menta.auth.application.port.out.UserAuditRepository;
 import com.menta.auth.application.usecase.ActivateAccountUseCaseImpl;
+import com.menta.auth.application.usecase.ActivationTokenIssuer;
 import com.menta.auth.application.usecase.ChangeUserRoleUseCaseImpl;
 import com.menta.auth.application.usecase.ListUsersUseCaseImpl;
 import com.menta.auth.application.usecase.LoginUseCaseImpl;
@@ -243,29 +244,38 @@ public class AuthConfiguration {
         );
     }
 
+    /**
+     * The shared generate/hash/encrypt/persist/outbox sequence behind every activation email: registration and
+     * resend.
+     */
     @Bean
-    public RegisterUserUseCase registerUserUseCase(
-        UserRepository userRepository,
-        PasswordEncoderPort passwordEncoder,
+    public ActivationTokenIssuer activationTokenIssuer(
         ActivationTokenRepository activationTokenRepository,
         ActivationTokenGenerator activationTokenGenerator,
         ActivationTokenHasher activationTokenHasher,
         ActivationDeliveryCipher activationDeliveryCipher,
-        ActivationRateLimitPort activationRateLimitPort,
-        OutboxAppender outboxAppender,
-        Clock clock
+        OutboxAppender outboxAppender
     ) {
-        RegisterUserUseCaseImpl implementation = new RegisterUserUseCaseImpl(
-            userRepository,
-            passwordEncoder,
+        return new ActivationTokenIssuer(
             activationTokenRepository,
             activationTokenGenerator,
             activationTokenHasher,
             activationDeliveryCipher,
-            activationRateLimitPort,
             outboxAppender,
-            clock,
             activationTokenTtl
+        );
+    }
+
+    @Bean
+    public RegisterUserUseCase registerUserUseCase(
+        UserRepository userRepository,
+        PasswordEncoderPort passwordEncoder,
+        ActivationRateLimitPort activationRateLimitPort,
+        ActivationTokenIssuer activationTokenIssuer,
+        Clock clock
+    ) {
+        RegisterUserUseCaseImpl implementation = new RegisterUserUseCaseImpl(
+            userRepository, passwordEncoder, activationRateLimitPort, activationTokenIssuer, clock
         );
         return new TransactionalRegisterUserUseCase(implementation);
     }
@@ -275,10 +285,11 @@ public class AuthConfiguration {
         ActivationTokenRepository activationTokenRepository,
         ActivationTokenHasher activationTokenHasher,
         UserRepository userRepository,
+        PasswordEncoderPort passwordEncoder,
         Clock clock
     ) {
         return new TransactionalActivateAccountUseCase(new ActivateAccountUseCaseImpl(
-            activationTokenRepository, activationTokenHasher, userRepository, clock
+            activationTokenRepository, activationTokenHasher, userRepository, passwordEncoder, clock
         ));
     }
 
@@ -298,23 +309,12 @@ public class AuthConfiguration {
     public ResendActivationUseCase resendActivationUseCase(
         UserRepository userRepository,
         ActivationTokenRepository activationTokenRepository,
-        ActivationTokenGenerator activationTokenGenerator,
-        ActivationTokenHasher activationTokenHasher,
-        ActivationDeliveryCipher activationDeliveryCipher,
         ActivationRateLimitPort activationRateLimitPort,
-        OutboxAppender outboxAppender,
+        ActivationTokenIssuer activationTokenIssuer,
         Clock clock
     ) {
         ResendActivationUseCaseImpl implementation = new ResendActivationUseCaseImpl(
-            userRepository,
-            activationTokenRepository,
-            activationTokenGenerator,
-            activationTokenHasher,
-            activationDeliveryCipher,
-            activationRateLimitPort,
-            outboxAppender,
-            clock,
-            activationTokenTtl
+            userRepository, activationTokenRepository, activationRateLimitPort, activationTokenIssuer, clock
         );
         return new TransactionalResendActivationUseCase(implementation);
     }

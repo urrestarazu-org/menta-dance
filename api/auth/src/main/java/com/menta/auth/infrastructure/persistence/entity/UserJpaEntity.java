@@ -77,6 +77,12 @@ public class UserJpaEntity {
     @Column(name = "demo", nullable = false)
     private boolean demo;
 
+    /** The holder has not chosen a password yet; the stored hash is an unusable placeholder (V30, #378). */
+    @Getter
+    @Setter
+    @Column(name = "must_set_password", nullable = false)
+    private boolean mustSetPassword;
+
     // JPA requires default constructor
     protected UserJpaEntity() {
     }
@@ -114,6 +120,26 @@ public class UserJpaEntity {
         LocalDate birthDate,
         boolean demo
     ) {
+        this(id, email, passwordHash, role, status, createdAt, updatedAt, tokenVersion,
+            firstName, lastName, phone, birthDate, demo, false);
+    }
+
+    public UserJpaEntity(
+        UUID id,
+        String email,
+        String passwordHash,
+        Role role,
+        UserStatus status,
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt,
+        long tokenVersion,
+        String firstName,
+        String lastName,
+        String phone,
+        LocalDate birthDate,
+        boolean demo,
+        boolean mustSetPassword
+    ) {
         this.id = id;
         this.email = email;
         this.passwordHash = passwordHash;
@@ -127,6 +153,7 @@ public class UserJpaEntity {
         this.phone = phone;
         this.birthDate = birthDate;
         this.demo = demo;
+        this.mustSetPassword = mustSetPassword;
     }
 
     // Getters and setters

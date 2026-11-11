@@ -131,7 +131,7 @@ class AccountActivationIntegrationTest extends AbstractAuthMySqlIntegrationTest 
 
         assertThatThrownBy(() -> loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD, CLIENT_FINGERPRINT)))
             .isInstanceOf(AccountNotActivatedException.class);
-        activateAccountUseCase.activate(new ActivateAccountCommand(RAW_TOKEN));
+        activateAccountUseCase.activate(new ActivateAccountCommand(RAW_TOKEN, null));
         assertThat(loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD, CLIENT_FINGERPRINT)).accessToken())
             .isNotBlank();
     }
@@ -174,7 +174,7 @@ class AccountActivationIntegrationTest extends AbstractAuthMySqlIntegrationTest 
             Callable<Boolean> activate = () -> {
                 start.await();
                 try {
-                    activateAccountUseCase.activate(new ActivateAccountCommand(RAW_TOKEN));
+                    activateAccountUseCase.activate(new ActivateAccountCommand(RAW_TOKEN, null));
                     return true;
                 } catch (ActivationTokenInvalidException expected) {
                     return false;

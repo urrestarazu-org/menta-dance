@@ -18,7 +18,11 @@ public interface ActivateAccountUseCase {
     /**
      * Activates the account that owns the presented raw activation token.
      *
-     * @param command carries the raw token from the activation link
+     * @param command carries the raw token from the activation link and, for an account created by an
+     *      administrator, the password its holder chose
+     * @throws com.menta.auth.domain.exception.PasswordRequiredException when the account needs a password and the
+     *      command carries none
+     * @throws com.menta.auth.domain.exception.WeakPasswordException when the chosen password breaks the policy
      * @throws com.menta.auth.domain.exception.ActivationTokenInvalidException for every failure, without telling
      *      the caller whether the token was unknown, expired, used, invalidated or lost a race
      */

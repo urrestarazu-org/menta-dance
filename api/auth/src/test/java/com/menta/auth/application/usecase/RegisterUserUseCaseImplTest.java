@@ -73,14 +73,12 @@ class RegisterUserUseCaseImplTest {
         return new RegisterUserUseCaseImpl(
             userRepository,
             passwordEncoder,
-            activationTokenRepository,
-            activationTokenGenerator,
-            activationTokenHasher,
-            activationDeliveryCipher,
             activationRateLimitPort,
-            outboxAppender,
-            clock,
-            ttl
+            new ActivationTokenIssuer(
+                activationTokenRepository, activationTokenGenerator, activationTokenHasher,
+                activationDeliveryCipher, outboxAppender, ttl
+            ),
+            clock
         );
     }
 

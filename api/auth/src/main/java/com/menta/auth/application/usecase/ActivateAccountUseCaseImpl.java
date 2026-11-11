@@ -5,9 +5,12 @@ import com.menta.auth.application.port.in.ActivateAccountUseCase;
 import com.menta.auth.application.port.out.ActivationTokenHasher;
 import com.menta.auth.application.port.out.ActivationTokenRepository;
 import com.menta.auth.application.port.out.Clock;
+import com.menta.auth.application.port.out.PasswordEncoderPort;
 import com.menta.auth.domain.exception.ActivationTokenInvalidException;
+import com.menta.auth.domain.exception.PasswordRequiredException;
 import com.menta.auth.domain.model.ActivationToken;
 import com.menta.auth.domain.model.ActivationTokenStatus;
+import com.menta.auth.domain.model.Password;
 import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.repository.UserRepository;
 import java.time.Instant;
@@ -25,23 +28,31 @@ import java.time.Instant;
  * activation" over the wire. Atomicity across the token/user writes is NOT
  * provided here: the caller MUST wrap this use case with a transactional
  * decorator (see {@code TransactionalActivateAccountUseCase}).</p>
+ *
+ * <p>An account created by an administrator has no usable password yet: activation requires the one its holder
+ * chose, checked against the same policy as a password reset, and stores it in the same transaction that
+ * activates the account. A missing or weak password is rejected before the token is consumed, so the holder can
+ * retry with the same link. For every other account the password in the command is ignored.</p>
  */
 public class ActivateAccountUseCaseImpl implements ActivateAccountUseCase {
 
     private final ActivationTokenRepository activationTokenRepository;
     private final ActivationTokenHasher activationTokenHasher;
     private final UserRepository userRepository;
+    private final PasswordEncoderPort passwordEncoder;
     private final Clock clock;
 
     public ActivateAccountUseCaseImpl(
         ActivationTokenRepository activationTokenRepository,
         ActivationTokenHasher activationTokenHasher,
         UserRepository userRepository,
+        PasswordEncoderPort passwordEncoder,
         Clock clock
     ) {
         this.activationTokenRepository = activationTokenRepository;
         this.activationTokenHasher = activationTokenHasher;
         this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
         this.clock = clock;
     }
 
@@ -60,9 +71,16 @@ public class ActivateAccountUseCaseImpl implements ActivateAccountUseCase {
         User user = userRepository.findById(token.getUserId())
             .orElseThrow(ActivationTokenInvalidException::new);
 
+        // Checked before anything is consumed: a missing or weak password must not cost the holder the token.
+        String chosenPasswordHash = user.isMustSetPassword() ? hashChosenPassword(command.password()) : null;
+
         try {
             token.consume(now);
-            user.activate();
+            if (chosenPasswordHash == null) {
+                user.activate();
+            } else {
+                user.activateWithPassword(chosenPasswordHash);
+            }
         } catch (IllegalStateException e) {
             // A racing activation (or any other inconsistent state) collapses
             // into the same generic exception — never a distinguishable one.
@@ -73,5 +91,12 @@ public class ActivateAccountUseCaseImpl implements ActivateAccountUseCase {
             throw new ActivationTokenInvalidException();
         }
         userRepository.save(user);
+    }
+
+    private String hashChosenPassword(String rawPassword) {
+        if (rawPassword == null) {
+            throw new PasswordRequiredException();
+        }
+        return passwordEncoder.encode(Password.of(rawPassword).value());
     }
 }

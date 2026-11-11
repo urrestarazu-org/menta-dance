@@ -1,5 +1,6 @@
 package com.menta.auth.application.usecase;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -64,10 +65,30 @@ class ValidateActivationTokenUseCaseImplTest {
         when(activationTokenRepository.findByHash(TOKEN_HASH)).thenReturn(Optional.of(token));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
-        useCase.validate(new ActivateAccountCommand(RAW_TOKEN));
+        boolean passwordRequired = useCase.validate(new ActivateAccountCommand(RAW_TOKEN, null));
 
+        assertThat(passwordRequired).isFalse();
         verify(activationTokenRepository, never()).consumeIfActive(any(), any());
         verify(activationTokenRepository, never()).save(any(ActivationToken.class));
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void reports_that_a_password_is_required_when_the_pending_account_was_created_by_an_administrator() {
+        UserId userId = UserId.generate();
+        ActivationToken token = ActivationToken.issue(
+            userId, TOKEN_HASH, NOW.plus(Duration.ofHours(24)), NOW
+        );
+        User user = User.rehydrate(
+            userId, Email.of("staff@example.com"), "unusable-hash", Role.INSTRUCTOR, UserStatus.PENDING_ACTIVATION,
+            LocalDateTime.now(), LocalDateTime.now(), 1L, null, false, true
+        );
+        when(activationTokenRepository.findByHash(TOKEN_HASH)).thenReturn(Optional.of(token));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        assertThat(useCase.validate(new ActivateAccountCommand(RAW_TOKEN, null))).isTrue();
+
+        verify(activationTokenRepository, never()).consumeIfActive(any(), any());
         verify(userRepository, never()).save(any());
     }
 
@@ -79,7 +100,7 @@ class ValidateActivationTokenUseCaseImplTest {
         );
         when(activationTokenRepository.findByHash(TOKEN_HASH)).thenReturn(Optional.of(token));
 
-        assertThatThrownBy(() -> useCase.validate(new ActivateAccountCommand(RAW_TOKEN)))
+        assertThatThrownBy(() -> useCase.validate(new ActivateAccountCommand(RAW_TOKEN, null)))
             .isInstanceOf(ActivationTokenInvalidException.class);
 
         verify(activationTokenRepository, never()).consumeIfActive(any(), any());
@@ -99,7 +120,7 @@ class ValidateActivationTokenUseCaseImplTest {
         when(activationTokenRepository.findByHash(TOKEN_HASH)).thenReturn(Optional.of(token));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
-        assertThatThrownBy(() -> useCase.validate(new ActivateAccountCommand(RAW_TOKEN)))
+        assertThatThrownBy(() -> useCase.validate(new ActivateAccountCommand(RAW_TOKEN, null)))
             .isInstanceOf(ActivationTokenInvalidException.class);
 
         verify(activationTokenRepository, never()).consumeIfActive(any(), any());

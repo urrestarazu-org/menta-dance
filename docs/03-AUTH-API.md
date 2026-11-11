@@ -46,8 +46,8 @@ que la ruta canónica.
 | `POST /refresh` | `X-Refresh-Token` obligatorio; nunca body JSON | `200` con el par rotado |
 | `POST /logout` | `Authorization: Bearer <access>` y `X-Refresh-Token` obligatorios | `204 No Content` |
 | `POST /register` | JSON `{ "email", "password", "role": "STUDENT", "firstName", "lastName", "phone", "birthDate"? }` (`birthDate` es opcional) | `202 Accepted`, sin cuerpo y siempre genérico; un cuerpo inválido responde `400 INVALID_REQUEST` |
-| `GET /activate/{token}` | token opaco en el path; sólo valida sin consumir | `204 No Content` |
-| `POST /activate` | JSON `{ "token" }` | `204 No Content`; consume el token y activa la cuenta |
+| `GET /activate/{token}` | token opaco en el path; sólo valida sin consumir | `204 No Content`; `200` con `{ "passwordRequired": true }` si la cuenta la creó un administrador y el titular aún debe elegir contraseña |
+| `POST /activate` | JSON `{ "token", "password"? }` (`password` sólo se exige si la validación respondió `passwordRequired`) | `204 No Content`; consume el token y activa la cuenta. Cuenta creada por un administrador: sin `password` `400 PASSWORD_REQUIRED`, con una débil `400 WEAK_PASSWORD`; en ambos casos el token no se consume |
 | `POST /resend-activation` | JSON `{ "email" }` | `202 Accepted`, sin cuerpo y siempre genérico |
 | `POST /forgot-password` | JSON `{ "email" }` | `202 Accepted`, sin cuerpo y siempre genérico |
 | `POST /reset-password` | JSON `{ "token", "newPassword" }` | `200 OK`, sin cuerpo |
@@ -142,6 +142,28 @@ demo, createdAt }`; los nombres son `null` en cuentas sin perfil. La respuesta
 nunca incluye el hash de la contraseña ni `token_version`. No hay índice para la
 búsqueda: la tabla es chica y un `LIKE '%…%'` no lo aprovecharía.
 
+**Activación con contraseña elegida por el titular.** Las cuentas que crea un
+administrador no tienen contraseña utilizable: se guardan con el hash de un secreto
+aleatorio descartado, distinto por cuenta, y con `must_set_password = TRUE` (V30).
+Hasta activar no se puede iniciar sesión. Esa marca la pone el alta de cuentas de
+staff (`POST /api/v1/admin/users`), que llega en un PR posterior; este cambio deja
+lista la activación que la consume. El componente que emite el token y el correo
+de activación es compartido entre el registro y el reenvío (`ActivationTokenIssuer`),
+sin cambio de comportamiento.
+
+*El titular elige su contraseña al activar.* El enlace del correo lleva a la
+pantalla de activación del BFF, que valida el token con `GET /activate/{token}`: si
+la cuenta requiere contraseña responde `200 { "passwordRequired": true }` (para
+cuentas del registro público sigue siendo `204` vacío, como antes), y la pantalla
+pide la contraseña. `POST /activate` la exige en el cuerpo, la valida con la misma
+política que el registro y el reseteo (`Password`: 8 caracteres como mínimo, una
+mayúscula y un número), y en una sola transacción guarda el hash real, apaga
+`must_set_password`, consume el token y activa la cuenta. Una contraseña ausente
+o débil se rechaza **antes** de consumir el token, así que el titular reintenta con
+el mismo enlace. Para una cuenta con `must_set_password = FALSE` el comportamiento
+de `POST /activate` es exactamente el anterior y cualquier `password` enviado se
+ignora.
+
 **Cambio de rol.** El destino puede ser cualquiera de los cuatro roles y el
 origen puede estar en cualquier estado. En una sola transacción se cambia el rol,
 se incrementa `token_version`, se revocan todos los refresh tokens del usuario, se
@@ -168,7 +190,8 @@ administrador que lo hizo, la acción `ROLE_CHANGED`, el rol anterior y el nuevo
 el instante, que fija la aplicación.
 
 Quedan fuera de este cambio y llegan en PRs posteriores: el alta de cuentas de
-staff (`POST /api/v1/admin/users`) y la pantalla del BFF.
+staff (`POST /api/v1/admin/users`) y la pantalla del BFF, incluido el campo de
+contraseña de la pantalla de activación.
 
 ## Renovación y reutilización
 
