@@ -139,7 +139,8 @@ public class BffSecurityConfig {
                         .requestMatchers("/gestion/contenido/**", "/gestion/sesiones/**")
                         .hasAnyRole("ADMIN", "INSTRUCTOR")
                         .requestMatchers("/gestion/recepcion/**").hasAnyRole("RECEPTIONIST", "ADMIN")
-                        .requestMatchers("/gestion/billing/**", "/gestion/dispositivos/**").hasRole("ADMIN")
+                        .requestMatchers("/gestion/billing/**", "/gestion/dispositivos/**", "/gestion/usuarios/**")
+                        .hasRole("ADMIN")
                         // Fail closed: a prefix nobody planned (or any other verb on the exact
                         // /gestion path) is administrator-only, never open to the rest of the staff.
                         .requestMatchers("/gestion/**").hasRole("ADMIN")

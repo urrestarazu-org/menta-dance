@@ -92,9 +92,9 @@ class ManagementLayoutIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("no section is linked while none has a screen: the navigation never shows dead links")
-    void noDeadLinksYet() throws Exception {
-        Cookie session = logIn("ADMIN");
+    @DisplayName("a role with no section gets only Inicio: the navigation never shows dead links")
+    void noDeadLinksForARoleWithoutSections() throws Exception {
+        Cookie session = logIn("INSTRUCTOR");
 
         String main = mainOf(mockMvc.perform(get("/gestion").cookie(session))
                 .andReturn().getResponse().getContentAsString());

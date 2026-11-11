@@ -198,8 +198,9 @@ Los tests que recorren enlaces ignoran los anchors internos (`#main`) del skip l
 
 ## Área de gestión (`/gestion`)
 
-Base del área web para el personal (issue #354). Todavía no hay pantallas de negocio: solo el inicio
-`GET /gestion`. La autorización real la decide la API; el BFF solo evita mostrar pantallas que un rol no
+Base del área web para el personal (issue #354). Pantallas hoy: el inicio `GET /gestion` y el listado de
+usuarios `GET /gestion/usuarios` (#378, solo lectura); el resto de las secciones se habilita a medida que
+llega cada pantalla. La autorización real la decide la API; el BFF solo evita mostrar pantallas que un rol no
 puede usar.
 
 ### Prefijos y roles
@@ -212,7 +213,7 @@ Sin sesión, el navegador va a `/login`; con sesión pero sin el rol, recibe un 
 | `GET /gestion` (inicio) | `ADMIN`, `INSTRUCTOR`, `RECEPTIONIST` |
 | `/gestion/contenido/**`, `/gestion/sesiones/**` | `ADMIN`, `INSTRUCTOR` |
 | `/gestion/recepcion/**` | `RECEPTIONIST`, `ADMIN` |
-| `/gestion/billing/**`, `/gestion/dispositivos/**` | `ADMIN` |
+| `/gestion/billing/**`, `/gestion/dispositivos/**`, `/gestion/usuarios/**` | `ADMIN` |
 | Cualquier otra ruta bajo `/gestion/**` | `ADMIN` (cierra por defecto: un prefijo no previsto no queda abierto al resto del personal) |
 
 ### Aterrizaje después del login
@@ -245,10 +246,34 @@ coinciden con los del usuario, en el orden declarado. Los roles se declaran sin 
 ### Cómo habilitar una sección nueva
 
 1. Agregar el controller de la pantalla bajo su prefijo (por ejemplo `/gestion/contenido`) y su vista con
-   `fragments/management :: page(..., '<clave>', ...)`.
+   `fragments/management :: page(..., '<clave>', ...)`. La clave es la que declara la sección en
+   `ManagementNavigationConfig` (en inglés: `content`, `sessions`, `reception`, `billing`, `devices`, `users`).
 2. En `ManagementNavigationConfig`, pasar `enabled` de esa sección a `true` (así nunca hay un enlace sin pantalla).
-3. Si el prefijo es nuevo, agregarlo en `BffSecurityConfig` antes de `/gestion/**` y sumar su caso a
-   `ManagementAccessIntegrationTest`.
+3. Si el prefijo es nuevo, agregarlo en `BffSecurityConfig` antes de `/gestion/**` y sumar sus casos de rol
+   rechazado a `ManagementAccessIntegrationTest`. La matriz de ese test mide "permitido" como 404 (nada atiende
+   la ruta), así que el acceso permitido de una pantalla que ya existe se prueba en el test de la propia pantalla.
+
+### Usuarios (`/gestion/usuarios`)
+
+Primera pantalla real del área (#378, parte de solo lectura): lista las cuentas con `GET /api/v1/admin/users`,
+con el token de acceso de la sesión, y solo la ve `ADMIN`. El alta y el cambio de rol llegan en un PR posterior.
+
+- **Filtros por GET** (se pueden enlazar y recargar): `role` (select con "Todos"), `q` (email, nombre o apellido) y
+  `page` (desde 0). Un rol desconocido o vacío y un `q` en blanco equivalen a no filtrar; `q` se recorta a 100
+  caracteres antes de llamar a la API; una `page` negativa es la primera y una pasada del final muestra la última.
+  El tamaño de página es fijo (20) y no se expone. Una `page` que no es número responde 400.
+- **Tabla accesible**: `<caption>` con el total, columnas Email, Nombre y apellido, Rol, Estado y Alta con
+  `scope="col"`, rol y estado en español y fecha legible (`<time datetime>`). Una cuenta sin perfil muestra
+  "Sin nombre".
+- **Paginación**: `<nav aria-label="Paginación de usuarios">` con Anterior, "Página X de Y" (`aria-current="page"`) y
+  Siguiente, solo si hay más de una página. Los enlaces conservan los filtros y Thymeleaf codifica sus parámetros;
+  en los extremos el enlace que no aplica es un `<a role="link" aria-disabled="true">` sin `href`.
+- **Estados**: sin coincidencias, "No hay usuarios que coincidan con la búsqueda."; si la API falla (401, 403, 429,
+  5xx, cuerpo inválido, timeout) la página responde 503 con un aviso y conserva el formulario. Nunca se muestra el
+  cuerpo del error de la API.
+- **Privacidad**: la respuesta lleva `Cache-Control: no-store` (contiene emails y nombres), todo dato de usuario se
+  escapa (`th:text`, nunca `th:utext`) y ni los emails, ni los nombres, ni el texto buscado, ni el token se
+  registran en los logs.
 
 ## Accesibilidad base
 

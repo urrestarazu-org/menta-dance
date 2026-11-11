@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/management :: page('Usuarios', 'users', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<h1 class="mb-6">Usuarios</h1>
+
+<form th:action="@{/gestion/usuarios}" method="get" role="search" aria-label="Filtrar usuarios"
+      class="card mb-6 grid gap-4 sm:grid-cols-[1fr_auto_auto] sm:items-end">
+    <div class="field">
+        <label class="field-label" for="q">Buscar por email o nombre</label>
+        <input class="field-input" id="q" type="search" name="q" maxlength="100" autocomplete="off"
+               th:value="${users.text()}"/>
+    </div>
+    <div class="field">
+        <label class="field-label" for="role">Rol</label>
+        <select class="field-input" id="role" name="role">
+            <option value="">Todos</option>
+            <option th:each="option : ${roles}" th:value="${option.name()}" th:text="${option.label}"
+                    th:selected="${option == users.role()}">Rol</option>
+        </select>
+    </div>
+    <div class="flex items-center gap-4">
+        <button type="submit" class="btn btn-primary">Buscar</button>
+        <a th:href="@{/gestion/usuarios}">Limpiar</a>
+    </div>
+</form>
+
+<div th:if="${users.unavailable()}" class="mb-4">
+    <div th:replace="~{fragments/components :: alert('error', 'No pudimos cargar los usuarios en este momento. Intentá nuevamente en unos minutos.')}"></div>
+</div>
+<div th:if="${users.empty()}" class="mb-4">
+    <div th:replace="~{fragments/components :: alert('info', 'No hay usuarios que coincidan con la búsqueda.')}"></div>
+</div>
+
+<div th:unless="${users.rows().isEmpty()}" class="overflow-x-auto" role="region" aria-label="Listado de usuarios" tabindex="0">
+    <table class="w-full text-left">
+        <caption class="mb-2 text-left font-semibold">
+            Usuarios (<span th:text="${users.totalElements()}">0</span> en total)
+        </caption>
+        <thead>
+        <tr class="border-b border-brand-deep/30">
+            <th scope="col" class="p-3 font-semibold">Email</th>
+            <th scope="col" class="p-3 font-semibold">Nombre y apellido</th>
+            <th scope="col" class="p-3 font-semibold">Rol</th>
+            <th scope="col" class="p-3 font-semibold">Estado</th>
+            <th scope="col" class="p-3 font-semibold">Alta</th>
+        </tr>
+        </thead>
+        <tbody class="divide-y divide-brand-deep/15">
+        <tr th:each="row : ${users.rows()}">
+            <td class="p-3 break-all" th:text="${row.email()}">ada@example.com</td>
+            <td class="p-3" th:text="${row.displayName()}">Ada Lovelace</td>
+            <td class="p-3" th:text="${row.role().label}">Rol</td>
+            <td class="p-3">
+                <span class="badge" th:text="${row.status().label}"
+                      th:classappend="${row.status().name() == 'ACTIVE'} ? 'badge-success' : (${row.status().name() == 'PENDING_ACTIVATION'} ? 'badge-warning' : (${row.status().name() == 'INACTIVE'} ? 'badge-neutral' : 'badge-danger'))">Estado</span>
+            </td>
+            <td class="p-3 whitespace-nowrap">
+                <time th:datetime="${row.createdDate()}" th:text="${row.createdLabel()}">1 de octubre de 2026</time>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+</div>
+
+<nav th:if="${users.paginated()}" aria-label="Paginación de usuarios" class="mt-6">
+    <ul class="m-0 flex list-none flex-wrap items-center gap-6 p-0">
+        <li>
+            <a th:if="${users.hasPrevious()}" rel="prev"
+               th:href="@{/gestion/usuarios(role=${users.role()},q=${users.text()},page=${users.previousPage()})}">Anterior</a>
+            <a th:unless="${users.hasPrevious()}" role="link" aria-disabled="true"
+               class="cursor-not-allowed text-brand-deep/70 no-underline">Anterior</a>
+        </li>
+        <li><span aria-current="page" th:text="|Página ${users.pageNumber()} de ${users.totalPages()}|">Página 1 de 3</span></li>
+        <li>
+            <a th:if="${users.hasNext()}" rel="next"
+               th:href="@{/gestion/usuarios(role=${users.role()},q=${users.text()},page=${users.nextPage()})}">Siguiente</a>
+            <a th:unless="${users.hasNext()}" role="link" aria-disabled="true"
+               class="cursor-not-allowed text-brand-deep/70 no-underline">Siguiente</a>
+        </li>
+    </ul>
+</nav>
+</th:block>
+</body>
+</html>

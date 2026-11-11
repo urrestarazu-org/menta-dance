@@ -216,9 +216,10 @@ administrador que lo hizo, la acción (`USER_CREATED` en el alta, con rol anteri
 `NULL`, o `ROLE_CHANGED` en el cambio de rol), el rol anterior y el nuevo y el
 instante, que fija la aplicación.
 
-Queda fuera de este cambio y llega en un PR posterior: la pantalla del BFF
-(`/gestion/usuarios`), incluido el campo de contraseña de la pantalla de
-activación.
+La pantalla del BFF `/gestion/usuarios` ya muestra el listado de solo lectura
+(ver [BFF y Tailwind](31-BFF-TAILWIND.md#usuarios-gestionusuarios)). Queda fuera y
+llega en un PR posterior: el alta y el cambio de rol desde la web, incluido el
+campo de contraseña de la pantalla de activación.
 
 ## Renovación y reutilización
 
