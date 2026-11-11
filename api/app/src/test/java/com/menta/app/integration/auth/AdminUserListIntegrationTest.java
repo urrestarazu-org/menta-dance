@@ -46,10 +46,10 @@ class AdminUserListIntegrationTest extends AbstractAdminUserIntegrationTest {
 
     @Test
     void lists_users_filtered_by_role_and_search_and_paged() {
-        User admin = newUser(Role.ADMIN);
         newUser(Role.STUDENT);
         newUser(Role.STUDENT);
         newUser(Role.INSTRUCTOR);
+        User admin = newUser(Role.ADMIN);
         String token = login(admin);
 
         ResponseEntity<Map> all = list(token, "");
