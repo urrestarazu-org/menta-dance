@@ -3,7 +3,14 @@
       th:replace="~{fragments/management :: page('Usuarios', 'users', ~{::main-content})}">
 <body>
 <th:block th:fragment="main-content">
-<h1 class="mb-6">Usuarios</h1>
+<div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+    <h1>Usuarios</h1>
+    <a class="btn btn-primary" th:href="@{/gestion/usuarios/nuevo}">Nueva cuenta</a>
+</div>
+
+<div th:if="${accountCreated}" class="mb-4">
+    <div th:replace="~{fragments/components :: alert('success', ${accountCreated})}"></div>
+</div>
 
 <form th:action="@{/gestion/usuarios}" method="get" role="search" aria-label="Filtrar usuarios"
       class="card mb-6 grid gap-4 sm:grid-cols-[1fr_auto_auto] sm:items-end">

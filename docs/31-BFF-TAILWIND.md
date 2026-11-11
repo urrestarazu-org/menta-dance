@@ -199,8 +199,8 @@ Los tests que recorren enlaces ignoran los anchors internos (`#main`) del skip l
 ## Área de gestión (`/gestion`)
 
 Base del área web para el personal (issue #354). Pantallas hoy: el inicio `GET /gestion` y el listado de
-usuarios `GET /gestion/usuarios` (#378, solo lectura); el resto de las secciones se habilita a medida que
-llega cada pantalla. La autorización real la decide la API; el BFF solo evita mostrar pantallas que un rol no
+usuarios `GET /gestion/usuarios` con su alta `GET /gestion/usuarios/nuevo` y `POST /gestion/usuarios` (#378); el
+resto de las secciones se habilita a medida que llega cada pantalla. La autorización real la decide la API; el BFF solo evita mostrar pantallas que un rol no
 puede usar.
 
 ### Prefijos y roles
@@ -255,8 +255,9 @@ coinciden con los del usuario, en el orden declarado. Los roles se declaran sin 
 
 ### Usuarios (`/gestion/usuarios`)
 
-Primera pantalla real del área (#378, parte de solo lectura): lista las cuentas con `GET /api/v1/admin/users`,
-con el token de acceso de la sesión, y solo la ve `ADMIN`. El alta y el cambio de rol llegan en un PR posterior.
+Primera pantalla real del área (#378): lista las cuentas con `GET /api/v1/admin/users`, con el token de acceso de
+la sesión, y solo la ve `ADMIN`. El alta (más abajo) ya existe; el cambio de rol desde la lista llega en un PR
+posterior.
 
 - **Filtros por GET** (se pueden enlazar y recargar): `role` (select con "Todos"), `q` (email, nombre o apellido) y
   `page` (desde 0). Un rol desconocido o vacío y un `q` en blanco equivalen a no filtrar; `q` se recorta a 100
@@ -274,6 +275,33 @@ con el token de acceso de la sesión, y solo la ve `ADMIN`. El alta y el cambio 
 - **Privacidad**: la respuesta lleva `Cache-Control: no-store` (contiene emails y nombres), todo dato de usuario se
   escapa (`th:text`, nunca `th:utext`) y ni los emails, ni los nombres, ni el texto buscado, ni el token se
   registran en los logs.
+
+#### Alta de cuentas de staff (`/gestion/usuarios/nuevo`)
+
+El botón **Nueva cuenta** del listado abre el formulario; solo `ADMIN` (lo cubre `/gestion/usuarios/**`). Usa el
+layout de gestión con `active='users'` y los fragmentos `errorSummary` y `field`, igual que el registro.
+
+- **Campos**: Nombre, Apellido (hasta 100 caracteres), Email (válido, hasta 255) y Rol, un `<select>` con
+  "Elegí un rol" más Profesor/a, Recepcionista y Administrador. `STUDENT` no se ofrece y, aunque llegue a mano, se
+  rechaza antes de llamar a la API: los alumnos se registran solos. No hay contraseña: la cuenta nace pendiente, la
+  API le manda al titular el correo de activación y él elige la suya (ver [Auth API](03-AUTH-API.md)).
+- **Éxito**: `POST /gestion/usuarios` llama a `POST /api/v1/admin/users` y responde Post/Redirect/Get a
+  `/gestion/usuarios`, sin datos en la URL. El listado muestra una sola vez, en una región `role="status"`, "Creamos
+  la cuenta de <nombre>. Le enviamos un correo para que la active y elija su contraseña." (mensaje *flash* guardado en
+  la sesión de Redis, escapado como todo texto).
+- **Errores** (siempre se conserva lo tipeado; los de campo enfocan el resumen de errores al cargar):
+
+| Caso | Status | Qué ve el administrador |
+|---|---|---|
+| Datos inválidos en el formulario | 200 | Resumen de errores y un mensaje por campo (`aria-invalid`, `aria-describedby`) |
+| API `409` con `code` `EMAIL_ALREADY_REGISTERED` | 409 | Error en el campo Email: "Ya existe una cuenta con ese email." |
+| API `400` | 400 | Aviso general: "Revisá los datos e intentá de nuevo." |
+| Cualquier otra respuesta (401, 403, 404, 429, 5xx, otro `409`, cuerpo ilegible, timeout) | 503 | Aviso general: "No pudimos crear la cuenta. Probá de nuevo en unos minutos." |
+
+- **Qué lee el BFF de la respuesta**: solo el status y, en un `409`, el campo `code` del problema. Ningún otro cuerpo
+  de error se lee, se muestra ni se registra (el mapeo genérico RFC 9457 es el issue #711).
+- **Privacidad**: el formulario y sus errores llevan `Cache-Control: no-store` (hay datos de una tercera persona);
+  ni el email, ni los nombres, ni el token van a un log (solo el nombre de la clase de la excepción). CSRF activo.
 
 ## Accesibilidad base
 

@@ -216,6 +216,41 @@ class ManagementUsersIntegrationTest extends BaseIntegrationTest {
                 .contains("value=\"&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;\"");
     }
 
+    // ---- account creation entry point ----
+
+    @Test
+    @DisplayName("links the creation form with a Nueva cuenta button, also while the API is down")
+    void linksTheCreationForm() throws Exception {
+        stubUsers(200, ONE_PAGE);
+        String main = mainOfAdminRequest();
+        stubUsers(503, "{}");
+        String degraded = mainOfAdminRequest();
+
+        assertThat(main).containsPattern("<a[^>]*href=\"/gestion/usuarios/nuevo\"[^>]*>\\s*Nueva cuenta\\s*</a>");
+        assertThat(degraded).containsPattern("<a[^>]*href=\"/gestion/usuarios/nuevo\"[^>]*>\\s*Nueva cuenta\\s*</a>");
+    }
+
+    @Test
+    @DisplayName("shows the confirmation of a creation in a status region, escaped, and nothing without one")
+    void showsTheCreationConfirmation() throws Exception {
+        stubUsers(200, ONE_PAGE);
+        WIRE_MOCK_SERVER.stubFor(WireMock.post(urlPathEqualTo(USERS_API)).willReturn(aResponse().withStatus(201)));
+        Cookie session = logIn("ADMIN");
+        String plain = mainOf(mockMvc.perform(get(PATH).cookie(session))
+                .andReturn().getResponse().getContentAsString());
+
+        mockMvc.perform(post(PATH).cookie(session).with(csrf()).param("email", "ada@example.com")
+                .param("firstName", "<b>Ada</b>").param("lastName", "& Co.").param("role", "ADMIN"));
+        String confirmed = mainOf(mockMvc.perform(get(PATH).cookie(session))
+                .andReturn().getResponse().getContentAsString());
+
+        assertThat(plain).doesNotContain("role=\"status\"").doesNotContain("Creamos la cuenta");
+        assertThat(confirmed).containsPattern("<[^>]*role=\"status\"[^>]*>\\s*<p>Creamos la cuenta de "
+                        + "&lt;b&gt;Ada&lt;/b&gt; &amp; Co\\.\\. Le enviamos un correo para que la active y elija "
+                        + "su contraseña\\.</p>")
+                .doesNotContain("<b>Ada</b>");
+    }
+
     // ---- filters ----
 
     @Test
