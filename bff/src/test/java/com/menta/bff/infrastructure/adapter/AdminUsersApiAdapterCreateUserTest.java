@@ -45,12 +45,20 @@ class AdminUsersApiAdapterCreateUserTest {
 
     private AdminUsersApiAdapter adapter;
 
+    /** Generous on purpose: the first request of a cold JVM on a slow CI runner can take over a second. */
+    private static final Duration GENEROUS_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration SHORT_TIMEOUT = Duration.ofMillis(300);
+
     @BeforeEach
     void setUp(WireMockRuntimeInfo wireMock) {
+        adapter = adapterWith(wireMock, GENEROUS_TIMEOUT);
+    }
+
+    private static AdminUsersApiAdapter adapterWith(WireMockRuntimeInfo wireMock, Duration timeout) {
         AuthProperties properties = new AuthProperties();
         properties.setBaseUrl(wireMock.getHttpBaseUrl());
-        properties.setTimeout(Duration.ofSeconds(1));
-        adapter = new AdminUsersApiAdapter(WebClient.builder().baseUrl(wireMock.getHttpBaseUrl()).build(), properties);
+        properties.setTimeout(timeout);
+        return new AdminUsersApiAdapter(WebClient.builder().baseUrl(wireMock.getHttpBaseUrl()).build(), properties);
     }
 
     private static void stubReply(int status, String contentType, String body) {
@@ -141,15 +149,16 @@ class AdminUsersApiAdapterCreateUserTest {
 
     @Test
     @DisplayName("a dropped connection and a response slower than the timeout are unavailable")
-    void transportErrorsAndTimeout() {
+    void transportErrorsAndTimeout(WireMockRuntimeInfo wireMock) {
         stubFor(post(urlPathEqualTo(USERS)).willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)));
         assertThatThrownBy(() -> adapter.createUser(TOKEN, COMMAND))
                 .isInstanceOf(AdminUsersApiClient.ServiceUnavailableException.class)
                 .hasMessageNotContaining(TOKEN);
 
+        AdminUsersApiAdapter impatient = adapterWith(wireMock, SHORT_TIMEOUT);
         stubFor(post(urlPathEqualTo(USERS)).willReturn(aResponse().withStatus(201).withFixedDelay(2_000)
                 .withHeader("Content-Type", "application/json").withBody(CREATED_BODY)));
-        assertThatThrownBy(() -> adapter.createUser(TOKEN, COMMAND))
+        assertThatThrownBy(() -> impatient.createUser(TOKEN, COMMAND))
                 .isInstanceOf(AdminUsersApiClient.ServiceUnavailableException.class);
     }
 }

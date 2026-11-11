@@ -73,12 +73,20 @@ class AdminUsersApiAdapterTest {
         return "{\"items\": [{" + fields + "}], \"page\": 0, \"size\": 20, \"totalElements\": 1, \"totalPages\": 1}";
     }
 
+    /** Generous on purpose: the first request of a cold JVM on a slow CI runner can take over a second. */
+    private static final Duration GENEROUS_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration SHORT_TIMEOUT = Duration.ofMillis(300);
+
     @BeforeEach
     void setUp(WireMockRuntimeInfo wireMock) {
+        adapter = adapterWith(wireMock, GENEROUS_TIMEOUT);
+    }
+
+    private static AdminUsersApiAdapter adapterWith(WireMockRuntimeInfo wireMock, Duration timeout) {
         AuthProperties properties = new AuthProperties();
         properties.setBaseUrl(wireMock.getHttpBaseUrl());
-        properties.setTimeout(Duration.ofMillis(500));
-        adapter = new AdminUsersApiAdapter(WebClient.builder().baseUrl(wireMock.getHttpBaseUrl()).build(), properties);
+        properties.setTimeout(timeout);
+        return new AdminUsersApiAdapter(WebClient.builder().baseUrl(wireMock.getHttpBaseUrl()).build(), properties);
     }
 
     private static void stubBody(int status, String body) {
@@ -195,15 +203,16 @@ class AdminUsersApiAdapterTest {
 
     @Test
     @DisplayName("a dropped connection and a response slower than the timeout are unavailable")
-    void transportErrorsAndTimeout() {
+    void transportErrorsAndTimeout(WireMockRuntimeInfo wireMock) {
         stubFor(get(urlPathEqualTo(USERS)).willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)));
         assertThatThrownBy(() -> adapter.listUsers(TOKEN, FIRST_PAGE))
                 .isInstanceOf(AdminUsersApiClient.ServiceUnavailableException.class)
                 .hasMessageNotContaining(TOKEN);
 
+        AdminUsersApiAdapter impatient = adapterWith(wireMock, SHORT_TIMEOUT);
         stubFor(get(urlPathEqualTo(USERS)).willReturn(aResponse().withStatus(200).withFixedDelay(2_000)
                 .withHeader("Content-Type", "application/json").withBody(PAGE_BODY)));
-        assertThatThrownBy(() -> adapter.listUsers(TOKEN, FIRST_PAGE))
+        assertThatThrownBy(() -> impatient.listUsers(TOKEN, FIRST_PAGE))
                 .isInstanceOf(AdminUsersApiClient.ServiceUnavailableException.class);
     }
 }
