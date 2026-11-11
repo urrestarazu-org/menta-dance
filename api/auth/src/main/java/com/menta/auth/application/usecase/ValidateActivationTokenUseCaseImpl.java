@@ -8,6 +8,7 @@ import com.menta.auth.application.port.out.Clock;
 import com.menta.auth.domain.exception.ActivationTokenInvalidException;
 import com.menta.auth.domain.model.ActivationToken;
 import com.menta.auth.domain.model.ActivationTokenStatus;
+import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.model.UserStatus;
 import com.menta.auth.domain.repository.UserRepository;
 
@@ -16,7 +17,8 @@ import com.menta.auth.domain.repository.UserRepository;
  *
  * <p>This use case deliberately performs no writes. It verifies the same
  * preconditions needed by activation so a safe HTTP method can check a link
- * without consuming its credential or changing account state.</p>
+ * without consuming its credential or changing account state, and tells the
+ * caller whether activation will ask the holder for a password.</p>
  */
 public class ValidateActivationTokenUseCaseImpl implements ValidateActivationTokenUseCase {
 
@@ -38,7 +40,7 @@ public class ValidateActivationTokenUseCaseImpl implements ValidateActivationTok
     }
 
     @Override
-    public void validate(ActivateAccountCommand command) {
+    public boolean validate(ActivateAccountCommand command) {
         String tokenHash = activationTokenHasher.hash(command.rawToken());
         ActivationToken token = activationTokenRepository.findByHash(tokenHash)
             .orElseThrow(ActivationTokenInvalidException::new);
@@ -47,12 +49,9 @@ public class ValidateActivationTokenUseCaseImpl implements ValidateActivationTok
             throw new ActivationTokenInvalidException();
         }
 
-        if (userRepository.findById(token.getUserId())
-            .map(user -> user.getStatus() == UserStatus.PENDING_ACTIVATION)
-            .orElse(false)) {
-            return;
-        }
-
-        throw new ActivationTokenInvalidException();
+        return userRepository.findById(token.getUserId())
+            .filter(user -> user.getStatus() == UserStatus.PENDING_ACTIVATION)
+            .map(User::isMustSetPassword)
+            .orElseThrow(ActivationTokenInvalidException::new);
     }
 }

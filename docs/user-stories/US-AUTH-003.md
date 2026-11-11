@@ -22,6 +22,14 @@ correo para poder iniciar sesión.
   temporal con el mismo contrato.
 - Registro y reenvío devuelven `429 Retry-After` ante límite y `503 Retry-After`
   si Redis no está disponible; el token no aparece en logs ni en respuestas.
+- Cuentas creadas por un administrador (#378) reutilizan este flujo (mismo
+  token, correo y reenvío), pero nacen sin contraseña utilizable ni por defecto: `GET /activate/{token}` responde `200
+  { "passwordRequired": true }` en lugar de `204`, y `POST /activate` exige
+  `password` (misma política que el registro y el reseteo), la guarda y activa
+  la cuenta en una sola transacción. Sin `password` responde `400
+  PASSWORD_REQUIRED`; con una débil, `400 WEAK_PASSWORD`; en ambos casos el
+  token no se consume. Para cuentas del registro público nada cambia. El campo
+  de contraseña en la pantalla del BFF llega en el PR de `/gestion/usuarios`.
 - El envío de correo usa un puerto/worker interno, sin RabbitMQ ni HTTP interno.
 - Errores siguen `application/problem+json`; tokens y datos personales no se
   incluyen en logs.

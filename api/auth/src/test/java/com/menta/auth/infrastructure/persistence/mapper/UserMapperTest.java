@@ -162,4 +162,34 @@ class UserMapperTest {
         assertThat(legacyConstructor.isDemo()).isFalse();
         assertThat(UserMapper.toDomain(legacyConstructor).isDemo()).isFalse();
     }
+
+    @Test
+    void maps_the_must_set_password_marker_in_both_directions() {
+        User invited = User.rehydrate(
+            UserId.of(USER_ID), Email.of("staff@example.com"), "unusable-hash", Role.RECEPTIONIST,
+            UserStatus.PENDING_ACTIVATION, CREATED_AT, UPDATED_AT, 1L, null, false, true
+        );
+
+        UserJpaEntity persisted = UserMapper.toJpaEntity(invited);
+        User reloaded = UserMapper.toDomain(persisted);
+
+        assertThat(persisted.isMustSetPassword()).isTrue();
+        assertThat(reloaded.isMustSetPassword()).isTrue();
+    }
+
+    @Test
+    void a_user_without_the_marker_maps_to_a_false_column_and_back() {
+        User user = User.rehydrate(
+            UserId.of(USER_ID), Email.of("student@example.com"), "password-hash", Role.STUDENT,
+            UserStatus.ACTIVE, CREATED_AT, UPDATED_AT, 1L
+        );
+        UserJpaEntity row = new UserJpaEntity(
+            USER_ID, "student@example.com", "password-hash", Role.STUDENT, UserStatus.ACTIVE,
+            CREATED_AT, UPDATED_AT, 1L, null, null, null, null, false
+        );
+
+        assertThat(UserMapper.toJpaEntity(user).isMustSetPassword()).isFalse();
+        assertThat(row.isMustSetPassword()).isFalse();
+        assertThat(UserMapper.toDomain(row).isMustSetPassword()).isFalse();
+    }
 }

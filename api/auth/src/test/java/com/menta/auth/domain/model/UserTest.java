@@ -212,4 +212,88 @@ class UserTest {
         assertThat(user.getTokenVersion()).isEqualTo(4L);
         assertThat(user.getUpdatedAt()).isEqualTo(past);
     }
+
+    /** A pending account whose holder still has to choose a password, as an administrator-created one is stored. */
+    private static User mustChoosePasswordUser() {
+        LocalDateTime now = LocalDateTime.now();
+        return User.rehydrate(
+            UserId.generate(), Email.of("staff@example.com"), "unusable-hash", Role.RECEPTIONIST,
+            UserStatus.PENDING_ACTIVATION, now, now, 1L, null, false, true
+        );
+    }
+
+    @Test
+    void other_ways_of_building_a_user_never_require_choosing_a_password() {
+        LocalDateTime now = LocalDateTime.now();
+        UserProfile profile = new UserProfile("Ada", "Lovelace", "+5491100000000", null);
+        UserId id = UserId.generate();
+        Email email = Email.of("student@example.com");
+
+        assertThat(User.register(email, "hash", Role.STUDENT, profile).isMustSetPassword()).isFalse();
+        assertThat(User.create(email, "hash", Role.STUDENT).isMustSetPassword()).isFalse();
+        assertThat(User.rehydrate(id, email, "h", Role.STUDENT, UserStatus.ACTIVE, now, now, 1L, null, true)
+            .isMustSetPassword()).isFalse();
+    }
+
+    @Test
+    void rehydrate_restores_the_must_set_password_marker() {
+        LocalDateTime now = LocalDateTime.now();
+        UserId id = UserId.generate();
+        Email email = Email.of("staff@example.com");
+
+        User pending = User.rehydrate(
+            id, email, "h", Role.INSTRUCTOR, UserStatus.PENDING_ACTIVATION, now, now, 1L, null, false, true
+        );
+        User chosen = User.rehydrate(
+            id, email, "h", Role.INSTRUCTOR, UserStatus.ACTIVE, now, now, 1L, null, false, false
+        );
+
+        assertThat(pending.isMustSetPassword()).isTrue();
+        assertThat(chosen.isMustSetPassword()).isFalse();
+    }
+
+    @Test
+    void activate_refuses_an_account_that_must_choose_its_password() {
+        User user = mustChoosePasswordUser();
+
+        assertThatThrownBy(user::activate).isInstanceOf(IllegalStateException.class);
+
+        assertThat(user.getStatus()).isEqualTo(UserStatus.PENDING_ACTIVATION);
+    }
+
+    @Test
+    void activate_with_password_stores_the_chosen_hash_clears_the_marker_and_activates() {
+        User user = mustChoosePasswordUser();
+
+        user.activateWithPassword("chosen-hash");
+
+        assertThat(user.getPasswordHash()).isEqualTo("chosen-hash");
+        assertThat(user.isMustSetPassword()).isFalse();
+        assertThat(user.getStatus()).isEqualTo(UserStatus.ACTIVE);
+    }
+
+    @Test
+    void activate_with_password_is_only_for_pending_accounts_that_must_choose_one() {
+        LocalDateTime now = LocalDateTime.now();
+        User ordinaryPending = new User(
+            UserId.generate(), Email.of("student@example.com"), "hash", Role.STUDENT,
+            UserStatus.PENDING_ACTIVATION, now, now
+        );
+        User alreadyActive = mustChoosePasswordUser();
+        alreadyActive.activateWithPassword("first-hash");
+
+        assertThatThrownBy(() -> ordinaryPending.activateWithPassword("h"))
+            .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> alreadyActive.activateWithPassword("second-hash"))
+            .isInstanceOf(IllegalStateException.class);
+        assertThat(alreadyActive.getPasswordHash()).isEqualTo("first-hash");
+    }
+
+    @Test
+    void activate_with_password_rejects_a_null_hash() {
+        User user = mustChoosePasswordUser();
+
+        assertThatThrownBy(() -> user.activateWithPassword(null)).isInstanceOf(NullPointerException.class);
+        assertThat(user.getStatus()).isEqualTo(UserStatus.PENDING_ACTIVATION);
+    }
 }

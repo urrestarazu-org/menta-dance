@@ -89,4 +89,22 @@ class UserJpaEntityTest {
         regular.setDemo(true);
         assertThat(regular.isDemo()).isTrue();
     }
+
+    @Test
+    void the_must_set_password_marker_defaults_to_false_and_is_supplied_by_its_constructor() {
+        UserJpaEntity regular = new UserJpaEntity(
+            ID, "student@example.com", "hashed-password", Role.STUDENT, UserStatus.ACTIVE,
+            CREATED_AT, UPDATED_AT, 1L, null, null, null, null, false
+        );
+        UserJpaEntity invited = new UserJpaEntity(
+            ID, "staff@example.com", "unusable-hash", Role.INSTRUCTOR, UserStatus.PENDING_ACTIVATION,
+            CREATED_AT, UPDATED_AT, 1L, "Ada", "Lovelace", null, null, false, true
+        );
+
+        assertThat(regular.isMustSetPassword()).isFalse();
+        assertThat(invited.isMustSetPassword()).isTrue();
+
+        invited.setMustSetPassword(false);
+        assertThat(invited.isMustSetPassword()).isFalse();
+    }
 }

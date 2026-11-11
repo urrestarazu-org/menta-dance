@@ -52,7 +52,7 @@ info:
       ya registrado o rol no permitido.
     - `POST /resend-activation` responde `202` vacío para email inexistente,
       pendiente o ya activo.
-    - `GET /activate/{token}` valida el token sin consumirlo; `POST /activate` ejecuta la activación y no distingue token inválido, expirado ni reutilizado.
+    - `GET /activate/{token}` valida el token sin consumirlo; `POST /activate` ejecuta la activación y no distingue token inválido, expirado ni reutilizado. Para una cuenta creada por un administrador, ambos piden además la contraseña que elige el titular (ver `passwordRequired`); sólo se llega a ese detalle con un token válido.
     - `POST /forgot-password` responde `202` vacío para email inexistente,
       inactivo o activo — igual que `resend-activation`.
 
@@ -346,7 +346,17 @@ paths:
           example: 3f8a9c1e-opaque-single-use-token
       responses:
         '204':
-          description: Token válido y disponible para activación.
+          description: |
+            Token válido y disponible para activación. La cuenta se registró con su propia contraseña: la
+            activación no pide ninguna.
+        '200':
+          description: |
+            Token válido y disponible para activación, y la cuenta la creó un administrador: el titular todavía
+            no tiene contraseña y `POST /activate` exige que la elija (`passwordRequired: true`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivationTokenValidation'
         '400':
           description: Token inválido, expirado o reutilizado — indistinguibles entre sí.
           content:
@@ -369,6 +379,13 @@ paths:
       description: |
         Consume el token de activación y pasa la cuenta a `ACTIVE`.
 
+        Si la cuenta la creó un administrador, el titular aún no tiene
+        contraseña: el cuerpo debe traer `password`, que se valida con la misma política que el registro y el
+        reseteo (8 caracteres como mínimo, una mayúscula y un número), se guarda y la cuenta se activa en la
+        misma transacción. Sin `password` responde `400 PASSWORD_REQUIRED`; con una contraseña débil, `400
+        WEAK_PASSWORD`. En ambos casos el token **no se consume**: el titular reintenta con el mismo enlace.
+        Para cualquier otra cuenta `password` se ignora y el comportamiento es el de siempre.
+
         El token se recibe sólo en el cuerpo JSON y nunca se registra en claro.
         La pantalla intermedia del BFF (`POST /activar`) retira el token de la URL
         del navegador: el enlace del correo apunta al BFF y éste llama a este
@@ -386,21 +403,43 @@ paths:
               $ref: '#/components/schemas/ActivateAccountRequest'
             example:
               token: 3f8a9c1e-opaque-single-use-token
+              password: UnaClaveNueva1
       responses:
         '204':
           description: Cuenta activada.
         '400':
-          description: Token inválido, expirado o reutilizado — indistinguibles entre sí.
+          description: |
+            Token inválido, expirado o reutilizado — indistinguibles entre sí — o, para una cuenta creada por un
+            administrador, contraseña ausente o que no cumple la política.
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
-              example:
-                type: https://menta.dance/problems/activation_token_invalid
-                title: Bad Request
-                status: 400
-                detail: El token de activación es inválido o expiró.
-                code: ACTIVATION_TOKEN_INVALID
+              examples:
+                tokenInvalid:
+                  summary: Token inválido, expirado o reutilizado
+                  value:
+                    type: https://menta.dance/problems/activation_token_invalid
+                    title: Bad Request
+                    status: 400
+                    detail: El token de activación es inválido o expiró.
+                    code: ACTIVATION_TOKEN_INVALID
+                passwordRequired:
+                  summary: Falta la contraseña que debe elegir el titular
+                  value:
+                    type: https://menta.dance/problems/password_required
+                    title: Bad Request
+                    status: 400
+                    detail: Elegí una contraseña para activar tu cuenta.
+                    code: PASSWORD_REQUIRED
+                weakPassword:
+                  summary: La contraseña no cumple la política
+                  value:
+                    type: https://menta.dance/problems/weak_password
+                    title: Bad Request
+                    status: 400
+                    detail: 'La contraseña no cumple los requisitos: al menos 8 caracteres, al menos un número.'
+                    code: WEAK_PASSWORD
         '503':
           $ref: '#/components/responses/AuthDegraded'
 
@@ -883,6 +922,22 @@ components:
           type: string
           minLength: 1
           description: Token opaco de un solo uso recibido por email.
+        password:
+          type: string
+          format: password
+          description: |
+            Contraseña que elige el titular. Obligatoria sólo si la cuenta la creó un administrador (`GET
+            /activate/{token}` responde `passwordRequired: true`); en cualquier otro caso se ignora. Debe cumplir
+            la política de contraseñas: 8 caracteres como mínimo, una mayúscula y un número.
+
+    ActivationTokenValidation:
+      type: object
+      required: [passwordRequired]
+      properties:
+        passwordRequired:
+          type: boolean
+          description: Siempre `true`; la ausencia de cuerpo (`204`) significa que no hace falta contraseña.
+          example: true
 
     UserRole:
       type: string
@@ -1009,6 +1064,7 @@ components:
         - ACCESS_DENIED
         - USER_NOT_FOUND
         - LAST_ADMIN_CANNOT_BE_DEMOTED
+        - PASSWORD_REQUIRED
 
   responses:
 

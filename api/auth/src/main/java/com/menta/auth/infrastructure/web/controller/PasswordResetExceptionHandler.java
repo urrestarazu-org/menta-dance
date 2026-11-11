@@ -6,11 +6,7 @@ import com.menta.auth.domain.exception.PasswordResetTokenExpiredException;
 import com.menta.auth.domain.exception.PasswordResetTokenNotFoundException;
 import com.menta.auth.domain.exception.SamePasswordException;
 import com.menta.auth.domain.exception.WeakPasswordException;
-import com.menta.auth.domain.model.PasswordPolicyViolation;
 import com.menta.auth.infrastructure.web.ProblemDetails;
-import java.util.EnumMap;
-import java.util.Map;
-import java.util.stream.Collectors;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -34,14 +30,6 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  */
 @RestControllerAdvice(annotations = PublicPasswordResetEndpoint.class)
 public class PasswordResetExceptionHandler {
-
-    private static final Map<PasswordPolicyViolation, String> VIOLATION_MESSAGES = new EnumMap<>(
-        Map.of(
-            PasswordPolicyViolation.TOO_SHORT, "al menos 8 caracteres",
-            PasswordPolicyViolation.MISSING_UPPERCASE, "al menos una mayúscula",
-            PasswordPolicyViolation.MISSING_DIGIT, "al menos un número"
-        )
-    );
 
     @ExceptionHandler(PasswordResetRateLimitedException.class)
     ResponseEntity<ProblemDetail> rateLimited(PasswordResetRateLimitedException exception) {
@@ -79,13 +67,8 @@ public class PasswordResetExceptionHandler {
 
     @ExceptionHandler(WeakPasswordException.class)
     ResponseEntity<ProblemDetail> weakPassword(WeakPasswordException exception) {
-        String violations = exception.getViolations().stream()
-            .map(VIOLATION_MESSAGES::get)
-            .collect(Collectors.joining(", "));
         return ProblemDetails.response(
-            HttpStatus.BAD_REQUEST,
-            "La contraseña no cumple los requisitos: " + violations + ".",
-            exception.getErrorCode()
+            HttpStatus.BAD_REQUEST, PasswordPolicyMessages.detailOf(exception), exception.getErrorCode()
         );
     }
 

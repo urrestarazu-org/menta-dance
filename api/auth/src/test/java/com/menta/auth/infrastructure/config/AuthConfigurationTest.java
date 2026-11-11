@@ -39,6 +39,7 @@ import com.menta.auth.application.port.out.RefreshTokenRepository;
 import com.menta.auth.application.port.out.TokenHasher;
 import com.menta.auth.application.port.out.UserAdminRepository;
 import com.menta.auth.application.port.out.UserAuditRepository;
+import com.menta.auth.application.usecase.ActivationTokenIssuer;
 import com.menta.auth.application.usecase.ListUsersUseCaseImpl;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.auth.infrastructure.activation.AesGcmActivationDeliveryCipher;
@@ -145,10 +146,8 @@ class AuthConfigurationTest {
     @Test
     void wires_the_register_user_use_case_bean() {
         RegisterUserUseCase useCase = configuration.registerUserUseCase(
-            mock(UserRepository.class), mock(PasswordEncoderPort.class),
-            mock(ActivationTokenRepository.class), mock(ActivationTokenGenerator.class),
-            mock(ActivationTokenHasher.class), mock(ActivationDeliveryCipher.class),
-            mock(ActivationRateLimitPort.class), mock(OutboxAppender.class), mock(Clock.class)
+            mock(UserRepository.class), mock(PasswordEncoderPort.class), mock(ActivationRateLimitPort.class),
+            mock(ActivationTokenIssuer.class), mock(Clock.class)
         );
 
         assertThat(useCase).isInstanceOf(TransactionalRegisterUserUseCase.class);
@@ -158,7 +157,7 @@ class AuthConfigurationTest {
     void wires_the_activate_account_use_case_bean() {
         ActivateAccountUseCase useCase = configuration.activateAccountUseCase(
             mock(ActivationTokenRepository.class), mock(ActivationTokenHasher.class),
-            mock(UserRepository.class), mock(Clock.class)
+            mock(UserRepository.class), mock(PasswordEncoderPort.class), mock(Clock.class)
         );
 
         assertThat(useCase).isInstanceOf(TransactionalActivateAccountUseCase.class);
@@ -177,10 +176,8 @@ class AuthConfigurationTest {
     @Test
     void wires_the_resend_activation_use_case_bean() {
         ResendActivationUseCase useCase = configuration.resendActivationUseCase(
-            mock(UserRepository.class), mock(ActivationTokenRepository.class),
-            mock(ActivationTokenGenerator.class), mock(ActivationTokenHasher.class),
-            mock(ActivationDeliveryCipher.class), mock(ActivationRateLimitPort.class),
-            mock(OutboxAppender.class), mock(Clock.class)
+            mock(UserRepository.class), mock(ActivationTokenRepository.class), mock(ActivationRateLimitPort.class),
+            mock(ActivationTokenIssuer.class), mock(Clock.class)
         );
 
         assertThat(useCase).isInstanceOf(TransactionalResendActivationUseCase.class);
@@ -260,6 +257,16 @@ class AuthConfigurationTest {
         );
 
         assertThat(useCase).isInstanceOf(TransactionalChangeUserRoleUseCase.class);
+    }
+
+    @Test
+    void wires_the_activation_token_issuer_bean() {
+        ActivationTokenIssuer issuer = configuration.activationTokenIssuer(
+            mock(ActivationTokenRepository.class), mock(ActivationTokenGenerator.class),
+            mock(ActivationTokenHasher.class), mock(ActivationDeliveryCipher.class), mock(OutboxAppender.class)
+        );
+
+        assertThat(issuer).isNotNull();
     }
 
     @Test

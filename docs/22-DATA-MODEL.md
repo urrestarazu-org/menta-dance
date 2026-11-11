@@ -27,6 +27,15 @@ como valor y se validan mediante puertos; no se crean FKs ni `JOIN`s cruzados.
   `created_at DATETIME(3)`. Hoy la única acción es `ROLE_CHANGED`, con el rol
   anterior y el nuevo. El rollback del operador es `V29_1`, fuera de
   `db/migration`.
+- `auth_users.must_set_password BOOLEAN NOT NULL DEFAULT FALSE` (V30, #378) marca
+  las cuentas que creó un administrador y cuyo titular todavía no eligió
+  contraseña: su `password_hash` es el de un secreto aleatorio descartado
+  (distinto por cuenta; nadie puede autenticarse con él) y la activación exige la
+  contraseña real, que lo reemplaza y apaga la marca en la misma transacción. No
+  hay contraseña por defecto. Las filas existentes quedan en `FALSE` (sin
+  backfill). El rollback del operador es `V30_1`, fuera de `db/migration`; borra
+  la marca, así que antes hay que eliminar o recrear las cuentas pendientes de
+  ese tipo.
 - Roles iniciales: `ALUMNO`, `PROFESOR`, `RECEPCIONISTA`, `ADMIN`.
 - `auth_refresh_tokens`: `token_hash CHAR(64) UNIQUE`, `family_id`, `issued_at`,
   `expires_at`, `revoked_at`, `rotated_at` y metadatos de dispositivo.

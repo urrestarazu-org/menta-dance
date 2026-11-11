@@ -4,6 +4,8 @@ import com.menta.auth.domain.exception.ActivationRateLimitedException;
 import com.menta.auth.domain.exception.ActivationTokenInvalidException;
 import com.menta.auth.domain.exception.AuthDegradedException;
 import com.menta.auth.domain.exception.DuplicateRegistrationException;
+import com.menta.auth.domain.exception.PasswordRequiredException;
+import com.menta.auth.domain.exception.WeakPasswordException;
 import com.menta.auth.infrastructure.web.ProblemDetails;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -42,6 +44,24 @@ public class ActivationExceptionHandler {
     ResponseEntity<ProblemDetail> invalidToken(ActivationTokenInvalidException exception) {
         return ProblemDetails.response(
             HttpStatus.BAD_REQUEST, "El token de activación es inválido o expiró.", exception.getErrorCode()
+        );
+    }
+
+    /**
+     * Only reachable with a valid token for an account an administrator created, so naming the reason reveals
+     * nothing about other accounts, and the holder keeps the same link to retry.
+     */
+    @ExceptionHandler(PasswordRequiredException.class)
+    ResponseEntity<ProblemDetail> passwordRequired(PasswordRequiredException exception) {
+        return ProblemDetails.response(
+            HttpStatus.BAD_REQUEST, "Elegí una contraseña para activar tu cuenta.", exception.getErrorCode()
+        );
+    }
+
+    @ExceptionHandler(WeakPasswordException.class)
+    ResponseEntity<ProblemDetail> weakPassword(WeakPasswordException exception) {
+        return ProblemDetails.response(
+            HttpStatus.BAD_REQUEST, PasswordPolicyMessages.detailOf(exception), exception.getErrorCode()
         );
     }
 

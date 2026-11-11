@@ -5,17 +5,22 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.menta.auth.application.dto.ActivateAccountCommand;
 import com.menta.auth.application.port.out.ActivationTokenHasher;
 import com.menta.auth.application.port.out.ActivationTokenRepository;
 import com.menta.auth.application.port.out.Clock;
+import com.menta.auth.application.port.out.PasswordEncoderPort;
 import com.menta.auth.domain.exception.ActivationTokenInvalidException;
+import com.menta.auth.domain.exception.PasswordRequiredException;
+import com.menta.auth.domain.exception.WeakPasswordException;
 import com.menta.auth.domain.model.ActivationToken;
 import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.model.UserId;
+import com.menta.auth.domain.model.UserProfile;
 import com.menta.auth.domain.model.UserStatus;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.shared.domain.vo.Email;
@@ -53,6 +58,7 @@ class ActivateAccountUseCaseImplTest {
     @Mock private ActivationTokenRepository activationTokenRepository;
     @Mock private ActivationTokenHasher activationTokenHasher;
     @Mock private UserRepository userRepository;
+    @Mock private PasswordEncoderPort passwordEncoder;
     @Mock private Clock clock;
 
     private ActivateAccountUseCaseImpl useCase;
@@ -60,7 +66,7 @@ class ActivateAccountUseCaseImplTest {
     @BeforeEach
     void setUp() {
         useCase = new ActivateAccountUseCaseImpl(
-            activationTokenRepository, activationTokenHasher, userRepository, clock
+            activationTokenRepository, activationTokenHasher, userRepository, passwordEncoder, clock
         );
         when(activationTokenHasher.hash(RAW_TOKEN)).thenReturn(TOKEN_HASH);
     }
@@ -90,7 +96,7 @@ class ActivateAccountUseCaseImplTest {
             .thenReturn(true);
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        useCase.activate(new ActivateAccountCommand(RAW_TOKEN));
+        useCase.activate(new ActivateAccountCommand(RAW_TOKEN, null));
 
         ArgumentCaptor<ActivationToken> consumedToken = ArgumentCaptor.forClass(ActivationToken.class);
         verify(activationTokenRepository).consumeIfActive(
@@ -116,7 +122,7 @@ class ActivateAccountUseCaseImplTest {
             any(ActivationToken.class), org.mockito.ArgumentMatchers.eq(NOW)))
             .thenReturn(false);
 
-        assertThatThrownBy(() -> useCase.activate(new ActivateAccountCommand(RAW_TOKEN)))
+        assertThatThrownBy(() -> useCase.activate(new ActivateAccountCommand(RAW_TOKEN, null)))
             .isInstanceOf(ActivationTokenInvalidException.class);
 
         verify(userRepository, never()).save(any());
@@ -126,7 +132,7 @@ class ActivateAccountUseCaseImplTest {
     void rejects_an_unknown_token_hash_with_the_generic_exception_and_no_persistence() {
         when(activationTokenRepository.findByHash(TOKEN_HASH)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> useCase.activate(new ActivateAccountCommand(RAW_TOKEN)))
+        assertThatThrownBy(() -> useCase.activate(new ActivateAccountCommand(RAW_TOKEN, null)))
             .isInstanceOf(ActivationTokenInvalidException.class);
 
         verify(userRepository, never()).findById(any());
@@ -146,7 +152,7 @@ class ActivateAccountUseCaseImplTest {
         stubClock();
         when(activationTokenRepository.findByHash(TOKEN_HASH)).thenReturn(Optional.of(usedToken));
 
-        assertThatThrownBy(() -> useCase.activate(new ActivateAccountCommand(RAW_TOKEN)))
+        assertThatThrownBy(() -> useCase.activate(new ActivateAccountCommand(RAW_TOKEN, null)))
             .isInstanceOf(ActivationTokenInvalidException.class);
 
         verify(userRepository, never()).findById(any());
@@ -165,7 +171,7 @@ class ActivateAccountUseCaseImplTest {
         stubClock();
         when(activationTokenRepository.findByHash(TOKEN_HASH)).thenReturn(Optional.of(expiredToken));
 
-        assertThatThrownBy(() -> useCase.activate(new ActivateAccountCommand(RAW_TOKEN)))
+        assertThatThrownBy(() -> useCase.activate(new ActivateAccountCommand(RAW_TOKEN, null)))
             .isInstanceOf(ActivationTokenInvalidException.class);
 
         verify(userRepository, never()).findById(any());
@@ -185,7 +191,7 @@ class ActivateAccountUseCaseImplTest {
         stubClock();
         when(activationTokenRepository.findByHash(TOKEN_HASH)).thenReturn(Optional.of(invalidatedToken));
 
-        assertThatThrownBy(() -> useCase.activate(new ActivateAccountCommand(RAW_TOKEN)))
+        assertThatThrownBy(() -> useCase.activate(new ActivateAccountCommand(RAW_TOKEN, null)))
             .isInstanceOf(ActivationTokenInvalidException.class);
 
         verify(userRepository, never()).findById(any());
@@ -206,10 +212,95 @@ class ActivateAccountUseCaseImplTest {
         when(activationTokenRepository.findByHash(TOKEN_HASH)).thenReturn(Optional.of(token));
         when(userRepository.findById(userId)).thenReturn(Optional.of(alreadyActiveUser));
 
-        assertThatThrownBy(() -> useCase.activate(new ActivateAccountCommand(RAW_TOKEN)))
+        assertThatThrownBy(() -> useCase.activate(new ActivateAccountCommand(RAW_TOKEN, null)))
             .isInstanceOf(ActivationTokenInvalidException.class);
 
         verify(activationTokenRepository, never()).save(any(ActivationToken.class));
         verify(userRepository, never()).save(any());
+    }
+
+    private static User invitedUser(UserId id) {
+        return User.rehydrate(
+            id, Email.of("staff@example.com"), "unusable-hash", Role.RECEPTIONIST,
+            UserStatus.PENDING_ACTIVATION, LocalDateTime.now(), LocalDateTime.now(), 1L,
+            new UserProfile("Ada", "Lovelace", "+5491100000000", null), false, true
+        );
+    }
+
+    private ActivationToken activeTokenFor(UserId userId) {
+        return ActivationToken.issue(userId, TOKEN_HASH, NOW.plus(Duration.ofHours(24)), NOW);
+    }
+
+    @Test
+    void an_invited_account_takes_the_chosen_password_and_activates_in_the_same_call() {
+        UserId userId = UserId.generate();
+        User user = invitedUser(userId);
+        stubClock();
+        when(activationTokenRepository.findByHash(TOKEN_HASH)).thenReturn(Optional.of(activeTokenFor(userId)));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(passwordEncoder.encode("Chosen1Pass")).thenReturn("chosen-hash");
+        when(activationTokenRepository.consumeIfActive(
+            any(ActivationToken.class), org.mockito.ArgumentMatchers.eq(NOW)))
+            .thenReturn(true);
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        useCase.activate(new ActivateAccountCommand(RAW_TOKEN, "Chosen1Pass"));
+
+        ArgumentCaptor<User> savedUser = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(savedUser.capture());
+        assertThat(savedUser.getValue().getStatus()).isEqualTo(UserStatus.ACTIVE);
+        assertThat(savedUser.getValue().getPasswordHash()).isEqualTo("chosen-hash");
+        assertThat(savedUser.getValue().isMustSetPassword()).isFalse();
+    }
+
+    @Test
+    void an_invited_account_without_a_password_is_rejected_and_costs_nobody_the_token() {
+        UserId userId = UserId.generate();
+        stubClock();
+        when(activationTokenRepository.findByHash(TOKEN_HASH)).thenReturn(Optional.of(activeTokenFor(userId)));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(invitedUser(userId)));
+
+        assertThatThrownBy(() -> useCase.activate(new ActivateAccountCommand(RAW_TOKEN, null)))
+            .isInstanceOf(PasswordRequiredException.class);
+
+        verify(activationTokenRepository, never()).consumeIfActive(any(), any());
+        verify(userRepository, never()).save(any());
+        verifyNoInteractions(passwordEncoder);
+    }
+
+    @Test
+    void an_invited_account_with_a_weak_password_is_rejected_before_anything_is_consumed() {
+        UserId userId = UserId.generate();
+        stubClock();
+        when(activationTokenRepository.findByHash(TOKEN_HASH)).thenReturn(Optional.of(activeTokenFor(userId)));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(invitedUser(userId)));
+
+        assertThatThrownBy(() -> useCase.activate(new ActivateAccountCommand(RAW_TOKEN, "weak")))
+            .isInstanceOf(WeakPasswordException.class);
+
+        verify(activationTokenRepository, never()).consumeIfActive(any(), any());
+        verify(userRepository, never()).save(any());
+        verifyNoInteractions(passwordEncoder);
+    }
+
+    @Test
+    void an_ordinary_account_ignores_a_password_and_keeps_its_own() {
+        UserId userId = UserId.generate();
+        User user = pendingUser(userId);
+        stubClock();
+        when(activationTokenRepository.findByHash(TOKEN_HASH)).thenReturn(Optional.of(activeTokenFor(userId)));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(activationTokenRepository.consumeIfActive(
+            any(ActivationToken.class), org.mockito.ArgumentMatchers.eq(NOW)))
+            .thenReturn(true);
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        useCase.activate(new ActivateAccountCommand(RAW_TOKEN, "Ignored1Pass"));
+
+        ArgumentCaptor<User> savedUser = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(savedUser.capture());
+        assertThat(savedUser.getValue().getStatus()).isEqualTo(UserStatus.ACTIVE);
+        assertThat(savedUser.getValue().getPasswordHash()).isEqualTo("hash");
+        verifyNoInteractions(passwordEncoder);
     }
 }

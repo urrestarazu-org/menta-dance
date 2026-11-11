@@ -17,8 +17,8 @@ public final class UserMapper {
     }
 
     /**
-     * Maps the user to its JPA entity, including status, token version, demo marker and profile (null columns
-     * when absent).
+     * Maps the user to its JPA entity, including status, token version, demo and must-set-password markers and
+     * profile (null columns when absent).
      *
      * @return the entity, or null when {@code user} is null
      */
@@ -42,7 +42,8 @@ public final class UserMapper {
             profile == null ? null : profile.lastName(),
             profile == null ? null : profile.phone(),
             profile == null ? null : profile.birthDate(),
-            user.isDemo()
+            user.isDemo(),
+            user.isMustSetPassword()
         );
     }
 
@@ -66,7 +67,8 @@ public final class UserMapper {
             entity.getUpdatedAt(),
             entity.getTokenVersion(),
             toProfile(entity),
-            entity.isDemo()
+            entity.isDemo(),
+            entity.isMustSetPassword()
         );
     }
 
