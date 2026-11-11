@@ -24,9 +24,10 @@ como valor y se validan mediante puertos; no se crean FKs ni `JOIN`s cruzados.
   administrador hace sobre una cuenta. Columnas: `id`, `user_id` (FK a
   `auth_users`, con índice), `actor_id` (el admin que hizo el cambio, sin FK),
   `action VARCHAR(50)`, `previous_value` y `new_value` (`VARCHAR(255)`, nulos) y
-  `created_at DATETIME(3)`. Hoy la única acción es `ROLE_CHANGED`, con el rol
-  anterior y el nuevo. El rollback del operador es `V29_1`, fuera de
-  `db/migration`.
+  `created_at DATETIME(3)`. Las acciones son `ROLE_CHANGED`, con el rol anterior y
+  el nuevo, y `USER_CREATED` (alta de una cuenta de staff por el admin), con
+  `previous_value` nulo y el rol inicial en `new_value`. El rollback del operador
+  es `V29_1`, fuera de `db/migration`.
 - `auth_users.must_set_password BOOLEAN NOT NULL DEFAULT FALSE` (V30, #378) marca
   las cuentas que creó un administrador y cuyo titular todavía no eligió
   contraseña: su `password_hash` es el de un secreto aleatorio descartado

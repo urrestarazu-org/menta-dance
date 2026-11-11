@@ -279,10 +279,28 @@ class SecurityConfigTest {
     }
 
     @Test
+    void an_unauthenticated_post_of_the_admin_user_creation_route_is_rejected() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(post(ADMIN_USERS_URL)).andExpect(status().isUnauthorized());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"INSTRUCTOR", "STUDENT", "RECEPTIONIST"})
+    void a_non_admin_post_of_the_admin_user_creation_route_is_forbidden(String role) throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(post(ADMIN_USERS_URL).with(user("someone").roles(role)))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
     void an_admin_reaches_the_admin_user_routes_past_the_security_layer() throws Exception {
         MockMvc mockMvc = buildSecurityFilterChainMockMvc();
 
         mockMvc.perform(get(ADMIN_USERS_URL).with(user("admin").roles("ADMIN")))
+            .andExpect(status().isNotFound());
+        mockMvc.perform(post(ADMIN_USERS_URL).with(user("admin").roles("ADMIN")))
             .andExpect(status().isNotFound());
         mockMvc.perform(patch(ADMIN_USER_ROLE_URL).with(user("admin").roles("ADMIN")))
             .andExpect(status().isNotFound());

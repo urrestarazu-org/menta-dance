@@ -223,7 +223,7 @@ class ActivateAccountUseCaseImplTest {
         return User.rehydrate(
             id, Email.of("staff@example.com"), "unusable-hash", Role.RECEPTIONIST,
             UserStatus.PENDING_ACTIVATION, LocalDateTime.now(), LocalDateTime.now(), 1L,
-            new UserProfile("Ada", "Lovelace", "+5491100000000", null), false, true
+            new UserProfile("Ada", "Lovelace", null, null), false, true
         );
     }
 

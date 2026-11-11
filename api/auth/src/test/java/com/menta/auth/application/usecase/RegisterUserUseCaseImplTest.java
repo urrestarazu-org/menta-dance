@@ -99,6 +99,23 @@ class RegisterUserUseCaseImplTest {
     }
 
     @Test
+    void requires_a_phone_for_public_registration_before_any_write_or_lookup() {
+        RegisterUserCommand command = new RegisterUserCommand(
+            "student@example.com", "Sup3rSecret!", Role.STUDENT, FIRST_NAME, LAST_NAME, null, BIRTH_DATE, "client-fp"
+        );
+
+        assertThatThrownBy(() -> useCase.register(command))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Phone");
+
+        verifyNoInteractions(
+            userRepository, passwordEncoder, activationTokenRepository,
+            activationTokenGenerator, activationTokenHasher, activationDeliveryCipher,
+            activationRateLimitPort, outboxAppender, clock
+        );
+    }
+
+    @Test
     void rejects_admin_public_registration_before_any_write_or_lookup() {
         RegisterUserCommand command = new RegisterUserCommand(
             "admin@example.com", "Sup3rSecret!", Role.ADMIN, FIRST_NAME, LAST_NAME, PHONE, BIRTH_DATE, "client-fp"

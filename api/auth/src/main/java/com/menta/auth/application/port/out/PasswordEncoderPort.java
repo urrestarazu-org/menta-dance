@@ -17,6 +17,17 @@ public interface PasswordEncoderPort {
     String encode(String rawPassword);
 
     /**
+     * Produces the encoded form of a random secret that is generated, hashed and immediately forgotten, so that
+     * no password matches it. Every call yields a different value.
+     *
+     * <p>It is the placeholder stored for an account whose holder has not chosen a password yet. The secret is
+     * never returned, logged or persisted in the clear.
+     *
+     * @return an encoded value no one can authenticate with
+     */
+    String encodeUnusable();
+
+    /**
      * Verifies a raw password against a previously encoded one.
      *
      * @param rawPassword the plaintext password presented by the caller

@@ -75,7 +75,7 @@ tags:
   - name: Recuperación de contraseña
     description: Solicitud y consumo del enlace de recuperación de contraseña.
   - name: Administración de usuarios
-    description: Listado de cuentas y cambio de rol. Requiere el rol `ADMIN`.
+    description: Listado de cuentas, alta de cuentas de staff y cambio de rol. Requiere el rol `ADMIN`.
 
 paths:
   /api/v1/auth/login:
@@ -379,7 +379,7 @@ paths:
       description: |
         Consume el token de activación y pasa la cuenta a `ACTIVE`.
 
-        Si la cuenta la creó un administrador, el titular aún no tiene
+        Si la cuenta la creó un administrador (`POST /api/v1/admin/users`), el titular aún no tiene
         contraseña: el cuerpo debe traer `password`, que se valida con la misma política que el registro y el
         reseteo (8 caracteres como mínimo, una mayúscula y un número), se guarda y la cuenta se activa en la
         misma transacción. Sin `password` responde `400 PASSWORD_REQUIRED`; con una contraseña débil, `400
@@ -663,6 +663,75 @@ paths:
           $ref: '#/components/responses/AuthenticationRequired'
         '403':
           $ref: '#/components/responses/AccessDenied'
+
+    post:
+      tags: [Administración de usuarios]
+      summary: Crear una cuenta de staff
+      description: |
+        Da de alta una cuenta con rol `INSTRUCTOR`, `RECEPTIONIST` o `ADMIN` (los alumnos se registran solos: pedir
+        `STUDENT` es `400`). La cuenta nace en `PENDING_ACTIVATION`, con `demo` en `false`, y el titular recibe un
+        correo con el enlace de activación, el mismo flujo que el registro (US-AUTH-003).
+
+        **No existe contraseña por defecto.** La cuenta se guarda con un hash de contraseña aleatorio, distinto
+        por cuenta, que nadie conoce, y marcada para que el titular elija la suya al activar (ver `POST
+        /api/v1/auth/activate`). Hasta entonces nadie puede iniciar sesión con ella.
+
+        Un email que ya tiene cuenta responde `409 EMAIL_ALREADY_REGISTERED` (a diferencia del registro público,
+        acá el llamante es un administrador y puede saberlo). El email se compara sin distinguir mayúsculas.
+
+        La cuenta, el token de activación, el correo encolado y la auditoría (`USER_CREATED`: quién, cuándo y rol)
+        se confirman en una sola transacción. No hay `Location`: no existe un endpoint que lea una cuenta sola.
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: La cuenta creada, pendiente de activación.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSummary'
+              example:
+                id: 5b6f7c8e-1d2a-4e3b-9c4d-0a1b2c3d4e5f
+                email: recepcion@example.com
+                firstName: Ada
+                lastName: Lovelace
+                role: RECEPTIONIST
+                status: PENDING_ACTIVATION
+                demo: false
+                createdAt: '2026-11-10T09:30:00'
+        '400':
+          description: Cuerpo inválido, email mal formado, nombre vacío o demasiado largo, rol desconocido o `STUDENT`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://menta.dance/problems/invalid_request
+                title: Bad Request
+                status: 400
+                detail: La solicitud contiene datos inválidos.
+                code: INVALID_REQUEST
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '409':
+          description: Ya existe una cuenta con ese email.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://menta.dance/problems/email_already_registered
+                title: Conflict
+                status: 409
+                detail: Ya existe una cuenta con ese email.
+                code: EMAIL_ALREADY_REGISTERED
 
   /api/v1/admin/users/{userId}/role:
     patch:
@@ -960,6 +1029,35 @@ components:
           $ref: '#/components/schemas/UserRole'
       additionalProperties: false
 
+    CreateUserRequest:
+      type: object
+      description: |
+        Datos de la cuenta de staff. No lleva contraseña: la elige el titular al activar la cuenta.
+      required: [email, firstName, lastName, role]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          description: Dirección a la que llega el enlace de activación.
+          example: recepcion@example.com
+        firstName:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: Ada
+        lastName:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: Lovelace
+        role:
+          type: string
+          description: Rol de staff. `STUDENT` no se puede crear acá.
+          enum: [INSTRUCTOR, RECEPTIONIST, ADMIN]
+          example: RECEPTIONIST
+      additionalProperties: false
+
     UserSummary:
       type: object
       description: |
@@ -1065,6 +1163,7 @@ components:
         - USER_NOT_FOUND
         - LAST_ADMIN_CANNOT_BE_DEMOTED
         - PASSWORD_REQUIRED
+        - EMAIL_ALREADY_REGISTERED
 
   responses:
 

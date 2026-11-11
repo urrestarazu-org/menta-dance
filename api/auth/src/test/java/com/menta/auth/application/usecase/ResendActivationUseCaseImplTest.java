@@ -25,6 +25,7 @@ import com.menta.auth.domain.model.ActivationToken;
 import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.model.UserId;
+import com.menta.auth.domain.model.UserProfile;
 import com.menta.auth.domain.model.UserStatus;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.shared.domain.vo.Email;
@@ -145,9 +146,8 @@ class ResendActivationUseCaseImplTest {
     @Test
     void reissues_a_fresh_token_for_a_pending_account_created_by_an_administrator() {
         allowRateLimit();
-        User invited = User.rehydrate(
-            UserId.generate(), Email.of(EMAIL), "unusable-hash", Role.RECEPTIONIST, UserStatus.PENDING_ACTIVATION,
-            LocalDateTime.now(), LocalDateTime.now(), 1L, null, false, true
+        User invited = User.invite(
+            Email.of(EMAIL), "unusable-hash", Role.RECEPTIONIST, new UserProfile("Ada", "Lovelace", null, null)
         );
         when(userRepository.findByEmail(any())).thenReturn(Optional.of(invited));
         stubTokenIssuance();
