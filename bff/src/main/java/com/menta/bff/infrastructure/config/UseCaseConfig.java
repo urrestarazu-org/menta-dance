@@ -1,6 +1,7 @@
 package com.menta.bff.infrastructure.config;
 
 import com.menta.bff.application.port.out.AccessTokenClaimsReader;
+import com.menta.bff.application.port.out.AdminUsersApiClient;
 import com.menta.bff.application.port.out.AuthApiClient;
 import com.menta.bff.application.port.out.BillingApiClient;
 import com.menta.bff.application.port.out.CatalogApiClient;
@@ -29,6 +30,8 @@ import com.menta.bff.application.usecase.GetPlansViewUseCase;
 import com.menta.bff.application.usecase.GetPlansViewUseCaseImpl;
 import com.menta.bff.application.usecase.GetValidAccessTokenUseCase;
 import com.menta.bff.application.usecase.GetValidAccessTokenUseCaseImpl;
+import com.menta.bff.application.usecase.ListUsersUseCase;
+import com.menta.bff.application.usecase.ListUsersUseCaseImpl;
 import com.menta.bff.application.usecase.LoginUseCase;
 import com.menta.bff.application.usecase.LoginUseCaseImpl;
 import com.menta.bff.application.usecase.LogoutUseCase;
@@ -188,5 +191,10 @@ public class UseCaseConfig {
     public GetAssignedSessionsUseCase getAssignedSessionsUseCase(
             PhysicalSessionsApiClient physicalSessionsApiClient, ClassesProperties classesProperties) {
         return new GetAssignedSessionsUseCaseImpl(physicalSessionsApiClient, classesProperties.getDisplayZone());
+    }
+
+    @Bean
+    public ListUsersUseCase listUsersUseCase(AdminUsersApiClient adminUsersApiClient) {
+        return new ListUsersUseCaseImpl(adminUsersApiClient);
     }
 }
