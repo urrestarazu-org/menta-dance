@@ -216,11 +216,13 @@ administrador que lo hizo, la acción (`USER_CREATED` en el alta, con rol anteri
 `NULL`, o `ROLE_CHANGED` en el cambio de rol), el rol anterior y el nuevo y el
 instante, que fija la aplicación.
 
-La pantalla del BFF `/gestion/usuarios` muestra el listado y el formulario de alta de
-cuentas de staff, que llama a `POST /api/v1/admin/users` y traduce `409
-EMAIL_ALREADY_REGISTERED` en un error del campo email (ver
-[BFF y Tailwind](31-BFF-TAILWIND.md#usuarios-gestionusuarios)). Queda fuera y llega en
-un PR posterior: el cambio de rol desde la lista.
+La pantalla del BFF `/gestion/usuarios` muestra el listado, el formulario de alta de
+cuentas de staff (`POST /api/v1/admin/users`, que traduce `409 EMAIL_ALREADY_REGISTERED`
+en un error del campo email) y, en cada fila, el cambio de rol (`PATCH
+/api/v1/admin/users/{userId}/role`), que traduce `409 LAST_ADMIN_CANNOT_BE_DEMOTED` y
+`404 USER_NOT_FOUND` en avisos del listado. Como cambiar el rol cierra todas las sesiones
+de la cuenta, si el administrador cambia el suyo el BFF cierra su sesión web y lo manda al
+login con un aviso (ver [BFF y Tailwind](31-BFF-TAILWIND.md#usuarios-gestionusuarios)).
 
 ## Renovación y reutilización
 

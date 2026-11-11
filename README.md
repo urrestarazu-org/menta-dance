@@ -299,6 +299,7 @@ menta-dance/
 | Funcionalidad | Descripción |
 |---------------|-------------|
 | **Gestión Completa** | Acceso total a cursos, usuarios y configuración |
+| **Cuentas y roles** | Desde la web (`/gestion/usuarios`): listar y buscar cuentas, dar de alta profesores, recepcionistas y administradores (reciben un correo para activar la cuenta) y cambiar el rol de cualquier cuenta, lo que cierra sus sesiones |
 | **Verificar Pagos** | Aprobar transferencias manuales |
 | **Conciliación** | Resolver discrepancias con el procesador de pagos |
 | **Dispositivos QR** | Registrar y administrar lectores de check-in |

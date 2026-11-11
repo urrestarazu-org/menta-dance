@@ -262,7 +262,6 @@ class ManagementUsersIntegrationTest extends BaseIntegrationTest {
 
         assertThat(main).containsPattern("<form[^>]*action=\"/gestion/usuarios\"")
                 .containsPattern("<form[^>]*method=\"get\"")
-                .doesNotContain("_csrf")
                 .containsPattern("<label[^>]*for=\"q\"[^>]*>[^<]*Buscar por email o nombre[^<]*</label>")
                 .containsPattern("<input[^>]*id=\"q\"[^>]*name=\"q\"[^>]*maxlength=\"100\"")
                 .containsPattern("<label[^>]*for=\"role\"[^>]*>\\s*Rol\\s*</label>")
@@ -274,7 +273,9 @@ class ManagementUsersIntegrationTest extends BaseIntegrationTest {
                 .containsPattern("<option value=\"STUDENT\"[^>]*>\\s*Alumno/a\\s*</option>")
                 .containsPattern("<button[^>]*type=\"submit\"[^>]*>\\s*Buscar\\s*</button>")
                 .containsPattern("<a[^>]*href=\"/gestion/usuarios\"[^>]*>\\s*Limpiar\\s*</a>");
-        assertThat(main).doesNotContainPattern("<option[^>]*selected[^>]*>\\s*Administrador");
+        // The row forms that change a role come after the search form, and only they select a role and carry a token.
+        String filterForm = main.substring(main.indexOf("role=\"search\""), main.indexOf("</form>"));
+        assertThat(filterForm).doesNotContain("_csrf").doesNotContainPattern("<option[^>]*selected[^>]*>");
     }
 
     @Test

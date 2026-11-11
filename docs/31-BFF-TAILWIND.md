@@ -199,8 +199,8 @@ Los tests que recorren enlaces ignoran los anchors internos (`#main`) del skip l
 ## Área de gestión (`/gestion`)
 
 Base del área web para el personal (issue #354). Pantallas hoy: el inicio `GET /gestion` y el listado de
-usuarios `GET /gestion/usuarios` con su alta `GET /gestion/usuarios/nuevo` y `POST /gestion/usuarios` (#378); el
-resto de las secciones se habilita a medida que llega cada pantalla. La autorización real la decide la API; el BFF solo evita mostrar pantallas que un rol no
+usuarios `GET /gestion/usuarios` con su alta `GET /gestion/usuarios/nuevo` y `POST /gestion/usuarios` y el cambio de
+rol `POST /gestion/usuarios/{id}/rol` (#378); el resto de las secciones se habilita a medida que llega cada pantalla. La autorización real la decide la API; el BFF solo evita mostrar pantallas que un rol no
 puede usar.
 
 ### Prefijos y roles
@@ -256,14 +256,14 @@ coinciden con los del usuario, en el orden declarado. Los roles se declaran sin 
 ### Usuarios (`/gestion/usuarios`)
 
 Primera pantalla real del área (#378): lista las cuentas con `GET /api/v1/admin/users`, con el token de acceso de
-la sesión, y solo la ve `ADMIN`. El alta (más abajo) ya existe; el cambio de rol desde la lista llega en un PR
-posterior.
+la sesión, y solo la ve `ADMIN`. Desde ahí el administrador da de alta cuentas de staff y cambia el rol de
+cualquier cuenta (más abajo): con #378 completo, el `ADMIN` hace todo eso desde la web.
 
 - **Filtros por GET** (se pueden enlazar y recargar): `role` (select con "Todos"), `q` (email, nombre o apellido) y
   `page` (desde 0). Un rol desconocido o vacío y un `q` en blanco equivalen a no filtrar; `q` se recorta a 100
   caracteres antes de llamar a la API; una `page` negativa es la primera y una pasada del final muestra la última.
   El tamaño de página es fijo (20) y no se expone. Una `page` que no es número responde 400.
-- **Tabla accesible**: `<caption>` con el total, columnas Email, Nombre y apellido, Rol, Estado y Alta con
+- **Tabla accesible**: `<caption>` con el total, columnas Email, Nombre y apellido, Rol, Estado, Alta y Cambiar rol con
   `scope="col"`, rol y estado en español y fecha legible (`<time datetime>`). Una cuenta sin perfil muestra
   "Sin nombre".
 - **Paginación**: `<nav aria-label="Paginación de usuarios">` con Anterior, "Página X de Y" (`aria-current="page"`) y
@@ -302,6 +302,49 @@ layout de gestión con `active='users'` y los fragmentos `errorSummary` y `field
   de error se lee, se muestra ni se registra (el mapeo genérico RFC 9457 es el issue #711).
 - **Privacidad**: el formulario y sus errores llevan `Cache-Control: no-store` (hay datos de una tercera persona);
   ni el email, ni los nombres, ni el token van a un log (solo el nombre de la clase de la excepción). CSRF activo.
+
+#### Cambio de rol (`POST /gestion/usuarios/{id}/rol`)
+
+Cada fila del listado lleva su propio formulario (columna **Cambiar rol**): un `<select>` con los cuatro roles
+(Administrador, Profesor/a, Recepcionista y Alumno/a, con el rol actual elegido), un `<label class="sr-only">` "Rol de
+<email>" que lo nombra para el lector de pantalla y el botón **Cambiar** (con el texto oculto " el rol de <email>",
+para que varios botones no suenen iguales). Se muestra en todas las filas: cualquier cuenta puede pasar a cualquier
+rol y elegir el que ya tiene es un no-op idempotente de la API, así que ningún botón sobra.
+
+- **Campos**: el select se llama `role` (el rol nuevo) y los ocultos `filterRole`, `q` y `page` guardan el estado del
+  listado (el filtro de rol no puede llamarse `role`: chocaría con el nuevo). El `id` de la cuenta va en el path.
+- **Validación local** (antes de llamar a la API): el `id` debe ser un UUID (es un segmento del path de la API, que lo
+  recibe como variable de URI codificada) y el rol uno de los cuatro. Si no, se responde como un `400`. Sin token de
+  sesión se responde como una caída.
+- **Redirección**: siempre Post/Redirect/Get al path fijo `/gestion/usuarios` con a lo sumo `role`, `q` y `page`,
+  revalidados (rol conocido, `q` no vacío de hasta 100 caracteres, `page` entero no negativo; lo demás se descarta) y
+  codificados estrictamente como variables de URI: lo que mande el cliente no puede agregar parámetros, un fragmento
+  ni cambiar el destino. Nunca se redirige a una URL del cliente.
+- **Resultado** (mensaje *flash* de una sola vez en el listado, escapado):
+
+| Caso | Región | Qué ve el administrador |
+|---|---|---|
+| API `200` | `role="status"` | "Cambiamos el rol de <nombre o email> a <rol>. Se cerraron sus sesiones: tendrá que iniciar sesión de nuevo." |
+| API `409` con `code` `LAST_ADMIN_CANNOT_BE_DEMOTED` | `role="alert"` | "No se puede quitar el rol de administrador al único administrador activo." |
+| API `404` con `code` `USER_NOT_FOUND` | `role="alert"` | "No encontramos esa cuenta." |
+| API `400`, o `id`/rol inválidos | `role="alert"` | "Revisá los datos e intentá de nuevo." |
+| Cualquier otra respuesta (401, 403, 429, 5xx, otro `404` o `409`, otro status, `200` sin cuenta legible, timeout) | `role="alert"` | "No pudimos cambiar el rol. Probá de nuevo en unos minutos." |
+
+  Si el rol elegido ya era el actual la API responde `200` sin tocar sesiones y el mensaje de éxito es el mismo (el
+  BFF no lo distingue: no conoce el rol anterior de una cuenta ajena). Un `200` ilegible se informa como caída porque
+  repetir el cambio es inocuo. De la respuesta solo se lee el `code` de un `404`/`409`; ningún otro cuerpo de error se
+  lee, se muestra ni se registra (el mapeo genérico RFC 9457 es el issue #711).
+- **El administrador cambia su propio rol**: la API revoca todas sus sesiones, incluida la que está usando (sube el
+  `tokenVersion` y revoca los refresh tokens), de modo que su siguiente llamada fallaría. En lugar de dejarlo en una
+  sesión rota, si el `id` coincide con el claim `sub` de su token de acceso y el rol pedido difiere del claim `role`,
+  el BFF cierra la sesión web (la invalida, sin llamar a la API: ya está revocada) y redirige a
+  `/login?roleChanged`, que muestra en una región `role="status"` "Cambiaste tu propio rol. Iniciá sesión de nuevo."
+  Si la API lo rechaza (por ejemplo `409` por ser el último administrador) o pidió el rol que ya tiene, la sesión
+  sigue y se ve el resultado normal en el listado. Se lee `sub` con el mismo lector de claims (sin verificar firma) que
+  ya extrae `role` en el login: solo decide qué mostrar, la API autoriza cada llamada. Si el token no se puede leer, el
+  cambio se trata como ajeno y la sesión revocada se resuelve por el refresco habitual (`/login?sessionExpired=true`).
+- **Privacidad**: todas las respuestas llevan `Cache-Control: no-store`; ni el email, ni el nombre, ni el id, ni el token
+  van a un log (solo el nombre de la clase de la excepción). CSRF activo; solo `ADMIN` (`/gestion/usuarios/**`).
 
 ## Accesibilidad base
 

@@ -21,6 +21,9 @@ import org.springframework.web.bind.annotation.RequestParam;
  * POST /login is handled automatically by Spring Security
  * via BffAuthenticationProvider.
  *
+ * <p>An administrator who changed their own role is sent here with {@code ?roleChanged}, because the Auth API
+ * closed the session they were using; the page says why.
+ *
  * <p>When the login failed, Spring Security redirects to {@code /login?error} and leaves the
  * failure in the session; this controller turns it into the message shown, once. Anything it does
  * not recognise (including a request that carries only the parameter) is the generic
@@ -49,6 +52,9 @@ public class LoginViewController {
         }
         if (reset != null) {
             model.addAttribute("resetNotice", "Tu contraseña fue actualizada. Iniciá sesión con la nueva.");
+        }
+        if (request.getParameter("roleChanged") != null) {
+            model.addAttribute("roleChangedNotice", "Cambiaste tu propio rol. Iniciá sesión de nuevo.");
         }
         return "login";
     }
