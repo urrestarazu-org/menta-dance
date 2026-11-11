@@ -1,6 +1,7 @@
 package com.menta.auth.infrastructure.config;
 
 import com.menta.auth.application.port.in.ActivateAccountUseCase;
+import com.menta.auth.application.port.in.ListUsersUseCase;
 import com.menta.auth.application.port.in.LoginUseCase;
 import com.menta.auth.application.port.in.LogoutUseCase;
 import com.menta.auth.application.port.in.RefreshTokenUseCase;
@@ -30,7 +31,9 @@ import com.menta.auth.application.port.out.PasswordResetTokenRepository;
 import com.menta.auth.application.port.out.RefreshTokenRepository;
 import com.menta.auth.application.port.out.TokenBlacklistPort;
 import com.menta.auth.application.port.out.TokenHasher;
+import com.menta.auth.application.port.out.UserAdminRepository;
 import com.menta.auth.application.usecase.ActivateAccountUseCaseImpl;
+import com.menta.auth.application.usecase.ListUsersUseCaseImpl;
 import com.menta.auth.application.usecase.LoginUseCaseImpl;
 import com.menta.auth.application.usecase.LogoutUseCaseImpl;
 import com.menta.auth.application.usecase.RefreshTokenUseCaseImpl;
@@ -495,6 +498,13 @@ public class AuthConfiguration {
             authDegradedGuard
         );
         return new TransactionalLogoutUseCase(implementation);
+    }
+
+    // -- Administration of users (#378) --------------------------------------
+
+    @Bean
+    public ListUsersUseCase listUsersUseCase(UserAdminRepository userAdminRepository) {
+        return new ListUsersUseCaseImpl(userAdminRepository);
     }
 
     /**

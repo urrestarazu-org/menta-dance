@@ -74,6 +74,8 @@ tags:
     description: Registro público y activación de cuenta.
   - name: Recuperación de contraseña
     description: Solicitud y consumo del enlace de recuperación de contraseña.
+  - name: Administración de usuarios
+    description: Listado de cuentas. Requiere el rol `ADMIN`.
 
 paths:
   /api/v1/auth/login:
@@ -559,6 +561,70 @@ paths:
         '429':
           $ref: '#/components/responses/PasswordResetRateLimited'
 
+  /api/v1/admin/users:
+    get:
+      tags: [Administración de usuarios]
+      summary: Listar usuarios
+      description: |
+        Listado paginado de cuentas, ordenado por email y, a igual email, por id.
+        No hay parámetro `sort`: el orden es fijo para que paginar no repita ni
+        saltee filas.
+
+        `q` busca por email, nombre o apellido, sin distinguir mayúsculas, y toma
+        el texto de forma literal (`%`, `_` y `\` no son comodines). Un `q` vacío
+        o en blanco equivale a no filtrar; más de 100 caracteres es `400`.
+
+        `size` mayor a 50 se **rechaza** con `400`, nunca se recorta.
+
+        La respuesta nunca incluye el hash de la contraseña ni la versión de
+        token.
+      operationId: listUsers
+      parameters:
+        - name: role
+          in: query
+          required: false
+          description: Sólo usuarios con este rol.
+          schema:
+            $ref: '#/components/schemas/UserRole'
+        - name: q
+          in: query
+          required: false
+          description: Texto a buscar en email, nombre y apellido. Máximo 100 caracteres.
+          schema:
+            type: string
+            maxLength: 100
+          example: lovelace
+        - name: page
+          in: query
+          required: false
+          description: Índice de página, desde 0.
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          required: false
+          description: Tamaño de página.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        '200':
+          description: Una página de usuarios. Una página pasada del final vuelve sin `items` pero con los totales.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPage'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+
 components:
 
   securitySchemes:
@@ -733,6 +799,74 @@ components:
           minLength: 1
           description: Token opaco de un solo uso recibido por email.
 
+    UserRole:
+      type: string
+      description: |
+        Rol de una cuenta. A diferencia de `Role` (el que acepta el registro
+        público), incluye `RECEPTIONIST`.
+      enum: [ADMIN, INSTRUCTOR, STUDENT, RECEPTIONIST]
+      example: INSTRUCTOR
+
+    UserStatus:
+      type: string
+      enum: [PENDING_ACTIVATION, ACTIVE, INACTIVE, SUSPENDED, LOCKED]
+      example: ACTIVE
+
+    UserSummary:
+      type: object
+      description: |
+        Lo que ve un administrador de una cuenta. Nunca incluye el hash de la
+        contraseña ni la versión de token.
+      required: [id, email, role, status, demo, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        firstName:
+          type: [string, 'null']
+          description: '`null` en cuentas sin perfil (demo, admin, anteriores al perfil).'
+        lastName:
+          type: [string, 'null']
+          description: '`null` en cuentas sin perfil.'
+        role:
+          $ref: '#/components/schemas/UserRole'
+        status:
+          $ref: '#/components/schemas/UserStatus'
+        demo:
+          type: boolean
+          description: Cuenta de prueba o demo; no recibe correos salientes.
+        createdAt:
+          type: string
+          description: |
+            Fecha de alta, sin zona horaria (`YYYY-MM-DDTHH:mm:ss`). No es un
+            `date-time` RFC 3339 porque no lleva offset.
+          pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$'
+          example: '2026-10-01T09:30:00'
+
+    UserPage:
+      type: object
+      required: [items, page, size, totalElements, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserSummary'
+        page:
+          type: integer
+          minimum: 0
+        size:
+          type: integer
+          minimum: 1
+          maximum: 50
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+
     Problem:
       type: object
       description: |
@@ -778,6 +912,8 @@ components:
         - PASSWORD_RESET_TOKEN_ALREADY_USED
         - WEAK_PASSWORD
         - SAME_PASSWORD
+        - AUTHENTICATION_REQUIRED
+        - ACCESS_DENIED
 
   responses:
 
@@ -838,6 +974,32 @@ components:
             status: 429
             detail: Demasiados intentos; reintentá más tarde.
             code: PASSWORD_RESET_RATE_LIMITED
+
+    AuthenticationRequired:
+      description: Falta el access token o no es válido.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: https://menta.dance/problems/authentication_required
+            title: Unauthorized
+            status: 401
+            detail: Authentication is required.
+            code: AUTHENTICATION_REQUIRED
+
+    AccessDenied:
+      description: El usuario autenticado no tiene el rol requerido (`ADMIN`).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: https://menta.dance/problems/access_denied
+            title: Forbidden
+            status: 403
+            detail: You are not authorized to access this resource.
+            code: ACCESS_DENIED
 
     AuthDegraded:
       description: |
