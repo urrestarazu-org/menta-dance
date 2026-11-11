@@ -24,8 +24,10 @@ import org.junit.jupiter.params.provider.ValueSource;
  * API decides the real authorization. Each case logs in for real against the stubbed Auth API and
  * reuses the session cookie.
  *
- * <p>There are no business screens behind the prefixes yet, so "allowed" is observed as 404 (the security
- * chain let the request through and nothing handles it) and "forbidden" as 403.
+ * <p>There are no business screens behind most prefixes yet, so "allowed" is observed as 404 (the security
+ * chain let the request through and nothing handles it) and "forbidden" as 403. The users screen exists, so
+ * only its refusals are listed here; the administrator's access is covered by
+ * {@code ManagementUsersIntegrationTest}.
  * </p>
  */
 @DisplayName("Management area access Integration Tests")
@@ -107,6 +109,12 @@ class ManagementAccessIntegrationTest extends BaseIntegrationTest {
                 Arguments.of("/gestion/dispositivos", INSTRUCTOR, false),
                 Arguments.of("/gestion/dispositivos", RECEPTIONIST, false),
                 Arguments.of("/gestion/dispositivos", STUDENT, false),
+                // users: administrator only. The administrator's own access is not a 404 (the screen
+                // exists), so it is covered by ManagementUsersIntegrationTest.
+                Arguments.of("/gestion/usuarios", INSTRUCTOR, false),
+                Arguments.of("/gestion/usuarios", RECEPTIONIST, false),
+                Arguments.of("/gestion/usuarios", STUDENT, false),
+                Arguments.of("/gestion/usuarios/nuevo", INSTRUCTOR, false),
                 // any prefix nobody planned stays closed to everyone but the administrator
                 Arguments.of("/gestion/otra-cosa", ADMIN, true),
                 Arguments.of("/gestion/otra-cosa", INSTRUCTOR, false),
