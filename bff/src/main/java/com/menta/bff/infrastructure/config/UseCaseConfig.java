@@ -12,6 +12,8 @@ import com.menta.bff.application.port.out.SubscriptionApiClient;
 import com.menta.bff.application.port.out.VirtualApiClient;
 import com.menta.bff.application.usecase.AccountActivationUseCase;
 import com.menta.bff.application.usecase.AccountActivationUseCaseImpl;
+import com.menta.bff.application.usecase.ChangeUserRoleUseCase;
+import com.menta.bff.application.usecase.ChangeUserRoleUseCaseImpl;
 import com.menta.bff.application.usecase.CreateUserUseCase;
 import com.menta.bff.application.usecase.CreateUserUseCaseImpl;
 import com.menta.bff.application.usecase.GetAssignedSessionsUseCase;
@@ -203,5 +205,11 @@ public class UseCaseConfig {
     @Bean
     public CreateUserUseCase createUserUseCase(AdminUsersApiClient adminUsersApiClient) {
         return new CreateUserUseCaseImpl(adminUsersApiClient);
+    }
+
+    @Bean
+    public ChangeUserRoleUseCase changeUserRoleUseCase(
+            AdminUsersApiClient adminUsersApiClient, AccessTokenClaimsReader accessTokenClaimsReader) {
+        return new ChangeUserRoleUseCaseImpl(adminUsersApiClient, accessTokenClaimsReader);
     }
 }

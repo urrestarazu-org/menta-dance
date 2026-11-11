@@ -25,7 +25,8 @@ import org.springframework.web.util.UriBuilder;
 import reactor.core.publisher.Mono;
 
 /**
- * WebClient adapter for {@code GET} and {@code POST /api/v1/admin/users} of the Auth API.
+ * WebClient adapter for {@code GET} and {@code POST /api/v1/admin/users} and
+ * {@code PATCH /api/v1/admin/users/{userId}/role} of the Auth API.
  *
  * <p>The calls send {@code Authorization: Bearer <token>}. The token only ever travels in that header:
  * it is never put in a log line or an exception message, and neither are the request parameters (search
@@ -37,8 +38,9 @@ import reactor.core.publisher.Mono;
  * authorization decision.
  * </p>
  *
- * <p>The creation reads one field of one error body: the {@code code} of a 409, to tell an email that
- * already has an account from any other conflict. Every other error body is released unread.
+ * <p>The creation and the role change read one field of one error body: the {@code code} of a 409 (and of
+ * the 404 of the role change), to tell the conflict the screen words from any other. Every other error body is
+ * released unread.
  * </p>
  *
  * <p>Part of Clean Architecture infrastructure layer. Uses an explicit constructor because
@@ -50,7 +52,10 @@ import reactor.core.publisher.Mono;
 public class AdminUsersApiAdapter implements AdminUsersApiClient {
 
     private static final String USERS_ENDPOINT = "/api/v1/admin/users";
+    private static final String ROLE_ENDPOINT = USERS_ENDPOINT + "/{userId}/role";
     private static final String EMAIL_TAKEN_CODE = "EMAIL_ALREADY_REGISTERED";
+    private static final String USER_NOT_FOUND_CODE = "USER_NOT_FOUND";
+    private static final String LAST_ADMIN_CODE = "LAST_ADMIN_CANNOT_BE_DEMOTED";
 
     private final WebClient webClient;
     private final AuthProperties properties;
@@ -101,6 +106,28 @@ public class AdminUsersApiAdapter implements AdminUsersApiClient {
         }
     }
 
+    @Override
+    public UserSummary changeRole(String accessToken, String userId, UserRole role) {
+        try {
+            UserWire wire = webClient.patch()
+                    .uri(ROLE_ENDPOINT, userId)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(new ChangeRoleWire(role.name()))
+                    .exchangeToMono(this::readRoleChange)
+                    .timeout(properties.getTimeout())
+                    .block();
+            return toDomain(wire);
+        } catch (UserNotFoundException | LastAdminCannotBeDemotedException | InvalidRequestException
+                 | ServiceUnavailableException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            // Class name only: nothing from the request (headers, body) or the response may reach a log.
+            log.warn("Auth API role change call failed: {}", e.getClass().getSimpleName());
+            throw new ServiceUnavailableException("Auth API unavailable", e);
+        }
+    }
+
     /**
      * Builds the query string with URI variables, which are encoded strictly: a literal query parameter
      * would let {@code +}, {@code &} or {@code =} typed in the search box change what the API receives.
@@ -139,15 +166,44 @@ public class AdminUsersApiAdapter implements AdminUsersApiClient {
             return response.releaseBody();
         }
         if (status == HttpStatus.CONFLICT.value()) {
-            return response.bodyToMono(ProblemWire.class)
-                    .flatMap(problem -> Mono.<Void>error(EMAIL_TAKEN_CODE.equals(problem.code())
-                            ? new EmailAlreadyRegisteredException("Auth API: the email already has an account")
-                            : unavailable("answered 409")))
-                    .switchIfEmpty(Mono.error(unavailable("answered 409 without a body")));
+            return failWhenCodeIs(response, EMAIL_TAKEN_CODE,
+                    new EmailAlreadyRegisteredException("Auth API: the email already has an account"));
         }
         return response.releaseBody().then(Mono.error(status == HttpStatus.BAD_REQUEST.value()
                 ? new InvalidRequestException("Auth API rejected the account data")
                 : unavailable("answered " + status)));
+    }
+
+    /** Only a 200 is success; the typed failures need their code, any other error body is released unread. */
+    private Mono<UserWire> readRoleChange(ClientResponse response) {
+        int status = response.statusCode().value();
+        if (status == HttpStatus.OK.value()) {
+            return response.bodyToMono(UserWire.class);
+        }
+        if (status == HttpStatus.NOT_FOUND.value()) {
+            return failWhenCodeIs(response, USER_NOT_FOUND_CODE,
+                    new UserNotFoundException("Auth API: the account does not exist"));
+        }
+        if (status == HttpStatus.CONFLICT.value()) {
+            return failWhenCodeIs(response, LAST_ADMIN_CODE,
+                    new LastAdminCannotBeDemotedException("Auth API: the last active administrator"));
+        }
+        return response.releaseBody().then(Mono.error(status == HttpStatus.BAD_REQUEST.value()
+                ? new InvalidRequestException("Auth API rejected the role change")
+                : unavailable("answered " + status)));
+    }
+
+    /**
+     * Fails with {@code typed} when the error body carries {@code expectedCode}, and as unavailable for any
+     * other code, a body without one or no usable body. It reads nothing else of the body.
+     */
+    private static <T> Mono<T> failWhenCodeIs(ClientResponse response, String expectedCode, RuntimeException typed) {
+        int status = response.statusCode().value();
+        return response.bodyToMono(ProblemWire.class)
+                .flatMap(problem -> Mono.<T>error(expectedCode.equals(problem.code())
+                        ? typed
+                        : unavailable("answered " + status)))
+                .switchIfEmpty(Mono.error(unavailable("answered " + status + " without a body")));
     }
 
     private static UserPage toDomain(UserPageWire wire) {
@@ -179,6 +235,10 @@ public class AdminUsersApiAdapter implements AdminUsersApiClient {
 
     /** Request body of the creation, as {@code CreateUserRequest} in {@code auth-v1.yaml} names it. */
     private record CreateUserWire(String email, String firstName, String lastName, String role) {
+    }
+
+    /** Request body of the role change, as {@code ChangeUserRoleRequest} in {@code auth-v1.yaml} names it. */
+    private record ChangeRoleWire(String role) {
     }
 
     /** The only field read from an error body. */
