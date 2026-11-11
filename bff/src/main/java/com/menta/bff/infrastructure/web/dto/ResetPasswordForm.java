@@ -1,9 +1,7 @@
 package com.menta.bff.infrastructure.web.dto;
 
+import com.menta.bff.infrastructure.web.validation.PasswordPolicy;
 import jakarta.validation.constraints.AssertTrue;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
 import java.util.Objects;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -12,9 +10,9 @@ import lombok.Setter;
 /**
  * Form backing the {@code /restablecer-contrasena} page.
  *
- * <p>The password constraints are the ones of {@link RegisterForm}: they mirror the API's
- * {@code Password} type (at least 8 characters, one uppercase letter, one digit). The API stays
- * authoritative. The password is never rendered back: the template has no value for it.
+ * <p>The password follows the {@link PasswordPolicy} shared with the other password forms, which mirrors the
+ * API's {@code Password} type. The API stays authoritative. The password is never rendered back: the
+ * template has no value for it.
  * </p>
  */
 @Getter
@@ -24,10 +22,7 @@ public class ResetPasswordForm {
 
     private String token;
 
-    @NotBlank(message = "Ingresá una contraseña")
-    @Size(min = 8, message = "La contraseña debe tener al menos 8 caracteres")
-    @Pattern(regexp = "(?s).*\\p{javaUpperCase}.*", message = "La contraseña debe incluir al menos una mayúscula")
-    @Pattern(regexp = "(?s).*\\p{javaDigit}.*", message = "La contraseña debe incluir al menos un número")
+    @PasswordPolicy
     private String password;
 
     private String passwordConfirmation;

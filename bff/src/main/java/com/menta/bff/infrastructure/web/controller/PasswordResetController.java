@@ -45,8 +45,6 @@ public class PasswordResetController {
 
     private static final String REQUEST_VIEW = "request-password-reset";
     private static final String RESET_VIEW = "reset-password";
-    static final String WEAK_PASSWORD = "La contraseña no cumple los requisitos. Elegí una de al menos 8 "
-            + "caracteres, con una mayúscula y un número.";
     static final String SAME_PASSWORD = "La nueva contraseña debe ser diferente a la actual.";
 
     private final RequestPasswordResetUseCase requestPasswordResetUseCase;
@@ -117,7 +115,7 @@ public class PasswordResetController {
         } catch (AuthApiClient.PasswordRejectedException e) {
             bindingResult.rejectValue("password", "api.rejected",
                     e.reason() == AuthApiClient.PasswordRejectedException.Reason.SAME_AS_CURRENT
-                            ? SAME_PASSWORD : WEAK_PASSWORD);
+                            ? SAME_PASSWORD : AuthFlowErrors.WEAK_PASSWORD);
             return RESET_VIEW;
         } catch (AuthApiClient.RateLimitedException
                  | AuthApiClient.InvalidRequestException

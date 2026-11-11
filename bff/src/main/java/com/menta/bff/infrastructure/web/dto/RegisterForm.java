@@ -1,12 +1,12 @@
 package com.menta.bff.infrastructure.web.dto;
 
 import com.menta.bff.infrastructure.web.validation.E164Phone;
+import com.menta.bff.infrastructure.web.validation.PasswordPolicy;
 import com.menta.bff.infrastructure.web.validation.PastIsoDate;
 import com.menta.bff.infrastructure.web.validation.PhoneNumbers;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.DateTimeException;
 import java.time.LocalDate;
@@ -21,9 +21,7 @@ import lombok.Setter;
  * <p>The constraints mirror what the Auth API enforces so the user gets Spanish
  * field errors without a round trip: the email rules of {@code RegisterUserRequest}
  * ({@code @NotBlank}, {@code @Email}) and the password policy of the API's
- * {@code Password} type (US-AUTH-006: at least 8 characters, one uppercase letter,
- * one digit, counted on the raw value). {@code \p{javaUpperCase}} and
- * {@code \p{javaDigit}} are the very {@code Character} predicates the API uses.
+ * {@code Password} type (US-AUTH-006), stated once in {@link PasswordPolicy}.
  * The API stays authoritative; its 400 is mapped to a generic form error.
  * </p>
  *
@@ -61,10 +59,7 @@ public class RegisterForm {
     @PastIsoDate
     private String birthDate;
 
-    @NotBlank(message = "Ingresá una contraseña")
-    @Size(min = 8, message = "La contraseña debe tener al menos 8 caracteres")
-    @Pattern(regexp = "(?s).*\\p{javaUpperCase}.*", message = "La contraseña debe incluir al menos una mayúscula")
-    @Pattern(regexp = "(?s).*\\p{javaDigit}.*", message = "La contraseña debe incluir al menos un número")
+    @PasswordPolicy
     private String password;
 
     private String passwordConfirmation;
