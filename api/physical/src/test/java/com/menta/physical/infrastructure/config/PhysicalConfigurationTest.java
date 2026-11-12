@@ -12,6 +12,7 @@ import com.menta.physical.application.port.in.BatchCreatePhysicalSessionsUseCase
 import com.menta.physical.application.port.in.CreatePhysicalCourseUseCase;
 import com.menta.physical.application.port.in.CreatePhysicalSessionUseCase;
 import com.menta.physical.application.port.in.GetPhysicalDeviceUseCase;
+import com.menta.physical.application.port.in.GetPhysicalSessionRosterUseCase;
 import com.menta.physical.application.port.in.IssuePhysicalAccessQrUseCase;
 import com.menta.physical.application.port.in.ListManagedPhysicalCoursesUseCase;
 import com.menta.physical.application.port.in.ListManagedPhysicalSessionsUseCase;
@@ -40,6 +41,7 @@ import com.menta.physical.application.usecase.BatchCreatePhysicalSessionsUseCase
 import com.menta.physical.application.usecase.CreatePhysicalCourseUseCaseImpl;
 import com.menta.physical.application.usecase.CreatePhysicalSessionUseCaseImpl;
 import com.menta.physical.application.usecase.GetPhysicalDeviceUseCaseImpl;
+import com.menta.physical.application.usecase.GetPhysicalSessionRosterUseCaseImpl;
 import com.menta.physical.application.usecase.IssuePhysicalAccessQrUseCaseImpl;
 import com.menta.physical.application.usecase.ListManagedPhysicalCoursesUseCaseImpl;
 import com.menta.physical.application.usecase.ListManagedPhysicalSessionsUseCaseImpl;
@@ -51,6 +53,7 @@ import com.menta.physical.application.usecase.ProcessPhysicalCheckInUseCaseImpl;
 import com.menta.physical.application.usecase.UpdatePhysicalCourseUseCaseImpl;
 import com.menta.physical.application.usecase.UpdatePhysicalSessionUseCaseImpl;
 import com.menta.physical.domain.exception.InvalidDeviceTokenException;
+import com.menta.physical.domain.exception.SessionNotFoundException;
 import com.menta.physical.domain.model.DeviceId;
 import com.menta.physical.infrastructure.device.SecureRandomDeviceSecretGenerator;
 import com.menta.physical.infrastructure.device.Sha256DeviceSecretHasher;
@@ -59,9 +62,11 @@ import com.menta.physical.infrastructure.redis.RedisCheckInRateLimitPort;
 import com.menta.physical.infrastructure.transaction.TransactionalRegisterPhysicalDeviceUseCase;
 import com.menta.physical.infrastructure.transaction.TransactionalRevokePhysicalDeviceUseCase;
 import com.menta.physical.infrastructure.transaction.TransactionalRotatePhysicalDeviceSecretUseCase;
+import com.menta.shared.auth.UserDisplayNamePort;
 import com.menta.shared.auth.UserExistencePort;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -147,6 +152,21 @@ class PhysicalConfigurationTest {
         assertThat(useCase).isInstanceOf(ListPhysicalSessionsByRangeUseCaseImpl.class);
         useCase.list(from, to);
         verify(sessionRepository).findManagedAcrossCourses(from, to);
+    }
+
+    @Test
+    void wires_the_session_roster_use_case_bean() {
+        PhysicalSessionRepository sessionRepository = mock(PhysicalSessionRepository.class);
+        when(sessionRepository.findById(any())).thenReturn(Optional.empty());
+
+        GetPhysicalSessionRosterUseCase useCase = configuration.getPhysicalSessionRosterUseCase(
+            sessionRepository, mock(PhysicalCourseRepository.class), mock(PhysicalCapacityAssignmentRepository.class),
+            mock(UserDisplayNamePort.class)
+        );
+
+        assertThat(useCase).isInstanceOf(GetPhysicalSessionRosterUseCaseImpl.class);
+        assertThatThrownBy(() -> useCase.get(UUID.randomUUID().toString()))
+            .isInstanceOf(SessionNotFoundException.class);
     }
 
     @Test

@@ -12,6 +12,8 @@ import com.menta.auth.infrastructure.persistence.entity.UserJpaEntity;
 import com.menta.auth.infrastructure.persistence.mapper.UserMapper;
 import com.menta.auth.infrastructure.persistence.repository.UserJpaRepository;
 import com.menta.auth.infrastructure.persistence.repository.UserSearchSpecifications;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -46,6 +48,14 @@ public class UserAdminRepositoryAdapter implements UserAdminRepository {
             page.getContent().stream().map(UserMapper::toDomain).map(UserSummary::from).toList(),
             page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages()
         );
+    }
+
+    @Override
+    public List<UserSummary> findSummariesByIds(Collection<UserId> ids) {
+        return jpaRepository.findAllById(ids.stream().map(UserId::getValue).toList()).stream()
+            .map(UserMapper::toDomain)
+            .map(UserSummary::from)
+            .toList();
     }
 
     @Override

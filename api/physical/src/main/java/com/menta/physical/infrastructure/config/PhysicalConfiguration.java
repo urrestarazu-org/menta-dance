@@ -5,6 +5,7 @@ import com.menta.physical.application.port.in.CreatePhysicalCourseUseCase;
 import com.menta.physical.application.port.in.CreatePhysicalSessionUseCase;
 import com.menta.physical.application.port.in.GetPhysicalAttendanceHistoryUseCase;
 import com.menta.physical.application.port.in.GetPhysicalDeviceUseCase;
+import com.menta.physical.application.port.in.GetPhysicalSessionRosterUseCase;
 import com.menta.physical.application.port.in.IssuePhysicalAccessQrUseCase;
 import com.menta.physical.application.port.in.ListManagedPhysicalCoursesUseCase;
 import com.menta.physical.application.port.in.ListManagedPhysicalSessionsUseCase;
@@ -36,6 +37,7 @@ import com.menta.physical.application.usecase.CreatePhysicalCourseUseCaseImpl;
 import com.menta.physical.application.usecase.CreatePhysicalSessionUseCaseImpl;
 import com.menta.physical.application.usecase.GetPhysicalAttendanceHistoryUseCaseImpl;
 import com.menta.physical.application.usecase.GetPhysicalDeviceUseCaseImpl;
+import com.menta.physical.application.usecase.GetPhysicalSessionRosterUseCaseImpl;
 import com.menta.physical.application.usecase.IssuePhysicalAccessQrUseCaseImpl;
 import com.menta.physical.application.usecase.ListManagedPhysicalCoursesUseCaseImpl;
 import com.menta.physical.application.usecase.ListManagedPhysicalSessionsUseCaseImpl;
@@ -61,6 +63,7 @@ import com.menta.physical.infrastructure.redis.RedisCheckInRateLimitPort;
 import com.menta.physical.infrastructure.transaction.TransactionalRegisterPhysicalDeviceUseCase;
 import com.menta.physical.infrastructure.transaction.TransactionalRevokePhysicalDeviceUseCase;
 import com.menta.physical.infrastructure.transaction.TransactionalRotatePhysicalDeviceSecretUseCase;
+import com.menta.shared.auth.UserDisplayNamePort;
 import com.menta.shared.auth.UserExistencePort;
 import java.time.Duration;
 import java.time.ZoneId;
@@ -272,6 +275,21 @@ public class PhysicalConfiguration {
         PhysicalSessionRepository sessionRepository
     ) {
         return new ListPhysicalSessionsByRangeUseCaseImpl(sessionRepository);
+    }
+
+    /**
+     * #355 — the staff roster of a session. Read-only and not transactional here: each repository call opens
+     * its own read-only transaction. {@code UserDisplayNamePort} is the {@code :api:shared} contract whose
+     * adapter, in {@code api:app}, reaches {@code auth} through its application layer.
+     */
+    @Bean
+    public GetPhysicalSessionRosterUseCase getPhysicalSessionRosterUseCase(
+        PhysicalSessionRepository sessionRepository, PhysicalCourseRepository courseRepository,
+        PhysicalCapacityAssignmentRepository assignmentRepository, UserDisplayNamePort displayNames
+    ) {
+        return new GetPhysicalSessionRosterUseCaseImpl(
+            sessionRepository, courseRepository, assignmentRepository, displayNames
+        );
     }
 
     /**

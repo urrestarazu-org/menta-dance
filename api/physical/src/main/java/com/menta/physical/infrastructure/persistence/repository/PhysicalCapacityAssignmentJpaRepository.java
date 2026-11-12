@@ -136,4 +136,19 @@ public interface PhysicalCapacityAssignmentJpaRepository
     List<AssignedSessionRowProjection> findAssignedSessions(
         @Param("studentId") UUID studentId, @Param("from") Instant from, @Param("to") Instant to
     );
+
+    /**
+     * The roster of a session (#355), driven from the assignments table so a hold or a pending purchase can
+     * never surface, with the student's check-in for that same session {@code LEFT JOIN}ed (the unique index
+     * on {@code (session_id, user_id)} makes it at most one row). Served by
+     * {@code idx_physical_assignments_session}; no new index is needed.
+     */
+    @Query(
+        "SELECT asg.studentId AS studentId, asg.assignmentType AS assignmentType, "
+            + "a.recordedAt AS checkedInAt, a.kind AS checkInKind "
+            + "FROM PhysicalCapacityAssignmentJpaEntity asg "
+            + "LEFT JOIN AttendanceJpaEntity a ON a.sessionId = asg.sessionId AND a.userId = asg.studentId "
+            + "WHERE asg.sessionId = :sessionId"
+    )
+    List<SessionRosterRowProjection> findRoster(@Param("sessionId") UUID sessionId);
 }

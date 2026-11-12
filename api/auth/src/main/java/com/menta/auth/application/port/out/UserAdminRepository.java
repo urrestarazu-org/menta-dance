@@ -2,8 +2,11 @@ package com.menta.auth.application.port.out;
 
 import com.menta.auth.application.dto.ListUsersQuery;
 import com.menta.auth.application.dto.UserPage;
+import com.menta.auth.application.dto.UserSummary;
 import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.model.UserId;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -20,6 +23,13 @@ public interface UserAdminRepository {
      * @return the requested page; a page past the end has no items but still reports the totals
      */
     UserPage search(ListUsersQuery query);
+
+    /**
+     * Reads, in a single query, the summaries of the users that have one of the ids.
+     *
+     * @return one summary per existing user, in no particular order; an unknown id is simply absent
+     */
+    List<UserSummary> findSummariesByIds(Collection<UserId> ids);
 
     /**
      * Reads a user taking a write lock on its row, so that concurrent role changes of the same user queue up.

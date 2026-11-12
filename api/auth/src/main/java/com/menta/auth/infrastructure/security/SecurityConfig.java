@@ -139,6 +139,10 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *     (#355; the staff listing of a day's sessions across every course. Exact method and
  *     path only: it opens nothing else under /admin/physical/sessions/**, and must be
  *     declared before that rule below since first match wins).
+ *   - GET /api/v1/admin/physical/sessions/{sessionId}/roster → ADMIN, INSTRUCTOR or RECEPTIONIST
+ *     (#355; who holds a confirmed spot in a session and who already checked in, so the front
+ *     desk knows whom to check in. Exact method and single-segment pattern: nothing else under
+ *     /admin/physical/sessions/** opens, and it must come before that rule below).
  *   - /api/v1/admin/physical/sessions/**        → ADMIN or INSTRUCTOR
  *     (#43; updating a session lives under a DIFFERENT top-level prefix
  *     than /admin/physical/courses/** above — that matcher does not cover
@@ -327,6 +331,11 @@ public class SecurityConfig {
                 // /sessions/** (the PATCH below stays ADMIN or INSTRUCTOR). Declared before the
                 // /sessions/** rule — first match wins.
                 .requestMatchers(HttpMethod.GET, "/api/v1/admin/physical/sessions")
+                    .hasAnyRole("ADMIN", "INSTRUCTOR", "RECEPTIONIST")
+                // #355: the roster of one session. Same reasoning, one wildcard segment for the
+                // session id and the exact GET method, so reception still cannot PATCH or read the
+                // session itself. Declared before the /sessions/** rule below.
+                .requestMatchers(HttpMethod.GET, "/api/v1/admin/physical/sessions/*/roster")
                     .hasAnyRole("ADMIN", "INSTRUCTOR", "RECEPTIONIST")
                 // #43: different top-level prefix than /courses/** above — needs its own
                 // matcher, same first-match-wins ordering rationale.

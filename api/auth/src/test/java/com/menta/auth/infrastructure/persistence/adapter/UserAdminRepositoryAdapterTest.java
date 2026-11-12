@@ -13,6 +13,7 @@ import com.menta.auth.infrastructure.persistence.entity.UserJpaEntity;
 import com.menta.auth.infrastructure.persistence.repository.UserJpaRepository;
 import com.menta.testsupport.MySqlTestImage;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -251,5 +252,33 @@ class UserAdminRepositoryAdapterTest {
     @Test
     void finds_nothing_for_update_when_the_user_does_not_exist() {
         assertThat(adapter.findByIdForUpdate(UserId.generate())).isEmpty();
+    }
+
+    @Test
+    void finds_the_summaries_of_the_requested_users_only() {
+        UserJpaEntity ana = seed("ana@example.com", Role.STUDENT, UserStatus.ACTIVE, "Ana", "Perez");
+        UserJpaEntity admin = seed("admin@example.com", Role.ADMIN, UserStatus.ACTIVE, null, null);
+        seed("otra@example.com", Role.STUDENT);
+
+        List<UserSummary> found = adapter.findSummariesByIds(
+            List.of(UserId.of(ana.getId()), UserId.of(admin.getId()), UserId.generate())
+        );
+
+        assertThat(found).extracting(UserSummary::email)
+            .containsExactlyInAnyOrder("ana@example.com", "admin@example.com");
+        assertThat(found).filteredOn(summary -> summary.email().equals("ana@example.com")).singleElement()
+            .satisfies(summary -> {
+                assertThat(summary.id()).isEqualTo(ana.getId().toString());
+                assertThat(summary.firstName()).isEqualTo("Ana");
+                assertThat(summary.lastName()).isEqualTo("Perez");
+            });
+    }
+
+    @Test
+    void finds_no_summaries_for_users_that_do_not_exist_or_for_an_empty_request() {
+        seed("ana@example.com", Role.STUDENT);
+
+        assertThat(adapter.findSummariesByIds(List.of(UserId.generate()))).isEmpty();
+        assertThat(adapter.findSummariesByIds(List.of())).isEmpty();
     }
 }

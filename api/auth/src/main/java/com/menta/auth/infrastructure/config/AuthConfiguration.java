@@ -11,6 +11,7 @@ import com.menta.auth.application.port.in.RegisterUserUseCase;
 import com.menta.auth.application.port.in.RequestPasswordResetUseCase;
 import com.menta.auth.application.port.in.ResendActivationUseCase;
 import com.menta.auth.application.port.in.ResetPasswordUseCase;
+import com.menta.auth.application.port.in.ResolveUserDisplayNamesUseCase;
 import com.menta.auth.application.port.in.ValidateActivationTokenUseCase;
 import com.menta.auth.application.port.out.AccessTokenIssuer;
 import com.menta.auth.application.port.out.ActivationDeliveryCipher;
@@ -47,6 +48,7 @@ import com.menta.auth.application.usecase.RegisterUserUseCaseImpl;
 import com.menta.auth.application.usecase.RequestPasswordResetUseCaseImpl;
 import com.menta.auth.application.usecase.ResendActivationUseCaseImpl;
 import com.menta.auth.application.usecase.ResetPasswordUseCaseImpl;
+import com.menta.auth.application.usecase.ResolveUserDisplayNamesUseCaseImpl;
 import com.menta.auth.application.usecase.ValidateActivationTokenUseCaseImpl;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.auth.infrastructure.activation.AesGcmActivationDeliveryCipher;
@@ -512,6 +514,12 @@ public class AuthConfiguration {
     @Bean
     public ListUsersUseCase listUsersUseCase(UserAdminRepository userAdminRepository) {
         return new ListUsersUseCaseImpl(userAdminRepository);
+    }
+
+    /** #355: how the staff-facing roster of a physical session names its students; read-only, no transaction. */
+    @Bean
+    public ResolveUserDisplayNamesUseCase resolveUserDisplayNamesUseCase(UserAdminRepository userAdminRepository) {
+        return new ResolveUserDisplayNamesUseCaseImpl(userAdminRepository);
     }
 
     @Bean

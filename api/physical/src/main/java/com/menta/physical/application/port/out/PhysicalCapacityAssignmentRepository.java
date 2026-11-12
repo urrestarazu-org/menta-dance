@@ -2,6 +2,7 @@ package com.menta.physical.application.port.out;
 
 import com.menta.physical.application.dto.AssignedSessionRow;
 import com.menta.physical.application.dto.AttendanceHistoryRow;
+import com.menta.physical.application.dto.SessionRosterRow;
 import com.menta.physical.domain.model.SessionId;
 import java.time.Instant;
 import java.util.List;
@@ -52,4 +53,13 @@ public interface PhysicalCapacityAssignmentRepository {
      * sessions are excluded; holds are never consulted, only the assignments table.
      */
     List<AssignedSessionRow> findAssignedSessions(UUID studentId, Instant from, Instant to);
+
+    /**
+     * The students holding a confirmed assignment for the session (#355), each {@code LEFT JOIN}ed with their
+     * check-in for that same session. Driven from the assignments table, so holds and pending payments can
+     * never surface; no order is guaranteed, the caller sorts.
+     *
+     * @return one row per assignment; empty when the session has none or does not exist
+     */
+    List<SessionRosterRow> findRoster(SessionId sessionId);
 }

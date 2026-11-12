@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -245,13 +246,16 @@ class SecurityConfigTest {
     }
 
     /**
-     * #355. The exact-path GET matcher must not widen the rest of {@code /admin/physical/sessions/**}:
-     * reception still cannot touch a single session (a future roster rule needs its own matcher).
+     * #355. The exact-path GET matcher of the listing must not widen the rest of
+     * {@code /admin/physical/sessions/**}: reception still cannot touch a single session, and the roster
+     * matcher is not a prefix either (nothing below or beside it opens).
      */
     @ParameterizedTest
     @ValueSource(strings = {
         "/api/v1/admin/physical/sessions/00000000-0000-0000-0000-000000000001",
-        "/api/v1/admin/physical/sessions/00000000-0000-0000-0000-000000000001/roster",
+        "/api/v1/admin/physical/sessions/00000000-0000-0000-0000-000000000001/roster/extra",
+        "/api/v1/admin/physical/sessions/00000000-0000-0000-0000-000000000001/other",
+        "/api/v1/admin/physical/sessions/00000000-0000-0000-0000-000000000001/x/roster",
         "/api/v1/admin/physical/sessions/"
     })
     void a_receptionist_get_below_the_staff_sessions_route_is_still_forbidden(String url) throws Exception {
@@ -259,6 +263,62 @@ class SecurityConfigTest {
 
         mockMvc.perform(get(url).with(user("reception").roles("RECEPTIONIST")))
             .andExpect(status().isForbidden());
+    }
+
+    /** #355. The roster is not public: an anonymous caller gets {@code 401}. */
+    @Test
+    void an_unauthenticated_get_of_the_session_roster_route_is_rejected() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get(STAFF_SESSION_ROSTER_URL))
+            .andExpect(status().isUnauthorized());
+    }
+
+    /**
+     * #355. ADMIN, INSTRUCTOR and RECEPTIONIST reach the (unmapped) dispatcher. Before the dedicated
+     * matcher, the {@code /api/v1/admin/physical/sessions/**} rule admitted only the first two.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"ADMIN", "INSTRUCTOR", "RECEPTIONIST"})
+    void a_staff_role_get_of_the_session_roster_route_passes_the_security_layer(String role) throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get(STAFF_SESSION_ROSTER_URL).with(user("staff").roles(role)))
+            .andExpect(status().isNotFound());
+    }
+
+    /** #355. A student is authenticated but not staff: {@code 403}, never {@code 401}. */
+    @Test
+    void an_authenticated_student_get_of_the_session_roster_route_is_forbidden() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get(STAFF_SESSION_ROSTER_URL).with(user("student").roles("STUDENT")))
+            .andExpect(status().isForbidden());
+    }
+
+    /**
+     * #355. Only {@code GET} of the roster was opened to reception: any other method on that exact path keeps
+     * the {@code /sessions/**} rule, ADMIN or INSTRUCTOR.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"POST", "PUT", "PATCH", "DELETE"})
+    void a_receptionist_write_to_the_session_roster_route_is_still_forbidden(String method) throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(request(HttpMethod.valueOf(method), STAFF_SESSION_ROSTER_URL)
+                .with(user("reception").roles("RECEPTIONIST")))
+            .andExpect(status().isForbidden());
+    }
+
+    /** #355. The roster rule did not narrow the others: ADMIN and INSTRUCTOR keep the rest of the sessions. */
+    @ParameterizedTest
+    @ValueSource(strings = {"ADMIN", "INSTRUCTOR"})
+    void a_session_manager_post_to_the_session_roster_route_still_passes_the_security_layer(String role)
+        throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(post(STAFF_SESSION_ROSTER_URL).with(user("manager").roles(role)))
+            .andExpect(status().isNotFound());
     }
 
     /** #355. Only {@code GET} was opened: any other method on the exact path keeps ADMIN or INSTRUCTOR. */
@@ -318,6 +378,7 @@ class SecurityConfigTest {
     private static final String STAFF_SESSIONS_URL = "/api/v1/admin/physical/sessions";
     private static final String STAFF_SESSION_URL =
         "/api/v1/admin/physical/sessions/00000000-0000-0000-0000-000000000001";
+    private static final String STAFF_SESSION_ROSTER_URL = STAFF_SESSION_URL + "/roster";
     private static final String ADMIN_USERS_URL = "/api/v1/admin/users";
     private static final String ADMIN_USER_ROLE_URL =
         "/api/v1/admin/users/00000000-0000-0000-0000-000000000001/role";
