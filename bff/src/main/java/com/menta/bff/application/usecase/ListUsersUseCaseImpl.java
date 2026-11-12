@@ -87,7 +87,7 @@ public class ListUsersUseCaseImpl implements ListUsersUseCase {
     }
 
     private static UserRow toRow(UserSummary user) {
-        return new UserRow(user.email(), displayName(user), user.role(), user.status(),
+        return new UserRow(user.id(), user.email(), displayName(user), user.role(), user.status(),
                 user.createdAt().toLocalDate(), DAY_FORMAT.format(user.createdAt()));
     }
 

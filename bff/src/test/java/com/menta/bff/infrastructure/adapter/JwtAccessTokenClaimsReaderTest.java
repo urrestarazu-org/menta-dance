@@ -59,4 +59,26 @@ class JwtAccessTokenClaimsReaderTest {
         assertThatThrownBy(() -> reader.roleOf(TestAccessTokens.withPayload("\"STUDENT\"")))
             .isInstanceOf(UnreadableTokenException.class);
     }
+
+    @Test
+    @DisplayName("Reads the subject claim: the id of the account the Auth API issued the token to")
+    void reads_the_subject_claim() {
+        String token = TestAccessTokens.withPayload("{\"sub\":\"5b6f7c8e-1d2a-4e3b-9c4d-0a1b2c3d4e5f\"}");
+
+        assertThat(reader.subjectOf(token)).isEqualTo("5b6f7c8e-1d2a-4e3b-9c4d-0a1b2c3d4e5f");
+    }
+
+    @Test
+    void rejects_a_null_or_unreadable_token_for_the_subject() {
+        assertThatThrownBy(() -> reader.subjectOf(null)).isInstanceOf(UnreadableTokenException.class);
+        assertThatThrownBy(() -> reader.subjectOf("opaque-token")).isInstanceOf(UnreadableTokenException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "{\"role\":\"ADMIN\"}", "{\"sub\":null}", "{\"sub\":42}", "{\"sub\":\"\"}", "{\"sub\":\"  \"}"})
+    void rejects_payloads_without_a_subject(String payload) {
+        assertThatThrownBy(() -> reader.subjectOf(TestAccessTokens.withPayload(payload)))
+            .isInstanceOf(UnreadableTokenException.class);
+    }
 }

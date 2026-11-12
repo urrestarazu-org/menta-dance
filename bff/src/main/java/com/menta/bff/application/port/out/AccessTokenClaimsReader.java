@@ -19,7 +19,17 @@ public interface AccessTokenClaimsReader {
     String roleOf(String accessToken);
 
     /**
-     * Exception thrown when the access token cannot yield a role.
+     * Returns the subject carried by the token: the identifier of the account it was issued to. It only tells
+     * the web layer whether an account is the signed-in one; it never authorizes anything.
+     *
+     * @param accessToken compact JWT issued by the Auth API
+     * @return account identifier, never blank
+     * @throws UnreadableTokenException if the token is malformed or carries no subject
+     */
+    String subjectOf(String accessToken);
+
+    /**
+     * Exception thrown when the access token cannot yield the claim asked for.
      */
     class UnreadableTokenException extends RuntimeException {
         public UnreadableTokenException(String message) {

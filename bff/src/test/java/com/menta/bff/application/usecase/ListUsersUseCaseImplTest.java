@@ -68,7 +68,7 @@ class ListUsersUseCaseImplTest {
         UsersListView view = useCase.execute(TOKEN, null, null, null);
 
         assertThat(view.unavailable()).isFalse();
-        assertThat(view.rows()).containsExactly(new UserRow("ada@example.com", "Ada Lovelace",
+        assertThat(view.rows()).containsExactly(new UserRow("id-ada@example.com", "ada@example.com", "Ada Lovelace",
                 UserRole.INSTRUCTOR, UserStatus.ACTIVE, LocalDate.of(2026, 10, 1), "1 de octubre de 2026"));
         assertThat(view.page()).isZero();
         assertThat(view.totalPages()).isEqualTo(2);
