@@ -81,7 +81,7 @@ public interface PhysicalSessionJpaRepository extends JpaRepository<PhysicalSess
     );
 
     /**
-     * Cross-course management read for the staff day listing (#355): every status and every course
+     * Cross-course management read for the staff range listing (#355): every status and every course
      * status, in the half-open range {@code [from, to)}, joined with the course in the same
      * statement so no course is read per session.
      *

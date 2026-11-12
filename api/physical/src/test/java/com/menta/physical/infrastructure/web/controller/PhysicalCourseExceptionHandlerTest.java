@@ -7,6 +7,7 @@ import com.menta.physical.domain.exception.CapacityBelowAssignedException;
 import com.menta.physical.domain.exception.CourseHasActiveAssignmentsException;
 import com.menta.physical.domain.exception.CourseNotFoundException;
 import com.menta.physical.domain.exception.CourseNotOwnedException;
+import com.menta.physical.domain.exception.InvalidSessionRangeException;
 import com.menta.physical.domain.exception.ProfessorMismatchException;
 import com.menta.physical.domain.exception.SessionAlreadyOccurredException;
 import com.menta.physical.domain.exception.SessionNotFoundException;
@@ -91,9 +92,18 @@ class PhysicalCourseExceptionHandlerTest {
     }
 
     @Test
-    void maps_a_malformed_date_parameter_to_400() {
+    void maps_a_malformed_instant_parameter_to_400() {
         ResponseEntity<ProblemDetail> response =
-            handler.malformedParameter(new DateTimeParseException("bad date", "2026-13-40", 0));
+            handler.malformedParameter(new DateTimeParseException("bad instant", "2026-13-40T00:00:00Z", 0));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody().getProperties().get("code")).isEqualTo("INVALID_REQUEST");
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+    }
+
+    @Test
+    void maps_an_invalid_session_range_to_400() {
+        ResponseEntity<ProblemDetail> response = handler.invalidRange(new InvalidSessionRangeException());
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody().getProperties().get("code")).isEqualTo("INVALID_REQUEST");
@@ -103,7 +113,7 @@ class PhysicalCourseExceptionHandlerTest {
     @Test
     void maps_a_missing_request_parameter_to_400() {
         ResponseEntity<ProblemDetail> response =
-            handler.missingParameter(new MissingServletRequestParameterException("date", "String"));
+            handler.missingParameter(new MissingServletRequestParameterException("from", "String"));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody().getProperties().get("code")).isEqualTo("INVALID_REQUEST");

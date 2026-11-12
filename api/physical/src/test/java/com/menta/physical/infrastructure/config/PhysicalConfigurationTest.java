@@ -16,7 +16,7 @@ import com.menta.physical.application.port.in.IssuePhysicalAccessQrUseCase;
 import com.menta.physical.application.port.in.ListManagedPhysicalCoursesUseCase;
 import com.menta.physical.application.port.in.ListManagedPhysicalSessionsUseCase;
 import com.menta.physical.application.port.in.ListPhysicalDevicesUseCase;
-import com.menta.physical.application.port.in.ListPhysicalSessionsByDateUseCase;
+import com.menta.physical.application.port.in.ListPhysicalSessionsByRangeUseCase;
 import com.menta.physical.application.port.in.PhysicalCourseAvailabilityPort;
 import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
 import com.menta.physical.application.port.in.RegisterPhysicalDeviceUseCase;
@@ -44,7 +44,7 @@ import com.menta.physical.application.usecase.IssuePhysicalAccessQrUseCaseImpl;
 import com.menta.physical.application.usecase.ListManagedPhysicalCoursesUseCaseImpl;
 import com.menta.physical.application.usecase.ListManagedPhysicalSessionsUseCaseImpl;
 import com.menta.physical.application.usecase.ListPhysicalDevicesUseCaseImpl;
-import com.menta.physical.application.usecase.ListPhysicalSessionsByDateUseCaseImpl;
+import com.menta.physical.application.usecase.ListPhysicalSessionsByRangeUseCaseImpl;
 import com.menta.physical.application.usecase.PhysicalCourseAvailabilityPortImpl;
 import com.menta.physical.application.usecase.PhysicalDeviceAuthenticator;
 import com.menta.physical.application.usecase.ProcessPhysicalCheckInUseCaseImpl;
@@ -60,9 +60,7 @@ import com.menta.physical.infrastructure.transaction.TransactionalRegisterPhysic
 import com.menta.physical.infrastructure.transaction.TransactionalRevokePhysicalDeviceUseCase;
 import com.menta.physical.infrastructure.transaction.TransactionalRotatePhysicalDeviceSecretUseCase;
 import com.menta.shared.auth.UserExistencePort;
-import java.time.DateTimeException;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -137,27 +135,18 @@ class PhysicalConfigurationTest {
     }
 
     @Test
-    void wires_the_sessions_by_date_use_case_bean_in_the_academy_zone() {
+    void wires_the_sessions_by_range_use_case_bean_without_any_zone() {
         PhysicalSessionRepository sessionRepository = mock(PhysicalSessionRepository.class);
-        when(sessionRepository.findManagedAcrossCourses(any(), any())).thenReturn(List.of());
+        Instant from = Instant.parse("2026-10-10T03:00:00Z");
+        Instant to = Instant.parse("2026-10-11T03:00:00Z");
+        when(sessionRepository.findManagedAcrossCourses(from, to)).thenReturn(List.of());
 
-        ListPhysicalSessionsByDateUseCase useCase = configuration.listPhysicalSessionsByDateUseCase(
-            sessionRepository, "America/Argentina/Buenos_Aires"
-        );
+        ListPhysicalSessionsByRangeUseCase useCase =
+            configuration.listPhysicalSessionsByRangeUseCase(sessionRepository);
 
-        assertThat(useCase).isInstanceOf(ListPhysicalSessionsByDateUseCaseImpl.class);
-        useCase.list(LocalDate.of(2026, 10, 10));
-        verify(sessionRepository).findManagedAcrossCourses(
-            Instant.parse("2026-10-10T03:00:00Z"), Instant.parse("2026-10-11T03:00:00Z")
-        );
-    }
-
-    @Test
-    void an_unknown_zone_for_the_sessions_by_date_use_case_stops_the_context_at_startup() {
-        PhysicalSessionRepository sessionRepository = mock(PhysicalSessionRepository.class);
-
-        assertThatThrownBy(() -> configuration.listPhysicalSessionsByDateUseCase(sessionRepository, "Mars/Olympus"))
-            .isInstanceOf(DateTimeException.class);
+        assertThat(useCase).isInstanceOf(ListPhysicalSessionsByRangeUseCaseImpl.class);
+        useCase.list(from, to);
+        verify(sessionRepository).findManagedAcrossCourses(from, to);
     }
 
     @Test
