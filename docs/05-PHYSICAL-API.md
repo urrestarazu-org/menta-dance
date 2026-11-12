@@ -13,6 +13,7 @@ GET    /api/v1/admin/physical/courses/{courseId}/sessions
 POST   /api/v1/admin/physical/courses/{courseId}/sessions
 POST   /api/v1/admin/physical/courses/{courseId}/sessions/batch
 GET    /api/v1/admin/physical/sessions?from=<instante>&to=<instante>
+GET    /api/v1/admin/physical/sessions/{sessionId}/roster
 PATCH  /api/v1/admin/physical/sessions/{sessionId}
 GET    /api/v1/physical/attendance/me
 GET    /api/v1/physical/sessions/me
@@ -70,6 +71,42 @@ GET /api/v1/admin/physical/sessions?from=2026-11-12T03:00:00Z&to=2026-11-13T03:0
   asignación confirmada.
 - Se listan también las sesiones canceladas y las de cursos inactivos, igual que
   la lectura de gestión por curso. Sin paginación: de ahí el tope de 7 días del rango.
+
+`GET /admin/physical/sessions/{sessionId}/roster` (#355) es el roster de una
+sesión para el personal: los alumnos con **asignación de cupo confirmada**
+(mensual o individual) y su asistencia. Lo pueden usar `ADMIN`, `INSTRUCTOR` y
+`RECEPTIONIST` (`STUDENT` recibe `403`, sin token `401`), con la misma regla
+exacta por método y ruta que el listado: recepción sigue sin poder leer la
+sesión, hacer `POST` ni `PATCH`. Es de sólo lectura y no se acota por curso
+propio. Sirve a recepción para obtener el `studentId` que exige el check-in
+`MANUAL` y al profesor para ver quién asistió.
+
+- Entran sólo las filas de `physical_capacity_assignments`. **No** aparecen los
+  holds (vigentes, vencidos ni convertidos: un hold reserva el cupo mientras un
+  pago está pendiente) ni los pagos pendientes. Por eso `studentCount` puede ser
+  menor que el `occupied` del listado por rango.
+- La respuesta es `{ session, students }`. `session` es el encabezado mínimo:
+  `sessionId`, `courseId`, `courseName`, `scheduledAt`, `status`, `capacity` y
+  `studentCount` (alumnos del roster). Una sesión `CANCELLED` conserva su roster
+  y lo informa en `status`.
+- Cada alumno trae `studentId`, `displayName`, `assignmentType` (`MONTHLY` o
+  `INDIVIDUAL`), `attendanceStatus`, `checkedInAt` y `checkInKind`.
+  `attendanceStatus` es `PRESENT` si hizo check-in en esa sesión y `PENDING` si
+  no (no se dice «ausente»: la sesión puede no haber ocurrido todavía). En
+  `PRESENT`, `checkedInAt` es el instante del check-in y `checkInKind` su
+  variante (`QR` o `MANUAL`); en `PENDING` ambos son `null`.
+- **Todas las fechas del backend son UTC:** `scheduledAt` y `checkedInAt` son
+  instantes ISO-8601 con `Z`, que el cliente convierte a su hora local.
+- `displayName` es nombre y apellido del perfil; si la cuenta no tiene perfil,
+  su email (el roster lo ven sólo roles de staff). Los nombres se resuelven por
+  un puerto Java hacia `auth` (`UserDisplayNamePort` en `shared`), en una sola
+  consulta para todo el roster. Un alumno que `auth` no conoce se muestra como
+  `Alumno <8 primeros caracteres del id>` y no rompe el roster.
+- Orden estable: por `displayName` (alfabético en español, sin distinguir
+  mayúsculas ni acentos) y luego por `studentId`. Sin paginación: el cupo de una
+  sesión es chico.
+- `sessionId` malformado responde `400 INVALID_REQUEST`; una sesión inexistente,
+  `404 SESSION_NOT_FOUND` (`application/problem+json`).
 
 `GET /physical/attendance/me` es autoservicio de `ALUMNO` y admite `month`
 (`YYYY-MM`) e `includeAbsent`; devuelve únicamente las sesiones asignadas al

@@ -42,6 +42,12 @@ info:
     `/api/v1/admin/physical/sessions/**` (p. ej. el `PATCH` de una sesión)
     sigue siendo sólo `ADMIN`/`INSTRUCTOR`.
 
+    Segunda excepción (#355): `GET /api/v1/admin/physical/sessions/{sessionId}/roster`
+    (alumnos con cupo confirmado de una sesión y su asistencia) también admite a
+    `RECEPTIONIST`, con la misma regla exacta por método y ruta: recepción sigue sin
+    poder leer la sesión (`GET .../sessions/{sessionId}`), ni hacer `POST`, `PUT`,
+    `PATCH` o `DELETE` sobre ella.
+
     `POST /api/v1/physical/sessions/{sessionId}/access-qr` requiere sólo un
     Bearer token válido (sin rol específico) — el alumno autenticado es su
     propia autorización. `POST
@@ -481,6 +487,94 @@ paths:
                     status: 409
                     detail: Session has already occurred and cannot be modified.
                     code: SESSION_ALREADY_OCCURRED
+
+  /api/v1/admin/physical/sessions/{sessionId}/roster:
+    get:
+      tags: [Gestión de sesiones]
+      summary: Roster de una sesión — alumnos con cupo confirmado y su asistencia (staff)
+      description: |
+        Lista a los alumnos con una **asignación de cupo confirmada** (mensual o
+        individual) para la sesión, con su estado de asistencia (#355). Pensado para
+        que recepción sepa a quién hacerle el check-in `MANUAL` (que exige
+        `studentId`) y para que el profesor vea quién asistió. Lo pueden usar `ADMIN`,
+        `INSTRUCTOR` y `RECEPTIONIST`; `STUDENT` recibe `403` y sin token `401`. Es de
+        sólo lectura y no se acota por propiedad del curso.
+
+        **Qué entra y qué no.** Entran únicamente las filas de
+        `physical_capacity_assignments`. **No** aparecen los holds (ni vigentes, ni
+        vencidos, ni convertidos: un hold es lo que reserva el cupo mientras un pago
+        está pendiente y todavía no es un alumno inscripto) ni los pagos pendientes.
+        Por eso `session.studentCount` puede ser menor que la ocupación `occupied` del
+        listado por rango. La sesión se puede leer en cualquier estado: una sesión
+        `CANCELLED` conserva su roster y lo informa en `session.status`.
+
+        **Encabezado.** `session` trae lo mínimo útil para mostrar junto a la lista:
+        `sessionId`, `courseId`, `courseName`, `scheduledAt`, `status`, `capacity` y
+        `studentCount` (alumnos del roster).
+
+        **Asistencia.** `attendanceStatus` es `PRESENT` si el alumno hizo check-in en
+        ESTA sesión y `PENDING` si no (no se dice "ausente": la sesión puede no haber
+        ocurrido todavía). En `PRESENT`, `checkedInAt` es el instante del check-in y
+        `checkInKind` su variante (`QR` o `MANUAL`); en `PENDING` ambos son `null`
+        explícito.
+
+        **Todas las fechas del backend son UTC.** `scheduledAt` y `checkedInAt` son
+        instantes ISO-8601 con `Z`; el cliente los convierte a su hora local.
+
+        **Nombre y orden.** `displayName` es nombre y apellido del perfil del alumno;
+        si la cuenta no tiene perfil, su email (el roster lo ven sólo roles de staff).
+        Un alumno que `auth` no conoce no rompe el roster: se muestra como
+        `Alumno <8 primeros caracteres del id>`. El orden es estable: por `displayName`
+        (alfabético en español, sin distinguir mayúsculas ni acentos) y luego por
+        `studentId`. No hay paginación: el cupo de una sesión es chico y está acotado
+        por su `capacity`.
+      operationId: getPhysicalSessionRoster
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Roster de la sesión.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalSessionRosterResponse'
+        '400':
+          description: '`sessionId` malformado (`INVALID_REQUEST`).'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                id_malformado:
+                  value:
+                    type: https://menta.dance/problems/invalid_request
+                    title: Bad Request
+                    status: 400
+                    detail: Malformed request.
+                    code: INVALID_REQUEST
+        '401':
+          description: Sin credencial de autenticación.
+        '403':
+          description: El rol del token no es `ADMIN`, `INSTRUCTOR` ni `RECEPTIONIST`.
+        '404':
+          description: Sesión inexistente (`SESSION_NOT_FOUND`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                sesion_inexistente:
+                  value:
+                    type: https://menta.dance/problems/session_not_found
+                    title: Not Found
+                    status: 404
+                    detail: Session not found.
+                    code: SESSION_NOT_FOUND
 
   /api/v1/physical/sessions/me:
     get:
@@ -1407,6 +1501,72 @@ components:
           description: |
             Asignaciones confirmadas más holds vigentes (no convertidos ni
             vencidos). `capacity - occupied` es la disponibilidad de la sesión.
+
+    PhysicalSessionRosterResponse:
+      type: object
+      required: [session, students]
+      properties:
+        session:
+          type: object
+          required: [sessionId, courseId, courseName, scheduledAt, status, capacity, studentCount]
+          properties:
+            sessionId:
+              type: string
+              format: uuid
+            courseId:
+              type: string
+              format: uuid
+            courseName:
+              type: string
+              description: Título del curso.
+            scheduledAt:
+              type: string
+              format: date-time
+              description: Inicio de la sesión, en UTC.
+            status:
+              type: string
+              enum: [SCHEDULED, CANCELLED]
+            capacity:
+              type: integer
+              description: Cupo total de la sesión.
+            studentCount:
+              type: integer
+              minimum: 0
+              description: Alumnos con asignación confirmada, es decir, el tamaño de `students`.
+        students:
+          type: array
+          description: Ordenados por `displayName` y luego por `studentId`. Sin paginación.
+          items:
+            $ref: '#/components/schemas/PhysicalRosterStudentResponse'
+
+    PhysicalRosterStudentResponse:
+      type: object
+      required: [studentId, displayName, assignmentType, attendanceStatus, checkedInAt, checkInKind]
+      properties:
+        studentId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+          description: |
+            Nombre y apellido; el email si la cuenta no tiene perfil; `Alumno <8 primeros
+            caracteres del id>` si `auth` no conoce al usuario.
+        assignmentType:
+          type: string
+          enum: [MONTHLY, INDIVIDUAL]
+          description: Cómo obtuvo el alumno el lugar (plan mensual o clase individual).
+        attendanceStatus:
+          type: string
+          enum: [PRESENT, PENDING]
+          description: "`PRESENT` si hizo check-in en esta sesión; `PENDING` si todavía no."
+        checkedInAt:
+          type: [string, 'null']
+          format: date-time
+          description: Instante del check-in, en UTC. `null` mientras `attendanceStatus` sea `PENDING`.
+        checkInKind:
+          type: [string, 'null']
+          enum: [QR, MANUAL, null]
+          description: Variante del check-in. `null` mientras `attendanceStatus` sea `PENDING`.
 
     AccessQrResponse:
       type: object

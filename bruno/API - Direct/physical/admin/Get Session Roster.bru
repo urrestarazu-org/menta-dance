@@ -1,0 +1,51 @@
+meta {
+  name: Get Physical Session Roster
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admin/physical/sessions/{{physicalSessionId}}/roster
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  #355. Roster de una sesión: los alumnos con asignación de cupo CONFIRMADA
+  (mensual o individual) y su asistencia. Requiere un token de ADMIN,
+  INSTRUCTOR o RECEPTIONIST (STUDENT recibe 403, sin token 401) y un
+  `physicalSessionId` existente. Es de solo lectura y no se acota por curso propio.
+
+  Los holds y los pagos pendientes NO aparecen: solo las asignaciones confirmadas.
+  Una sesión cancelada conserva su roster y lo informa en `session.status`.
+
+  Todas las fechas del backend son UTC: `scheduledAt` y `checkedInAt` son
+  instantes ISO-8601 con `Z`; el cliente los convierte a su hora local.
+
+  `attendanceStatus` es PRESENT si el alumno hizo check-in en esta sesión (con
+  `checkedInAt` y `checkInKind` QR o MANUAL) y PENDING si no (ambos null). El
+  `studentId` es el que exige el check-in MANUAL.
+
+  `displayName` es nombre y apellido; el email si la cuenta no tiene perfil; y
+  `Alumno <8 primeros caracteres del id>` si el usuario no existe en auth. Orden:
+  `displayName` y luego `studentId`. Sin paginación.
+
+  Contrato de éxito: 200 con { session, students[] }.
+    session: { sessionId, courseId, courseName, scheduledAt, status, capacity,
+    studentCount }
+    students[]: { studentId, displayName, assignmentType, attendanceStatus,
+    checkedInAt, checkInKind }
+  Contrato de error:
+    400 INVALID_REQUEST → `sessionId` malformado
+    401 → sin token
+    403 → rol sin acceso (STUDENT)
+    404 SESSION_NOT_FOUND → sesión inexistente
+}
+
+assert {
+  res.status: eq 200
+}
