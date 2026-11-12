@@ -4,14 +4,17 @@ import com.menta.physical.domain.exception.CapacityBelowAssignedException;
 import com.menta.physical.domain.exception.CourseHasActiveAssignmentsException;
 import com.menta.physical.domain.exception.CourseNotFoundException;
 import com.menta.physical.domain.exception.CourseNotOwnedException;
+import com.menta.physical.domain.exception.InvalidSessionRangeException;
 import com.menta.physical.domain.exception.ProfessorMismatchException;
 import com.menta.physical.domain.exception.SessionAlreadyOccurredException;
 import com.menta.physical.domain.exception.SessionNotFoundException;
 import com.menta.physical.infrastructure.web.ProblemDetails;
+import java.time.format.DateTimeParseException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -85,6 +88,31 @@ public class PhysicalCourseExceptionHandler {
     ResponseEntity<ProblemDetail> malformedId(IllegalArgumentException exception) {
         return ProblemDetails.response(
             HttpStatus.BAD_REQUEST, "Malformed request.", "INVALID_REQUEST"
+        );
+    }
+
+    /** A query parameter that is not a valid ISO instant, e.g. {@code from} of the staff range listing (#355). */
+    @ExceptionHandler(DateTimeParseException.class)
+    ResponseEntity<ProblemDetail> malformedParameter(DateTimeParseException exception) {
+        return ProblemDetails.response(
+            HttpStatus.BAD_REQUEST, "Malformed request.", "INVALID_REQUEST"
+        );
+    }
+
+    /** A required query parameter that is absent, e.g. {@code to} of the staff range listing (#355). */
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    ResponseEntity<ProblemDetail> missingParameter(MissingServletRequestParameterException exception) {
+        return ProblemDetails.response(
+            HttpStatus.BAD_REQUEST, "Malformed request.", "INVALID_REQUEST"
+        );
+    }
+
+    /** An empty, inverted or too wide instant range of the staff session listing (#355). */
+    @ExceptionHandler(InvalidSessionRangeException.class)
+    ResponseEntity<ProblemDetail> invalidRange(InvalidSessionRangeException exception) {
+        return ProblemDetails.response(
+            HttpStatus.BAD_REQUEST, "The range must have from before to and span at most 7 days.",
+            exception.getErrorCode()
         );
     }
 

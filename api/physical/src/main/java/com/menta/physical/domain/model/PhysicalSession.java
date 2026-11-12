@@ -64,11 +64,23 @@ public final class PhysicalSession {
     }
 
     /**
+     * Spots that count against the capacity: confirmed assignments plus holds that have not expired
+     * nor been converted (a pending payment holds its spot). This is exactly what {@link
+     * #getAvailableSpots()} subtracts from the capacity, so the two can never disagree.
+     *
+     * <p>Not floored: an oversold session reports more occupied spots than its capacity, which is
+     * the honest figure for staff.
+     */
+    public int getOccupiedSpots() {
+        return assignedSpots + activeCapacityHolds;
+    }
+
+    /**
      * Floored at zero: a bug in a future write path that oversells a
      * session must never surface here as a negative, nonsensical count.
      */
     public int getAvailableSpots() {
-        return Math.max(0, capacity - assignedSpots - activeCapacityHolds);
+        return Math.max(0, capacity - getOccupiedSpots());
     }
 
     /**

@@ -135,6 +135,10 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *     touching a course they don't own — is checked in the use case, not
  *     here; this rule only proves the caller is one of the two roles that
  *     may reach the controller at all).
+ *   - GET /api/v1/admin/physical/sessions       → ADMIN, INSTRUCTOR or RECEPTIONIST
+ *     (#355; the staff listing of a day's sessions across every course. Exact method and
+ *     path only: it opens nothing else under /admin/physical/sessions/**, and must be
+ *     declared before that rule below since first match wins).
  *   - /api/v1/admin/physical/sessions/**        → ADMIN or INSTRUCTOR
  *     (#43; updating a session lives under a DIFFERENT top-level prefix
  *     than /admin/physical/courses/** above — that matcher does not cover
@@ -318,6 +322,12 @@ public class SecurityConfig {
                 // course is enforced in the use case, not here. Must be declared before
                 // the generic /api/v1/admin/** rule below — first match wins.
                 .requestMatchers("/api/v1/admin/physical/courses/**").hasAnyRole("ADMIN", "INSTRUCTOR")
+                // #355: the staff day listing. EXACT method and path: reception may read the day's
+                // sessions to find who to check in, but must not reach anything else under
+                // /sessions/** (the PATCH below stays ADMIN or INSTRUCTOR). Declared before the
+                // /sessions/** rule — first match wins.
+                .requestMatchers(HttpMethod.GET, "/api/v1/admin/physical/sessions")
+                    .hasAnyRole("ADMIN", "INSTRUCTOR", "RECEPTIONIST")
                 // #43: different top-level prefix than /courses/** above — needs its own
                 // matcher, same first-match-wins ordering rationale.
                 .requestMatchers("/api/v1/admin/physical/sessions/**").hasAnyRole("ADMIN", "INSTRUCTOR")

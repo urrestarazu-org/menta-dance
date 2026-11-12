@@ -10,6 +10,7 @@ import com.menta.physical.application.port.in.ListManagedPhysicalCoursesUseCase;
 import com.menta.physical.application.port.in.ListManagedPhysicalSessionsUseCase;
 import com.menta.physical.application.port.in.ListMyPhysicalSessionsUseCase;
 import com.menta.physical.application.port.in.ListPhysicalDevicesUseCase;
+import com.menta.physical.application.port.in.ListPhysicalSessionsByRangeUseCase;
 import com.menta.physical.application.port.in.PhysicalCourseAvailabilityPort;
 import com.menta.physical.application.port.in.PhysicalCourseOwnershipPort;
 import com.menta.physical.application.port.in.ProcessPhysicalCheckInUseCase;
@@ -40,6 +41,7 @@ import com.menta.physical.application.usecase.ListManagedPhysicalCoursesUseCaseI
 import com.menta.physical.application.usecase.ListManagedPhysicalSessionsUseCaseImpl;
 import com.menta.physical.application.usecase.ListMyPhysicalSessionsUseCaseImpl;
 import com.menta.physical.application.usecase.ListPhysicalDevicesUseCaseImpl;
+import com.menta.physical.application.usecase.ListPhysicalSessionsByRangeUseCaseImpl;
 import com.menta.physical.application.usecase.PhysicalCourseAvailabilityPortImpl;
 import com.menta.physical.application.usecase.PhysicalCourseOwnershipPortImpl;
 import com.menta.physical.application.usecase.PhysicalDeviceAuthenticator;
@@ -258,6 +260,18 @@ public class PhysicalConfiguration {
         PhysicalCourseRepository courseRepository, PhysicalSessionRepository sessionRepository
     ) {
         return new UpdatePhysicalSessionUseCaseImpl(courseRepository, sessionRepository);
+    }
+
+    /**
+     * #355 -- the staff range listing takes UTC instants from the client, so unlike the attendance
+     * history and the student's session listing it needs no academy zone. Read-only: no
+     * transactional decorator.
+     */
+    @Bean
+    public ListPhysicalSessionsByRangeUseCase listPhysicalSessionsByRangeUseCase(
+        PhysicalSessionRepository sessionRepository
+    ) {
+        return new ListPhysicalSessionsByRangeUseCaseImpl(sessionRepository);
     }
 
     /**
