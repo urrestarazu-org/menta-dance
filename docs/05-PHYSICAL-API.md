@@ -12,6 +12,7 @@ PATCH  /api/v1/admin/physical/courses/{courseId}
 GET    /api/v1/admin/physical/courses/{courseId}/sessions
 POST   /api/v1/admin/physical/courses/{courseId}/sessions
 POST   /api/v1/admin/physical/courses/{courseId}/sessions/batch
+GET    /api/v1/admin/physical/sessions?from=<instante>&to=<instante>
 PATCH  /api/v1/admin/physical/sessions/{sessionId}
 GET    /api/v1/physical/attendance/me
 GET    /api/v1/physical/sessions/me
@@ -27,6 +28,48 @@ POST   /api/v1/physical/devices/{deviceId}/revoke
 Alumnos y visitantes consultan cursos y sesiones únicamente mediante
 `/api/v1/catalog/courses`; estas rutas `/admin/physical` son de gestión para
 `ADMIN` o el `PROFESOR` propietario.
+
+`GET /admin/physical/sessions?from=<instante>&to=<instante>` (#355) es la agenda
+para el personal: lista las sesiones de **todos** los cursos que empiezan en el
+rango `[from, to)`, ordenadas por hora de inicio y luego por nombre de curso. Lo
+pueden usar `ADMIN`, `INSTRUCTOR` y `RECEPTIONIST` (`STUDENT` recibe `403`, sin
+token `401`). La regla de seguridad es exacta por método y ruta: no abre nada
+más bajo `/admin/physical/sessions/**`, así que el `PATCH` de una sesión sigue
+siendo sólo de `ADMIN` e `INSTRUCTOR`. Es de sólo lectura y no se acota por
+curso propio.
+
+**Todas las fechas del backend son UTC; el día local lo calcula el cliente.** El
+backend no aplica ninguna zona horaria a este endpoint: el cliente (BFF,
+Android) calcula el día local de la persona y manda el rango UTC
+correspondiente. Ejemplo, el día 2026-11-12 en Buenos Aires (UTC-3):
+
+```text
+GET /api/v1/admin/physical/sessions?from=2026-11-12T03:00:00Z&to=2026-11-13T03:00:00Z
+```
+
+- `from` y `to` son obligatorios: instantes ISO-8601 estrictos (con segundos y
+  `Z`, p. ej. `2026-11-12T03:00:00Z`). También se acepta un offset numérico
+  (`2026-11-12T00:00:00-03:00`), que se normaliza al mismo instante UTC; un `+`
+  en el offset debe ir codificado en la URL (`%2B`). Ausentes o mal formados
+  responden `400 INVALID_REQUEST`.
+- El rango es semiabierto: `scheduledAt >= from` y `scheduledAt < to`; dos días
+  consecutivos no repiten ni pierden la sesión de la medianoche.
+- `from` debe ser anterior a `to` y el rango puede abarcar a lo sumo 7 días
+  (`to - from <= 7 días`; exactamente 7 días es válido), porque el listado no
+  tiene paginación. Un rango vacío, invertido o más ancho responde
+  `400 INVALID_REQUEST`.
+- Los instantes de la respuesta (`scheduledAt`, `endsAt`) también están en UTC.
+- Cada ítem trae `sessionId`, `courseId`, `courseName`, `scheduledAt`, `endsAt`,
+  `status` (`SCHEDULED` o `CANCELLED`), `capacity` y `occupied`. `endsAt` es el
+  inicio más la duración actual del curso: la sesión no guarda un fin propio.
+- `occupied` es lo que cuenta contra el cupo: asignaciones confirmadas más los
+  holds vigentes (no convertidos ni vencidos; un hold reserva el cupo mientras un
+  pago está pendiente). Es la misma aritmética de la disponibilidad
+  (`capacity - occupied = availableSpots`), salvo que no se trunca en cero en una
+  sesión sobrevendida. Por eso puede ser mayor que la cantidad de alumnos con
+  asignación confirmada.
+- Se listan también las sesiones canceladas y las de cursos inactivos, igual que
+  la lectura de gestión por curso. Sin paginación: de ahí el tope de 7 días del rango.
 
 `GET /physical/attendance/me` es autoservicio de `ALUMNO` y admite `month`
 (`YYYY-MM`) e `includeAbsent`; devuelve únicamente las sesiones asignadas al

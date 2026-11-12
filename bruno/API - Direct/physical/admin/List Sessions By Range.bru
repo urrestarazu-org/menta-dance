@@ -1,0 +1,58 @@
+meta {
+  name: List Physical Sessions By Range
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admin/physical/sessions?from=2026-10-10T03:00:00Z&to=2026-10-11T03:00:00Z
+  body: none
+  auth: bearer
+}
+
+params:query {
+  from: 2026-10-10T03:00:00Z
+  to: 2026-10-11T03:00:00Z
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  #355. Sesiones de un rango de instantes de TODOS los cursos presenciales, para
+  el personal. Requiere un token de ADMIN, INSTRUCTOR o RECEPTIONIST (STUDENT
+  recibe 403, sin token 401). Es de solo lectura y no se acota por curso propio.
+
+  Todas las fechas del backend son UTC; el día local lo calcula el cliente. El
+  backend no aplica ninguna zona horaria: el cliente convierte el día local de la
+  persona al rango UTC correspondiente. Ejemplo: el día 2026-11-12 en Buenos
+  Aires (UTC-3) es
+  `from=2026-11-12T03:00:00Z&to=2026-11-13T03:00:00Z`.
+
+  `from` y `to` son obligatorios, instantes ISO-8601 estrictos con segundos y `Z`
+  (o un offset numérico como `-03:00`, que se normaliza a UTC; un `+` debe ir
+  codificado como `%2B`). El rango es semiabierto: `scheduledAt >= from` y
+  `scheduledAt < to`. `from` debe ser anterior a `to` y el rango puede abarcar a
+  lo sumo 7 días. Los instantes de la respuesta están en UTC. Orden: hora de
+  inicio y luego nombre de curso. Sin paginación.
+
+  `endsAt` es el inicio más la duración actual del curso. `occupied` son las
+  asignaciones confirmadas más los holds vigentes (no convertidos ni vencidos, lo
+  que reserva el cupo de un pago pendiente): `capacity - occupied` es la
+  disponibilidad de la sesión. También se listan las sesiones canceladas, con su
+  `status`.
+
+  Contrato de éxito: 200 con { sessions[] }, cada una
+  { sessionId, courseId, courseName, scheduledAt, endsAt, status, capacity,
+  occupied }. Un rango sin sesiones devuelve sessions: [].
+  Contrato de error:
+    400 INVALID_REQUEST → `from` o `to` ausentes o inválidos, `from` no anterior
+        a `to`, o rango mayor a 7 días
+    401 → sin token
+    403 → rol sin acceso (STUDENT)
+}
+
+assert {
+  res.status: eq 200
+}
