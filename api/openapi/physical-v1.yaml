@@ -36,6 +36,12 @@ info:
     COURSE_NOT_OWNED`). Una sesión no tiene `professorId` propio: la
     autorización siempre se resuelve a través de su curso padre.
 
+    Excepción (#355): `GET /api/v1/admin/physical/sessions?from=&to=` (listado
+    de las sesiones de un rango de instantes UTC, de todos los cursos) también admite a
+    `RECEPTIONIST`. La regla es exacta por método y ruta: el resto de
+    `/api/v1/admin/physical/sessions/**` (p. ej. el `PATCH` de una sesión)
+    sigue siendo sólo `ADMIN`/`INSTRUCTOR`.
+
     `POST /api/v1/physical/sessions/{sessionId}/access-qr` requiere sólo un
     Bearer token válido (sin rol específico) — el alumno autenticado es su
     propia autorización. `POST
@@ -321,6 +327,103 @@ paths:
           description: Rol sin acceso, o PROFESOR que no es dueño del curso (`COURSE_NOT_OWNED`).
         '404':
           description: Curso inexistente.
+
+  /api/v1/admin/physical/sessions:
+    get:
+      tags: [Gestión de sesiones]
+      summary: Listar las sesiones de un rango de instantes, de todos los cursos (staff)
+      description: |
+        Sesiones que empiezan en el rango `[from, to)` de TODOS los cursos
+        presenciales, ordenadas por hora de inicio y luego por nombre de curso
+        (#355). Pensado para que `ADMIN`, `INSTRUCTOR` y `RECEPTIONIST` vean la
+        agenda de un día; `STUDENT` recibe `403`. Es de sólo lectura y no se
+        acota por propiedad del curso: un `INSTRUCTOR` ve también las sesiones
+        de cursos ajenos.
+
+        **Todas las fechas del backend son UTC; el día local lo calcula el
+        cliente.** `from` y `to` son instantes en UTC: el cliente convierte el
+        día local de la persona al rango correspondiente y el backend no aplica
+        ninguna zona horaria. Ejemplo: el día 2026-11-12 en Buenos Aires
+        (UTC-3) es `from=2026-11-12T03:00:00Z&to=2026-11-13T03:00:00Z`. Los
+        instantes de la respuesta también están en UTC.
+
+        **El rango.** `from` y `to` son obligatorios, instantes ISO-8601
+        estrictos (`Instant.parse`): con segundos y con `Z` o con un offset
+        numérico (`2026-11-12T00:00:00-03:00`), que se normaliza al mismo
+        instante UTC. Un offset con `+` debe ir codificado en la URL (`%2B`),
+        si no el `+` llega como espacio y el valor es inválido. Es semiabierto:
+        lista las sesiones con `scheduledAt >= from` y `scheduledAt < to`, así
+        que dos días consecutivos no repiten ni pierden la sesión de la
+        medianoche. `from` debe ser anterior a `to` y el rango puede abarcar a
+        lo sumo **7 días** (`to - from <= 7 días`; exactamente 7 días es
+        válido), porque el listado no tiene paginación. Un parámetro ausente o
+        mal formado, un rango vacío o invertido, o uno más ancho que 7 días,
+        responde `400 INVALID_REQUEST`. Un rango sin sesiones responde `200` con
+        `sessions: []`.
+
+        **Qué se lista.** Sesiones de cualquier estado (las `CANCELLED`
+        incluidas, con su `status`) y de cursos en cualquier estado, igual que
+        la lectura de gestión por curso.
+
+        **`endsAt`.** Inicio más la duración actual del curso
+        (`durationMinutes`); la sesión no persiste un fin propio.
+
+        **`occupied`.** Cupos que cuentan contra la capacidad: asignaciones
+        confirmadas (`physical_capacity_assignments`) más los holds vigentes,
+        es decir, no convertidos y no vencidos. Un hold es lo que reserva el
+        cupo mientras un pago está pendiente. Es exactamente lo que resta de
+        `capacity` la disponibilidad de la sesión (`capacity - occupied` =
+        `availableSpots`), salvo que `occupied` no se trunca en cero si la
+        sesión estuviera sobrevendida. Un hold vencido o ya convertido no
+        suma. Por eso `occupied` puede ser mayor que la cantidad de alumnos con
+        asignación confirmada.
+      operationId: listPhysicalSessionsByRange
+      parameters:
+        - name: from
+          in: query
+          required: true
+          description: Inicio del rango (inclusive), instante en UTC; el cliente convierte el día local al rango.
+          schema:
+            type: string
+            format: date-time
+            example: "2026-11-12T03:00:00Z"
+        - name: to
+          in: query
+          required: true
+          description: >-
+            Fin del rango (exclusivo), instante en UTC; debe ser posterior a `from` y
+            a lo sumo 7 días después.
+          schema:
+            type: string
+            format: date-time
+            example: "2026-11-13T03:00:00Z"
+      responses:
+        '200':
+          description: Sesiones del rango, ordenadas por inicio y nombre de curso.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalRangeSessionsResponse'
+        '400':
+          description: >-
+            `from` o `to` ausentes o que no son un instante ISO-8601 válido, `from` no anterior
+            a `to`, o rango mayor a 7 días (`INVALID_REQUEST`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                rango_invalido:
+                  value:
+                    type: https://menta.dance/problems/invalid_request
+                    title: Bad Request
+                    status: 400
+                    detail: The range must have from before to and span at most 7 days.
+                    code: INVALID_REQUEST
+        '401':
+          description: Sin credencial de autenticación.
+        '403':
+          description: El rol del token no es `ADMIN`, `INSTRUCTOR` ni `RECEPTIONIST`.
 
   /api/v1/admin/physical/sessions/{sessionId}:
     patch:
@@ -1261,6 +1364,49 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PhysicalSessionManagementResponse'
+
+    PhysicalRangeSessionsResponse:
+      type: object
+      required: [sessions]
+      properties:
+        sessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PhysicalRangeSessionResponse'
+
+    PhysicalRangeSessionResponse:
+      type: object
+      required: [sessionId, courseId, courseName, scheduledAt, endsAt, status, capacity, occupied]
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        courseId:
+          type: string
+          format: uuid
+        courseName:
+          type: string
+          description: Título del curso.
+        scheduledAt:
+          type: string
+          format: date-time
+          description: Inicio de la sesión, en UTC.
+        endsAt:
+          type: string
+          format: date-time
+          description: Fin de la sesión, en UTC. Inicio más la duración actual del curso.
+        status:
+          type: string
+          enum: [SCHEDULED, CANCELLED]
+        capacity:
+          type: integer
+          description: Cupo total de la sesión.
+        occupied:
+          type: integer
+          minimum: 0
+          description: |
+            Asignaciones confirmadas más holds vigentes (no convertidos ni
+            vencidos). `capacity - occupied` es la disponibilidad de la sesión.
 
     AccessQrResponse:
       type: object
