@@ -10,11 +10,14 @@ import com.menta.physical.domain.exception.CourseNotOwnedException;
 import com.menta.physical.domain.exception.ProfessorMismatchException;
 import com.menta.physical.domain.exception.SessionAlreadyOccurredException;
 import com.menta.physical.domain.exception.SessionNotFoundException;
+import java.time.format.DateTimeParseException;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 
 class PhysicalCourseExceptionHandlerTest {
 
@@ -82,6 +85,25 @@ class PhysicalCourseExceptionHandlerTest {
     @Test
     void maps_malformed_id_to_400() {
         ResponseEntity<ProblemDetail> response = handler.malformedId(new IllegalArgumentException("bad uuid"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody().getProperties().get("code")).isEqualTo("INVALID_REQUEST");
+    }
+
+    @Test
+    void maps_a_malformed_date_parameter_to_400() {
+        ResponseEntity<ProblemDetail> response =
+            handler.malformedParameter(new DateTimeParseException("bad date", "2026-13-40", 0));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody().getProperties().get("code")).isEqualTo("INVALID_REQUEST");
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+    }
+
+    @Test
+    void maps_a_missing_request_parameter_to_400() {
+        ResponseEntity<ProblemDetail> response =
+            handler.missingParameter(new MissingServletRequestParameterException("date", "String"));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody().getProperties().get("code")).isEqualTo("INVALID_REQUEST");

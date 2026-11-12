@@ -1,5 +1,6 @@
 package com.menta.physical.infrastructure.persistence.adapter;
 
+import com.menta.physical.application.dto.SessionWithCourse;
 import com.menta.physical.application.port.out.PhysicalSessionRepository;
 import com.menta.physical.domain.exception.SessionNotFoundException;
 import com.menta.physical.domain.model.CourseId;
@@ -42,6 +43,18 @@ public class PhysicalSessionRepositoryAdapter implements PhysicalSessionReposito
             .findManagedWithAvailability(courseId.getValue(), from, to, Instant.now())
             .stream()
             .map(PhysicalSessionJpaMapper::toDomain)
+            .toList();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public List<SessionWithCourse> findManagedAcrossCourses(Instant from, Instant to) {
+        return sessionRepository
+            .findManagedAcrossCoursesWithAvailability(from, to, Instant.now())
+            .stream()
+            .map(row -> new SessionWithCourse(
+                PhysicalSessionJpaMapper.toDomain(row), row.getCourseTitle(), row.getCourseDurationMinutes()
+            ))
             .toList();
     }
 

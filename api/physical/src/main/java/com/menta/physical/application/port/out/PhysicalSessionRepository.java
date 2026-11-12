@@ -1,5 +1,6 @@
 package com.menta.physical.application.port.out;
 
+import com.menta.physical.application.dto.SessionWithCourse;
 import com.menta.physical.domain.model.CourseId;
 import com.menta.physical.domain.model.PhysicalSession;
 import com.menta.physical.domain.model.SessionId;
@@ -29,6 +30,15 @@ public interface PhysicalSessionRepository {
      * (US-PHYSICAL-006 escenario 3).
      */
     List<PhysicalSession> findManaged(CourseId courseId, Instant from, Instant to);
+
+    /**
+     * Management read across every course: each session starting in the half-open range {@code
+     * [from, to)}, whatever its status or its course's status, with the live availability counts and
+     * the course data staff listings need, resolved in one query.
+     *
+     * <p>Ordered by start time, then course title, then session id, so the order is total.
+     */
+    List<SessionWithCourse> findManagedAcrossCourses(Instant from, Instant to);
 
     /** Finds a session by id, whatever its status, with live availability counts. */
     Optional<PhysicalSession> findById(SessionId sessionId);

@@ -8,10 +8,12 @@ import com.menta.physical.domain.exception.ProfessorMismatchException;
 import com.menta.physical.domain.exception.SessionAlreadyOccurredException;
 import com.menta.physical.domain.exception.SessionNotFoundException;
 import com.menta.physical.infrastructure.web.ProblemDetails;
+import java.time.format.DateTimeParseException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -83,6 +85,22 @@ public class PhysicalCourseExceptionHandler {
      */
     @ExceptionHandler(IllegalArgumentException.class)
     ResponseEntity<ProblemDetail> malformedId(IllegalArgumentException exception) {
+        return ProblemDetails.response(
+            HttpStatus.BAD_REQUEST, "Malformed request.", "INVALID_REQUEST"
+        );
+    }
+
+    /** A query parameter that is not a valid ISO date, e.g. the {@code date} of the staff day listing (#355). */
+    @ExceptionHandler(DateTimeParseException.class)
+    ResponseEntity<ProblemDetail> malformedParameter(DateTimeParseException exception) {
+        return ProblemDetails.response(
+            HttpStatus.BAD_REQUEST, "Malformed request.", "INVALID_REQUEST"
+        );
+    }
+
+    /** A required query parameter that is absent, e.g. the {@code date} of the staff day listing (#355). */
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    ResponseEntity<ProblemDetail> missingParameter(MissingServletRequestParameterException exception) {
         return ProblemDetails.response(
             HttpStatus.BAD_REQUEST, "Malformed request.", "INVALID_REQUEST"
         );

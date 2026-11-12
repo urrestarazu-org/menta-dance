@@ -43,6 +43,19 @@ class PhysicalSessionTest {
     }
 
     @Test
+    void occupied_spots_add_assignments_and_holds_and_mirror_what_availability_subtracts() {
+        PhysicalSession session = session(20, 5, 3);
+
+        assertThat(session.getOccupiedSpots()).isEqualTo(8);
+        assertThat(session.getAvailableSpots()).isEqualTo(session.getCapacity() - session.getOccupiedSpots());
+    }
+
+    @Test
+    void occupied_spots_are_not_floored_so_an_oversold_session_stays_visible() {
+        assertThat(session(10, 8, 5).getOccupiedSpots()).isEqualTo(13);
+    }
+
+    @Test
     void rejects_negative_capacity() {
         assertThatThrownBy(() -> session(-1, 0, 0))
             .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("capacity");

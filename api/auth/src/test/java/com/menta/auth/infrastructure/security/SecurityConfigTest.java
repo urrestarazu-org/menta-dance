@@ -212,6 +212,84 @@ class SecurityConfigTest {
             .andExpect(status().isForbidden());
     }
 
+    /** #355. The staff day listing is not public: an anonymous caller gets {@code 401}. */
+    @Test
+    void an_unauthenticated_get_of_the_staff_sessions_by_date_route_is_rejected() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get(STAFF_SESSIONS_URL).param("date", "2026-10-10"))
+            .andExpect(status().isUnauthorized());
+    }
+
+    /**
+     * #355. ADMIN, INSTRUCTOR and RECEPTIONIST reach the (unmapped) dispatcher. Before the dedicated
+     * matcher, the {@code /api/v1/admin/physical/sessions/**} rule admitted only the first two.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"ADMIN", "INSTRUCTOR", "RECEPTIONIST"})
+    void a_staff_role_get_of_the_staff_sessions_by_date_route_passes_the_security_layer(String role)
+        throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get(STAFF_SESSIONS_URL).param("date", "2026-10-10").with(user("staff").roles(role)))
+            .andExpect(status().isNotFound());
+    }
+
+    /** #355. A student is authenticated but not staff: {@code 403}, never {@code 401}. */
+    @Test
+    void an_authenticated_student_get_of_the_staff_sessions_by_date_route_is_forbidden() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get(STAFF_SESSIONS_URL).param("date", "2026-10-10").with(user("student").roles("STUDENT")))
+            .andExpect(status().isForbidden());
+    }
+
+    /**
+     * #355. The exact-path GET matcher must not widen the rest of {@code /admin/physical/sessions/**}:
+     * reception still cannot touch a single session (a future roster rule needs its own matcher).
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "/api/v1/admin/physical/sessions/00000000-0000-0000-0000-000000000001",
+        "/api/v1/admin/physical/sessions/00000000-0000-0000-0000-000000000001/roster",
+        "/api/v1/admin/physical/sessions/"
+    })
+    void a_receptionist_get_below_the_staff_sessions_route_is_still_forbidden(String url) throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get(url).with(user("reception").roles("RECEPTIONIST")))
+            .andExpect(status().isForbidden());
+    }
+
+    /** #355. Only {@code GET} was opened: any other method on the exact path keeps ADMIN or INSTRUCTOR. */
+    @Test
+    void a_receptionist_post_of_the_staff_sessions_route_is_still_forbidden() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(post(STAFF_SESSIONS_URL).with(user("reception").roles("RECEPTIONIST")))
+            .andExpect(status().isForbidden());
+    }
+
+    /** #355. The session PATCH keeps its authorization: reception (and students) cannot reschedule or cancel. */
+    @ParameterizedTest
+    @ValueSource(strings = {"RECEPTIONIST", "STUDENT"})
+    void a_non_staff_manager_patch_of_a_physical_session_is_forbidden(String role) throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(patch(STAFF_SESSION_URL).with(user("someone").roles(role)))
+            .andExpect(status().isForbidden());
+    }
+
+    /** #355. The session PATCH stays open to ADMIN and INSTRUCTOR (it reaches the unmapped dispatcher). */
+    @ParameterizedTest
+    @ValueSource(strings = {"ADMIN", "INSTRUCTOR"})
+    void a_session_manager_patch_of_a_physical_session_passes_the_security_layer(String role) throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(patch(STAFF_SESSION_URL).with(user("manager").roles(role)))
+            .andExpect(status().isNotFound());
+    }
+
     /**
      * Confirms the admin cancellation route needs no new matcher: the existing generic
      * {@code /api/v1/admin/**} → {@code hasRole("ADMIN")} rule already rejects a non-admin.
@@ -237,6 +315,9 @@ class SecurityConfigTest {
             .andExpect(status().isNotFound());
     }
 
+    private static final String STAFF_SESSIONS_URL = "/api/v1/admin/physical/sessions";
+    private static final String STAFF_SESSION_URL =
+        "/api/v1/admin/physical/sessions/00000000-0000-0000-0000-000000000001";
     private static final String ADMIN_USERS_URL = "/api/v1/admin/users";
     private static final String ADMIN_USER_ROLE_URL =
         "/api/v1/admin/users/00000000-0000-0000-0000-000000000001/role";

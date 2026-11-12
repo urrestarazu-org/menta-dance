@@ -80,6 +80,38 @@ public interface PhysicalSessionJpaRepository extends JpaRepository<PhysicalSess
         @Param("now") Instant now
     );
 
+    /**
+     * Cross-course management read for the staff day listing (#355): every status and every course
+     * status, in the half-open range {@code [from, to)}, joined with the course in the same
+     * statement so no course is read per session.
+     *
+     * <p>The {@code assignedSpots}/{@code activeCapacityHolds} subqueries are the same ones every
+     * availability read uses (live counts, a hold counting only while unconverted and {@code
+     * expires_at > :now}), so the occupied figure cannot drift from the availability arithmetic.
+     * Ordering is total: start time, then course title, then session id.</p>
+     */
+    @Query(
+        value = "SELECT s.id AS id, s.course_id AS courseId, s.scheduled_at AS scheduledAt, "
+            + "s.capacity AS capacity, "
+            + "(SELECT COUNT(*) FROM physical_capacity_assignments a WHERE a.session_id = s.id) "
+            + "AS assignedSpots, "
+            + "(SELECT COUNT(*) FROM physical_capacity_holds h "
+            + "WHERE h.session_id = s.id AND h.converted_at IS NULL AND h.expires_at > :now) "
+            + "AS activeCapacityHolds, "
+            + "s.status AS status, s.notes AS notes, "
+            + "c.title AS courseTitle, c.duration_minutes AS courseDurationMinutes "
+            + "FROM physical_sessions s "
+            + "JOIN physical_courses c ON c.id = s.course_id "
+            + "WHERE s.scheduled_at >= :from AND s.scheduled_at < :to "
+            + "ORDER BY s.scheduled_at ASC, c.title ASC, s.id ASC",
+        nativeQuery = true
+    )
+    List<PhysicalSessionWithCourseProjection> findManagedAcrossCoursesWithAvailability(
+        @Param("from") Instant from,
+        @Param("to") Instant to,
+        @Param("now") Instant now
+    );
+
     /** Single-session read with the same live availability computation, for update flows. */
     @Query(
         value = "SELECT s.id AS id, s.course_id AS courseId, s.scheduled_at AS scheduledAt, "
