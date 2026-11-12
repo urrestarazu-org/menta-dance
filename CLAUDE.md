@@ -92,6 +92,20 @@ etc.) sobre getters/setters/constructores escritos a mano en código **nuevo**.
   entidades JPA) o con inyección de dependencias (`@RequiredArgsConstructor`
   en casos de uso), no reemplaza a `record` donde `record` ya encaja.
 
+### Fechas y horas
+
+**Regla** (vigente desde 2026-11-12, [ADR-0048](docs/adr/0048-fechas-del-backend-en-utc.md)):
+todas las fechas y horas del **backend** van en **UTC**; los clientes (BFF y Android) son los que
+convierten a la zona del usuario.
+
+- Un momento del tiempo es un `Instant` (en los contratos, ISO-8601 con `Z`). En código de
+  `main` del backend no usar `ZoneId`, `ZonedDateTime` ni `LocalDateTime.now()` /
+  `LocalDate.now()`: el "ahora" sale del puerto `Clock` del módulo.
+- Una consulta "del día" recibe un rango de instantes UTC (`from`, `to`) que calcula el cliente;
+  el backend no resuelve "el día" con una zona.
+- El código existente que no cumple la regla (lecturas de `physical` con `physical.attendance.zone-id`,
+  `LocalDateTime.now()` en `auth`) es deuda listada en el ADR: no copiar ese patrón.
+
 ## Comandos de Build
 
 ```bash
