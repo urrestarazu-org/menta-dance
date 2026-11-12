@@ -67,6 +67,20 @@ class LoginViewControllerTest {
                 .isEqualTo("Tu contraseña fue actualizada. Iniciá sesión con la nueva.");
     }
 
+    @Test
+    @DisplayName("adds a notice after the administrator changed their own role")
+    void adds_a_notice_after_an_own_role_change() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setParameter("roleChanged", "");
+        Model model = new ExtendedModelMap();
+
+        String view = controller.loginForm(null, null, null, request, model);
+
+        assertThat(view).isEqualTo("login");
+        assertThat(model.getAttribute("roleChangedNotice"))
+                .isEqualTo("Cambiaste tu propio rol. Iniciá sesión de nuevo.");
+    }
+
     private Model failedLoginWith(AuthenticationException failure) {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.getSession().setAttribute(WebAttributes.AUTHENTICATION_EXCEPTION, failure);

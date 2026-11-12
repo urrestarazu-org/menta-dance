@@ -12,6 +12,13 @@
     <div th:replace="~{fragments/components :: alert('success', ${accountCreated})}"></div>
 </div>
 
+<div th:if="${roleChanged}" class="mb-4">
+    <div th:replace="~{fragments/components :: alert('success', ${roleChanged})}"></div>
+</div>
+<div th:if="${roleChangeError}" class="mb-4">
+    <div th:replace="~{fragments/components :: alert('error', ${roleChangeError})}"></div>
+</div>
+
 <form th:action="@{/gestion/usuarios}" method="get" role="search" aria-label="Filtrar usuarios"
       class="card mb-6 grid gap-4 sm:grid-cols-[1fr_auto_auto] sm:items-end">
     <div class="field">
@@ -52,6 +59,7 @@
             <th scope="col" class="p-3 font-semibold">Rol</th>
             <th scope="col" class="p-3 font-semibold">Estado</th>
             <th scope="col" class="p-3 font-semibold">Alta</th>
+            <th scope="col" class="p-3 font-semibold">Cambiar rol</th>
         </tr>
         </thead>
         <tbody class="divide-y divide-brand-deep/15">
@@ -65,6 +73,20 @@
             </td>
             <td class="p-3 whitespace-nowrap">
                 <time th:datetime="${row.createdDate()}" th:text="${row.createdLabel()}">1 de octubre de 2026</time>
+            </td>
+            <td class="p-3">
+                <form th:action="@{/gestion/usuarios/{id}/rol(id=${row.id()})}" method="post"
+                      class="flex items-center gap-2">
+                    <label class="sr-only" th:for="|role-${row.id()}|" th:text="|Rol de ${row.email()}|">Rol de ada@example.com</label>
+                    <select class="field-input" th:id="|role-${row.id()}|" name="role">
+                        <option th:each="option : ${roles}" th:value="${option.name()}" th:text="${option.label}"
+                                th:selected="${option == row.role()}">Rol</option>
+                    </select>
+                    <input type="hidden" name="filterRole" th:value="${users.role() != null} ? ${users.role().name()} : ''"/>
+                    <input type="hidden" name="q" th:value="${users.text()}"/>
+                    <input type="hidden" name="page" th:value="${users.page()}"/>
+                    <button type="submit" class="btn btn-primary">Cambiar<span class="sr-only" th:text="| el rol de ${row.email()}|"> el rol de ada@example.com</span></button>
+                </form>
             </td>
         </tr>
         </tbody>
