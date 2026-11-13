@@ -283,7 +283,8 @@ Un alumno autenticado cotiza y paga desde el BFF (plantillas Thymeleaf, sin Java
    Para un alumno con sesión, la página consulta además `GET /api/v1/physical/sessions/me` (#542)
    con su token y marca "Ya tenés lugar" las sesiones listadas donde ya tiene lugar confirmado
    (se cruza por `sessionId`); esas sesiones no ofrecen "Cotizar solo esta clase". La ventana de
-   sesiones la decide la API (`physical.sessions.window-days`, 60 días por defecto), el visitante
+   sesiones es el rango `from`/`to` UTC (a lo sumo 92 días) que manda el cliente y la API no tiene una
+   ventana propia (#729; el ajuste del BFF a ese rango es la parte 3), el visitante
    anónimo no dispara la consulta y, si falla (timeout, `401`, `403`, `404`, `5xx` o cuerpo
    ilegible), la ficha se muestra igual sin marcas. Esa respuesta ahora incluye `assignmentType`
    (`MONTHLY` o `INDIVIDUAL`) por sesión; la web todavía no lo consume.

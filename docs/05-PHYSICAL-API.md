@@ -15,8 +15,9 @@ POST   /api/v1/admin/physical/courses/{courseId}/sessions/batch
 GET    /api/v1/admin/physical/sessions?from=<instante>&to=<instante>
 GET    /api/v1/admin/physical/sessions/{sessionId}/roster
 PATCH  /api/v1/admin/physical/sessions/{sessionId}
-GET    /api/v1/physical/attendance/me
-GET    /api/v1/physical/sessions/me
+GET    /api/v1/physical/attendance/me?from=<instante>&to=<instante>
+GET    /api/v1/admin/physical/attendance/{studentId}?from=<instante>&to=<instante>
+GET    /api/v1/physical/sessions/me?from=<instante>&to=<instante>
 POST   /api/v1/physical/sessions/{sessionId}/check-ins
 GET    /api/v1/physical/sessions/{sessionId}/check-ins
 POST   /api/v1/physical/sessions/{sessionId}/access-qr
@@ -108,23 +109,57 @@ propio. Sirve a recepción para obtener el `studentId` que exige el check-in
 - `sessionId` malformado responde `400 INVALID_REQUEST`; una sesión inexistente,
   `404 SESSION_NOT_FOUND` (`application/problem+json`).
 
-`GET /physical/attendance/me` es autoservicio de `ALUMNO` y admite `month`
-(`YYYY-MM`) e `includeAbsent`; devuelve únicamente las sesiones asignadas al
-alumno y su resumen de asistencia del período.
+`GET /physical/attendance/me` es autoservicio de `ALUMNO` y admite `from`, `to`
+(obligatorios) e `includeAbsent`; devuelve únicamente las sesiones asignadas al
+alumno que empiezan en el rango y su resumen de asistencia de ese rango. Su
+versión de gestión, `GET /admin/physical/attendance/{studentId}`, recibe los
+mismos parámetros y lo pueden usar `ADMIN` (todo el historial del alumno) e
+`INSTRUCTOR` (sólo las sesiones de sus propios cursos). La respuesta repite el
+rango pedido como `from` y `to` (UTC, con `Z`) junto con `scheduledSessionCount`,
+`attended`, `absent`, `attendanceRate` y `sessions`; ya no existe el campo
+`month` y la respuesta no agrupa ni etiqueta por día o mes.
 
 `GET /physical/sessions/me` es autoservicio exclusivo de `ALUMNO` (otros roles
 reciben `403`): lista las sesiones, ordenadas por fecha ascendente, donde el
-alumno del token tiene una `physical_capacity_assignment` confirmada. El rango
-va desde el inicio del día actual en la zona de la academia
-(`physical.attendance.zone-id`) hasta `physical.sessions.window-days` días
-después (60 por defecto), y se devuelve como `from`/`to`. Los holds técnicos, los
-pagos pendientes y las sesiones canceladas no aparecen. Cada ítem incluye
-`sessionId` (el que recibe `access-qr`), curso, instructor, `scheduledAt` y
-`checkInOpen`, calculado con la misma ventana que el check-in. No acepta
-`studentId`. Cada ítem incluye además `assignmentType` (`MONTHLY` o
-`INDIVIDUAL`, nunca nulo), que indica si el lugar proviene del plan mensual o de
-una compra individual; las asignaciones anteriores a la migración V26 figuran
-como `MONTHLY`. La sala no se expone: el modelo actual no la persiste.
+alumno del token tiene una `physical_capacity_assignment` confirmada y que
+empiezan en el rango pedido. Devuelve el mismo rango como `from`/`to`. Los holds
+técnicos, los pagos pendientes y las sesiones canceladas no aparecen. Cada ítem
+incluye `sessionId` (el que recibe `access-qr`), curso, instructor,
+`scheduledAt` y `checkInOpen`, calculado con la misma ventana que el check-in
+sobre el reloj del servidor. No acepta `studentId`. Cada ítem incluye además
+`assignmentType` (`MONTHLY` o `INDIVIDUAL`, nunca nulo), que indica si el lugar
+proviene del plan mensual o de una compra individual; las asignaciones
+anteriores a la migración V26 figuran como `MONTHLY`. La sala no se expone: el
+modelo actual no la persiste.
+
+**Las dos lecturas del alumno y la de asistencia de gestión reciben un rango UTC
+que calcula el cliente** (#729, [ADR-0048](adr/0048-fechas-del-backend-en-utc.md)):
+el backend no conoce la zona de la academia ni la del usuario, y ya no existen
+las propiedades `physical.attendance.zone-id` ni `physical.sessions.window-days`.
+Ejemplos en Buenos Aires (UTC-3):
+
+```text
+# Mis sesiones del día 12/11/2026
+GET /api/v1/physical/sessions/me?from=2026-11-12T03:00:00Z&to=2026-11-13T03:00:00Z
+
+# Mi asistencia de noviembre de 2026
+GET /api/v1/physical/attendance/me?from=2026-11-01T03:00:00Z&to=2026-12-01T03:00:00Z
+```
+
+- `from` y `to` son obligatorios y estrictos, igual que en el listado de
+  gestión: instantes ISO-8601 con segundos y `Z`, o un offset numérico que se
+  normaliza al mismo instante UTC (un `+` va codificado como `%2B`). Ausentes o
+  mal formados responden `400 INVALID_REQUEST` (`application/problem+json`).
+- El rango es semiabierto, `[from, to)`: una sesión justo en `from` entra y una
+  justo en `to` no, así que dos rangos consecutivos no repiten ni pierden la de
+  la medianoche.
+- `from` debe ser anterior a `to` y el rango puede abarcar a lo sumo **92 días**
+  (el mayor lapso de tres meses calendario; exactamente 92 días es válido y 92
+  días más un nanosegundo no). Un rango vacío, invertido o más ancho responde
+  `400 INVALID_REQUEST` con el detalle fijo `The range must have from before to
+  and span at most 92 days.`
+- El parámetro `month` (`YYYY-MM`) de la asistencia se eliminó: el cliente
+  manda el mes local como rango. Un request que sólo trae `month` responde `400`.
 
 Una **sesión** es la ocurrencia concreta de un curso: fecha, hora y cupo. No
 existen endpoints de reserva ni listas de espera: un pago confirmado crea las

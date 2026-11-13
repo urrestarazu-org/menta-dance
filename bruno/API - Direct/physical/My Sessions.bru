@@ -5,8 +5,13 @@ meta {
 }
 
 get {
-  url: {{baseUrl}}/api/v1/physical/sessions/me
+  url: {{baseUrl}}/api/v1/physical/sessions/me?from=2026-11-12T03:00:00Z&to=2026-11-13T03:00:00Z
   auth: bearer
+}
+
+params:query {
+  from: 2026-11-12T03:00:00Z
+  to: 2026-11-13T03:00:00Z
 }
 
 auth:bearer {
@@ -14,24 +19,42 @@ auth:bearer {
 }
 
 docs {
-  #356. The acting student's upcoming sessions with a confirmed capacity
-  assignment, oldest first. Range: from the start of today in the academy zone
-  up to `physical.sessions.window-days` days ahead (default 60), returned as
-  `from`/`to`. Holds and pending purchases do not count; cancelled sessions are
-  omitted. `checkInOpen` tells whether the check-in window is open right now,
-  so the `sessionId` can be fed straight to `POST .../access-qr`.
-  `assignmentType` (MONTHLY or INDIVIDUAL) says how the seat was obtained; it is
-  never null.
-  The student id always comes from the Bearer token — there is no studentId
-  parameter. Use a STUDENT token.
+  #356, #729. Las sesiones del alumno autenticado que tienen una asignación de
+  cupo confirmada y empiezan en el rango pedido, de la más antigua a la más
+  nueva. Los holds y las compras pendientes no cuentan; las sesiones canceladas
+  se omiten. `checkInOpen` indica si la ventana de check-in está abierta ahora
+  mismo, así que el `sessionId` se puede pasar directo a `POST .../access-qr`.
+  `assignmentType` (MONTHLY o INDIVIDUAL) dice cómo se obtuvo el lugar; nunca es
+  nulo. El id del alumno sale siempre del Bearer token: no hay parámetro
+  studentId. Usar un token de STUDENT.
 
-  Success contract: 200 with { from, to, sessions[] } where each session is
-  { sessionId, courseId, courseName, instructorName, scheduledAt, checkInOpen,
-  assignmentType }.
-  Error contract: 401 when unauthenticated; 403 for any role other than
-  STUDENT.
+  Todas las fechas del backend son UTC; el día local lo calcula el cliente. El
+  backend no aplica ninguna zona horaria: el cliente convierte el día o el mes
+  local de la persona al rango UTC. Ejemplos en Buenos Aires (UTC-3):
+    - el día 12/11/2026:
+      `from=2026-11-12T03:00:00Z&to=2026-11-13T03:00:00Z`
+    - noviembre de 2026:
+      `from=2026-11-01T03:00:00Z&to=2026-12-01T03:00:00Z`
+
+  `from` y `to` son obligatorios, instantes ISO-8601 estrictos con segundos y `Z`
+  (o un offset numérico como `-03:00`, que se normaliza a UTC; un `+` debe ir
+  codificado como `%2B`). El rango es semiabierto: `scheduledAt >= from` y
+  `scheduledAt < to`. `from` debe ser anterior a `to` y el rango puede abarcar a
+  lo sumo 92 días (exactamente 92 días es válido).
+
+  Contrato de éxito: 200 con { from, to, sessions[] }, donde `from` y `to`
+  repiten el rango pedido en UTC y cada sesión es { sessionId, courseId,
+  courseName, instructorName, scheduledAt, checkInOpen, assignmentType }.
+  Contrato de error:
+    400 INVALID_REQUEST → `from` o `to` ausentes o inválidos, `from` no anterior
+        a `to`, o rango mayor a 92 días
+    401 → sin token
+    403 → rol distinto de STUDENT
 }
 
 assert {
   res.status: eq 200
+  res.body.from: eq 2026-11-12T03:00:00Z
+  res.body.to: eq 2026-11-13T03:00:00Z
+  res.body.sessions: isArray
 }

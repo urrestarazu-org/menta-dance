@@ -2,7 +2,7 @@
 
 **Estado:** Aceptado
 **Fecha:** 2026-11-12
-**Actualizado:** 2026-11-13 (#729): decisión sobre la recurrencia de los cursos
+**Actualizado:** 2026-11-13 (#729): decisión sobre la recurrencia de los cursos y lecturas de `physical` en UTC
 **Decisores:** Dueño del proyecto / Arquitectura
 
 ## Contexto y Problema
@@ -49,7 +49,7 @@ de sesiones del día para recepción (#355), que necesitaba definir qué es "el 
 ### Opción 2: El backend trabaja en la zona de la academia
 
 * **Descripción:** el backend interpreta y calcula "el día" con una zona configurada
-  (`physical.attendance.zone-id`), como hacen hoy tres lecturas de `physical`.
+  (`physical.attendance.zone-id`), como hacían tres lecturas de `physical` hasta #729 (parte 2).
 * **Pros:**
   * Los clientes reciben el día ya resuelto.
 * **Contras:**
@@ -89,7 +89,10 @@ usuario y es un cálculo simple y estándar.
 3. **Las consultas "del día" reciben un rango.** El cliente calcula el día local y envía
    `from` y `to` (instantes UTC, rango semiabierto `[from, to)`). Ejemplo, el 12 de noviembre en
    Buenos Aires: `from=2026-11-12T03:00:00Z&to=2026-11-13T03:00:00Z`. Es el caso de
-   `GET /api/v1/admin/physical/sessions` (#355).
+   `GET /api/v1/admin/physical/sessions` (#355, hasta 7 días) y de las lecturas del alumno
+   `GET /api/v1/physical/sessions/me` y `GET /api/v1/physical/attendance/me`, y su versión de
+   gestión `GET /api/v1/admin/physical/attendance/{studentId}` (#729, hasta 92 días, lo que cubre
+   cualquier mes calendario).
 4. **Los contratos lo declaran.** Todo campo de fecha y hora de OpenAPI dice que está en UTC. Un
    `+` en un offset numérico viaja codificado como `%2B`.
 5. **Fechas de calendario sin hora.** Un valor como la fecha de nacimiento no es un instante: se
@@ -168,16 +171,19 @@ recurrencia como hora local más zona (la opción (b)) y se enmendaría este ADR
 
 ### Negativas / Deuda Técnica
 
-Hoy hay código que no cumple la regla; se corrige de forma gradual y cada punto necesita su
-propio cambio:
+Las lecturas de `physical` ya cumplen la regla (#729, parte 2): `ListMyPhysicalSessionsUseCaseImpl`
+y `GetPhysicalAttendanceHistoryUseCaseImpl` reciben un rango UTC `[from, to)` de a lo sumo 92 días
+en lugar de calcular "hoy" o "el mes" con una zona, y las propiedades `physical.attendance.zone-id`
+y `physical.sessions.window-days` se eliminaron. Lo que sigue sin cumplirla se corrige de forma
+gradual y cada punto necesita su propio cambio:
 
-* `ListMyPhysicalSessionsUseCaseImpl` y `GetPhysicalAttendanceHistoryUseCaseImpl` calculan "hoy"
-  con `physical.attendance.zone-id`. Esa propiedad se elimina cuando ambas pasen a recibir un
-  rango (#729, parte 2).
 * Los clientes que muestran la hora de las sesiones y los cursos deben convertir desde UTC, y el
   cliente de gestión debe convertir también el día de la semana y la hora al cargar un curso o una
   sesión (#729, parte 3). Hoy el BFF muestra `dayOfWeek` y `startTime` del curso tal como llegan
   (`ClassLabels.schedule`) y Android "Mi asistencia" usa una zona fija.
+* Los clientes deben además mandar el rango UTC a las lecturas de `physical` (el BFF y Android
+  usan todavía `GET /physical/sessions/me` sin rango y `attendance/me?month=`, que ya no existen;
+  #729, parte 3).
 * El fixture de la demo y las sesiones ya creadas deben alinearse con el contrato UTC o
   regenerarse (#729, parte 3). La aplicación todavía no está en producción.
 * `User` (9 usos) y `DemoUserFixture` (1) toman la hora con `LocalDateTime.now()`, que usa la
@@ -207,8 +213,8 @@ puede activarse cuando la deuda anterior esté saldada, para no dejar CI en rojo
 
 * #355 (listado de sesiones del día para staff, que pasó de `date` a `from`/`to`), #728 y #729
   (las sesiones se crean en UTC pero se leen en la zona de la academia). La decisión sobre la
-  recurrencia de los cursos corresponde a la parte 1 de #729; las lecturas de `physical` (parte 2) y
-  los clientes (parte 3) se resuelven en cambios aparte.
+  recurrencia de los cursos corresponde a la parte 1 de #729; las lecturas de `physical` (parte 2)
+  ya reciben un rango UTC; los clientes (parte 3) se resuelven en un cambio aparte.
 * [Contrato de `physical`](../05-PHYSICAL-API.md#recurrencia-de-los-cursos-y-zona): la regla
   aplicada a los endpoints de gestión.
 * [ADR-0027](0027-mysql-flyway-strategy.md): MySQL y Flyway.

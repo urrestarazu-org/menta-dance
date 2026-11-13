@@ -5,12 +5,13 @@ meta {
 }
 
 get {
-  url: {{baseUrl}}/api/v1/physical/attendance/me?month=2026-09&includeAbsent=false
+  url: {{baseUrl}}/api/v1/physical/attendance/me?from=2026-11-01T03:00:00Z&to=2026-12-01T03:00:00Z&includeAbsent=false
   auth: bearer
 }
 
 params:query {
-  month: 2026-09
+  from: 2026-11-01T03:00:00Z
+  to: 2026-12-01T03:00:00Z
   includeAbsent: false
 }
 
@@ -19,21 +20,38 @@ auth:bearer {
 }
 
 docs {
-  #39, US-PHYSICAL-002. The acting student's own attendance for one calendar
-  month. `month` is required (`YYYY-MM`); `includeAbsent` defaults to
-  `false` and hides unattended assignments from `sessions[]` without moving
-  any aggregate. The student id always comes from the Bearer token — there
-  is no studentId parameter to abuse.
+  #39, US-PHYSICAL-002, #729. La asistencia del alumno autenticado para un rango
+  de instantes UTC. `includeAbsent` es `false` por defecto y oculta de
+  `sessions[]` las asignaciones sin asistencia, sin mover ningún agregado. El id
+  del alumno sale siempre del Bearer token: no hay parámetro studentId que se
+  pueda abusar.
 
-  Success contract: 200 with { period, scheduledSessionCount, attended,
-  absent, attendanceRate, sessions[] }. Each session carries `kind` (`QR` or
-  `MANUAL`, the origin of the check-in) when ATTENDED and `kind: null` when
-  ABSENT (visible with `includeAbsent=true`).
-  Error contract: 400 (`INVALID_REQUEST`) on a malformed month; 401 when
-  unauthenticated.
+  Todas las fechas del backend son UTC; el día local lo calcula el cliente. El
+  backend no aplica ninguna zona horaria: el cliente convierte el mes local de la
+  persona al rango UTC. Ejemplo: noviembre de 2026 en Buenos Aires (UTC-3) es
+  `from=2026-11-01T03:00:00Z&to=2026-12-01T03:00:00Z`. El parámetro `month`
+  (`YYYY-MM`) ya no existe.
+
+  `from` y `to` son obligatorios, instantes ISO-8601 estrictos con segundos y `Z`
+  (o un offset numérico como `-03:00`, que se normaliza a UTC; un `+` debe ir
+  codificado como `%2B`). El rango es semiabierto: `scheduledAt >= from` y
+  `scheduledAt < to`. `from` debe ser anterior a `to` y el rango puede abarcar a
+  lo sumo 92 días (exactamente 92 días es válido).
+
+  Contrato de éxito: 200 con { from, to, scheduledSessionCount, attended,
+  absent, attendanceRate, sessions[] }, donde `from` y `to` repiten el rango
+  pedido en UTC. Cada sesión trae `kind` (`QR` o `MANUAL`, el origen del
+  check-in) cuando está ATTENDED y `kind: null` cuando está ABSENT (visible con
+  `includeAbsent=true`).
+  Contrato de error:
+    400 INVALID_REQUEST → `from` o `to` ausentes o inválidos, `from` no anterior
+        a `to`, o rango mayor a 92 días
+    401 → sin token
 }
 
 assert {
   res.status: eq 200
+  res.body.from: eq 2026-11-01T03:00:00Z
+  res.body.to: eq 2026-12-01T03:00:00Z
   res.body.sessions: isArray
 }
