@@ -33,6 +33,7 @@ import com.menta.physical.infrastructure.persistence.repository.PhysicalCourseJp
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
 import com.menta.shared.domain.vo.Email;
 import com.menta.shared.physical.AssignmentType;
+import java.net.URI;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
@@ -44,6 +45,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -56,9 +58,11 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
- * HTTP-level coverage for {@code GET /api/v1/physical/sessions/me} (#356) through the real
- * {@code SecurityConfig} filter chain, the real use case and real MySQL. Session dates are
- * relative to the real clock, so the suite cannot age out.
+ * HTTP-level coverage for {@code GET /api/v1/physical/sessions/me?from=&to=} (#356, #729) through the
+ * real {@code SecurityConfig} filter chain, the real use case and real MySQL. The range is UTC and
+ * half-open; the client computes it from its user's local day or month. Session dates are relative to
+ * the real clock (or a fixed Buenos Aires day, where the test is about its edges), so the suite cannot
+ * age out.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("integration-test")
@@ -66,6 +70,10 @@ class PhysicalMySessionsIntegrationTest extends AbstractPhysicalMySqlIntegration
 
     private static final String MERCHANT_ACCOUNT_ID = "merchant-integration-attendance-history";
     private static final String URL = "/api/v1/physical/sessions/me";
+    private static final String RANGE_DETAIL = "The range must have from before to and span at most 92 days.";
+    // The local day 2026-11-12 in Buenos Aires (UTC-3), as the client computes it.
+    private static final Instant BA_DAY_FROM = Instant.parse("2026-11-12T03:00:00Z");
+    private static final Instant BA_DAY_TO = Instant.parse("2026-11-13T03:00:00Z");
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
@@ -73,6 +81,7 @@ class PhysicalMySessionsIntegrationTest extends AbstractPhysicalMySqlIntegration
         registry.add("billing.mercadopago.merchant-account-id", () -> MERCHANT_ACCOUNT_ID);
     }
 
+    @LocalServerPort private int port;
     @Autowired private TestRestTemplate http;
     @Autowired private UserRepository userRepository;
     @Autowired private AccessTokenIssuer accessTokenIssuer;
@@ -167,6 +176,25 @@ class PhysicalMySessionsIntegrationTest extends AbstractPhysicalMySqlIntegration
         return http.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
     }
 
+    /** Sends the exact path and query as given, with no template encoding: {@code %2B} and a bare {@code +}. */
+    @SuppressWarnings("rawtypes")
+    private ResponseEntity<Map> getRaw(UUID userId, Role role, String pathAndQuery) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(tokenFor(userId, role));
+        return http.exchange(
+            URI.create("http://localhost:" + port + pathAndQuery), HttpMethod.GET, new HttpEntity<>(headers), Map.class
+        );
+    }
+
+    private static String wideRange() {
+        Instant now = Instant.now();
+        return range(now.minus(1, ChronoUnit.DAYS), now.plus(30, ChronoUnit.DAYS));
+    }
+
+    private static String range(Instant from, Instant to) {
+        return URL + "?from=" + from + "&to=" + to;
+    }
+
     @SuppressWarnings({"rawtypes", "unchecked"})
     private static List<Map<String, Object>> sessionsOf(ResponseEntity<Map> response) {
         return (List<Map<String, Object>>) response.getBody().get("sessions");
@@ -186,7 +214,7 @@ class PhysicalMySessionsIntegrationTest extends AbstractPhysicalMySqlIntegration
         seedAssignment(sooner, student);
         // A technical hold is not an assignment.
         seedHold(seedSession(salsa, now.plus(3, ChronoUnit.DAYS), "SCHEDULED"));
-        // Past, beyond the 60-day range, cancelled: assigned but not listed.
+        // Past, beyond the requested range, cancelled: assigned but not listed.
         seedAssignment(seedSession(salsa, now.minus(3, ChronoUnit.DAYS), "SCHEDULED"), student);
         seedAssignment(seedSession(salsa, now.plus(90, ChronoUnit.DAYS), "SCHEDULED"), student);
         seedAssignment(seedSession(salsa, now.plus(4, ChronoUnit.DAYS), "CANCELLED"), student);
@@ -195,7 +223,8 @@ class PhysicalMySessionsIntegrationTest extends AbstractPhysicalMySqlIntegration
         seedAssignment(seedSession(salsa, now.plus(5, ChronoUnit.DAYS), "SCHEDULED"), other);
 
         @SuppressWarnings("rawtypes")
-        ResponseEntity<Map> response = getAs(student, Role.STUDENT, URL);
+        ResponseEntity<Map> response =
+            getAs(student, Role.STUDENT, range(now.minus(1, ChronoUnit.HOURS), now.plus(60, ChronoUnit.DAYS)));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         List<Map<String, Object>> sessions = sessionsOf(response);
@@ -208,8 +237,9 @@ class PhysicalMySessionsIntegrationTest extends AbstractPhysicalMySqlIntegration
         assertThat(Instant.parse((String) first.get("scheduledAt")))
             .isCloseTo(now.plus(2, ChronoUnit.DAYS), org.assertj.core.api.Assertions.within(1, ChronoUnit.SECONDS));
         assertThat(sessions).extracting(item -> item.get("checkInOpen")).containsExactly(false, false);
-        assertThat(Instant.parse((String) response.getBody().get("from"))).isBefore(Instant.now());
-        assertThat(Instant.parse((String) response.getBody().get("to"))).isAfter(now.plus(59, ChronoUnit.DAYS));
+        assertThat(Instant.parse((String) response.getBody().get("from")))
+            .isEqualTo(now.minus(1, ChronoUnit.HOURS));
+        assertThat(Instant.parse((String) response.getBody().get("to"))).isEqualTo(now.plus(60, ChronoUnit.DAYS));
     }
 
     @Test
@@ -220,7 +250,7 @@ class PhysicalMySessionsIntegrationTest extends AbstractPhysicalMySqlIntegration
             student, AssignmentType.MONTHLY);
 
         @SuppressWarnings("rawtypes")
-        ResponseEntity<Map> response = getAs(student, Role.STUDENT, URL);
+        ResponseEntity<Map> response = getAs(student, Role.STUDENT, wideRange());
 
         assertThat(sessionsOf(response)).singleElement()
             .satisfies(item -> assertThat(item.get("assignmentType")).isEqualTo("MONTHLY"));
@@ -234,7 +264,7 @@ class PhysicalMySessionsIntegrationTest extends AbstractPhysicalMySqlIntegration
             student, AssignmentType.INDIVIDUAL);
 
         @SuppressWarnings("rawtypes")
-        ResponseEntity<Map> response = getAs(student, Role.STUDENT, URL);
+        ResponseEntity<Map> response = getAs(student, Role.STUDENT, wideRange());
 
         assertThat(sessionsOf(response)).singleElement()
             .satisfies(item -> assertThat(item.get("assignmentType")).isEqualTo("INDIVIDUAL"));
@@ -251,7 +281,7 @@ class PhysicalMySessionsIntegrationTest extends AbstractPhysicalMySqlIntegration
             student, AssignmentType.INDIVIDUAL);
 
         @SuppressWarnings("rawtypes")
-        ResponseEntity<Map> response = getAs(student, Role.STUDENT, URL);
+        ResponseEntity<Map> response = getAs(student, Role.STUDENT, wideRange());
 
         assertThat(sessionsOf(response)).extracting(item -> item.get("assignmentType"))
             .containsExactly("MONTHLY", "INDIVIDUAL");
@@ -265,7 +295,7 @@ class PhysicalMySessionsIntegrationTest extends AbstractPhysicalMySqlIntegration
         seedAssignment(inWindow, student);
 
         @SuppressWarnings("rawtypes")
-        ResponseEntity<Map> response = getAs(student, Role.STUDENT, URL);
+        ResponseEntity<Map> response = getAs(student, Role.STUDENT, wideRange());
 
         assertThat(sessionsOf(response)).singleElement()
             .satisfies(item -> assertThat(item.get("checkInOpen")).isEqualTo(true));
@@ -280,7 +310,7 @@ class PhysicalMySessionsIntegrationTest extends AbstractPhysicalMySqlIntegration
         seedAssignment(session, student);
 
         @SuppressWarnings("rawtypes")
-        ResponseEntity<Map> response = getAs(other, Role.STUDENT, URL + "?studentId=" + student);
+        ResponseEntity<Map> response = getAs(other, Role.STUDENT, wideRange() + "&studentId=" + student);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(sessionsOf(response)).isEmpty();
@@ -289,7 +319,7 @@ class PhysicalMySessionsIntegrationTest extends AbstractPhysicalMySqlIntegration
     @Test
     void without_a_token_the_route_is_unauthorized() {
         @SuppressWarnings("rawtypes")
-        ResponseEntity<Map> response = http.getForEntity(URL, Map.class);
+        ResponseEntity<Map> response = http.getForEntity(wideRange(), Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
@@ -300,9 +330,123 @@ class PhysicalMySessionsIntegrationTest extends AbstractPhysicalMySqlIntegration
             UUID user = issueUser(role);
 
             @SuppressWarnings("rawtypes")
-            ResponseEntity<Map> response = getAs(user, role, URL);
+            ResponseEntity<Map> response = getAs(user, role, wideRange());
 
             assertThat(response.getStatusCode()).as(role.name()).isEqualTo(HttpStatus.FORBIDDEN);
         }
+    }
+
+    /**
+     * #729 — the local day of Buenos Aires in UTC: a class at 00:30 local (03:30Z) and one at 23:30 local
+     * (02:30Z the next UTC day) both belong to it; 23:59:59 of the day before is out, and a class exactly
+     * at {@code from} is in while one exactly at {@code to} is out.
+     */
+    @Test
+    void a_buenos_aires_day_keeps_the_00_30_and_23_30_local_classes_and_is_half_open() {
+        UUID student = issueUser(Role.STUDENT);
+        UUID course = seedCourse("Salsa Intermedio");
+        UUID previousNight = seedSession(course, BA_DAY_FROM.minusSeconds(1), "SCHEDULED");
+        UUID atFrom = seedSession(course, BA_DAY_FROM, "SCHEDULED");
+        UUID justAfterMidnight = seedSession(course, Instant.parse("2026-11-12T03:30:00Z"), "SCHEDULED");
+        UUID lateEvening = seedSession(course, Instant.parse("2026-11-13T02:30:00Z"), "SCHEDULED");
+        UUID atTo = seedSession(course, BA_DAY_TO, "SCHEDULED");
+        for (UUID session : List.of(previousNight, atFrom, justAfterMidnight, lateEvening, atTo)) {
+            seedAssignment(session, student);
+        }
+
+        @SuppressWarnings("rawtypes")
+        ResponseEntity<Map> response = getAs(student, Role.STUDENT, range(BA_DAY_FROM, BA_DAY_TO));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().get("from")).isEqualTo("2026-11-12T03:00:00Z");
+        assertThat(response.getBody().get("to")).isEqualTo("2026-11-13T03:00:00Z");
+        assertThat(sessionsOf(response)).extracting(item -> item.get("sessionId"))
+            .containsExactly(atFrom.toString(), justAfterMidnight.toString(), lateEvening.toString());
+    }
+
+    /** #729 — the local month of November in Buenos Aires: first and last instant of it. */
+    @Test
+    void a_buenos_aires_month_includes_its_first_and_last_instants_and_nothing_beyond() {
+        UUID student = issueUser(Role.STUDENT);
+        UUID course = seedCourse("Salsa Intermedio");
+        Instant from = Instant.parse("2026-11-01T03:00:00Z");
+        Instant to = Instant.parse("2026-12-01T03:00:00Z");
+        UUID lastOfOctober = seedSession(course, from.minusSeconds(1), "SCHEDULED");
+        UUID firstOfNovember = seedSession(course, from, "SCHEDULED");
+        UUID lastOfNovember = seedSession(course, to.minusSeconds(1), "SCHEDULED");
+        UUID firstOfDecember = seedSession(course, to, "SCHEDULED");
+        for (UUID session : List.of(lastOfOctober, firstOfNovember, lastOfNovember, firstOfDecember)) {
+            seedAssignment(session, student);
+        }
+
+        @SuppressWarnings("rawtypes")
+        ResponseEntity<Map> response = getAs(student, Role.STUDENT, range(from, to));
+
+        assertThat(sessionsOf(response)).extracting(item -> item.get("sessionId"))
+            .containsExactly(firstOfNovember.toString(), lastOfNovember.toString());
+    }
+
+    @Test
+    void a_range_of_exactly_92_days_is_accepted() {
+        UUID student = issueUser(Role.STUDENT);
+
+        @SuppressWarnings("rawtypes")
+        ResponseEntity<Map> response =
+            getAs(student, Role.STUDENT, range(BA_DAY_FROM, BA_DAY_FROM.plus(92, ChronoUnit.DAYS)));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(sessionsOf(response)).isEmpty();
+    }
+
+    /** {@code %2B} is how a client encodes the {@code +} of an offset; it is normalised to the UTC instant. */
+    @Test
+    void an_encoded_offset_is_normalised_to_utc_and_echoed_in_utc() {
+        UUID student = issueUser(Role.STUDENT);
+        UUID session = seedSession(seedCourse("Salsa Intermedio"), Instant.parse("2026-11-12T03:30:00Z"), "SCHEDULED");
+        seedAssignment(session, student);
+
+        @SuppressWarnings("rawtypes")
+        ResponseEntity<Map> response = getRaw(student, Role.STUDENT,
+            URL + "?from=2026-11-12T00:00:00-03:00&to=2026-11-13T06%3A00%3A00%2B03%3A00");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().get("from")).isEqualTo("2026-11-12T03:00:00Z");
+        assertThat(response.getBody().get("to")).isEqualTo("2026-11-13T03:00:00Z");
+        assertThat(sessionsOf(response)).extracting(item -> item.get("sessionId")).containsExactly(session.toString());
+    }
+
+    @Test
+    void every_invalid_range_is_a_400_invalid_request_problem_with_a_fixed_detail() {
+        UUID student = issueUser(Role.STUDENT);
+        String atSecondOver92Days = BA_DAY_FROM.plus(92, ChronoUnit.DAYS).plusNanos(1).toString();
+        List<String> invalidQueries = List.of(
+            "",
+            "?from=" + BA_DAY_FROM,
+            "?to=" + BA_DAY_TO,
+            "?month=2026-11",
+            "?from=2026-11-12&to=" + BA_DAY_TO,
+            "?from=" + BA_DAY_FROM + "&to=2026-11-13T03:00:00",
+            "?from=hoy&to=" + BA_DAY_TO,
+            // An unencoded + reaches the server as a space: not an instant.
+            "?from=2026-11-12T00:00:00+03:00&to=" + BA_DAY_TO,
+            "?from=" + BA_DAY_FROM + "&to=" + BA_DAY_FROM,
+            "?from=" + BA_DAY_TO + "&to=" + BA_DAY_FROM,
+            "?from=" + BA_DAY_FROM + "&to=" + atSecondOver92Days
+        );
+
+        for (String query : invalidQueries) {
+            @SuppressWarnings("rawtypes")
+            ResponseEntity<Map> response = getRaw(student, Role.STUDENT, URL + query);
+
+            assertThat(response.getStatusCode()).as(query).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(response.getHeaders().getContentType()).as(query)
+                .isEqualTo(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON);
+            assertThat(response.getBody().get("code")).as(query).isEqualTo("INVALID_REQUEST");
+        }
+        @SuppressWarnings("rawtypes")
+        ResponseEntity<Map> tooWide = getRaw(
+            student, Role.STUDENT, URL + "?from=" + BA_DAY_FROM + "&to=" + atSecondOver92Days
+        );
+        assertThat(tooWide.getBody().get("detail")).isEqualTo(RANGE_DETAIL);
     }
 }

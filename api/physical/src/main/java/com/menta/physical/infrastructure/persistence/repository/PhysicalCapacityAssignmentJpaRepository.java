@@ -83,7 +83,7 @@ public interface PhysicalCapacityAssignmentJpaRepository
     long countBySessionIdForUpdate(@Param("sessionId") UUID sessionId);
 
     /**
-     * Monthly attendance history (#39, US-PHYSICAL-002, design C1). Drives from this table (the
+     * Attendance history of an instant range (#39, #729, US-PHYSICAL-002, C1). Drives from this table (the
      * denominator, D1), joins {@code physical_sessions} for the date filter and
      * {@code physical_courses} for display fields AND the instructor-ownership predicate, and
      * {@code LEFT JOIN}s {@code physical_attendances} for the live {@code ATTENDED}/{@code
@@ -107,13 +107,13 @@ public interface PhysicalCapacityAssignmentJpaRepository
             + "JOIN PhysicalCourseJpaEntity c ON c.id = s.courseId "
             + "LEFT JOIN AttendanceJpaEntity a ON a.sessionId = s.id AND a.userId = asg.studentId "
             + "WHERE asg.studentId = :studentId "
-            + "AND s.scheduledAt >= :monthStart AND s.scheduledAt < :monthNext "
+            + "AND s.scheduledAt >= :from AND s.scheduledAt < :to "
             + "AND (:professorId IS NULL OR c.professorId = :professorId) "
             + "ORDER BY s.scheduledAt ASC, s.id ASC"
     )
-    List<MonthlyAttendanceRowProjection> findMonthlyAttendance(
-        @Param("studentId") UUID studentId, @Param("monthStart") Instant monthStart,
-        @Param("monthNext") Instant monthNext, @Param("professorId") UUID professorId
+    List<AttendanceRowProjection> findAttendance(
+        @Param("studentId") UUID studentId, @Param("from") Instant from,
+        @Param("to") Instant to, @Param("professorId") UUID professorId
     );
 
     /**

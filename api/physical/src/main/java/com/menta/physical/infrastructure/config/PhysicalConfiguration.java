@@ -66,7 +66,6 @@ import com.menta.physical.infrastructure.transaction.TransactionalRotatePhysical
 import com.menta.shared.auth.UserDisplayNamePort;
 import com.menta.shared.auth.UserExistencePort;
 import java.time.Duration;
-import java.time.ZoneId;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.context.annotation.Bean;
@@ -293,31 +292,26 @@ public class PhysicalConfiguration {
     }
 
     /**
-     * #39, US-PHYSICAL-002, design C3 — {@code ZoneId.of} throws at context startup on a bad
-     * configured id, not at request time. Both the self and elevated (P2) controllers share this
-     * one bean.
+     * #39, US-PHYSICAL-002, design C3, #729 — no zone and nothing to configure: the range arrives as UTC
+     * instants (ADR-0048). Both the self and elevated (P2) controllers share this one bean.
      */
     @Bean
     public GetPhysicalAttendanceHistoryUseCase getPhysicalAttendanceHistoryUseCase(
-        PhysicalCapacityAssignmentRepository assignmentRepository,
-        @Value("${physical.attendance.zone-id:America/Argentina/Buenos_Aires}") String zoneId
+        PhysicalCapacityAssignmentRepository assignmentRepository
     ) {
-        return new GetPhysicalAttendanceHistoryUseCaseImpl(assignmentRepository, ZoneId.of(zoneId));
+        return new GetPhysicalAttendanceHistoryUseCaseImpl(assignmentRepository);
     }
 
     /**
-     * #356 -- the listing's check-in flag uses the same {@code app.qr.session-window-*} bounds the QR
-     * flow enforces, and the same academy zone as the attendance history. {@code
-     * physical.sessions.window-days} bounds how far ahead the listing looks (default 60).
+     * #356, #729 -- the listing's check-in flag uses the same {@code app.qr.session-window-*} bounds the QR
+     * flow enforces; the range arrives as UTC instants, so no zone and no window length are configured.
      */
     @Bean
     public ListMyPhysicalSessionsUseCase listMyPhysicalSessionsUseCase(
-        PhysicalCapacityAssignmentRepository assignmentRepository, Clock clock, QrProperties qrProperties,
-        @Value("${physical.attendance.zone-id:America/Argentina/Buenos_Aires}") String zoneId,
-        @Value("${physical.sessions.window-days:60}") int windowDays
+        PhysicalCapacityAssignmentRepository assignmentRepository, Clock clock, QrProperties qrProperties
     ) {
         return new ListMyPhysicalSessionsUseCaseImpl(
-            assignmentRepository, clock, ZoneId.of(zoneId), windowDays,
+            assignmentRepository, clock,
             new CheckInWindow(qrProperties.getSessionWindowBefore(), qrProperties.getSessionWindowAfter())
         );
     }

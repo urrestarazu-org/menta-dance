@@ -2,6 +2,7 @@ package com.menta.physical.infrastructure.web.dto;
 
 import com.menta.physical.application.dto.AttendanceHistoryView;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -11,14 +12,15 @@ import java.util.List;
  * would itself be an enumeration oracle (C4).
  */
 public record AttendanceHistoryResponse(
-    String period, int scheduledSessionCount, int attended, int absent,
+    Instant from, Instant to, int scheduledSessionCount, int attended, int absent,
     BigDecimal attendanceRate, List<AttendanceSessionResponse> sessions
 ) {
 
     /** Maps the application view to the wire shape, keeping every value as is. */
     public static AttendanceHistoryResponse from(AttendanceHistoryView view) {
         return new AttendanceHistoryResponse(
-            view.period(), view.scheduledSessionCount(), view.attended(), view.absent(), view.attendanceRate(),
+            view.from(), view.to(), view.scheduledSessionCount(), view.attended(), view.absent(),
+            view.attendanceRate(),
             view.sessions().stream().map(AttendanceSessionResponse::from).toList()
         );
     }

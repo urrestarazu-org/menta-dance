@@ -51,6 +51,7 @@ import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJ
 import com.menta.shared.domain.vo.Email;
 import com.menta.shared.physical.AssignmentType;
 import java.math.BigDecimal;
+import java.net.URI;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -65,6 +66,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -79,9 +81,10 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
  * HTTP-level coverage for the self attendance-history endpoint (#39, US-PHYSICAL-002, P1) —
- * through the real {@code SecurityConfig} filter chain, {@code GetPhysicalAttendanceHistoryUseCase}
- * bean and the real {@code physical.attendance.zone-id} default, mirrors
- * {@code PhysicalCheckInIntegrationTest}.
+ * through the real {@code SecurityConfig} filter chain and {@code GetPhysicalAttendanceHistoryUseCase}
+ * bean, mirrors {@code PhysicalCheckInIntegrationTest}. The range is UTC and half-open, computed by the
+ * client (#729): the month-sized tests use UTC months, the Buenos Aires tests spell out the local day
+ * and month in UTC.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("integration-test")
@@ -90,6 +93,11 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
     /** R2 remediation fixture (#39 verify-report FAIL finding 1) — mirrors {@code PhysicalPurchaseIntegrationTest}. */
     private static final String MERCHANT_ACCOUNT_ID = "merchant-integration-attendance-history";
     private static final BigDecimal MONTHLY_PRICE = new BigDecimal("300.00");
+
+    // The local day 2026-11-12 in Buenos Aires (UTC-3), as the client computes it.
+    private static final Instant BA_DAY_FROM = Instant.parse("2026-11-12T03:00:00Z");
+    private static final Instant BA_DAY_TO = Instant.parse("2026-11-13T03:00:00Z");
+    private static final String RANGE_DETAIL = "The range must have from before to and span at most 92 days.";
 
     // Time-bomb fix (#45 follow-up): every seeded session date is computed relative to the
     // real clock at test-run time instead of a hardcoded absolute calendar date, so the suite
@@ -113,8 +121,16 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
         return instantAt(month.atDay(dayOfMonth));
     }
 
+    /** The query string of the UTC month {@code [first day 00:00Z, first day of the next month 00:00Z)}. */
     private static String monthQuery(YearMonth month) {
-        return month.toString();
+        return rangeQuery(
+            month.atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant(),
+            month.plusMonths(1).atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant()
+        );
+    }
+
+    private static String rangeQuery(Instant from, Instant to) {
+        return "from=" + from + "&to=" + to;
     }
 
     @DynamicPropertySource
@@ -123,6 +139,7 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
         registry.add("billing.mercadopago.merchant-account-id", () -> MERCHANT_ACCOUNT_ID);
     }
 
+    @LocalServerPort private int port;
     @Autowired private TestRestTemplate http;
     @Autowired private UserRepository userRepository;
     @Autowired private AccessTokenIssuer accessTokenIssuer;
@@ -291,10 +308,10 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
                 () -> new IllegalStateException("No billing.PhysicalPaymentCompleted outbox row was produced"));
     }
 
-    private ResponseEntity<Map> readOwnMonth(UUID studentId, String month, Boolean includeAbsent) {
+    private ResponseEntity<Map> readOwnMonth(UUID studentId, String range, Boolean includeAbsent) {
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(tokenFor(studentId, Role.STUDENT));
-        String query = "?month=" + month + (includeAbsent == null ? "" : "&includeAbsent=" + includeAbsent);
+        String query = "?" + range + (includeAbsent == null ? "" : "&includeAbsent=" + includeAbsent);
         return http.exchange(
             "/api/v1/physical/attendance/me" + query, HttpMethod.GET, new HttpEntity<>(headers), Map.class
         );
@@ -552,7 +569,7 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
     @Test
     void an_anonymous_request_is_rejected_with_401() {
         ResponseEntity<Map> response = http.exchange(
-            "/api/v1/physical/attendance/me?month=" + monthQuery(FIRST_MONTH), HttpMethod.GET, HttpEntity.EMPTY,
+            "/api/v1/physical/attendance/me?" + monthQuery(FIRST_MONTH), HttpMethod.GET, HttpEntity.EMPTY,
             Map.class
         );
 
@@ -560,12 +577,12 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
     }
 
     private ResponseEntity<Map> readElevatedMonth(
-        UUID callerId, Role callerRole, UUID studentId, String month
+        UUID callerId, Role callerRole, UUID studentId, String range
     ) {
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(tokenFor(callerId, callerRole));
         return http.exchange(
-            "/api/v1/admin/physical/attendance/" + studentId + "?month=" + month + "&includeAbsent=true",
+            "/api/v1/admin/physical/attendance/" + studentId + "?" + range + "&includeAbsent=true",
             HttpMethod.GET, new HttpEntity<>(headers), Map.class
         );
     }
@@ -696,10 +713,145 @@ class PhysicalAttendanceHistoryIntegrationTest extends AbstractPhysicalMySqlInte
     @Test
     void an_anonymous_request_to_the_elevated_endpoint_is_rejected_with_401() {
         ResponseEntity<Map> response = http.exchange(
-            "/api/v1/admin/physical/attendance/" + UUID.randomUUID() + "?month=" + monthQuery(FIRST_MONTH),
+            "/api/v1/admin/physical/attendance/" + UUID.randomUUID() + "?" + monthQuery(FIRST_MONTH),
             HttpMethod.GET, HttpEntity.EMPTY, Map.class
         );
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    // --- #729: the range is UTC, half-open and computed by the client ---
+
+    /** Sends the exact path and query as given, with no template encoding: {@code %2B} and a bare {@code +}. */
+    private ResponseEntity<Map> getRaw(UUID callerId, Role callerRole, String pathAndQuery) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(tokenFor(callerId, callerRole));
+        return http.exchange(
+            URI.create("http://localhost:" + port + pathAndQuery), HttpMethod.GET, new HttpEntity<>(headers), Map.class
+        );
+    }
+
+    private void seedBuenosAiresEdges(UUID studentId, UUID courseId) {
+        for (Instant scheduledAt : List.of(
+            BA_DAY_FROM.minusSeconds(1), BA_DAY_FROM, Instant.parse("2026-11-12T03:30:00Z"),
+            Instant.parse("2026-11-13T02:30:00Z"), BA_DAY_TO
+        )) {
+            seedAssignment(seedSession(courseId, scheduledAt), studentId);
+        }
+    }
+
+    private static void assertBuenosAiresDay(ResponseEntity<Map> response) {
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().get("from")).isEqualTo("2026-11-12T03:00:00Z");
+        assertThat(response.getBody().get("to")).isEqualTo("2026-11-13T03:00:00Z");
+        assertThat(response.getBody().get("scheduledSessionCount")).isEqualTo(3);
+        assertThat(response.getBody()).doesNotContainKey("month");
+        assertThat(((List<Map<String, Object>>) response.getBody().get("sessions")))
+            .extracting(item -> item.get("scheduledAt"))
+            .containsExactly("2026-11-12T03:00:00Z", "2026-11-12T03:30:00Z", "2026-11-13T02:30:00Z");
+    }
+
+    /**
+     * A class at 00:30 local (03:30Z) and one at 23:30 local (02:30Z next UTC day) belong to the Buenos Aires
+     * day; 23:59:59 of the day before is out, a class exactly at {@code from} is in, exactly at {@code to} out.
+     */
+    @Test
+    void a_buenos_aires_day_keeps_the_00_30_and_23_30_local_classes_and_is_half_open() {
+        UUID studentId = issueUser(Role.STUDENT);
+        seedBuenosAiresEdges(studentId, seedCourse());
+
+        assertBuenosAiresDay(readOwnMonth(studentId, rangeQuery(BA_DAY_FROM, BA_DAY_TO), true));
+    }
+
+    @Test
+    void the_elevated_endpoint_applies_the_same_half_open_utc_range() {
+        UUID studentId = issueUser(Role.STUDENT);
+        UUID adminId = issueUser(Role.ADMIN);
+        seedBuenosAiresEdges(studentId, seedCourse());
+
+        assertBuenosAiresDay(
+            readElevatedMonth(adminId, Role.ADMIN, studentId, rangeQuery(BA_DAY_FROM, BA_DAY_TO))
+        );
+    }
+
+    /** The local month of November in Buenos Aires: its first and last instants in UTC. */
+    @Test
+    void a_buenos_aires_month_includes_its_first_and_last_instants_and_nothing_beyond() {
+        UUID studentId = issueUser(Role.STUDENT);
+        UUID courseId = seedCourse();
+        Instant from = Instant.parse("2026-11-01T03:00:00Z");
+        Instant to = Instant.parse("2026-12-01T03:00:00Z");
+        for (Instant scheduledAt : List.of(from.minusSeconds(1), from, to.minusSeconds(1), to)) {
+            seedAssignment(seedSession(courseId, scheduledAt), studentId);
+        }
+
+        ResponseEntity<Map> response = readOwnMonth(studentId, rangeQuery(from, to), true);
+
+        assertThat(response.getBody().get("scheduledSessionCount")).isEqualTo(2);
+        assertThat(((List<Map<String, Object>>) response.getBody().get("sessions")))
+            .extracting(item -> item.get("scheduledAt"))
+            .containsExactly("2026-11-01T03:00:00Z", "2026-12-01T02:59:59Z");
+    }
+
+    @Test
+    void a_range_of_exactly_92_days_is_accepted_and_echoed() {
+        UUID studentId = issueUser(Role.STUDENT);
+        Instant to = BA_DAY_FROM.plus(92, java.time.temporal.ChronoUnit.DAYS);
+
+        ResponseEntity<Map> response = readOwnMonth(studentId, rangeQuery(BA_DAY_FROM, to), true);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().get("to")).isEqualTo(to.toString());
+        assertThat(response.getBody().get("scheduledSessionCount")).isEqualTo(0);
+    }
+
+    /** {@code %2B} is how a client encodes the {@code +} of an offset; it is normalised to the UTC instant. */
+    @Test
+    void an_encoded_offset_is_normalised_to_utc_and_echoed_in_utc() {
+        UUID studentId = issueUser(Role.STUDENT);
+
+        ResponseEntity<Map> response = getRaw(studentId, Role.STUDENT,
+            "/api/v1/physical/attendance/me?from=2026-11-12T00:00:00-03:00&to=2026-11-13T06%3A00%3A00%2B03%3A00");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().get("from")).isEqualTo("2026-11-12T03:00:00Z");
+        assertThat(response.getBody().get("to")).isEqualTo("2026-11-13T03:00:00Z");
+    }
+
+    @Test
+    void every_invalid_range_is_a_400_invalid_request_problem_on_both_endpoints() {
+        UUID adminId = issueUser(Role.ADMIN);
+        UUID studentId = issueUser(Role.STUDENT);
+        String over92Days = BA_DAY_FROM.plus(92, java.time.temporal.ChronoUnit.DAYS).plusNanos(1).toString();
+        List<String> invalidQueries = List.of(
+            "",
+            "?from=" + BA_DAY_FROM,
+            "?to=" + BA_DAY_TO,
+            "?month=2026-11",
+            "?from=2026-11&to=" + BA_DAY_TO,
+            "?from=" + BA_DAY_FROM + "&to=2026-11-13",
+            // An unencoded + reaches the server as a space: not an instant.
+            "?from=2026-11-12T00:00:00+03:00&to=" + BA_DAY_TO,
+            "?from=" + BA_DAY_FROM + "&to=" + BA_DAY_FROM,
+            "?from=" + BA_DAY_TO + "&to=" + BA_DAY_FROM,
+            "?from=" + BA_DAY_FROM + "&to=" + over92Days
+        );
+
+        for (String query : invalidQueries) {
+            assertInvalidRange(getRaw(studentId, Role.STUDENT, "/api/v1/physical/attendance/me" + query), query);
+            assertInvalidRange(
+                getRaw(adminId, Role.ADMIN, "/api/v1/admin/physical/attendance/" + studentId + query), query
+            );
+        }
+        ResponseEntity<Map> tooWide =
+            getRaw(studentId, Role.STUDENT, "/api/v1/physical/attendance/me?from=" + BA_DAY_FROM + "&to=" + over92Days);
+        assertThat(tooWide.getBody().get("detail")).isEqualTo(RANGE_DETAIL);
+    }
+
+    private static void assertInvalidRange(ResponseEntity<Map> response, String query) {
+        assertThat(response.getStatusCode()).as(query).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getHeaders().getContentType()).as(query)
+            .isEqualTo(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON);
+        assertThat(response.getBody().get("code")).as(query).isEqualTo("INVALID_REQUEST");
     }
 }

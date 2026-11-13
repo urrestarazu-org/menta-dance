@@ -103,10 +103,12 @@ class PhysicalCourseExceptionHandlerTest {
 
     @Test
     void maps_an_invalid_session_range_to_400() {
-        ResponseEntity<ProblemDetail> response = handler.invalidRange(new InvalidSessionRangeException());
+        ResponseEntity<ProblemDetail> response = handler.invalidRange(new InvalidSessionRangeException(7));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody().getProperties().get("code")).isEqualTo("INVALID_REQUEST");
+        assertThat(response.getBody().getDetail())
+            .isEqualTo("The range must have from before to and span at most 7 days.");
         assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
     }
 

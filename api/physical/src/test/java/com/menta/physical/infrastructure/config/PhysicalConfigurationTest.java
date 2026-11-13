@@ -7,15 +7,18 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.menta.physical.application.dto.AttendanceViewer;
 import com.menta.physical.application.dto.DeviceAuthenticationRejection;
 import com.menta.physical.application.port.in.BatchCreatePhysicalSessionsUseCase;
 import com.menta.physical.application.port.in.CreatePhysicalCourseUseCase;
 import com.menta.physical.application.port.in.CreatePhysicalSessionUseCase;
+import com.menta.physical.application.port.in.GetPhysicalAttendanceHistoryUseCase;
 import com.menta.physical.application.port.in.GetPhysicalDeviceUseCase;
 import com.menta.physical.application.port.in.GetPhysicalSessionRosterUseCase;
 import com.menta.physical.application.port.in.IssuePhysicalAccessQrUseCase;
 import com.menta.physical.application.port.in.ListManagedPhysicalCoursesUseCase;
 import com.menta.physical.application.port.in.ListManagedPhysicalSessionsUseCase;
+import com.menta.physical.application.port.in.ListMyPhysicalSessionsUseCase;
 import com.menta.physical.application.port.in.ListPhysicalDevicesUseCase;
 import com.menta.physical.application.port.in.ListPhysicalSessionsByRangeUseCase;
 import com.menta.physical.application.port.in.PhysicalCourseAvailabilityPort;
@@ -40,11 +43,13 @@ import com.menta.physical.application.port.out.PhysicalSessionRepository;
 import com.menta.physical.application.usecase.BatchCreatePhysicalSessionsUseCaseImpl;
 import com.menta.physical.application.usecase.CreatePhysicalCourseUseCaseImpl;
 import com.menta.physical.application.usecase.CreatePhysicalSessionUseCaseImpl;
+import com.menta.physical.application.usecase.GetPhysicalAttendanceHistoryUseCaseImpl;
 import com.menta.physical.application.usecase.GetPhysicalDeviceUseCaseImpl;
 import com.menta.physical.application.usecase.GetPhysicalSessionRosterUseCaseImpl;
 import com.menta.physical.application.usecase.IssuePhysicalAccessQrUseCaseImpl;
 import com.menta.physical.application.usecase.ListManagedPhysicalCoursesUseCaseImpl;
 import com.menta.physical.application.usecase.ListManagedPhysicalSessionsUseCaseImpl;
+import com.menta.physical.application.usecase.ListMyPhysicalSessionsUseCaseImpl;
 import com.menta.physical.application.usecase.ListPhysicalDevicesUseCaseImpl;
 import com.menta.physical.application.usecase.ListPhysicalSessionsByRangeUseCaseImpl;
 import com.menta.physical.application.usecase.PhysicalCourseAvailabilityPortImpl;
@@ -152,6 +157,37 @@ class PhysicalConfigurationTest {
         assertThat(useCase).isInstanceOf(ListPhysicalSessionsByRangeUseCaseImpl.class);
         useCase.list(from, to);
         verify(sessionRepository).findManagedAcrossCourses(from, to);
+    }
+
+    @Test
+    void wires_the_attendance_history_use_case_bean_without_any_zone() {
+        PhysicalCapacityAssignmentRepository repository = mock(PhysicalCapacityAssignmentRepository.class);
+        Instant from = Instant.parse("2026-11-01T03:00:00Z");
+        Instant to = Instant.parse("2026-12-01T03:00:00Z");
+        UUID studentId = UUID.randomUUID();
+        when(repository.findAttendance(studentId, from, to)).thenReturn(List.of());
+
+        GetPhysicalAttendanceHistoryUseCase useCase = configuration.getPhysicalAttendanceHistoryUseCase(repository);
+
+        assertThat(useCase).isInstanceOf(GetPhysicalAttendanceHistoryUseCaseImpl.class);
+        useCase.history(AttendanceViewer.self(studentId), from, to, true);
+        verify(repository).findAttendance(studentId, from, to);
+    }
+
+    @Test
+    void wires_the_my_sessions_use_case_bean_with_the_qr_check_in_window_and_no_zone() {
+        PhysicalCapacityAssignmentRepository repository = mock(PhysicalCapacityAssignmentRepository.class);
+        Instant from = Instant.parse("2026-11-12T03:00:00Z");
+        Instant to = Instant.parse("2026-11-13T03:00:00Z");
+        UUID studentId = UUID.randomUUID();
+        when(repository.findAssignedSessions(studentId, from, to)).thenReturn(List.of());
+
+        ListMyPhysicalSessionsUseCase useCase =
+            configuration.listMyPhysicalSessionsUseCase(repository, mock(Clock.class), new QrProperties());
+
+        assertThat(useCase).isInstanceOf(ListMyPhysicalSessionsUseCaseImpl.class);
+        useCase.list(studentId, from, to);
+        verify(repository).findAssignedSessions(studentId, from, to);
     }
 
     @Test

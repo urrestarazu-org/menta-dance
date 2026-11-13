@@ -7,7 +7,7 @@ import com.menta.physical.application.port.out.PhysicalCapacityAssignmentReposit
 import com.menta.physical.domain.model.AttendanceKind;
 import com.menta.physical.domain.model.SessionId;
 import com.menta.physical.infrastructure.persistence.repository.AssignedSessionRowProjection;
-import com.menta.physical.infrastructure.persistence.repository.MonthlyAttendanceRowProjection;
+import com.menta.physical.infrastructure.persistence.repository.AttendanceRowProjection;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityAssignmentJpaRepository;
 import com.menta.physical.infrastructure.persistence.repository.SessionRosterRowProjection;
 import java.time.Instant;
@@ -38,18 +38,16 @@ public class PhysicalCapacityAssignmentRepositoryAdapter
 
     @Override
     @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
-    public List<AttendanceHistoryRow> findMonthlyAttendance(UUID studentId, Instant monthStart, Instant monthNext) {
-        return toRows(assignmentRepository.findMonthlyAttendance(studentId, monthStart, monthNext, null));
+    public List<AttendanceHistoryRow> findAttendance(UUID studentId, Instant from, Instant to) {
+        return toRows(assignmentRepository.findAttendance(studentId, from, to, null));
     }
 
     @Override
     @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
-    public List<AttendanceHistoryRow> findMonthlyAttendanceInCoursesOwnedBy(
-        UUID studentId, Instant monthStart, Instant monthNext, UUID professorId
+    public List<AttendanceHistoryRow> findAttendanceInCoursesOwnedBy(
+        UUID studentId, Instant from, Instant to, UUID professorId
     ) {
-        return toRows(
-            assignmentRepository.findMonthlyAttendance(studentId, monthStart, monthNext, professorId)
-        );
+        return toRows(assignmentRepository.findAttendance(studentId, from, to, professorId));
     }
 
     @Override
@@ -82,7 +80,7 @@ public class PhysicalCapacityAssignmentRepositoryAdapter
         );
     }
 
-    private static List<AttendanceHistoryRow> toRows(List<MonthlyAttendanceRowProjection> projections) {
+    private static List<AttendanceHistoryRow> toRows(List<AttendanceRowProjection> projections) {
         return projections.stream()
             .map(row -> new AttendanceHistoryRow(
                 row.getSessionId(), row.getScheduledAt(), row.getCourseName(), row.getInstructorName(),
