@@ -17,6 +17,7 @@
 - **Dado** un curso existente y un usuario autorizado.
 - **Cuando** envía `POST /api/v1/admin/physical/courses/{courseId}/sessions` con
   fecha, hora de inicio y capacidad opcional (hereda del curso si no se especifica).
+  La fecha y la hora de inicio se envían **en UTC** (ADR-0048, #729).
 - **Entonces** Physical crea la sesión con `sessionId` único y responde `201 Created`.
 
 **Escenario 2: crear sesiones en lote**
@@ -25,7 +26,9 @@
 - **Cuando** envía `POST /api/v1/admin/physical/courses/{courseId}/sessions/batch`
   con `fromDate`, `toDate`.
 - **Entonces** Physical genera automáticamente todas las sesiones según el patrón
-  de recurrencia del curso, excluyendo feriados si están configurados.
+  de recurrencia del curso, excluyendo feriados si están configurados. `fromDate`
+  y `toDate` son fechas UTC, y se generan las sesiones de las fechas
+  UTC cuyo día de la semana UTC coincide con el `dayOfWeek` del curso.
 
 **Escenario 3: listar sesiones**
 
@@ -66,7 +69,7 @@
 ```json
 {
   "date": "2026-09-15",
-  "startTime": "19:00",
+  "startTime": "22:00",
   "capacity": 18,
   "notes": "Clase especial de repaso"
 }

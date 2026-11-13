@@ -2,6 +2,7 @@
 
 **Estado:** Aceptado
 **Fecha:** 2026-11-12
+**Actualizado:** 2026-11-13 (#729): decisión sobre la recurrencia de los cursos
 **Decisores:** Dueño del proyecto / Arquitectura
 
 ## Contexto y Problema
@@ -43,7 +44,7 @@ de sesiones del día para recepción (#355), que necesitaba definir qué es "el 
 * **Contras:**
   * Cada cliente debe convertir y calcular el día local.
   * Las recurrencias semanales ("los lunes a las 20:00") no se expresan de forma natural en UTC
-    (ver "Decisión pendiente").
+    (ver "Decisión: recurrencia de los cursos").
 
 ### Opción 2: El backend trabaja en la zona de la academia
 
@@ -95,14 +96,67 @@ usuario y es un cálculo simple y estándar.
    transporta como `LocalDate` tal como lo envía el cliente. Cuando el backend necesita compararlo
    con "hoy", usa el día UTC del `Clock`.
 
-## Decisión pendiente: recurrencia de los cursos
+## Decisión: recurrencia de los cursos
 
-Un curso presencial se define por `dayOfWeek` y `startTime` ("los lunes a las 20:00"), y de ahí
+**Fecha:** 2026-11-13 (#729).
+
+Un curso presencial se define por `dayOfWeek` y `startTime` ("los martes a las 20:00"), y de ahí
 salen las sesiones. En UTC, la hora del día y el día de la semana cambian según la zona, así que
-no hay una traducción directa. Hoy `startTime` se interpreta como UTC al crear las sesiones, que
-es coherente con esta regla pero hace que quien cargue "20:00" piense en hora local. Queda por
-decidir cómo se expresa y se documenta la recurrencia (por ejemplo, que el cliente envíe la hora
-ya convertida a UTC). Se trata en #729.
+no hay una traducción directa. Hoy el backend ya interpreta esos valores como UTC:
+`BatchCreatePhysicalSessionsUseCaseImpl` recorre las fechas del rango y, por cada una cuyo
+`getDayOfWeek()` coincide con el `dayOfWeek` del curso, crea una sesión en
+`LocalDateTime.of(fecha, startTime).toInstant(ZoneOffset.UTC)`, y `CreatePhysicalSessionUseCaseImpl`
+hace lo mismo con el `date` y el `startTime` del pedido. Eso cumple la regla; lo que faltaba era
+decirlo en el contrato, porque los clientes mostraban los valores crudos como si fueran hora local
+(el catálogo público mostraba "martes 20:00" para una sesión que en realidad es a las 17:00 en
+Buenos Aires).
+
+Elegimos la **opción (a)** de #729: **el contrato es UTC**.
+
+* `dayOfWeek` y `startTime` de un curso presencial, y `date` y `startTime` al crear o modificar una
+  sesión, son valores **en UTC**. `fromDate` y `toDate` del alta en lote son fechas UTC.
+* El **cliente de gestión** (hoy el BFF web, y cualquier otro) convierte la **hora y el día de la
+  semana** entre la zona de la academia y UTC, tanto al enviar (crear o editar un curso, crear una
+  sesión, alta en lote) como al mostrar (listado de gestión y catálogo público). El backend no
+  conoce la zona de la academia para este fin.
+* Las sesiones generadas en lote son las de las fechas UTC cuyo día de la semana UTC coincide con
+  el `dayOfWeek` del curso.
+
+Ejemplos con Buenos Aires (UTC-3, sin horario de verano):
+
+| Intención en Buenos Aires | `dayOfWeek` enviado (UTC) | `startTime` enviado (UTC) | Qué cambia |
+|---------------------------|---------------------------|---------------------------|------------|
+| Martes 20:00              | `TUESDAY`                 | `23:00:00`                | La hora, no el día |
+| Martes 21:00              | `WEDNESDAY`               | `00:00:00`                | El día pasa al miércoles |
+| Martes 22:00              | `WEDNESDAY`               | `01:00:00`                | El día pasa al miércoles |
+| Miércoles 00:30           | `WEDNESDAY`               | `03:30:00`                | La hora, no el día |
+| Domingo 23:30             | `MONDAY`                  | `02:30:00`                | El día pasa al lunes |
+
+Una clase "martes 22:00 en Buenos Aires" el 2026-11-17 se crea con `date: 2026-11-18` y
+`startTime: 01:00:00`, y queda guardada como `scheduledAt = 2026-11-18T01:00:00Z`. Al mostrar, el
+cliente hace la conversión inversa: `WEDNESDAY 01:00:00` (UTC) se ve "martes 22:00" en Buenos Aires.
+
+### Alternativa descartada: opción (b), hora local más zona del curso
+
+Guardar la recurrencia como hora local más una zona (`America/Argentina/Buenos_Aires`) y calcular
+cada sesión a partir de ellas. Se descarta porque:
+
+* Es una **excepción explícita** a la regla de este ADR: el backend volvería a recibir y guardar
+  valores en una zona, y la recurrencia sería el único dato de fecha y hora que no está en UTC.
+* Obliga a llevar **reglas de horario de verano dentro del backend** (`ZoneId`, `ZonedDateTime`), que
+  es justo lo que la Opción 1 evita, y al proyecto a mantener datos de zonas actualizados.
+* Cada módulo que consuma la recurrencia (catálogo, check-in, facturación) tendría que **conocer
+  zonas**, o recibirlas ya resueltas, con lo que la inconsistencia de #729 volvería por otro camino.
+
+Su ventaja es real (la recurrencia sería exacta ante cambios de horario) pero no se necesita hoy.
+
+### Limitación conocida: horario de verano
+
+Una recurrencia fijada en UTC es exacta **solo para zonas sin horario de verano**. La academia está
+en Argentina (UTC-3, sin horario de verano), así que se acepta. Si algún día la academia pasara a
+una zona con horario de verano, o necesitara varias zonas, una clase "martes 22:00" cambiaría una
+hora respecto de la hora local en los cambios de horario. En ese caso habría que guardar la
+recurrencia como hora local más zona (la opción (b)) y se enmendaría este ADR.
 
 ## Consecuencias
 
@@ -119,9 +173,13 @@ propio cambio:
 
 * `ListMyPhysicalSessionsUseCaseImpl` y `GetPhysicalAttendanceHistoryUseCaseImpl` calculan "hoy"
   con `physical.attendance.zone-id`. Esa propiedad se elimina cuando ambas pasen a recibir un
-  rango.
-* La documentación del contrato de `physical` y los clientes que muestran la hora de las sesiones
-  deben confirmar que convierten desde UTC (#729).
+  rango (#729, parte 2).
+* Los clientes que muestran la hora de las sesiones y los cursos deben convertir desde UTC, y el
+  cliente de gestión debe convertir también el día de la semana y la hora al cargar un curso o una
+  sesión (#729, parte 3). Hoy el BFF muestra `dayOfWeek` y `startTime` del curso tal como llegan
+  (`ClassLabels.schedule`) y Android "Mi asistencia" usa una zona fija.
+* El fixture de la demo y las sesiones ya creadas deben alinearse con el contrato UTC o
+  regenerarse (#729, parte 3). La aplicación todavía no está en producción.
 * `User` (9 usos) y `DemoUserFixture` (1) toman la hora con `LocalDateTime.now()`, que usa la
   zona de la JVM. En los contenedores da UTC porque es el valor por defecto de la imagen, pero
   ningún `docker-compose` lo fija; en una máquina de desarrollo en otra zona guardaría hora local.
@@ -148,7 +206,11 @@ puede activarse cuando la deuda anterior esté saldada, para no dejar CI en rojo
 ## Referencias y Decisiones Relacionadas
 
 * #355 (listado de sesiones del día para staff, que pasó de `date` a `from`/`to`), #728 y #729
-  (las sesiones se crean en UTC pero se leen en la zona de la academia).
+  (las sesiones se crean en UTC pero se leen en la zona de la academia). La decisión sobre la
+  recurrencia de los cursos corresponde a la parte 1 de #729; las lecturas de `physical` (parte 2) y
+  los clientes (parte 3) se resuelven en cambios aparte.
+* [Contrato de `physical`](../05-PHYSICAL-API.md#recurrencia-de-los-cursos-y-zona): la regla
+  aplicada a los endpoints de gestión.
 * [ADR-0027](0027-mysql-flyway-strategy.md): MySQL y Flyway.
 * [ADR-0021](0021-clean-architecture-mandatory.md): Clean Architecture (el puerto `Clock` vive en
   `application`).

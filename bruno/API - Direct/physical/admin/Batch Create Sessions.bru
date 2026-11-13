@@ -29,6 +29,12 @@ docs {
   course's recurring day of week, at its startTime and capacity. No holiday
   exclusion — the project has no holidays concept yet.
 
+  Everything is UTC (ADR-0048, #729): `fromDate` and `toDate` are UTC dates, and
+  the course's `dayOfWeek` and `startTime` are UTC too. A session is generated
+  for each UTC date whose UTC weekday equals the course's `dayOfWeek`, at
+  `date + startTime` (UTC). The management client converts the local range to
+  UTC dates.
+
   Success contract: 201 with PhysicalSessionManagementListResponse.
   Error contract:
     403 COURSE_NOT_OWNED → INSTRUCTOR is not the course's professor

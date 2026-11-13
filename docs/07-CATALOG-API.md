@@ -38,6 +38,11 @@ Physical. La modalidad no se indica en la ruta.
 - **Id presencial activo:** `200` con `courseId`, `modality` (`PHYSICAL`),
   `title`, `level` y el bloque `physical` (`professorName`, `dayOfWeek`,
   `startTime`, `capacity`) más `sessions`, las próximas sesiones programadas.
+  `dayOfWeek` y `startTime` están **en UTC**, no en la zona del usuario: el
+  cliente los convierte juntos para mostrarlos, y la conversión puede cambiar el
+  día (`WEDNESDAY` a las `01:00` UTC es martes 22:00 en Buenos Aires). Ver
+  [ADR-0048](adr/0048-fechas-del-backend-en-utc.md) y
+  [recurrencia de los cursos](05-PHYSICAL-API.md#recurrencia-de-los-cursos-y-zona).
 - **Id desconocido o curso presencial inactivo:** el mismo
   `404 COURSE_NOT_FOUND`, indistinguible en estado y forma del cuerpo.
 
@@ -50,6 +55,9 @@ campos requeridos hacen las formas excluyentes (el detalle presencial lleva
 Cada sesión expone exactamente `sessionId`, `scheduledAt` (instante ISO-8601
 en UTC, termina en `Z`), `capacity` y `availableSpots`.
 
+En el ejemplo, el curso es los martes a las 22:00 UTC (19:00 en Buenos Aires,
+UTC-3) y la sesión coincide: `2026-10-06T22:00:00Z`.
+
 ```json
 {
   "courseId": "b6bb98d6-179e-49d0-9dda-6c03a16998f0",
@@ -59,7 +67,7 @@ en UTC, termina en `Z`), `capacity` y `availableSpots`.
   "physical": {
     "professorName": "María García",
     "dayOfWeek": "TUESDAY",
-    "startTime": "19:00",
+    "startTime": "22:00",
     "capacity": 20,
     "sessions": [
       {

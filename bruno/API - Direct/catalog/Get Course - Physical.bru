@@ -33,6 +33,11 @@ docs {
       }
     }
 
+  Time zone: `physical.dayOfWeek` and `physical.startTime` are UTC, not the
+  user's zone (ADR-0048, #729). The client converts them together to display
+  them; the conversion can change the weekday (`WEDNESDAY` 01:00:00 UTC is
+  Tuesday 22:00 in Buenos Aires, UTC-3).
+
   Sessions:
     - Only SCHEDULED sessions in the window [now, now + W). W is the number
       of days in `catalog.physical.sessions.window-days` (env

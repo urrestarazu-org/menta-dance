@@ -19,8 +19,8 @@ body:json {
     "title": "Salsa Intermedio",
     "description": "Curso de salsa para nivel intermedio",
     "professorName": "María García",
-    "dayOfWeek": "WEDNESDAY",
-    "startTime": "20:00:00",
+    "dayOfWeek": "TUESDAY",
+    "startTime": "23:00:00",
     "durationMinutes": 60,
     "level": "INTERMEDIATE",
     "capacity": 20
@@ -36,6 +36,13 @@ script:post-response {
 docs {
   US-PHYSICAL-005 escenario 1. Requires an ADMIN or INSTRUCTOR bearer token
   (log in first with a fixture that has one of those roles).
+
+  `dayOfWeek` and `startTime` are UTC (ADR-0048, #729). The management client
+  converts BOTH the weekday and the hour from the academy zone before sending,
+  and converts them back to show them. This sample is "Tuesday 20:00 in Buenos
+  Aires (UTC-3)" = `TUESDAY` 23:00:00 UTC; "Tuesday 22:00 in Buenos Aires" would
+  be `WEDNESDAY` 01:00:00 UTC. A recurrence fixed in UTC is exact only for zones
+  without daylight saving time.
 
   `professorId` is omitted here — an INSTRUCTOR creating a course is always
   assigned to themselves; only an ADMIN may set an arbitrary `professorId` in

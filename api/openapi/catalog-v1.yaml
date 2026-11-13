@@ -139,8 +139,18 @@ components:
           type: string
         dayOfWeek:
           type: string
+          description: >-
+            Día de la semana de la recurrencia del curso, **en UTC** (no en la
+            zona del usuario). El cliente lo convierte junto con `startTime`
+            para mostrarlo; la conversión puede cambiar el día (ADR-0048).
+          example: WEDNESDAY
         startTime:
           type: string
+          description: >-
+            Hora de inicio de cada clase, **en UTC**. El cliente la convierte a
+            su zona, junto con `dayOfWeek`, para mostrarla: `WEDNESDAY` a las
+            `01:00:00` UTC es martes 22:00 en Buenos Aires (UTC-3).
+          example: "01:00:00"
         capacity:
           type: integer
     VirtualCatalogBlock:
@@ -248,8 +258,20 @@ components:
               type: string
             dayOfWeek:
               type: string
+              description: >-
+                Día de la semana de la recurrencia del curso, **en UTC** (no en
+                la zona del usuario). El cliente lo convierte junto con
+                `startTime` para mostrarlo; la conversión puede cambiar el día
+                (ADR-0048).
+              example: WEDNESDAY
             startTime:
               type: string
+              description: >-
+                Hora de inicio de cada clase, **en UTC**. El cliente la
+                convierte a su zona, junto con `dayOfWeek`, para mostrarla:
+                `WEDNESDAY` a las `01:00:00` UTC es martes 22:00 en Buenos Aires
+                (UTC-3).
+              example: "01:00:00"
             capacity:
               type: integer
             sessions:
