@@ -42,8 +42,14 @@ import org.springframework.stereotype.Component;
  *
  * <p>Courses are upserted by the fixed ids in {@link DemoIds}. A {@link PhysicalCourse} stores a single weekday,
  * so "Bachata Sensual Presencial" stores {@code TUESDAY} while its sessions are generated on Tuesday and
- * Thursday directly; times are UTC, like the batch session creation. Regular sessions are keyed by
- * {@code (courseId, scheduledAt)}, so only missing slots are created.
+ * Thursday directly. Weekdays and start times are UTC (ADR-0048), like the batch session creation, and the
+ * clients convert them to the academy zone (Buenos Aires, UTC-3, no DST). The values are therefore chosen as
+ * "local time + 3 hours": a class taught on Tuesday at 19:00 in Buenos Aires is stored as {@code TUESDAY 22:00}
+ * and a Saturday 11:00 class as {@code SATURDAY 14:00}. Evening classes from 21:00 local on would cross
+ * midnight UTC and change the stored weekday, so the demo avoids them. Regular sessions are keyed by
+ * {@code (courseId, scheduledAt)}, so only missing slots are created; this also means a database seeded
+ * with the previous values (19:00 and 11:00 UTC) keeps those rows and receives the new slots next to them,
+ * so reset the demo database to see only the realistic schedule.
  *
  * <p>The rolling session keeps one fixed id: while "now" is still inside its check-in window (taken from
  * {@link QrProperties}, keeping 30 minutes of margin before it closes) it is reused, otherwise it is moved to
@@ -67,7 +73,10 @@ public final class DemoPhysicalCatalogFixture implements ApplicationRunner, Orde
     private static final int WEEKS = 8;
     private static final Duration ROLLING_LEAD = Duration.ofMinutes(10);
     private static final Duration ROLLING_CLOSING_MARGIN = Duration.ofMinutes(30);
-    private static final LocalTime EVENING = LocalTime.of(19, 0);
+    /** 19:00 in Buenos Aires (UTC-3), stored as UTC. */
+    private static final LocalTime EVENING = LocalTime.of(22, 0);
+    /** 11:00 in Buenos Aires (UTC-3), stored as UTC. */
+    private static final LocalTime SATURDAY_MORNING = LocalTime.of(14, 0);
 
     private static final DemoCourse SENSUAL = new DemoCourse(
         DemoIds.PHYSICAL_SENSUAL_COURSE_ID, "Bachata Sensual Presencial",
@@ -76,7 +85,7 @@ public final class DemoPhysicalCatalogFixture implements ApplicationRunner, Orde
     private static final DemoCourse TRADITIONAL = new DemoCourse(
         DemoIds.PHYSICAL_TRADITIONAL_COURSE_ID, "Bachata Tradicional Presencial",
         "In-person bachata tradicional class.", DayOfWeek.SATURDAY, Set.of(DayOfWeek.SATURDAY),
-        LocalTime.of(11, 0), 15);
+        SATURDAY_MORNING, 15);
 
     private final PhysicalCourseRepository courseRepository;
     private final PhysicalSessionRepository sessionRepository;

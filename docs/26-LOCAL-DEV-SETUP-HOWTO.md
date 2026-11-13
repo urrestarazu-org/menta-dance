@@ -586,9 +586,13 @@ El perfil `demo` siembra datos de prueba al arrancar la API. Cada módulo tiene 
 - Virtual: "Bachata Sensual" y "Bachata Tradicional", publicados, con 2 módulos cada uno (el primero de
   preview con una lección gratuita, el segundo restringido). Los videos usan el adaptador local de
   Bunny.net, sin credenciales reales.
-- Physical: "Bachata Sensual Presencial" (martes y jueves 19:00, cupo 12) y "Bachata Tradicional
-  Presencial" (sábados 11:00, cupo 15), a cargo del profesor demo, con sesiones para las próximas 4
-  semanas. Los horarios están en **UTC**, igual que la creación de sesiones en lote.
+- Physical: "Bachata Sensual Presencial" (martes y jueves 19:00 en Buenos Aires, cupo 12) y "Bachata
+  Tradicional Presencial" (sábados 11:00 en Buenos Aires, cupo 15), a cargo del profesor demo, con
+  sesiones para las próximas 4 semanas. Los horarios se guardan en **UTC** (22:00 y 14:00, con
+  Buenos Aires en UTC-3), igual que la creación de sesiones en lote; los clientes los convierten a la
+  zona de la academia. El sembrado no migra datos: una base demo sembrada antes de #729 conserva los
+  horarios viejos (19:00 y 11:00 UTC) y suma los nuevos al lado; para ver solo los nuevos hay que
+  recrear la base demo.
 - Sesión rolling: una sesión de Sensual unos 10 minutos en el futuro, para probar el check-in QR. El
   alumno tiene cupo confirmado en ella y en la próxima sesión regular de Sensual.
 - Billing: precio presencial de 25000 ARS (Sensual) y 20000 ARS (Tradicional), con 20% de recargo

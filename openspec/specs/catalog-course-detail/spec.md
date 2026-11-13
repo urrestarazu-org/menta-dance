@@ -43,7 +43,7 @@ When neither a published virtual course nor an active physical course matches `{
 
 ### Requirement: Physical detail returns course data
 
-When a PHYSICAL id resolves to an active physical course, the system MUST answer 200 with `courseId`, `modality` = `PHYSICAL`, `title`, `level`, and the physical block (`professorName`, `dayOfWeek`, `startTime`, `capacity`), plus the detail-only `sessions` collection. The response MUST NOT contain prices or `quoteEndpoint`.
+When a PHYSICAL id resolves to an active physical course, the system MUST answer 200 with `courseId`, `modality` = `PHYSICAL`, `title`, `level`, and the physical block (`professorName`, `dayOfWeek`, `startTime`, `capacity`), plus the detail-only `sessions` collection. The response MUST NOT contain prices or `quoteEndpoint`. `dayOfWeek` and `startTime` are UTC values (ADR-0048): the backend does not apply a zone, and the clients (BFF, Android) convert both the hour and the weekday to the zone they display (the academy zone, `America/Argentina/Buenos_Aires` in the BFF), so a course stored as `TUESDAY` `22:00` is shown as Tuesday 19:00 in Buenos Aires and one stored as `WEDNESDAY` `01:00` as Tuesday 22:00.
 
 #### Scenario: Physical id answers 200 with course data
 

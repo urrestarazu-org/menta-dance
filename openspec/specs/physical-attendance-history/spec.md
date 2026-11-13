@@ -2,41 +2,63 @@
 
 ## Purpose
 
-Let a student read their own assigned physical sessions and attendance for one calendar
-month, and let `ADMIN`/`INSTRUCTOR` read another student's month under a scoped access rule,
-without exposing a second write path or a denormalized source of truth.
+Let a student read their own assigned physical sessions and attendance for a UTC instant
+range chosen by the client (for example a calendar month in the user's zone), and let
+`ADMIN`/`INSTRUCTOR` read another student's range under a scoped access rule, without exposing
+a second write path or a denormalized source of truth. The backend never resolves "the month"
+with a zone: the client computes the range (ADR-0048).
 
 ## Requirements
 
-### Requirement: Self attendance for a calendar month
+### Requirement: Self attendance for a UTC range
 
 An authenticated caller MUST be able to read their own attendance via
-`GET /api/v1/physical/attendance/me?month=YYYY-MM&includeAbsent=true|false`. The response MUST
-contain `scheduledSessionCount`, `attended`, `absent`, `attendanceRate`, and `sessions[]`.
+`GET /api/v1/physical/attendance/me?from=<instant>&to=<instant>&includeAbsent=true|false`, where
+`from` and `to` are required ISO-8601 UTC instants. The response MUST repeat the requested range
+as `from` and `to` (UTC, with `Z`) and contain `scheduledSessionCount`, `attended`, `absent`,
+`attendanceRate`, and `sessions[]`; it MUST NOT contain a `month` field.
 `scheduledSessionCount` MUST equal the count of the caller's `physical_capacity_assignments`
-rows whose joined session's `scheduled_at` falls in `[monthStart, monthNext)` for the requested
-month. Each session row MUST include date, course, instructor, attendance status, and `kind`
+rows whose joined session's `scheduled_at` falls in the half-open range `[from, to)`. Each session row MUST include date, course, instructor, attendance status, and `kind`
 (`QR` or `MANUAL`, the origin of the recorded attendance). `kind` MUST be present for `ATTENDED`
 rows and MUST be `null` or omitted for `ABSENT` rows. Ordering MUST be `scheduled_at` ASC,
-`sessionId` ASC as tie-break. An anonymous request MUST return `401`. The OpenAPI contract MUST
+`sessionId` ASC as tie-break. A missing or malformed `from`/`to`, a `from` that is not before
+`to`, or a range wider than 92 days MUST return `400 INVALID_REQUEST`. An anonymous request MUST
+return `401`. The OpenAPI contract MUST
 document `kind` as an optional nullable enum `[QR, MANUAL]`.
 
-#### Scenario: Student reads a five-session month
+#### Scenario: Student reads a five-session range
 
-- GIVEN an authenticated student with 5 assignments in `2026-09`, 4 attended and 1 absent
-- WHEN they call `GET /api/v1/physical/attendance/me?month=2026-09`
+- GIVEN an authenticated student with 5 assignments in the range of September 2026 in Buenos
+  Aires (UTC-3), 4 attended and 1 absent
+- WHEN they call `GET /api/v1/physical/attendance/me?from=2026-09-01T03:00:00Z&to=2026-10-01T03:00:00Z`
 - THEN the response is `200` with `scheduledSessionCount: 5`, `attended: 4`, `absent: 1`
+- AND the response carries `from: 2026-09-01T03:00:00Z` and `to: 2026-10-01T03:00:00Z`
 
-#### Scenario: Student reads a four-session month
+#### Scenario: Student reads a four-session range
 
-- GIVEN an authenticated student with 4 assignments in `2026-10`, all attended
-- WHEN they call `GET /api/v1/physical/attendance/me?month=2026-10`
+- GIVEN an authenticated student with 4 assignments in the range of October 2026 in Buenos Aires,
+  all attended
+- WHEN they call `GET /api/v1/physical/attendance/me?from=2026-10-01T03:00:00Z&to=2026-11-01T03:00:00Z`
 - THEN the response is `200` with `scheduledSessionCount: 4`, `attended: 4`, `absent: 0`
+
+#### Scenario: Invalid range is rejected
+
+- GIVEN an authenticated student
+- WHEN they call the endpoint with a missing `from` or `to`, a malformed instant, `from` not
+  before `to`, or a range of more than 92 days
+- THEN the response is `400 INVALID_REQUEST`
+- AND a range of exactly 92 days is accepted
+
+#### Scenario: The range is half-open
+
+- GIVEN a session scheduled exactly at `from` and another exactly at `to`
+- WHEN the student reads `[from, to)`
+- THEN the session at `from` is included and the session at `to` is excluded
 
 #### Scenario: Anonymous request is rejected
 
 - GIVEN no authentication credential
-- WHEN a request is made to `GET /api/v1/physical/attendance/me?month=2026-09`
+- WHEN a request is made to `GET /api/v1/physical/attendance/me?from=2026-09-01T03:00:00Z&to=2026-10-01T03:00:00Z`
 - THEN the response is `401`
 
 #### Scenario: A student cannot obtain another student's data via the self endpoint
@@ -47,31 +69,31 @@ document `kind` as an optional nullable enum `[QR, MANUAL]`.
 
 #### Scenario: Attended rows expose their origin
 
-- GIVEN a student with one attendance recorded by QR and one recorded manually in `2026-09`
-- WHEN they call `GET /api/v1/physical/attendance/me?month=2026-09`
+- GIVEN a student with one attendance recorded by QR and one recorded manually in the September 2026 range
+- WHEN they call `GET /api/v1/physical/attendance/me?from=2026-09-01T03:00:00Z&to=2026-10-01T03:00:00Z`
 - THEN the two `sessions[]` rows carry `kind: QR` and `kind: MANUAL` respectively
 - AND `scheduledSessionCount`, `attended`, `absent`, `attendanceRate` and the row ordering are unchanged
 
 #### Scenario: Absent rows have no origin
 
-- GIVEN a month with one absent assignment
+- GIVEN a range with one absent assignment
 - WHEN the student calls the endpoint with `includeAbsent=true`
 - THEN the `ABSENT` row has `kind` null or omitted
 
 ### Requirement: Denominator counts assignments, not purchase coverage windows
 
 `scheduledSessionCount` MUST be derived purely from assignment rows whose session falls in the
-requested month, never from a purchase's rolling N-session coverage window. A `MONTHLY`
+requested range, never from a purchase's rolling N-session coverage window. A `MONTHLY`
 purchase confirmed mid-month MUST be counted identically to an `INDIVIDUAL` purchase: only by
-the calendar month of each assigned session.
+the range that contains each assigned session.
 
 #### Scenario: A mid-month MONTHLY purchase splits across two monthly views
 
 - GIVEN a `MONTHLY` purchase confirmed on 2026-09-20 producing assignments in both September
   and October
-- WHEN the student reads `2026-09` and then `2026-10`
-- THEN each month's `scheduledSessionCount` reflects only that month's assigned sessions
-- AND neither month's count equals the purchase's own coverage-window session count
+- WHEN the student reads the September range and then the October range
+- THEN each range's `scheduledSessionCount` reflects only that range's assigned sessions
+- AND neither count equals the purchase's own coverage-window session count
 
 ### Requirement: includeAbsent controls the session list, never the aggregate
 
@@ -82,14 +104,14 @@ full assignment set, unaffected by the flag.
 
 #### Scenario: includeAbsent=false omits unattended rows but keeps aggregates intact
 
-- GIVEN a month with 5 assignments, 4 attended and 1 absent
+- GIVEN a range with 5 assignments, 4 attended and 1 absent
 - WHEN the student calls the endpoint with `includeAbsent=false`
 - THEN `sessions[]` contains only the 4 attended rows
 - AND `scheduledSessionCount` is 5, `attended` is 4, `absent` is 1
 
 #### Scenario: includeAbsent=true lists the absent row
 
-- GIVEN the same month
+- GIVEN the same range
 - WHEN the student calls the endpoint with `includeAbsent=true`
 - THEN `sessions[]` contains all 5 rows, including one with `status: ABSENT`
 - AND the aggregate numbers are unchanged from the `includeAbsent=false` call
@@ -119,15 +141,15 @@ and MUST be `null` or omitted for `ABSENT` rows.
 - WHEN the session is read
 - THEN `status` is `ABSENT`, `recordedAt` is `null` and `kind` is `null` or omitted
 
-### Requirement: Empty month returns a zeroed 200, never 404
+### Requirement: Empty range returns a zeroed 200, never 404
 
-A month with zero assignments MUST return `200` with `scheduledSessionCount: 0`, empty
+A range with zero assignments MUST return `200` with `scheduledSessionCount: 0`, empty
 `sessions[]`, and `attendanceRate: 0.00`.
 
-#### Scenario: Student with no assignments in the month
+#### Scenario: Student with no assignments in the range
 
-- GIVEN an authenticated student with zero assignments in `2026-11`
-- WHEN they call `GET /api/v1/physical/attendance/me?month=2026-11`
+- GIVEN an authenticated student with zero assignments in the November 2026 range
+- WHEN they call `GET /api/v1/physical/attendance/me?from=2026-11-01T03:00:00Z&to=2026-12-01T03:00:00Z`
 - THEN the response is `200` with `scheduledSessionCount: 0`, `sessions: []`, `attendanceRate: 0.00`
 
 ### Requirement: Attendance rate rounding
@@ -137,13 +159,13 @@ A month with zero assignments MUST return `200` with `scheduledSessionCount: 0`,
 
 #### Scenario: Rate rounds HALF_UP at scale 2
 
-- GIVEN a month with `attended: 4` and `scheduledSessionCount: 5`
+- GIVEN a range with `attended: 4` and `scheduledSessionCount: 5`
 - WHEN the aggregate is computed
 - THEN `attendanceRate` is `80.00`
 
 #### Scenario: Rate is zero with no denominator
 
-- GIVEN a month with `scheduledSessionCount: 0`
+- GIVEN a range with `scheduledSessionCount: 0`
 - WHEN the aggregate is computed
 - THEN `attendanceRate` is `0.00`
 
@@ -156,34 +178,35 @@ NOT affect `scheduledSessionCount`, because no assignment row was ever created f
 #### Scenario: A pre-quote cancellation never produced an assignment
 
 - GIVEN a session cancelled before any student quoted it
-- WHEN a student's month containing that session's date is read
+- WHEN a student's range containing that session's date is read
 - THEN the cancelled session does not appear in `sessions[]`
 - AND it is not counted in `scheduledSessionCount`
 
 ### Requirement: Elevated read for ADMIN and INSTRUCTOR
 
 `ADMIN` and `INSTRUCTOR` MUST be able to read another student's attendance via
-`GET /api/v1/admin/physical/attendance/{studentId}?month=YYYY-MM&includeAbsent=true|false`.
-`ADMIN` MUST see the student's unrestricted month — all sessions and aggregates, identical in
+`GET /api/v1/admin/physical/attendance/{studentId}?from=<instant>&to=<instant>&includeAbsent=true|false`,
+with the same range rules and response shape as the self endpoint.
+`ADMIN` MUST see the student's unrestricted range — all sessions and aggregates, identical in
 shape to the self endpoint. A `STUDENT` caller MUST be rejected with `403`. An anonymous
 request MUST return `401`.
 
-#### Scenario: Admin reads any student's month unrestricted
+#### Scenario: Admin reads any student's range unrestricted
 
 - GIVEN an authenticated `ADMIN` and a student with 5 assignments across 3 different courses
-- WHEN the admin calls `GET /api/v1/admin/physical/attendance/{studentId}?month=2026-09`
+- WHEN the admin calls `GET /api/v1/admin/physical/attendance/{studentId}?from=2026-09-01T03:00:00Z&to=2026-10-01T03:00:00Z`
 - THEN the response is `200` with all 5 sessions and aggregates covering the full set
 
 #### Scenario: A STUDENT caller cannot reach the elevated endpoint
 
 - GIVEN an authenticated caller with only the `STUDENT` role
-- WHEN they call `GET /api/v1/admin/physical/attendance/{studentId}?month=2026-09`
+- WHEN they call `GET /api/v1/admin/physical/attendance/{studentId}?from=2026-09-01T03:00:00Z&to=2026-10-01T03:00:00Z`
 - THEN the response is `403`
 
 #### Scenario: Anonymous request to the elevated endpoint is rejected
 
 - GIVEN no authentication credential
-- WHEN a request is made to `GET /api/v1/admin/physical/attendance/{studentId}?month=2026-09`
+- WHEN a request is made to `GET /api/v1/admin/physical/attendance/{studentId}?from=2026-09-01T03:00:00Z&to=2026-10-01T03:00:00Z`
 - THEN the response is `401`
 
 ### Requirement: Instructor elevated read is scoped to owned courses
@@ -199,54 +222,56 @@ post-filtered in application code.
 
 - GIVEN an `INSTRUCTOR` teaching course A, and a student with 3 assignments in course A and 2
   in course B (taught by someone else)
-- WHEN the instructor reads that student's month
+- WHEN the instructor reads that student's range
 - THEN `sessions[]` contains only the 3 course-A sessions
 - AND `scheduledSessionCount`, `attended`, and `absent` reflect only those 3 sessions
 
 #### Scenario: Instructor sees zero rows for a student in a course they don't teach
 
 - GIVEN an `INSTRUCTOR` teaching no course the target student is assigned to
-- WHEN the instructor reads that student's month
+- WHEN the instructor reads that student's range
 - THEN `sessions[]` is empty and every aggregate number is 0
 
 ### Requirement: Elevated read does not leak student existence to an instructor
 
 A student who is not assigned to any course the instructor teaches MUST yield the same empty
 `200` shape (`scheduledSessionCount: 0`, `sessions: []`, `attendanceRate: 0.00`) as a student
-who has zero assignments that month at all. The instructor's elevated read MUST NOT distinguish
+who has zero assignments in that range at all. The instructor's elevated read MUST NOT distinguish
 these two cases through status code or response shape.
 
-#### Scenario: Non-existent overlap and genuinely empty month look identical
+#### Scenario: Non-existent overlap and genuinely empty range look identical
 
 - GIVEN student X (not enrolled in any course the instructor teaches) and student Y (a real
-  student with zero physical assignments that month)
-- WHEN the instructor reads each student's month via the elevated endpoint
+  student with zero physical assignments in that range)
+- WHEN the instructor reads each student's range via the elevated endpoint
 - THEN both responses are `200` with `scheduledSessionCount: 0`, `sessions: []`,
   `attendanceRate: 0.00`, indistinguishable from each other
 
-### Requirement: Month boundaries resolve in the configured local zone
+### Requirement: Range boundaries are UTC instants chosen by the client
 
-Month boundaries (`[monthStart, monthNext)`) MUST be derived from `YearMonth` in the zone
-configured by `physical.attendance.zone-id` (default `America/Argentina/Buenos_Aires`), never
-in UTC. A session scheduled late in the local evening near a month boundary MUST be attributed
-to the calendar month that boundary falls in locally, not the UTC-shifted month.
+The backend MUST NOT resolve "the month" or "the day" with a zone: it MUST treat `from` and `to`
+as UTC instants and apply `[from, to)` as given. The property `physical.attendance.zone-id` MUST
+NOT exist. The client (BFF, Android) MUST compute the range in the user's or the academy's zone,
+so a session scheduled late in the local evening near a month boundary is attributed to the
+calendar month it belongs to locally, not the UTC-shifted month.
 
 #### Scenario: A late-evening local session lands in the correct local month
 
-- GIVEN a session scheduled at `2026-09-30T23:30:00-03:00` (local time in the configured zone,
-  which is `2026-10-01T02:30:00Z` in UTC)
-- WHEN the student reads `2026-09`
-- THEN the session is included in September's `sessions[]` and count
-- AND it is excluded from October's `sessions[]` and count
+- GIVEN a session scheduled at `2026-10-01T02:30:00Z` (`2026-09-30T23:30:00-03:00` in Buenos Aires)
+- WHEN a Buenos Aires client reads its September range
+  (`from=2026-09-01T03:00:00Z&to=2026-10-01T03:00:00Z`)
+- THEN the session is included in that range's `sessions[]` and count
+- AND it is excluded from the October range
+  (`from=2026-10-01T03:00:00Z&to=2026-11-01T03:00:00Z`)
 
-### Requirement: Bounded, untruncated response for one month
+### Requirement: Bounded, untruncated response for one range
 
-Neither endpoint MUST paginate. A full calendar month's assignments MUST be returned complete
+Neither endpoint MUST paginate. A full range's assignments (at most 92 days) MUST be returned complete
 and untruncated in a single response.
 
-#### Scenario: A full month returns without truncation
+#### Scenario: A full range returns without truncation
 
-- GIVEN a student with assignments filling every course session offered in one month
-- WHEN the month is read via either endpoint
+- GIVEN a student with assignments filling every course session offered in one range
+- WHEN the range is read via either endpoint
 - THEN `sessions[]` contains every one of those assignments in a single response with no
   page/cursor parameter and no truncation

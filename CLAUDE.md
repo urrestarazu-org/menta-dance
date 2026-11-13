@@ -103,10 +103,10 @@ convierten a la zona del usuario.
   `LocalDate.now()`: el "ahora" sale del puerto `Clock` del módulo.
 - Una consulta "del día" recibe un rango de instantes UTC (`from`, `to`) que calcula el cliente;
   el backend no resuelve "el día" con una zona.
-- Las lecturas de `physical` ya cumplen la regla (reciben un rango UTC `from`/`to`). El código
-  existente que no la cumple (`LocalDateTime.now()` y `LocalDate.now()` en `auth`: `User`,
-  `DemoUserFixture`, `UserProfile`; y la conversión de los clientes) es deuda listada en el ADR:
-  no copiar ese patrón.
+- Las lecturas de `physical` ya cumplen la regla (reciben un rango UTC `from`/`to`) y los clientes
+  ya envían el rango y convierten hora y día. El código existente que no la cumple
+  (`LocalDateTime.now()` y `LocalDate.now()` en `auth`: `User`, `DemoUserFixture`, `UserProfile`) es
+  deuda listada en el ADR: no copiar ese patrón.
 
 ## Comandos de Build
 
