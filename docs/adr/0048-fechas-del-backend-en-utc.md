@@ -174,18 +174,19 @@ recurrencia como hora local más zona (la opción (b)) y se enmendaría este ADR
 Las lecturas de `physical` ya cumplen la regla (#729, parte 2): `ListMyPhysicalSessionsUseCaseImpl`
 y `GetPhysicalAttendanceHistoryUseCaseImpl` reciben un rango UTC `[from, to)` de a lo sumo 92 días
 en lugar de calcular "hoy" o "el mes" con una zona, y las propiedades `physical.attendance.zone-id`
-y `physical.sessions.window-days` se eliminaron. Lo que sigue sin cumplirla se corrige de forma
-gradual y cada punto necesita su propio cambio:
+y `physical.sessions.window-days` se eliminaron. Resuelto en #729 (parte 3): el BFF (#740) y
+Android (#741) calculan y envían el rango UTC y convierten a la zona (la de la academia en el BFF,
+la del dispositivo en Android) la hora **y** el día de la semana de cursos y sesiones, y el
+fixture de la demo (`DemoPhysicalCatalogFixture`) guarda horarios UTC realistas (martes y jueves
+22:00 UTC = 19:00 en Buenos Aires, sábados 14:00 UTC = 11:00). Lo que sigue sin cumplirla se
+corrige de forma gradual y cada punto necesita su propio cambio:
 
-* Los clientes que muestran la hora de las sesiones y los cursos deben convertir desde UTC, y el
-  cliente de gestión debe convertir también el día de la semana y la hora al cargar un curso o una
-  sesión (#729, parte 3). Hoy el BFF muestra `dayOfWeek` y `startTime` del curso tal como llegan
-  (`ClassLabels.schedule`) y Android "Mi asistencia" usa una zona fija.
-* Los clientes deben además mandar el rango UTC a las lecturas de `physical` (el BFF y Android
-  usan todavía `GET /physical/sessions/me` sin rango y `attendance/me?month=`, que ya no existen;
-  #729, parte 3).
-* El fixture de la demo y las sesiones ya creadas deben alinearse con el contrato UTC o
-  regenerarse (#729, parte 3). La aplicación todavía no está en producción.
+* El cliente de gestión debe convertir también la zona local a UTC (día de la semana y hora) al
+  **cargar** un curso o una sesión. Hoy el BFF no tiene ese formulario; se resuelve cuando se
+  construya (#368).
+* Las sesiones ya creadas con la convención anterior (hora local guardada como UTC) y las bases
+  demo sembradas antes de #729 conservan sus horarios viejos: el sembrado de la demo no migra
+  filas existentes, hay que recrear la base demo. La aplicación todavía no está en producción.
 * `User` (9 usos) y `DemoUserFixture` (1) toman la hora con `LocalDateTime.now()`, que usa la
   zona de la JVM. En los contenedores da UTC porque es el valor por defecto de la imagen, pero
   ningún `docker-compose` lo fija; en una máquina de desarrollo en otra zona guardaría hora local.

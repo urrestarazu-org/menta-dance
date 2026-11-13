@@ -339,12 +339,12 @@ Otras variables del perfil (definidas en `api/app/src/main/resources/application
 
 Datos sembrados: los cursos virtuales "Bachata Sensual" y "Bachata Tradicional" (2 módulos cada uno, con
 lecciones gratuitas y restringidas, servidas por el adaptador local de Bunny.net); los cursos presenciales
-"Bachata Sensual Presencial" (martes y jueves 19:00, cupo 12) y "Bachata Tradicional Presencial" (sábados
-11:00, cupo 15), con sesiones para las próximas 4 semanas y una sesión "rolling" unos 10 minutos en el
+"Bachata Sensual Presencial" (martes y jueves 19:00 hora de Buenos Aires, cupo 12) y "Bachata Tradicional Presencial"
+(sábados 11:00 hora de Buenos Aires, cupo 15), con sesiones para las próximas 4 semanas y una sesión "rolling" unos 10 minutos en el
 futuro; precios presenciales de 25000 y 20000 ARS (recargo individual del 20%); "Plan Virtual"
 (30000 ARS, 30 días, ambos cursos virtuales) y "Plan Completo" (60000 ARS, 30 días, los 4 cursos); y un
 TRIAL de 90 días sobre "Plan Completo" para el alumno, que además tiene cupo confirmado en la próxima
-sesión de Sensual y en la sesión rolling. Los horarios se expresan en UTC.
+sesión de Sensual y en la sesión rolling. Los horarios se guardan en UTC (22:00 y 14:00) y los clientes los muestran en hora de Buenos Aires.
 
 Comportamiento a tener en cuenta:
 

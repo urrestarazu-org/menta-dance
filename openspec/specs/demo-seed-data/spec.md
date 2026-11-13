@@ -112,9 +112,11 @@ lessons. Seeded video references MUST work with the local Bunny adapter.
 
 ### Requirement: Physical catalog and sessions
 
-Physical MUST seed "Bachata Sensual Presencial" (Tue/Thu 19:00, capacity
-12) and "Bachata Tradicional Presencial" (Sat 11:00, capacity 15), both
-owned by the instructor user. It MUST create sessions for the next 4
+Physical MUST seed "Bachata Sensual Presencial" (Tue/Thu 19:00 in Buenos
+Aires, stored as 22:00 UTC, capacity 12) and "Bachata Tradicional Presencial"
+(Sat 11:00 in Buenos Aires, stored as 14:00 UTC, capacity 15), both owned by
+the instructor user. Weekdays and times are stored in UTC (ADR-0048) and the
+clients convert them to the academy zone. It MUST create sessions for the next 4
 weeks plus one rolling session about 10 minutes in the future. The
 rolling session MUST be reused or replaced on each start, without
 accumulating.

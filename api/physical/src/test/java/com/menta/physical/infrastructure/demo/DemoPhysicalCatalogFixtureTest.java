@@ -35,9 +35,9 @@ import org.mockito.ArgumentCaptor;
 
 class DemoPhysicalCatalogFixtureTest {
 
-    /** A Wednesday; the first regular Sensual slot is Thursday 2026-10-08 19:00 UTC. */
+    /** A Wednesday; the first regular Sensual slot is Thursday 2026-10-08 22:00 UTC (19:00 in Buenos Aires). */
     private static final Instant NOW = Instant.parse("2026-10-07T17:00:00Z");
-    private static final Instant NEXT_SENSUAL = Instant.parse("2026-10-08T19:00:00Z");
+    private static final Instant NEXT_SENSUAL = Instant.parse("2026-10-08T22:00:00Z");
     private static final CourseId SENSUAL = CourseId.of(DemoIds.PHYSICAL_SENSUAL_COURSE_ID);
     private static final CourseId TRADITIONAL = CourseId.of(DemoIds.PHYSICAL_TRADITIONAL_COURSE_ID);
     private static final SessionId ROLLING = SessionId.of(DemoPhysicalCatalogFixture.ROLLING_SESSION_ID);
@@ -62,12 +62,12 @@ class DemoPhysicalCatalogFixtureTest {
         assertThat(sensual.getId()).isEqualTo(SENSUAL);
         assertThat(sensual.getTitle()).isEqualTo("Bachata Sensual Presencial");
         assertThat(sensual.getDayOfWeek()).isEqualTo(DayOfWeek.TUESDAY);
-        assertThat(sensual.getStartTime()).isEqualTo(LocalTime.of(19, 0));
+        assertThat(sensual.getStartTime()).isEqualTo(LocalTime.of(22, 0));
         assertThat(sensual.getCapacity()).isEqualTo(12);
         assertThat(traditional.getId()).isEqualTo(TRADITIONAL);
         assertThat(traditional.getTitle()).isEqualTo("Bachata Tradicional Presencial");
         assertThat(traditional.getDayOfWeek()).isEqualTo(DayOfWeek.SATURDAY);
-        assertThat(traditional.getStartTime()).isEqualTo(LocalTime.of(11, 0));
+        assertThat(traditional.getStartTime()).isEqualTo(LocalTime.of(14, 0));
         assertThat(traditional.getCapacity()).isEqualTo(15);
         assertThat(captor.getAllValues()).allSatisfy(course -> {
             assertThat(course.getProfessorId()).isEqualTo(DemoIds.INSTRUCTOR_USER_ID);
@@ -93,19 +93,19 @@ class DemoPhysicalCatalogFixtureTest {
         List<PhysicalSession> sensual = captor.getAllValues().get(0);
         List<PhysicalSession> traditional = captor.getAllValues().get(1);
         assertThat(sensual).extracting(PhysicalSession::getScheduledAt).containsExactly(
-            Instant.parse("2026-10-08T19:00:00Z"), Instant.parse("2026-10-13T19:00:00Z"),
-            Instant.parse("2026-10-15T19:00:00Z"), Instant.parse("2026-10-20T19:00:00Z"),
-            Instant.parse("2026-10-22T19:00:00Z"), Instant.parse("2026-10-27T19:00:00Z"),
-            Instant.parse("2026-10-29T19:00:00Z"), Instant.parse("2026-11-03T19:00:00Z"),
-            Instant.parse("2026-11-05T19:00:00Z"), Instant.parse("2026-11-10T19:00:00Z"),
-            Instant.parse("2026-11-12T19:00:00Z"), Instant.parse("2026-11-17T19:00:00Z"),
-            Instant.parse("2026-11-19T19:00:00Z"), Instant.parse("2026-11-24T19:00:00Z"),
-            Instant.parse("2026-11-26T19:00:00Z"), Instant.parse("2026-12-01T19:00:00Z"));
+            Instant.parse("2026-10-08T22:00:00Z"), Instant.parse("2026-10-13T22:00:00Z"),
+            Instant.parse("2026-10-15T22:00:00Z"), Instant.parse("2026-10-20T22:00:00Z"),
+            Instant.parse("2026-10-22T22:00:00Z"), Instant.parse("2026-10-27T22:00:00Z"),
+            Instant.parse("2026-10-29T22:00:00Z"), Instant.parse("2026-11-03T22:00:00Z"),
+            Instant.parse("2026-11-05T22:00:00Z"), Instant.parse("2026-11-10T22:00:00Z"),
+            Instant.parse("2026-11-12T22:00:00Z"), Instant.parse("2026-11-17T22:00:00Z"),
+            Instant.parse("2026-11-19T22:00:00Z"), Instant.parse("2026-11-24T22:00:00Z"),
+            Instant.parse("2026-11-26T22:00:00Z"), Instant.parse("2026-12-01T22:00:00Z"));
         assertThat(traditional).extracting(PhysicalSession::getScheduledAt).containsExactly(
-            Instant.parse("2026-10-10T11:00:00Z"), Instant.parse("2026-10-17T11:00:00Z"),
-            Instant.parse("2026-10-24T11:00:00Z"), Instant.parse("2026-10-31T11:00:00Z"),
-            Instant.parse("2026-11-07T11:00:00Z"), Instant.parse("2026-11-14T11:00:00Z"),
-            Instant.parse("2026-11-21T11:00:00Z"), Instant.parse("2026-11-28T11:00:00Z"));
+            Instant.parse("2026-10-10T14:00:00Z"), Instant.parse("2026-10-17T14:00:00Z"),
+            Instant.parse("2026-10-24T14:00:00Z"), Instant.parse("2026-10-31T14:00:00Z"),
+            Instant.parse("2026-11-07T14:00:00Z"), Instant.parse("2026-11-14T14:00:00Z"),
+            Instant.parse("2026-11-21T14:00:00Z"), Instant.parse("2026-11-28T14:00:00Z"));
         assertThat(sensual).allSatisfy(session -> {
             assertThat(session.getCourseId()).isEqualTo(SENSUAL);
             assertThat(session.getCapacity()).isEqualTo(12);
@@ -116,14 +116,14 @@ class DemoPhysicalCatalogFixtureTest {
 
     @Test
     void a_slot_earlier_today_is_not_created() {
-        Instant tuesdayNight = Instant.parse("2026-10-13T20:00:00Z");
+        Instant tuesdayNight = Instant.parse("2026-10-13T23:00:00Z");
         new DemoPhysicalCatalogFixture(
             courses, sessions, assignments, assignmentPort, () -> tuesdayNight, new QrProperties()).run(mock());
 
         ArgumentCaptor<List<PhysicalSession>> captor = ArgumentCaptor.forClass(List.class);
         verify(sessions, times(2)).saveAll(captor.capture());
         assertThat(captor.getAllValues().get(0)).extracting(PhysicalSession::getScheduledAt)
-            .first().isEqualTo(Instant.parse("2026-10-15T19:00:00Z"));
+            .first().isEqualTo(Instant.parse("2026-10-15T22:00:00Z"));
     }
 
     @Test
