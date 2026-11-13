@@ -4,11 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.menta.android.di.IoDispatcher
 import com.menta.android.domain.model.AttendanceHistoryResult
+import com.menta.android.domain.time.DeviceZone
 import com.menta.android.domain.usecase.GetMyAttendanceUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.Clock
 import java.time.YearMonth
-import java.time.ZoneId
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Job
@@ -19,13 +19,11 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** Fixed business zone of the academy: the month is cut here, never in UTC or the device zone. */
-internal val ACADEMY_ZONE: ZoneId = ZoneId.of("America/Argentina/Buenos_Aires")
-
 @HiltViewModel
 class AttendanceHistoryViewModel @Inject constructor(
     private val getMyAttendance: GetMyAttendanceUseCase,
     private val clock: Clock,
+    private val deviceZone: DeviceZone,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(
@@ -82,5 +80,5 @@ class AttendanceHistoryViewModel @Inject constructor(
     private fun isBeforeCurrent(month: YearMonth) = month < current()
 
     /** `TestClock.withZone` returns itself, so the zone is applied to the instant, not to the clock. */
-    private fun current(): YearMonth = YearMonth.from(clock.instant().atZone(ACADEMY_ZONE))
+    private fun current(): YearMonth = YearMonth.from(clock.instant().atZone(deviceZone.current()))
 }

@@ -29,6 +29,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.menta.android.R
 import com.menta.android.domain.model.AttendanceEntry
 import com.menta.android.presentation.mysessions.formatSessionTime
+import java.time.ZoneId
 import java.util.Locale
 
 private val ATTENDANCE_LOCALE: Locale = Locale.forLanguageTag("es-AR")
@@ -118,9 +119,9 @@ private fun AttendanceList(entries: List<AttendanceEntry>) {
 @Composable
 private fun AttendanceItem(entry: AttendanceEntry) {
     val classLabel = remember(entry.scheduledAt) {
-        formatSessionTime(entry.scheduledAt, ACADEMY_ZONE, ATTENDANCE_LOCALE)
+        formatSessionTime(entry.scheduledAt, ZoneId.systemDefault(), ATTENDANCE_LOCALE)
     }
-    val checkInTime = remember(entry.recordedAt) { formatCheckInTime(entry.recordedAt, ACADEMY_ZONE) }
+    val checkInTime = remember(entry.recordedAt) { formatCheckInTime(entry.recordedAt, ZoneId.systemDefault()) }
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(text = entry.courseName, style = MaterialTheme.typography.titleMedium)

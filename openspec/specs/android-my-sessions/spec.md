@@ -8,7 +8,7 @@ Upcoming in-person sessions list ("Mis clases") for the student Android app (#37
 
 ### Requirement: Upcoming sessions list
 
-The app MUST show the sessions returned by `GET /api/v1/physical/sessions/me`, in the server order (`scheduledAt` ascending). Each item MUST show course name, instructor name and the scheduled start in the device time zone. All user-facing text MUST be Spanish.
+The app MUST request `GET /api/v1/physical/sessions/me?from=<instant>&to=<instant>` with the half-open UTC window `[now - 1 day, now + 30 days)` (ISO-8601 instants with `Z`, `now` from the injected `Clock`) and MUST show the sessions returned, in the server order (`scheduledAt` ascending). Each item MUST show course name, instructor name and the scheduled start in the device time zone. All user-facing text MUST be Spanish.
 
 #### Scenario: Sessions returned
 - GIVEN the API answers 200 with two sessions

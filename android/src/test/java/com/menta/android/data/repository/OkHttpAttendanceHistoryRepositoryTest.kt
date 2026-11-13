@@ -3,8 +3,11 @@ package com.menta.android.data.repository
 import com.menta.android.domain.model.AttendanceEntry
 import com.menta.android.domain.model.AttendanceHistoryResult
 import com.menta.android.domain.model.AttendanceOrigin
+import com.menta.android.domain.time.DeviceZone
 import java.time.Instant
 import java.time.YearMonth
+import java.time.ZoneId
+import java.time.ZoneOffset
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import okhttp3.OkHttpClient
@@ -17,6 +20,7 @@ import org.junit.Test
 class OkHttpAttendanceHistoryRepositoryTest {
     private lateinit var server: MockWebServer
     private lateinit var repository: OkHttpAttendanceHistoryRepository
+    private var zone: ZoneId = ZoneOffset.UTC
 
     private val september = YearMonth.of(2026, 9)
 
@@ -24,7 +28,7 @@ class OkHttpAttendanceHistoryRepositoryTest {
     fun setUp() {
         server = MockWebServer()
         server.start()
-        repository = OkHttpAttendanceHistoryRepository(OkHttpClient(), server.url("/").toString())
+        repository = OkHttpAttendanceHistoryRepository(OkHttpClient(), server.url("/").toString(), { zone })
     }
 
     @After
@@ -33,7 +37,7 @@ class OkHttpAttendanceHistoryRepositoryTest {
     }
 
     @Test
-    fun the_request_is_a_get_with_the_month_query_and_the_accept_header_and_nothing_else() {
+    fun the_request_is_a_get_with_the_utc_range_query_and_the_accept_header_and_nothing_else() {
         server.enqueue(okJson(historyBody()))
 
         repository.monthlyAttendance(september)
@@ -41,25 +45,67 @@ class OkHttpAttendanceHistoryRepositoryTest {
         val request = server.takeRequest()
         assertEquals("GET", request.method)
         assertEquals("/api/v1/physical/attendance/me", request.url.encodedPath)
-        assertEquals("month=2026-09", request.url.encodedQuery)
+        assertEquals("from=2026-09-01T00%3A00%3A00Z&to=2026-10-01T00%3A00%3A00Z", request.url.encodedQuery)
+        assertNull(request.url.queryParameter("month"))
         assertNull(request.url.queryParameter("studentId"))
         assertNull(request.url.queryParameter("includeAbsent"))
         assertEquals("application/json, application/problem+json", request.headers["Accept"])
     }
 
     @Test
-    fun the_month_query_follows_the_requested_month() {
+    fun the_range_follows_the_requested_month_and_crosses_the_year_end() {
+        server.enqueue(okJson(historyBody()))
         server.enqueue(okJson(historyBody()))
 
         repository.monthlyAttendance(YearMonth.of(2024, 1))
+        repository.monthlyAttendance(YearMonth.of(2026, 12))
 
-        assertEquals("month=2024-01", server.takeRequest().url.encodedQuery)
+        assertRange("2024-01-01T00:00:00Z", "2024-02-01T00:00:00Z", server.takeRequest())
+        assertRange("2026-12-01T00:00:00Z", "2027-01-01T00:00:00Z", server.takeRequest())
+    }
+
+    @Test
+    fun the_month_is_cut_in_the_device_zone_and_sent_as_utc_instants() {
+        zone = ZoneId.of("America/Argentina/Buenos_Aires")
+        server.enqueue(okJson(historyBody()))
+
+        repository.monthlyAttendance(YearMonth.of(2026, 11))
+
+        assertRange("2026-11-01T03:00:00Z", "2026-12-01T03:00:00Z", server.takeRequest())
+    }
+
+    @Test
+    fun a_zone_ahead_of_utc_starts_the_month_on_the_previous_utc_day() {
+        zone = ZoneId.of("Asia/Tokyo")
+        server.enqueue(okJson(historyBody()))
+
+        repository.monthlyAttendance(september)
+
+        assertRange("2026-08-31T15:00:00Z", "2026-09-30T15:00:00Z", server.takeRequest())
+    }
+
+    @Test
+    fun the_zone_is_read_on_every_request_so_a_device_zone_change_is_honored() {
+        server.enqueue(okJson(historyBody()))
+        server.enqueue(okJson(historyBody()))
+
+        repository.monthlyAttendance(september)
+        zone = ZoneId.of("America/Argentina/Buenos_Aires")
+        repository.monthlyAttendance(september)
+
+        assertRange("2026-09-01T00:00:00Z", "2026-10-01T00:00:00Z", server.takeRequest())
+        assertRange("2026-09-01T03:00:00Z", "2026-10-01T03:00:00Z", server.takeRequest())
+    }
+
+    private fun assertRange(from: String, to: String, request: mockwebserver3.RecordedRequest) {
+        assertEquals(from, request.url.queryParameter("from"))
+        assertEquals(to, request.url.queryParameter("to"))
     }
 
     @Test
     fun a_trailing_slash_in_the_base_url_does_not_duplicate_the_separator() {
         server.enqueue(okJson(historyBody()))
-        val slashed = OkHttpAttendanceHistoryRepository(OkHttpClient(), server.url("/").toString().trimEnd('/') + "/")
+        val slashed = OkHttpAttendanceHistoryRepository(OkHttpClient(), server.url("/").toString().trimEnd('/') + "/", { zone })
 
         slashed.monthlyAttendance(september)
 
@@ -183,7 +229,7 @@ class OkHttpAttendanceHistoryRepositoryTest {
     fun aggregates_and_unknown_fields_are_tolerated() {
         server.enqueue(
             okJson(
-                """{"month":"2026-09","scheduledSessionCount":3,"attended":1,"absent":2,"attendanceRate":33.33,"extra":true,"sessions":[
+                """{"from":"2026-09-01T00:00:00Z","to":"2026-10-01T00:00:00Z","scheduledSessionCount":3,"attended":1,"absent":2,"attendanceRate":33.33,"extra":true,"sessions":[
                     {"sessionId":"s-1","courseId":"c-1","courseName":"Salsa","instructorName":"Ana",
                     "scheduledAt":"2026-09-03T22:00:00Z","status":"ATTENDED","recordedAt":"2026-09-03T22:02:00Z","kind":"QR","room":"A"}
                 ]}""",
@@ -233,7 +279,7 @@ class OkHttpAttendanceHistoryRepositoryTest {
     fun an_io_failure_is_unavailable() {
         val deadUrl = server.url("/").toString()
         server.close()
-        val offline = OkHttpAttendanceHistoryRepository(OkHttpClient(), deadUrl)
+        val offline = OkHttpAttendanceHistoryRepository(OkHttpClient(), deadUrl, { zone })
 
         assertEquals(AttendanceHistoryResult.Unavailable, offline.monthlyAttendance(september))
     }
@@ -242,7 +288,7 @@ class OkHttpAttendanceHistoryRepositoryTest {
         MockResponse.Builder().code(200).addHeader("Content-Type", "application/json").body(body).build()
 
     private fun historyBody(vararg sessions: String) =
-        """{"month":"2026-09","scheduledSessionCount":${sessions.size},"attended":${sessions.size},"absent":0,"attendanceRate":100.0,""" +
+        """{"from":"2026-09-01T00:00:00Z","to":"2026-10-01T00:00:00Z","scheduledSessionCount":${sessions.size},"attended":${sessions.size},"absent":0,"attendanceRate":100.0,""" +
             """"sessions":[${sessions.joinToString(",")}]}"""
 
     /** [kind] and [recordedAt] render as JSON `null` when null; [ABSENT_KEY] omits `kind` entirely. */

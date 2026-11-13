@@ -31,9 +31,15 @@ class OkHttpPhysicalSessionsRepository(
 ) : PhysicalSessionsRepository {
     private val base: HttpUrl = baseUrl.toHttpUrl()
 
-    override fun mySessions(): MySessionsResult = try {
+    override fun mySessions(from: Instant, to: Instant): MySessionsResult = try {
         val request = Request.Builder()
-            .url(base.newBuilder().addPathSegments(MY_SESSIONS_PATH).build())
+            .url(
+                base.newBuilder()
+                    .addPathSegments(MY_SESSIONS_PATH)
+                    .addQueryParameter("from", from.toString())
+                    .addQueryParameter("to", to.toString())
+                    .build(),
+            )
             .get()
             .header("Accept", "application/json, application/problem+json")
             .build()

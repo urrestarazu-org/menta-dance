@@ -3,11 +3,13 @@ package com.menta.android.testing
 import com.menta.android.domain.model.AccessQrResult
 import com.menta.android.domain.model.MySessionsResult
 import com.menta.android.domain.repository.PhysicalSessionsRepository
+import java.time.Instant
 
 class FakePhysicalSessionsRepository : PhysicalSessionsRepository {
     /** Returned by every call; tests reassign it between calls to script a sequence. */
     var mySessionsResult: MySessionsResult = MySessionsResult.Loaded(emptyList())
-    var mySessionsCalls = 0
+    val mySessionsRanges = mutableListOf<Pair<Instant, Instant>>()
+    val mySessionsCalls get() = mySessionsRanges.size
 
     /** Consumed first-in first-out by [issueAccessQr]; once empty, [accessQrResult] is returned. */
     val accessQrScript = ArrayDeque<AccessQrResult>()
@@ -15,8 +17,8 @@ class FakePhysicalSessionsRepository : PhysicalSessionsRepository {
     val accessQrRequests = mutableListOf<String>()
     val accessQrCalls get() = accessQrRequests.size
 
-    override fun mySessions(): MySessionsResult {
-        mySessionsCalls++
+    override fun mySessions(from: Instant, to: Instant): MySessionsResult {
+        mySessionsRanges += from to to
         return mySessionsResult
     }
 

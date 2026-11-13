@@ -11,6 +11,7 @@ import java.time.Clock
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.YearMonth
+import java.time.ZoneId
 import java.time.ZoneOffset
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceTimeBy
@@ -28,16 +29,19 @@ class AttendanceHistoryViewModelTest {
 
     private val repository = FakeAttendanceHistoryRepository()
 
-    private fun viewModelAt(instant: String) = AttendanceHistoryViewModel(
+    private val buenosAires = ZoneId.of("America/Argentina/Buenos_Aires")
+
+    private fun viewModelAt(instant: String, zone: ZoneId = buenosAires) = AttendanceHistoryViewModel(
         GetMyAttendanceUseCase(repository),
         Clock.fixed(Instant.parse(instant), ZoneOffset.UTC),
+        { zone },
         mainRule.dispatcher,
     )
 
     // --- Default month and no load in init ---
 
     @Test
-    fun the_default_month_is_the_current_month_in_buenos_aires() {
+    fun the_default_month_is_the_current_month_in_the_device_zone() {
         val viewModel = viewModelAt("2026-09-15T15:00:00Z")
 
         assertEquals(YearMonth.of(2026, 9), viewModel.uiState.value.month)
@@ -48,6 +52,14 @@ class AttendanceHistoryViewModelTest {
         // 2026-10-01T01:30Z is 2026-09-30 22:30 in Buenos Aires.
         assertEquals(YearMonth.of(2026, 9), viewModelAt("2026-10-01T01:30:00Z").uiState.value.month)
         assertEquals(YearMonth.of(2026, 9), viewModelAt(OffsetDateTime.parse("2026-09-30T23:30:00-03:00").toInstant().toString()).uiState.value.month)
+    }
+
+    @Test
+    fun the_month_is_cut_in_the_device_zone_not_in_a_fixed_one() {
+        // 2026-12-01T01:00Z is still 2026-11-30 22:00 in Buenos Aires but already December in UTC and Tokyo.
+        assertEquals(YearMonth.of(2026, 11), viewModelAt("2026-12-01T01:00:00Z", buenosAires).uiState.value.month)
+        assertEquals(YearMonth.of(2026, 12), viewModelAt("2026-12-01T01:00:00Z", ZoneOffset.UTC).uiState.value.month)
+        assertEquals(YearMonth.of(2026, 12), viewModelAt("2026-11-30T16:00:00Z", ZoneId.of("Asia/Tokyo")).uiState.value.month)
     }
 
     @Test
@@ -281,6 +293,7 @@ class AttendanceHistoryViewModelTest {
     private fun viewModelBeforeTheSeptemberRollover() = AttendanceHistoryViewModel(
         GetMyAttendanceUseCase(repository),
         TestClock(mainRule.dispatcher.scheduler, Instant.parse("2026-10-01T02:30:00Z")),
+        { buenosAires },
         mainRule.dispatcher,
     )
 

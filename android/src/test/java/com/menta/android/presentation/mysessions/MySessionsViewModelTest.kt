@@ -5,8 +5,10 @@ import com.menta.android.domain.model.MySessionsResult
 import com.menta.android.domain.usecase.GetMySessionsUseCase
 import com.menta.android.testing.FakePhysicalSessionsRepository
 import com.menta.android.testing.MainDispatcherRule
+import com.menta.android.testing.TestClock
 import java.time.Instant
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -18,7 +20,11 @@ class MySessionsViewModelTest {
     @get:Rule val mainRule = MainDispatcherRule()
 
     private val repository = FakePhysicalSessionsRepository()
-    private val viewModel = MySessionsViewModel(GetMySessionsUseCase(repository), mainRule.dispatcher)
+    private val viewModel = MySessionsViewModel(
+        GetMySessionsUseCase(repository),
+        TestClock(mainRule.dispatcher.scheduler, Instant.parse("2026-10-05T18:00:00Z")),
+        mainRule.dispatcher,
+    )
 
     private fun session(id: String, checkInOpen: Boolean = false) =
         MySession(id, "Salsa", "Ana", Instant.parse("2026-10-05T21:30:00Z"), checkInOpen)
@@ -29,6 +35,32 @@ class MySessionsViewModelTest {
 
         assertEquals(MySessionsUiState.Loading, viewModel.uiState.value)
         assertEquals(0, repository.mySessionsCalls)
+    }
+
+    @Test
+    fun refresh_requests_the_window_from_one_day_ago_to_thirty_days_ahead() = runTest {
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(Instant.parse("2026-10-04T18:00:00Z") to Instant.parse("2026-11-04T18:00:00Z")),
+            repository.mySessionsRanges,
+        )
+    }
+
+    @Test
+    fun a_later_refresh_moves_the_window_with_the_clock() = runTest {
+        viewModel.refresh()
+        advanceUntilIdle()
+        advanceTimeBy(60 * 60 * 1000L)
+
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        assertEquals(
+            Instant.parse("2026-10-04T19:00:00Z") to Instant.parse("2026-11-04T19:00:00Z"),
+            repository.mySessionsRanges.last(),
+        )
     }
 
     @Test
