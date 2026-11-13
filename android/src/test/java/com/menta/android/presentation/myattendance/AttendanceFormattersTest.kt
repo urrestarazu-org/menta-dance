@@ -5,6 +5,7 @@ import com.menta.android.domain.model.AttendanceOrigin
 import com.menta.android.presentation.mysessions.formatSessionTime
 import java.time.Instant
 import java.time.YearMonth
+import java.time.ZoneId
 import java.util.Locale
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -12,6 +13,7 @@ import org.junit.Test
 
 class AttendanceFormattersTest {
     private val esAr = Locale.forLanguageTag("es-AR")
+    private val buenosAires = ZoneId.of("America/Argentina/Buenos_Aires")
 
     @Test
     fun month_label_is_spanish_and_lowercase() {
@@ -20,12 +22,12 @@ class AttendanceFormattersTest {
 
     @Test
     fun check_in_time_is_rendered_in_the_given_zone() {
-        assertEquals("19:02", formatCheckInTime(Instant.parse("2026-09-03T22:02:00Z"), ACADEMY_ZONE))
+        assertEquals("19:02", formatCheckInTime(Instant.parse("2026-09-03T22:02:00Z"), buenosAires))
     }
 
     @Test
-    fun check_in_time_follows_the_academy_zone_across_midnight() {
-        assertEquals("23:30", formatCheckInTime(Instant.parse("2026-10-01T02:30:00Z"), ACADEMY_ZONE))
+    fun check_in_time_follows_the_given_zone_across_midnight() {
+        assertEquals("23:30", formatCheckInTime(Instant.parse("2026-10-01T02:30:00Z"), buenosAires))
     }
 
     @Test
@@ -40,14 +42,14 @@ class AttendanceFormattersTest {
     }
 
     @Test
-    fun class_time_is_cut_in_buenos_aires_time() {
+    fun class_time_is_cut_in_the_given_zone() {
         assertEquals(
             "jueves 3 de septiembre, 19:00",
-            formatSessionTime(Instant.parse("2026-09-03T22:00:00Z"), ACADEMY_ZONE, esAr),
+            formatSessionTime(Instant.parse("2026-09-03T22:00:00Z"), buenosAires, esAr),
         )
         assertEquals(
             "miércoles 30 de septiembre, 23:30",
-            formatSessionTime(Instant.parse("2026-10-01T02:30:00Z"), ACADEMY_ZONE, esAr),
+            formatSessionTime(Instant.parse("2026-10-01T02:30:00Z"), buenosAires, esAr),
         )
     }
 }

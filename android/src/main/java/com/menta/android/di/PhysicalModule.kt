@@ -5,6 +5,7 @@ import com.menta.android.data.repository.OkHttpAttendanceHistoryRepository
 import com.menta.android.data.repository.OkHttpPhysicalSessionsRepository
 import com.menta.android.domain.repository.AttendanceHistoryRepository
 import com.menta.android.domain.repository.PhysicalSessionsRepository
+import com.menta.android.domain.time.DeviceZone
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -20,6 +21,8 @@ object PhysicalModule {
         OkHttpPhysicalSessionsRepository(client, BuildConfig.API_BASE_URL)
 
     @Provides @Singleton
-    fun attendanceHistoryRepository(@ApiHttpClient client: OkHttpClient): AttendanceHistoryRepository =
-        OkHttpAttendanceHistoryRepository(client, BuildConfig.API_BASE_URL)
+    fun attendanceHistoryRepository(
+        @ApiHttpClient client: OkHttpClient,
+        deviceZone: DeviceZone,
+    ): AttendanceHistoryRepository = OkHttpAttendanceHistoryRepository(client, BuildConfig.API_BASE_URL, deviceZone)
 }

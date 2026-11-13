@@ -6,6 +6,7 @@ import com.menta.android.domain.model.AttendanceEntry
 import com.menta.android.domain.model.AttendanceHistoryResult
 import com.menta.android.domain.model.AttendanceOrigin
 import com.menta.android.domain.repository.AttendanceHistoryRepository
+import com.menta.android.domain.time.DeviceZone
 import java.time.Instant
 import java.time.YearMonth
 import kotlinx.serialization.json.Json
@@ -18,19 +19,24 @@ import okhttp3.Request
  * OkHttp adapter for the monthly attendance history. The supplied [client] is the `@ApiHttpClient`
  * stack (Bearer injection, single refresh-and-retry) and must not carry a logging interceptor.
  * Every failure collapses into [AttendanceHistoryResult.Unavailable].
+ *
+ * The API takes a half-open UTC range `[from, to)`; the month is cut in the [deviceZone] (ADR-0048).
  */
 class OkHttpAttendanceHistoryRepository(
     private val client: OkHttpClient,
     baseUrl: String,
+    private val deviceZone: DeviceZone,
 ) : AttendanceHistoryRepository {
     private val base: HttpUrl = baseUrl.toHttpUrl()
 
     override fun monthlyAttendance(month: YearMonth): AttendanceHistoryResult = try {
+        val zone = deviceZone.current()
         val request = Request.Builder()
             .url(
                 base.newBuilder()
                     .addPathSegments(ATTENDANCE_PATH)
-                    .addQueryParameter("month", month.toString())
+                    .addQueryParameter("from", month.atDay(1).atStartOfDay(zone).toInstant().toString())
+                    .addQueryParameter("to", month.plusMonths(1).atDay(1).atStartOfDay(zone).toInstant().toString())
                     .build(),
             )
             .get()

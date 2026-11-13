@@ -19,6 +19,9 @@ class OkHttpPhysicalSessionsRepositoryTest {
     private lateinit var server: MockWebServer
     private lateinit var repository: OkHttpPhysicalSessionsRepository
 
+    private val from = Instant.parse("2026-10-04T18:00:00Z")
+    private val to = Instant.parse("2026-11-03T18:00:00Z")
+
     @Before
     fun setUp() {
         server = MockWebServer()
@@ -35,7 +38,7 @@ class OkHttpPhysicalSessionsRepositoryTest {
     fun my_sessions_issues_a_get_with_the_json_and_problem_json_accept_header() {
         server.enqueue(okJson(sessionsBody()))
 
-        repository.mySessions()
+        repository.mySessions(from, to)
 
         val request = server.takeRequest()
         assertEquals("GET", request.method)
@@ -44,11 +47,23 @@ class OkHttpPhysicalSessionsRepositoryTest {
     }
 
     @Test
+    fun my_sessions_sends_the_utc_range_as_iso_instants_with_z() {
+        server.enqueue(okJson(sessionsBody()))
+
+        repository.mySessions(from, to)
+
+        assertEquals(
+            "from=2026-10-04T18%3A00%3A00Z&to=2026-11-03T18%3A00%3A00Z",
+            server.takeRequest().url.encodedQuery,
+        )
+    }
+
+    @Test
     fun a_trailing_slash_in_the_base_url_does_not_duplicate_the_separator() {
         server.enqueue(okJson(sessionsBody()))
         val slashed = OkHttpPhysicalSessionsRepository(OkHttpClient(), server.url("/").toString().trimEnd('/') + "/")
 
-        slashed.mySessions()
+        slashed.mySessions(from, to)
 
         assertEquals("/api/v1/physical/sessions/me", server.takeRequest().url.encodedPath)
     }
@@ -64,7 +79,7 @@ class OkHttpPhysicalSessionsRepositoryTest {
             ),
         )
 
-        val result = repository.mySessions()
+        val result = repository.mySessions(from, to)
 
         assertEquals(
             MySessionsResult.Loaded(
@@ -88,7 +103,7 @@ class OkHttpPhysicalSessionsRepositoryTest {
             ),
         )
 
-        val result = repository.mySessions() as MySessionsResult.Loaded
+        val result = repository.mySessions(from, to) as MySessionsResult.Loaded
 
         assertEquals(listOf("started", "later"), result.sessions.map { it.sessionId })
     }
@@ -97,7 +112,7 @@ class OkHttpPhysicalSessionsRepositoryTest {
     fun an_empty_sessions_array_is_loaded_with_no_sessions() {
         server.enqueue(okJson(sessionsBody()))
 
-        assertEquals(MySessionsResult.Loaded(emptyList()), repository.mySessions())
+        assertEquals(MySessionsResult.Loaded(emptyList()), repository.mySessions(from, to))
     }
 
     @Test
@@ -111,7 +126,7 @@ class OkHttpPhysicalSessionsRepositoryTest {
             ),
         )
 
-        val result = repository.mySessions()
+        val result = repository.mySessions(from, to)
 
         assertEquals(
             MySessionsResult.Loaded(
@@ -125,7 +140,7 @@ class OkHttpPhysicalSessionsRepositoryTest {
     fun a_malformed_body_is_unavailable() {
         server.enqueue(okJson("oops"))
 
-        assertEquals(MySessionsResult.Unavailable, repository.mySessions())
+        assertEquals(MySessionsResult.Unavailable, repository.mySessions(from, to))
     }
 
     @Test
@@ -134,28 +149,28 @@ class OkHttpPhysicalSessionsRepositoryTest {
             okJson(sessionsBody("""{"sessionId":"s-1","courseName":"Salsa","scheduledAt":"2026-10-05T18:30:00Z","checkInOpen":true}""")),
         )
 
-        assertEquals(MySessionsResult.Unavailable, repository.mySessions())
+        assertEquals(MySessionsResult.Unavailable, repository.mySessions(from, to))
     }
 
     @Test
     fun a_bad_instant_is_unavailable() {
         server.enqueue(okJson(sessionsBody(sessionJson("s-1", "Salsa", "Ana", "not-an-instant", checkInOpen = true))))
 
-        assertEquals(MySessionsResult.Unavailable, repository.mySessions())
+        assertEquals(MySessionsResult.Unavailable, repository.mySessions(from, to))
     }
 
     @Test
     fun a_server_error_is_unavailable() {
         server.enqueue(MockResponse.Builder().code(500).body("boom").build())
 
-        assertEquals(MySessionsResult.Unavailable, repository.mySessions())
+        assertEquals(MySessionsResult.Unavailable, repository.mySessions(from, to))
     }
 
     @Test
     fun an_unauthorized_answer_is_unavailable_and_left_to_the_session_gate() {
         server.enqueue(MockResponse.Builder().code(401).build())
 
-        assertEquals(MySessionsResult.Unavailable, repository.mySessions())
+        assertEquals(MySessionsResult.Unavailable, repository.mySessions(from, to))
     }
 
     @Test
@@ -164,7 +179,7 @@ class OkHttpPhysicalSessionsRepositoryTest {
         server.close()
         val offline = OkHttpPhysicalSessionsRepository(OkHttpClient(), deadUrl)
 
-        assertEquals(MySessionsResult.Unavailable, offline.mySessions())
+        assertEquals(MySessionsResult.Unavailable, offline.mySessions(from, to))
     }
 
     @Test

@@ -8,12 +8,17 @@ Monthly attended-classes history ("Mi asistencia") for the student Android app (
 
 ### Requirement: Monthly attendance request
 
-For the selected month the app MUST request `GET /api/v1/physical/attendance/me?month=YYYY-MM` through the authenticated API client. It MUST NOT send a `studentId` and MUST NOT send `includeAbsent`, so the list contains attended classes only. The app MUST NOT paginate: the whole month arrives in one response.
+For the selected month the app MUST request `GET /api/v1/physical/attendance/me?from=<instant>&to=<instant>` through the authenticated API client, where `[from, to)` is the selected month cut in the device time zone (first day 00:00 inclusive to first day of the next month 00:00 exclusive) and both bounds are UTC ISO-8601 instants with `Z` (ADR-0048). It MUST NOT send `month`. It MUST NOT send a `studentId` and MUST NOT send `includeAbsent`, so the list contains attended classes only. The app MUST NOT paginate: the whole month arrives in one response.
 
 #### Scenario: Request shape
 - GIVEN the selected month is 2026-09
 - WHEN the history loads
-- THEN exactly one request is made with the path `/api/v1/physical/attendance/me`, query `month=2026-09`, no `studentId` and no `includeAbsent`, carrying the session credentials
+- THEN exactly one request is made with the path `/api/v1/physical/attendance/me`, query `from=2026-09-01T00:00:00Z&to=2026-10-01T00:00:00Z` (device zone UTC), no `month`, no `studentId` and no `includeAbsent`, carrying the session credentials
+
+#### Scenario: Month bounds follow the device zone
+- GIVEN the device zone is `America/Argentina/Buenos_Aires` and the selected month is 2026-11
+- WHEN the history loads
+- THEN the query is `from=2026-11-01T03:00:00Z&to=2026-12-01T03:00:00Z`
 
 #### Scenario: Whole month in one response
 - GIVEN the API answers 200 with 12 attended sessions
@@ -22,15 +27,15 @@ For the selected month the app MUST request `GET /api/v1/physical/attendance/me?
 
 ### Requirement: Month selector and default month
 
-The screen MUST show a selector with an "Anterior" text button, a month label (Spanish, lowercase month name, e.g. "septiembre de 2026") and a "Siguiente" text button. The initial month MUST be the current calendar month in the fixed zone `America/Argentina/Buenos_Aires`, computed from the injected `Clock` (never from the raw UTC date and never from the device zone). "Anterior" MUST select the previous month with no lower bound. "Siguiente" MUST select the next month and MUST be disabled when the selected month is the current month, so no future month can be selected.
+The screen MUST show a selector with an "Anterior" text button, a month label (Spanish, lowercase month name, e.g. "septiembre de 2026") and a "Siguiente" text button. The initial month MUST be the current calendar month in the device time zone, computed from the injected `Clock` and the injected device zone (never from the raw UTC date). "Anterior" MUST select the previous month with no lower bound. "Siguiente" MUST select the next month and MUST be disabled when the selected month is the current month, so no future month can be selected.
 
 #### Scenario: Default is the current month
 - GIVEN the clock reads 2026-09-15T15:00:00Z
 - WHEN the screen state is created
 - THEN the selected month is 2026-09 AND the label is "septiembre de 2026"
 
-#### Scenario: Last evening of a month in Buenos Aires
-- GIVEN the clock reads 2026-10-01T01:30:00Z (2026-09-30 22:30 in Buenos Aires)
+#### Scenario: Last evening of a month in the device zone
+- GIVEN the device zone is `America/Argentina/Buenos_Aires` and the clock reads 2026-10-01T01:30:00Z (2026-09-30 22:30 there)
 - WHEN the screen state is created
 - THEN the selected month is 2026-09, not 2026-10
 
@@ -46,7 +51,7 @@ The screen MUST show a selector with an "Anterior" text button, a month label (S
 
 ### Requirement: Attendance row content
 
-Each attended session MUST be listed in the server order, showing the course name, the class date and start time, the instructor name and one check-in line that combines the origin and the check-in time. The class date and time and the check-in time MUST be rendered in `America/Argentina/Buenos_Aires` in Spanish. The check-in time MUST derive from `recordedAt`. The check-in line MUST read "Ingreso por QR · HH:mm" when `kind` is `QR`, "Ingreso en recepción · HH:mm" when `kind` is `MANUAL`, and "Ingreso HH:mm" (no origin) when `kind` is null, absent or any other value. The origin wording MUST NOT start with "Con", which is reserved for the instructor line.
+Each attended session MUST be listed in the server order, showing the course name, the class date and start time, the instructor name and one check-in line that combines the origin and the check-in time. The class date and time and the check-in time MUST be rendered in the device time zone in Spanish. The check-in time MUST derive from `recordedAt`. The check-in line MUST read "Ingreso por QR · HH:mm" when `kind` is `QR`, "Ingreso en recepción · HH:mm" when `kind` is `MANUAL`, and "Ingreso HH:mm" (no origin) when `kind` is null, absent or any other value. The origin wording MUST NOT start with "Con", which is reserved for the instructor line.
 
 #### Scenario: QR attendance
 - GIVEN a row "Salsa" / "Ana", `scheduledAt` 2026-09-03T22:00:00Z, `recordedAt` 2026-09-03T22:02:00Z, `kind` QR
@@ -63,8 +68,8 @@ Each attended session MUST be listed in the server order, showing the course nam
 - WHEN the response is parsed
 - THEN parsing succeeds AND each row is listed with the check-in line "Ingreso HH:mm" and no origin
 
-#### Scenario: Server order and Buenos Aires month cut
-- GIVEN rows returned for 2026-09 in order [A, B], B at 2026-10-01T02:30:00Z
+#### Scenario: Server order and device-zone rendering
+- GIVEN the device zone is `America/Argentina/Buenos_Aires` and rows returned for 2026-09 in order [A, B], B at 2026-10-01T02:30:00Z
 - WHEN the list loads
 - THEN the order is [A, B] AND B shows "miércoles 30 de septiembre, 23:30"
 
