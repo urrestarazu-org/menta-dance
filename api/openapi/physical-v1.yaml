@@ -116,6 +116,11 @@ paths:
         original de la historia — se agregó porque no existe (todavía)
         ningún puerto que resuelva el nombre de un profesor a partir de su
         id desde Physical.
+
+        **`dayOfWeek` y `startTime` son UTC.** El cliente de gestión convierte
+        el día y la hora locales a UTC antes de enviarlos: martes 22:00 en
+        Buenos Aires (UTC-3) se envía como `WEDNESDAY` y `01:00:00`. Ver
+        ADR-0048.
       operationId: createPhysicalCourse
       requestBody:
         required: true
@@ -161,6 +166,10 @@ paths:
         Sólo los campos presentes en el body cambian. Desactivar
         (`status: INACTIVE`) un curso con sesiones futuras que ya tienen
         cupos asignados responde `409 COURSE_HAS_ACTIVE_ASSIGNMENTS`.
+
+        `dayOfWeek` y `startTime`, si se envían, son UTC (ver
+        `CreatePhysicalCourseRequest`): el cliente convierte el día y la hora
+        locales antes de enviarlos.
       operationId: updatePhysicalCourse
       parameters:
         - name: courseId
@@ -235,6 +244,12 @@ paths:
       summary: Crear una sesión
       description: |
         `capacity` es opcional — si se omite, hereda la capacidad del curso.
+
+        **`date` y `startTime` son UTC.** La sesión se crea en
+        `scheduledAt = date + startTime` como instante UTC. El cliente de
+        gestión convierte la fecha y la hora locales a UTC antes de enviarlas
+        (martes 2026-11-17 22:00 en Buenos Aires, UTC-3, es `date: 2026-11-18`
+        y `startTime: 01:00:00`). Ver ADR-0048.
       operationId: createPhysicalSession
       parameters:
         - name: courseId
@@ -308,6 +323,12 @@ paths:
         Genera una sesión por cada fecha en `[fromDate, toDate]` que caiga
         en el día de recurrencia del curso, con su horario y capacidad. Sin
         exclusión de feriados: el proyecto no tiene ese concepto todavía.
+
+        **Todo es UTC.** `fromDate` y `toDate` son fechas UTC, y el día de la
+        recurrencia (`dayOfWeek`) y la hora (`startTime`) del curso también: se
+        genera una sesión por cada fecha UTC cuyo día de la semana UTC coincide
+        con `dayOfWeek`, en `scheduledAt = fecha + startTime` (UTC). El cliente de
+        gestión convierte el rango local a fechas UTC. Ver ADR-0048.
       operationId: batchCreatePhysicalSessions
       parameters:
         - name: courseId
@@ -1300,9 +1321,21 @@ components:
         dayOfWeek:
           type: string
           enum: [MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY]
+          description: >-
+            Día de la semana de la recurrencia, **en UTC**. El cliente de gestión
+            convierte el día local a UTC antes de enviarlo: puede cambiar respecto
+            del día local (martes 22:00 en Buenos Aires, UTC-3, es `WEDNESDAY` a las
+            `01:00:00`). Ver ADR-0048.
+          example: WEDNESDAY
         startTime:
           type: string
-          example: "20:00:00"
+          description: >-
+            Hora de inicio de cada clase, `HH:mm:ss` **en UTC**. El cliente de
+            gestión convierte la hora local a UTC antes de enviarla y, al mostrarla,
+            la convierte de vuelta junto con `dayOfWeek` (martes 22:00 en Buenos
+            Aires, UTC-3, es `01:00:00` del miércoles). Una recurrencia fijada en
+            UTC es exacta sólo para zonas sin horario de verano. Ver ADR-0048.
+          example: "01:00:00"
         durationMinutes:
           type: integer
           minimum: 1
@@ -1324,8 +1357,21 @@ components:
         dayOfWeek:
           type: string
           enum: [MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY]
+          description: >-
+            Día de la semana de la recurrencia, **en UTC**. El cliente de gestión
+            convierte el día local a UTC antes de enviarlo: puede cambiar respecto
+            del día local (martes 22:00 en Buenos Aires, UTC-3, es `WEDNESDAY` a las
+            `01:00:00`). Ver ADR-0048.
+          example: WEDNESDAY
         startTime:
           type: string
+          description: >-
+            Hora de inicio de cada clase, `HH:mm:ss` **en UTC**. El cliente de
+            gestión convierte la hora local a UTC antes de enviarla y, al mostrarla,
+            la convierte de vuelta junto con `dayOfWeek` (martes 22:00 en Buenos
+            Aires, UTC-3, es `01:00:00` del miércoles). Una recurrencia fijada en
+            UTC es exacta sólo para zonas sin horario de verano. Ver ADR-0048.
+          example: "01:00:00"
         durationMinutes:
           type: integer
           minimum: 1
@@ -1357,8 +1403,12 @@ components:
           type: string
         dayOfWeek:
           type: string
+          description: Día de la semana de la recurrencia, **en UTC**. El cliente lo convierte a la zona de la academia para mostrarlo (ADR-0048).
+          example: WEDNESDAY
         startTime:
           type: string
+          description: Hora de inicio de cada clase, `HH:mm:ss` **en UTC**. El cliente la convierte a la zona de la academia, junto con `dayOfWeek`, para mostrarla (ADR-0048).
+          example: "01:00:00"
         durationMinutes:
           type: integer
         level:
@@ -1384,9 +1434,12 @@ components:
         date:
           type: string
           format: date
+          description: Fecha de la sesión, **en UTC**. Si la hora local cruza la medianoche UTC, la fecha UTC es la del día siguiente (martes 2026-11-17 22:00 en Buenos Aires es `2026-11-18` a las `01:00:00`).
+          example: "2026-11-18"
         startTime:
           type: string
-          example: "19:00:00"
+          description: Hora de inicio, `HH:mm:ss` **en UTC**. `scheduledAt` de la sesión es `date` + `startTime` como instante UTC.
+          example: "01:00:00"
         capacity:
           type: [integer, "null"]
           minimum: 1
@@ -1401,9 +1454,13 @@ components:
         fromDate:
           type: string
           format: date
+          description: Primera fecha del rango, **en UTC** (inclusive). El cliente convierte el rango local a fechas UTC.
+          example: "2026-11-01"
         toDate:
           type: string
           format: date
+          description: Última fecha del rango, **en UTC** (inclusive).
+          example: "2026-11-30"
 
     UpdatePhysicalSessionRequest:
       type: object
@@ -1412,8 +1469,12 @@ components:
         date:
           type: string
           format: date
+          description: Fecha de la sesión, **en UTC** (ver `CreatePhysicalSessionRequest`).
+          example: "2026-11-18"
         startTime:
           type: string
+          description: Hora de inicio, `HH:mm:ss` **en UTC**.
+          example: "01:00:00"
         capacity:
           type: integer
           minimum: 1

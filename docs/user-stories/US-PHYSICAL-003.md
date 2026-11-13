@@ -13,7 +13,9 @@
 ## Criterios de aceptación
 
 - `GET /api/v1/catalog/courses` lista cursos recurrentes con profesor, día,
-  horario, nivel y capacidad.
+  horario, nivel y capacidad. El día (`dayOfWeek`) y el horario (`startTime`)
+  están **en UTC**: el cliente los convierte juntos a la zona del usuario para
+  mostrarlos (ADR-0048, #729).
 - `GET /api/v1/catalog/courses/{courseId}` con un id presencial activo devuelve
   los datos del curso y `physical.sessions`, las próximas sesiones programadas
   con su disponibilidad. Un id virtual conserva su detalle y nunca lleva
@@ -52,7 +54,7 @@ Detalle (`GET /api/v1/catalog/courses/{courseId}`):
   "physical": {
     "professorName": "María García",
     "dayOfWeek": "TUESDAY",
-    "startTime": "19:00",
+    "startTime": "22:00",
     "capacity": 20,
     "sessions": [
       {

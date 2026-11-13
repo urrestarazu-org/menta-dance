@@ -130,6 +130,50 @@ Una **sesión** es la ocurrencia concreta de un curso: fecha, hora y cupo. No
 existen endpoints de reserva ni listas de espera: un pago confirmado crea las
 asignaciones de cupo necesarias y reduce la capacidad de cada sesión.
 
+## Recurrencia de los cursos y zona
+
+**El contrato de los cursos y de la creación de sesiones es UTC** (#729,
+[ADR-0048](adr/0048-fechas-del-backend-en-utc.md)). Un curso se define por
+`dayOfWeek` y `startTime` ("los martes a las 20:00"), y esos dos valores se
+interpretan **en UTC**, igual que `date` y `startTime` al crear o modificar una
+sesión:
+
+- `POST` y `PATCH /admin/physical/courses`: `dayOfWeek` y `startTime` son UTC.
+- `POST /admin/physical/courses/{courseId}/sessions`: la sesión se crea en
+  `scheduledAt = date + startTime`, como instante UTC.
+- `POST /admin/physical/courses/{courseId}/sessions/batch`: `fromDate` y
+  `toDate` son fechas UTC (ambas inclusive). Se genera una sesión por cada fecha
+  UTC del rango cuyo día de la semana UTC coincide con el `dayOfWeek` del curso,
+  en `scheduledAt = fecha + startTime`. El backend no consulta ninguna zona.
+- Las respuestas de gestión (`dayOfWeek`, `startTime`) y el bloque `physical` del
+  catálogo público devuelven los mismos valores UTC.
+
+**El cliente de gestión convierte la hora y también el día de la semana** entre
+la zona de la academia y UTC, tanto al enviar como al mostrar. El backend no
+conoce la zona de la academia para este fin. Con Buenos Aires (UTC-3, sin horario
+de verano):
+
+| Intención en Buenos Aires | `dayOfWeek` enviado (UTC) | `startTime` enviado (UTC) | Qué cambia |
+|---------------------------|---------------------------|---------------------------|------------|
+| Martes 20:00              | `TUESDAY`                 | `23:00:00`                | La hora, no el día |
+| Martes 21:00              | `WEDNESDAY`               | `00:00:00`                | El día pasa al miércoles |
+| Martes 22:00              | `WEDNESDAY`               | `01:00:00`                | El día pasa al miércoles |
+| Miércoles 00:30           | `WEDNESDAY`               | `03:30:00`                | La hora, no el día |
+| Domingo 23:30             | `MONDAY`                  | `02:30:00`                | El día pasa al lunes |
+
+Ejemplo de sesión: la clase del martes 2026-11-17 a las 22:00 en Buenos Aires se
+crea con `{ "date": "2026-11-18", "startTime": "01:00:00" }` y queda en
+`scheduledAt = 2026-11-18T01:00:00Z`. En el alta en lote, el cliente envía el
+rango como fechas UTC: la clase local del martes 2026-11-03 a las 22:00 es la
+sesión del miércoles UTC 2026-11-04 a las 01:00Z, y se genera sólo si el
+2026-11-04 está dentro de `[fromDate, toDate]`.
+
+**Limitación conocida.** Una recurrencia fijada en UTC es exacta sólo para zonas
+sin horario de verano. La academia está en Argentina (UTC-3, sin horario de
+verano), así que se acepta. Si la academia pasara a una zona con horario de verano
+o necesitara varias zonas, la recurrencia tendría que guardarse como hora local
+más zona (opción (b) de #729) y se enmendaría el ADR-0048.
+
 ## Check-in
 
 `POST /sessions/{sessionId}/access-qr` permite al `ALUMNO` autenticado obtener

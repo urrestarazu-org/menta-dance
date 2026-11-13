@@ -17,7 +17,7 @@ auth:bearer {
 body:json {
   {
     "date": "2026-09-16",
-    "startTime": "19:00:00",
+    "startTime": "22:00:00",
     "notes": "Clase especial de repaso"
   }
 }
@@ -31,6 +31,12 @@ script:post-response {
 docs {
   US-PHYSICAL-006 escenario 1. Requires an ADMIN or INSTRUCTOR bearer token
   and an existing `physicalCourseId` (run "Create Physical Course" first).
+
+  `date` and `startTime` are UTC (ADR-0048, #729): `scheduledAt` is
+  `date + startTime` as a UTC instant. The management client converts the local
+  date and hour before sending. This sample is "Wednesday 2026-09-16 19:00 in
+  Buenos Aires (UTC-3)" = `date` 2026-09-16, `startTime` 22:00:00 UTC; a class
+  at 22:00 local on 2026-09-15 would be `date` 2026-09-16, `startTime` 01:00:00.
 
   `capacity` is omitted here — inherits the parent course's capacity.
 

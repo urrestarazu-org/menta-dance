@@ -16,7 +16,9 @@
 
 - **Dado** un usuario con rol `ADMIN` o `PROFESOR`.
 - **Cuando** envía `POST /api/v1/admin/physical/courses` con nombre, descripción,
-  día de recurrencia, horario, nivel, capacidad máxima y profesor asignado.
+  día de recurrencia, horario, nivel, capacidad máxima y profesor asignado. El
+  día y el horario se envían **en UTC**: el cliente de gestión convierte ambos
+  desde la zona de la academia (ADR-0048, #729).
 - **Entonces** Physical crea el curso con un `courseId` UUID globalmente único
   y responde `201 Created`.
 
@@ -55,7 +57,7 @@
   "name": "Salsa Intermedio",
   "description": "Curso de salsa para nivel intermedio",
   "dayOfWeek": "WEDNESDAY",
-  "startTime": "20:00",
+  "startTime": "01:00",
   "durationMinutes": 60,
   "level": "INTERMEDIATE",
   "capacity": 20,
@@ -68,6 +70,10 @@
 - El `courseId` es UUID v4, globalmente único para permitir el catálogo unificado.
 - Physical no almacena precios; esos datos pertenecen a Billing.
 - La recurrencia define el patrón; las sesiones concretas se crean por separado.
+- `dayOfWeek` y `startTime` son UTC. El ejemplo del contrato es "martes 22:00 en
+  Buenos Aires" (UTC-3), que se envía como `WEDNESDAY` y `01:00`. Es exacto sólo
+  para zonas sin horario de verano; ver
+  [ADR-0048](../adr/0048-fechas-del-backend-en-utc.md).
 
 ## Definition of Done
 
