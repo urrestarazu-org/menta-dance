@@ -6,6 +6,7 @@ import com.menta.physical.application.dto.AttendanceSessionView;
 import com.menta.physical.application.dto.AttendanceStatus;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -18,22 +19,25 @@ import java.util.List;
  * aggregate number is always computed over the full row set, which the caller must already have
  * assembled from the unrestricted or course-scoped query — this class never re-derives scope.</p>
  */
-public final class MonthlyAttendanceAssembler {
+public final class AttendanceAssembler {
 
     private static final int SCALE = 2;
 
-    private MonthlyAttendanceAssembler() {
+    private AttendanceAssembler() {
     }
 
     /**
-     * Builds the monthly attendance summary from rows that are already scoped to the reader.
+     * Builds the attendance summary of the range {@code [from, to)} from rows that are already scoped to
+     * the reader. The range is only echoed: the assembler never groups or labels by day or month, so it
+     * needs no time zone.
      *
      * <p>The rate is attended over scheduled sessions as a percentage with two decimals, and is
      * {@code 0.00} when there are no rows. {@code includeAbsent} only filters the {@code sessions}
      * list; the counts always cover every row.
      */
     public static AttendanceHistoryView assemble(
-        String period, List<AttendanceHistoryRow> rows, boolean includeAbsent) {
+        Instant from, Instant to, List<AttendanceHistoryRow> rows, boolean includeAbsent
+    ) {
         int scheduledSessionCount = rows.size();
         int attended = 0;
         List<AttendanceSessionView> sessions = new ArrayList<>();
@@ -52,7 +56,7 @@ public final class MonthlyAttendanceAssembler {
         }
         int absent = scheduledSessionCount - attended;
         return new AttendanceHistoryView(
-            period, scheduledSessionCount, attended, absent, rateOf(attended, scheduledSessionCount), sessions
+            from, to, scheduledSessionCount, attended, absent, rateOf(attended, scheduledSessionCount), sessions
         );
     }
 

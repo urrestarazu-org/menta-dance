@@ -111,7 +111,8 @@ public class PhysicalCourseExceptionHandler {
     @ExceptionHandler(InvalidSessionRangeException.class)
     ResponseEntity<ProblemDetail> invalidRange(InvalidSessionRangeException exception) {
         return ProblemDetails.response(
-            HttpStatus.BAD_REQUEST, "The range must have from before to and span at most 7 days.",
+            HttpStatus.BAD_REQUEST,
+            "The range must have from before to and span at most " + exception.getMaxDays() + " days.",
             exception.getErrorCode()
         );
     }

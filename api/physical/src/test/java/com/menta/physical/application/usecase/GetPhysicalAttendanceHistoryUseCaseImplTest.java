@@ -1,9 +1,12 @@
 package com.menta.physical.application.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
@@ -11,152 +14,156 @@ import com.menta.physical.application.dto.AttendanceHistoryRow;
 import com.menta.physical.application.dto.AttendanceHistoryView;
 import com.menta.physical.application.dto.AttendanceViewer;
 import com.menta.physical.application.port.out.PhysicalCapacityAssignmentRepository;
+import com.menta.physical.domain.exception.InvalidSessionRangeException;
+import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
-import java.time.YearMonth;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 /**
- * #39, US-PHYSICAL-002, design C2/C3/C4. Zone-bounds pair (Risk #1) is mandatory: a single
- * UTC-written test would pass a UTC-hardcoded regression.
+ * #39, US-PHYSICAL-002, design C2/C4, #729. The range is UTC and goes to the repository untouched,
+ * whichever viewer reads: there is no zone to resolve and no month to derive.
  */
 class GetPhysicalAttendanceHistoryUseCaseImplTest {
 
-    private static final ZoneId BUENOS_AIRES = ZoneId.of("America/Argentina/Buenos_Aires");
+    // The local month of November 2026 in Buenos Aires, as a client would send it.
+    private static final Instant FROM = Instant.parse("2026-11-01T03:00:00Z");
+    private static final Instant TO = Instant.parse("2026-12-01T03:00:00Z");
+
+    private final PhysicalCapacityAssignmentRepository repository = mock(PhysicalCapacityAssignmentRepository.class);
+    private final GetPhysicalAttendanceHistoryUseCaseImpl useCase =
+        new GetPhysicalAttendanceHistoryUseCaseImpl(repository);
+
+    private static AttendanceHistoryRow row(Instant scheduledAt) {
+        return new AttendanceHistoryRow(UUID.randomUUID(), scheduledAt, "Salsa", "Ana", null, null);
+    }
 
     @Test
-    void september_month_bounds_resolve_in_buenos_aires_zone() {
-        PhysicalCapacityAssignmentRepository repository = mock(PhysicalCapacityAssignmentRepository.class);
-        when(repository.findMonthlyAttendance(any(), any(), any())).thenReturn(List.of());
-        GetPhysicalAttendanceHistoryUseCaseImpl useCase =
-            new GetPhysicalAttendanceHistoryUseCaseImpl(repository, BUENOS_AIRES);
+    void the_given_bounds_reach_the_repository_untouched_and_are_echoed_in_the_view() {
+        when(repository.findAttendance(any(), any(), any())).thenReturn(List.of());
         UUID studentId = UUID.randomUUID();
 
-        useCase.history(AttendanceViewer.self(studentId), YearMonth.of(2026, 9), true);
+        AttendanceHistoryView view = useCase.history(AttendanceViewer.self(studentId), FROM, TO, true);
 
-        verify(repository).findMonthlyAttendance(
-            studentId, Instant.parse("2026-09-01T03:00:00Z"), Instant.parse("2026-10-01T03:00:00Z")
-        );
+        verify(repository).findAttendance(studentId, FROM, TO);
+        assertThat(view.from()).isEqualTo(FROM);
+        assertThat(view.to()).isEqualTo(TO);
     }
 
     /**
-     * The two-zone pair Risk #1 mandates: the SAME instant lands in September under Buenos
-     * Aires and in October under UTC, proving month attribution actually depends on the
-     * configured zone rather than a hardcoded UTC assumption.
+     * The half-open contract: the bounds are forwarded as given, so the query's {@code >= from AND < to}
+     * keeps a session exactly at {@code from} and drops one exactly at {@code to}; the use case itself
+     * keeps every row the repository returns.
      */
     @Test
-    void a_late_evening_session_lands_in_september_under_buenos_aires_but_october_under_utc() {
+    void a_session_exactly_at_from_is_kept_and_the_bounds_are_the_ones_that_exclude_to() {
+        AttendanceHistoryRow atFrom = row(FROM);
+        when(repository.findAttendance(any(), any(), any())).thenReturn(List.of(atFrom));
         UUID studentId = UUID.randomUUID();
-        Instant lateEveningInstant = Instant.parse("2026-10-01T02:00:00Z"); // 2026-09-30T23:00-03:00
 
-        PhysicalCapacityAssignmentRepository buenosAiresRepository = mock(PhysicalCapacityAssignmentRepository.class);
-        when(buenosAiresRepository.findMonthlyAttendance(any(), any(), any())).thenReturn(List.of(
-            new AttendanceHistoryRow(UUID.randomUUID(), lateEveningInstant, "Salsa", "Ana", null, null)
-        ));
-        GetPhysicalAttendanceHistoryUseCaseImpl buenosAiresUseCase =
-            new GetPhysicalAttendanceHistoryUseCaseImpl(buenosAiresRepository, BUENOS_AIRES);
+        AttendanceHistoryView view = useCase.history(AttendanceViewer.self(studentId), FROM, TO, true);
 
-        AttendanceHistoryView septemberInBuenosAires =
-            buenosAiresUseCase.history(AttendanceViewer.self(studentId), YearMonth.of(2026, 9), true);
-        assertThat(septemberInBuenosAires.scheduledSessionCount()).isEqualTo(1);
-        verify(buenosAiresRepository).findMonthlyAttendance(
-            studentId, Instant.parse("2026-09-01T03:00:00Z"), Instant.parse("2026-10-01T03:00:00Z")
-        );
-
-        PhysicalCapacityAssignmentRepository utcRepository = mock(PhysicalCapacityAssignmentRepository.class);
-        when(utcRepository.findMonthlyAttendance(any(), any(), any())).thenReturn(List.of());
-        GetPhysicalAttendanceHistoryUseCaseImpl utcUseCase =
-            new GetPhysicalAttendanceHistoryUseCaseImpl(utcRepository, ZoneOffset.UTC);
-
-        utcUseCase.history(AttendanceViewer.self(studentId), YearMonth.of(2026, 9), true);
-        verify(utcRepository).findMonthlyAttendance(
-            studentId, Instant.parse("2026-09-01T00:00:00Z"), Instant.parse("2026-10-01T00:00:00Z")
-        );
-        // The same lateEveningInstant is >= 2026-10-01T00:00:00Z, so under UTC bounds it would
-        // NOT be included in September at all — it belongs to October instead.
-        assertThat(lateEveningInstant.isBefore(Instant.parse("2026-10-01T00:00:00Z"))).isFalse();
+        assertThat(view.scheduledSessionCount()).isEqualTo(1);
+        assertThat(view.sessions()).singleElement().extracting(session -> session.scheduledAt()).isEqualTo(FROM);
+        verify(repository).findAttendance(studentId, FROM, TO);
     }
 
     @Test
     void self_and_admin_viewers_both_dispatch_to_the_unrestricted_query_and_never_reach_the_scoped_method() {
-        PhysicalCapacityAssignmentRepository repository = mock(PhysicalCapacityAssignmentRepository.class);
-        when(repository.findMonthlyAttendance(any(), any(), any())).thenReturn(List.of());
-        GetPhysicalAttendanceHistoryUseCaseImpl useCase =
-            new GetPhysicalAttendanceHistoryUseCaseImpl(repository, BUENOS_AIRES);
+        when(repository.findAttendance(any(), any(), any())).thenReturn(List.of());
         UUID studentId = UUID.randomUUID();
-        YearMonth month = YearMonth.of(2026, 9);
 
-        useCase.history(AttendanceViewer.self(studentId), month, true);
-        useCase.history(AttendanceViewer.elevated(studentId, UUID.randomUUID(), true), month, true);
+        useCase.history(AttendanceViewer.self(studentId), FROM, TO, true);
+        useCase.history(AttendanceViewer.elevated(studentId, UUID.randomUUID(), true), FROM, TO, true);
 
-        verify(repository, org.mockito.Mockito.times(2)).findMonthlyAttendance(
-            studentId, Instant.parse("2026-09-01T03:00:00Z"), Instant.parse("2026-10-01T03:00:00Z")
-        );
+        verify(repository, times(2)).findAttendance(studentId, FROM, TO);
         verifyNoMoreInteractions(repository);
     }
 
     @Test
-    void a_student_with_zero_rows_that_month_yields_the_same_view_as_the_empty_month_shape() {
-        PhysicalCapacityAssignmentRepository repository = mock(PhysicalCapacityAssignmentRepository.class);
-        when(repository.findMonthlyAttendance(any(), any(), any())).thenReturn(List.of());
-        GetPhysicalAttendanceHistoryUseCaseImpl useCase =
-            new GetPhysicalAttendanceHistoryUseCaseImpl(repository, BUENOS_AIRES);
+    void a_student_with_zero_rows_in_the_range_yields_the_empty_shape_echoing_the_range() {
+        when(repository.findAttendance(any(), any(), any())).thenReturn(List.of());
 
-        AttendanceHistoryView view =
-            useCase.history(AttendanceViewer.self(UUID.randomUUID()), YearMonth.of(2026, 11), true);
+        AttendanceHistoryView view = useCase.history(AttendanceViewer.self(UUID.randomUUID()), FROM, TO, true);
 
-        AttendanceHistoryView expectedEmptyShape = new AttendanceHistoryView(
-            "2026-11", 0, 0, 0, new java.math.BigDecimal("0.00"), List.of()
-        );
-        assertThat(view).isEqualTo(expectedEmptyShape);
+        assertThat(view).isEqualTo(new AttendanceHistoryView(FROM, TO, 0, 0, 0, new BigDecimal("0.00"), List.of()));
     }
 
     /**
-     * #39, US-PHYSICAL-002 P2, design C2/R7 — completes the exhaustive-dispatch coverage 1.9
-     * started: {@code InstructorOwnCourses} MUST call the scoped method with the caller's own
-     * id, never {@code null}, and MUST NOT reach the unrestricted method at all.
+     * #39, US-PHYSICAL-002 P2, design C2/R7: {@code InstructorOwnCourses} MUST call the scoped method
+     * with the caller's own id, never {@code null}, and MUST NOT reach the unrestricted method at all.
      */
     @Test
     void instructor_own_courses_viewer_dispatches_to_the_scoped_method_with_the_callers_own_id() {
-        PhysicalCapacityAssignmentRepository repository = mock(PhysicalCapacityAssignmentRepository.class);
-        when(repository.findMonthlyAttendanceInCoursesOwnedBy(any(), any(), any(), any())).thenReturn(List.of());
-        GetPhysicalAttendanceHistoryUseCaseImpl useCase =
-            new GetPhysicalAttendanceHistoryUseCaseImpl(repository, BUENOS_AIRES);
+        when(repository.findAttendanceInCoursesOwnedBy(any(), any(), any(), any())).thenReturn(List.of());
         UUID studentId = UUID.randomUUID();
         UUID professorId = UUID.randomUUID();
 
-        useCase.history(AttendanceViewer.elevated(studentId, professorId, false), YearMonth.of(2026, 9), true);
+        useCase.history(AttendanceViewer.elevated(studentId, professorId, false), FROM, TO, true);
 
-        verify(repository).findMonthlyAttendanceInCoursesOwnedBy(
-            studentId, Instant.parse("2026-09-01T03:00:00Z"), Instant.parse("2026-10-01T03:00:00Z"), professorId
-        );
+        verify(repository).findAttendanceInCoursesOwnedBy(studentId, FROM, TO, professorId);
         verifyNoMoreInteractions(repository);
     }
 
     /**
      * #39, US-PHYSICAL-002 P2, design C4/R9 — anti-enumeration equality, instructor case: an
-     * {@code InstructorOwnCourses} viewer for a student with zero overlapping courses yields a
-     * view equal to the same empty-month shape as 1.10. No existence port exists to distinguish
-     * "student not found" from "student exists but no course overlap" from "student exists, zero
-     * sessions that month" — all three collapse to the same object.
+     * {@code InstructorOwnCourses} viewer for a student with zero overlapping courses yields the same
+     * empty shape as any other empty read. No existence port exists to distinguish "student not found"
+     * from "student exists but no course overlap" from "student exists, zero sessions in the range".
      */
     @Test
-    void an_instructor_viewer_with_zero_overlapping_courses_yields_the_same_empty_month_shape() {
-        PhysicalCapacityAssignmentRepository repository = mock(PhysicalCapacityAssignmentRepository.class);
-        when(repository.findMonthlyAttendanceInCoursesOwnedBy(any(), any(), any(), any())).thenReturn(List.of());
-        GetPhysicalAttendanceHistoryUseCaseImpl useCase =
-            new GetPhysicalAttendanceHistoryUseCaseImpl(repository, BUENOS_AIRES);
+    void an_instructor_viewer_with_zero_overlapping_courses_yields_the_same_empty_shape() {
+        when(repository.findAttendanceInCoursesOwnedBy(any(), any(), any(), any())).thenReturn(List.of());
 
         AttendanceHistoryView view = useCase.history(
-            AttendanceViewer.elevated(UUID.randomUUID(), UUID.randomUUID(), false), YearMonth.of(2026, 11), true
+            AttendanceViewer.elevated(UUID.randomUUID(), UUID.randomUUID(), false), FROM, TO, true
         );
 
-        AttendanceHistoryView expectedEmptyShape = new AttendanceHistoryView(
-            "2026-11", 0, 0, 0, new java.math.BigDecimal("0.00"), List.of()
-        );
-        assertThat(view).isEqualTo(expectedEmptyShape);
+        assertThat(view).isEqualTo(new AttendanceHistoryView(FROM, TO, 0, 0, 0, new BigDecimal("0.00"), List.of()));
+    }
+
+    @Test
+    void a_range_of_exactly_92_days_is_accepted_by_every_viewer() {
+        when(repository.findAttendance(any(), any(), any())).thenReturn(List.of());
+        when(repository.findAttendanceInCoursesOwnedBy(any(), any(), any(), any())).thenReturn(List.of());
+        UUID studentId = UUID.randomUUID();
+        UUID professorId = UUID.randomUUID();
+        Instant to = FROM.plus(Duration.ofDays(92));
+
+        useCase.history(AttendanceViewer.self(studentId), FROM, to, true);
+        useCase.history(AttendanceViewer.elevated(studentId, professorId, false), FROM, to, true);
+
+        verify(repository).findAttendance(studentId, FROM, to);
+        verify(repository).findAttendanceInCoursesOwnedBy(studentId, FROM, to, professorId);
+    }
+
+    @Test
+    void a_range_of_92_days_and_one_nanosecond_is_rejected_without_reading() {
+        Instant to = FROM.plus(Duration.ofDays(92)).plusNanos(1);
+
+        assertThatThrownBy(() -> useCase.history(AttendanceViewer.self(UUID.randomUUID()), FROM, to, true))
+            .isInstanceOf(InvalidSessionRangeException.class);
+
+        verifyNoInteractions(repository);
+    }
+
+    @Test
+    void an_empty_range_is_rejected_without_reading() {
+        assertThatThrownBy(() -> useCase.history(AttendanceViewer.self(UUID.randomUUID()), FROM, FROM, true))
+            .isInstanceOf(InvalidSessionRangeException.class);
+
+        verifyNoInteractions(repository);
+    }
+
+    @Test
+    void an_inverted_range_is_rejected_without_reading() {
+        AttendanceViewer viewer = AttendanceViewer.elevated(UUID.randomUUID(), UUID.randomUUID(), false);
+
+        assertThatThrownBy(() -> useCase.history(viewer, TO, FROM, true))
+            .isInstanceOf(InvalidSessionRangeException.class);
+
+        verifyNoInteractions(repository);
     }
 }

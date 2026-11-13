@@ -7,51 +7,46 @@ import com.menta.physical.application.port.in.ListMyPhysicalSessionsUseCase;
 import com.menta.physical.application.port.out.Clock;
 import com.menta.physical.application.port.out.PhysicalCapacityAssignmentRepository;
 import com.menta.physical.domain.model.CheckInWindow;
+import com.menta.physical.domain.model.InstantRange;
+import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
 /**
- * #356. The range starts at the beginning of today in the academy's zone (so a class earlier
- * today still shows) and spans {@code windowDays} calendar days; the zone keeps "today" aligned
- * with how the academy and {@link GetPhysicalAttendanceHistoryUseCaseImpl} read the calendar.
+ * #356, #729. Every backend date is UTC, so the range arrives as instants computed by the client and
+ * goes to the repository untouched: no time zone, no day arithmetic. The range is capped at
+ * {@link #MAX_RANGE} to bound the response. The {@link Clock} is only used for {@code checkInOpen},
+ * never to decide the range.
  */
 public class ListMyPhysicalSessionsUseCaseImpl implements ListMyPhysicalSessionsUseCase {
 
+    /** Widest range a single read may span (three calendar months at most); exactly this width is accepted. */
+    static final Duration MAX_RANGE = Duration.ofDays(92);
+
     private final PhysicalCapacityAssignmentRepository assignmentRepository;
     private final Clock clock;
-    private final ZoneId zoneId;
-    private final int windowDays;
     private final CheckInWindow checkInWindow;
 
     public ListMyPhysicalSessionsUseCaseImpl(
-        PhysicalCapacityAssignmentRepository assignmentRepository, Clock clock, ZoneId zoneId,
-        int windowDays, CheckInWindow checkInWindow
+        PhysicalCapacityAssignmentRepository assignmentRepository, Clock clock, CheckInWindow checkInWindow
     ) {
-        if (windowDays < 1) {
-            throw new IllegalArgumentException("windowDays must be at least 1 but was " + windowDays);
-        }
         this.assignmentRepository = assignmentRepository;
         this.clock = clock;
-        this.zoneId = zoneId;
-        this.windowDays = windowDays;
         this.checkInWindow = checkInWindow;
     }
 
     @Override
-    public AssignedSessionsView list(UUID studentId) {
+    public AssignedSessionsView list(UUID studentId, Instant from, Instant to) {
+        InstantRange range = InstantRange.within(from, to, MAX_RANGE);
         Instant now = clock.now();
-        LocalDate today = now.atZone(zoneId).toLocalDate();
-        Instant from = today.atStartOfDay(zoneId).toInstant();
-        Instant to = today.plusDays(windowDays).atStartOfDay(zoneId).toInstant();
 
-        List<AssignedSessionView> sessions = assignmentRepository.findAssignedSessions(studentId, from, to)
+        List<AssignedSessionView> sessions = assignmentRepository
+            .findAssignedSessions(studentId, range.from(), range.to())
             .stream()
             .map(row -> toView(row, now))
             .toList();
-        return new AssignedSessionsView(from, to, sessions);
+        return new AssignedSessionsView(range.from(), range.to(), sessions);
     }
 
     private AssignedSessionView toView(AssignedSessionRow row, Instant now) {

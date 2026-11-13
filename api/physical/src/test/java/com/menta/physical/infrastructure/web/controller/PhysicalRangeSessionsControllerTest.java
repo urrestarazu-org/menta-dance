@@ -165,7 +165,7 @@ class PhysicalRangeSessionsControllerTest {
 
     @Test
     void a_range_the_use_case_rejects_is_a_400_problem() throws Exception {
-        when(useCase.list(any(), any())).thenThrow(new InvalidSessionRangeException());
+        when(useCase.list(any(), any())).thenThrow(new InvalidSessionRangeException(7));
 
         mockMvc.perform(get(URL).param("from", TO).param("to", FROM))
             .andExpect(status().isBadRequest())

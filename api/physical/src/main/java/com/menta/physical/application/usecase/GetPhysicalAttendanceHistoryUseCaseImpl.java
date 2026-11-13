@@ -5,45 +5,46 @@ import com.menta.physical.application.dto.AttendanceHistoryView;
 import com.menta.physical.application.dto.AttendanceViewer;
 import com.menta.physical.application.port.in.GetPhysicalAttendanceHistoryUseCase;
 import com.menta.physical.application.port.out.PhysicalCapacityAssignmentRepository;
+import com.menta.physical.domain.model.InstantRange;
+import java.time.Duration;
 import java.time.Instant;
-import java.time.YearMonth;
-import java.time.ZoneId;
 import java.util.List;
 
 /**
- * #39, US-PHYSICAL-002, design C1-C4. Never checks whether the student exists — no
+ * #39, US-PHYSICAL-002, design C1-C4, #729. Never checks whether the student exists — no
  * {@code UserQueryPort}, no existence probe, no {@code 404} path anywhere (C4): the query has no
  * branch that distinguishes "student does not exist" from "student exists but no overlap" from
- * "student exists but no sessions that month", so all three converge on the same empty view.
+ * "student exists but no sessions in that range", so all three converge on the same empty view.
+ *
+ * <p>Every backend date is UTC: the range arrives as instants computed by the client and goes to the
+ * repository untouched, with no time zone. It is capped at {@link #MAX_RANGE} to bound the response.
  */
 public class GetPhysicalAttendanceHistoryUseCaseImpl implements GetPhysicalAttendanceHistoryUseCase {
 
-    private final PhysicalCapacityAssignmentRepository assignmentRepository;
-    private final ZoneId zoneId;
+    /** Widest range a single read may span (three calendar months at most); exactly this width is accepted. */
+    static final Duration MAX_RANGE = Duration.ofDays(92);
 
-    public GetPhysicalAttendanceHistoryUseCaseImpl(
-        PhysicalCapacityAssignmentRepository assignmentRepository, ZoneId zoneId
-    ) {
+    private final PhysicalCapacityAssignmentRepository assignmentRepository;
+
+    public GetPhysicalAttendanceHistoryUseCaseImpl(PhysicalCapacityAssignmentRepository assignmentRepository) {
         this.assignmentRepository = assignmentRepository;
-        this.zoneId = zoneId;
     }
 
     @Override
-    public AttendanceHistoryView history(AttendanceViewer viewer, YearMonth month, boolean includeAbsent) {
-        Instant monthStart = month.atDay(1).atStartOfDay(zoneId).toInstant();
-        Instant monthNext = month.plusMonths(1).atDay(1).atStartOfDay(zoneId).toInstant();
+    public AttendanceHistoryView history(AttendanceViewer viewer, Instant from, Instant to, boolean includeAbsent) {
+        InstantRange range = InstantRange.within(from, to, MAX_RANGE);
 
         List<AttendanceHistoryRow> rows = switch (viewer) {
             case AttendanceViewer.Self self ->
-                assignmentRepository.findMonthlyAttendance(self.studentId(), monthStart, monthNext);
+                assignmentRepository.findAttendance(self.studentId(), range.from(), range.to());
             case AttendanceViewer.Admin admin ->
-                assignmentRepository.findMonthlyAttendance(admin.studentId(), monthStart, monthNext);
+                assignmentRepository.findAttendance(admin.studentId(), range.from(), range.to());
             case AttendanceViewer.InstructorOwnCourses instructor ->
-                assignmentRepository.findMonthlyAttendanceInCoursesOwnedBy(
-                    instructor.studentId(), monthStart, monthNext, instructor.professorId()
+                assignmentRepository.findAttendanceInCoursesOwnedBy(
+                    instructor.studentId(), range.from(), range.to(), instructor.professorId()
                 );
         };
 
-        return MonthlyAttendanceAssembler.assemble(month.toString(), rows, includeAbsent);
+        return AttendanceAssembler.assemble(range.from(), range.to(), rows, includeAbsent);
     }
 }

@@ -4,7 +4,7 @@ import com.menta.physical.application.dto.PhysicalRangeSessionView;
 import com.menta.physical.application.dto.SessionWithCourse;
 import com.menta.physical.application.port.in.ListPhysicalSessionsByRangeUseCase;
 import com.menta.physical.application.port.out.PhysicalSessionRepository;
-import com.menta.physical.domain.exception.InvalidSessionRangeException;
+import com.menta.physical.domain.model.InstantRange;
 import com.menta.physical.domain.model.PhysicalSession;
 import java.time.Duration;
 import java.time.Instant;
@@ -30,10 +30,8 @@ public class ListPhysicalSessionsByRangeUseCaseImpl implements ListPhysicalSessi
 
     @Override
     public List<PhysicalRangeSessionView> list(Instant from, Instant to) {
-        if (!from.isBefore(to) || Duration.between(from, to).compareTo(MAX_RANGE) > 0) {
-            throw new InvalidSessionRangeException();
-        }
-        return sessionRepository.findManagedAcrossCourses(from, to).stream()
+        InstantRange range = InstantRange.within(from, to, MAX_RANGE);
+        return sessionRepository.findManagedAcrossCourses(range.from(), range.to()).stream()
             .map(ListPhysicalSessionsByRangeUseCaseImpl::toView)
             .toList();
     }

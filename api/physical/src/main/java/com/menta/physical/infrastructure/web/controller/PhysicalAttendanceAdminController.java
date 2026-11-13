@@ -4,7 +4,7 @@ import com.menta.physical.application.dto.AttendanceHistoryView;
 import com.menta.physical.application.dto.AttendanceViewer;
 import com.menta.physical.application.port.in.GetPhysicalAttendanceHistoryUseCase;
 import com.menta.physical.infrastructure.web.dto.AttendanceHistoryResponse;
-import java.time.YearMonth;
+import java.time.Instant;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -15,14 +15,17 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * {@code GET /api/v1/admin/physical/attendance/{studentId}} — elevated read of ANOTHER student's
- * month (#39, US-PHYSICAL-002, design C2/C7). {@code SecurityConfig}'s dedicated matcher admits
+ * {@code GET /api/v1/admin/physical/attendance/{studentId}?from=&to=} — elevated read of ANOTHER
+ * student's attendance in the half-open instant range {@code [from, to)} (#39, #729, US-PHYSICAL-002,
+ * design C2/C7). {@code SecurityConfig}'s dedicated matcher admits
  * both {@code ADMIN} and {@code INSTRUCTOR}; this controller never checks the role itself for the
  * coarse gate — it only builds {@link AttendanceViewer#elevated} from the path variable plus the
  * principal. The instructor-ownership narrowing already happens inside the query (design C1), so
  * an {@code INSTRUCTOR} reaches this controller unconditionally and never gets a {@code 403}
  * here. Reuses {@link AttendanceHistoryResponse}, the same shape the self controller returns —
- * deliberately, so a shape difference never becomes an enumeration oracle (design C4/C6).
+ * deliberately, so a shape difference never becomes an enumeration oracle (design C4/C6). The range
+ * rules are those of {@link PhysicalAttendanceController}: UTC instants, at most 92 days, a
+ * {@code 400 INVALID_REQUEST} problem otherwise.
  */
 @RestController
 @PhysicalAttendanceEndpoint
@@ -39,15 +42,17 @@ public class PhysicalAttendanceAdminController {
     @GetMapping("/api/v1/admin/physical/attendance/{studentId}")
     public ResponseEntity<AttendanceHistoryResponse> forStudent(
         @PathVariable String studentId,
-        @RequestParam String month,
+        @RequestParam String from,
+        @RequestParam String to,
         @RequestParam(required = false, defaultValue = "false") boolean includeAbsent,
         Authentication authentication
     ) {
         AttendanceViewer viewer = AttendanceViewer.elevated(
             UUID.fromString(studentId), actingUserId(authentication), isAdmin(authentication)
         );
-        AttendanceHistoryView view =
-            getPhysicalAttendanceHistoryUseCase.history(viewer, YearMonth.parse(month), includeAbsent);
+        AttendanceHistoryView view = getPhysicalAttendanceHistoryUseCase.history(
+            viewer, Instant.parse(from), Instant.parse(to), includeAbsent
+        );
         return ResponseEntity.ok(AttendanceHistoryResponse.from(view));
     }
 

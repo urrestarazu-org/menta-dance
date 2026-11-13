@@ -126,7 +126,7 @@ class PhysicalCapacityAssignmentRepositoryAdapterTest {
         seedAssignment(laterSession, studentId);
         seedAssignment(earlierSession, studentId);
 
-        List<AttendanceHistoryRow> rows = adapter().findMonthlyAttendance(
+        List<AttendanceHistoryRow> rows = adapter().findAttendance(
             studentId, Instant.parse("2026-09-01T00:00:00Z"), Instant.parse("2026-10-01T00:00:00Z")
         );
 
@@ -142,7 +142,7 @@ class PhysicalCapacityAssignmentRepositoryAdapterTest {
         UUID sessionId = seedSession(courseId, Instant.parse("2026-09-10T22:00:00Z"));
         seedAssignment(sessionId, studentId);
 
-        List<AttendanceHistoryRow> rows = adapter().findMonthlyAttendance(
+        List<AttendanceHistoryRow> rows = adapter().findAttendance(
             studentId, Instant.parse("2026-09-01T00:00:00Z"), Instant.parse("2026-10-01T00:00:00Z")
         );
 
@@ -152,7 +152,7 @@ class PhysicalCapacityAssignmentRepositoryAdapterTest {
     }
 
     @Test
-    void half_open_bounds_include_month_start_and_exclude_month_next() {
+    void half_open_bounds_include_from_and_exclude_to() {
         UUID studentId = UUID.randomUUID();
         UUID courseId = seedCourse(UUID.randomUUID());
         UUID atStart = seedSession(courseId, Instant.parse("2026-09-01T00:00:00Z"));
@@ -160,12 +160,38 @@ class PhysicalCapacityAssignmentRepositoryAdapterTest {
         seedAssignment(atStart, studentId);
         seedAssignment(atNext, studentId);
 
-        List<AttendanceHistoryRow> rows = adapter().findMonthlyAttendance(
+        List<AttendanceHistoryRow> rows = adapter().findAttendance(
             studentId, Instant.parse("2026-09-01T00:00:00Z"), Instant.parse("2026-10-01T00:00:00Z")
         );
 
         assertThat(rows).hasSize(1);
         assertThat(rows.get(0).sessionId()).isEqualTo(atStart);
+    }
+
+    /**
+     * #729 — a Buenos Aires local day computed by the client, {@code [03:00Z, next day 03:00Z)}: the
+     * 00:00 and 23:59 local sessions are in, the 23:59 of the previous day and the 00:00 of the next
+     * one (03:00Z) are out. Nothing in the query depends on a zone.
+     */
+    @Test
+    void a_buenos_aires_day_in_utc_keeps_the_00_30_and_23_30_local_sessions_and_nothing_around_them() {
+        UUID studentId = UUID.randomUUID();
+        UUID courseId = seedCourse(UUID.randomUUID());
+        UUID previousNight = seedSession(courseId, Instant.parse("2026-11-12T02:59:59Z"));
+        seedAssignment(previousNight, studentId);
+        UUID justAfterMidnight = seedSession(courseId, Instant.parse("2026-11-12T03:30:00Z"));
+        seedAssignment(justAfterMidnight, studentId);
+        UUID lateEvening = seedSession(courseId, Instant.parse("2026-11-13T02:30:00Z"));
+        seedAssignment(lateEvening, studentId);
+        UUID nextMidnight = seedSession(courseId, Instant.parse("2026-11-13T03:00:00Z"));
+        seedAssignment(nextMidnight, studentId);
+
+        List<AttendanceHistoryRow> rows = adapter().findAttendance(
+            studentId, Instant.parse("2026-11-12T03:00:00Z"), Instant.parse("2026-11-13T03:00:00Z")
+        );
+
+        assertThat(rows).extracting(AttendanceHistoryRow::sessionId)
+            .containsExactly(justAfterMidnight, lateEvening);
     }
 
     @Test
@@ -179,7 +205,7 @@ class PhysicalCapacityAssignmentRepositoryAdapterTest {
         seedAssignment(sessionB, studentId);
         seedAttendance(sessionA, studentId, Instant.parse("2026-09-03T22:05:00Z"));
 
-        List<AttendanceHistoryRow> rows = adapter().findMonthlyAttendance(
+        List<AttendanceHistoryRow> rows = adapter().findAttendance(
             studentId, Instant.parse("2026-09-01T00:00:00Z"), Instant.parse("2026-10-01T00:00:00Z")
         );
 
@@ -207,10 +233,10 @@ class PhysicalCapacityAssignmentRepositoryAdapterTest {
         seedAssignment(ownedSession, studentId);
         seedAssignment(otherSession, studentId);
 
-        List<AttendanceHistoryRow> scopedToOtherProfessor = adapter().findMonthlyAttendanceInCoursesOwnedBy(
+        List<AttendanceHistoryRow> scopedToOtherProfessor = adapter().findAttendanceInCoursesOwnedBy(
             studentId, Instant.parse("2026-09-01T00:00:00Z"), Instant.parse("2026-10-01T00:00:00Z"), otherProfessor
         );
-        List<AttendanceHistoryRow> unrestricted = adapter().findMonthlyAttendance(
+        List<AttendanceHistoryRow> unrestricted = adapter().findAttendance(
             studentId, Instant.parse("2026-09-01T00:00:00Z"), Instant.parse("2026-10-01T00:00:00Z")
         );
 

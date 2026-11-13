@@ -16,7 +16,11 @@ import org.junit.jupiter.api.Test;
  * Pure, zero mocks (#39, US-PHYSICAL-002, design C6) — mirrors {@code CourseProgressAssemblerTest}
  * in {@code api/virtual}.
  */
-class MonthlyAttendanceAssemblerTest {
+class AttendanceAssemblerTest {
+
+    // The local month of November 2026 in Buenos Aires, as a client would send it.
+    private static final Instant FROM = Instant.parse("2026-11-01T03:00:00Z");
+    private static final Instant TO = Instant.parse("2026-12-01T03:00:00Z");
 
     private static AttendanceHistoryRow attendedRow(Instant scheduledAt) {
         return attendedRow(scheduledAt, AttendanceKind.QR);
@@ -34,6 +38,21 @@ class MonthlyAttendanceAssemblerTest {
     }
 
     @Test
+    void the_range_is_echoed_untouched_and_nothing_is_grouped_by_day_or_month() {
+        List<AttendanceHistoryRow> rows = List.of(
+            attendedRow(Instant.parse("2026-11-01T03:00:00Z")),
+            absentRow(Instant.parse("2026-12-01T02:59:59Z"))
+        );
+
+        AttendanceHistoryView view = AttendanceAssembler.assemble(FROM, TO, rows, true);
+
+        assertThat(view.from()).isEqualTo(FROM);
+        assertThat(view.to()).isEqualTo(TO);
+        assertThat(view.sessions()).extracting(session -> session.scheduledAt())
+            .containsExactly(Instant.parse("2026-11-01T03:00:00Z"), Instant.parse("2026-12-01T02:59:59Z"));
+    }
+
+    @Test
     void four_session_month_all_attended_yields_full_rate_and_no_absent_rows() {
         List<AttendanceHistoryRow> rows = List.of(
             attendedRow(Instant.parse("2026-10-02T22:00:00Z")),
@@ -42,7 +61,7 @@ class MonthlyAttendanceAssemblerTest {
             attendedRow(Instant.parse("2026-10-23T22:00:00Z"))
         );
 
-        AttendanceHistoryView view = MonthlyAttendanceAssembler.assemble("2026-10", rows, true);
+        AttendanceHistoryView view = AttendanceAssembler.assemble(FROM, TO, rows, true);
 
         assertThat(view.scheduledSessionCount()).isEqualTo(4);
         assertThat(view.attended()).isEqualTo(4);
@@ -61,7 +80,7 @@ class MonthlyAttendanceAssemblerTest {
             absentRow(Instant.parse("2026-09-28T22:00:00Z"))
         );
 
-        AttendanceHistoryView view = MonthlyAttendanceAssembler.assemble("2026-09", rows, true);
+        AttendanceHistoryView view = AttendanceAssembler.assemble(FROM, TO, rows, true);
 
         assertThat(view.scheduledSessionCount()).isEqualTo(5);
         assertThat(view.attended()).isEqualTo(4);
@@ -78,14 +97,14 @@ class MonthlyAttendanceAssemblerTest {
             absentRow(Instant.parse("2026-11-18T22:00:00Z"))
         );
 
-        AttendanceHistoryView view = MonthlyAttendanceAssembler.assemble("2026-11", rows, true);
+        AttendanceHistoryView view = AttendanceAssembler.assemble(FROM, TO, rows, true);
 
         assertThat(view.attendanceRate()).isEqualByComparingTo(new BigDecimal("66.67"));
     }
 
     @Test
     void zero_denominator_yields_zero_rate() {
-        AttendanceHistoryView view = MonthlyAttendanceAssembler.assemble("2026-12", List.of(), true);
+        AttendanceHistoryView view = AttendanceAssembler.assemble(FROM, TO, List.of(), true);
 
         assertThat(view.scheduledSessionCount()).isEqualTo(0);
         assertThat(view.attended()).isEqualTo(0);
@@ -104,8 +123,8 @@ class MonthlyAttendanceAssemblerTest {
             absentRow(Instant.parse("2026-09-28T22:00:00Z"))
         );
 
-        AttendanceHistoryView withAbsent = MonthlyAttendanceAssembler.assemble("2026-09", rows, true);
-        AttendanceHistoryView withoutAbsent = MonthlyAttendanceAssembler.assemble("2026-09", rows, false);
+        AttendanceHistoryView withAbsent = AttendanceAssembler.assemble(FROM, TO, rows, true);
+        AttendanceHistoryView withoutAbsent = AttendanceAssembler.assemble(FROM, TO, rows, false);
 
         assertThat(withAbsent.sessions()).hasSize(5);
         assertThat(withoutAbsent.sessions()).hasSize(4);
@@ -122,7 +141,7 @@ class MonthlyAttendanceAssemblerTest {
         AttendanceHistoryRow attended = attendedRow(Instant.parse("2026-09-03T22:00:00Z"));
         AttendanceHistoryRow absent = absentRow(Instant.parse("2026-09-10T22:00:00Z"));
 
-        AttendanceHistoryView view = MonthlyAttendanceAssembler.assemble("2026-09", List.of(attended, absent), true);
+        AttendanceHistoryView view = AttendanceAssembler.assemble(FROM, TO, List.of(attended, absent), true);
 
         assertThat(view.sessions().get(0).status()).isEqualTo(AttendanceStatus.ATTENDED);
         assertThat(view.sessions().get(0).recordedAt()).isEqualTo(attended.recordedAt());
@@ -135,7 +154,7 @@ class MonthlyAttendanceAssemblerTest {
         AttendanceHistoryRow qr = attendedRow(Instant.parse("2026-09-03T22:00:00Z"), AttendanceKind.QR);
         AttendanceHistoryRow manual = attendedRow(Instant.parse("2026-09-10T22:00:00Z"), AttendanceKind.MANUAL);
 
-        AttendanceHistoryView view = MonthlyAttendanceAssembler.assemble("2026-09", List.of(qr, manual), true);
+        AttendanceHistoryView view = AttendanceAssembler.assemble(FROM, TO, List.of(qr, manual), true);
 
         assertThat(view.sessions().get(0).kind()).isEqualTo(AttendanceKind.QR);
         assertThat(view.sessions().get(1).kind()).isEqualTo(AttendanceKind.MANUAL);
@@ -150,7 +169,7 @@ class MonthlyAttendanceAssemblerTest {
         AttendanceHistoryRow attended = attendedRow(Instant.parse("2026-09-03T22:00:00Z"), AttendanceKind.MANUAL);
         AttendanceHistoryRow absent = absentRow(Instant.parse("2026-09-10T22:00:00Z"));
 
-        AttendanceHistoryView view = MonthlyAttendanceAssembler.assemble("2026-09", List.of(attended, absent), true);
+        AttendanceHistoryView view = AttendanceAssembler.assemble(FROM, TO, List.of(attended, absent), true);
 
         assertThat(view.sessions()).hasSize(2);
         assertThat(view.sessions().get(0).kind()).isEqualTo(AttendanceKind.MANUAL);
@@ -166,7 +185,7 @@ class MonthlyAttendanceAssemblerTest {
             null, AttendanceKind.QR
         );
 
-        AttendanceHistoryView view = MonthlyAttendanceAssembler.assemble("2026-09", List.of(inconsistent), true);
+        AttendanceHistoryView view = AttendanceAssembler.assemble(FROM, TO, List.of(inconsistent), true);
 
         assertThat(view.sessions().get(0).status()).isEqualTo(AttendanceStatus.ABSENT);
         assertThat(view.sessions().get(0).kind()).isNull();
