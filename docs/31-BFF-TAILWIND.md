@@ -200,8 +200,9 @@ Los tests que recorren enlaces ignoran los anchors internos (`#main`) del skip l
 
 Base del área web para el personal (issue #354). Pantallas hoy: el inicio `GET /gestion` y el listado de
 usuarios `GET /gestion/usuarios` con su alta `GET /gestion/usuarios/nuevo` y `POST /gestion/usuarios` y el cambio de
-rol `POST /gestion/usuarios/{id}/rol` (#378); el resto de las secciones se habilita a medida que llega cada pantalla. La autorización real la decide la API; el BFF solo evita mostrar pantallas que un rol no
-puede usar.
+rol `POST /gestion/usuarios/{id}/rol` (#378), y la recepción `GET /gestion/recepcion` con el roster de cada sesión y
+el check-in manual (#373); el resto de las secciones se habilita a medida que llega cada pantalla. La autorización
+real la decide la API; el BFF solo evita mostrar pantallas que un rol no puede usar.
 
 ### Prefijos y roles
 
@@ -345,6 +346,60 @@ rol y elegir el que ya tiene es un no-op idempotente de la API, así que ningún
   cambio se trata como ajeno y la sesión revocada se resuelve por el refresco habitual (`/login?sessionExpired=true`).
 - **Privacidad**: todas las respuestas llevan `Cache-Control: no-store`; ni el email, ni el nombre, ni el id, ni el token
   van a un log (solo el nombre de la clase de la excepción). CSRF activo; solo `ADMIN` (`/gestion/usuarios/**`).
+
+### Recepción (`/gestion/recepcion`)
+
+Pantalla de `RECEPTIONIST` y `ADMIN` (#373; `INSTRUCTOR` no entra: la API le deja leer sesiones y roster, pero el
+check-in manual es solo de recepción y la sección es de ella). Tres rutas, todas bajo `/gestion/recepcion/**`:
+
+| Ruta | Qué hace | API (con el token de la sesión) |
+|---|---|---|
+| `GET /gestion/recepcion` | Sesiones de hoy: curso, horario, cupo ocupado (`occupied` de `capacity`), estado | `GET /api/v1/admin/physical/sessions?from=&to=` |
+| `GET /gestion/recepcion/sesiones/{sessionId}?q=` | Roster: alumnos con cupo confirmado y su asistencia, con búsqueda por nombre | `GET /api/v1/admin/physical/sessions/{sessionId}/roster` |
+| `POST /gestion/recepcion/sesiones/{sessionId}/asistencias` | "Registrar asistencia" de un alumno (`studentId` en el formulario) | `POST /api/v1/physical/sessions/{sessionId}/check-ins`, variante `MANUAL` |
+
+- **"Hoy" y las fechas**: el backend trabaja en UTC (ADR-0048), así que el BFF hace la conversión. "Hoy" es el día local
+  en la zona de la academia (`menta.classes.display-zone`, `America/Argentina/Buenos_Aires` por defecto, la misma de
+  "Mis clases") calculado desde un `Clock` inyectable (`ListTodaySessionsUseCaseImpl`). Pide el rango
+  `[inicio del día, inicio del día siguiente)` como instantes UTC con `Z` (en Buenos Aires,
+  `from=2026-11-13T03:00:00Z&to=2026-11-14T03:00:00Z`; el máximo de la API es 7 días y se usa 1). Una sesión de las
+  00:30 locales cae en el día, una de las 23:30 también, y la de las 00:00 del día siguiente no. Los horarios se
+  muestran en esa misma zona (`ClassLabels`).
+- **Roster**: cada fila trae nombre, tipo de cupo (plan mensual o clase individual), y el estado como **texto**
+  ("Presente" con la hora y cómo se registró, `QR` o `manual`; "Pendiente"), nunca solo color. El botón "Registrar
+  asistencia" solo está en los pendientes de una sesión no cancelada y su nombre accesible incluye al alumno
+  (" de <nombre>", texto oculto). La tabla lleva `<caption>` y `<th scope>`.
+- **Búsqueda**: server-side sobre el roster ya recibido (`?q=`, un `<form role="search">` con su `<label>`):
+  ignora mayúsculas y acentos, cada palabra tipeada debe estar en el nombre y se recorta a 100 caracteres. Los totales
+  del encabezado no cambian con la búsqueda. La API no filtra: el roster de una sesión es chico (acotado por su cupo).
+- **Validación local**: `sessionId` y `studentId` deben ser UUID (van en un path y en un body); si no, el GET responde 404
+  y el POST vuelve a la lista de hoy con "Revisá los datos e intentá de nuevo.", sin llamar a la API. El BFF solo envía
+  `studentId` y `sessionId`: el actor sale del token y la API valida rol, cupo y estado de la sesión.
+- **Check-in** (Post/Redirect/Get al roster, con a lo sumo `q`, codificado estrictamente; mensaje *flash* de una vez,
+  escapado; CSRF activo):
+
+| Caso | Región | Qué ve la recepcionista |
+|---|---|---|
+| API `201` | `role="status"` | "Registramos la asistencia." |
+| API `200` (reintento idempotente: no se duplica) | `role="status"` | "La asistencia ya estaba registrada (<QR o manual>, <día y hora>). No se duplicó." |
+| `403` con `code` `CAPACITY_ASSIGNMENT_REQUIRED` | `role="alert"` | "El alumno no tiene un cupo confirmado en esta sesión, así que no se puede registrar su asistencia." |
+| `403` con `code` `OUTSIDE_CHECK_IN_WINDOW` | `role="alert"` | "La sesión está fuera de la ventana de check-in: no se puede registrar la asistencia." |
+| `409` con `code` `SESSION_NOT_ACTIVE` (sesión cancelada) | `role="alert"` | "La sesión está cancelada: no admite asistencias." |
+| Cualquier otra respuesta (400, 401, otro `403` como `INSUFFICIENT_ROLE`, 404, otro `409` como `ALREADY_PROCESSING`, 429, 5xx, `2xx` sin asistencia legible, timeout) | `role="alert"` | "No pudimos registrar la asistencia. Probá de nuevo en unos minutos." |
+
+  Nota de contrato: hoy la variante `MANUAL` **no** tiene ventana de tiempo (permite cargar asistencia retroactiva, ver
+  `docs/05-PHYSICAL-API.md` y US-PHYSICAL-008), así que `OUTSIDE_CHECK_IN_WINDOW` solo lo devuelve la variante QR; el
+  BFF lo traduce igual, por si la API la incorporara. Lo que sí devuelve MANUAL para una sesión que no admite
+  asistencias es el `409 SESSION_NOT_ACTIVE` (cancelada). Un `{sessionId}` inexistente en MANUAL responde `403
+  CAPACITY_ASSIGNMENT_REQUIRED` (no `404`), y se muestra como "sin cupo".
+- **Estados**: una caída de la API muestra el aviso propio de la pantalla (`role="alert"`) con status 503; una sesión
+  que la API no conoce (`404 SESSION_NOT_FOUND`) o un id mal formado, "No encontramos esa sesión." con status 404.
+  Un día sin sesiones y una sesión sin alumnos o una búsqueda sin resultados se avisan en una región `role="status"`.
+- **Qué lee el BFF de las respuestas**: el status y, en el `404` del roster y en el `403`/`409` del check-in, el campo
+  `code`. Ningún otro cuerpo de error se lee, se muestra ni se registra.
+- **Privacidad**: todas las respuestas llevan `Cache-Control: no-store` (hay nombres de alumnos); ni los nombres, ni los
+  ids de alumnos o sesiones, ni el token van a un log (solo el nombre de la clase de la excepción o un texto fijo).
+  Todo lo que se muestra pasa por `th:text` (escapado).
 
 ## Accesibilidad base
 

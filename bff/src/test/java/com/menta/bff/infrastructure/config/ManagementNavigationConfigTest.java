@@ -19,10 +19,11 @@ class ManagementNavigationConfigTest {
     }
 
     @Test
-    @DisplayName("only the sections that have a screen are offered: today, Usuarios and only to an administrator")
-    void onlyUsersIsOffered() {
-        assertThat(keysFor("ADMIN")).containsExactly("users");
-        for (String role : List.of("INSTRUCTOR", "RECEPTIONIST", "STUDENT")) {
+    @DisplayName("only sections with a screen are offered (Recepción to reception and admin, Usuarios to admin)")
+    void onlySectionsWithAScreenAreOffered() {
+        assertThat(keysFor("ADMIN")).containsExactly("reception", "users");
+        assertThat(keysFor("RECEPTIONIST")).containsExactly("reception");
+        for (String role : List.of("INSTRUCTOR", "STUDENT")) {
             assertThat(keysFor(role)).as(role).isEmpty();
         }
     }
@@ -30,10 +31,20 @@ class ManagementNavigationConfigTest {
     @Test
     @DisplayName("the Usuarios section points at the screen the controller serves")
     void usersSectionPoints() {
-        ManagementSection users = navigation.sectionsFor(List.of("ROLE_ADMIN")).get(0);
+        ManagementSection users = navigation.sectionsFor(List.of("ROLE_ADMIN")).get(1);
 
         assertThat(users.label()).isEqualTo("Usuarios");
         assertThat(users.path()).isEqualTo("/gestion/usuarios");
         assertThat(users.roles()).containsExactly("ADMIN");
+    }
+
+    @Test
+    @DisplayName("the Recepción section points at the screen the controller serves, for reception and admin only")
+    void receptionSectionPoints() {
+        ManagementSection reception = navigation.sectionsFor(List.of("ROLE_RECEPTIONIST")).get(0);
+
+        assertThat(reception.label()).isEqualTo("Recepción");
+        assertThat(reception.path()).isEqualTo("/gestion/recepcion");
+        assertThat(reception.roles()).containsExactlyInAnyOrder("RECEPTIONIST", "ADMIN");
     }
 }
