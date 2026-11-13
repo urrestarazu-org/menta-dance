@@ -365,6 +365,10 @@ check-in manual es solo de recepción y la sección es de ella). Tres rutas, tod
   `from=2026-11-13T03:00:00Z&to=2026-11-14T03:00:00Z`; el máximo de la API es 7 días y se usa 1). Una sesión de las
   00:30 locales cae en el día, una de las 23:30 también, y la de las 00:00 del día siguiente no. Los horarios se
   muestran en esa misma zona (`ClassLabels`).
+- **Páginas de clases (`/classes`)**: el horario del curso (`dayOfWeek` + `startTime`, en UTC) se convierte junto, día
+  y hora, a la zona de la academia (`ClassLabels.schedule`: miércoles 01:00 UTC se muestra "Martes 22:00"). Las
+  lecturas de `GET /api/v1/physical/sessions/me` envían `from`/`to` en UTC con `Z`: la devolución de pago pide desde
+  ayer hasta 31 días adelante, y el detalle del curso, el tramo de las sesiones listadas (tope 92 días).
 - **Roster**: cada fila trae nombre, tipo de cupo (plan mensual o clase individual), y el estado como **texto**
   ("Presente" con la hora y cómo se registró, `QR` o `manual`; "Pendiente"), nunca solo color. El botón "Registrar
   asistencia" solo está en los pendientes de una sesión no cancelada y su nombre accesible incluye al alumno

@@ -38,7 +38,7 @@ class PhysicalClassesIntegrationTest extends BaseIntegrationTest {
               {"courseId": "%s", "modality": "VIRTUAL", "title": "Ballet Básico", "level": "BEGINNER",
                "physical": null, "virtual": {"premium": false}},
               {"courseId": "%s", "modality": "PHYSICAL", "title": "Salsa en vivo", "level": "ADVANCED",
-               "physical": {"professorName": "María García", "dayOfWeek": "MONDAY", "startTime": "18:00",
+               "physical": {"professorName": "María García", "dayOfWeek": "MONDAY", "startTime": "21:00",
                             "capacity": 12},
                "virtual": null}
             ]}
@@ -47,7 +47,7 @@ class PhysicalClassesIntegrationTest extends BaseIntegrationTest {
     private static final String PHYSICAL_DETAIL_BODY =
             """
             {"courseId": "%s", "modality": "PHYSICAL", "title": "Salsa en vivo", "level": "ADVANCED",
-             "physical": {"professorName": "María García", "dayOfWeek": "MONDAY", "startTime": "18:00",
+             "physical": {"professorName": "María García", "dayOfWeek": "MONDAY", "startTime": "21:00",
                           "capacity": 12,
                           "sessions": [
                             {"sessionId": "s-1", "scheduledAt": "2026-10-12T21:00:00Z", "capacity": 12,
@@ -59,7 +59,7 @@ class PhysicalClassesIntegrationTest extends BaseIntegrationTest {
     private static final String NO_SESSIONS_BODY =
             """
             {"courseId": "%s", "modality": "PHYSICAL", "title": "Salsa en vivo", "level": "ADVANCED",
-             "physical": {"professorName": "María García", "dayOfWeek": "MONDAY", "startTime": "18:00",
+             "physical": {"professorName": "María García", "dayOfWeek": "MONDAY", "startTime": "21:00",
                           "capacity": 12, "sessions": []}}
             """.formatted(PHYSICAL_ID);
 

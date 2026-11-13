@@ -15,6 +15,7 @@ import com.menta.bff.application.port.out.PhysicalSessionsApiClient;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,10 +51,13 @@ class GetClassDetailViewUseCaseImplTest {
     }
 
     private static final String TOKEN = "access-token-abc";
+    /** The first and last session of {@link #threeSessions()}, the latter plus the one-minute margin. */
+    private static final Instant OWNED_FROM = Instant.parse("2026-10-12T21:00:00Z");
+    private static final Instant OWNED_TO = Instant.parse("2026-10-26T21:01:00Z");
 
     private static PhysicalCourseDetail detail(List<PhysicalCourseDetail.Session> sessions) {
         return new PhysicalCourseDetail("p-1", "Salsa en vivo", "ADVANCED", "María García",
-                "MONDAY", "18:00", 12, sessions);
+                "MONDAY", "21:00", 12, sessions);
     }
 
     @Test
@@ -182,7 +186,8 @@ class GetClassDetailViewUseCaseImplTest {
     @DisplayName("marks the sessions where the signed-in student already holds a spot")
     void marksOwnedSessions() {
         when(catalogApiClient.getPhysicalCourse("p-1")).thenReturn(threeSessions());
-        when(physicalSessionsApiClient.findMySessionIds(TOKEN)).thenReturn(Set.of("s-2", "s-3", "s-other"));
+        when(physicalSessionsApiClient.findMySessionIds(TOKEN, OWNED_FROM, OWNED_TO))
+                .thenReturn(Set.of("s-2", "s-3", "s-other"));
 
         ClassDetailView view = useCase.execute("p-1", TOKEN);
 
@@ -197,7 +202,7 @@ class GetClassDetailViewUseCaseImplTest {
     @DisplayName("marks nothing when the student holds none of the listed sessions")
     void marksNothingWhenNoneOwned() {
         when(catalogApiClient.getPhysicalCourse("p-1")).thenReturn(threeSessions());
-        when(physicalSessionsApiClient.findMySessionIds(TOKEN)).thenReturn(Set.of());
+        when(physicalSessionsApiClient.findMySessionIds(TOKEN, OWNED_FROM, OWNED_TO)).thenReturn(Set.of());
 
         assertThat(useCase.execute("p-1", TOKEN).sessions())
                 .extracting(ClassDetailView.SessionRow::owned).containsOnly(false);
@@ -228,7 +233,7 @@ class GetClassDetailViewUseCaseImplTest {
     @DisplayName("renders the page without marks when the student's sessions cannot be read")
     void degradesWhenSessionsLookupFails() {
         when(catalogApiClient.getPhysicalCourse("p-1")).thenReturn(threeSessions());
-        when(physicalSessionsApiClient.findMySessionIds(TOKEN))
+        when(physicalSessionsApiClient.findMySessionIds(TOKEN, OWNED_FROM, OWNED_TO))
                 .thenThrow(new PhysicalSessionsApiClient.ServiceUnavailableException("down"));
 
         ClassDetailView view = useCase.execute("p-1", TOKEN);
@@ -238,6 +243,56 @@ class GetClassDetailViewUseCaseImplTest {
         assertThat(view.sessions()).hasSize(3)
                 .extracting(ClassDetailView.SessionRow::owned).containsOnly(false);
         assertThat(view.canQuote()).isTrue();
+    }
+
+    @Test
+    @DisplayName("looks up the student's sessions over the range the listed sessions span, last one included")
+    void looksUpTheRangeOfTheListedSessions() {
+        when(catalogApiClient.getPhysicalCourse("p-1")).thenReturn(detail(List.of(
+                new PhysicalCourseDetail.Session("s-2", Instant.parse("2026-10-26T21:00:00Z"), 12, 3),
+                new PhysicalCourseDetail.Session("s-1", Instant.parse("2026-10-12T21:00:00Z"), 12, 5),
+                new PhysicalCourseDetail.Session("s-3", Instant.parse("2026-10-19T21:00:00Z"), 12, 0))));
+        when(physicalSessionsApiClient.findMySessionIds(TOKEN, OWNED_FROM, OWNED_TO)).thenReturn(Set.of("s-2"));
+
+        ClassDetailView view = useCase.execute("p-1", TOKEN);
+
+        assertThat(view.sessions()).extracting(ClassDetailView.SessionRow::owned)
+                .containsExactly(true, false, false);
+    }
+
+    @Test
+    @DisplayName("a single listed session still gets a non-empty range that contains it")
+    void singleSessionRange() {
+        when(catalogApiClient.getPhysicalCourse("p-1")).thenReturn(detail(List.of(
+                new PhysicalCourseDetail.Session("s-1", Instant.parse("2026-10-12T21:00:00Z"), 12, 5))));
+        when(physicalSessionsApiClient.findMySessionIds(
+                TOKEN, Instant.parse("2026-10-12T21:00:00Z"), Instant.parse("2026-10-12T21:01:00Z")))
+                .thenReturn(Set.of("s-1"));
+
+        assertThat(useCase.execute("p-1", TOKEN).sessions().get(0).owned()).isTrue();
+    }
+
+    @Test
+    @DisplayName("never asks for more than the 92 days the backend accepts")
+    void rangeIsCappedAt92Days() {
+        Instant first = Instant.parse("2026-10-12T21:00:00Z");
+        when(catalogApiClient.getPhysicalCourse("p-1")).thenReturn(detail(List.of(
+                new PhysicalCourseDetail.Session("s-1", first, 12, 5),
+                new PhysicalCourseDetail.Session("s-2", first.plus(200, ChronoUnit.DAYS), 12, 5))));
+        when(physicalSessionsApiClient.findMySessionIds(TOKEN, first, first.plus(92, ChronoUnit.DAYS)))
+                .thenReturn(Set.of("s-1"));
+
+        assertThat(useCase.execute("p-1", TOKEN).sessions())
+                .extracting(ClassDetailView.SessionRow::owned).containsExactly(true, false);
+    }
+
+    @Test
+    @DisplayName("shows the UTC recurrence in the academy zone, rolling the weekday back when needed")
+    void convertsRecurrenceToAcademyZone() {
+        when(catalogApiClient.getPhysicalCourse("p-1")).thenReturn(new PhysicalCourseDetail(
+                "p-1", "Salsa en vivo", "ADVANCED", "María García", "WEDNESDAY", "01:00", 12, List.of()));
+
+        assertThat(useCase.execute("p-1", null).scheduleLabel()).isEqualTo("Martes 22:00");
     }
 
     @Test
@@ -254,10 +309,10 @@ class GetClassDetailViewUseCaseImplTest {
     @DisplayName("sends the student's own token to look the sessions up")
     void usesTheStudentsToken() {
         when(catalogApiClient.getPhysicalCourse("p-1")).thenReturn(threeSessions());
-        when(physicalSessionsApiClient.findMySessionIds(TOKEN)).thenReturn(Set.of());
+        when(physicalSessionsApiClient.findMySessionIds(TOKEN, OWNED_FROM, OWNED_TO)).thenReturn(Set.of());
 
         useCase.execute("p-1", TOKEN);
 
-        verify(physicalSessionsApiClient).findMySessionIds(TOKEN);
+        verify(physicalSessionsApiClient).findMySessionIds(TOKEN, OWNED_FROM, OWNED_TO);
     }
 }

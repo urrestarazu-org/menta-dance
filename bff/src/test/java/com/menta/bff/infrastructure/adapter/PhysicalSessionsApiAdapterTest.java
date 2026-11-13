@@ -5,7 +5,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
-import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.verify;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -31,6 +31,8 @@ class PhysicalSessionsApiAdapterTest {
 
     private static final String MY_SESSIONS = "/api/v1/physical/sessions/me";
     private static final String TOKEN = "access-token-abc";
+    private static final Instant FROM = Instant.parse("2026-10-13T03:00:00Z");
+    private static final Instant TO = Instant.parse("2026-12-12T03:00:00Z");
 
     private static final String TWO_SESSIONS_BODY =
             """
@@ -53,7 +55,7 @@ class PhysicalSessionsApiAdapterTest {
     }
 
     private static void stubBody(int status, String body) {
-        stubFor(get(urlEqualTo(MY_SESSIONS)).willReturn(aResponse().withStatus(status)
+        stubFor(get(urlPathEqualTo(MY_SESSIONS)).willReturn(aResponse().withStatus(status)
                 .withHeader("Content-Type", "application/json").withBody(body)));
     }
 
@@ -62,8 +64,10 @@ class PhysicalSessionsApiAdapterTest {
     void mapsSessionIds() {
         stubBody(200, TWO_SESSIONS_BODY);
 
-        assertThat(adapter.findMySessionIds(TOKEN)).containsExactlyInAnyOrder("s-1", "s-2");
-        verify(getRequestedFor(urlEqualTo(MY_SESSIONS)).withHeader("Authorization", equalTo("Bearer " + TOKEN)));
+        assertThat(adapter.findMySessionIds(TOKEN, FROM, TO)).containsExactlyInAnyOrder("s-1", "s-2");
+        verify(getRequestedFor(urlPathEqualTo(MY_SESSIONS)).withHeader("Authorization", equalTo("Bearer " + TOKEN))
+                .withQueryParam("from", equalTo("2026-10-13T03:00:00Z"))
+                .withQueryParam("to", equalTo("2026-12-12T03:00:00Z")));
     }
 
     @Test
@@ -71,10 +75,28 @@ class PhysicalSessionsApiAdapterTest {
     void mapsSessions() {
         stubBody(200, TWO_SESSIONS_BODY);
 
-        assertThat(adapter.findMySessions(TOKEN)).containsExactly(
+        assertThat(adapter.findMySessions(TOKEN, FROM, TO)).containsExactly(
                 new AssignedSession("s-1", "Salsa", Instant.parse("2026-10-20T21:00:00Z")),
                 new AssignedSession("s-2", "Salsa", Instant.parse("2026-10-27T21:00:00Z")));
-        verify(getRequestedFor(urlEqualTo(MY_SESSIONS)).withHeader("Authorization", equalTo("Bearer " + TOKEN)));
+        verify(getRequestedFor(urlPathEqualTo(MY_SESSIONS)).withHeader("Authorization", equalTo("Bearer " + TOKEN))
+                .withQueryParam("from", equalTo("2026-10-13T03:00:00Z"))
+                .withQueryParam("to", equalTo("2026-12-12T03:00:00Z")));
+    }
+
+    @Test
+    @DisplayName("both queries send the window as ISO-8601 UTC instants with Z")
+    void sendsTheWindowAsUtcInstants() {
+        stubBody(200, TWO_SESSIONS_BODY);
+
+        Instant from = Instant.parse("2026-11-12T15:30:00Z");
+        Instant to = Instant.parse("2026-12-13T15:30:00Z");
+
+        adapter.findMySessionIds(TOKEN, from, to);
+        adapter.findMySessions(TOKEN, from, to);
+
+        verify(2, getRequestedFor(urlPathEqualTo(MY_SESSIONS))
+                .withQueryParam("from", equalTo("2026-11-12T15:30:00Z"))
+                .withQueryParam("to", equalTo("2026-12-13T15:30:00Z")));
     }
 
     @Test
@@ -83,7 +105,7 @@ class PhysicalSessionsApiAdapterTest {
         stubBody(200, "{\"sessions\": [{\"courseId\": \"c-1\"}, {\"sessionId\": \"s-0\"}, "
                 + "{\"sessionId\": \"s-1\", \"scheduledAt\": \"2026-10-20T21:00:00Z\"}]}");
 
-        assertThat(adapter.findMySessions(TOKEN))
+        assertThat(adapter.findMySessions(TOKEN, FROM, TO))
                 .containsExactly(new AssignedSession("s-1", null, Instant.parse("2026-10-20T21:00:00Z")));
     }
 
@@ -91,12 +113,12 @@ class PhysicalSessionsApiAdapterTest {
     @DisplayName("findMySessions is unavailable on an error status or an unusable body")
     void sessionsUnavailable() {
         stubBody(503, "{}");
-        assertThatThrownBy(() -> adapter.findMySessions(TOKEN))
+        assertThatThrownBy(() -> adapter.findMySessions(TOKEN, FROM, TO))
                 .isInstanceOf(PhysicalSessionsApiClient.ServiceUnavailableException.class)
                 .hasMessageNotContaining(TOKEN);
 
         stubBody(200, "{\"from\": \"2026-10-13T03:00:00Z\"}");
-        assertThatThrownBy(() -> adapter.findMySessions(TOKEN))
+        assertThatThrownBy(() -> adapter.findMySessions(TOKEN, FROM, TO))
                 .isInstanceOf(PhysicalSessionsApiClient.ServiceUnavailableException.class);
     }
 
@@ -105,7 +127,7 @@ class PhysicalSessionsApiAdapterTest {
     void emptyList() {
         stubBody(200, "{\"from\": \"2026-10-13T03:00:00Z\", \"to\": \"2026-12-12T03:00:00Z\", \"sessions\": []}");
 
-        assertThat(adapter.findMySessionIds(TOKEN)).isEmpty();
+        assertThat(adapter.findMySessionIds(TOKEN, FROM, TO)).isEmpty();
     }
 
     @Test
@@ -113,7 +135,7 @@ class PhysicalSessionsApiAdapterTest {
     void skipsItemsWithoutId() {
         stubBody(200, "{\"sessions\": [{\"courseId\": \"c-1\"}, {\"sessionId\": \"s-1\"}]}");
 
-        assertThat(adapter.findMySessionIds(TOKEN)).containsExactly("s-1");
+        assertThat(adapter.findMySessionIds(TOKEN, FROM, TO)).containsExactly("s-1");
     }
 
     @ParameterizedTest(name = "status {0} is unavailable")
@@ -122,7 +144,7 @@ class PhysicalSessionsApiAdapterTest {
     void errorStatuses(int status) {
         stubBody(status, "{\"status\":" + status + "}");
 
-        assertThatThrownBy(() -> adapter.findMySessionIds(TOKEN))
+        assertThatThrownBy(() -> adapter.findMySessionIds(TOKEN, FROM, TO))
                 .isInstanceOf(PhysicalSessionsApiClient.ServiceUnavailableException.class)
                 .hasMessageNotContaining(TOKEN);
     }
@@ -131,29 +153,29 @@ class PhysicalSessionsApiAdapterTest {
     @DisplayName("an unreadable or empty body is unavailable")
     void unusableBodies() {
         stubBody(200, "<html>not json</html>");
-        assertThatThrownBy(() -> adapter.findMySessionIds(TOKEN))
+        assertThatThrownBy(() -> adapter.findMySessionIds(TOKEN, FROM, TO))
                 .isInstanceOf(PhysicalSessionsApiClient.ServiceUnavailableException.class);
 
         stubBody(200, "");
-        assertThatThrownBy(() -> adapter.findMySessionIds(TOKEN))
+        assertThatThrownBy(() -> adapter.findMySessionIds(TOKEN, FROM, TO))
                 .isInstanceOf(PhysicalSessionsApiClient.ServiceUnavailableException.class);
 
         stubBody(200, "{\"from\": \"2026-10-13T03:00:00Z\"}");
-        assertThatThrownBy(() -> adapter.findMySessionIds(TOKEN))
+        assertThatThrownBy(() -> adapter.findMySessionIds(TOKEN, FROM, TO))
                 .isInstanceOf(PhysicalSessionsApiClient.ServiceUnavailableException.class);
     }
 
     @Test
     @DisplayName("a dropped connection and a response slower than the timeout are unavailable")
     void transportErrorsAndTimeout() {
-        stubFor(get(urlEqualTo(MY_SESSIONS)).willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)));
-        assertThatThrownBy(() -> adapter.findMySessionIds(TOKEN))
+        stubFor(get(urlPathEqualTo(MY_SESSIONS)).willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)));
+        assertThatThrownBy(() -> adapter.findMySessionIds(TOKEN, FROM, TO))
                 .isInstanceOf(PhysicalSessionsApiClient.ServiceUnavailableException.class)
                 .hasMessageNotContaining(TOKEN);
 
-        stubFor(get(urlEqualTo(MY_SESSIONS)).willReturn(aResponse().withStatus(200).withFixedDelay(2_000)
+        stubFor(get(urlPathEqualTo(MY_SESSIONS)).willReturn(aResponse().withStatus(200).withFixedDelay(2_000)
                 .withHeader("Content-Type", "application/json").withBody("{\"sessions\": []}")));
-        assertThatThrownBy(() -> adapter.findMySessionIds(TOKEN))
+        assertThatThrownBy(() -> adapter.findMySessionIds(TOKEN, FROM, TO))
                 .isInstanceOf(PhysicalSessionsApiClient.ServiceUnavailableException.class);
     }
 }

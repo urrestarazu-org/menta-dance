@@ -24,6 +24,10 @@ import org.springframework.web.reactive.function.client.WebClient;
  * header; only the exception class name is logged, never the request or the response.
  * </p>
  *
+ * <p>The range is sent as {@code from} and {@code to} query parameters, ISO-8601 UTC instants with {@code Z}
+ * (the {@link Instant#toString()} form), as the upstream requires (ADR-0048).
+ * </p>
+ *
  * <p>Part of Clean Architecture infrastructure layer. Uses an explicit constructor because
  * {@code @Qualifier} cannot be carried by Lombok's {@code @RequiredArgsConstructor}.
  * </p>
@@ -44,26 +48,29 @@ public class PhysicalSessionsApiAdapter implements PhysicalSessionsApiClient {
     }
 
     @Override
-    public Set<String> findMySessionIds(String accessToken) {
-        return fetch(accessToken).stream()
+    public Set<String> findMySessionIds(String accessToken, Instant from, Instant to) {
+        return fetch(accessToken, from, to).stream()
                 .map(SessionWire::sessionId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toUnmodifiableSet());
     }
 
     @Override
-    public List<AssignedSession> findMySessions(String accessToken) {
-        return fetch(accessToken).stream()
+    public List<AssignedSession> findMySessions(String accessToken, Instant from, Instant to) {
+        return fetch(accessToken, from, to).stream()
                 .filter(s -> s.sessionId() != null && s.scheduledAt() != null)
                 .map(s -> new AssignedSession(s.sessionId(), s.courseName(), s.scheduledAt()))
                 .toList();
     }
 
-    private List<SessionWire> fetch(String accessToken) {
+    private List<SessionWire> fetch(String accessToken, Instant from, Instant to) {
         MySessionsWire wire;
         try {
             wire = webClient.get()
-                    .uri(MY_SESSIONS_ENDPOINT)
+                    .uri(uri -> uri.path(MY_SESSIONS_ENDPOINT)
+                            .queryParam("from", from.toString())
+                            .queryParam("to", to.toString())
+                            .build())
                     .headers(headers -> headers.setBearerAuth(accessToken))
                     .retrieve()
                     .bodyToMono(MySessionsWire.class)

@@ -11,8 +11,8 @@ import java.util.List;
  * @param title         course title
  * @param level         upstream level code (e.g. {@code ADVANCED}), may be {@code null}
  * @param professorName professor name
- * @param dayOfWeek     upstream weekday code (e.g. {@code MONDAY})
- * @param startTime     start time as {@code HH:mm}
+ * @param dayOfWeek     upstream weekday code (e.g. {@code MONDAY}), in UTC as upstream sends it (ADR-0048)
+ * @param startTime     start time as {@code HH:mm}, in UTC as upstream sends it (ADR-0048)
  * @param capacity      course capacity
  * @param sessions      upcoming sessions, ascending by time, never {@code null}
  */
