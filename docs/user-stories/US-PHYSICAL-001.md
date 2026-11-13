@@ -59,10 +59,10 @@
 **Escenario 7: descubrir las sesiones con cupo (#356)**
 
 - **Dado** un alumno autenticado con asignaciones de cupo confirmadas.
-- **Cuando** consulta `GET /api/v1/physical/sessions/me`.
-- **Entonces** recibe, ordenadas por fecha ascendente, solo sus sesiones desde el
-  inicio de hoy hasta 60 días después (configurable), cada una con su `sessionId`
-  y si la ventana de check-in está abierta; los holds técnicos, los pagos
+- **Cuando** consulta `GET /api/v1/physical/sessions/me?from=<instante>&to=<instante>`
+  con el rango UTC `[from, to)` (a lo sumo 92 días) que calcula su cliente (#729).
+- **Entonces** recibe, ordenadas por fecha ascendente, solo sus sesiones de ese
+  rango, cada una con su `sessionId` y si la ventana de check-in está abierta; los holds técnicos, los pagos
   pendientes y las sesiones canceladas no aparecen, y un rol distinto de `STUDENT`
   recibe `403`.
 

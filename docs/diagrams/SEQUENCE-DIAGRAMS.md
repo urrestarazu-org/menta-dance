@@ -226,7 +226,7 @@ sequenceDiagram
         Billing->>MySQL: Purchase → ASSIGNED
 
         Alumno->>BFF: Ver mis clases
-        BFF->>App: GET /api/v1/physical/attendance/me
+        BFF->>App: GET /api/v1/physical/sessions/me?from&to (rango UTC)
         App-->>BFF: Sessions with confirmed spots
     end
 ```

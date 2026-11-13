@@ -5,12 +5,13 @@ meta {
 }
 
 get {
-  url: {{baseUrl}}/api/v1/admin/physical/attendance/00000000-0000-0000-0000-000000000000?month=2026-09&includeAbsent=false
+  url: {{baseUrl}}/api/v1/admin/physical/attendance/00000000-0000-0000-0000-000000000000?from=2026-11-01T03:00:00Z&to=2026-12-01T03:00:00Z&includeAbsent=false
   auth: bearer
 }
 
 params:query {
-  month: 2026-09
+  from: 2026-11-01T03:00:00Z
+  to: 2026-12-01T03:00:00Z
   includeAbsent: false
 }
 
@@ -19,24 +20,36 @@ auth:bearer {
 }
 
 docs {
-  #39, US-PHYSICAL-002 P2. Elevated read of ANOTHER student's month.
-  `ADMIN` reads any student unrestricted. `INSTRUCTOR` reads a student but
-  the result is filtered server-side to sessions of courses that instructor
-  teaches — both `sessions[]` and every aggregate number reflect only that
-  filtered set. `STUDENT` cannot reach this endpoint at all.
-
-  A student who is not enrolled in any course the instructor teaches
-  returns the same empty 200 shape as a student with zero assignments that
-  month — the response never leaks student existence.
-
-  Success contract: 200 with { period, scheduledSessionCount, attended,
-  absent, attendanceRate, sessions[] } — identical shape to the self
+  #39, US-PHYSICAL-002 P2, #729. Lectura elevada de la asistencia de OTRO alumno
+  en un rango de instantes UTC. `ADMIN` lee a cualquier alumno sin restricción.
+  `INSTRUCTOR` lee a un alumno pero el resultado se filtra en el servidor a las
+  sesiones de los cursos que ese instructor dicta: tanto `sessions[]` como todos
+  los agregados reflejan sólo ese subconjunto. `STUDENT` no puede alcanzar este
   endpoint.
-  Error contract: 400 (`INVALID_REQUEST`) on a malformed studentId or
-  month; 401 when unauthenticated; 403 when the caller is neither ADMIN
-  nor INSTRUCTOR.
+
+  Un alumno que no está inscripto en ningún curso del instructor devuelve el
+  mismo 200 vacío que un alumno sin asignaciones en ese rango: la respuesta
+  nunca revela si el alumno existe.
+
+  Todas las fechas del backend son UTC; el día local lo calcula el cliente. El
+  backend no aplica ninguna zona horaria. Ejemplo: noviembre de 2026 en Buenos
+  Aires (UTC-3) es `from=2026-11-01T03:00:00Z&to=2026-12-01T03:00:00Z`. El
+  parámetro `month` (`YYYY-MM`) ya no existe. `from` y `to` son obligatorios,
+  instantes ISO-8601 estrictos (un `+` de offset debe ir codificado como
+  `%2B`), el rango es semiabierto `[from, to)` y abarca a lo sumo 92 días.
+
+  Contrato de éxito: 200 con { from, to, scheduledSessionCount, attended,
+  absent, attendanceRate, sessions[] }, con la misma forma que el endpoint del
+  propio alumno.
+  Contrato de error:
+    400 INVALID_REQUEST → `studentId` malformado; `from` o `to` ausentes o
+        inválidos, `from` no anterior a `to`, o rango mayor a 92 días
+    401 → sin token
+    403 → el rol no es ADMIN ni INSTRUCTOR
 }
 
 assert {
   res.status: eq 200
+  res.body.from: eq 2026-11-01T03:00:00Z
+  res.body.to: eq 2026-12-01T03:00:00Z
 }

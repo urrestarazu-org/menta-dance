@@ -12,8 +12,12 @@
 
 ## Criterios de aceptación
 
-- `GET /api/v1/physical/attendance/me?month=2026-09` devuelve sesiones asignadas,
-  fecha, curso, profesor y estado de asistencia.
+- `GET /api/v1/physical/attendance/me?from=2026-09-01T03:00:00Z&to=2026-10-01T03:00:00Z`
+  devuelve las sesiones asignadas que empiezan en el rango semiabierto `[from, to)`
+  (aquí, septiembre en Buenos Aires), con fecha, curso, profesor y estado de
+  asistencia. El rango es UTC y lo calcula el cliente (ADR-0048, #729): `from` y
+  `to` son obligatorios, `from` es anterior a `to` y el rango abarca a lo sumo
+  92 días; si no, `400 INVALID_REQUEST`.
 - `includeAbsent=true` incluye sesiones asignadas sin check-in como `ABSENT`.
 - El denominador del porcentaje es la cantidad de sesiones efectivamente
   asignadas al alumno en el período, proveniente del snapshot mensual o de pagos
@@ -27,7 +31,8 @@
 
 ```json
 {
-  "period": "2026-09",
+  "from": "2026-09-01T03:00:00Z",
+  "to": "2026-10-01T03:00:00Z",
   "scheduledSessionCount": 5,
   "attended": 4,
   "absent": 1,
