@@ -1,10 +1,14 @@
 package com.menta.physical.infrastructure.persistence.adapter;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import com.menta.physical.application.dto.AssignedSessionRow;
 import com.menta.physical.application.dto.AttendanceHistoryRow;
+import com.menta.physical.application.dto.SessionRosterRow;
+import com.menta.physical.domain.model.AttendanceKind;
 import com.menta.physical.domain.model.CourseStatus;
+import com.menta.physical.domain.model.SessionId;
 import com.menta.physical.infrastructure.persistence.entity.AttendanceJpaEntity;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalCapacityAssignmentJpaEntity;
 import com.menta.physical.infrastructure.persistence.entity.PhysicalCourseJpaEntity;
@@ -104,8 +108,12 @@ class PhysicalCapacityAssignmentRepositoryAdapterTest {
     }
 
     private void seedAttendance(UUID sessionId, UUID studentId, Instant recordedAt) {
+        seedAttendance(sessionId, studentId, recordedAt, "QR");
+    }
+
+    private void seedAttendance(UUID sessionId, UUID studentId, Instant recordedAt, String kind) {
         attendanceRepository.saveAndFlush(new AttendanceJpaEntity(
-            UUID.randomUUID(), sessionId, studentId, recordedAt, "reader-1", "QR"
+            UUID.randomUUID(), sessionId, studentId, recordedAt, "reader-1", kind
         ));
     }
 
@@ -278,5 +286,61 @@ class PhysicalCapacityAssignmentRepositoryAdapterTest {
         );
 
         assertThat(rows).extracting(AssignedSessionRow::sessionId).containsExactly(mine);
+    }
+
+    @Test
+    void the_roster_has_one_row_per_assignment_of_the_session_and_none_of_other_sessions() {
+        UUID courseId = seedCourse(UUID.randomUUID());
+        UUID sessionId = seedSession(courseId, Instant.parse("2026-10-10T22:00:00Z"));
+        UUID otherSessionId = seedSession(courseId, Instant.parse("2026-10-11T22:00:00Z"));
+        UUID monthly = UUID.randomUUID();
+        UUID individual = UUID.randomUUID();
+        seedAssignment(sessionId, monthly, AssignmentType.MONTHLY);
+        seedAssignment(sessionId, individual, AssignmentType.INDIVIDUAL);
+        seedAssignment(otherSessionId, UUID.randomUUID(), AssignmentType.MONTHLY);
+
+        List<SessionRosterRow> rows = adapter().findRoster(SessionId.of(sessionId));
+
+        assertThat(rows).extracting(SessionRosterRow::studentId, SessionRosterRow::assignmentType)
+            .containsExactlyInAnyOrder(
+            tuple(monthly, AssignmentType.MONTHLY), tuple(individual, AssignmentType.INDIVIDUAL)
+        );
+    }
+
+    @Test
+    void the_roster_row_of_a_student_with_a_check_in_carries_its_instant_and_kind_and_the_others_have_none() {
+        UUID courseId = seedCourse(UUID.randomUUID());
+        UUID sessionId = seedSession(courseId, Instant.parse("2026-10-10T22:00:00Z"));
+        final UUID otherSessionId = seedSession(courseId, Instant.parse("2026-10-11T22:00:00Z"));
+        UUID present = UUID.randomUUID();
+        UUID manual = UUID.randomUUID();
+        UUID pending = UUID.randomUUID();
+        seedAssignment(sessionId, present);
+        seedAssignment(sessionId, manual);
+        seedAssignment(sessionId, pending);
+        seedAttendance(sessionId, present, Instant.parse("2026-10-10T21:47:12Z"), "QR");
+        seedAttendance(sessionId, manual, Instant.parse("2026-10-10T22:05:30Z"), "MANUAL");
+        // The pending student checked in to ANOTHER session: the join must not leak it here.
+        seedAssignment(otherSessionId, pending);
+        seedAttendance(otherSessionId, pending, Instant.parse("2026-10-11T21:50:00Z"), "QR");
+
+        List<SessionRosterRow> rows = adapter().findRoster(SessionId.of(sessionId));
+
+        assertThat(rows)
+            .extracting(SessionRosterRow::studentId, SessionRosterRow::checkedInAt, SessionRosterRow::checkInKind)
+            .containsExactlyInAnyOrder(
+                tuple(present, Instant.parse("2026-10-10T21:47:12Z"), AttendanceKind.QR),
+                tuple(manual, Instant.parse("2026-10-10T22:05:30Z"), AttendanceKind.MANUAL),
+                tuple(pending, null, null)
+            );
+    }
+
+    @Test
+    void the_roster_of_a_session_without_assignments_or_unknown_is_empty() {
+        UUID courseId = seedCourse(UUID.randomUUID());
+        UUID sessionId = seedSession(courseId, Instant.parse("2026-10-10T22:00:00Z"));
+
+        assertThat(adapter().findRoster(SessionId.of(sessionId))).isEmpty();
+        assertThat(adapter().findRoster(SessionId.generate())).isEmpty();
     }
 }

@@ -2,12 +2,14 @@ package com.menta.physical.infrastructure.persistence.adapter;
 
 import com.menta.physical.application.dto.AssignedSessionRow;
 import com.menta.physical.application.dto.AttendanceHistoryRow;
+import com.menta.physical.application.dto.SessionRosterRow;
 import com.menta.physical.application.port.out.PhysicalCapacityAssignmentRepository;
 import com.menta.physical.domain.model.AttendanceKind;
 import com.menta.physical.domain.model.SessionId;
 import com.menta.physical.infrastructure.persistence.repository.AssignedSessionRowProjection;
 import com.menta.physical.infrastructure.persistence.repository.MonthlyAttendanceRowProjection;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalCapacityAssignmentJpaRepository;
+import com.menta.physical.infrastructure.persistence.repository.SessionRosterRowProjection;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -56,6 +58,21 @@ public class PhysicalCapacityAssignmentRepositoryAdapter
         return assignmentRepository.findAssignedSessions(studentId, from, to).stream()
             .map(PhysicalCapacityAssignmentRepositoryAdapter::toAssignedSessionRow)
             .toList();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public List<SessionRosterRow> findRoster(SessionId sessionId) {
+        return assignmentRepository.findRoster(sessionId.getValue()).stream()
+            .map(PhysicalCapacityAssignmentRepositoryAdapter::toRosterRow)
+            .toList();
+    }
+
+    private static SessionRosterRow toRosterRow(SessionRosterRowProjection row) {
+        return new SessionRosterRow(
+            row.getStudentId(), row.getAssignmentType(), row.getCheckedInAt(),
+            row.getCheckInKind() == null ? null : AttendanceKind.valueOf(row.getCheckInKind())
+        );
     }
 
     private static AssignedSessionRow toAssignedSessionRow(AssignedSessionRowProjection row) {

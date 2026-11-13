@@ -17,6 +17,7 @@ import com.menta.auth.application.port.in.RegisterUserUseCase;
 import com.menta.auth.application.port.in.RequestPasswordResetUseCase;
 import com.menta.auth.application.port.in.ResendActivationUseCase;
 import com.menta.auth.application.port.in.ResetPasswordUseCase;
+import com.menta.auth.application.port.in.ResolveUserDisplayNamesUseCase;
 import com.menta.auth.application.port.in.ValidateActivationTokenUseCase;
 import com.menta.auth.application.port.out.AccessTokenIssuer;
 import com.menta.auth.application.port.out.ActivationDeliveryCipher;
@@ -42,6 +43,7 @@ import com.menta.auth.application.port.out.UserAdminRepository;
 import com.menta.auth.application.port.out.UserAuditRepository;
 import com.menta.auth.application.usecase.ActivationTokenIssuer;
 import com.menta.auth.application.usecase.ListUsersUseCaseImpl;
+import com.menta.auth.application.usecase.ResolveUserDisplayNamesUseCaseImpl;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.auth.infrastructure.activation.AesGcmActivationDeliveryCipher;
 import com.menta.auth.infrastructure.activation.RedisActivationRateLimitPort;
@@ -286,6 +288,14 @@ class AuthConfigurationTest {
         ListUsersUseCase useCase = configuration.listUsersUseCase(mock(UserAdminRepository.class));
 
         assertThat(useCase).isInstanceOf(ListUsersUseCaseImpl.class);
+    }
+
+    @Test
+    void wires_the_resolve_user_display_names_use_case_bean() {
+        ResolveUserDisplayNamesUseCase useCase =
+            configuration.resolveUserDisplayNamesUseCase(mock(UserAdminRepository.class));
+
+        assertThat(useCase).isInstanceOf(ResolveUserDisplayNamesUseCaseImpl.class);
     }
 
     @Test
