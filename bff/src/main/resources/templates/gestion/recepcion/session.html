@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/management :: page('Alumnos de la sesión', 'reception', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<p class="mb-4"><a th:href="@{/gestion/recepcion}">Volver a las sesiones de hoy</a></p>
+
+<h1 class="mb-2" th:text="${roster.ok()} ? ${roster.courseName()} : 'Sesión'">Salsa</h1>
+
+<div th:if="${checkInSuccess}" class="mb-4">
+    <div th:replace="~{fragments/components :: alert('success', ${checkInSuccess})}"></div>
+</div>
+<div th:if="${checkInInfo}" class="mb-4">
+    <div th:replace="~{fragments/components :: alert('info', ${checkInInfo})}"></div>
+</div>
+<div th:if="${checkInError}" class="mb-4">
+    <div th:replace="~{fragments/components :: alert('error', ${checkInError})}"></div>
+</div>
+
+<div th:if="${roster.outcome().name() == 'NOT_FOUND'}" class="mb-4">
+    <div th:replace="~{fragments/components :: alert('error', 'No encontramos esa sesión.')}"></div>
+</div>
+<div th:if="${roster.outcome().name() == 'UNAVAILABLE'}" class="mb-4">
+    <div th:replace="~{fragments/components :: alert('error', 'No pudimos cargar los alumnos de la sesión en este momento. Intentá nuevamente en unos minutos.')}"></div>
+</div>
+
+<th:block th:if="${roster.ok()}">
+<p class="mb-4" th:text="${roster.momentLabel()}">lunes 12 de octubre a las 18:00</p>
+
+<dl class="mb-6 flex flex-wrap gap-x-8 gap-y-2">
+    <div>
+        <dt class="font-semibold">Cupo total</dt>
+        <dd class="m-0" th:text="${roster.capacity()}">15</dd>
+    </div>
+    <div>
+        <dt class="font-semibold">Alumnos con cupo</dt>
+        <dd class="m-0" th:text="${roster.enrolled()}">12</dd>
+    </div>
+    <div>
+        <dt class="font-semibold">Con asistencia registrada</dt>
+        <dd class="m-0" th:text="${roster.present()}">5</dd>
+    </div>
+</dl>
+
+<div th:if="${roster.cancelled()}" class="mb-4">
+    <div th:replace="~{fragments/components :: alert('info', 'La sesión está cancelada: no se puede registrar asistencia.')}"></div>
+</div>
+
+<form th:action="@{/gestion/recepcion/sesiones/{id}(id=${sessionId})}" method="get" role="search"
+      aria-label="Buscar alumnos de la sesión" class="card mb-6 grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
+    <div class="field">
+        <label class="field-label" for="q">Buscar alumno por nombre</label>
+        <input class="field-input" id="q" type="search" name="q" maxlength="100" autocomplete="off"
+               th:value="${roster.text()}"/>
+    </div>
+    <div class="flex items-center gap-4">
+        <button type="submit" class="btn btn-primary">Buscar</button>
+        <a th:href="@{/gestion/recepcion/sesiones/{id}(id=${sessionId})}">Limpiar</a>
+    </div>
+</form>
+
+<div th:if="${roster.noStudents()}" class="mb-4">
+    <div th:replace="~{fragments/components :: alert('info', 'Esta sesión no tiene alumnos con cupo confirmado.')}"></div>
+</div>
+<div th:if="${roster.noMatches()}" class="mb-4">
+    <div th:replace="~{fragments/components :: alert('info', 'Ningún alumno coincide con la búsqueda.')}"></div>
+</div>
+
+<div th:unless="${roster.rows().isEmpty()}" class="overflow-x-auto" role="region" aria-label="Alumnos de la sesión" tabindex="0">
+    <table class="w-full text-left">
+        <caption class="mb-2 text-left font-semibold">
+            Alumnos con cupo (<span th:text="${roster.rows().size()}">0</span><span th:if="${roster.filtered()}"
+            th:text="| de ${roster.enrolled()}|"> de 12</span>)
+        </caption>
+        <thead>
+        <tr class="border-b border-brand-deep/30">
+            <th scope="col" class="p-3 font-semibold">Alumno</th>
+            <th scope="col" class="p-3 font-semibold">Tipo de cupo</th>
+            <th scope="col" class="p-3 font-semibold">Asistencia</th>
+            <th scope="col" class="p-3 font-semibold">Acción</th>
+        </tr>
+        </thead>
+        <tbody class="divide-y divide-brand-deep/15">
+        <tr th:each="row : ${roster.rows()}">
+            <th scope="row" class="p-3 font-medium" th:text="${row.displayName()}">Ada Lovelace</th>
+            <td class="p-3" th:text="${row.assignmentLabel()} ?: 'Sin dato'">Plan mensual</td>
+            <td class="p-3">
+                <span class="badge" th:text="${row.statusLabel()}"
+                      th:classappend="${row.present()} ? 'badge-success' : 'badge-warning'">Pendiente</span>
+                <span th:if="${row.present()}"
+                      th:text="|${row.checkedInLabel()}${row.kindLabel() != null ? ', ' + row.kindLabel() : ''}|">18:05, QR</span>
+            </td>
+            <td class="p-3">
+                <form th:if="${row.canRegister()}"
+                      th:action="@{/gestion/recepcion/sesiones/{id}/asistencias(id=${sessionId})}" method="post">
+                    <input type="hidden" name="studentId" th:value="${row.studentId()}"/>
+                    <input type="hidden" name="q" th:value="${roster.text()}"/>
+                    <button type="submit" class="btn btn-primary">Registrar asistencia<span class="sr-only" th:text="| de ${row.displayName()}|"> de Ada Lovelace</span></button>
+                </form>
+                <span th:unless="${row.canRegister()}" class="sr-only">Sin acción disponible</span>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+</div>
+</th:block>
+</th:block>
+</body>
+</html>

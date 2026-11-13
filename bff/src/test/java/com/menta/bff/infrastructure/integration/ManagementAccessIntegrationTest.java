@@ -92,9 +92,8 @@ class ManagementAccessIntegrationTest extends BaseIntegrationTest {
                 Arguments.of("/gestion/sesiones", INSTRUCTOR, true),
                 Arguments.of("/gestion/sesiones", RECEPTIONIST, false),
                 Arguments.of("/gestion/sesiones", STUDENT, false),
-                // reception: receptionist and administrator
-                Arguments.of("/gestion/recepcion", RECEPTIONIST, true),
-                Arguments.of("/gestion/recepcion", ADMIN, true),
+                // reception: receptionist and administrator. Their own access to the screens that exist is not
+                // a 404 (they are served), so it is covered by ManagementReceptionIntegrationTest.
                 Arguments.of("/gestion/recepcion", INSTRUCTOR, false),
                 Arguments.of("/gestion/recepcion", STUDENT, false),
                 Arguments.of("/gestion/recepcion/asistencia", RECEPTIONIST, true),

@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/management :: page('Recepción', 'reception', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<h1 class="mb-2">Recepción</h1>
+<p class="mb-6">Sesiones de hoy, <span th:text="${agenda.dayLabel()}">viernes 13 de noviembre</span>.</p>
+
+<div th:if="${checkInError}" class="mb-4">
+    <div th:replace="~{fragments/components :: alert('error', ${checkInError})}"></div>
+</div>
+
+<div th:if="${agenda.unavailable()}" class="mb-4">
+    <div th:replace="~{fragments/components :: alert('error', 'No pudimos cargar las sesiones de hoy en este momento. Intentá nuevamente en unos minutos.')}"></div>
+</div>
+<div th:if="${agenda.empty()}" class="mb-4">
+    <div th:replace="~{fragments/components :: alert('info', 'Hoy no hay sesiones programadas.')}"></div>
+</div>
+
+<div th:unless="${agenda.rows().isEmpty()}" class="overflow-x-auto" role="region" aria-label="Sesiones de hoy" tabindex="0">
+    <table class="w-full text-left">
+        <caption class="mb-2 text-left font-semibold">
+            Sesiones de hoy (<span th:text="${agenda.rows().size()}">0</span>)
+        </caption>
+        <thead>
+        <tr class="border-b border-brand-deep/30">
+            <th scope="col" class="p-3 font-semibold">Curso</th>
+            <th scope="col" class="p-3 font-semibold">Horario</th>
+            <th scope="col" class="p-3 font-semibold">Cupo ocupado</th>
+            <th scope="col" class="p-3 font-semibold">Estado</th>
+            <th scope="col" class="p-3 font-semibold">Alumnos</th>
+        </tr>
+        </thead>
+        <tbody class="divide-y divide-brand-deep/15">
+        <tr th:each="row : ${agenda.rows()}">
+            <th scope="row" class="p-3 font-medium" th:text="${row.courseName()}">Salsa</th>
+            <td class="p-3 whitespace-nowrap">
+                <time th:datetime="${row.startsAt()}" th:text="${row.timeLabel()}">18:00</time>
+            </td>
+            <td class="p-3 whitespace-nowrap" th:text="|${row.occupied()} de ${row.capacity()}|">12 de 15</td>
+            <td class="p-3">
+                <span class="badge" th:text="${row.cancelled()} ? 'Cancelada' : 'Programada'"
+                      th:classappend="${row.cancelled()} ? 'badge-danger' : 'badge-success'">Programada</span>
+            </td>
+            <td class="p-3">
+                <a th:href="@{/gestion/recepcion/sesiones/{id}(id=${row.sessionId()})}">Ver alumnos<span class="sr-only" th:text="| de ${row.courseName()}, ${row.timeLabel()}|"> de Salsa, 18:00</span></a>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+</div>
+</th:block>
+</body>
+</html>

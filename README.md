@@ -309,7 +309,7 @@ menta-dance/
 
 | Funcionalidad | Descripción |
 |---------------|-------------|
-| **Check-in Manual** | Registrar asistencia cuando el QR falla |
+| **Check-in Manual** | Registrar asistencia cuando el QR falla. Desde la web (`/gestion/recepcion`): ver las sesiones de hoy con su cupo, abrir una para ver quiénes tienen lugar y quiénes ya asistieron, buscar por nombre y registrar la asistencia de cada alumno (si ya estaba registrada, se avisa y no se duplica) |
 | **Consultar Sesiones** | Ver quiénes están inscritos en cada clase |
 
 ---
