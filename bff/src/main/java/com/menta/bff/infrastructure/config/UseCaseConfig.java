@@ -6,6 +6,7 @@ import com.menta.bff.application.port.out.AuthApiClient;
 import com.menta.bff.application.port.out.BillingApiClient;
 import com.menta.bff.application.port.out.CatalogApiClient;
 import com.menta.bff.application.port.out.PhysicalPurchaseApiClient;
+import com.menta.bff.application.port.out.PhysicalReceptionApiClient;
 import com.menta.bff.application.port.out.PhysicalSessionsApiClient;
 import com.menta.bff.application.port.out.SessionTokenRepository;
 import com.menta.bff.application.port.out.SubscriptionApiClient;
@@ -32,8 +33,12 @@ import com.menta.bff.application.usecase.GetPaymentProgressUseCase;
 import com.menta.bff.application.usecase.GetPaymentProgressUseCaseImpl;
 import com.menta.bff.application.usecase.GetPlansViewUseCase;
 import com.menta.bff.application.usecase.GetPlansViewUseCaseImpl;
+import com.menta.bff.application.usecase.GetSessionRosterUseCase;
+import com.menta.bff.application.usecase.GetSessionRosterUseCaseImpl;
 import com.menta.bff.application.usecase.GetValidAccessTokenUseCase;
 import com.menta.bff.application.usecase.GetValidAccessTokenUseCaseImpl;
+import com.menta.bff.application.usecase.ListTodaySessionsUseCase;
+import com.menta.bff.application.usecase.ListTodaySessionsUseCaseImpl;
 import com.menta.bff.application.usecase.ListUsersUseCase;
 import com.menta.bff.application.usecase.ListUsersUseCaseImpl;
 import com.menta.bff.application.usecase.LoginUseCase;
@@ -48,6 +53,8 @@ import com.menta.bff.application.usecase.QuotePhysicalPurchaseUseCase;
 import com.menta.bff.application.usecase.QuotePhysicalPurchaseUseCaseImpl;
 import com.menta.bff.application.usecase.RegisterAccountUseCase;
 import com.menta.bff.application.usecase.RegisterAccountUseCaseImpl;
+import com.menta.bff.application.usecase.RegisterManualCheckInUseCase;
+import com.menta.bff.application.usecase.RegisterManualCheckInUseCaseImpl;
 import com.menta.bff.application.usecase.RequestPasswordResetUseCase;
 import com.menta.bff.application.usecase.RequestPasswordResetUseCaseImpl;
 import com.menta.bff.application.usecase.ResendActivationUseCase;
@@ -57,7 +64,9 @@ import com.menta.bff.application.usecase.ResetPasswordUseCaseImpl;
 import com.menta.bff.application.usecase.SubscribeToPlanUseCase;
 import com.menta.bff.application.usecase.SubscribeToPlanUseCaseImpl;
 import com.menta.bff.infrastructure.web.filter.TokenRefreshFilter;
+import java.time.Clock;
 import java.util.UUID;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -211,5 +220,30 @@ public class UseCaseConfig {
     public ChangeUserRoleUseCase changeUserRoleUseCase(
             AdminUsersApiClient adminUsersApiClient, AccessTokenClaimsReader accessTokenClaimsReader) {
         return new ChangeUserRoleUseCaseImpl(adminUsersApiClient, accessTokenClaimsReader);
+    }
+
+    /**
+     * Agenda of the reception screen (#373). "Today" is the local day in the academy's display zone; the
+     * {@link Clock} is injectable so tests can fix the instant, and falls back to the system UTC clock because
+     * only the instant matters here (the use case applies the zone itself).
+     */
+    @Bean
+    public ListTodaySessionsUseCase listTodaySessionsUseCase(
+            PhysicalReceptionApiClient receptionApiClient, ObjectProvider<Clock> clockProvider,
+            ClassesProperties classesProperties) {
+        return new ListTodaySessionsUseCaseImpl(receptionApiClient,
+                clockProvider.getIfAvailable(Clock::systemUTC), classesProperties.getDisplayZone());
+    }
+
+    @Bean
+    public GetSessionRosterUseCase getSessionRosterUseCase(
+            PhysicalReceptionApiClient receptionApiClient, ClassesProperties classesProperties) {
+        return new GetSessionRosterUseCaseImpl(receptionApiClient, classesProperties.getDisplayZone());
+    }
+
+    @Bean
+    public RegisterManualCheckInUseCase registerManualCheckInUseCase(
+            PhysicalReceptionApiClient receptionApiClient, ClassesProperties classesProperties) {
+        return new RegisterManualCheckInUseCaseImpl(receptionApiClient, classesProperties.getDisplayZone());
     }
 }
