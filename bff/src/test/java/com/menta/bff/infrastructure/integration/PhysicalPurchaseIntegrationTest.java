@@ -6,6 +6,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static com.menta.bff.infrastructure.integration.HtmlSections.mainOf;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -102,6 +103,11 @@ class PhysicalPurchaseIntegrationTest extends BaseIntegrationTest {
         stubGet(CATALOG, 200, DETAIL_BODY);
         stubGet("/api/v1/catalog/courses", 200, LIST_BODY);
         stubGet(PRICING, 200, PRICING_BODY);
+    }
+
+    private static void stubMySessions(int status, String body) {
+        WIRE_MOCK_SERVER.stubFor(WireMock.get(urlPathEqualTo(MY_SESSIONS)).willReturn(aResponse().withStatus(status)
+                .withHeader("Content-Type", "application/json").withBody(body)));
     }
 
     private static void stubGet(String url, int status, String body) {
@@ -522,6 +528,7 @@ class PhysicalPurchaseIntegrationTest extends BaseIntegrationTest {
     }
 
     private static final String MY_SESSIONS = "/api/v1/physical/sessions/me";
+    private static final String UTC_INSTANT = "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z";
 
     private static final String MY_SESSIONS_BODY =
             """
@@ -543,7 +550,7 @@ class PhysicalPurchaseIntegrationTest extends BaseIntegrationTest {
     @Test
     @DisplayName("a confirmed payment lists the assigned sessions in the academy zone, soonest first")
     void returnListsAssignedSessionsWhenConfirmed() throws Exception {
-        stubGet(MY_SESSIONS, 200, MY_SESSIONS_BODY);
+        stubMySessions(200, MY_SESSIONS_BODY);
 
         String html = returnPageAfterPaying("COMPLETED");
 
@@ -551,14 +558,16 @@ class PhysicalPurchaseIntegrationTest extends BaseIntegrationTest {
                 .contains("Tus próximas sesiones")
                 .containsSubsequence("Salsa en vivo", "lunes 19 de octubre a las 18:00",
                         "Bachata", "martes 20 de octubre a las 22:30");
-        assertThat(WIRE_MOCK_SERVER.findAll(getRequestedFor(urlEqualTo(MY_SESSIONS))
-                .withHeader("Authorization", WireMock.matching("Bearer .+")))).hasSize(1);
+        assertThat(WIRE_MOCK_SERVER.findAll(getRequestedFor(urlPathEqualTo(MY_SESSIONS))
+                .withHeader("Authorization", WireMock.matching("Bearer .+"))
+                .withQueryParam("from", WireMock.matching(UTC_INSTANT))
+                .withQueryParam("to", WireMock.matching(UTC_INSTANT)))).hasSize(1);
     }
 
     @Test
     @DisplayName("when the student's sessions cannot be read the confirmed return renders without the list")
     void returnWithoutListWhenSessionsLookupFails() throws Exception {
-        stubGet(MY_SESSIONS, 503, "{\"status\":503}");
+        stubMySessions(503, "{\"status\":503}");
 
         String html = returnPageAfterPaying("COMPLETED");
 
@@ -570,12 +579,12 @@ class PhysicalPurchaseIntegrationTest extends BaseIntegrationTest {
     @Test
     @DisplayName("a payment that is not confirmed never queries nor shows the sessions")
     void returnDoesNotQuerySessionsUnlessConfirmed() throws Exception {
-        stubGet(MY_SESSIONS, 200, MY_SESSIONS_BODY);
+        stubMySessions(200, MY_SESSIONS_BODY);
 
         for (String paymentStatus : List.of("AWAITING_PROVIDER", "REJECTED", "CANCELLED", "EXPIRED")) {
             String html = returnPageAfterPaying(paymentStatus);
             assertThat(html).doesNotContain("Tus próximas sesiones").doesNotContain("Salsa en vivo");
-            assertThat(WIRE_MOCK_SERVER.findAll(getRequestedFor(urlEqualTo(MY_SESSIONS)))).isEmpty();
+            assertThat(WIRE_MOCK_SERVER.findAll(getRequestedFor(urlPathEqualTo(MY_SESSIONS)))).isEmpty();
         }
     }
 

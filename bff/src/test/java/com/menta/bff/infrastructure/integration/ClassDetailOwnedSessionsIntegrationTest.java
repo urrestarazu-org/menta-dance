@@ -4,6 +4,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -35,7 +36,7 @@ class ClassDetailOwnedSessionsIntegrationTest extends BaseIntegrationTest {
     private static final String DETAIL_BODY =
             """
             {"courseId": "%s", "modality": "PHYSICAL", "title": "Salsa en vivo", "level": "ADVANCED",
-             "physical": {"professorName": "María García", "dayOfWeek": "MONDAY", "startTime": "18:00",
+             "physical": {"professorName": "María García", "dayOfWeek": "MONDAY", "startTime": "21:00",
                           "capacity": 12,
                           "sessions": [
                             {"sessionId": "s-1", "scheduledAt": "2026-10-12T21:00:00Z", "capacity": 12,
@@ -73,6 +74,11 @@ class ClassDetailOwnedSessionsIntegrationTest extends BaseIntegrationTest {
                 "{\"courseId\": \"" + COURSE_ID + "\", \"monthlyPrice\": 25000.00, \"currency\": \"ARS\"}");
     }
 
+    private static void stubMySessions(int status, String body) {
+        WIRE_MOCK_SERVER.stubFor(WireMock.get(urlPathEqualTo(MY_SESSIONS)).willReturn(aResponse().withStatus(status)
+                .withHeader("Content-Type", "application/json").withBody(body)));
+    }
+
     private static void stubGet(String url, int status, String body) {
         WIRE_MOCK_SERVER.stubFor(WireMock.get(urlEqualTo(url)).willReturn(aResponse().withStatus(status)
                 .withHeader("Content-Type", "application/json").withBody(body)));
@@ -99,7 +105,7 @@ class ClassDetailOwnedSessionsIntegrationTest extends BaseIntegrationTest {
     @Test
     @DisplayName("a student sees 'Ya tenés lugar' and no quote button in the sessions they hold")
     void marksOwnedSessionsForSignedInStudent() throws Exception {
-        stubGet(MY_SESSIONS, 200, MY_SESSIONS_BODY);
+        stubMySessions(200, MY_SESSIONS_BODY);
 
         String html = studentPage();
 
@@ -109,14 +115,16 @@ class ClassDetailOwnedSessionsIntegrationTest extends BaseIntegrationTest {
         assertThat(count(html, QUOTE_BUTTON)).isEqualTo(1);
         assertThat(html).contains("lunes 12 de octubre a las 18:00", "5 lugares libres", "Completo");
         assertThat(html).contains("Cotizar clases del mes");
-        WIRE_MOCK_SERVER.verify(getRequestedFor(urlEqualTo(MY_SESSIONS))
-                .withHeader("Authorization", equalTo("Bearer " + ACCESS_TOKEN)));
+        WIRE_MOCK_SERVER.verify(getRequestedFor(urlPathEqualTo(MY_SESSIONS))
+                .withHeader("Authorization", equalTo("Bearer " + ACCESS_TOKEN))
+                .withQueryParam("from", equalTo("2026-10-12T21:00:00Z"))
+                .withQueryParam("to", equalTo("2026-10-26T21:01:00Z")));
     }
 
     @Test
     @DisplayName("a student who holds none of the listed sessions keeps every quote button")
     void studentWithoutOwnedSessionsKeepsButtons() throws Exception {
-        stubGet(MY_SESSIONS, 200, "{\"from\": \"2026-10-13T03:00:00Z\", \"to\": \"2026-12-12T03:00:00Z\", "
+        stubMySessions(200, "{\"from\": \"2026-10-13T03:00:00Z\", \"to\": \"2026-12-12T03:00:00Z\", "
                 + "\"sessions\": []}");
 
         assertOpenSessionsOfferQuotes(studentPage());
@@ -125,21 +133,21 @@ class ClassDetailOwnedSessionsIntegrationTest extends BaseIntegrationTest {
     @Test
     @DisplayName("an anonymous visitor sees the page as before and no student call is made")
     void anonymousPageIsUnchanged() throws Exception {
-        stubGet(MY_SESSIONS, 200, MY_SESSIONS_BODY);
+        stubMySessions(200, MY_SESSIONS_BODY);
 
         String html = mockMvc.perform(get("/classes/" + COURSE_ID))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
 
         assertThat(html).doesNotContain(OWNED_MARK).doesNotContain("Cotizar")
                 .contains("Ingresá para comprar", "5 lugares libres", "3 lugares libres", "Completo");
-        WIRE_MOCK_SERVER.verify(0, getRequestedFor(urlEqualTo(MY_SESSIONS)));
+        WIRE_MOCK_SERVER.verify(0, getRequestedFor(urlPathEqualTo(MY_SESSIONS)));
     }
 
     @ParameterizedTest(name = "sessions/me answering {0} still renders the page, without marks")
     @ValueSource(ints = {401, 403, 404, 500, 503})
     @DisplayName("a failing student lookup degrades to the page without marks")
     void failingLookupDegrades(int upstreamStatus) throws Exception {
-        stubGet(MY_SESSIONS, upstreamStatus, "{\"status\":" + upstreamStatus + ",\"detail\":\"db password\"}");
+        stubMySessions(upstreamStatus, "{\"status\":" + upstreamStatus + ",\"detail\":\"db password\"}");
 
         String html = studentPage();
 
@@ -150,7 +158,7 @@ class ClassDetailOwnedSessionsIntegrationTest extends BaseIntegrationTest {
     @Test
     @DisplayName("a dropped connection to the student lookup degrades to the page without marks")
     void droppedLookupDegrades() throws Exception {
-        WIRE_MOCK_SERVER.stubFor(WireMock.get(urlEqualTo(MY_SESSIONS))
+        WIRE_MOCK_SERVER.stubFor(WireMock.get(urlPathEqualTo(MY_SESSIONS))
                 .willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)));
 
         assertOpenSessionsOfferQuotes(studentPage());

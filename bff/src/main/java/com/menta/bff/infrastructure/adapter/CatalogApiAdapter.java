@@ -113,7 +113,8 @@ public class CatalogApiAdapter implements CatalogApiClient {
     /**
      * Wire shape for one entry. The modality-specific {@code virtual} block is
      * left unbound (the home page needs nothing from it); only the professor
-     * schedule fields are read from the {@code physical} block.
+     * schedule fields are read from the {@code physical} block. {@code dayOfWeek} and {@code startTime} are
+     * UTC (ADR-0048) and travel as sent; the use cases convert them to the academy's zone.
      */
     private record CatalogCourseWire(
             String courseId,

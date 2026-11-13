@@ -159,8 +159,9 @@ public class UseCaseConfig {
     }
 
     @Bean
-    public GetClassesViewUseCase getClassesViewUseCase(CatalogApiClient catalogApiClient) {
-        return new GetClassesViewUseCaseImpl(catalogApiClient);
+    public GetClassesViewUseCase getClassesViewUseCase(
+            CatalogApiClient catalogApiClient, ClassesProperties classesProperties) {
+        return new GetClassesViewUseCaseImpl(catalogApiClient, classesProperties.getDisplayZone());
     }
 
     @Bean
@@ -202,8 +203,10 @@ public class UseCaseConfig {
 
     @Bean
     public GetAssignedSessionsUseCase getAssignedSessionsUseCase(
-            PhysicalSessionsApiClient physicalSessionsApiClient, ClassesProperties classesProperties) {
-        return new GetAssignedSessionsUseCaseImpl(physicalSessionsApiClient, classesProperties.getDisplayZone());
+            PhysicalSessionsApiClient physicalSessionsApiClient, ObjectProvider<Clock> clockProvider,
+            ClassesProperties classesProperties) {
+        return new GetAssignedSessionsUseCaseImpl(physicalSessionsApiClient,
+                clockProvider.getIfAvailable(Clock::systemUTC), classesProperties.getDisplayZone());
     }
 
     @Bean

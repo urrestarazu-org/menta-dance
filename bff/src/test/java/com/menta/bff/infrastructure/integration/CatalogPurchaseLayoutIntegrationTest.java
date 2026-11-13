@@ -2,6 +2,7 @@ package com.menta.bff.infrastructure.integration;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -354,7 +355,7 @@ class CatalogPurchaseLayoutIntegrationTest extends BaseIntegrationTest {
     @DisplayName("las sesiones propias llevan un badge con texto 'Ya tenés lugar' y sin botón de cotizar")
     void ownedSessionsGetABadge() throws Exception {
         logIn();
-        stubGet(MY_SESSIONS, 200, MY_SESSIONS_BODY);
+        stubMySessions(200, MY_SESSIONS_BODY);
 
         String html = body(get("/classes/" + PHYSICAL_ID).cookie(session));
 
@@ -482,7 +483,7 @@ class CatalogPurchaseLayoutIntegrationTest extends BaseIntegrationTest {
                 .param("quoteId", QUOTE_ID).param("courseId", PHYSICAL_ID).param("idempotencyKey", KEY));
         stubGet(PAYMENT, 200, "{\"status\":\"COMPLETED\",\"createdAt\":\"2026-10-10T12:00:00Z\","
                 + "\"updatedAt\":\"2026-10-10T12:01:00Z\"}");
-        stubGet(MY_SESSIONS, 200, MY_SESSIONS_BODY);
+        stubMySessions(200, MY_SESSIONS_BODY);
 
         String html = body(get("/compras/retorno").cookie(session));
 
@@ -520,6 +521,11 @@ class CatalogPurchaseLayoutIntegrationTest extends BaseIntegrationTest {
         WIRE_MOCK_SERVER.stubFor(WireMock.post(urlEqualTo(PURCHASES)).willReturn(aResponse().withStatus(201)
                 .withHeader("Content-Type", "application/json")
                 .withBody(TRANSFER_BODY)));
+    }
+
+    private static void stubMySessions(int status, String body) {
+        WIRE_MOCK_SERVER.stubFor(WireMock.get(urlPathEqualTo(MY_SESSIONS)).willReturn(aResponse().withStatus(status)
+                .withHeader("Content-Type", "application/json").withBody(body)));
     }
 
     private static void stubGet(String url, int status, String body) {

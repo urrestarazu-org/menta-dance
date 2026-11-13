@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 import com.menta.bff.application.dto.CatalogCourse;
 import com.menta.bff.application.port.out.CatalogApiClient;
 import com.menta.bff.domain.model.CourseModality;
+import java.time.ZoneId;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -18,6 +19,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("GetClassesViewUseCase")
 class GetClassesViewUseCaseImplTest {
 
+    private static final ZoneId ACADEMY_ZONE = ZoneId.of("America/Argentina/Buenos_Aires");
+
     @Mock
     private CatalogApiClient catalogApiClient;
 
@@ -25,16 +28,16 @@ class GetClassesViewUseCaseImplTest {
 
     @BeforeEach
     void setUp() {
-        useCase = new GetClassesViewUseCaseImpl(catalogApiClient);
+        useCase = new GetClassesViewUseCaseImpl(catalogApiClient, ACADEMY_ZONE);
     }
 
     @Test
-    @DisplayName("lists only physical courses with level, professor, day and start time in Spanish")
+    @DisplayName("lists only physical courses with level, professor, day and start time in Spanish, in the zone")
     void listsPhysicalCoursesOnly() {
         when(catalogApiClient.listCourses()).thenReturn(List.of(
                 new CatalogCourse("v-1", CourseModality.VIRTUAL, "Ballet", "BEGINNER", null, null, null),
                 new CatalogCourse("p-1", CourseModality.PHYSICAL, "Salsa en vivo", "ADVANCED",
-                        "María García", "MONDAY", "18:00")));
+                        "María García", "MONDAY", "21:00")));
 
         ClassesView view = useCase.execute();
 
@@ -46,11 +49,22 @@ class GetClassesViewUseCaseImplTest {
     }
 
     @Test
+    @DisplayName("shows the UTC recurrence in the academy zone, rolling the weekday back when needed")
+    void convertsRecurrenceToAcademyZone() {
+        when(catalogApiClient.listCourses()).thenReturn(List.of(
+                new CatalogCourse("a", CourseModality.PHYSICAL, "A", null, null, "TUESDAY", "23:00"),
+                new CatalogCourse("b", CourseModality.PHYSICAL, "B", null, null, "WEDNESDAY", "01:00")));
+
+        assertThat(useCase.execute().classes()).extracting(ClassCard::scheduleLabel)
+                .containsExactly("Martes 20:00", "Martes 22:00");
+    }
+
+    @Test
     @DisplayName("tolerates a missing or unknown day and start time")
     void toleratesMissingSchedule() {
         when(catalogApiClient.listCourses()).thenReturn(List.of(
                 new CatalogCourse("a", CourseModality.PHYSICAL, "A", null, null, null, null),
-                new CatalogCourse("b", CourseModality.PHYSICAL, "B", null, null, "FUNDAY", "10:00"),
+                new CatalogCourse("b", CourseModality.PHYSICAL, "B", null, null, "FUNDAY", "13:00"),
                 new CatalogCourse("c", CourseModality.PHYSICAL, "C", null, null, "SUNDAY", null)));
 
         ClassesView view = useCase.execute();
