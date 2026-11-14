@@ -332,6 +332,8 @@ suscripción de prueba, para recorrer la aplicación con datos realistas. Solo p
 | Alumno | `alumno@menta.dance` | `Alumno123!` | `DEMO_STUDENT_PASSWORD` |
 | Recepcionista | `recepcion@menta.dance` | `Recep123!` | `DEMO_RECEPTIONIST_PASSWORD` |
 
+El profesor tiene el nombre "Profesor Demo" (se completa también en una base local ya sembrada sin nombre).
+
 Otras variables del perfil (definidas en `api/app/src/main/resources/application-demo.yml`):
 
 - `DEMO_QR_READER_SECRET`: secreto del lector QR demo. Sin valor, el lector no se siembra (se registra un
