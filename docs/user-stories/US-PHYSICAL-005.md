@@ -21,6 +21,9 @@
   desde la zona de la academia (ADR-0048, #729).
 - **Entonces** Physical crea el curso con un `courseId` UUID globalmente único
   y responde `201 Created`.
+- **Pero** un `ADMIN` debe enviar `professorId`: si falta responde `400` con
+  `PROFESSOR_REQUIRED` (#743). Un `PROFESOR` que lo omite queda como profesor del
+  curso.
 
 **Escenario 2: listar cursos**
 

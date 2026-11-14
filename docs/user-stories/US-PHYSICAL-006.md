@@ -19,6 +19,9 @@
   fecha, hora de inicio y capacidad opcional (hereda del curso si no se especifica).
   La fecha y la hora de inicio se envían **en UTC** (ADR-0048, #729).
 - **Entonces** Physical crea la sesión con `sessionId` único y responde `201 Created`.
+- **Pero** si el curso ya tiene una sesión, en cualquier estado, en ese mismo
+  instante UTC, responde `409 Conflict` con `SESSION_ALREADY_EXISTS` y la fecha en
+  `conflictingDates` (#743).
 
 **Escenario 2: crear sesiones en lote**
 
@@ -29,6 +32,11 @@
   de recurrencia del curso, excluyendo feriados si están configurados. `fromDate`
   y `toDate` son fechas UTC, y se generan las sesiones de las fechas
   UTC cuyo día de la semana UTC coincide con el `dayOfWeek` del curso.
+- **Pero** si el curso ya tiene una sesión, en cualquier estado (una cancelada
+  cuenta), en alguno de esos instantes, responde `409 Conflict` con
+  `SESSION_ALREADY_EXISTS` y las fechas repetidas en `conflictingDates`; es todo o
+  nada: no crea ninguna sesión. Un rango invertido o sin ninguna fecha del día de
+  la semana del curso responde `400` con `INVALID_REQUEST` (#743).
 
 **Escenario 3: listar sesiones**
 

@@ -109,10 +109,13 @@ paths:
       tags: [Gestión de cursos]
       summary: Crear un curso presencial
       description: |
-        `professorId` es opcional: un PROFESOR que lo omite queda asignado
-        a sí mismo; si lo envía debe coincidir con su propio id, o responde
-        `400 PROFESSOR_MISMATCH`. Sólo un ADMIN puede asignar el curso a un
-        `professorId` arbitrario. `professorName` no forma parte del diseño
+        `professorId` es opcional para un PROFESOR y **obligatorio para un
+        ADMIN**. Un PROFESOR que lo omite queda asignado a sí mismo; si lo
+        envía debe coincidir con su propio id, o responde `400
+        PROFESSOR_MISMATCH`. Un ADMIN que lo omite recibe `400
+        PROFESSOR_REQUIRED` (el curso ya no se le asigna por omisión); sólo un
+        ADMIN puede asignar el curso a un `professorId` arbitrario.
+        `professorName` no forma parte del diseño
         original de la historia — se agregó porque no existe (todavía)
         ningún puerto que resuelva el nombre de un profesor a partir de su
         id desde Physical.
@@ -250,6 +253,10 @@ paths:
         gestión convierte la fecha y la hora locales a UTC antes de enviarlas
         (martes 2026-11-17 22:00 en Buenos Aires, UTC-3, es `date: 2026-11-18`
         y `startTime: 01:00:00`). Ver ADR-0048.
+
+        Si el curso ya tiene una sesión en ese mismo instante UTC exacto, en
+        cualquier estado (una `CANCELLED` cuenta como existente), responde
+        `409 SESSION_ALREADY_EXISTS` con la fecha en `conflictingDates`.
       operationId: createPhysicalSession
       parameters:
         - name: courseId
@@ -275,6 +282,8 @@ paths:
           description: Rol sin acceso, o PROFESOR que no es dueño del curso (`COURSE_NOT_OWNED`).
         '404':
           description: Curso inexistente.
+        '409':
+          $ref: '#/components/responses/SessionAlreadyExists'
 
     get:
       tags: [Gestión de sesiones]
@@ -329,6 +338,15 @@ paths:
         genera una sesión por cada fecha UTC cuyo día de la semana UTC coincide
         con `dayOfWeek`, en `scheduledAt = fecha + startTime` (UTC). El cliente de
         gestión convierte el rango local a fechas UTC. Ver ADR-0048.
+
+        **Todo o nada.** Antes de guardar se buscan las sesiones del curso en
+        todos los instantes que se van a generar. Si alguno ya existe (en
+        cualquier estado: una `CANCELLED` cuenta como existente) responde
+        `409 SESSION_ALREADY_EXISTS` con las fechas repetidas en
+        `conflictingDates` y no crea ninguna, tampoco las fechas libres. Un
+        rango invertido (`fromDate` posterior a `toDate`) o sin ninguna fecha
+        en el día de la semana del curso responde `400 INVALID_REQUEST` en
+        lugar de una lista vacía.
       operationId: batchCreatePhysicalSessions
       parameters:
         - name: courseId
@@ -350,10 +368,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PhysicalSessionManagementListResponse'
+        '400':
+          description: Body inválido, rango invertido o sin ninguna fecha en el día de la semana del curso (`INVALID_REQUEST`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                rango_sin_fechas:
+                  value:
+                    type: https://menta.dance/problems/invalid_request
+                    title: Bad Request
+                    status: 400
+                    detail: The range must have fromDate not after toDate and include a date on the course's day of week.
+                    code: INVALID_REQUEST
         '403':
           description: Rol sin acceso, o PROFESOR que no es dueño del curso (`COURSE_NOT_OWNED`).
         '404':
           description: Curso inexistente.
+        '409':
+          $ref: '#/components/responses/SessionAlreadyExists'
 
   /api/v1/admin/physical/sessions:
     get:
@@ -1318,7 +1352,9 @@ components:
                 detail: The range must have from before to and span at most 92 days.
                 code: INVALID_REQUEST
     InvalidRequest:
-      description: Body inválido (bean validation) o `professorId` no coincide con el actor.
+      description: >-
+        Body inválido (bean validation), `professorId` no coincide con el actor (`PROFESSOR_MISMATCH`)
+        o un ADMIN que omite `professorId` (`PROFESSOR_REQUIRED`).
       content:
         application/problem+json:
           schema:
@@ -1331,6 +1367,39 @@ components:
                 status: 400
                 detail: professorId must match the authenticated instructor.
                 code: PROFESSOR_MISMATCH
+            professor_required:
+              value:
+                type: https://menta.dance/problems/professor_required
+                title: Bad Request
+                status: 400
+                detail: professorId is required when an administrator creates a course.
+                code: PROFESSOR_REQUIRED
+    SessionAlreadyExists:
+      description: >-
+        El curso ya tiene una sesión, en cualquier estado (una `CANCELLED` cuenta como existente), en uno
+        o más de los instantes UTC pedidos (`SESSION_ALREADY_EXISTS`). `conflictingDates` lista esos
+        instantes, ordenados. En el lote es todo o nada: no se crea ninguna sesión.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/SessionConflictProblem'
+          examples:
+            lote_repetido:
+              value:
+                type: https://menta.dance/problems/session_already_exists
+                title: Conflict
+                status: 409
+                detail: The course already has a session at one or more of the requested dates.
+                code: SESSION_ALREADY_EXISTS
+                conflictingDates: ["2026-12-02T20:00:00Z", "2026-12-09T20:00:00Z"]
+            sesion_suelta:
+              value:
+                type: https://menta.dance/problems/session_already_exists
+                title: Conflict
+                status: 409
+                detail: The course already has a session at one or more of the requested dates.
+                code: SESSION_ALREADY_EXISTS
+                conflictingDates: ["2026-12-09T20:00:00Z"]
 
   schemas:
     Problem:
@@ -1351,6 +1420,21 @@ components:
         code:
           type: string
 
+    SessionConflictProblem:
+      description: >-
+        `Problem` con la lista de instantes que ya tienen una sesión del curso (#743).
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required: [conflictingDates]
+          properties:
+            conflictingDates:
+              type: array
+              description: Instantes UTC (ISO-8601 con `Z`) con una sesión existente, ordenados de menor a mayor.
+              items:
+                type: string
+                format: date-time
+
     CreatePhysicalCourseRequest:
       type: object
       required: [title, description, professorName, dayOfWeek, startTime, durationMinutes, level, capacity]
@@ -1362,7 +1446,9 @@ components:
         professorId:
           type: [string, "null"]
           format: uuid
-          description: Omitido por un PROFESOR (se asigna a sí mismo); requerido para que un ADMIN asigne a otro profesor.
+          description: >-
+            Opcional para un PROFESOR (si se omite, se asigna a sí mismo). **Obligatorio para un ADMIN**:
+            si falta responde `400 PROFESSOR_REQUIRED`.
         professorName:
           type: string
         dayOfWeek:

@@ -41,7 +41,21 @@ docs {
   `capacity` is omitted here — inherits the parent course's capacity.
 
   Success contract: 201 with the full PhysicalSessionManagementResponse.
+  Si el curso ya tiene una sesión en ese mismo instante UTC (en cualquier
+  estado, una cancelada cuenta) responde `409 SESSION_ALREADY_EXISTS` con la
+  fecha en `conflictingDates` (#743). Ejemplo, al repetir este request:
+
+    {
+      "type": "https://menta.dance/problems/session_already_exists",
+      "title": "Conflict",
+      "status": 409,
+      "detail": "The course already has a session at one or more of the requested dates.",
+      "code": "SESSION_ALREADY_EXISTS",
+      "conflictingDates": ["2026-09-16T22:00:00Z"]
+    }
+
   Error contract:
+    409 SESSION_ALREADY_EXISTS → the course already has a session at that UTC instant
     403 COURSE_NOT_OWNED → INSTRUCTOR is not the course's professor
     404 COURSE_NOT_FOUND → courseId does not exist
 }

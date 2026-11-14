@@ -35,8 +35,37 @@ docs {
   `date + startTime` (UTC). The management client converts the local range to
   UTC dates.
 
+  Todo o nada (#743): si el curso ya tiene una sesión (en cualquier estado, una
+  cancelada cuenta) en alguno de los instantes a generar, responde `409
+  SESSION_ALREADY_EXISTS` con las fechas repetidas en `conflictingDates` y no
+  crea ninguna sesión, tampoco las libres. Ejemplo, al repetir este request
+  sobre un curso de los martes UTC:
+
+    {
+      "type": "https://menta.dance/problems/session_already_exists",
+      "title": "Conflict",
+      "status": 409,
+      "detail": "The course already has a session at one or more of the requested dates.",
+      "code": "SESSION_ALREADY_EXISTS",
+      "conflictingDates": ["2026-09-01T23:00:00Z", "2026-09-08T23:00:00Z"]
+    }
+
+  Un rango invertido (`fromDate` posterior a `toDate`) o sin ninguna fecha del día
+  de la semana del curso responde `400 INVALID_REQUEST` en lugar de `201` con una
+  lista vacía:
+
+    {
+      "type": "https://menta.dance/problems/invalid_request",
+      "title": "Bad Request",
+      "status": 400,
+      "detail": "The range must have fromDate not after toDate and include a date on the course's day of week.",
+      "code": "INVALID_REQUEST"
+    }
+
   Success contract: 201 with PhysicalSessionManagementListResponse.
   Error contract:
+    400 INVALID_REQUEST        → inverted range or no date on the course's weekday
+    409 SESSION_ALREADY_EXISTS → a session already exists at a generated instant
     403 COURSE_NOT_OWNED → INSTRUCTOR is not the course's professor
     404 COURSE_NOT_FOUND → courseId does not exist
 }

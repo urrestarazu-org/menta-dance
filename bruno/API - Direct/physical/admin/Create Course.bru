@@ -18,6 +18,7 @@ body:json {
   {
     "title": "Salsa Intermedio",
     "description": "Curso de salsa para nivel intermedio",
+    "professorId": "de000000-0000-4000-8000-000000000002",
     "professorName": "María García",
     "dayOfWeek": "TUESDAY",
     "startTime": "23:00:00",
@@ -44,13 +45,26 @@ docs {
   be `WEDNESDAY` 01:00:00 UTC. A recurrence fixed in UTC is exact only for zones
   without daylight saving time.
 
-  `professorId` is omitted here — an INSTRUCTOR creating a course is always
-  assigned to themselves; only an ADMIN may set an arbitrary `professorId` in
-  the body.
+  `professorId` is the demo instructor (profesor@menta.dance). An ADMIN MUST send
+  it; an INSTRUCTOR may omit it (the course is assigned to themselves) or send
+  their own id, and only an ADMIN may set an arbitrary one.
+
+  Es obligatorio para el ADMIN (#743): sin `professorId` responde `400
+  PROFESSOR_REQUIRED` y el curso ya no se asigna al admin por omisión. Ejemplo
+  de la respuesta de error:
+
+    {
+      "type": "https://menta.dance/problems/professor_required",
+      "title": "Bad Request",
+      "status": 400,
+      "detail": "professorId is required when an administrator creates a course.",
+      "code": "PROFESSOR_REQUIRED"
+    }
 
   Success contract: 201 with the full PhysicalCourseManagementResponse.
   Error contract:
     400 PROFESSOR_MISMATCH → INSTRUCTOR supplied someone else's professorId
+    400 PROFESSOR_REQUIRED → ADMIN omitted professorId
     403                     → role is neither ADMIN nor INSTRUCTOR
 }
 
