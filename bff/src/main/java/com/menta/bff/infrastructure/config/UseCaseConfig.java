@@ -37,6 +37,8 @@ import com.menta.bff.application.usecase.GetClassesViewUseCase;
 import com.menta.bff.application.usecase.GetClassesViewUseCaseImpl;
 import com.menta.bff.application.usecase.GetCourseDetailViewUseCase;
 import com.menta.bff.application.usecase.GetCourseDetailViewUseCaseImpl;
+import com.menta.bff.application.usecase.GetCourseSessionRosterUseCase;
+import com.menta.bff.application.usecase.GetCourseSessionRosterUseCaseImpl;
 import com.menta.bff.application.usecase.GetCourseSessionUseCase;
 import com.menta.bff.application.usecase.GetCourseSessionUseCaseImpl;
 import com.menta.bff.application.usecase.GetLessonViewUseCase;
@@ -339,6 +341,12 @@ public class UseCaseConfig {
     public GetCourseSessionUseCase getCourseSessionUseCase(
             PhysicalCourseManagementApiClient courseApiClient, ClassesProperties classesProperties) {
         return new GetCourseSessionUseCaseImpl(courseApiClient, classesProperties.getDisplayZone());
+    }
+
+    @Bean
+    public GetCourseSessionRosterUseCase getCourseSessionRosterUseCase(
+            GetCourseSessionUseCase getCourseSessionUseCase, GetSessionRosterUseCase getSessionRosterUseCase) {
+        return new GetCourseSessionRosterUseCaseImpl(getCourseSessionUseCase, getSessionRosterUseCase);
     }
 
     @Bean

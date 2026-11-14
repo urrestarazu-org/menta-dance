@@ -6,6 +6,7 @@ import java.util.List;
  * View model of the roster of one session on the reception screen.
  *
  * @param outcome       how the lookup ended
+ * @param courseId      identifier of the course the session belongs to (only for {@link Outcome#OK})
  * @param courseName    name of the class (only for {@link Outcome#OK})
  * @param momentLabel   Spanish date and time of the start in the academy's zone (only for {@link Outcome#OK})
  * @param cancelled     whether the session is cancelled
@@ -16,8 +17,8 @@ import java.util.List;
  * @param rows          students that match the search, in upstream order
  */
 public record SessionRosterView(
-        Outcome outcome, String courseName, String momentLabel, boolean cancelled, int capacity, int enrolled,
-        int present, String text, List<Row> rows) {
+        Outcome outcome, String courseId, String courseName, String momentLabel, boolean cancelled, int capacity,
+        int enrolled, int present, String text, List<Row> rows) {
 
     /** How the lookup ended. */
     public enum Outcome {
@@ -48,7 +49,7 @@ public record SessionRosterView(
 
     /** A view without a roster: the session was not found or the API is down. The search text stays. */
     public static SessionRosterView failed(Outcome outcome, String text) {
-        return new SessionRosterView(outcome, null, null, false, 0, 0, 0, text, List.of());
+        return new SessionRosterView(outcome, null, null, null, false, 0, 0, 0, text, List.of());
     }
 
     /** Whether the roster was obtained. */

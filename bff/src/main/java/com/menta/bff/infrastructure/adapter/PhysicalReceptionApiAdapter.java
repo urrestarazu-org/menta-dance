@@ -203,12 +203,12 @@ public class PhysicalReceptionApiAdapter implements PhysicalReceptionApiClient {
             throw unavailable("roster is incomplete");
         }
         RosterSessionWire session = wire.session();
-        if (session.sessionId() == null || session.courseName() == null || session.scheduledAt() == null
-                || session.status() == null || session.capacity() == null) {
+        if (session.sessionId() == null || session.courseId() == null || session.courseName() == null
+                || session.scheduledAt() == null || session.status() == null || session.capacity() == null) {
             throw unavailable("roster header is incomplete");
         }
         List<RosterStudent> students = wire.students().stream().map(PhysicalReceptionApiAdapter::toStudent).toList();
-        return new SessionRoster(session.sessionId(), session.courseName(), session.scheduledAt(),
+        return new SessionRoster(session.sessionId(), session.courseId(), session.courseName(), session.scheduledAt(),
                 CANCELLED.equals(session.status()), session.capacity(), students);
     }
 
@@ -246,7 +246,8 @@ public class PhysicalReceptionApiAdapter implements PhysicalReceptionApiClient {
     }
 
     private record RosterSessionWire(
-            String sessionId, String courseName, Instant scheduledAt, String status, Integer capacity) {
+            String sessionId, String courseId, String courseName, Instant scheduledAt, String status,
+            Integer capacity) {
     }
 
     private record StudentWire(

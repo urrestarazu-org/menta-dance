@@ -27,6 +27,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class GetSessionRosterUseCaseImplTest {
 
     private static final String TOKEN = "access-token-abc";
+    private static final String COURSE_ID = "1b6f7c8e-1d2a-4e3b-9c4d-0a1b2c3d4e5f";
     private static final String SESSION_ID = "5b6f7c8e-1d2a-4e3b-9c4d-0a1b2c3d4e5f";
     private static final Instant START = Instant.parse("2026-11-13T21:00:00Z");
 
@@ -49,7 +50,7 @@ class GetSessionRosterUseCaseImplTest {
 
     private void rosterOf(boolean cancelled, RosterStudent... students) {
         when(receptionApiClient.getRoster(TOKEN, SESSION_ID))
-                .thenReturn(new SessionRoster(SESSION_ID, "Salsa", START, cancelled, 15, List.of(students)));
+                .thenReturn(new SessionRoster(SESSION_ID, COURSE_ID, "Salsa", START, cancelled, 15, List.of(students)));
     }
 
     private static List<String> names(SessionRosterView view) {
@@ -65,6 +66,7 @@ class GetSessionRosterUseCaseImplTest {
 
         assertThat(view.outcome()).isEqualTo(Outcome.OK);
         assertThat(view.ok()).isTrue();
+        assertThat(view.courseId()).isEqualTo(COURSE_ID);
         assertThat(view.courseName()).isEqualTo("Salsa");
         assertThat(view.momentLabel()).isEqualTo("viernes 13 de noviembre a las 18:00");
         assertThat(view.capacity()).isEqualTo(15);

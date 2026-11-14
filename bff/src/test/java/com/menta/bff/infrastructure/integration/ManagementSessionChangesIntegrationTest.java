@@ -639,7 +639,7 @@ class ManagementSessionChangesIntegrationTest extends BaseIntegrationTest {
 
     @Test
     @DisplayName("each scheduled row of the sessions page links to its reschedule and cancel pages; a cancelled "
-            + "row has no actions")
+            + "row has neither")
     void rowActions() throws Exception {
         stubPageForList();
         stubSessions(EMPTY, CANCELLED);
@@ -652,6 +652,6 @@ class ManagementSessionChangesIntegrationTest extends BaseIntegrationTest {
                 .contains("<a href=\"" + cancelPath(SESSION_A) + "\">Cancelar<span class=\"sr-only\"> la sesión del "
                         + "martes 17 de noviembre a las 22:00</span></a>")
                 .doesNotContain(reschedulePath(SESSION_B)).doesNotContain(cancelPath(SESSION_B))
-                .contains("Sin acciones disponibles");
+                .doesNotContain("Sin acciones disponibles");
     }
 }

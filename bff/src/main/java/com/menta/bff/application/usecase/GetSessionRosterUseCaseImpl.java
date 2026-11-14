@@ -57,7 +57,7 @@ public class GetSessionRosterUseCaseImpl implements GetSessionRosterUseCase {
                 .filter(student -> matches(student.displayName(), search))
                 .map(student -> toRow(student, roster.cancelled()))
                 .toList();
-        return new SessionRosterView(Outcome.OK, roster.courseName(),
+        return new SessionRosterView(Outcome.OK, roster.courseId(), roster.courseName(),
                 ClassLabels.moment(roster.scheduledAt(), displayZone), roster.cancelled(), roster.capacity(),
                 students.size(), present, search, rows);
     }
