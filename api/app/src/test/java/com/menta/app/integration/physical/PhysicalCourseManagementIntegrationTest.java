@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
+import com.menta.app.integration.support.AbstractPhysicalMySqlIntegrationTest;
 import com.menta.auth.application.port.out.AccessTokenIssuer;
 import com.menta.auth.application.port.out.ActivationRateLimitPort;
 import com.menta.auth.application.port.out.AuthDegradedGuard;
@@ -55,10 +56,14 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
  * {@code /api/v1/admin/physical/courses/**} matcher is declared before the
  * generic {@code /api/v1/admin/**} rule (a unit test on the controller alone
  * cannot exercise Spring's matcher-ordering behavior).
+ *
+ * <p>Runs against a real MySQL (not the in-memory database): the native
+ * {@code SELECT EXISTS(...)} behind the deactivation guard comes back as a
+ * {@code Long} from MySQL, which an in-memory database hides (#748).</p>
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
-class PhysicalCourseManagementIntegrationTest {
+@ActiveProfiles("integration-test")
+class PhysicalCourseManagementIntegrationTest extends AbstractPhysicalMySqlIntegrationTest {
 
     @Autowired private TestRestTemplate http;
     @Autowired private UserRepository userRepository;
@@ -227,6 +232,48 @@ class PhysicalCourseManagementIntegrationTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         List<?> courses = (List<?>) response.getBody().get("courses");
         assertThat(courses).hasSize(2);
+    }
+
+    @Test
+    void deactivating_a_course_without_future_assigned_sessions_succeeds() {
+        UUID ownerId = UUID.randomUUID();
+        UUID courseId = seedCourse(ownerId, CourseStatus.ACTIVE);
+        UUID pastSessionId = UUID.randomUUID();
+        sessionRepository.save(new PhysicalSessionJpaEntity(
+            pastSessionId, courseId, Instant.now().minusSeconds(86400), 20, "SCHEDULED", null
+        ));
+        assignmentRepository.save(new PhysicalCapacityAssignmentJpaEntity(
+            UUID.randomUUID(), pastSessionId, UUID.randomUUID(), AssignmentType.MONTHLY, Instant.now()
+        ));
+        UUID adminId = issueUser(Role.ADMIN);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(tokenFor(adminId, Role.ADMIN));
+        ResponseEntity<Map> response = http.exchange(
+            "/api/v1/admin/physical/courses/" + courseId, HttpMethod.PATCH,
+            new HttpEntity<>(Map.of("status", "INACTIVE"), headers), Map.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(courseRepository.findById(courseId).orElseThrow().getStatus())
+            .isEqualTo(CourseStatus.INACTIVE);
+    }
+
+    @Test
+    void deactivating_a_course_with_no_sessions_at_all_succeeds() {
+        UUID courseId = seedCourse(UUID.randomUUID(), CourseStatus.ACTIVE);
+        UUID adminId = issueUser(Role.ADMIN);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(tokenFor(adminId, Role.ADMIN));
+        ResponseEntity<Map> response = http.exchange(
+            "/api/v1/admin/physical/courses/" + courseId, HttpMethod.PATCH,
+            new HttpEntity<>(Map.of("status", "INACTIVE"), headers), Map.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 
     @Test
