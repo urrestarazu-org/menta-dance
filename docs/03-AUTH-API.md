@@ -27,7 +27,7 @@ POST /api/v1/auth/refresh
 POST /api/v1/auth/logout
 POST /api/v1/auth/logout-all
 POST /api/v1/auth/change-password
-GET  /api/v1/auth/me
+GET  /api/v1/users/me
 GET  /api/v1/auth/me/roles
 ```
 
@@ -38,7 +38,9 @@ Todas las respuestas de error usan `application/problem+json`.
 Las rutas canónicas están bajo `/api/v1/auth`; no existe compatibilidad para el
 prefijo legado `/auth`. Durante la migración de registro se conserva solamente
 el alias temporal `POST /api/v1/users/register`, con el mismo comportamiento
-que la ruta canónica.
+que la ruta canónica. La lectura de la cuenta propia vive en
+`GET /api/v1/users/me` (la ruta `GET /api/v1/auth/me` del diseño funcional no
+existe).
 
 | Endpoint | Autenticación de entrada | Respuesta exitosa |
 | --- | --- | --- |
@@ -51,6 +53,7 @@ que la ruta canónica.
 | `POST /resend-activation` | JSON `{ "email" }` | `202 Accepted`, sin cuerpo y siempre genérico |
 | `POST /forgot-password` | JSON `{ "email" }` | `202 Accepted`, sin cuerpo y siempre genérico |
 | `POST /reset-password` | JSON `{ "token", "newPassword" }` | `200 OK`, sin cuerpo |
+| `GET /api/v1/users/me` | `Authorization: Bearer <access>` obligatorio, cualquier rol | `200` con `{ "userId", "firstName", "lastName", "role" }` del dueño del token; `firstName`/`lastName` son `null` en cuentas sin perfil. Nunca expone email, hash, estado, teléfono ni fecha de nacimiento. Sin token, con un token inválido o con el token todavía válido de una cuenta eliminada: `401 AUTHENTICATION_REQUIRED` |
 
 Registro público crea una cuenta `PENDING_ACTIVATION`, un token de un uso y un
 evento durable de correo en una sola transacción. También guarda los datos

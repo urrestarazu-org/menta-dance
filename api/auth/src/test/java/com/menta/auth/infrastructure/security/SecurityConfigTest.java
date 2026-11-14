@@ -213,6 +213,29 @@ class SecurityConfigTest {
             .andExpect(status().isForbidden());
     }
 
+    /**
+     * #749. Before this matcher existed, this path fell through to
+     * {@code anyRequest().access(roleAuthorizationManager)}, which grants unmapped paths by
+     * default (see the class Javadoc) — an anonymous caller would NOT have been rejected here.
+     */
+    @Test
+    void an_unauthenticated_get_of_the_own_account_route_is_rejected() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get("/api/v1/users/me"))
+            .andExpect(status().isUnauthorized());
+    }
+
+    /** #749. Every role reads its own account: all four reach the (unmapped) dispatcher, never 401/403. */
+    @ParameterizedTest
+    @ValueSource(strings = {"ADMIN", "INSTRUCTOR", "STUDENT", "RECEPTIONIST"})
+    void an_authenticated_get_of_the_own_account_route_passes_the_security_layer(String role) throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get("/api/v1/users/me").with(user("someone").roles(role)))
+            .andExpect(status().isNotFound());
+    }
+
     /** #355. The staff day listing is not public: an anonymous caller gets {@code 401}. */
     @Test
     void an_unauthenticated_get_of_the_staff_sessions_by_date_route_is_rejected() throws Exception {

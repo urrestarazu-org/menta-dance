@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import com.menta.auth.application.port.in.ActivateAccountUseCase;
 import com.menta.auth.application.port.in.ChangeUserRoleUseCase;
 import com.menta.auth.application.port.in.CreateUserUseCase;
+import com.menta.auth.application.port.in.GetCurrentUserUseCase;
 import com.menta.auth.application.port.in.ListUsersUseCase;
 import com.menta.auth.application.port.in.LoginUseCase;
 import com.menta.auth.application.port.in.LogoutUseCase;
@@ -42,6 +43,7 @@ import com.menta.auth.application.port.out.TokenHasher;
 import com.menta.auth.application.port.out.UserAdminRepository;
 import com.menta.auth.application.port.out.UserAuditRepository;
 import com.menta.auth.application.usecase.ActivationTokenIssuer;
+import com.menta.auth.application.usecase.GetCurrentUserUseCaseImpl;
 import com.menta.auth.application.usecase.ListUsersUseCaseImpl;
 import com.menta.auth.application.usecase.ResolveUserDisplayNamesUseCaseImpl;
 import com.menta.auth.domain.repository.UserRepository;
@@ -288,6 +290,13 @@ class AuthConfigurationTest {
         ListUsersUseCase useCase = configuration.listUsersUseCase(mock(UserAdminRepository.class));
 
         assertThat(useCase).isInstanceOf(ListUsersUseCaseImpl.class);
+    }
+
+    @Test
+    void wires_the_get_current_user_use_case_bean() {
+        GetCurrentUserUseCase useCase = configuration.getCurrentUserUseCase(mock(UserRepository.class));
+
+        assertThat(useCase).isInstanceOf(GetCurrentUserUseCaseImpl.class);
     }
 
     @Test

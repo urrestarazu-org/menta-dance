@@ -3,6 +3,7 @@ package com.menta.auth.infrastructure.config;
 import com.menta.auth.application.port.in.ActivateAccountUseCase;
 import com.menta.auth.application.port.in.ChangeUserRoleUseCase;
 import com.menta.auth.application.port.in.CreateUserUseCase;
+import com.menta.auth.application.port.in.GetCurrentUserUseCase;
 import com.menta.auth.application.port.in.ListUsersUseCase;
 import com.menta.auth.application.port.in.LoginUseCase;
 import com.menta.auth.application.port.in.LogoutUseCase;
@@ -40,6 +41,7 @@ import com.menta.auth.application.usecase.ActivateAccountUseCaseImpl;
 import com.menta.auth.application.usecase.ActivationTokenIssuer;
 import com.menta.auth.application.usecase.ChangeUserRoleUseCaseImpl;
 import com.menta.auth.application.usecase.CreateUserUseCaseImpl;
+import com.menta.auth.application.usecase.GetCurrentUserUseCaseImpl;
 import com.menta.auth.application.usecase.ListUsersUseCaseImpl;
 import com.menta.auth.application.usecase.LoginUseCaseImpl;
 import com.menta.auth.application.usecase.LogoutUseCaseImpl;
@@ -514,6 +516,12 @@ public class AuthConfiguration {
     @Bean
     public ListUsersUseCase listUsersUseCase(UserAdminRepository userAdminRepository) {
         return new ListUsersUseCaseImpl(userAdminRepository);
+    }
+
+    /** #749: the authenticated user's own account; read-only, no transaction. */
+    @Bean
+    public GetCurrentUserUseCase getCurrentUserUseCase(UserRepository userRepository) {
+        return new GetCurrentUserUseCaseImpl(userRepository);
     }
 
     /** #355: how the staff-facing roster of a physical session names its students; read-only, no transaction. */
