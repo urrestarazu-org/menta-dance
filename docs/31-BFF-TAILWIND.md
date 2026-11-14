@@ -201,7 +201,7 @@ Los tests que recorren enlaces ignoran los anchors internos (`#main`) del skip l
 Base del área web para el personal (issue #354). Pantallas hoy: el inicio `GET /gestion` y el listado de
 usuarios `GET /gestion/usuarios` con su alta `GET /gestion/usuarios/nuevo` y `POST /gestion/usuarios` y el cambio de
 rol `POST /gestion/usuarios/{id}/rol` (#378), y la recepción `GET /gestion/recepcion` con el roster de cada sesión y
-el check-in manual (#373), y los cursos presenciales `GET /gestion/cursos-presenciales` con sus sesiones (#368); el resto de las secciones se habilita a medida que llega cada pantalla. La autorización
+el check-in manual (#373), y los cursos presenciales `GET /gestion/cursos-presenciales` con sus sesiones y los alumnos de cada una (#368); el resto de las secciones se habilita a medida que llega cada pantalla. La autorización
 real la decide la API; el BFF solo evita mostrar pantallas que un rol no puede usar.
 
 ### Prefijos y roles
@@ -409,9 +409,8 @@ check-in manual es solo de recepción y la sección es de ella). Tres rutas, tod
 ### Cursos presenciales (`/gestion/cursos-presenciales`) (#368)
 
 Gestión web de cursos presenciales para `ADMIN` e `INSTRUCTOR` (la API limita al instructor a sus cursos). Hoy están
-las pantallas de **cursos** y las de las **sesiones** de cada curso; el roster de una sesión llega en el PR siguiente
-(la entrada `Sesiones` de la navegación sigue deshabilitada y es otra: esta es `cursos-presenciales`, "Cursos
-presenciales").
+las pantallas de **cursos**, las de las **sesiones** de cada curso y la de los **alumnos** de una sesión (la entrada
+`Sesiones` de la navegación sigue deshabilitada y es otra: esta es `cursos-presenciales`, "Cursos presenciales").
 
 - **Rutas**: `GET /gestion/cursos-presenciales` (listado), `GET`/`POST .../nuevo` (alta) y `GET`/`POST
   .../{courseId}/editar` (edición). `STUDENT` y `RECEPTIONIST` reciben 403; un anónimo va al login; todo POST lleva
@@ -456,20 +455,22 @@ presenciales").
 #### Sesiones de un curso (`/gestion/cursos-presenciales/{courseId}/sesiones`)
 
 El curso va en cada URL; el listado de cursos tiene un enlace "Sesiones" por fila. `ManagementCourseSessionsController`
-atiende el listado y las altas; `ManagementSessionChangesController`, la reprogramación y la cancelación.
+atiende el listado y las altas; `ManagementSessionChangesController`, la reprogramación y la cancelación, y
+`ManagementSessionRosterController`, los alumnos de una sesión.
 
 - **Rutas** (`ADMIN` e `INSTRUCTOR`; `STUDENT` y `RECEPTIONIST` reciben 403; un anónimo va al login; todo POST lleva CSRF
   y toda respuesta `Cache-Control: no-store`): `GET .../sesiones` (listado con los dos formularios de alta en la misma
   página), `POST .../sesiones` (una sesión), `POST .../sesiones/lote` (un rango), `GET`/`POST
-  .../sesiones/{sessionId}/reprogramar` y `GET`/`POST .../sesiones/{sessionId}/cancelar`. Los POST correctos son
+  .../sesiones/{sessionId}/reprogramar`, `GET`/`POST .../sesiones/{sessionId}/cancelar` y `GET
+  .../sesiones/{sessionId}?q=` (los alumnos de la sesión, solo lectura). Los POST correctos son
   Post/Redirect/Get al listado con un aviso en una región `role="status"` ("Creamos la sesión.", "Creamos 4 sesiones."
   con las fechas creadas, "Reprogramamos la sesión.", "Cancelamos la sesión."); la URL de redirección se arma con el
   `courseId` que devuelve la API.
 - **Listado**: primero lo que ya existe, después los formularios (así quien crea ve las sesiones existentes). Contexto del
   curso (título, horario, profesor, cupo) y una tabla con `<caption>` y `<th scope>`: fecha y hora (`momentLabel`, con
   `<time datetime>` en UTC), "ocupados / cupo" (`3 / 10`, donde ocupados son las asignaciones confirmadas más los holds
-  vigentes), disponibles, estado como **texto** (Programada/Cancelada, además del color) y las acciones "Reprogramar" y
-  "Cancelar" (no en las canceladas). La columna de acciones es donde luego irá el enlace al roster.
+  vigentes), disponibles, estado como **texto** (Programada/Cancelada, además del color) y las acciones "Ver alumnos"
+  (en todas las filas, también en las canceladas), "Reprogramar" y "Cancelar" (estas dos no en las canceladas).
 - **Ventana de fechas**: por defecto desde hoy (en la zona de la academia, con el `Clock` inyectable) hasta 90 días
   después; los parámetros opcionales `desde` y `hasta` (`yyyy-MM-dd`) la cambian desde un formulario `GET`. Solo `desde`:
   90 días desde esa fecha; solo `hasta`: desde hoy. Un valor ilegible, una ventana invertida o de más de 366 días da la
@@ -497,6 +498,24 @@ atiende el listado y las altas; `ManagementSessionChangesController`, la reprogr
   lectura. Reprogramar pide fecha y hora nuevas, siempre juntas, y no toca cupo ni notas. Si la sesión ya tiene lugares
   tomados, una nota visible dice "Esta sesión ya tiene N alumnos asignados." sin afirmar nada sobre qué pasa con ellos
   (la API no lo dice; ocupados incluye los holds vigentes). Una sesión cancelada muestra un aviso en lugar del formulario.
+- **Alumnos de una sesión** (`GET .../sesiones/{sessionId}`, plantilla `gestion/cursos/alumnos`): solo lectura, sin
+  formularios que cambien algo ni botón de check-in (registrar asistencia es de la recepción, `/gestion/recepcion`, que
+  sigue cerrada al `INSTRUCTOR`). Muestra el curso, el momento en la zona de la academia, el estado como **texto**
+  (Programada/Cancelada, también si está cancelada, con sus alumnos), el cupo total, los alumnos con cupo y los que ya
+  tienen asistencia, y una tabla con `<caption>` y `<th scope>`: alumno, tipo de cupo (plan mensual o clase
+  individual), asistencia como **texto** (Presente/Pendiente, además del color) y registro (hora local `HH:mm` y
+  origen, QR o manual, solo si hay asistencia). Sin alumnos: "Todavía no hay alumnos asignados a esta sesión."; la
+  búsqueda por nombre `?q=` es la de la recepción (mismo caso de uso, `GetSessionRosterUseCase`, sin máquinas nuevas).
+  - **Pertenencia**: el endpoint de roster de la API deja leer a un instructor el roster de cualquier curso, así que el
+    BFF no lo llama a ciegas. `GetCourseSessionRosterUseCase` primero busca la sesión entre las del curso de la URL
+    (`GetCourseSession`: un instructor ajeno recibe el 403 de la API en esa lectura y el roster ni se pide; una sesión
+    que no es de ese curso, un 404) y recién después lee el roster de la sesión que la API listó; además exige que el
+    roster diga que es del mismo curso (`SessionRoster.courseId`), si no es un 404. Un id que no es UUID es un 404 sin
+    llamar a la API.
+  - **Fallos**: sesión o curso inexistente → página de aviso 404 con enlace de vuelta a las sesiones; curso ajeno →
+    "No podés gestionar este curso." (403); API caída o respuesta inutilizable → "No pudimos cargar los alumnos de la
+    sesión en este momento. Intentá nuevamente en unos minutos." (503). Nunca se muestra texto de la API. Sin CSRF
+    porque es solo `GET`; la respuesta lleva `Cache-Control: no-store` (hay nombres) y todo pasa por `th:text`.
 - **Errores de la API, por `code`** (el cuerpo nunca llega al navegador): `SESSION_ALREADY_EXISTS` → ver arriba;
   `INVALID_REQUEST` → en el lote, error junto al rango ("No hay ninguna fecha del curso entre esas fechas.", 400), en el
   resto alerta general (400); `SESSION_ALREADY_OCCURRED` → junto a la fecha al reprogramar ("No se puede reprogramar una
