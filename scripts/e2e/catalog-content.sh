@@ -132,6 +132,9 @@ start_api() {
         OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:34318" \
         BILLING_WEBHOOK_MERCADOPAGO_HMAC_SECRET="$MERCADOPAGO_DEV_WEBHOOK_HMAC_SECRET" \
         BILLING_MERCADOPAGO_MERCHANT_ACCOUNT_ID="$MERCADOPAGO_MERCHANT_ACCOUNT_ID" \
+        APP_CDN_BUNNYNET_PULLZONEHOSTNAME="local-catalog-content.invalid" \
+        APP_CDN_BUNNYNET_VIDEOLIBRARYID="e2e-library" \
+        APP_CDN_BUNNYNET_SECURITYKEY="e2e-catalog-content-not-a-secret" \
         "$PROJECT_ROOT/gradlew" --no-daemon :api:app:bootRun >"$API_LOG" 2>&1 &
     api_pid=$!
     printf '%s\n' "$api_pid" >"$API_PID_FILE"

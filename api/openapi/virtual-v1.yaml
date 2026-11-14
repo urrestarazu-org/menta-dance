@@ -112,7 +112,9 @@ paths:
         - $ref: '#/components/parameters/LessonId'
       responses:
         '200':
-          description: URL HLS firmada temporalmente para una lección autorizada.
+          description: >-
+            URL firmada temporalmente (Token Authentication de la CDN) para una lección autorizada. Hoy apunta a
+            un archivo MP4; `stream.type` conserva el valor constante `HLS` por compatibilidad del contrato.
           content:
             application/json:
               schema:

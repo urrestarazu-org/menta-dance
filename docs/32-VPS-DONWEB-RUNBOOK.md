@@ -409,6 +409,27 @@ Puntos a tener en cuenta:
 - **Qué no se comprobó:** que la variable llegue con valor prueba que está cargada, no que sea correcta. No se verificó el CBU ni el alias contra el banco, el pull zone y la librería de video contra Bunny.net, ni que las credenciales de SMTP autentiquen: no se envió ningún correo real. Esa prueba queda pendiente.
 - **Mercado Pago** no cambió en este paso: sigue con las credenciales de pruebas del 2026-10-20. Pasar a cobros reales y el webhook de producción se siguen en #641 y #647.
 
+**Antes del próximo despliegue (#751): clave de firma de Bunny.net.** Desde #751 la API firma las URLs de video con la
+*CDN token authentication* de la biblioteca Stream y falla cerrado: sin `APP_CDN_BUNNYNET_SECURITYKEY` (la tarjeta
+**Token authentication key** de **Security > General** de la biblioteca, rotulada *API key* ahí pero distinta de la API key
+de la página *API*; no la resetees: esa misma clave firma los embeds y las URLs de CDN, y resetearla rompe ambos), o con el host o la biblioteca en el valor
+`invalid-missing-config`, **la API no arranca**. Hay que cargarla en `/opt/menta/.env` (mismo procedimiento que las dos
+variables de arriba, valor sin comillas) **antes** de desplegar una imagen con este cambio; el compose ya la pasa al
+contenedor. La biblioteca debe tener *CDN token authentication* activada (en esa misma página) y *MP4 Fallback*. Si la biblioteca
+restringe *Allowed domains* o activa *Block Direct URL File Access*, en producción tienen que estar los dominios reales
+del sitio (se comparan con el *hostname* del `Referer`); son ajustes de Bunny.net que decide quien administra la
+biblioteca. Este paso no se ejecutó ni se comprobó contra Bunny.net.
+
+**Diagnóstico de video en producción (#751).** Si una lección no reproduce el video, la batería de Bruno
+`bruno/Diagnostics/Video` pregunta, desde un equipo de desarrollo (no hace falta entrar al VPS), qué firma la API y qué
+responde el CDN de Bunny.net. Es de **solo lectura** (GET/HEAD; el único POST es el login de la cuenta de diagnóstico,
+que no crea datos). Manda el `Referer` del BFF (`bff_url`) como lo hace el navegador y compara contra un pedido sin `Referer`. Se corre desde `bruno/` con
+`bru run "Diagnostics/Video" --env production --env-var baseUrl=... --env-var bff_url=... --env-var diagLessonId=... --env-var diagCourseId=... --env-var diagEmail=... --env-var diagPassword=...`.
+Usar una cuenta de alumno dedicada al diagnóstico; las credenciales y la URL firmada son secretos (no versionarlos ni
+pegar capturas de la timeline de Bruno, que muestra la URL con el token). Detalle, tabla de decisión y precauciones en la
+sección "Diagnóstico de video" de [`bruno/README.md`](../bruno/README.md). Este procedimiento no se ejecutó contra
+producción.
+
 ### 2.10 Despliegue con deploy.sh (#593)
 
 `infra/docker/prod/deploy.sh` es lo único que ejecuta la clave SSH de despliegue. Lo llama el job `deploy` de `release.yml` con los digests de las imágenes y la configuración del stack (contrato y pasos en `docs/16-CICD-PIPELINE.md`, "Contrato con `deploy.sh`"). Se probó con un Docker real: el backup y su restauración (33 tablas del esquema), la lectura del health de API, BFF y Nginx, y la poda de imágenes. Las pruebas de lógica están en `infra/docker/prod/deploy.test.sh` y corren en CI.

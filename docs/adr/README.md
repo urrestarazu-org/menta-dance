@@ -26,7 +26,7 @@
 | [0037](0037-catalog-course-id-routing.md) | Ruteo de courseId a su módulo dueño en el catálogo |
 | [0038](0038-payment-webhook-state-machine-and-worker.md) | Máquina de estados de Payment, worker de webhook y puerto a Mercado Pago |
 | [0039](0039-post-payment-fulfillment-boundaries.md) | Límites del fulfillment post-pago |
-| [0040](0040-local-bunny-net-signature-adapter.md) | Adaptador local determinista de firma Bunny.net |
+| [0040](0040-local-bunny-net-signature-adapter.md) | Adaptador local determinista de firma Bunny.net (enmendado: firma real, #751) |
 | [0041](0041-lesson-access-unplanned-course-denial.md) | Un curso sin plan deniega acceso a lecciones protegidas |
 | [0042](0042-security-tooling-baseline.md) | Baseline de tooling de seguridad de código |
 | [0043](0043-checkstyle-policy-ratchet.md) | Política de Checkstyle y trinquete |

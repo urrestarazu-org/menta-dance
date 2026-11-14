@@ -15,11 +15,17 @@ this journey now proves that corrected behavior rather than the old one.
 ### Requirement: Profile-guarded, mutually exclusive adapter selection
 
 `VirtualConfiguration` MUST expose exactly one `BunnyNetSignatureService`
-bean: `LocalBunnyNetSignatureService` when profile `e2e-bunny-net` OR
-`demo` is active, `StringFormatBunnyNetSignatureService` otherwise.
+bean: `LocalBunnyNetSignatureService` when profile `e2e-bunny-net` is active
+(always), or when `demo` is active and `app.cdn.bunny-net.security-key` is
+blank; `TokenAuthBunnyNetSignatureService` otherwise (including `demo` with a
+configured key). Whenever the real adapter is selected, startup MUST fail
+closed if the security key is missing or the host/library keep their
+placeholder values.
 Startup MUST fail closed when `e2e-bunny-net` or `demo` combines with
 `prod`, `production`, or `staging` (case-insensitive).
-(Previously: only `e2e-bunny-net` selected the local adapter and only it was guarded.)
+(Amended by #751, ADR-0040 2026-11-14: `StringFormatBunnyNetSignatureService`
+was replaced by `TokenAuthBunnyNetSignatureService`; before that, `demo`
+always selected the local adapter.)
 
 #### Scenario: Local profile selects the local adapter
 
@@ -28,9 +34,9 @@ Startup MUST fail closed when `e2e-bunny-net` or `demo` combines with
 - THEN it MUST resolve to `LocalBunnyNetSignatureService`
 - AND no outbound request MUST reach Bunny.net
 
-#### Scenario: Demo profile selects the local adapter
+#### Scenario: Demo profile without a security key selects the local adapter
 
-- GIVEN profile `demo` is active
+- GIVEN profile `demo` is active and `app.cdn.bunny-net.security-key` is blank
 - WHEN Spring resolves `BunnyNetSignatureService`
 - THEN it MUST resolve to `LocalBunnyNetSignatureService`
 - AND exactly one bean of that type MUST exist
@@ -41,12 +47,26 @@ Startup MUST fail closed when `e2e-bunny-net` or `demo` combines with
 - WHEN Spring resolves `BunnyNetSignatureService`
 - THEN exactly one `LocalBunnyNetSignatureService` bean MUST be present
 
+#### Scenario: Demo profile with a security key selects the real adapter
+
+- GIVEN profile `demo` is active and a complete `app.cdn.bunny-net.*` configuration
+- WHEN Spring resolves `BunnyNetSignatureService`
+- THEN it MUST resolve to `TokenAuthBunnyNetSignatureService`
+
 #### Scenario: Default profiles keep the real adapter as sole candidate
 
-- GIVEN the application starts without profile `e2e-bunny-net` or `demo`
+- GIVEN the application starts without profile `e2e-bunny-net` or `demo` and with
+  a complete `app.cdn.bunny-net.*` configuration
 - WHEN Spring resolves `BunnyNetSignatureService`
-- THEN it MUST resolve to `StringFormatBunnyNetSignatureService`
+- THEN it MUST resolve to `TokenAuthBunnyNetSignatureService`
 - AND no second candidate bean MUST exist
+
+#### Scenario: Real adapter fails closed on missing configuration
+
+- GIVEN the real adapter is selected and the security key is missing, or the
+  host or library id keep their placeholder value
+- WHEN the application context starts
+- THEN startup MUST fail naming the property, never its value
 
 #### Scenario: Local profile fails closed in production-like environments
 
@@ -118,9 +138,10 @@ resolution, and existing real-adapter coverage MUST remain intact.
 
 #### Scenario: Existing real-adapter test suite still passes unmodified
 
-- GIVEN the existing `StringFormatBunnyNetSignatureServiceTest` suite
+- GIVEN the real-adapter test suite (`TokenAuthBunnyNetSignatureServiceTest`,
+  formerly `StringFormatBunnyNetSignatureServiceTest`)
 - WHEN it runs after the local adapter is introduced
-- THEN all its assertions MUST still pass with unmodified behavior
+- THEN all its assertions MUST pass
 
 ### Requirement: Isolated unit coverage of the local adapter
 

@@ -12,7 +12,7 @@ import com.menta.virtual.infrastructure.persistence.repository.VirtualModuleJpaR
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Profile;
@@ -29,10 +29,17 @@ import org.springframework.stereotype.Component;
  * like {@code E2eBunnyNetVirtualFixture}, because the Virtual use cases generate random ids. The video
  * references are plain labels that the local Bunny.net adapter signs without any credential. The runner is
  * intentionally not transactional.
+ *
+ * <p>Optional real video (#751): when {@code demo.virtual.free-lesson-video-id} (env {@code
+ * DEMO_VIRTUAL_FREE_LESSON_VIDEO_ID}) is non-blank, it replaces the label as the {@code videoId} of the two
+ * FREE demo lessons, so a developer with a real Bunny.net video can watch it locally (see ADR-0040). Because the
+ * rows are upserted by id and never refreshed, an already seeded free lesson whose {@code videoId} differs gets
+ * it updated on the next start; nothing else of the lesson changes, restricted lessons are never touched, and
+ * when the property is blank existing rows are not read or modified (a second start creates nothing). No real
+ * video id is ever stored in the repository: the value only comes from the environment.</p>
  */
 @Component
 @Profile("demo")
-@RequiredArgsConstructor
 public final class DemoVirtualCatalogFixture implements ApplicationRunner, Ordered {
 
     private static final String CATEGORY = "DANCE";
@@ -72,6 +79,19 @@ public final class DemoVirtualCatalogFixture implements ApplicationRunner, Order
     private final VirtualCourseJpaRepository courseRepository;
     private final VirtualModuleJpaRepository moduleRepository;
     private final VirtualLessonJpaRepository lessonRepository;
+    private final String freeLessonVideoId;
+
+    public DemoVirtualCatalogFixture(
+        VirtualCourseJpaRepository courseRepository,
+        VirtualModuleJpaRepository moduleRepository,
+        VirtualLessonJpaRepository lessonRepository,
+        @Value("${demo.virtual.free-lesson-video-id:}") String freeLessonVideoId
+    ) {
+        this.courseRepository = courseRepository;
+        this.moduleRepository = moduleRepository;
+        this.lessonRepository = lessonRepository;
+        this.freeLessonVideoId = freeLessonVideoId == null ? "" : freeLessonVideoId.strip();
+    }
 
     @Override
     public void run(ApplicationArguments arguments) {
@@ -101,10 +121,19 @@ public final class DemoVirtualCatalogFixture implements ApplicationRunner, Order
                 new VirtualModuleJpaEntity(module.id(), courseId, module.title(), module.preview(), displayOrder));
         }
         DemoLesson lesson = module.lesson();
+        boolean overridden = lesson.free() && !freeLessonVideoId.isEmpty();
+        String videoId = overridden ? freeLessonVideoId : lesson.videoId();
         if (!lessonRepository.existsById(lesson.id())) {
             lessonRepository.save(new VirtualLessonJpaEntity(
-                lesson.id(), module.id(), courseId, lesson.title(), "Demo lesson.", lesson.videoId(), 5,
+                lesson.id(), module.id(), courseId, lesson.title(), "Demo lesson.", videoId, 5,
                 lesson.free(), 0));
+        } else if (overridden) {
+            lessonRepository.findById(lesson.id())
+                .filter(existing -> !videoId.equals(existing.getVideoId()))
+                .ifPresent(existing -> {
+                    existing.assignVideoId(videoId);
+                    lessonRepository.save(existing);
+                });
         }
     }
 

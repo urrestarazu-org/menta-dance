@@ -39,3 +39,13 @@ logging:
   level:
     root: WARN
     com.menta: DEBUG
+
+# #751: with token authentication the real Bunny.net adapter is fail-closed (key, host and library
+# must be set), and every context booted under this profile uses it. Fake values: nothing here ever
+# reaches a CDN.
+app:
+  cdn:
+    bunny-net:
+      pull-zone-hostname: vz-test.b-cdn.net
+      video-library-id: "123456"
+      security-key: test-only-security-key-not-a-secret

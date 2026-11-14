@@ -9,13 +9,15 @@ import java.util.Locale;
 
 /**
  * Deterministic, credential-free {@link BunnyNetSignatureService} for local
- * development and E2E acceptance testing (profile {@code e2e-bunny-net},
- * issue #129). Preserves the same
- * {@code <pullZoneHostname>/<videoLibraryId>/<videoId>} shape as {@link
- * com.menta.virtual.infrastructure.cdn.StringFormatBunnyNetSignatureService}
- * and additionally appends real {@code exp}/{@code sig} query parameters, so
- * a Bruno journey can assert determinism against this adapter without ever
- * reaching Bunny.net.
+ * development and E2E acceptance testing (profile {@code e2e-bunny-net}, and
+ * profile {@code demo} when no security key is configured; issue #129,
+ * amended by #751). Produces the placeholder shape
+ * {@code <pullZoneHostname>/<videoLibraryId>/<videoId>} plus {@code exp}/{@code sig}
+ * query parameters. It is deliberately NOT the shape of the real adapter
+ * ({@link com.menta.virtual.infrastructure.cdn.TokenAuthBunnyNetSignatureService}:
+ * {@code https://<pullZone>/<videoId>/<fileName>?token=..&expires=..}); a Bruno
+ * journey can assert determinism against this adapter without ever reaching
+ * Bunny.net, and its output is unchanged by #751.
  *
  * <p>{@code sig = SHA-256("menta-local-e2e|" + videoLibraryId + "|" +
  * videoId + "|" + exp)}, rendered as 64 lowercase hex characters. The salt
