@@ -27,7 +27,7 @@ import com.menta.virtual.domain.model.CourseId;
 import com.menta.virtual.domain.model.LessonId;
 import com.menta.virtual.domain.model.VirtualLesson;
 import com.menta.virtual.infrastructure.cdn.BunnyNetProperties;
-import com.menta.virtual.infrastructure.cdn.StringFormatBunnyNetSignatureService;
+import com.menta.virtual.infrastructure.cdn.TokenAuthBunnyNetSignatureService;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -80,7 +80,8 @@ class GetPublicLessonStreamUseCaseImplTest {
         BunnyNetProperties props = new BunnyNetProperties();
         props.setPullZoneHostname(PULL_ZONE_HOSTNAME);
         props.setVideoLibraryId(VIDEO_LIBRARY_ID);
-        return new StringFormatBunnyNetSignatureService(props);
+        props.setSecurityKey("test-security-key");
+        return new TokenAuthBunnyNetSignatureService(props);
     }
 
     private static VirtualLesson lesson(
@@ -242,13 +243,14 @@ class GetPublicLessonStreamUseCaseImplTest {
     }
 
     @Test
-    void string_format_placeholder_service_builds_url_with_pull_zone_library_and_videoId() {
-        // Sanity check: the placeholder service produces the documented
-        // shape so a downstream test or future HMAC impl has a stable
-        // contract to migrate against.
-        BunnyNetSignatureService placeholder = configuredService();
+    void token_auth_service_builds_a_signed_mp4_url_from_pull_zone_and_videoId() {
+        // Sanity check: the real adapter produces the documented Bunny Stream shape (no library id in the
+        // path, token + absolute expiry as query parameters).
+        BunnyNetSignatureService service = configuredService();
 
-        assertThat(placeholder.generateSignedUrl("abc-123", 1_700_000_000L))
-            .isEqualTo(PULL_ZONE_HOSTNAME + "/" + VIDEO_LIBRARY_ID + "/" + "abc-123");
+        assertThat(service.generateSignedUrl("abc-123", 1_700_000_000L))
+            .startsWith("https://" + PULL_ZONE_HOSTNAME + "/abc-123/play_720p.mp4?token=HS256-")
+            .endsWith("&expires=1700000000")
+            .doesNotContain(VIDEO_LIBRARY_ID);
     }
 }

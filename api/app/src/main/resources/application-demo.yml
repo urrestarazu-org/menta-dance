@@ -9,6 +9,10 @@ demo:
   qr-reader:
     # Empty on purpose: an unresolved placeholder would fail startup. A blank secret skips the QR reader seed.
     secret: ${DEMO_QR_READER_SECRET:}
+  virtual:
+    # Optional real Bunny.net videoId for the two free demo lessons (#751). Empty on purpose: blank keeps the
+    # label references served by the local adapter. Used together with APP_CDN_BUNNYNET_* (docs/26).
+    free-lesson-video-id: ${DEMO_VIRTUAL_FREE_LESSON_VIDEO_ID:}
 
 billing:
   bank-transfer:

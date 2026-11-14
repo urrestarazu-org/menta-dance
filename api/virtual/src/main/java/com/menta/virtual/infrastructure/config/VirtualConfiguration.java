@@ -47,7 +47,8 @@ import com.menta.virtual.application.usecase.UpdateVirtualLessonUseCaseImpl;
 import com.menta.virtual.application.usecase.UpdateVirtualModuleUseCaseImpl;
 import com.menta.virtual.application.usecase.VirtualCourseCatalogPortImpl;
 import com.menta.virtual.infrastructure.cdn.BunnyNetProperties;
-import com.menta.virtual.infrastructure.cdn.StringFormatBunnyNetSignatureService;
+import com.menta.virtual.infrastructure.cdn.ProbingBunnyNetSignatureService;
+import com.menta.virtual.infrastructure.cdn.TokenAuthBunnyNetSignatureService;
 import com.menta.virtual.infrastructure.cdn.local.LocalBunnyNetSignatureService;
 import com.menta.virtual.infrastructure.transaction.RetryOnDuplicateKeyCompleteLessonUseCase;
 import com.menta.virtual.infrastructure.transaction.RetryOnDuplicateKeySaveLessonProgressUseCase;
@@ -65,12 +66,14 @@ import com.menta.virtual.infrastructure.transaction.TransactionalUpdateVirtualLe
 import com.menta.virtual.infrastructure.transaction.TransactionalUpdateVirtualModuleUseCase;
 import java.util.Locale;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Profile;
 import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 
 /**
  * Wires Virtual's use cases. Adapters are {@code @Component}-scanned; the
@@ -94,6 +97,8 @@ import org.springframework.core.env.Environment;
 @ConfigurationPropertiesScan(basePackages = "com.menta.virtual.infrastructure.cdn")
 public class VirtualConfiguration {
 
+    private static final Logger LOG = LoggerFactory.getLogger(VirtualConfiguration.class);
+
     /**
      * Production {@link java.time.Clock} adapter for the application-layer
      * {@link Clock} port. Mirrors the {@code AuthConfiguration}/{@code
@@ -115,49 +120,60 @@ public class VirtualConfiguration {
     private static final Set<String> PRODUCTION_LIKE_PROFILES = Set.of("prod", "production", "staging");
 
     /**
-     * US-VIRTUAL-004 / ADR-0040. Deterministic, credential-free local
-     * adapter for local development and E2E acceptance testing. The prod
-     * guard lives HERE, inside the factory method itself, rather than in
-     * a separate {@code @PostConstruct} or {@code ApplicationRunner}: a
-     * {@code @Bean} factory throw aborts context refresh before the web
-     * server starts accepting requests, and this method only runs at all
-     * when {@code e2e-bunny-net} or {@code demo} is active (its own
-     * {@code @Profile} guards registration), so the check only has to defend
-     * against those profiles combining with a production-like one. The
-     * {@code demo} profile seeds Bunny-less video references that only this
-     * adapter can sign.
+     * US-VIRTUAL-004 / ADR-0040 (amended 2026-11-14, #751). The single
+     * {@link BunnyNetSignatureService} bean; exactly one adapter exists in any
+     * context. Selection, evaluated in this order:
+     * <ol>
+     *   <li>{@code e2e-bunny-net} active: {@link LocalBunnyNetSignatureService}, always (never reaches the real
+     *       CDN, even if a security key is present).</li>
+     *   <li>{@code demo} active: {@link TokenAuthBunnyNetSignatureService} when
+     *       {@code app.cdn.bunny-net.security-key} is non-blank (a developer who wants to watch a real video),
+     *       otherwise {@link LocalBunnyNetSignatureService}.</li>
+     *   <li>Any other profile set: {@link TokenAuthBunnyNetSignatureService}.</li>
+     * </ol>
+     * Whenever the real adapter is chosen, {@link BunnyNetProperties#requireRealCdnConfiguration()} aborts the
+     * boot if the key, host or library are missing or still placeholders. The local adapter (cases 1 and 2) is
+     * guarded against production-like profiles. Both guards live HERE, inside the factory method, rather than in
+     * an {@code ApplicationRunner}: a {@code @Bean} factory throw aborts context refresh before the web server
+     * accepts requests. A single method (instead of two complementary {@code @Profile} methods) is needed because
+     * a profile expression cannot test whether a property is blank.
+     *
+     * <p>With {@code app.cdn.bunny-net.diagnostic-probe=true} the real adapter is wrapped in
+     * {@link ProbingBunnyNetSignatureService} (a logging-only HEAD probe); the bean stays single. The local
+     * adapter is never wrapped.</p>
      */
     @Bean
-    @Profile("e2e-bunny-net | demo")
-    public BunnyNetSignatureService localBunnyNetSignatureService(
+    public BunnyNetSignatureService bunnyNetSignatureService(
         BunnyNetProperties properties, Environment environment
     ) {
-        failClosedIfProductionLike(environment);
-        return new LocalBunnyNetSignatureService(properties);
-    }
-
-    /**
-     * US-VIRTUAL-004 placeholder. {@link StringFormatBunnyNetSignatureService}
-     * returns a {@code pullZone/videoLibrary/videoId} string — unsafe for
-     * production but structurally correct so a future HMAC-backed impl
-     * (or the official Bunny.net SDK, once accepted onto the dep tree)
-     * can replace THIS BEAN without touching the use case or the wire
-     * contract. ADR-0040 is the architectural note behind that
-     * isolation. Active whenever neither {@code e2e-bunny-net} nor {@code demo} is active — i.e. by
-     * default, including every production-like profile.
-     */
-    @Bean
-    @Profile("!e2e-bunny-net & !demo")
-    public BunnyNetSignatureService defaultBunnyNetSignatureService(BunnyNetProperties properties) {
-        return new StringFormatBunnyNetSignatureService(properties);
+        boolean e2e = environment.acceptsProfiles(Profiles.of("e2e-bunny-net"));
+        boolean demo = environment.acceptsProfiles(Profiles.of("demo"));
+        boolean hasSecurityKey = properties.getSecurityKey() != null && !properties.getSecurityKey().isBlank();
+        if (e2e || (demo && !hasSecurityKey)) {
+            failClosedIfProductionLike(environment);
+            LOG.info("Bunny.net signature adapter: local (no real CDN is contacted)");
+            return new LocalBunnyNetSignatureService(properties);
+        }
+        if (demo) {
+            failClosedIfProductionLike(environment);
+        }
+        properties.requireRealCdnConfiguration();
+        LOG.info("Bunny.net signature adapter: token authentication (real CDN)");
+        LOG.info("Bunny.net configuration: host={} libraryId={} file={} securityKey=configured diagnosticProbe={} "
+                + "probeReferer={}",
+            properties.pullZoneHost(), properties.getVideoLibraryId(), properties.getFileName(),
+            properties.isDiagnosticProbe() ? "on" : "off",
+            properties.probeReferer() == null ? "none" : properties.probeReferer());
+        BunnyNetSignatureService real = new TokenAuthBunnyNetSignatureService(properties);
+        return properties.isDiagnosticProbe() ? new ProbingBunnyNetSignatureService(real, properties) : real;
     }
 
     private static void failClosedIfProductionLike(Environment environment) {
         for (String profile : environment.getActiveProfiles()) {
             if (PRODUCTION_LIKE_PROFILES.contains(profile.toLowerCase(Locale.ROOT))) {
                 throw new IllegalStateException(
-                    "SECURITY: local Bunny.net signature adapter (profiles e2e-bunny-net, demo) cannot run "
-                        + "alongside a production-like profile. Active profiles: "
+                    "SECURITY: local Bunny.net signature adapter or demo profile (profiles e2e-bunny-net, demo) "
+                        + "cannot run alongside a production-like profile. Active profiles: "
                         + String.join(", ", environment.getActiveProfiles())
                 );
             }

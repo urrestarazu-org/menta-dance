@@ -33,6 +33,19 @@ class ApplicationDemoYmlTest {
     }
 
     @Test
+    void demo_profile_leaves_the_free_lesson_video_id_blank_by_default() {
+        runner.withPropertyValues("spring.profiles.active=demo").run(context ->
+            assertThat(context.getEnvironment().getProperty("demo.virtual.free-lesson-video-id")).isEmpty());
+    }
+
+    @Test
+    void the_free_lesson_video_id_comes_from_its_environment_variable() {
+        runner.withPropertyValues("spring.profiles.active=demo", "DEMO_VIRTUAL_FREE_LESSON_VIDEO_ID=vid-from-env")
+            .run(context -> assertThat(context.getEnvironment().getProperty("demo.virtual.free-lesson-video-id"))
+                .isEqualTo("vid-from-env"));
+    }
+
+    @Test
     void environment_variables_override_the_defaults() {
         runner.withPropertyValues(
             "spring.profiles.active=demo",

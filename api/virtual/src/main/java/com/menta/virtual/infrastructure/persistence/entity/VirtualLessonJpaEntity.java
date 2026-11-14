@@ -66,6 +66,14 @@ public class VirtualLessonJpaEntity {
         this.displayOrder = displayOrder;
     }
 
+    /**
+     * Re-points the lesson at another video. Used only by the demo fixture to apply a configured real video id
+     * to an already seeded lesson; the use cases go through the domain model instead.
+     */
+    public void assignVideoId(String videoId) {
+        this.videoId = videoId;
+    }
+
     public UUID getId() {
         return id;
     }

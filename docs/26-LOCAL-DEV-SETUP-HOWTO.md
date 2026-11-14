@@ -349,14 +349,14 @@ escenarios de aceptación del issue #129:
    fulfillment) y sólo entonces la lección protegida del curso *planned*
    devuelve `200` con una URL firmada determinista.
 
-**Cómo funciona el adaptador local (ADR-0040):**
-- `VirtualConfiguration` registra `LocalBunnyNetSignatureService` únicamente
-  bajo `@Profile("e2e-bunny-net | demo")`; el adaptador real
-  (`StringFormatBunnyNetSignatureService`) usa
-  `@Profile("!e2e-bunny-net & !demo")` — son mutuamente excluyentes, nunca
-  coexisten. El propio factory `@Bean` falla el arranque si `e2e-bunny-net`
-  o `demo` se combinan con `prod`/`production`/`staging`, antes de que el
-  servidor acepte ningún request.
+**Cómo funciona el adaptador local (ADR-0040, enmendado el 2026-11-14 por #751):**
+- `VirtualConfiguration` crea un único bean `BunnyNetSignatureService` y elige el adaptador según el perfil y
+  la clave: con `e2e-bunny-net` siempre usa `LocalBunnyNetSignatureService` (nunca sale a la CDN real, aunque
+  haya clave); con `demo` usa el adaptador real (`TokenAuthBunnyNetSignatureService`) solo si
+  `APP_CDN_BUNNYNET_SECURITYKEY` tiene valor y, si no, el local; en cualquier otro perfil usa el real y el
+  arranque falla si falta la clave o el host y la biblioteca siguen en el valor placeholder. El factory
+  también falla el arranque si `e2e-bunny-net` o `demo` se combinan con `prod`/`production`/`staging`, antes
+  de que el servidor acepte ningún request.
 - La firma (`sig`) es SHA-256 de un salt público + `videoLibraryId` +
   `videoId` + `exp` — determinística, sin credencial real y sin uso posible
   contra la CDN de producción.
@@ -385,6 +385,126 @@ scripts/e2e/bunny-net.sh --clean
 `--clean` no toca contenedores, volúmenes ni puertos de `catalog-content.sh`
 ni del entorno de desarrollo ordinario. Si el recorrido falla, conservá el
 stack aislado y revisá `.dev-logs/e2e-bunny-net-api.log`.
+
+### Ver un video real en local con el perfil `demo` (issue #751)
+
+Por defecto la demo usa el adaptador local: la URL firmada apunta a un host inexistente (`*.invalid`) y el
+`<video>` queda en `0:00`. Si querés ver un video de verdad, la API firma la URL con la *CDN token authentication*
+de la biblioteca Stream de Bunny.net. La clave es un secreto: definila **solo en tu entorno local** (el `.env` no se
+versiona) y nunca la pegues en el repositorio, en un issue ni en un chat.
+
+**En Bunny.net (una vez):**
+
+1. En la biblioteca de video, pestaña *Encoding*, activá **MP4 Fallback**. Solo los videos subidos
+   *después* de activarlo generan el MP4; un video anterior hay que volver a subirlo.
+2. En la biblioteca Stream, página **Security > General**, activá **CDN token authentication** y copiá la clave
+   de la tarjeta **Token authentication key** (el campo se llama *API key* ahí, pero **no** es la API key de la
+   página *API* de la biblioteca ni la *Read-only API key*). Según la documentación de Bunny.net, esa misma clave
+   firma los embeds y las URLs de CDN token authentication de la biblioteca, por eso **no la resetees**: hacerlo
+   rompe ambos. La API firma con el esquema avanzado (HS256); Bunny.net documenta el esquema de CDN en
+   `/cdn/security/token-authentication` (avanzado HS256 y básico).
+3. La *CDN token authentication* aplica a todas las URLs directas (MP4, HLS, miniaturas y previews). Además,
+   dos opciones de esa misma página (o del pull zone: IP allowlist, Edge Rules, hotlink protection) pueden
+   rechazar el `<video>` con `403` aunque la firma sea correcta:
+   - **Block Direct URL File Access** rechaza los pedidos **sin** cabecera `Referer`. El navegador siempre
+     manda una (el origen de la página), así que no afecta al `<video>`, pero sí a un `curl`/`HEAD` sin `Referer`.
+   - Los **dominios permitidos / bloqueados** se comparan con el *hostname* del `Referer` (sin puerto).
+   - El **pull zone** tiene su propia *Hotlink Protection* (**CDN > pull zone > Security**): los pedidos de
+     dominios que no están en su lista de *allowed referrers* reciben `403`, **independientemente** de lo que diga
+     *Security > General* de la biblioteca. Un `403` puede venir de cualquiera de los dos lugares (la documentación de
+     Stream también menciona IP allowlists, Edge Rules y hotlink protection del pull zone). Para llegar al pull zone:
+     biblioteca > **API** > *Pull zone* > **Manage**. En el pull zone, *Block Direct URL File Access* aparece recién
+     cuando hay *allowed referrers* configurados y bloquea los pedidos con `Referer` vacío.
+   - Los comodines: `*.example.com` permite todos los subdominios pero **no** el dominio raíz; si se sirve el
+     raíz, agregá `example.com` aparte. Las entradas son dominios sin esquema (`www.example.com`).
+   - **Producción:** agregar los dominios reales del sitio (`example.com` y `*.example.com` si se sirven ambos).
+   - **Local:** `localhost` no figura en la documentación de Bunny.net y puede no poder agregarse como dominio
+     permitido. Las opciones que ofrece Bunny.net: apagar *Block Direct URL File Access* de la biblioteca
+     (**Security > General**) solo durante la prueba y volver a activarlo después, o usar una biblioteca de prueba
+     aparte (los ajustes de seguridad son independientes por biblioteca).
+
+   Son ajustes de Bunny.net: cambiarlos es decisión de quien administra la biblioteca. Esto describe lo que dice la
+   documentación, no el estado de tu biblioteca.
+
+**En tu entorno local** (valores de ejemplo; reemplazalos por los tuyos):
+
+```bash
+APP_CDN_BUNNYNET_PULLZONEHOSTNAME=vz-example.b-cdn.net   # con o sin https://
+APP_CDN_BUNNYNET_VIDEOLIBRARYID=123456
+APP_CDN_BUNNYNET_SECURITYKEY=<tarjeta 'Token authentication key' de Security > General de la biblioteca>
+DEMO_VIRTUAL_FREE_LESSON_VIDEO_ID=<id del video en la biblioteca>
+# Opcional: nombre del MP4 si no existe play_720p.mp4 (por ejemplo play_480p.mp4)
+APP_CDN_BUNNYNET_FILENAME=play_720p.mp4
+```
+
+Después levantá la API y el BFF con el perfil `demo` (`SPRING_PROFILES_ACTIVE=demo`) y abrí la lección
+gratuita de "Bachata Sensual" o "Bachata Tradicional".
+
+- `APP_CDN_BUNNYNET_SECURITYKEY` es lo que activa el adaptador real en `demo`. Sin ella sigue el adaptador local
+  y todo funciona como antes (los tests y el recorrido `e2e-bunny-net` no cambian).
+- Con la clave definida, el host y la biblioteca no pueden quedar en el valor placeholder: la API no arranca y
+  el mensaje nombra la propiedad que falta, sin mostrar ningún valor.
+- `DEMO_VIRTUAL_FREE_LESSON_VIDEO_ID` reemplaza la etiqueta (`demo-sensual-free`, `demo-traditional-free`) como
+  `videoId` de las dos lecciones gratuitas. Como la demo no actualiza lo que ya sembró, en el próximo arranque
+  el fixture actualiza el `videoId` de esas dos lecciones si cambió; las lecciones restringidas no se tocan.
+  Si dejás la variable vacía, no se modifica nada de lo ya sembrado.
+- La URL tiene la forma `https://<host>/<videoId>/play_720p.mp4?token=HS256-…&expires=<epoch>`. La biblioteca
+  no forma parte de la URL de Stream; se conserva como configuración requerida. El HLS y el reproductor
+  embebido quedan fuera de este alcance.
+- Si la clave está mal puesta el reproductor falla de forma visible (`403`). La clave no se registra en
+  ningún log ni aparece en las respuestas.
+
+#### Si el video no se reproduce
+
+El navegador pide el MP4 **directo al CDN**: un `403` o `404` de Bunny.net no aparece en el log de la API ni del
+BFF. Para diagnosticarlo, la API deja estas líneas (nivel `INFO`, sin ningún secreto: nunca se registran la clave,
+el token ni la URL firmada). Verlas con `./scripts/dev.sh logs api`:
+
+- Al arrancar con el adaptador real:
+  `Bunny.net configuration: host=<host> libraryId=<id> file=<archivo> securityKey=configured diagnosticProbe=off probeReferer=none`.
+  Confirma qué host, biblioteca y nombre de archivo se están usando; `securityKey=configured` solo dice que hay
+  clave, nunca su valor. `probeReferer` muestra el `Referer` de la sonda (no es un secreto) o `none`.
+- Cada vez que se firma una URL (al abrir la lección):
+  `Bunny.net signed URL: videoId=<id> host=<host> file=<archivo> expiresAt=<instante UTC>`. Si no aparece, el
+  adaptador real no está activo (buscá `Bunny.net signature adapter:`: debe decir `token authentication (real CDN)`).
+  Revisá que el `videoId` y el `file` sean los esperados y que `expiresAt` sea futuro.
+
+**Sonda opcional contra el CDN (apagada por defecto).** Para ver qué responde Bunny.net, agregá
+`APP_CDN_BUNNYNET_DIAGNOSTICPROBE=true` al `.env`, reiniciá la API y abrí la lección. Después de firmar cada URL,
+la API envía en segundo plano un único `HEAD` (5 s de timeout, sin redirecciones ni reintentos) a esa misma URL y
+nunca altera la respuesta de la lección. Buscá `Bunny.net CDN probe` en `./scripts/dev.sh logs api`:
+
+```text
+Bunny.net CDN probe: videoId=<id> file=<archivo> status=<código> in <n>ms
+```
+
+| Estado | Qué significa |
+|--------|---------------|
+| `2xx` | El CDN sirve el archivo: el problema está del lado del navegador (revisá la pestaña *Network*). |
+| `403` | Token rechazado (clave incorrecta: usá la tarjeta *Token authentication key* de Security > General de la biblioteca) **o** el pedido no trae `Referer`, o trae uno no permitido, mientras *Block Direct URL File Access* o los dominios permitidos están activos. Puede venir de la biblioteca (*Security > General*) o de la *Hotlink Protection* del pull zone; mirá la sonda con `Referer` (abajo). |
+| `404` | El archivo no existe: *MP4 Fallback* no está activo para ese video (solo los videos subidos después de activarlo tienen MP4) o el nombre es otro (`APP_CDN_BUNNYNET_FILENAME`). |
+| otro | Estado inesperado: comparalo con la misma petición en la pestaña *Network*. |
+
+**El `Referer` de la sonda.** Por defecto la sonda no manda `Referer`, y con *Block Direct URL File Access* activo
+Bunny.net responde `403` aunque el token sea perfecto (el `<video>` del navegador sí lo manda). Para que la sonda vea
+lo mismo que el navegador, agregá `APP_CDN_BUNNYNET_DIAGNOSTICPROBEREFERER=http://localhost:8080/` (una URL
+absoluta `http`/`https`; si es inválida y la sonda está activa, la API no arranca). Se muestra como `probeReferer=`
+en el log de arranque; no es un secreto.
+
+Si la sonda no llega a Bunny.net (DNS, red, timeout) registra `Bunny.net CDN probe failed: ... error=<clase>` solo con
+el nombre de la excepción, sin la URL. Dejá la sonda apagada fuera de este diagnóstico: agrega una petición
+saliente por cada URL firmada. La otra fuente de verdad es la pestaña *Network* del navegador (la petición al
+MP4 y su código de estado).
+
+**Batería de Bruno.** Para comprobar de una vez la firma de la API, lo que responde el CDN (con `Referer`, sin `Referer`, sin token y
+con `Range`) y el `<video src>` de la página del BFF, desde `bruno/` corré
+`bru run "Diagnostics/Video" --env local`. Tiene una tabla de decisión síntoma, causa y arreglo; ver la sección
+"Diagnóstico de video" de [`bruno/README.md`](../bruno/README.md). La URL firmada es un secreto: la timeline de Bruno la
+muestra.
+
+**Historia del problema.** El caso real que dio origen a esta sección (síntoma, causas apiladas, errores de
+diagnóstico y verificación de producción) está documentado en
+[BUNNY-VIDEO-403-INVESTIGATION.md](BUNNY-VIDEO-403-INVESTIGATION.md).
 
 ---
 
@@ -585,7 +705,8 @@ El perfil `demo` siembra datos de prueba al arrancar la API. Cada módulo tiene 
 
 - Virtual: "Bachata Sensual" y "Bachata Tradicional", publicados, con 2 módulos cada uno (el primero de
   preview con una lección gratuita, el segundo restringido). Los videos usan el adaptador local de
-  Bunny.net, sin credenciales reales.
+  Bunny.net, sin credenciales reales, salvo que definas `APP_CDN_BUNNYNET_SECURITYKEY` y
+  `DEMO_VIRTUAL_FREE_LESSON_VIDEO_ID` (ver "Ver un video real en local con el perfil `demo`").
 - Physical: "Bachata Sensual Presencial" (martes y jueves 19:00 en Buenos Aires, cupo 12) y "Bachata
   Tradicional Presencial" (sábados 11:00 en Buenos Aires, cupo 15), a cargo del profesor demo, con
   sesiones para las próximas 4 semanas. Los horarios se guardan en **UTC** (22:00 y 14:00, con

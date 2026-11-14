@@ -142,9 +142,10 @@ JWT_SECRET=your-256-bit-secret-key-here
 MP_ACCESS_TOKEN=TEST-xxx
 MP_PUBLIC_KEY=TEST-xxx
 
-# Bunny CDN
-BUNNY_API_KEY=xxx
-BUNNY_LIBRARY_ID=xxx
+# Bunny CDN (ver docs/26-LOCAL-DEV-SETUP-HOWTO.md para ver un video real en local)
+APP_CDN_BUNNYNET_PULLZONEHOSTNAME=vz-example.b-cdn.net
+APP_CDN_BUNNYNET_VIDEOLIBRARYID=123456
+APP_CDN_BUNNYNET_SECURITYKEY=xxx
 ```
 
 ### 3. Iniciar Servicios
@@ -339,7 +340,8 @@ Otras variables del perfil (definidas en `api/app/src/main/resources/application
   nunca reutilizarlo en otro entorno.
 
 Datos sembrados: los cursos virtuales "Bachata Sensual" y "Bachata Tradicional" (2 módulos cada uno, con
-lecciones gratuitas y restringidas, servidas por el adaptador local de Bunny.net); los cursos presenciales
+lecciones gratuitas y restringidas, servidas por el adaptador local de Bunny.net salvo que definas
+`APP_CDN_BUNNYNET_SECURITYKEY` y `DEMO_VIRTUAL_FREE_LESSON_VIDEO_ID`, ver `docs/26-LOCAL-DEV-SETUP-HOWTO.md`); los cursos presenciales
 "Bachata Sensual Presencial" (martes y jueves 19:00 hora de Buenos Aires, cupo 12) y "Bachata Tradicional Presencial"
 (sábados 11:00 hora de Buenos Aires, cupo 15), con sesiones para las próximas 4 semanas y una sesión "rolling" unos 10 minutos en el
 futuro; precios presenciales de 25000 y 20000 ARS (recargo individual del 20%); "Plan Virtual"

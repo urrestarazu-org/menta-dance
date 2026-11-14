@@ -1,7 +1,7 @@
 # ADR-0040: Adaptador local determinista para `BunnyNetSignatureService`
 
 **Fecha:** 2026-08-30
-**Estado:** Aceptado
+**Estado:** Aceptado (enmendado el 2026-11-14, ver «Enmienda 2026-11-14 (#751)»)
 
 ## Contexto
 
@@ -132,9 +132,104 @@ como deuda de limpieza a resolver en un cambio posterior e independiente.
   `infrastructure/cdn/local/` y restaura el único método `@Bean` original
   sin ninguna migración de datos.
 
+## Enmienda 2026-11-14 (#751): firma real y selección por perfil y clave
+
+Esta enmienda no reescribe la decisión original: la complementa. Lo que sigue
+queda **vigente**; los apartados anteriores que lo contradigan (la
+exclusión mutua por `@Profile`, el adaptador "no local" como placeholder y el
+perfil `demo` atado siempre al adaptador local) quedan reemplazados por lo
+siguiente.
+
+**Contexto.** El adaptador no local (`StringFormatBunnyNetSignatureService`)
+devolvía `<host>/<library>/<videoId>` sin firma ni vencimiento, y ese formato
+no es el de Bunny Stream. Con *CDN token authentication* activada en la
+biblioteca Stream, ninguna URL sin firmar reproduce (`403`). Además `demo` usaba siempre el
+adaptador local, así que ni un desarrollador con un video real podía verlo.
+
+**Decisión.**
+
+1. **Firma real.** `StringFormatBunnyNetSignatureService` se reemplaza por
+   `TokenAuthBunnyNetSignatureService`, que firma con el esquema *advanced* de
+   Token Authentication de Bunny.net (HMAC-SHA256):
+   `token = "HS256-" + base64url_sin_padding(HMAC-SHA256(securityKey, path + expires))`,
+   donde `path` es el path **decodificado** (`/<videoId>/<fileName>`) y `expires`
+   los segundos epoch tal cual los entrega el caller. La URL es
+   `https://<pullZoneHostname>/<videoId>/<fileName>?token=<token>&expires=<epoch>`;
+   `fileName` es configurable (`app.cdn.bunny-net.file-name`, por defecto
+   `play_720p.mp4`, requiere *MP4 Fallback*). `videoLibraryId` no forma parte de
+   la URL de Stream. El host se acepta con o sin `https://` y sin barra final.
+   Referencia: documentación oficial de Bunny.net
+   (`bunny.net/docs/cdn/security/token-authentication/advanced`) y su repositorio
+   `BunnyWay/BunnyCDN.TokenAuthentication`, cuyo vector publicado
+   (`e2e/vectors.json`, caso `plain`) fija el test. El esquema *basic* (MD5) está
+   marcado como deprecado por Bunny.net y no se usa.
+2. **Clave como secreto.** `app.cdn.bunny-net.security-key`
+   (`APP_CDN_BUNNYNET_SECURITYKEY`) es la clave de la tarjeta *Token
+   authentication key* de **Security > General** de la biblioteca Stream
+   (rotulada *API key* ahí, pero distinta de la API key de la página *API* y de
+   la *Read-only API key*). Según la documentación de Bunny.net esa misma clave
+   firma los embeds y las URLs de CDN token authentication de la biblioteca:
+   no se resetea (rompería ambos) y la biblioteca necesita *CDN token
+   authentication* activada en esa página. (Corrección del 2026-11-14: una
+   redacción anterior de esta enmienda decía que la clave correcta era la
+   *URL Token Authentication Key* del pull zone y que la de la biblioteca solo
+   firmaba embeds; para una biblioteca Stream eso es incorrecto. La clave propia
+   de un pull zone solo aplica a un pull zone independiente.) Está excluida de `toString` (`@ToString.Exclude`), nunca se
+   registra ni aparece en un mensaje de error, y no pasa por el BFF (este solo
+   recibe la URL ya firmada).
+3. **Un único método `@Bean`.** `VirtualConfiguration` deja de tener dos métodos
+   con `@Profile` complementarios, porque una expresión de perfil no puede
+   consultar si una propiedad está en blanco. Un solo método decide, en este
+   orden:
+
+   | Perfiles activos | `security-key` | Adaptador |
+   |---|---|---|
+   | `e2e-bunny-net` (con o sin `demo`) | cualquiera | local, siempre |
+   | `demo` | en blanco o ausente | local |
+   | `demo` | con valor | real (valida configuración) |
+   | cualquier otro | cualquiera | real (valida configuración) |
+
+   Sigue existiendo exactamente un bean. El guard contra `prod`/`production`/
+   `staging` sigue en el factory y se aplica siempre que se elige el adaptador
+   local, o `demo` con clave.
+4. **Fail-closed.** Cuando se elige el adaptador real, el arranque falla si falta
+   la clave, si el host o la biblioteca siguen en el placeholder
+   (`invalid-missing-config` / `missing-config`) o están mal formados, o si
+   `file-name` no es un único segmento. El mensaje nombra las propiedades,
+   nunca sus valores. Esto salda la verificación diferida que antes figuraba en
+   `BunnyNetProperties`. Consecuencia operativa: cualquier despliegue sin perfil
+   `demo`/`e2e-bunny-net` necesita `APP_CDN_BUNNYNET_SECURITYKEY`.
+5. **El e2e no cambia.** `e2e-bunny-net` conserva el adaptador local y su
+   salida determinista (`exp`/`sig`), sin salir a la CDN real. Los contextos de
+   test (`test`, `integration-test`) y `scripts/e2e/catalog-content.sh` definen
+   valores falsos propios porque ahora usan el adaptador real.
+6. **Fixture de la demo.** `demo.virtual.free-lesson-video-id`
+   (`DEMO_VIRTUAL_FREE_LESSON_VIDEO_ID`), si no está en blanco, reemplaza la
+   etiqueta como `videoId` de las lecciones gratuitas de la demo, y también se
+   aplica a las ya sembradas (únicamente a los ids fijos de la demo).
+
+**Consecuencias.** Positivas: una lección puede reproducirse de verdad contra
+una biblioteca Stream con CDN token authentication; el adaptador real tiene vector oficial
+y prueba de selección por perfil y clave. Negativas / riesgo: la selección ya
+no la garantizan dos `@Profile` complementarios sino lógica en un método
+(mitigado por `VirtualConfigurationTest.BunnyNetAdapterProfileSelection`, que
+arranca un contexto real por cada combinación); la firma no se pudo contrastar
+contra una biblioteca real en esta enmienda (la verificación manual queda a
+cargo de quien tenga la clave). Fuera de alcance: HLS, reproductor embebido,
+subida de videos y firma por IP.
+
+**Diagnóstico de `403` (corrección 2026-11-14).** Un `403` no implica solo token
+o clave: con *Block Direct URL File Access* un pedido **sin** `Referer` se
+rechaza aunque el token sea perfecto, y los dominios permitidos o bloqueados se
+comparan con el *hostname* del `Referer`. El `<video>` del navegador manda
+`Referer`; la sonda de diagnóstico y los pedidos de Bruno ahora pueden mandarlo
+(`app.cdn.bunny-net.diagnostic-probe-referer`, opcional, en blanco por defecto).
+Son ajustes de la biblioteca; cambiarlos es decisión de quien la administra.
+
 ## Referencias y Decisiones Relacionadas
 
 - Issue #129
+- Issue #751 (enmienda 2026-11-14)
 - `docs/adr/0041-lesson-access-unplanned-course-denial.md` (D7, mismo
   cambio SDD, decisión independiente)
 - `openspec/changes/local-bunny-net-adapter/design.md` (A1, A2, A5, A7)
