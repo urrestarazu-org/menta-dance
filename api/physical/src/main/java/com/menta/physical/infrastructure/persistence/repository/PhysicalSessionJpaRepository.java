@@ -161,14 +161,18 @@ public interface PhysicalSessionJpaRepository extends JpaRepository<PhysicalSess
     )
     Optional<Integer> lockCapacityForUpdate(@Param("sessionId") UUID sessionId);
 
-    /** US-PHYSICAL-005 escenario 4: guards course deactivation. */
+    /**
+     * US-PHYSICAL-005 escenario 4: guards course deactivation.
+     *
+     * <p>JPQL on purpose, not a native {@code SELECT EXISTS(...)}: MySQL returns that expression as
+     * {@code BIGINT}, which Connector/J maps to {@code Long}, and Spring Data then fails with
+     * {@code ClassCastException} coercing it to {@code boolean} (#748). An in-memory database
+     * returns a {@code Boolean} and hides the problem, so this is covered against real MySQL in
+     * {@code PhysicalCourseManagementIntegrationTest}.</p>
+     */
     @Query(
-        value = "SELECT EXISTS("
-            + "SELECT 1 FROM physical_sessions s "
-            + "JOIN physical_capacity_assignments a ON a.session_id = s.id "
-            + "WHERE s.course_id = :courseId AND s.scheduled_at > :now"
-            + ")",
-        nativeQuery = true
+        "SELECT COUNT(a) > 0 FROM PhysicalCapacityAssignmentJpaEntity a, PhysicalSessionJpaEntity s "
+            + "WHERE a.sessionId = s.id AND s.courseId = :courseId AND s.scheduledAt > :now"
     )
     boolean existsFutureAssignedSession(@Param("courseId") UUID courseId, @Param("now") Instant now);
 
