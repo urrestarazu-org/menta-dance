@@ -25,6 +25,8 @@ import com.menta.bff.application.usecase.CreateManagedCourseUseCase;
 import com.menta.bff.application.usecase.CreateManagedCourseUseCaseImpl;
 import com.menta.bff.application.usecase.CreateUserUseCase;
 import com.menta.bff.application.usecase.CreateUserUseCaseImpl;
+import com.menta.bff.application.usecase.DescribeSessionConflictsUseCase;
+import com.menta.bff.application.usecase.DescribeSessionConflictsUseCaseImpl;
 import com.menta.bff.application.usecase.GetAssignedSessionsUseCase;
 import com.menta.bff.application.usecase.GetAssignedSessionsUseCaseImpl;
 import com.menta.bff.application.usecase.GetCatalogViewUseCase;
@@ -79,6 +81,8 @@ import com.menta.bff.application.usecase.ResetPasswordUseCase;
 import com.menta.bff.application.usecase.ResetPasswordUseCaseImpl;
 import com.menta.bff.application.usecase.ResolveOwnInstructorUseCase;
 import com.menta.bff.application.usecase.ResolveOwnInstructorUseCaseImpl;
+import com.menta.bff.application.usecase.ResolveSessionWindowUseCase;
+import com.menta.bff.application.usecase.ResolveSessionWindowUseCaseImpl;
 import com.menta.bff.application.usecase.SubscribeToPlanUseCase;
 import com.menta.bff.application.usecase.SubscribeToPlanUseCaseImpl;
 import com.menta.bff.application.usecase.UpdateCourseSessionUseCase;
@@ -333,5 +337,21 @@ public class UseCaseConfig {
     public UpdateCourseSessionUseCase updateCourseSessionUseCase(
             PhysicalCourseManagementApiClient courseApiClient, ClassesProperties classesProperties) {
         return new UpdateCourseSessionUseCaseImpl(courseApiClient, classesProperties.getDisplayZone());
+    }
+
+    /**
+     * The days of a course's sessions list (#368). "Today" is the local day in the academy's display zone; the
+     * {@link Clock} is injectable so tests can fix the instant.
+     */
+    @Bean
+    public ResolveSessionWindowUseCase resolveSessionWindowUseCase(
+            ObjectProvider<Clock> clockProvider, ClassesProperties classesProperties) {
+        return new ResolveSessionWindowUseCaseImpl(
+                clockProvider.getIfAvailable(Clock::systemUTC), classesProperties.getDisplayZone());
+    }
+
+    @Bean
+    public DescribeSessionConflictsUseCase describeSessionConflictsUseCase(ClassesProperties classesProperties) {
+        return new DescribeSessionConflictsUseCaseImpl(classesProperties.getDisplayZone());
     }
 }
