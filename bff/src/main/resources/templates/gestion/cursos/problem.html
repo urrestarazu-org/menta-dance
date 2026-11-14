@@ -5,7 +5,8 @@
 <th:block th:fragment="main-content">
 <div class="max-w-xl">
     <div th:replace="~{fragments/components :: notice(${problemTitle}, ${problemMessage})}"></div>
-    <p class="mt-6"><a th:href="@{/gestion/cursos-presenciales}">Volver a los cursos</a></p>
+    <p class="mt-6" th:if="${problemCourseId == null}"><a th:href="@{/gestion/cursos-presenciales}">Volver a los cursos</a></p>
+    <p class="mt-6" th:if="${problemCourseId != null}"><a th:href="@{/gestion/cursos-presenciales/{id}/sesiones(id=${problemCourseId})}">Volver a las sesiones</a></p>
 </div>
 </th:block>
 </body>

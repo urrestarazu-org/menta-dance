@@ -70,7 +70,7 @@ public class ManagementCourseSessionsController {
     static final String NO_DATES = "No hay ninguna fecha del curso entre esas fechas.";
     static final String ALREADY_EXISTS_UNKNOWN = "Ya existe una sesión de este curso en ese horario.";
 
-    private static final String BASE = "/gestion/cursos-presenciales";
+    static final String BASE = "/gestion/cursos-presenciales";
     private static final String SESSIONS = BASE + "/{courseId}/sesiones";
     private static final String PAGE_VIEW = "gestion/cursos/sesiones";
     private static final String PROBLEM_VIEW = "gestion/cursos/problem";
@@ -168,7 +168,7 @@ public class ManagementCourseSessionsController {
 
     // ---- helpers ----
 
-    private static String accessToken(HttpServletRequest request) {
+    static String accessToken(HttpServletRequest request) {
         return (String) request.getAttribute(TokenRefreshFilter.ACCESS_TOKEN_ATTRIBUTE);
     }
 
@@ -220,7 +220,7 @@ public class ManagementCourseSessionsController {
         return PROBLEM_VIEW;
     }
 
-    private static void problem(
+    static void problem(
             Model model, HttpServletResponse response, HttpStatus status, String title, String message) {
         response.setStatus(status.value());
         model.addAttribute("problemTitle", title);

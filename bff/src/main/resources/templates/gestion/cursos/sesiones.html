@@ -50,6 +50,7 @@
             <th scope="col" class="p-3 font-semibold">Ocupados / cupo</th>
             <th scope="col" class="p-3 font-semibold">Disponibles</th>
             <th scope="col" class="p-3 font-semibold">Estado</th>
+            <th scope="col" class="p-3 font-semibold">Acciones</th>
         </tr>
         </thead>
         <tbody class="divide-y divide-brand-deep/15">
@@ -62,6 +63,14 @@
             <td class="p-3">
                 <span class="badge" th:text="${item.cancelled()} ? 'Cancelada' : 'Programada'"
                       th:classappend="${item.cancelled()} ? 'badge-neutral' : 'badge-success'">Programada</span>
+            </td>
+            <td class="p-3 whitespace-nowrap">
+                <th:block th:unless="${item.cancelled()}">
+                    <a th:href="@{/gestion/cursos-presenciales/{course}/sesiones/{session}/reprogramar(course=${course.courseId()},session=${item.sessionId()})}">Reprogramar<span class="sr-only" th:text="| la sesión del ${item.momentLabel()}|"> la sesión del martes</span></a>
+                    ·
+                    <a th:href="@{/gestion/cursos-presenciales/{course}/sesiones/{session}/cancelar(course=${course.courseId()},session=${item.sessionId()})}">Cancelar<span class="sr-only" th:text="| la sesión del ${item.momentLabel()}|"> la sesión del martes</span></a>
+                </th:block>
+                <span th:if="${item.cancelled()}" class="sr-only">Sin acciones disponibles</span>
             </td>
         </tr>
         </tbody>

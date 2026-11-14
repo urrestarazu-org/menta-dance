@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/management :: page('Cancelar sesión', 'cursos-presenciales', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<div class="max-w-xl">
+    <h1 class="mb-6">Cancelar sesión</h1>
+
+    <div th:if="${sessionView.cancelled()}" class="mb-4">
+        <div th:replace="~{fragments/components :: alert('info', 'Esta sesión ya está cancelada.')}"></div>
+    </div>
+
+    <div th:if="${cancelError}" class="mb-4">
+        <div th:replace="~{fragments/components :: alert('error', ${cancelError})}"></div>
+    </div>
+
+    <p class="mb-4">
+        Sesión: <strong th:text="${sessionView.momentLabel()}">martes 17 de noviembre a las 22:00</strong>.
+    </p>
+
+    <th:block th:unless="${sessionView.cancelled()}">
+        <div th:if="${sessionView.occupied() > 0}" class="mb-4">
+            <div th:replace="~{fragments/components :: alert('info', ${sessionView.occupied() == 1} ? 'Esta sesión ya tiene 1 alumno asignado.' : 'Esta sesión ya tiene ' + ${sessionView.occupied()} + ' alumnos asignados.')}"></div>
+        </div>
+
+        <form th:action="@{/gestion/cursos-presenciales/{course}/sesiones/{session}/cancelar(course=${courseId},session=${sessionView.sessionId()})}"
+              method="post" class="card space-y-4">
+            <p>¿Cancelamos esta sesión?</p>
+            <div class="flex items-center gap-4">
+                <button type="submit" class="btn btn-primary">Sí, cancelar la sesión</button>
+                <a th:href="@{/gestion/cursos-presenciales/{course}/sesiones(course=${courseId})}">Volver</a>
+            </div>
+        </form>
+    </th:block>
+
+    <p th:if="${sessionView.cancelled()}">
+        <a th:href="@{/gestion/cursos-presenciales/{course}/sesiones(course=${courseId})}">Volver a las sesiones</a>
+    </p>
+</div>
+</th:block>
+</body>
+</html>

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/management :: page('Reprogramar sesión', 'cursos-presenciales', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<div class="max-w-xl">
+    <h1 class="mb-6">Reprogramar sesión</h1>
+
+    <p class="mb-4">
+        Sesión actual: <strong th:text="${sessionView.momentLabel()}">martes 17 de noviembre a las 22:00</strong>.
+        La fecha y la hora son las de la academia (Buenos Aires).
+    </p>
+
+    <div th:if="${sessionView.occupied() > 0}" class="mb-4">
+        <div th:replace="~{fragments/components :: alert('info', ${sessionView.occupied() == 1} ? 'Esta sesión ya tiene 1 alumno asignado.' : 'Esta sesión ya tiene ' + ${sessionView.occupied()} + ' alumnos asignados.')}"></div>
+    </div>
+
+    <div th:if="${sessionView.cancelled()}" class="mb-4">
+        <div th:replace="~{fragments/components :: alert('info', 'La sesión está cancelada: no se puede reprogramar.')}"></div>
+    </div>
+
+    <div th:if="${formError}" class="mb-4">
+        <div th:replace="~{fragments/components :: alert('error', ${formError})}"></div>
+    </div>
+
+    <form th:unless="${sessionView.cancelled()}"
+          th:action="@{/gestion/cursos-presenciales/{course}/sesiones/{session}/reprogramar(course=${courseId},session=${sessionView.sessionId()})}"
+          th:object="${form}" method="post" novalidate class="card space-y-4">
+        <div th:replace="~{fragments/components :: errorSummary(${ {'localDate':'localDate', 'localTime':'localTime'} })}"></div>
+
+        <div th:replace="~{fragments/components :: field('localDate', 'Nueva fecha', 'date', 'localDate', 'off', *{localDate}, null, ${!#fields.hasErrors('*')}, ${#fields.errors('localDate')})}"></div>
+        <div th:replace="~{fragments/components :: field('localTime', 'Nueva hora de inicio', 'time', 'localTime', 'off', *{localTime}, 'Formato HH:mm, por ejemplo 19:30.', false, ${#fields.errors('localTime')})}"></div>
+
+        <div class="flex items-center gap-4">
+            <button type="submit" class="btn btn-primary">Reprogramar sesión</button>
+            <a th:href="@{/gestion/cursos-presenciales/{course}/sesiones(course=${courseId})}">Volver a las sesiones</a>
+        </div>
+    </form>
+
+    <p th:if="${sessionView.cancelled()}">
+        <a th:href="@{/gestion/cursos-presenciales/{course}/sesiones(course=${courseId})}">Volver a las sesiones</a>
+    </p>
+</div>
+</th:block>
+</body>
+</html>
