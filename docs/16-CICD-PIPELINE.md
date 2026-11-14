@@ -858,6 +858,11 @@ anterior (ver "Rollback"). `deploy.sh` no se actualiza solo: si el release trae 
 versión distinta de la instalada, lo avisa en el log y hay que reinstalarlo a mano
 (runbook, sección 2.10).
 
+El stack que levanta `deploy.sh` corre siempre con el perfil `prod`. La demo pública no
+usa el perfil `demo` (`DemoProfileGuard` no permite combinarlo con `prod`): sus datos se
+cargan a mano sobre este mismo despliegue (runbook, sección 2.15, y la enmienda #380 de
+[ADR-0045](adr/0045-despliegue-vps-donweb.md)).
+
 ### Rollback
 
 El rollback es **manual**: si el health check falla, el script termina con error y

@@ -727,6 +727,9 @@ El profesor tiene el nombre "Profesor Demo" (se completa también en una base lo
 
 - **Guarda de arranque**: `DemoProfileGuard` aborta el arranque si `demo` se combina con `prod`,
   `production` o `staging` (sin distinguir mayúsculas), antes de que corra cualquier runner.
+  Por eso la demo pública no usa este perfil: corre en producción (`prod`) con datos cargados a
+  mano; ver la sección 2.15 de [`docs/32-VPS-DONWEB-RUNBOOK.md`](32-VPS-DONWEB-RUNBOOK.md) y la
+  enmienda #380 de [ADR-0045](adr/0045-despliegue-vps-donweb.md).
 - **Mercado Pago**: los adaptadores reales de Mercado Pago siguen activos con `demo`; usar credenciales
   sandbox (ver "Sandbox real de Mercado Pago"). Para el simulador local, ver la sección "Simulador local
   de Mercado Pago".

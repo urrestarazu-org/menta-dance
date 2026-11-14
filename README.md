@@ -372,7 +372,7 @@ paso a paso.
 | Recurso | URL |
 |---------|-----|
 | **Repositorio** | [github.com/urrestarazu-org/menta-dance](https://github.com/urrestarazu-org/menta-dance) |
-| **Despliegue** | _Próximamente_ |
+| **Despliegue** | Web: [mentadance.com](https://mentadance.com) · Salud de la API: [api.mentadance.com/actuator/health](https://api.mentadance.com/actuator/health) · Detalle: [runbook del VPS](docs/32-VPS-DONWEB-RUNBOOK.md) y [ADR-0045](docs/adr/0045-despliegue-vps-donweb.md) |
 | **Presentación (Slides)** | _Próximamente_ |
 | **Video Explicativo** | _Próximamente_ |
 | **Documentación Técnica** | [docs/README.md](docs/README.md) |

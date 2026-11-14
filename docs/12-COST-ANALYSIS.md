@@ -11,5 +11,6 @@ observabilidad. No incluye microservicios ni broker.
 | GHCR y GitHub Releases | imágenes versionadas por digest y JARs adjuntos a cada release |
 | Grafana/Loki/OTel | logs y trazas del MVP |
 
-La selección de proveedor y presupuesto se decide antes de la primera release.
+El proveedor y el costo del servidor se decidieron en
+[ADR-0045](adr/0045-despliegue-vps-donweb.md) (VPS de DonWeb con Docker Compose).
 La estimación no es un SLA: pagos se concilian manualmente ante incidente de BD.
