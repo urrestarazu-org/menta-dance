@@ -1,0 +1,35 @@
+meta {
+  name: Get Current User
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/v1/users/me
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  #749. La cuenta del usuario autenticado, cualquiera sea su rol (ADMIN,
+  INSTRUCTOR, STUDENT o RECEPTIONIST). El usuario sale siempre del Bearer token:
+  no hay parámetro para pedir la cuenta de otro.
+
+  Contrato de éxito: 200 con { userId, firstName, lastName, role }. `firstName`
+  y `lastName` son null en cuentas sin perfil (demo, admin, anteriores al
+  perfil). Nunca expone email, hash de la contraseña, estado, teléfono ni fecha
+  de nacimiento.
+  Contrato de error:
+    401 AUTHENTICATION_REQUIRED → sin token, token inválido, o el token todavía
+        válido de una cuenta que ya fue eliminada
+}
+
+assert {
+  res.status: eq 200
+  res.body.userId: isString
+  res.body.role: isString
+  res.body.email: isUndefined
+}

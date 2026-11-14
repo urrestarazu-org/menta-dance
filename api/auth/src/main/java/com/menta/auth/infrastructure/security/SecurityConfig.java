@@ -127,6 +127,11 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *     C1, never by this matcher).
  *   - /actuator/health                          → permitAll
  *   - /api/v1/users/register                    → permitAll (public registration; PR2 contract)
+ *   - GET /api/v1/users/me                      → authenticated (any role)
+ *     (#749; the caller reads their OWN account — the user id comes from the
+ *     JWT principal, this endpoint has no userId parameter to abuse. Otherwise
+ *     unmapped, so it would fall through to anyRequest()'s permissive default
+ *     grant).
  *   - /api/v1/admin/physical/courses/**         → ADMIN or INSTRUCTOR
  *     (#42; a PROFESOR manages their own courses under the admin prefix —
  *     evaluated before the generic /api/v1/admin/** rule below, since
@@ -322,6 +327,11 @@ public class SecurityConfig {
                     .hasAnyRole("ADMIN", "INSTRUCTOR")
                 .requestMatchers("/actuator/health").permitAll()
                 .requestMatchers("/api/v1/users/register").permitAll()
+                // #749: any authenticated user reads their OWN account. The user id comes from the
+                // JWT principal; this endpoint has no userId parameter to abuse. Required because
+                // anyRequest() below defers to RoleAuthorizationManager, which grants unmapped paths
+                // regardless of authentication.
+                .requestMatchers(HttpMethod.GET, "/api/v1/users/me").authenticated()
                 // #42: ADMIN and INSTRUCTOR share this prefix; ownership of a specific
                 // course is enforced in the use case, not here. Must be declared before
                 // the generic /api/v1/admin/** rule below — first match wins.

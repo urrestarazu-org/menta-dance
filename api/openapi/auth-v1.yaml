@@ -10,7 +10,7 @@ openapi: 3.1.0
 # ruta, método, parámetro, autenticación, respuesta, error o rate limit.
 #
 # Sólo describe endpoints IMPLEMENTADOS. Los endpoints planificados que figuran
-# en docs/03-AUTH-API.md (logout-all, change-password, me, me/roles) no están
+# en docs/03-AUTH-API.md (logout-all, change-password, me/roles) no están
 # acá porque todavía no existen.
 
 info:
@@ -74,6 +74,8 @@ tags:
     description: Registro público y activación de cuenta.
   - name: Recuperación de contraseña
     description: Solicitud y consumo del enlace de recuperación de contraseña.
+  - name: Cuenta propia
+    description: Lectura de la cuenta del usuario autenticado, cualquiera sea su rol.
   - name: Administración de usuarios
     description: Listado de cuentas, alta de cuentas de staff y cambio de rol. Requiere el rol `ADMIN`.
 
@@ -323,6 +325,33 @@ paths:
           $ref: '#/components/responses/ActivationRateLimited'
         '503':
           $ref: '#/components/responses/AuthDegraded'
+
+  /api/v1/users/me:
+    get:
+      tags: [Cuenta propia]
+      summary: Leer la cuenta propia
+      description: |
+        Devuelve el id, el nombre, el apellido y el rol del dueño del access
+        token, cualquiera sea su rol. El usuario sale siempre del token: no hay
+        parámetro para pedir la cuenta de otro.
+
+        No expone el email, el hash de la contraseña, el estado, el teléfono ni
+        la fecha de nacimiento. `firstName` y `lastName` son `null` en cuentas
+        sin perfil (demo, admin, anteriores al perfil).
+
+        Un token todavía válido cuya cuenta fue eliminada responde el mismo `401
+        AUTHENTICATION_REQUIRED` que un token ausente o inválido: ya no
+        identifica a nadie.
+      operationId: getCurrentUser
+      responses:
+        '200':
+          description: La cuenta del usuario autenticado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUser'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
 
   /api/v1/auth/activate/{token}:
     get:
@@ -1091,6 +1120,29 @@ components:
             `date-time` RFC 3339 porque no lleva offset.
           pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$'
           example: '2026-10-01T09:30:00'
+
+    CurrentUser:
+      type: object
+      description: |
+        Lo que ve el usuario autenticado de su propia cuenta. Nunca incluye el
+        email, el hash de la contraseña, el estado, el teléfono ni la fecha de
+        nacimiento.
+      required: [userId, role]
+      properties:
+        userId:
+          type: string
+          format: uuid
+          example: 3f0c1a52-6a8e-4f0b-9d5c-2b7e8a1d4c90
+        firstName:
+          type: [string, 'null']
+          description: '`null` en cuentas sin perfil (demo, admin, anteriores al perfil).'
+          example: Ada
+        lastName:
+          type: [string, 'null']
+          description: '`null` en cuentas sin perfil.'
+          example: Lovelace
+        role:
+          $ref: '#/components/schemas/UserRole'
 
     UserPage:
       type: object
