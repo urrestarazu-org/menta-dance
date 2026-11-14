@@ -99,12 +99,11 @@ class ManagementAccessIntegrationTest extends BaseIntegrationTest {
                 Arguments.of("/gestion/sesiones", INSTRUCTOR, true),
                 Arguments.of("/gestion/sesiones", RECEPTIONIST, false),
                 Arguments.of("/gestion/sesiones", STUDENT, false),
-                // in-person courses and their sessions (#368): administrator and instructor, at any depth
-                Arguments.of("/gestion/cursos-presenciales", ADMIN, true),
-                Arguments.of("/gestion/cursos-presenciales", INSTRUCTOR, true),
+                // in-person courses and their sessions (#368): administrator and instructor, at any depth. Their
+                // own access to the course screens that exist is not a 404 (they are served), so it is covered
+                // by ManagementCoursesIntegrationTest; the session routes do not exist yet.
                 Arguments.of("/gestion/cursos-presenciales", RECEPTIONIST, false),
                 Arguments.of("/gestion/cursos-presenciales", STUDENT, false),
-                Arguments.of("/gestion/cursos-presenciales/nuevo", INSTRUCTOR, true),
                 Arguments.of("/gestion/cursos-presenciales/nuevo", RECEPTIONIST, false),
                 Arguments.of("/gestion/cursos-presenciales/1/sesiones/lote", ADMIN, true),
                 Arguments.of("/gestion/cursos-presenciales/1/sesiones/lote", INSTRUCTOR, true),

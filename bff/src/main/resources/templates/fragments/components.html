@@ -50,6 +50,45 @@
     </div>
 </div>
 
+<!--
+  selectField(id, label, name, options, selected, placeholder, hint, errors)
+    Label + required <select> + optional hint + errors, wired like field. `options` is a
+    map value -> label (shown in order); `selected` is the current value or null;
+    `placeholder` is the text of an empty first option or null for none; `hint` and
+    `errors` may be null.
+
+  textareaField(id, label, name, value, rows, hint, errors)
+    Same for a required multi-line <textarea>.
+
+  Numbers and times need no new fragment: call field with type 'number' or 'time'.
+-->
+<div class="field" th:fragment="selectField(id, label, name, options, selected, placeholder, hint, errors)">
+    <label class="field-label" th:for="${id}" th:text="${label}">Label</label>
+    <select class="field-input" th:id="${id}" th:name="${name}" required
+            th:attr="aria-invalid=${!#lists.isEmpty(errors)} ? 'true' : null,
+                     aria-describedby=${!#lists.isEmpty(errors) or hint != null} ? ${id} + '-help' : null">
+        <option value="" th:if="${placeholder != null}" th:text="${placeholder}">Elegí una opción</option>
+        <option th:each="entry : ${options}" th:value="${entry.key}" th:text="${entry.value}"
+                th:selected="${entry.key == selected}">Opción</option>
+    </select>
+    <div th:replace="~{fragments/components :: fieldHelp(${id}, ${hint}, ${errors})}"></div>
+</div>
+
+<div class="field" th:fragment="textareaField(id, label, name, value, rows, hint, errors)">
+    <label class="field-label" th:for="${id}" th:text="${label}">Label</label>
+    <textarea class="field-input" th:id="${id}" th:name="${name}" th:rows="${rows}" required
+              th:attr="aria-invalid=${!#lists.isEmpty(errors)} ? 'true' : null,
+                       aria-describedby=${!#lists.isEmpty(errors) or hint != null} ? ${id} + '-help' : null"
+              th:text="${value}"></textarea>
+    <div th:replace="~{fragments/components :: fieldHelp(${id}, ${hint}, ${errors})}"></div>
+</div>
+
+<div th:fragment="fieldHelp(id, hint, errors)" th:id="${id} + '-help'"
+     th:if="${!#lists.isEmpty(errors) or hint != null}">
+    <p class="text-sm" th:if="${hint != null}" th:text="${hint}">Hint</p>
+    <p class="field-error" th:each="message : ${errors}" th:text="${message}">Error</p>
+</div>
+
 <th:block th:fragment="errorSummary(fields)"
           th:with="total=${#aggregates.sum(fields.keySet().![#fields.errors(#this).size()])}">
     <th:block th:if="${total > 0}">

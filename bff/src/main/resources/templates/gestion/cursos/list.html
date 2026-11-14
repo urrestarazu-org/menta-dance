@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/management :: page('Cursos presenciales', 'cursos-presenciales', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+    <h1>Cursos presenciales</h1>
+    <a class="btn btn-primary" th:href="@{/gestion/cursos-presenciales/nuevo}">Nuevo curso</a>
+</div>
+
+<div th:if="${courseSaved}" class="mb-4">
+    <div th:replace="~{fragments/components :: alert('success', ${courseSaved})}"></div>
+</div>
+
+<div th:if="${unavailable}" class="mb-4">
+    <div th:replace="~{fragments/components :: alert('error', 'No pudimos cargar los cursos en este momento. Intentá nuevamente en unos minutos.')}"></div>
+</div>
+<div th:if="${!unavailable and courses.isEmpty()}" class="mb-4">
+    <div th:replace="~{fragments/components :: alert('info', 'Todavía no hay cursos presenciales.')}"></div>
+</div>
+
+<div th:unless="${courses.isEmpty()}" class="overflow-x-auto" role="region" aria-label="Listado de cursos presenciales" tabindex="0">
+    <table class="w-full text-left">
+        <caption class="mb-2 text-left font-semibold">
+            Cursos presenciales (<span th:text="${courses.size()}">0</span>)
+        </caption>
+        <thead>
+        <tr class="border-b border-brand-deep/30">
+            <th scope="col" class="p-3 font-semibold">Curso</th>
+            <th scope="col" class="p-3 font-semibold">Profesor/a</th>
+            <th scope="col" class="p-3 font-semibold">Horario</th>
+            <th scope="col" class="p-3 font-semibold">Duración</th>
+            <th scope="col" class="p-3 font-semibold">Nivel</th>
+            <th scope="col" class="p-3 font-semibold">Cupo</th>
+            <th scope="col" class="p-3 font-semibold">Estado</th>
+            <th scope="col" class="p-3 font-semibold">Acciones</th>
+        </tr>
+        </thead>
+        <tbody class="divide-y divide-brand-deep/15">
+        <tr th:each="course : ${courses}">
+            <th scope="row" class="p-3 font-medium" th:text="${course.title()}">Salsa</th>
+            <td class="p-3" th:text="${course.professorName()}">Ada Lovelace</td>
+            <td class="p-3 whitespace-nowrap" th:text="${course.scheduleLabel()}">Martes 22:00</td>
+            <td class="p-3 whitespace-nowrap" th:text="|${course.durationMinutes()} min|">60 min</td>
+            <td class="p-3" th:text="${levels.getOrDefault(course.level(), course.level())}">Principiante</td>
+            <td class="p-3" th:text="${course.capacity()}">15</td>
+            <td class="p-3">
+                <span class="badge" th:text="${course.active()} ? 'Activo' : 'Inactivo'"
+                      th:classappend="${course.active()} ? 'badge-success' : 'badge-neutral'">Activo</span>
+            </td>
+            <td class="p-3">
+                <a th:href="@{/gestion/cursos-presenciales/{id}/editar(id=${course.courseId()})}">Editar<span class="sr-only" th:text="| el curso ${course.title()}|"> el curso Salsa</span></a>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+</div>
+</th:block>
+</body>
+</html>
