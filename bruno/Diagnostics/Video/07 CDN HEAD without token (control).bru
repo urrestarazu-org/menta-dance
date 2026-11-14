@@ -1,0 +1,54 @@
+meta {
+  name: 07 CDN HEAD without token (control)
+  type: http
+  seq: 7
+}
+
+head {
+  url: {{cdnUrlNoQuery}}
+  body: none
+  auth: none
+}
+
+headers {
+  Referer: {{bff_url}}/
+}
+
+script:pre-request {
+  if (!bru.getVar("cdnUrlNoQuery")) {
+    bru.runner.skipRequest();
+  }
+  req.setMaxRedirects(0);
+}
+
+tests {
+  const status = res.getStatus();
+  const withReferer = bru.getVar("diagHeadStatus");
+  const conclusive = withReferer === 200 || withReferer === 206;
+  const tokenOffHint = "CDN token authentication is OFF: the video is public (anyone with the path can download it). Enable 'CDN token authentication' on the library's Security > General page";
+
+  test(
+    "Without token but WITH Referer the CDN rejects the URL (got " + status + (conclusive ? "" : "; inconclusive: 04 did not get 2xx") + ")",
+    function () {
+      const hint =
+        status === 200 || status === 206 ? tokenOffHint :
+        status === 404 ? "404 without token: inconclusive (the file does not exist; see request 04)" :
+        "unexpected CDN status " + status + " (403 expected)";
+      expect(status === 403, hint).to.equal(true);
+    }
+  );
+}
+
+docs {
+  Control negativo: el mismo archivo SIN `token`/`expires` (solo host + ruta) pero CON
+  el mismo `Referer` que la request 04. Como el `Referer` es el mismo, un 403 aqui solo
+  puede deberse a la falta de token (no a *Block Direct URL File Access*).
+
+  Cuando es concluyente: solo si la 04 dio 2xx (el `Referer` es aceptado). Si la 04 dio
+  403, un 403 aqui no prueba nada (el `Referer` o la clave tambien podrian ser la causa);
+  el nombre del test lo marca como "inconclusive".
+
+  - 403 (con 04 2xx): pasa; la proteccion funciona y el 200 de la 04 se debe realmente al token.
+  - 200/206: falla con la nota "CDN token authentication is OFF: the video is public".
+  - 404: no concluyente; resolve primero la request 04.
+}

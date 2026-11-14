@@ -1,0 +1,60 @@
+meta {
+  name: 06 CDN HEAD without Referer (control)
+  type: http
+  seq: 6
+}
+
+head {
+  url: {{cdnSignedUrl}}
+  body: none
+  auth: none
+}
+
+script:pre-request {
+  if (!bru.getVar("cdnSignedUrl") || bru.getVar("diagHeadStatus") === undefined) {
+    bru.runner.skipRequest();
+  }
+  req.setMaxRedirects(0);
+}
+
+script:post-response {
+  // Numeric status only.
+  bru.setVar("diagNoRefererStatus", res.getStatus());
+}
+
+tests {
+  const status = res.getStatus();
+  const withReferer = bru.getVar("diagHeadStatus");
+  const withRefererOk = withReferer === 200 || withReferer === 206;
+  const same = status === withReferer;
+  const blockDirectOn = withRefererOk && status === 403;
+
+  const label =
+    same ? "same answer without Referer (" + status + "): 'Block direct URL file access' is not what decides" :
+    blockDirectOn ? "403 without Referer vs " + withReferer + " with it: 'Block Direct URL File Access' is ON (expected and harmless: the browser sends the Referer)" :
+    "answers differ (" + withReferer + " with Referer, " + status + " without)";
+
+  test("Without Referer: " + label, function () {
+    expect(
+      same || blockDirectOn,
+      "Unexpected: " + status + " without Referer but " + withReferer + " with it. If it is 2xx without and 403 with, the Referer hostname is not in the library's Allowed domains (production: the real site domains; local: see the folder docs, 'localhost' may not be addable). The pull zone Hotlink Protection can also cause it. Library Security > General page"
+    ).to.equal(true);
+  });
+}
+
+docs {
+  Control: el mismo `HEAD` de la request 04 SIN `Referer`.
+
+  Sirve para saber si la opcion de la biblioteca *Block Direct URL File Access* esta
+  activa (Security > General): esa opcion rechaza con 403 los pedidos sin `Referer`
+  aunque el token sea perfecto.
+
+  - Misma respuesta que 04: la opcion no es lo que decide.
+  - 403 aqui y 2xx en 04: *Block Direct URL File Access* esta ACTIVO. Es normal y no
+    rompe nada: el navegador SIEMPRE manda `Referer`, que es lo que hace la 04. El test pasa.
+  - 2xx aqui y 403 en 04: el `Referer` (su hostname, p. ej. `localhost`) NO esta permitido:
+    *Allowed domains* de la biblioteca o *Hotlink Protection* del pull zone (ambos dan 403 por separado). Es un problema real: el
+    test falla.
+
+  Cambiar esos ajustes es decision de quien administra la biblioteca de Bunny.net.
+}

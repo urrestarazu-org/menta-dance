@@ -1,0 +1,59 @@
+meta {
+  name: 05 CDN GET first bytes with Referer (Range)
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{cdnSignedUrl}}
+  body: none
+  auth: none
+}
+
+headers {
+  Range: bytes=0-1023
+  Referer: {{bff_url}}/
+}
+
+script:pre-request {
+  if (!bru.getVar("cdnSignedUrl")) {
+    bru.runner.skipRequest();
+  }
+  req.setMaxRedirects(0);
+}
+
+tests {
+  const status = res.getStatus();
+  const size = res.getSize ? res.getSize() : null;
+  const bodyBytes = size && typeof size.body === "number" ? size.body : null;
+  const hint =
+    status === 403 ? "403 WITH the BFF Referer: token rejected (wrong key), or the Referer hostname is not in the library's Allowed domains (see 04, 06 and 07)" :
+    status === 404 ? "404: MP4 missing (MP4 Fallback / file name)" :
+    status === 200 ? "200: the CDN ignored the Range header and sent the whole file (seeking and streaming degrade)" :
+    "unexpected CDN status " + status;
+
+  test("CDN answers 206 Partial Content to a Range request with Referer (got " + status + ")", function () {
+    expect(status === 206, hint).to.equal(true);
+  });
+
+  // The content checks only make sense when the CDN answered the range.
+  if (status === 206) {
+    test("CDN Range answer is video/mp4", function () {
+      const contentType = String(res.getHeader("content-type") || "").toLowerCase();
+      expect(contentType.indexOf("video/mp4") === 0, "content-type is not video/mp4").to.equal(true);
+    });
+
+    test("CDN Range answer body is small (at most 1024 bytes)", function () {
+      expect(bodyBytes !== null && bodyBytes <= 1024, "body larger than the requested range or size unknown").to.equal(true);
+    });
+  }
+}
+
+docs {
+  Pide solo los primeros 1024 bytes (`Range: bytes=0-1023`) con el `Referer` del BFF,
+  que es lo que hace el elemento `<video>` del navegador antes de reproducir. Se espera
+  `206`, `video/mp4` y un cuerpo pequeno. El cuerpo nunca se imprime.
+
+  Si el CDN responde `200` en vez de `206`, ignoró el `Range` (la reproduccion y el
+  seek empeoran y Bruno descarga el archivo entero: puede tardar en videos grandes).
+}

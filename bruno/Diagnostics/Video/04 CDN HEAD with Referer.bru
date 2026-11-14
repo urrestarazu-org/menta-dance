@@ -1,0 +1,75 @@
+meta {
+  name: 04 CDN HEAD with Referer
+  type: http
+  seq: 4
+}
+
+head {
+  url: {{cdnSignedUrl}}
+  body: none
+  auth: none
+}
+
+headers {
+  Referer: {{bff_url}}/
+}
+
+script:pre-request {
+  if (!bru.getVar("cdnSignedUrl")) {
+    bru.runner.skipRequest();
+  }
+  // Report the CDN answer as is: a redirect would hide a 3xx behind the next hop.
+  req.setMaxRedirects(0);
+}
+
+script:post-response {
+  // Numeric status only; request 06 compares against it.
+  bru.setVar("diagHeadStatus", res.getStatus());
+}
+
+tests {
+  const status = res.getStatus();
+  const ok = status === 200 || status === 206;
+  const hint =
+    status === 403 ? "403 WITH the BFF Referer: the token is rejected (wrong key: use the library Security > General 'Token authentication key'), or the Referer hostname is not in the library's Allowed domains or the pull zone's Hotlink Protection (they are independent; see the folder docs for local options), or another pull-zone rule blocks it. Compare with 06 and 07 (see folder docs)" :
+    status === 404 ? "404: MP4 missing (MP4 Fallback not active for that video, or the file name differs: APP_CDN_BUNNYNET_FILENAME)" :
+    status >= 300 && status < 400 ? "3xx: the CDN redirects (check the pull-zone host / HTTPS redirect)" :
+    "unexpected CDN status " + status;
+
+  test("CDN HEAD with signed URL and Referer answers 2xx (got " + status + ")", function () {
+    expect(ok, hint).to.equal(true);
+  });
+
+  // The header checks only make sense when the CDN served the file.
+  if (ok) {
+    test("CDN HEAD content-type is video/mp4", function () {
+      const contentType = String(res.getHeader("content-type") || "").toLowerCase();
+      expect(contentType.indexOf("video/mp4") === 0, "content-type is not video/mp4 (browser may refuse to play it)").to.equal(true);
+    });
+
+    test("CDN HEAD accepts byte ranges: accept-ranges is bytes", function () {
+      const acceptRanges = String(res.getHeader("accept-ranges") || "").toLowerCase();
+      expect(acceptRanges === "bytes", "accept-ranges is not bytes (seeking will not work)").to.equal(true);
+    });
+  }
+}
+
+docs {
+  Un `HEAD` directo al CDN con la URL firmada que devolvio la API y el `Referer` del BFF
+  (`{{bff_url}}/`): es lo mismo que hace el `<video>` del navegador, sin descargar el
+  video. Un 403/404 de Bunny.net NO aparece en el log de la API ni del BFF, por eso se
+  mira aca.
+
+  El `Referer` importa: con *Block Direct URL File Access* activo, Bunny.net rechaza con
+  403 los pedidos SIN `Referer` aunque el token sea perfecto, y los dominios
+  permitidos/bloqueados de la biblioteca se comparan con el hostname del `Referer`
+  (por ejemplo `localhost`, sin puerto).
+
+  - 200/206: el CDN sirve el archivo con el `Referer` del navegador. Si igual no se
+    reproduce, el problema esta del lado del navegador (ver la tabla del `folder.bru`).
+  - 403: token rechazado (clave incorrecta) o el hostname del `Referer` no esta permitido
+    (*Allowed domains* de la biblioteca o *Hotlink Protection* del pull zone). Para separarlos, mira 06 y 07 y la tabla del `folder.bru`.
+  - 404: el MP4 no existe (MP4 Fallback inactivo para ese video o nombre de archivo distinto).
+
+  La URL firmada contiene el token: la timeline de Bruno la muestra. No compartas capturas.
+}

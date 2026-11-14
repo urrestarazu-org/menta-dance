@@ -1,0 +1,42 @@
+meta {
+  name: 01 API health
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/actuator/health
+  body: none
+  auth: none
+}
+
+script:pre-request {
+  // Whole-collection runs (and the E2E environments) never define the diagnostic
+  // variables: skip the whole battery instead of failing against an unprepared environment.
+  if (!bru.getEnvVar("diagLessonId") || !bru.getEnvVar("diagEmail") || !bru.getEnvVar("diagPassword")) {
+    bru.runner.skipRequest();
+  }
+  // A previous run must never leak state into this one.
+  ["diagAuthToken", "cdnSignedUrl", "cdnUrlNoQuery", "cdnHost", "cdnPath", "diagStreamChecks",
+    "diagHeadStatus", "diagBffSessionOk"].forEach(function (name) { bru.deleteVar(name); });
+}
+
+tests {
+  test("API answers 200 on /actuator/health", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("API health status is UP", function () {
+    const body = res.getBody();
+    const up = !!body && body.status === "UP";
+    expect(up, "health status is not UP").to.equal(true);
+  });
+}
+
+docs {
+  Primera comprobacion de la bateria de diagnostico de video. Si falla, la API no
+  esta levantada (o `baseUrl` apunta a otro lado): ninguna de las siguientes tiene sentido.
+
+  Si faltan `diagLessonId`, `diagEmail` o `diagPassword` en el environment, toda la
+  bateria se omite sola (no falla): ver el `folder.bru` de esta carpeta.
+}
