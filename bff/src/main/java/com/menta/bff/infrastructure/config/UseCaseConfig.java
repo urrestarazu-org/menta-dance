@@ -5,6 +5,7 @@ import com.menta.bff.application.port.out.AdminUsersApiClient;
 import com.menta.bff.application.port.out.AuthApiClient;
 import com.menta.bff.application.port.out.BillingApiClient;
 import com.menta.bff.application.port.out.CatalogApiClient;
+import com.menta.bff.application.port.out.PhysicalCourseManagementApiClient;
 import com.menta.bff.application.port.out.PhysicalPurchaseApiClient;
 import com.menta.bff.application.port.out.PhysicalReceptionApiClient;
 import com.menta.bff.application.port.out.PhysicalSessionsApiClient;
@@ -13,8 +14,14 @@ import com.menta.bff.application.port.out.SubscriptionApiClient;
 import com.menta.bff.application.port.out.VirtualApiClient;
 import com.menta.bff.application.usecase.AccountActivationUseCase;
 import com.menta.bff.application.usecase.AccountActivationUseCaseImpl;
+import com.menta.bff.application.usecase.BatchCreateCourseSessionsUseCase;
+import com.menta.bff.application.usecase.BatchCreateCourseSessionsUseCaseImpl;
 import com.menta.bff.application.usecase.ChangeUserRoleUseCase;
 import com.menta.bff.application.usecase.ChangeUserRoleUseCaseImpl;
+import com.menta.bff.application.usecase.CreateCourseSessionUseCase;
+import com.menta.bff.application.usecase.CreateCourseSessionUseCaseImpl;
+import com.menta.bff.application.usecase.CreateManagedCourseUseCase;
+import com.menta.bff.application.usecase.CreateManagedCourseUseCaseImpl;
 import com.menta.bff.application.usecase.CreateUserUseCase;
 import com.menta.bff.application.usecase.CreateUserUseCaseImpl;
 import com.menta.bff.application.usecase.GetAssignedSessionsUseCase;
@@ -37,6 +44,10 @@ import com.menta.bff.application.usecase.GetSessionRosterUseCase;
 import com.menta.bff.application.usecase.GetSessionRosterUseCaseImpl;
 import com.menta.bff.application.usecase.GetValidAccessTokenUseCase;
 import com.menta.bff.application.usecase.GetValidAccessTokenUseCaseImpl;
+import com.menta.bff.application.usecase.ListCourseSessionsUseCase;
+import com.menta.bff.application.usecase.ListCourseSessionsUseCaseImpl;
+import com.menta.bff.application.usecase.ListManagedCoursesUseCase;
+import com.menta.bff.application.usecase.ListManagedCoursesUseCaseImpl;
 import com.menta.bff.application.usecase.ListTodaySessionsUseCase;
 import com.menta.bff.application.usecase.ListTodaySessionsUseCaseImpl;
 import com.menta.bff.application.usecase.ListUsersUseCase;
@@ -63,6 +74,10 @@ import com.menta.bff.application.usecase.ResetPasswordUseCase;
 import com.menta.bff.application.usecase.ResetPasswordUseCaseImpl;
 import com.menta.bff.application.usecase.SubscribeToPlanUseCase;
 import com.menta.bff.application.usecase.SubscribeToPlanUseCaseImpl;
+import com.menta.bff.application.usecase.UpdateCourseSessionUseCase;
+import com.menta.bff.application.usecase.UpdateCourseSessionUseCaseImpl;
+import com.menta.bff.application.usecase.UpdateManagedCourseUseCase;
+import com.menta.bff.application.usecase.UpdateManagedCourseUseCaseImpl;
 import com.menta.bff.infrastructure.web.filter.TokenRefreshFilter;
 import java.time.Clock;
 import java.util.UUID;
@@ -248,5 +263,51 @@ public class UseCaseConfig {
     public RegisterManualCheckInUseCase registerManualCheckInUseCase(
             PhysicalReceptionApiClient receptionApiClient, ClassesProperties classesProperties) {
         return new RegisterManualCheckInUseCaseImpl(receptionApiClient, classesProperties.getDisplayZone());
+    }
+
+    /**
+     * Management of physical courses and sessions (#368). Every use case converts between the academy's display
+     * zone and UTC, which is all the API speaks (ADR-0048).
+     */
+    @Bean
+    public ListManagedCoursesUseCase listManagedCoursesUseCase(
+            PhysicalCourseManagementApiClient courseApiClient, ClassesProperties classesProperties) {
+        return new ListManagedCoursesUseCaseImpl(courseApiClient, classesProperties.getDisplayZone());
+    }
+
+    @Bean
+    public CreateManagedCourseUseCase createManagedCourseUseCase(
+            PhysicalCourseManagementApiClient courseApiClient, ClassesProperties classesProperties) {
+        return new CreateManagedCourseUseCaseImpl(courseApiClient, classesProperties.getDisplayZone());
+    }
+
+    @Bean
+    public UpdateManagedCourseUseCase updateManagedCourseUseCase(
+            PhysicalCourseManagementApiClient courseApiClient, ClassesProperties classesProperties) {
+        return new UpdateManagedCourseUseCaseImpl(courseApiClient, classesProperties.getDisplayZone());
+    }
+
+    @Bean
+    public ListCourseSessionsUseCase listCourseSessionsUseCase(
+            PhysicalCourseManagementApiClient courseApiClient, ClassesProperties classesProperties) {
+        return new ListCourseSessionsUseCaseImpl(courseApiClient, classesProperties.getDisplayZone());
+    }
+
+    @Bean
+    public CreateCourseSessionUseCase createCourseSessionUseCase(
+            PhysicalCourseManagementApiClient courseApiClient, ClassesProperties classesProperties) {
+        return new CreateCourseSessionUseCaseImpl(courseApiClient, classesProperties.getDisplayZone());
+    }
+
+    @Bean
+    public BatchCreateCourseSessionsUseCase batchCreateCourseSessionsUseCase(
+            PhysicalCourseManagementApiClient courseApiClient, ClassesProperties classesProperties) {
+        return new BatchCreateCourseSessionsUseCaseImpl(courseApiClient, classesProperties.getDisplayZone());
+    }
+
+    @Bean
+    public UpdateCourseSessionUseCase updateCourseSessionUseCase(
+            PhysicalCourseManagementApiClient courseApiClient, ClassesProperties classesProperties) {
+        return new UpdateCourseSessionUseCaseImpl(courseApiClient, classesProperties.getDisplayZone());
     }
 }

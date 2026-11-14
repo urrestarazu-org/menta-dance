@@ -201,7 +201,7 @@ Los tests que recorren enlaces ignoran los anchors internos (`#main`) del skip l
 Base del área web para el personal (issue #354). Pantallas hoy: el inicio `GET /gestion` y el listado de
 usuarios `GET /gestion/usuarios` con su alta `GET /gestion/usuarios/nuevo` y `POST /gestion/usuarios` y el cambio de
 rol `POST /gestion/usuarios/{id}/rol` (#378), y la recepción `GET /gestion/recepcion` con el roster de cada sesión y
-el check-in manual (#373); el resto de las secciones se habilita a medida que llega cada pantalla. La autorización
+el check-in manual (#373); la base de cursos presenciales (#368) está sin pantallas todavía; el resto de las secciones se habilita a medida que llega cada pantalla. La autorización
 real la decide la API; el BFF solo evita mostrar pantallas que un rol no puede usar.
 
 ### Prefijos y roles
@@ -213,6 +213,7 @@ Sin sesión, el navegador va a `/login`; con sesión pero sin el rol, recibe un 
 |------|------------------|
 | `GET /gestion` (inicio) | `ADMIN`, `INSTRUCTOR`, `RECEPTIONIST` |
 | `/gestion/contenido/**`, `/gestion/sesiones/**` | `ADMIN`, `INSTRUCTOR` |
+| `/gestion/cursos-presenciales/**` | `ADMIN`, `INSTRUCTOR` (#368; la API limita al instructor a sus cursos) |
 | `/gestion/recepcion/**` | `RECEPTIONIST`, `ADMIN` |
 | `/gestion/billing/**`, `/gestion/dispositivos/**`, `/gestion/usuarios/**` | `ADMIN` |
 | Cualquier otra ruta bajo `/gestion/**` | `ADMIN` (cierra por defecto: un prefijo no previsto no queda abierto al resto del personal) |
@@ -404,6 +405,34 @@ check-in manual es solo de recepción y la sección es de ella). Tres rutas, tod
 - **Privacidad**: todas las respuestas llevan `Cache-Control: no-store` (hay nombres de alumnos); ni los nombres, ni los
   ids de alumnos o sesiones, ni el token van a un log (solo el nombre de la clase de la excepción o un texto fijo).
   Todo lo que se muestra pasa por `th:text` (escapado).
+
+### Cursos presenciales (`/gestion/cursos-presenciales`), base (#368)
+
+Primer paso de la gestión web de cursos y sesiones presenciales: **todavía sin pantallas** (el prefijo existe en
+`BffSecurityConfig` para `ADMIN` e `INSTRUCTOR` y responde 404; la entrada de navegación se habilita con las pantallas,
+que llegan en los PR siguientes). Lo que ya está:
+
+- **Puerto y adaptador**: `PhysicalCourseManagementApiClient` / `PhysicalCourseManagementApiAdapter` consumen
+  `/api/v1/admin/physical` con el token de la sesión (listar, crear y editar cursos; listar, crear, crear en lote y
+  editar sesiones). El roster de una sesión sigue en `PhysicalReceptionApiClient`. Un rechazo esperado de la API
+  (`400`, `403`, `404` o `409` con un `code` conocido) es una `CourseManagementException` con el `code`
+  (`PROFESSOR_REQUIRED`, `PROFESSOR_MISMATCH`, `INVALID_REQUEST`, `COURSE_NOT_OWNED`, `COURSE_NOT_FOUND`,
+  `SESSION_NOT_FOUND`, `COURSE_HAS_ACTIVE_ASSIGNMENTS`, `SESSION_ALREADY_EXISTS`, `CAPACITY_BELOW_ASSIGNED`,
+  `SESSION_ALREADY_OCCURRED`) y, en `SESSION_ALREADY_EXISTS`, las `conflictingDates` (instantes UTC); todo lo demás
+  (401, 429, 5xx, estado o `code` inesperado, cuerpo ilegible, timeout) es `ServiceUnavailableException`. Solo se lee
+  el `code` y las `conflictingDates` de un cuerpo de error; el token solo viaja en `Authorization`.
+- **Hora local a UTC** (ADR-0048): los formularios trabajan en la zona de la academia y la API en UTC, así que los casos
+  de uso convierten **día y hora juntos** con `ClassLabels` (`toUtcSlot`/`toLocalSlot` para la recurrencia semanal:
+  martes 22:00 en Buenos Aires es miércoles 01:00 UTC; `toUtc` para una sesión suelta; `toUtcDateRange` para el lote:
+  cada extremo del rango local se convierte con la hora del curso, y la API genera una sesión por cada fecha UTC cuyo
+  día UTC coincide con el del curso, que son las mismas sesiones que el usuario ve en su rango local). Usa una semana
+  de referencia fija, nunca la fecha actual; una recurrencia fijada en UTC es exacta solo para zonas sin horario de
+  verano, como Buenos Aires.
+- **Casos de uso** (`ListManagedCourses`, `CreateManagedCourse`, `UpdateManagedCourse`, `ListCourseSessions`,
+  `CreateCourseSession`, `BatchCreateCourseSessions`, `UpdateCourseSession`): finos, sin reglas de negocio ni
+  pre-chequeo de conflictos; capacidad, fechas, duplicados y propiedad las decide la API. `CreateManagedCourse`
+  envía siempre un `professorId` explícito (el administrador elige uno; el instructor manda el propio) y sin uno
+  utilizable responde `PROFESSOR_REQUIRED` sin llamar a la API. Los ids que no son UUID nunca llegan a un path.
 
 ## Accesibilidad base
 

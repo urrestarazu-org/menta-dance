@@ -16,6 +16,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -77,6 +78,12 @@ class ManagementAccessIntegrationTest extends BaseIntegrationTest {
         mockMvc.perform(get("/gestion/billing"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrlPattern("**/login"));
+        mockMvc.perform(get("/gestion/cursos-presenciales"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrlPattern("**/login"));
+        mockMvc.perform(post("/gestion/cursos-presenciales/nuevo").with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrlPattern("**/login"));
     }
 
     static Stream<Arguments> prefixMatrix() {
@@ -92,6 +99,17 @@ class ManagementAccessIntegrationTest extends BaseIntegrationTest {
                 Arguments.of("/gestion/sesiones", INSTRUCTOR, true),
                 Arguments.of("/gestion/sesiones", RECEPTIONIST, false),
                 Arguments.of("/gestion/sesiones", STUDENT, false),
+                // in-person courses and their sessions (#368): administrator and instructor, at any depth
+                Arguments.of("/gestion/cursos-presenciales", ADMIN, true),
+                Arguments.of("/gestion/cursos-presenciales", INSTRUCTOR, true),
+                Arguments.of("/gestion/cursos-presenciales", RECEPTIONIST, false),
+                Arguments.of("/gestion/cursos-presenciales", STUDENT, false),
+                Arguments.of("/gestion/cursos-presenciales/nuevo", INSTRUCTOR, true),
+                Arguments.of("/gestion/cursos-presenciales/nuevo", RECEPTIONIST, false),
+                Arguments.of("/gestion/cursos-presenciales/1/sesiones/lote", ADMIN, true),
+                Arguments.of("/gestion/cursos-presenciales/1/sesiones/lote", INSTRUCTOR, true),
+                Arguments.of("/gestion/cursos-presenciales/1/sesiones/lote", RECEPTIONIST, false),
+                Arguments.of("/gestion/cursos-presenciales/1/sesiones/lote", STUDENT, false),
                 // reception: receptionist and administrator. Their own access to the screens that exist is not
                 // a 404 (they are served), so it is covered by ManagementReceptionIntegrationTest.
                 Arguments.of("/gestion/recepcion", INSTRUCTOR, false),
@@ -140,5 +158,15 @@ class ManagementAccessIntegrationTest extends BaseIntegrationTest {
 
         mockMvc.perform(post("/gestion/billing/anything").cookie(session).with(csrf()))
                 .andExpect(status().isForbidden());
+    }
+
+    @ParameterizedTest(name = "{0} as POST /gestion/cursos-presenciales/...: allowed={1}")
+    @CsvSource({"ADMIN, true", "INSTRUCTOR, true", "RECEPTIONIST, false", "STUDENT, false"})
+    @DisplayName("the in-person courses rule applies to every verb: staff who manage them pass, the rest get a 403")
+    void courseManagementRuleCoversEveryVerb(String role, boolean allowed) throws Exception {
+        Cookie session = logIn(role);
+
+        mockMvc.perform(post("/gestion/cursos-presenciales/1/sesiones").cookie(session).with(csrf()))
+                .andExpect(allowed ? status().isNotFound() : status().isForbidden());
     }
 }
