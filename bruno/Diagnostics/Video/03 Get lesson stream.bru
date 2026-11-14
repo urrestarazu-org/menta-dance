@@ -1,0 +1,145 @@
+meta {
+  name: 03 Get lesson stream
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/{{apiVersion}}/virtual/lessons/{{diagLessonId}}/stream
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{diagAuthToken}}
+}
+
+script:pre-request {
+  if (!bru.getVar("diagAuthToken")) {
+    bru.runner.skipRequest();
+  }
+}
+
+script:post-response {
+  // SECURITY: the signed URL carries the token. Only non-secret derived values are
+  // stored; the URL itself lives in the runtime variable `cdnSignedUrl` (never
+  // setEnvVar) so the next requests can call the CDN. Nothing is logged.
+  bru.deleteVar("cdnSignedUrl");
+  bru.deleteVar("cdnUrlNoQuery");
+  bru.deleteVar("cdnHost");
+  bru.deleteVar("cdnPath");
+
+  const checks = {
+    hasUrl: false, https: false, hostIsPlaceholder: false, hasToken: false,
+    hasExpires: false, ttlSeconds: null, pathLooksLikeMp4: false, videoIdIsGuid: false,
+    videoIdIsDemoLabel: false
+  };
+
+  const body = res.getBody();
+  const url = res.getStatus() === 200 && body && body.stream && typeof body.stream.url === "string"
+    ? body.stream.url
+    : "";
+
+  // Manual parsing: no dependency on the URL global of the sandbox.
+  const m = url.match(/^(https?):\/\/([^\/?#:]+)(?::(\d+))?(\/[^?#]*)?(?:\?([^#]*))?/i);
+  if (m) {
+    const scheme = m[1].toLowerCase();
+    const host = m[2].toLowerCase();
+    const port = m[3] ? ":" + m[3] : "";
+    const path = m[4] || "/";
+    const query = m[5] || "";
+
+    const params = {};
+    query.split("&").forEach(function (pair) {
+      const i = pair.indexOf("=");
+      if (i > 0) { params[pair.substring(0, i)] = pair.substring(i + 1); }
+    });
+
+    checks.hasUrl = true;
+    checks.https = scheme === "https";
+    checks.hostIsPlaceholder =
+      host.endsWith(".invalid") || host.indexOf("invalid-missing-config") >= 0 ||
+      host.indexOf("missing-config") >= 0 || host.indexOf("local-bunny-net") >= 0 ||
+      host.endsWith(".local");
+    checks.hasToken = typeof params.token === "string" && params.token.length > 0;
+    checks.hasExpires = /^\d+$/.test(params.expires || "");
+    if (checks.hasExpires) {
+      checks.ttlSeconds = parseInt(params.expires, 10) - Math.floor(Date.now() / 1000);
+    }
+    checks.pathLooksLikeMp4 = /^\/[^\/]+\/[^\/]+\.mp4$/i.test(path);
+    const videoId = decodeURIComponent((path.split("/")[1] || ""));
+    checks.videoIdIsGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(videoId);
+    checks.videoIdIsDemoLabel = /^demo-/i.test(videoId);
+
+    bru.setVar("cdnHost", host + port);
+    bru.setVar("cdnPath", path);
+    bru.setVar("cdnUrlNoQuery", scheme + "://" + host + port + path);
+    bru.setVar("cdnSignedUrl", url);
+  }
+  bru.setVar("diagStreamChecks", JSON.stringify(checks));
+}
+
+tests {
+  const checks = JSON.parse(bru.getVar("diagStreamChecks") || "{}");
+  const ttl = checks.ttlSeconds;
+
+  test("Stream endpoint answers 200 (401 = bad token, 403/404 = lesson access)", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("Response carries a stream URL", function () {
+    expect(checks.hasUrl === true, "no stream URL in the response").to.equal(true);
+  });
+
+  test("Stream URL is https", function () {
+    expect(checks.https === true, "stream URL is not https (mixed content in the browser)").to.equal(true);
+  });
+
+  test("Stream URL host is not a placeholder (local fake adapter active?)", function () {
+    expect(
+      checks.hasUrl === true && checks.hostIsPlaceholder === false,
+      "host looks like the local fake adapter or an unset placeholder: APP_CDN_BUNNYNET_* missing"
+    ).to.equal(true);
+  });
+
+  test("Stream URL has token and expires parameters", function () {
+    expect(
+      checks.hasToken === true && checks.hasExpires === true,
+      "token and/or expires parameter missing (Token Authentication adapter not active?)"
+    ).to.equal(true);
+  });
+
+  test(
+    "Token expiry is in the future (remaining " + (ttl === null || ttl === undefined ? "n/a" : ttl + " s") + ")",
+    function () {
+      expect(
+        typeof ttl === "number" && ttl > 0,
+        "expires is not in the future (check the API clock / TTL configuration)"
+      ).to.equal(true);
+    }
+  );
+
+  test("Path looks like /<videoId>/<file>.mp4", function () {
+    expect(checks.pathLooksLikeMp4 === true, "path does not look like /<videoId>/<file>.mp4").to.equal(true);
+  });
+
+  test("videoId in the path is a Bunny.net video id, not a demo label", function () {
+    expect(
+      checks.videoIdIsDemoLabel === false && checks.videoIdIsGuid === true,
+      "the videoId is not a GUID (a demo label like demo-sensual-free means DEMO_VIRTUAL_FREE_LESSON_VIDEO_ID was not applied): the CDN cannot have that file"
+    ).to.equal(true);
+  });
+}
+
+docs {
+  Pide a la API la URL firmada del MP4 de la leccion `diagLessonId` (la misma que el BFF
+  pone en el `<video>`). El script posterior guarda solo valores NO secretos
+  (`cdnHost`, `cdnPath` sin query, `cdnUrlNoQuery`) y la URL firmada unicamente en la
+  variable de runtime `cdnSignedUrl` para las requests 04 a 07.
+
+  Los tests son booleanos a proposito: Chai imprime el valor REAL cuando una
+  asercion falla, y eso filtraria el token. Nunca agregues asserts directos sobre la URL.
+
+  Si falla "host is not a placeholder": la API esta usando el adaptador local falso
+  (falta `APP_CDN_BUNNYNET_SECURITYKEY` / host del pull zone / biblioteca).
+}

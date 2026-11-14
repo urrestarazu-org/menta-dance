@@ -1,0 +1,57 @@
+meta {
+  name: 02 Login (diagnostic student)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/{{apiVersion}}/auth/login
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "{{diagEmail}}",
+    "password": "{{diagPassword}}"
+  }
+}
+
+script:pre-request {
+  if (!bru.getEnvVar("diagEmail") || !bru.getEnvVar("diagPassword")) {
+    bru.runner.skipRequest();
+  }
+}
+
+script:post-response {
+  // The token goes to a RUNTIME variable only (never setEnvVar, never persisted).
+  // It is kept apart from the shared `authToken` so a diagnostic run never replaces
+  // the session of another request/folder.
+  if (res.getStatus() === 200) {
+    const body = res.getBody();
+    if (body && typeof body.access_token === "string" && body.access_token.length > 0) {
+      bru.setVar("diagAuthToken", body.access_token);
+    }
+  }
+}
+
+tests {
+  test("Login answers 200 (401 = wrong credentials, 403 = account not activated)", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("Login returned an access token", function () {
+    const body = res.getBody();
+    const hasToken = !!body && typeof body.access_token === "string" && body.access_token.length > 0;
+    expect(hasToken, "no access token in the login response").to.equal(true);
+  });
+}
+
+docs {
+  Inicia sesion en la API con la cuenta de diagnostico (`diagEmail` / `diagPassword`)
+  y guarda el access token solo como variable de runtime `diagAuthToken` (nunca en un
+  archivo ni en el environment). No crea datos.
+
+  En produccion usa una cuenta de alumno DEDICADA al diagnostico. Las credenciales se
+  cargan como secretos del environment o por `--env-var`; no se versionan.
+}

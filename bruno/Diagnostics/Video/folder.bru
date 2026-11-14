@@ -1,0 +1,76 @@
+meta {
+  name: Video
+  seq: 1
+}
+
+docs {
+  # Diagnostico: "la leccion no reproduce el video"
+
+  Bateria de requests de SOLO LECTURA (GET/HEAD; el unico POST es el login, que no
+  crea datos) para saber en que eslabon se rompe la reproduccion. El video lo sirve
+  Bunny.net: la API firma la URL del MP4, el BFF la pone en `<video src>` y el
+  NAVEGADOR la pide directo al CDN. Un 403/404 de Bunny.net no aparece en el log de la
+  API ni del BFF; por eso estas requests le preguntan al CDN lo mismo que el navegador.
+
+  ## Como correrla
+
+  Desde `bruno/`, EN ORDEN (cada request usa lo que guardo la anterior):
+
+  ```bash
+  bru run "Diagnostics/Video" --env local
+  bru run "Diagnostics/Video" --env production --env-var diagEmail=... --env-var diagPassword=...
+  ```
+
+  Variables del environment: `baseUrl`, `bff_url`, `diagCourseId`, `diagLessonId`,
+  `diagEmail`, `diagPassword`. `bff_url` se manda como `Referer` (`<bff_url>/`) en 04, 05 y 07: debe ser el
+  origen desde el que el navegador carga la pagina. Si falta `diagLessonId`, `diagEmail` o `diagPassword`
+  la bateria se omite sola (no falla), asi una corrida de toda la coleccion contra un
+  environment no preparado (por ejemplo los `e2e-*`) no la ejecuta.
+
+  ## Que dice cada request
+
+  | # | Request | Pregunta que responde |
+  |---|---------|-----------------------|
+  | 01 | API health | La API esta arriba |
+  | 02 | Login | La cuenta de diagnostico entra (token solo en runtime) |
+  | 03 | Get lesson stream | La API firma una URL real: host no placeholder, `token` y `expires`, TTL restante |
+  | 04 | CDN HEAD con Referer | El CDN acepta la URL firmada con el `Referer` del BFF, como el `<video>` (200/206, `video/mp4`, `accept-ranges`) |
+  | 05 | CDN GET Range con Referer | El CDN sirve los primeros bytes como el navegador (206) |
+  | 06 | CDN HEAD sin Referer (control) | Si da 403 mientras 04 da 2xx, *Block Direct URL File Access* esta activo (normal: el navegador manda `Referer`) |
+  | 07 | CDN HEAD sin token (control, CON Referer) | Con el mismo `Referer` que 04, un 403 solo puede deberse a la falta de token: la proteccion esta activa |
+  | 08 | Pagina de la leccion del BFF | El HTML trae `<video src>` con host real y el mismo host que firmo la API |
+
+  ## Tabla de decision: sintoma -> causa probable -> arreglo
+
+  | Sintoma | Causa probable | Arreglo |
+  |---------|----------------|---------|
+  | 03 falla "host is not a placeholder" | La API usa el adaptador local falso | Falta `APP_CDN_BUNNYNET_SECURITYKEY` y/o el host del pull zone (`APP_CDN_BUNNYNET_PULLZONEHOSTNAME`); reiniciar la API |
+  | 03 falla "videoId ... not a demo label" | La leccion conserva el `videoId` de demo (`demo-sensual-free`) | Definir `DEMO_VIRTUAL_FREE_LESSON_VIDEO_ID` con el id real del video y reiniciar la API (en produccion, corregir el `videoId` de la leccion) |
+  | 03 falla en https, `token`/`expires` o ruta | Adaptador distinto del esperado o configuracion del archivo | Revisar `Bunny.net signature adapter:` y `Bunny.net signed URL:` en el log de la API |
+  | 04 con Referer da 2xx y 06 sin Referer da 403 | *Block Direct URL File Access* esta ACTIVO en la biblioteca (rechaza pedidos sin `Referer`) | Nada: el navegador siempre manda `Referer` y el video se reproduce. Solo recorda que un `curl`/`HEAD` sin `Referer` da 403 aunque el token sea perfecto |
+  | 04 con Referer da 403 y 06 sin Referer da 2xx | El hostname del `Referer` (`localhost` en local) no esta permitido: *Allowed domains* de la biblioteca (Security > General) o *Hotlink Protection* del pull zone (CDN > pull zone > Security; desde la biblioteca: API > Pull zone > Manage), que dan 403 de forma independiente | Produccion: agregar los dominios reales (`example.com` y `*.example.com`: el comodin no incluye el raiz; sin esquema). Local: `localhost` no figura en la documentacion de Bunny.net y puede no poder agregarse; opciones de Bunny.net: apagar *Block Direct URL File Access* de la biblioteca solo durante la prueba y reactivarlo, o usar una biblioteca de prueba aparte (ajustes independientes por biblioteca). En el pull zone esa opcion aparece recien con *allowed referrers* configurados y bloquea el `Referer` vacio. Lo decide quien administra la biblioteca |
+  | 04 con Referer da 403, 06 da 403 y 07 da 403 | Token rechazado (clave o esquema) **o** el `Referer` no esta permitido: no se distinguen con estas requests | Primero la clave: debe ser la tarjeta **Token authentication key** de Security > General de la biblioteca Stream (rotulada *API key* ahi; NO la API key de la pagina *API*, NO la Read-only API key), con *CDN token authentication* activada en esa pagina y SIN haberla reseteado (resetearla rompe embeds y URLs de CDN). Esquema avanzado (HS256, el que firma la API); Bunny.net documenta el esquema en `/cdn/security/token-authentication` (avanzado HS256 y basico). Para aislar: apagar de forma temporal los *Allowed domains* y *Block Direct URL File Access*; si 04 sigue en 403 sin esas restricciones, es la clave o el esquema; si pasa a 2xx, era el `Referer`/dominio. Tambien pueden bloquear el pull zone sus reglas propias (IP allowlist, Edge Rules, hotlink protection) |
+  | 04 da 404 | El MP4 no existe | Activar *MP4 Fallback* en la biblioteca y resubir el video (los videos anteriores no lo tienen), o ajustar `APP_CDN_BUNNYNET_FILENAME` (por ejemplo `play_480p.mp4`) y el `videoId` real de la leccion |
+  | 07 da 200 | *CDN token authentication* apagada | Activarla en Security > General de la biblioteca (el video es publico mientras tanto) |
+  | 04 y 05 dan 2xx/206 pero el navegador no reproduce | Problema del lado del navegador | Mirar la pestaña *Network*: contenido mixto (BFF en https y video en http), codec no soportado, `Content-Type` incorrecto, reloj del equipo vs `expires`; y si el `Referer` real de la pagina (distinto de `bff_url`) esta permitido |
+  | 08 sin `<video src>` | Cableado BFF/API | Revisar los logs del BFF y que la API devuelva `stream.url` para esa leccion |
+  | 08 muestra la tarjeta de suscripcion | La cuenta no tiene acceso a esa leccion | Usar una leccion gratuita o una cuenta con suscripcion |
+  | 08 host distinto del de 03 | BFF apuntando a otra API/configuracion | Revisar `bff_url`/`baseUrl` y la configuracion del BFF |
+
+  ## Seguridad (leer antes de ejecutar)
+
+  - La URL firmada contiene el token. Los scripts nunca la imprimen ni la guardan en
+    archivos; solo vive en la variable de RUNTIME `cdnSignedUrl`. Los tests comparan
+    booleanos para que Chai no imprima la URL al fallar.
+  - La timeline y la consola de Bruno (desktop) SI muestran la URL de las requests 04 a 07:
+    tratar las capturas de pantalla como secretos.
+  - Los reporters (`--reporter-json/--reporter-html/--reporter-junit`) guardan en el archivo
+    el cuerpo de la respuesta de 03 (URL firmada), el access token de 02, la contrasena
+    enviada y la cabecera `Authorization`. Si hace falta un reporter, agregar
+    `--reporter-skip-all-headers --reporter-skip-body` y de todos modos no compartir el
+    archivo. No usar `--verbose`.
+  - Para una corrida por CLI sin guardar secretos: `bru run "Diagnostics/Video" --env local
+    --reporter-skip-all-headers --reporter-skip-body` (solo imprime el resumen por request; sin cuerpos ni cabeceras).
+  - En produccion usar una cuenta de alumno dedicada al diagnostico y cargar las
+    credenciales por `--env-var` o como secretos del environment; nunca versionarlas.
+}

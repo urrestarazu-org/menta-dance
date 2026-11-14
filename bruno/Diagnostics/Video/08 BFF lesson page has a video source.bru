@@ -1,0 +1,146 @@
+meta {
+  name: 08 BFF lesson page has a video source
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{bff_url}}/courses/{{diagCourseId}}/lessons/{{diagLessonId}}
+  body: none
+  auth: none
+}
+
+headers {
+  Accept: text/html
+}
+
+script:pre-request {
+  // BFF form-login handshake, done by hand because the BFF cookie is `Secure` and the
+  // Bruno cookie jar never resends it over plain http://localhost:
+  //   1) GET /login      -> SESSION cookie + hidden _csrf field
+  //   2) POST /login     -> 302, new SESSION cookie (session fixation protection)
+  //   3) this request    -> sends the new SESSION cookie explicitly
+  // SECURITY: the session id and the password are never logged or stored outside this
+  // script; only a short, non-secret outcome code is kept in a runtime variable.
+  bru.deleteVar("diagBffLogin");
+
+  const bffUrl = String(bru.getEnvVar("bff_url") || "").replace(/\/+$/, "");
+  const email = bru.getEnvVar("diagEmail");
+  const password = bru.getEnvVar("diagPassword");
+
+  if (!bffUrl || !email || !password || !bru.getEnvVar("diagLessonId") || !bru.getEnvVar("diagCourseId")) {
+    bru.runner.skipRequest();
+  } else {
+    const sessionFrom = function (response) {
+      const raw = response.headers && (response.headers["set-cookie"] || response.headers["Set-Cookie"]);
+      const lines = (Array.isArray(raw) ? raw : [raw]).filter(Boolean).flatMap(function (v) { return String(v).split(/\r?\n/); });
+      const line = lines.find(function (v) { return /^SESSION=/i.test(v.trim()); }) || "";
+      const m = line.match(/^SESSION=([^;\s]+)/i);
+      return m ? m[1] : null;
+    };
+    // maxRedirects 0 keeps the 302 (and its Set-Cookie) visible. `validateStatus: null` makes
+    // axios resolve for ANY status (the safe sandbox cannot pass a function, and a rejected
+    // 302 loses its response object there).
+    const send = function (options) {
+      return bru.sendRequest(Object.assign({ maxRedirects: 0, validateStatus: null }, options));
+    };
+
+    try {
+      const loginPage = await send({
+        method: "GET", url: bffUrl + "/login", headers: { Accept: "text/html" }
+      });
+      const initialSession = sessionFrom(loginPage);
+      const html = typeof loginPage.data === "string" ? loginPage.data : "";
+      const csrf = (html.match(/name="_csrf"[^>]*value="([^"]+)"/) || html.match(/value="([^"]+)"[^>]*name="_csrf"/) || [])[1];
+
+      if (!initialSession || !csrf) {
+        bru.setVar("diagBffLogin", "login-page-without-session-or-csrf");
+      } else {
+        const form = "email=" + encodeURIComponent(email) + "&password=" + encodeURIComponent(password) +
+          "&_csrf=" + encodeURIComponent(csrf);
+        const login = await send({
+          method: "POST", url: bffUrl + "/login", data: form,
+          headers: { "Content-Type": "application/x-www-form-urlencoded", Cookie: "SESSION=" + initialSession }
+        });
+        const location = String((login.headers && (login.headers.location || login.headers.Location)) || "");
+        const authenticatedSession = sessionFrom(login);
+
+        if (login.status !== 302 || /[?&]error/.test(location) || /\/login(\?|$)/.test(location)) {
+          bru.setVar("diagBffLogin", "login-rejected-" + login.status);
+        } else {
+          bru.setVar("diagBffLogin", "ok");
+          req.setHeader("Cookie", "SESSION=" + (authenticatedSession || initialSession));
+        }
+      }
+    } catch (e) {
+      // Only the error class: the message of a failed request may echo the URL or headers.
+      bru.setVar("diagBffLogin", "handshake-error-" + String((e && e.name) || "unknown"));
+    }
+  }
+  req.setMaxRedirects(0);
+}
+
+tests {
+  const body = typeof res.getBody() === "string" ? res.getBody() : "";
+  const status = res.getStatus();
+
+  const videoTag = body.match(/<video\b[^>]*>/i);
+  const srcAttr = videoTag ? videoTag[0].match(/\bsrc\s*=\s*"([^"]*)"/i) : null;
+  const src = srcAttr ? srcAttr[1].replace(/&amp;/g, "&") : "";
+  const m = src.match(/^(https?):\/\/([^\/?#:]+)(?::(\d+))?/i);
+  const srcHost = m ? m[2].toLowerCase() + (m[3] ? ":" + m[3] : "") : "";
+  const srcHostIsPlaceholder =
+    srcHost.endsWith(".invalid") || srcHost.indexOf("invalid-missing-config") >= 0 ||
+    srcHost.indexOf("missing-config") >= 0 || srcHost.indexOf("local-bunny-net") >= 0 ||
+    srcHost.endsWith(".local");
+  const subscriptionCard = /requiere una suscripci/i.test(body);
+  const apiHost = bru.getVar("cdnHost");
+  const loginOutcome = bru.getVar("diagBffLogin");
+
+  test("BFF login handshake succeeded (" + (loginOutcome || "n/a") + ")", function () {
+    expect(loginOutcome === "ok", "BFF login failed: check diagEmail/diagPassword, bff_url and that the BFF is reachable").to.equal(true);
+  });
+
+  test("BFF lesson page answers 200 (got " + status + ")", function () {
+    expect(status === 200, "BFF did not answer 200 (a 302 to /login means no session; 5xx means BFF/API wiring)").to.equal(true);
+  });
+
+  test("Page does not show the 'subscription required' card instead of the video", function () {
+    expect(subscriptionCard === false, "the page shows the subscription-required card: the account has no entitlement for this lesson").to.equal(true);
+  });
+
+  test("Page has a <video> tag with a src", function () {
+    expect(src.length > 0, "no <video src> in the page: BFF/API wiring (the stream URL never reached the template)").to.equal(true);
+  });
+
+  test("Video src host is not a placeholder (local fake adapter active?)", function () {
+    expect(
+      src.length > 0 && srcHostIsPlaceholder === false,
+      "the <video> src host is a placeholder or missing: the API uses the local fake adapter"
+    ).to.equal(true);
+  });
+
+  test("Video src host matches the host signed by the API (request 03)", function () {
+    expect(
+      src.length > 0 && !!apiHost && srcHost === apiHost,
+      "the <video> src host differs from the host of request 03 (or request 03 did not run)"
+    ).to.equal(true);
+  });
+}
+
+docs {
+  Pide la pagina de la leccion al BFF (`/courses/{diagCourseId}/lessons/{diagLessonId}`)
+  y comprueba que el HTML trae `<video src=...>` con un host real. NUNCA imprime el `src`
+  (contiene el token): todos los tests son booleanos.
+
+  El script previo hace el login del BFF a mano (GET /login para tomar la cookie y el
+  `_csrf`, POST /login con `email`, `password` y `_csrf`) y manda la cookie `SESSION`
+  explicitamente, porque esa cookie es `Secure` y el cookie jar de Bruno no la reenvia
+  por `http://`. Si el login falla, el test del handshake lo dice y la pagina se pide
+  igual sin sesion.
+
+  El texto "No se puede reproducir este video en tu navegador" esta SIEMPRE dentro de la
+  etiqueta `<video>` (es el contenido alternativo del navegador): su presencia no indica
+  un error. Las senales reales son: no hay `<video src>`, el host es un placeholder, o
+  aparece la tarjeta "Esta leccion requiere una suscripcion activa".
+}
