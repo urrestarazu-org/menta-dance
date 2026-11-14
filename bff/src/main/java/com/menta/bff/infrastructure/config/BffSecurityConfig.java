@@ -138,6 +138,9 @@ public class BffSecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/gestion").hasAnyRole("ADMIN", "INSTRUCTOR", "RECEPTIONIST")
                         .requestMatchers("/gestion/contenido/**", "/gestion/sesiones/**")
                         .hasAnyRole("ADMIN", "INSTRUCTOR")
+                        // In-person courses and their sessions (#368): the administrator manages all of them,
+                        // an instructor the own ones (the API tells them apart).
+                        .requestMatchers("/gestion/cursos-presenciales/**").hasAnyRole("ADMIN", "INSTRUCTOR")
                         .requestMatchers("/gestion/recepcion/**").hasAnyRole("RECEPTIONIST", "ADMIN")
                         .requestMatchers("/gestion/billing/**", "/gestion/dispositivos/**", "/gestion/usuarios/**")
                         .hasRole("ADMIN")
