@@ -6,10 +6,10 @@ import java.util.Optional;
  * Port for the display name of the signed-in instructor, which the Physical API asks for as free text
  * ({@code professorName}) when an instructor creates a course (#368).
  *
- * <p>Open seam: the Auth API's access token carries only the account id and the role, and there is no
- * "current user" endpoint, so today no adapter can answer. The infrastructure default answers empty, which
- * keeps instructors from creating courses from the web until a real source (a name claim or a profile
- * endpoint) is added behind this port.
+ * <p>The Auth API's access token carries only the account id and the role, so the name is read from the
+ * Auth API's current-user endpoint ({@code GET /api/v1/users/me}, #749). An answer of empty (an account
+ * without a name, or an Auth API that cannot answer) keeps the instructor from creating a course from the web
+ * rather than sending a made-up name.
  * </p>
  */
 public interface InstructorDisplayNameSource {

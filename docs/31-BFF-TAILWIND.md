@@ -432,11 +432,13 @@ las pantallas de **cursos**, las de las **sesiones** de cada curso y la de los *
     50). El `professorId` es obligatorio y se valida en el formulario (nunca se confía en el valor por defecto de la
     API); el nombre que se guarda es el de la lista (nombre y apellido, o el email si la cuenta no tiene perfil), jamás
     uno enviado por el navegador, y un id que no está en la lista se rechaza como si faltara.
-  - `INSTRUCTOR`: sin selector; el curso es a su nombre. El id sale del `sub` del token (`AccessTokenClaimsReader`). **El
-    nombre no tiene fuente hoy**: el token no trae nombre y la API de auth no tiene un endpoint de "usuario actual". El
-    puerto `InstructorDisplayNameSource` es esa costura abierta; su implementación por defecto
-    (`UnavailableInstructorDisplayNameSource`) no sabe ningún nombre, así que el alta de un profesor muestra un aviso
-    (503) y no envía nada hasta que exista una fuente real, que reemplaza a esa clase. Editar y listar funcionan igual.
+  - `INSTRUCTOR`: sin selector; el curso es a su nombre. El id sale del `sub` del token (`AccessTokenClaimsReader`). El
+    token no trae nombre, así que el puerto `InstructorDisplayNameSource` lo lee de la API de auth:
+    `CurrentUserApiAdapter` llama a `GET /api/v1/users/me` con el token del llamante (#749) y arma el nombre con nombre
+    y apellido (sin las partes vacías). Si la cuenta no tiene nombre o la API no responde un 200 legible (401, otro
+    estado, caída, timeout, cuerpo inválido), el puerto responde vacío y el alta muestra un aviso (503) sin enviar nada;
+    el log sólo registra el estado o la clase de la excepción, nunca el token ni el cuerpo. Editar y listar funcionan
+    igual.
   - Al editar, el profesor se muestra de solo lectura (no se puede cambiar).
 - **Errores de la API, por `code`** (el cuerpo nunca llega al navegador): `PROFESSOR_REQUIRED` y `PROFESSOR_MISMATCH`
   → error en el campo del profesor (400); `COURSE_HAS_ACTIVE_ASSIGNMENTS` → error en el campo estado, "No se puede
