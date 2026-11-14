@@ -14,6 +14,7 @@ import com.menta.auth.application.port.out.PasswordEncoderPort;
 import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.model.UserId;
+import com.menta.auth.domain.model.UserProfile;
 import com.menta.auth.domain.model.UserStatus;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.shared.demo.DemoIds;
@@ -75,10 +76,78 @@ class DemoUserFixtureTest {
     }
 
     @Test
+    void only_the_instructor_is_created_with_the_demo_profile() throws Exception {
+        fixture.run(new DefaultApplicationArguments());
+
+        ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+        verify(users, org.mockito.Mockito.times(4)).save(saved.capture());
+        assertThat(saved.getAllValues()).extracting(user -> user.getProfile().orElse(null)).containsExactly(
+            null, new UserProfile("Profesor", "Demo", null, null), null, null);
+    }
+
+    @Test
+    void an_existing_instructor_without_profile_gets_the_demo_profile_and_keeps_everything_else() throws Exception {
+        LocalDateTime created = LocalDateTime.of(2026, 1, 1, 10, 0);
+        User instructor = User.rehydrate(
+            UserId.of(DemoIds.INSTRUCTOR_USER_ID), Email.of("profesor@menta.dance"), "old-hash", Role.INSTRUCTOR,
+            UserStatus.ACTIVE, created, created, 7L, null, false, false);
+        when(users.findByEmail(instructor.getEmail())).thenReturn(Optional.of(instructor));
+
+        fixture.run(new DefaultApplicationArguments());
+
+        ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+        verify(users, org.mockito.Mockito.times(4)).save(saved.capture());
+        User completed = saved.getAllValues().stream()
+            .filter(user -> user.getId().getValue().equals(DemoIds.INSTRUCTOR_USER_ID))
+            .findFirst().orElseThrow();
+        assertThat(completed.getProfile()).contains(new UserProfile("Profesor", "Demo", null, null));
+        assertThat(completed.getEmail()).isEqualTo(instructor.getEmail());
+        assertThat(completed.getPasswordHash()).isEqualTo("old-hash");
+        assertThat(completed.getRole()).isEqualTo(Role.INSTRUCTOR);
+        assertThat(completed.getStatus()).isEqualTo(UserStatus.ACTIVE);
+        assertThat(completed.getCreatedAt()).isEqualTo(created);
+        assertThat(completed.getTokenVersion()).isEqualTo(7L);
+        assertThat(completed.isDemo()).isFalse();
+        assertThat(completed.isMustSetPassword()).isFalse();
+        verify(passwords, never()).encode("pw-instructor");
+    }
+
+    @Test
+    void an_existing_instructor_with_a_profile_is_never_overwritten() throws Exception {
+        User instructor = existing(DemoIds.INSTRUCTOR_USER_ID, "profesor@menta.dance", Role.INSTRUCTOR,
+            new UserProfile("Marta", "Gomez", null, null));
+        when(users.findByEmail(instructor.getEmail())).thenReturn(Optional.of(instructor));
+
+        fixture.run(new DefaultApplicationArguments());
+
+        ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+        verify(users, org.mockito.Mockito.times(3)).save(saved.capture());
+        assertThat(saved.getAllValues()).extracting(user -> user.getId().getValue())
+            .doesNotContain(DemoIds.INSTRUCTOR_USER_ID);
+    }
+
+    @Test
+    void existing_users_other_than_the_instructor_never_get_a_profile() throws Exception {
+        for (User existing : List.of(
+            existing(DemoIds.ADMIN_USER_ID, "admin@menta.dance", Role.ADMIN),
+            existing(DemoIds.STUDENT_USER_ID, "alumno@menta.dance", Role.STUDENT),
+            existing(DemoIds.RECEPTIONIST_USER_ID, "recepcion@menta.dance", Role.RECEPTIONIST))) {
+            when(users.findByEmail(existing.getEmail())).thenReturn(Optional.of(existing));
+        }
+
+        fixture.run(new DefaultApplicationArguments());
+
+        ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+        verify(users).save(saved.capture());
+        assertThat(saved.getValue().getId().getValue()).isEqualTo(DemoIds.INSTRUCTOR_USER_ID);
+    }
+
+    @Test
     void second_run_saves_nothing_and_does_not_reset_existing_passwords() throws Exception {
         for (User existing : List.of(
             existing(DemoIds.ADMIN_USER_ID, "admin@menta.dance", Role.ADMIN),
-            existing(DemoIds.INSTRUCTOR_USER_ID, "profesor@menta.dance", Role.INSTRUCTOR),
+            existing(DemoIds.INSTRUCTOR_USER_ID, "profesor@menta.dance", Role.INSTRUCTOR,
+                new UserProfile("Profesor", "Demo", null, null)),
             existing(DemoIds.STUDENT_USER_ID, "alumno@menta.dance", Role.STUDENT),
             existing(DemoIds.RECEPTIONIST_USER_ID, "recepcion@menta.dance", Role.RECEPTIONIST))) {
             when(users.findByEmail(existing.getEmail())).thenReturn(Optional.of(existing));
@@ -129,7 +198,12 @@ class DemoUserFixtureTest {
     }
 
     private static User existing(java.util.UUID id, String email, Role role) {
+        return existing(id, email, role, null);
+    }
+
+    private static User existing(java.util.UUID id, String email, Role role, UserProfile profile) {
         LocalDateTime now = LocalDateTime.now();
-        return User.rehydrate(UserId.of(id), Email.of(email), "old-hash", role, UserStatus.ACTIVE, now, now, 1L);
+        return User.rehydrate(
+            UserId.of(id), Email.of(email), "old-hash", role, UserStatus.ACTIVE, now, now, 1L, profile);
     }
 }

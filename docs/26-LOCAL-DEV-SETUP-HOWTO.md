@@ -693,6 +693,8 @@ El perfil `demo` siembra datos de prueba al arrancar la API. Cada módulo tiene 
 | Alumno | `alumno@menta.dance` | `Alumno123!` | `DEMO_STUDENT_PASSWORD` |
 | Recepcionista | `recepcion@menta.dance` | `Recep123!` | `DEMO_RECEPTIONIST_PASSWORD` |
 
+El profesor tiene el nombre "Profesor Demo" (se completa también en una base local ya sembrada sin nombre).
+
 **Otras variables:**
 
 - `DEMO_QR_READER_SECRET`: secreto del lector QR demo ("Demo QR reader"). Solo se guarda su hash. Si no
