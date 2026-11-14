@@ -3,6 +3,7 @@ package com.menta.physical.infrastructure.persistence.adapter;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.menta.physical.domain.model.CourseId;
@@ -125,5 +126,24 @@ class PhysicalSessionRepositoryAdapterTest {
         when(sessionRepository.existsFutureAssignedSession(any(), any())).thenReturn(true);
 
         assertThat(adapter.hasFutureAssignedSessions(courseId)).isTrue();
+    }
+
+    @Test
+    void find_existing_scheduled_at_delegates_to_the_course_scoped_query() {
+        CourseId courseId = CourseId.generate();
+        Instant taken = Instant.parse("2026-09-02T20:00:00Z");
+        Instant free = Instant.parse("2026-09-09T20:00:00Z");
+        when(sessionRepository.findScheduledAtByCourseIdAndScheduledAtIn(courseId.getValue(), List.of(taken, free)))
+            .thenReturn(List.of(taken));
+
+        assertThat(adapter.findExistingScheduledAt(courseId, List.of(taken, free))).containsExactly(taken);
+    }
+
+    @Test
+    void find_existing_scheduled_at_skips_the_query_for_no_candidates() {
+        CourseId courseId = CourseId.generate();
+
+        assertThat(adapter.findExistingScheduledAt(courseId, List.of())).isEmpty();
+        verifyNoInteractions(sessionRepository);
     }
 }

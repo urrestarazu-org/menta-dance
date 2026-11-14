@@ -5,6 +5,7 @@ import com.menta.physical.application.dto.PhysicalCourseManagementResult;
 import com.menta.physical.application.port.in.CreatePhysicalCourseUseCase;
 import com.menta.physical.application.port.out.PhysicalCourseRepository;
 import com.menta.physical.domain.exception.ProfessorMismatchException;
+import com.menta.physical.domain.exception.ProfessorRequiredException;
 import com.menta.physical.domain.model.PhysicalCourse;
 import java.util.UUID;
 
@@ -13,7 +14,9 @@ import java.util.UUID;
  * professor.
  *
  * <p>An instructor may only create courses for themselves; naming another professor fails with
- * {@code ProfessorMismatchException}. The new course always starts {@code ACTIVE}.
+ * {@code ProfessorMismatchException}, and omitting it assigns the course to them. An administrator
+ * must name the professor: omitting it fails with {@code ProfessorRequiredException} (#743). The new
+ * course always starts {@code ACTIVE}.
  */
 public class CreatePhysicalCourseUseCaseImpl implements CreatePhysicalCourseUseCase {
 
@@ -38,7 +41,10 @@ public class CreatePhysicalCourseUseCaseImpl implements CreatePhysicalCourseUseC
 
     private static UUID resolveProfessorId(UUID requestedProfessorId, UUID actingUserId, boolean actingAsAdmin) {
         if (actingAsAdmin) {
-            return requestedProfessorId != null ? requestedProfessorId : actingUserId;
+            if (requestedProfessorId == null) {
+                throw new ProfessorRequiredException();
+            }
+            return requestedProfessorId;
         }
         if (requestedProfessorId != null && !requestedProfessorId.equals(actingUserId)) {
             throw new ProfessorMismatchException();

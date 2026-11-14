@@ -700,4 +700,118 @@ class PhysicalSessionManagementIntegrationTest extends AbstractPhysicalMySqlInte
             .isIn("ASSIGNED", "EXCEPTION");
     }
 
+    @SuppressWarnings("unchecked")
+    private static List<String> conflictingDates(ResponseEntity<Map> response) {
+        return (List<String>) response.getBody().get("conflictingDates");
+    }
+
+    private ResponseEntity<Map> postBatch(UUID userId, Role role, UUID courseId, String from, String to) {
+        return http.exchange(
+            "/api/v1/admin/physical/courses/" + courseId + "/sessions/batch", HttpMethod.POST,
+            authenticated(userId, role, Map.of("fromDate", from, "toDate", to)), Map.class
+        );
+    }
+
+    @Test
+    void repeating_a_batch_answers_409_with_the_conflicting_dates_and_creates_nothing() {
+        UUID instructorId = issueUser(Role.INSTRUCTOR);
+        UUID courseId = seedCourse(instructorId);
+
+        ResponseEntity<Map> first = postBatch(instructorId, Role.INSTRUCTOR, courseId, "2026-12-01", "2026-12-31");
+        ResponseEntity<Map> second = postBatch(instructorId, Role.INSTRUCTOR, courseId, "2026-12-01", "2026-12-31");
+
+        assertThat(first.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(second.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(second.getBody().get("code")).isEqualTo("SESSION_ALREADY_EXISTS");
+        assertThat(conflictingDates(second)).containsExactly(
+            "2026-12-02T20:00:00Z", "2026-12-09T20:00:00Z", "2026-12-16T20:00:00Z",
+            "2026-12-23T20:00:00Z", "2026-12-30T20:00:00Z"
+        );
+        assertThat(sessionRepository.count()).isEqualTo(5);
+    }
+
+    @Test
+    void a_single_repeated_date_rejects_the_batch_and_creates_none_of_the_free_dates() {
+        UUID adminId = issueUser(Role.ADMIN);
+        UUID courseId = seedCourse(UUID.randomUUID());
+        seedSession(courseId, Instant.parse("2026-12-16T20:00:00Z"), 20, "SCHEDULED");
+
+        ResponseEntity<Map> response = postBatch(adminId, Role.ADMIN, courseId, "2026-12-01", "2026-12-31");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(conflictingDates(response))
+            .containsExactly("2026-12-16T20:00:00Z");
+        assertThat(sessionRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void a_cancelled_session_counts_as_an_existing_one_for_the_batch() {
+        UUID adminId = issueUser(Role.ADMIN);
+        UUID courseId = seedCourse(UUID.randomUUID());
+        seedSession(courseId, Instant.parse("2026-12-09T20:00:00Z"), 20, "CANCELLED");
+
+        ResponseEntity<Map> response = postBatch(adminId, Role.ADMIN, courseId, "2026-12-01", "2026-12-31");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(conflictingDates(response))
+            .containsExactly("2026-12-09T20:00:00Z");
+        assertThat(sessionRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void sessions_of_another_course_at_the_same_instant_are_not_a_conflict() {
+        UUID adminId = issueUser(Role.ADMIN);
+        UUID courseId = seedCourse(UUID.randomUUID());
+        UUID otherCourseId = seedCourse(UUID.randomUUID());
+        seedSession(otherCourseId, Instant.parse("2026-12-09T20:00:00Z"), 20, "SCHEDULED");
+
+        ResponseEntity<Map> response = postBatch(adminId, Role.ADMIN, courseId, "2026-12-01", "2026-12-31");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(sessionRepository.count()).isEqualTo(6);
+    }
+
+    @Test
+    void a_batch_range_without_a_matching_weekday_answers_400() {
+        UUID adminId = issueUser(Role.ADMIN);
+        UUID courseId = seedCourse(UUID.randomUUID());
+
+        // 2026-12-03 and 2026-12-04 are a Thursday and a Friday; the course meets on Wednesdays.
+        ResponseEntity<Map> response = postBatch(adminId, Role.ADMIN, courseId, "2026-12-03", "2026-12-04");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody().get("code")).isEqualTo("INVALID_REQUEST");
+        assertThat(sessionRepository.count()).isZero();
+    }
+
+    @Test
+    void an_inverted_batch_range_answers_400() {
+        UUID adminId = issueUser(Role.ADMIN);
+        UUID courseId = seedCourse(UUID.randomUUID());
+
+        ResponseEntity<Map> response = postBatch(adminId, Role.ADMIN, courseId, "2026-12-31", "2026-12-01");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody().get("code")).isEqualTo("INVALID_REQUEST");
+        assertThat(sessionRepository.count()).isZero();
+    }
+
+    @Test
+    void creating_a_session_at_the_instant_of_an_existing_one_answers_409_with_that_date() {
+        UUID instructorId = issueUser(Role.INSTRUCTOR);
+        UUID courseId = seedCourse(instructorId);
+        seedSession(courseId, Instant.parse("2026-12-09T20:00:00Z"), 20, "CANCELLED");
+
+        ResponseEntity<Map> response = http.exchange(
+            "/api/v1/admin/physical/courses/" + courseId + "/sessions", HttpMethod.POST,
+            authenticated(instructorId, Role.INSTRUCTOR, Map.of("date", "2026-12-09", "startTime", "20:00:00")),
+            Map.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody().get("code")).isEqualTo("SESSION_ALREADY_EXISTS");
+        assertThat(conflictingDates(response))
+            .containsExactly("2026-12-09T20:00:00Z");
+        assertThat(sessionRepository.count()).isEqualTo(1);
+    }
 }

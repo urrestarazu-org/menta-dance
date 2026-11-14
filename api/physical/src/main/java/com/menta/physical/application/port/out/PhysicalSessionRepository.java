@@ -5,6 +5,7 @@ import com.menta.physical.domain.model.CourseId;
 import com.menta.physical.domain.model.PhysicalSession;
 import com.menta.physical.domain.model.SessionId;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -54,6 +55,15 @@ public interface PhysicalSessionRepository {
      * already carry assignments.
      */
     List<PhysicalSession> saveAll(List<PhysicalSession> sessions);
+
+    /**
+     * Finds which of the given instants already have a session of the course, whatever the status of
+     * that session: a {@code CANCELLED} session still counts as existing (#743).
+     *
+     * <p>Compares the exact UTC instant. Returns the matching instants sorted ascending, each at
+     * most once for a course; an empty candidate collection yields an empty list.
+     */
+    List<Instant> findExistingScheduledAt(CourseId courseId, Collection<Instant> candidates);
 
     /**
      * US-PHYSICAL-005 escenario 4: a course may not be deactivated while it

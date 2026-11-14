@@ -3,7 +3,10 @@ package com.menta.physical.application.usecase;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.menta.physical.application.dto.BatchCreatePhysicalSessionsCommand;
@@ -11,11 +14,14 @@ import com.menta.physical.application.dto.PhysicalSessionManagementResult;
 import com.menta.physical.application.port.out.PhysicalCourseRepository;
 import com.menta.physical.application.port.out.PhysicalSessionRepository;
 import com.menta.physical.domain.exception.CourseNotOwnedException;
+import com.menta.physical.domain.exception.EmptySessionBatchException;
+import com.menta.physical.domain.exception.SessionAlreadyExistsException;
 import com.menta.physical.domain.model.CourseId;
 import com.menta.physical.domain.model.CourseStatus;
 import com.menta.physical.domain.model.PhysicalCourse;
 import com.menta.physical.domain.model.PhysicalCourseLevel;
 import java.time.DayOfWeek;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -70,17 +76,87 @@ class BatchCreatePhysicalSessionsUseCaseImplTest {
     }
 
     @Test
-    void a_range_with_no_matching_day_of_week_generates_no_sessions() {
+    void a_range_with_no_matching_day_of_week_is_rejected_and_saves_nothing() {
         CourseId id = CourseId.generate();
         UUID ownerId = UUID.randomUUID();
         when(courseRepository.findById(id)).thenReturn(Optional.of(course(id, ownerId)));
-        when(sessionRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         BatchCreatePhysicalSessionsCommand command =
             new BatchCreatePhysicalSessionsCommand(LocalDate.of(2026, 9, 3), LocalDate.of(2026, 9, 8));
 
-        List<PhysicalSessionManagementResult> results = useCase.createBatch(id.toString(), command, ownerId, false);
+        assertThatThrownBy(() -> useCase.createBatch(id.toString(), command, ownerId, false))
+            .isInstanceOf(EmptySessionBatchException.class);
+        verify(sessionRepository, never()).saveAll(any());
+    }
 
-        assertThat(results).isEmpty();
+    @Test
+    void an_inverted_range_is_rejected_and_saves_nothing() {
+        CourseId id = CourseId.generate();
+        UUID ownerId = UUID.randomUUID();
+        when(courseRepository.findById(id)).thenReturn(Optional.of(course(id, ownerId)));
+
+        BatchCreatePhysicalSessionsCommand command =
+            new BatchCreatePhysicalSessionsCommand(LocalDate.of(2026, 9, 30), LocalDate.of(2026, 9, 1));
+
+        assertThatThrownBy(() -> useCase.createBatch(id.toString(), command, ownerId, false))
+            .isInstanceOf(EmptySessionBatchException.class);
+        verify(sessionRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void a_repeated_batch_is_rejected_with_every_conflicting_instant_and_saves_nothing() {
+        CourseId id = CourseId.generate();
+        UUID ownerId = UUID.randomUUID();
+        when(courseRepository.findById(id)).thenReturn(Optional.of(course(id, ownerId)));
+        List<Instant> existing = List.of(
+            Instant.parse("2026-09-02T20:00:00Z"), Instant.parse("2026-09-09T20:00:00Z"),
+            Instant.parse("2026-09-16T20:00:00Z"), Instant.parse("2026-09-23T20:00:00Z"),
+            Instant.parse("2026-09-30T20:00:00Z")
+        );
+        when(sessionRepository.findExistingScheduledAt(eq(id), any())).thenReturn(existing);
+
+        BatchCreatePhysicalSessionsCommand command =
+            new BatchCreatePhysicalSessionsCommand(LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30));
+
+        assertThatThrownBy(() -> useCase.createBatch(id.toString(), command, ownerId, false))
+            .isInstanceOfSatisfying(SessionAlreadyExistsException.class,
+                exception -> assertThat(exception.getConflictingInstants()).containsExactlyElementsOf(existing));
+        verify(sessionRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void a_single_repeated_date_rejects_the_whole_batch_and_creates_none_of_the_free_dates() {
+        CourseId id = CourseId.generate();
+        UUID ownerId = UUID.randomUUID();
+        when(courseRepository.findById(id)).thenReturn(Optional.of(course(id, ownerId)));
+        Instant taken = Instant.parse("2026-09-16T20:00:00Z");
+        when(sessionRepository.findExistingScheduledAt(eq(id), any())).thenReturn(List.of(taken));
+
+        BatchCreatePhysicalSessionsCommand command =
+            new BatchCreatePhysicalSessionsCommand(LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30));
+
+        assertThatThrownBy(() -> useCase.createBatch(id.toString(), command, ownerId, false))
+            .isInstanceOfSatisfying(SessionAlreadyExistsException.class,
+                exception -> assertThat(exception.getConflictingInstants()).containsExactly(taken));
+        verify(sessionRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void looks_up_exactly_the_instants_it_is_about_to_generate() {
+        CourseId id = CourseId.generate();
+        UUID ownerId = UUID.randomUUID();
+        when(courseRepository.findById(id)).thenReturn(Optional.of(course(id, ownerId)));
+        when(sessionRepository.findExistingScheduledAt(eq(id), any())).thenReturn(List.of());
+        when(sessionRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        useCase.createBatch(
+            id.toString(),
+            new BatchCreatePhysicalSessionsCommand(LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 9)),
+            ownerId, false
+        );
+
+        verify(sessionRepository).findExistingScheduledAt(
+            id, List.of(Instant.parse("2026-09-02T20:00:00Z"), Instant.parse("2026-09-09T20:00:00Z"))
+        );
     }
 }

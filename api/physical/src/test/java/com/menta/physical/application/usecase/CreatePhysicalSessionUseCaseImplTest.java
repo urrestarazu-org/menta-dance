@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.menta.physical.application.dto.CreatePhysicalSessionCommand;
@@ -12,13 +14,16 @@ import com.menta.physical.application.port.out.PhysicalCourseRepository;
 import com.menta.physical.application.port.out.PhysicalSessionRepository;
 import com.menta.physical.domain.exception.CourseNotFoundException;
 import com.menta.physical.domain.exception.CourseNotOwnedException;
+import com.menta.physical.domain.exception.SessionAlreadyExistsException;
 import com.menta.physical.domain.model.CourseId;
 import com.menta.physical.domain.model.CourseStatus;
 import com.menta.physical.domain.model.PhysicalCourse;
 import com.menta.physical.domain.model.PhysicalCourseLevel;
 import java.time.DayOfWeek;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -106,5 +111,38 @@ class CreatePhysicalSessionUseCaseImplTest {
         PhysicalSessionManagementResult result = useCase.create(id.toString(), command, UUID.randomUUID(), true);
 
         assertThat(result.courseId()).isEqualTo(id.toString());
+    }
+
+    @Test
+    void a_second_session_at_the_same_instant_is_rejected_with_that_instant() {
+        CourseId id = CourseId.generate();
+        UUID ownerId = UUID.randomUUID();
+        when(courseRepository.findById(id)).thenReturn(Optional.of(course(id, ownerId)));
+        Instant taken = Instant.parse("2026-09-15T19:00:00Z");
+        when(sessionRepository.findExistingScheduledAt(id, List.of(taken))).thenReturn(List.of(taken));
+
+        CreatePhysicalSessionCommand command =
+            new CreatePhysicalSessionCommand(LocalDate.of(2026, 9, 15), LocalTime.of(19, 0), null, null);
+
+        assertThatThrownBy(() -> useCase.create(id.toString(), command, ownerId, false))
+            .isInstanceOfSatisfying(SessionAlreadyExistsException.class,
+                exception -> assertThat(exception.getConflictingInstants()).containsExactly(taken));
+        verify(sessionRepository, never()).save(any());
+    }
+
+    @Test
+    void a_session_at_a_different_instant_of_the_same_course_is_created() {
+        CourseId id = CourseId.generate();
+        UUID ownerId = UUID.randomUUID();
+        when(courseRepository.findById(id)).thenReturn(Optional.of(course(id, ownerId)));
+        when(sessionRepository.findExistingScheduledAt(any(), any())).thenReturn(List.of());
+        when(sessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        CreatePhysicalSessionCommand command =
+            new CreatePhysicalSessionCommand(LocalDate.of(2026, 9, 15), LocalTime.of(19, 30), null, null);
+
+        PhysicalSessionManagementResult result = useCase.create(id.toString(), command, ownerId, false);
+
+        assertThat(result.scheduledAt()).startsWith("2026-09-15T19:30");
     }
 }

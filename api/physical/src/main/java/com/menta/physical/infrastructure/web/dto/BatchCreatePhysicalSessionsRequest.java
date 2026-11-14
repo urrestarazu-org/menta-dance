@@ -6,8 +6,8 @@ import java.time.LocalDate;
 /**
  * Request body to generate the sessions of a course over a date range.
  *
- * <p>Both dates are mandatory ({@code @NotNull}) and the range is inclusive; an inverted range
- * simply matches no day and generates nothing.
+ * <p>Both dates are mandatory ({@code @NotNull}) and the range is inclusive. An inverted range, or
+ * one with no date on the course's day of week, is rejected (see {@code EmptySessionBatchException}).
  */
 public record BatchCreatePhysicalSessionsRequest(@NotNull LocalDate fromDate, @NotNull LocalDate toDate) {
 }

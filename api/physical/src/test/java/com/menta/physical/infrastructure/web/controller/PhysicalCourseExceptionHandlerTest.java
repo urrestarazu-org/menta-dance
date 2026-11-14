@@ -7,11 +7,16 @@ import com.menta.physical.domain.exception.CapacityBelowAssignedException;
 import com.menta.physical.domain.exception.CourseHasActiveAssignmentsException;
 import com.menta.physical.domain.exception.CourseNotFoundException;
 import com.menta.physical.domain.exception.CourseNotOwnedException;
+import com.menta.physical.domain.exception.EmptySessionBatchException;
 import com.menta.physical.domain.exception.InvalidSessionRangeException;
 import com.menta.physical.domain.exception.ProfessorMismatchException;
+import com.menta.physical.domain.exception.ProfessorRequiredException;
+import com.menta.physical.domain.exception.SessionAlreadyExistsException;
 import com.menta.physical.domain.exception.SessionAlreadyOccurredException;
 import com.menta.physical.domain.exception.SessionNotFoundException;
+import java.time.Instant;
 import java.time.format.DateTimeParseException;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -55,6 +60,37 @@ class PhysicalCourseExceptionHandlerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody().getProperties().get("code")).isEqualTo("PROFESSOR_MISMATCH");
+    }
+
+    @Test
+    void maps_professor_required_to_400() {
+        ResponseEntity<ProblemDetail> response = handler.professorRequired(new ProfessorRequiredException());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody().getProperties().get("code")).isEqualTo("PROFESSOR_REQUIRED");
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+    }
+
+    @Test
+    void maps_session_already_exists_to_409_listing_the_conflicting_dates() {
+        ResponseEntity<ProblemDetail> response = handler.sessionAlreadyExists(new SessionAlreadyExistsException(
+            List.of(Instant.parse("2026-09-09T20:00:00Z"), Instant.parse("2026-09-02T20:00:00Z"))
+        ));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody().getProperties().get("code")).isEqualTo("SESSION_ALREADY_EXISTS");
+        assertThat(response.getBody().getProperties().get("conflictingDates"))
+            .isEqualTo(List.of("2026-09-02T20:00:00Z", "2026-09-09T20:00:00Z"));
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+    }
+
+    @Test
+    void maps_an_empty_session_batch_to_400() {
+        ResponseEntity<ProblemDetail> response = handler.emptySessionBatch(new EmptySessionBatchException());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody().getProperties().get("code")).isEqualTo("INVALID_REQUEST");
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
     }
 
     @Test

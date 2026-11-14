@@ -5,18 +5,23 @@ import com.menta.physical.application.dto.PhysicalSessionManagementResult;
 import com.menta.physical.application.port.in.CreatePhysicalSessionUseCase;
 import com.menta.physical.application.port.out.PhysicalCourseRepository;
 import com.menta.physical.application.port.out.PhysicalSessionRepository;
+import com.menta.physical.domain.exception.SessionAlreadyExistsException;
 import com.menta.physical.domain.model.CourseId;
 import com.menta.physical.domain.model.PhysicalCourse;
 import com.menta.physical.domain.model.PhysicalSession;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 
 /**
  * Creates one session for a course after checking that the caller manages it.
  *
  * <p>Uses {@code CourseOwnershipGuard} for authorization and saves the session through the session
- * repository, which re-reads it with live availability counts.
+ * repository, which re-reads it with live availability counts. If the course already has a session
+ * (of any status) at the same UTC instant it fails with {@code SessionAlreadyExistsException}
+ * (#743).
  */
 public class CreatePhysicalSessionUseCaseImpl implements CreatePhysicalSessionUseCase {
 
@@ -38,11 +43,12 @@ public class CreatePhysicalSessionUseCaseImpl implements CreatePhysicalSessionUs
             courseRepository, CourseId.of(courseId), actingUserId, actingAsAdmin
         );
         int effectiveCapacity = command.capacity() != null ? command.capacity() : course.getCapacity();
+        Instant scheduledAt = LocalDateTime.of(command.date(), command.startTime()).toInstant(ZoneOffset.UTC);
+        if (!sessionRepository.findExistingScheduledAt(course.getId(), List.of(scheduledAt)).isEmpty()) {
+            throw new SessionAlreadyExistsException(List.of(scheduledAt));
+        }
         PhysicalSession session = PhysicalSession.create(
-            course.getId(),
-            LocalDateTime.of(command.date(), command.startTime()).toInstant(ZoneOffset.UTC),
-            effectiveCapacity,
-            command.notes()
+            course.getId(), scheduledAt, effectiveCapacity, command.notes()
         );
         return PhysicalSessionResultMapper.toResult(sessionRepository.save(session));
     }
