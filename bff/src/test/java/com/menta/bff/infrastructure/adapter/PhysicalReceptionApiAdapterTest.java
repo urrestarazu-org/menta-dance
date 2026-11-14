@@ -196,6 +196,7 @@ class PhysicalReceptionApiAdapterTest {
         SessionRoster roster = adapter.getRoster(TOKEN, SESSION_ID);
 
         assertThat(roster.sessionId()).isEqualTo(SESSION_ID);
+        assertThat(roster.courseId()).isEqualTo("c-1");
         assertThat(roster.courseName()).isEqualTo("Salsa");
         assertThat(roster.scheduledAt()).isEqualTo(Instant.parse("2026-11-13T21:00:00Z"));
         assertThat(roster.cancelled()).isFalse();
@@ -267,13 +268,14 @@ class PhysicalReceptionApiAdapterTest {
     }
 
     static Stream<Arguments> unusableRosters() {
-        String header = "\"session\": {\"sessionId\": \"s\", \"courseName\": \"Salsa\","
+        String header = "\"session\": {\"sessionId\": \"s\", \"courseId\": \"c\", \"courseName\": \"Salsa\","
                 + " \"scheduledAt\": \"2026-11-13T21:00:00Z\", \"status\": \"SCHEDULED\", \"capacity\": 5}";
         return Stream.of(
                 Arguments.of("{}"),
                 Arguments.of("{\"session\": {\"sessionId\": \"s\"}, \"students\": []}"),
                 Arguments.of("{" + header + "}"),
                 Arguments.of("{" + header + ", \"students\": [{\"displayName\": \"Ada\"}]}"),
+                Arguments.of("{" + header.replace(" \"courseId\": \"c\",", "") + ", \"students\": []}"),
                 Arguments.of("<html>not json</html>"));
     }
 
