@@ -13,8 +13,11 @@
     Las fechas y horas son las de la academia (Buenos Aires).
 </p>
 
-<div th:if="${sessionsSaved}" class="mb-4">
-    <div th:replace="~{fragments/components :: alert('success', ${sessionsSaved})}"></div>
+<div th:if="${sessionsSaved}" class="alert alert-success mb-4" role="status">
+    <p th:text="${sessionsSaved}">Creamos 4 sesiones.</p>
+    <ul th:if="${createdSessions != null}" class="mt-2 list-disc pl-6">
+        <li th:each="label : ${createdSessions}" th:text="${label}">martes 17 de noviembre a las 22:00</li>
+    </ul>
 </div>
 
 <h2 class="mb-4">Sesiones existentes</h2>
@@ -83,6 +86,35 @@
 
         <div class="flex items-center gap-4">
             <button type="submit" class="btn btn-primary">Crear sesión</button>
+        </div>
+    </form>
+
+    <h2 class="mb-4">Crear sesiones en lote</h2>
+
+    <p class="mb-4">
+        Se crea una sesión por cada día del curso (<span th:text="${course.scheduleLabel()}">Martes 22:00</span>)
+        entre las dos fechas, ambas incluidas. Si alguna de esas sesiones ya existe, no se crea ninguna.
+    </p>
+
+    <div th:if="${batchError}" class="mb-4">
+        <div th:replace="~{fragments/components :: alert('error', ${batchError})}"></div>
+    </div>
+    <div th:if="${batchConflicts != null}" class="alert alert-error mb-4" role="alert">
+        <p>No se creó ninguna sesión. Estas fechas ya tienen una sesión:</p>
+        <ul class="mt-2 list-disc pl-6">
+            <li th:each="label : ${batchConflicts}" th:text="${label}">martes 17/11 22:00</li>
+        </ul>
+    </div>
+
+    <form th:action="@{/gestion/cursos-presenciales/{id}/sesiones/lote(id=${course.courseId()})}"
+          th:object="${batchForm}" method="post" novalidate class="card space-y-4">
+        <div th:replace="~{fragments/components :: errorSummary(${ {'from':'batchFrom', 'to':'batchTo', 'toOrdered':'batchTo', 'toWithinLimit':'batchTo'} })}"></div>
+
+        <div th:replace="~{fragments/components :: field('batchFrom', 'Desde', 'date', 'from', 'off', *{from}, null, false, ${#fields.errors('from')})}"></div>
+        <div th:replace="~{fragments/components :: field('batchTo', 'Hasta', 'date', 'to', 'off', *{to}, 'El rango puede tener hasta 366 días.', false, ${#fields.errors('to*')})}"></div>
+
+        <div class="flex items-center gap-4">
+            <button type="submit" class="btn btn-primary">Crear sesiones</button>
         </div>
     </form>
 </div>

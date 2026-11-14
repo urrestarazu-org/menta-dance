@@ -101,14 +101,14 @@ class ManagementAccessIntegrationTest extends BaseIntegrationTest {
                 Arguments.of("/gestion/sesiones", STUDENT, false),
                 // in-person courses and their sessions (#368): administrator and instructor, at any depth. Their
                 // own access to the course screens that exist is not a 404 (they are served), so it is covered
-                // by ManagementCoursesIntegrationTest; the session routes do not exist yet.
+                // by the course and session integration tests; the path below is one that no screen handles.
                 Arguments.of("/gestion/cursos-presenciales", RECEPTIONIST, false),
                 Arguments.of("/gestion/cursos-presenciales", STUDENT, false),
                 Arguments.of("/gestion/cursos-presenciales/nuevo", RECEPTIONIST, false),
-                Arguments.of("/gestion/cursos-presenciales/1/sesiones/lote", ADMIN, true),
-                Arguments.of("/gestion/cursos-presenciales/1/sesiones/lote", INSTRUCTOR, true),
-                Arguments.of("/gestion/cursos-presenciales/1/sesiones/lote", RECEPTIONIST, false),
-                Arguments.of("/gestion/cursos-presenciales/1/sesiones/lote", STUDENT, false),
+                Arguments.of("/gestion/cursos-presenciales/1/sin-pantalla", ADMIN, true),
+                Arguments.of("/gestion/cursos-presenciales/1/sin-pantalla", INSTRUCTOR, true),
+                Arguments.of("/gestion/cursos-presenciales/1/sin-pantalla", RECEPTIONIST, false),
+                Arguments.of("/gestion/cursos-presenciales/1/sin-pantalla", STUDENT, false),
                 // reception: receptionist and administrator. Their own access to the screens that exist is not
                 // a 404 (they are served), so it is covered by ManagementReceptionIntegrationTest.
                 Arguments.of("/gestion/recepcion", INSTRUCTOR, false),
@@ -165,7 +165,7 @@ class ManagementAccessIntegrationTest extends BaseIntegrationTest {
     void courseManagementRuleCoversEveryVerb(String role, boolean allowed) throws Exception {
         Cookie session = logIn(role);
 
-        mockMvc.perform(post("/gestion/cursos-presenciales/1/sesiones").cookie(session).with(csrf()))
+        mockMvc.perform(post("/gestion/cursos-presenciales/1/sin-pantalla").cookie(session).with(csrf()))
                 .andExpect(allowed ? status().isNotFound() : status().isForbidden());
     }
 }

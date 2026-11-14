@@ -51,6 +51,8 @@ class ManagementCourseSessionsIntegrationTest extends BaseIntegrationTest {
     private static final String SESSIONS = BASE + "/" + COURSE_ID + "/sesiones";
     private static final String COURSES_API = "/api/v1/admin/physical/courses";
     private static final String SESSIONS_API = COURSES_API + "/" + COURSE_ID + "/sessions";
+    private static final String BATCH = SESSIONS + "/lote";
+    private static final String BATCH_API = SESSIONS_API + "/batch";
     private static final String NO_STORE = "no-store";
 
     /** Wednesday 01:00 UTC is Tuesday 22:00 in Buenos Aires. */
@@ -119,6 +121,12 @@ class ManagementCourseSessionsIntegrationTest extends BaseIntegrationTest {
     private static void stubCreated() {
         WIRE_MOCK_SERVER.stubFor(WireMock.post(urlPathEqualTo(SESSIONS_API)).willReturn(aResponse()
                 .withStatus(201).withHeader("Content-Type", "application/json").withBody(FIRST)));
+    }
+
+    private static void stubBatchCreated(String... sessions) {
+        WIRE_MOCK_SERVER.stubFor(WireMock.post(urlPathEqualTo(BATCH_API)).willReturn(aResponse()
+                .withStatus(201).withHeader("Content-Type", "application/json")
+                .withBody("{\"sessions\":[%s]}".formatted(String.join(",", sessions)))));
     }
 
     /** Both reads that draw the page: the sessions and the course. */
@@ -556,5 +564,234 @@ class ManagementCourseSessionsIntegrationTest extends BaseIntegrationTest {
 
         assertThat(result.getResponse().getStatus()).isEqualTo(404);
         WIRE_MOCK_SERVER.verify(0, postRequestedFor(urlPathEqualTo(COURSES_API + "/xyz/sessions")));
+    }
+
+    // ---- batch ----
+
+    private static String november() {
+        return "2026-11-";
+    }
+
+    /** The four Tuesdays 22:00 of November 2026 in Buenos Aires: Wednesdays 01:00 UTC. */
+    private static String[] fourTuesdays() {
+        return new String[] {
+            sessionJson("a1b2c3d4-1d2a-4e3b-9c4d-0a1b2c3d4e11", "2026-11-04T01:00:00Z", 15, 0, 0, "SCHEDULED"),
+            sessionJson("a1b2c3d4-1d2a-4e3b-9c4d-0a1b2c3d4e12", "2026-11-11T01:00:00Z", 15, 0, 0, "SCHEDULED"),
+            sessionJson("a1b2c3d4-1d2a-4e3b-9c4d-0a1b2c3d4e13", "2026-11-18T01:00:00Z", 15, 0, 0, "SCHEDULED"),
+            sessionJson("a1b2c3d4-1d2a-4e3b-9c4d-0a1b2c3d4e14", "2026-11-25T01:00:00Z", 15, 0, 0, "SCHEDULED")};
+    }
+
+    @ParameterizedTest(name = "{0} is refused")
+    @ValueSource(strings = {"RECEPTIONIST", "STUDENT"})
+    @DisplayName("the batch route is closed to every other role, and the API is never asked")
+    void batchRefusedToOtherRoles(String role) throws Exception {
+        mockMvc.perform(submit(post(BATCH), logIn(role), "from", "2026-11-01", "to", "2026-11-30"))
+                .andExpect(status().isForbidden());
+
+        WIRE_MOCK_SERVER.verify(0, anyRequestedFor(urlPathEqualTo(BATCH_API)));
+    }
+
+    @Test
+    @DisplayName("the batch route needs login and a CSRF token")
+    void batchNeedsLoginAndCsrf() throws Exception {
+        stubPage(FIRST);
+        stubBatchCreated(fourTuesdays());
+
+        mockMvc.perform(post(BATCH).with(csrf())).andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrlPattern("**/login"));
+        mockMvc.perform(post(BATCH).cookie(logIn("ADMIN")).param("from", "2026-11-01").param("to", "2026-11-30"))
+                .andExpect(status().isForbidden());
+
+        WIRE_MOCK_SERVER.verify(0, postRequestedFor(urlPathEqualTo(BATCH_API)));
+    }
+
+    @Test
+    @DisplayName("the batch form sits after the list and the single form, with both dates labelled and CSRF")
+    void batchForm() throws Exception {
+        stubPage(FIRST);
+
+        String main = mainOfGet(SESSIONS, logIn("ADMIN"));
+
+        assertThat(main).containsPattern("<h2[^>]*>Crear sesiones en lote</h2>")
+                .containsPattern("<form[^>]*action=\"" + BATCH + "\"[^>]*method=\"post\"")
+                .containsPattern("<input[^>]*id=\"batchFrom\"[^>]*type=\"date\"[^>]*name=\"from\"")
+                .containsPattern("<input[^>]*id=\"batchTo\"[^>]*type=\"date\"[^>]*name=\"to\"")
+                .containsPattern("<label[^>]*for=\"batchFrom\"[^>]*>Desde</label>")
+                .containsPattern("<label[^>]*for=\"batchTo\"[^>]*>Hasta</label>")
+                .containsPattern("<button[^>]*type=\"submit\"[^>]*>\\s*Crear sesiones\\s*</button>")
+                .contains("Martes 22:00");
+        assertThat(main.indexOf("Crear una sesión")).isLessThan(main.indexOf("Crear sesiones en lote"));
+        assertThat(main.split("name=\"_csrf\"", -1).length - 1).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("creates the sessions of a local month: the API gets the UTC dates of the course's weekday, "
+            + "and the list confirms how many and which, once")
+    void batchCreates() throws Exception {
+        stubPage(FIRST);
+        stubBatchCreated(fourTuesdays());
+        Cookie session = logIn("ADMIN");
+
+        MvcResult result = mockMvc.perform(submit(post(BATCH), session, "from", november() + "01",
+                "to", november() + "30")).andExpect(status().is3xxRedirection()).andExpect(redirectedUrl(SESSIONS))
+                .andReturn();
+
+        assertThat(result.getResponse().getHeader("Cache-Control")).contains(NO_STORE);
+        WIRE_MOCK_SERVER.verify(1, postRequestedFor(urlPathEqualTo(BATCH_API))
+                .withHeader("Authorization", equalTo("Bearer " + TestAccessTokens.withRole("ADMIN")))
+                .withRequestBody(equalToJson("{\"fromDate\":\"2026-11-02\",\"toDate\":\"2026-12-01\"}")));
+        String first = mainOfGet(SESSIONS, session);
+        String second = mainOfGet(SESSIONS, session);
+        assertThat(first).containsPattern("<[^>]*role=\"status\"[^>]*>\\s*<p>Creamos 4 sesiones.</p>")
+                .contains("martes 3 de noviembre a las 22:00").contains("martes 24 de noviembre a las 22:00");
+        assertThat(second).doesNotContain("Creamos 4 sesiones").doesNotContain("martes 3 de noviembre");
+    }
+
+    @Test
+    @DisplayName("one session is worded in the singular")
+    void batchCreatesOne() throws Exception {
+        stubPage(FIRST);
+        stubBatchCreated(fourTuesdays()[0]);
+        Cookie session = logIn("INSTRUCTOR");
+        mockMvc.perform(submit(post(BATCH), session, "from", "2026-11-03", "to", "2026-11-03"))
+                .andExpect(status().is3xxRedirection());
+
+        assertThat(mainOfGet(SESSIONS, session)).contains("Creamos 1 sesión.").doesNotContain("Creamos 1 sesiones");
+    }
+
+    @Test
+    @DisplayName("when a date already has a session nothing is created: the page lists the dates in the "
+            + "academy's zone, says that no session was created, with a 409, and keeps the list and the dates")
+    void batchConflict() throws Exception {
+        stubPage(FIRST);
+        stubConflict(BATCH_API, "2026-11-25T01:00:00Z", "2026-11-18T01:00:00Z");
+
+        MvcResult result = mockMvc.perform(submit(post(BATCH), logIn("ADMIN"),
+                "from", "2026-11-01", "to", "2026-11-30")).andReturn();
+        String main = mainOf(result.getResponse().getContentAsString());
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(409);
+        assertThat(main).containsPattern("<[^>]*role=\"alert\"[^>]*>\\s*<p>No se creó ninguna sesión. Estas fechas "
+                        + "ya tienen una sesión:</p>")
+                .containsPattern("<li>martes 17/11 22:00</li>\\s*<li>martes 24/11 22:00</li>")
+                .containsPattern("<input[^>]*id=\"batchFrom\"[^>]*value=\"2026-11-01\"")
+                .containsPattern("<input[^>]*id=\"batchTo\"[^>]*value=\"2026-11-30\"")
+                .containsPattern("<caption[^>]*>\\s*Sesiones")
+                .doesNotContain("Creamos").doesNotContain("secret-detail");
+    }
+
+    @Test
+    @DisplayName("a 400 of the API (no date of the course's weekday in the range) fails next to the range")
+    void batchNoDatesOfTheCourse() throws Exception {
+        stubPage(FIRST);
+        stubProblem("POST", BATCH_API, 400, "INVALID_REQUEST");
+
+        MvcResult result = mockMvc.perform(submit(post(BATCH), logIn("ADMIN"),
+                "from", "2026-11-05", "to", "2026-11-06")).andReturn();
+        String main = mainOf(result.getResponse().getContentAsString());
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(400);
+        assertThat(main).contains("data-error-summary")
+                .containsPattern("<a href=\"#batchTo\">No hay ninguna fecha del curso entre esas fechas.</a>")
+                .containsPattern("<p[^>]*class=\"field-error\"[^>]*>No hay ninguna fecha del curso entre esas "
+                        + "fechas.</p>")
+                .containsPattern("<input[^>]*id=\"batchTo\"[^>]*aria-invalid=\"true\"")
+                .containsPattern("<input[^>]*id=\"batchTo\"[^>]*aria-describedby=\"batchTo-help\"")
+                .doesNotContain("secret-detail");
+    }
+
+    @Test
+    @DisplayName("an inverted range is refused locally, next to the end date, and the API is not asked")
+    void batchInvertedRange() throws Exception {
+        stubPage(FIRST);
+        stubBatchCreated(fourTuesdays());
+
+        MvcResult result = mockMvc.perform(submit(post(BATCH), logIn("ADMIN"),
+                "from", "2026-11-30", "to", "2026-11-01")).andReturn();
+        String main = mainOf(result.getResponse().getContentAsString());
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        assertThat(main).contains("Hay 1 error en el formulario")
+                .containsPattern("<a href=\"#batchTo\">La fecha de fin no puede ser anterior a la de inicio</a>")
+                .containsPattern("<p[^>]*class=\"field-error\"[^>]*>La fecha de fin no puede ser anterior a la de "
+                        + "inicio</p>")
+                .containsPattern("<input[^>]*id=\"batchFrom\"[^>]*value=\"2026-11-30\"");
+        WIRE_MOCK_SERVER.verify(0, anyRequestedFor(urlPathEqualTo(BATCH_API)));
+    }
+
+    @Test
+    @DisplayName("a range of more than 366 days is refused locally, and 366 days go through")
+    void batchRangeCap() throws Exception {
+        stubPage(FIRST);
+        stubBatchCreated(fourTuesdays());
+        Cookie session = logIn("ADMIN");
+
+        MvcResult tooLong = mockMvc.perform(submit(post(BATCH), session, "from", "2026-01-01", "to", "2027-01-02"))
+                .andReturn();
+
+        assertThat(mainOf(tooLong.getResponse().getContentAsString()))
+                .containsPattern("<p[^>]*class=\"field-error\"[^>]*>El rango no puede superar los 366 días</p>");
+        WIRE_MOCK_SERVER.verify(0, anyRequestedFor(urlPathEqualTo(BATCH_API)));
+
+        mockMvc.perform(submit(post(BATCH), session, "from", "2026-01-01", "to", "2027-01-01"))
+                .andExpect(status().is3xxRedirection());
+        WIRE_MOCK_SERVER.verify(1, postRequestedFor(urlPathEqualTo(BATCH_API)));
+    }
+
+    @Test
+    @DisplayName("missing or unreadable dates are refused locally, in Spanish, and the API is not asked")
+    void batchInvalidDates() throws Exception {
+        stubPage(FIRST);
+        stubBatchCreated(fourTuesdays());
+
+        String main = mainOf(mockMvc.perform(submit(post(BATCH), logIn("ADMIN"), "to", "2026-02-30"))
+                .andReturn().getResponse().getContentAsString());
+
+        assertThat(main).contains("Hay 2 errores en el formulario")
+                .containsPattern("<a href=\"#batchFrom\">Ingresá la fecha de inicio</a>")
+                .containsPattern("<a href=\"#batchTo\">Ingresá una fecha de fin válida, con el formato aaaa-mm-dd</a>");
+        WIRE_MOCK_SERVER.verify(0, anyRequestedFor(urlPathEqualTo(BATCH_API)));
+    }
+
+    @ParameterizedTest(name = "API status {0}")
+    @ValueSource(ints = {401, 429, 500, 503})
+    @DisplayName("a failing API on the batch is a 503 with a general error above the batch form, and no detail")
+    void batchUnavailable(int apiStatus, CapturedOutput output) throws Exception {
+        stubPage(FIRST);
+        stubProblem("POST", BATCH_API, apiStatus, "SOMETHING_ELSE");
+
+        MvcResult result = mockMvc.perform(submit(post(BATCH), logIn("ADMIN"),
+                "from", "2026-11-01", "to", "2026-11-30")).andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(503);
+        assertThat(mainOf(result.getResponse().getContentAsString()))
+                .containsPattern("<[^>]*role=\"alert\"[^>]*>\\s*<p>No pudimos crear las sesiones. Probá de nuevo "
+                        + "en unos minutos.</p>")
+                .doesNotContain("secret-detail").doesNotContain("SOMETHING_ELSE");
+        assertThat(output.getAll()).doesNotContain("secret-detail").doesNotContain(TestAccessTokens.withRole("ADMIN"));
+    }
+
+    @Test
+    @DisplayName("a batch on a course that does not exist, or that an instructor does not see, is the 404 notice")
+    void batchOnUnknownCourse() throws Exception {
+        WIRE_MOCK_SERVER.stubFor(WireMock.get(urlPathEqualTo(COURSES_API)).willReturn(aResponse()
+                .withStatus(200).withHeader("Content-Type", "application/json").withBody("{\"courses\":[]}")));
+
+        MvcResult result = mockMvc.perform(submit(post(BATCH), logIn("INSTRUCTOR"),
+                "from", "2026-11-01", "to", "2026-11-30")).andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(404);
+        assertThat(mainOf(result.getResponse().getContentAsString())).contains("No encontramos ese curso.");
+        WIRE_MOCK_SERVER.verify(0, postRequestedFor(urlPathEqualTo(BATCH_API)));
+    }
+
+    @Test
+    @DisplayName("a batch on a malformed course id is a 404, and the API is not asked")
+    void batchOnMalformedCourse() throws Exception {
+        MvcResult result = mockMvc.perform(submit(post(BASE + "/xyz/sesiones/lote"), logIn("ADMIN"),
+                "from", "2026-11-01", "to", "2026-11-30")).andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(404);
+        WIRE_MOCK_SERVER.verify(0, anyRequestedFor(urlPathEqualTo(COURSES_API)));
     }
 }

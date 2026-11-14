@@ -3,6 +3,7 @@ package com.menta.bff.infrastructure.web.controller;
 import com.menta.bff.application.port.out.PhysicalCourseManagementApiClient.CourseManagementException;
 import com.menta.bff.application.port.out.PhysicalCourseManagementApiClient.CourseManagementException.Code;
 import com.menta.bff.application.port.out.PhysicalCourseManagementApiClient.ServiceUnavailableException;
+import com.menta.bff.application.usecase.BatchCreateCourseSessionsUseCase;
 import com.menta.bff.application.usecase.CreateCourseSessionUseCase;
 import com.menta.bff.application.usecase.DescribeSessionConflictsUseCase;
 import com.menta.bff.application.usecase.GetManagedCourseUseCase;
@@ -11,6 +12,7 @@ import com.menta.bff.application.usecase.ManagedCourseView;
 import com.menta.bff.application.usecase.ManagedSessionView;
 import com.menta.bff.application.usecase.ResolveSessionWindowUseCase;
 import com.menta.bff.application.usecase.SessionWindow;
+import com.menta.bff.infrastructure.web.dto.BatchForm;
 import com.menta.bff.infrastructure.web.dto.SessionForm;
 import com.menta.bff.infrastructure.web.filter.TokenRefreshFilter;
 import jakarta.servlet.http.HttpServletRequest;
@@ -34,17 +36,19 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 /**
  * The sessions of a physical course (#368): {@code GET /gestion/cursos-presenciales/{courseId}/sesiones} lists
- * them, with the form that creates one on the same page, so the user sees what already exists next to what they
- * add. Access is restricted to {@code ADMIN} and {@code INSTRUCTOR} in {@code BffSecurityConfig}; the Physical
- * API makes the real decision with the session's access token and scopes an instructor to their own courses.
+ * them, with the form that creates one ({@code POST .../sesiones}) and the one that creates a range of them
+ * ({@code POST .../sesiones/lote}) on the same page, so the user sees what already exists next to what they add.
+ * Access is restricted to {@code ADMIN} and {@code INSTRUCTOR} in {@code BffSecurityConfig}; the Physical API
+ * makes the real decision with the session's access token and scopes an instructor to their own courses.
  *
  * <p>The list shows a window of days (today to 90 days ahead unless the {@code desde} and {@code hasta} query
  * parameters say otherwise; a value that cannot be used gives the default window and a hint, never an error).
  * Whether a course already has a session at a moment is the API's decision: the BFF never checks it, it words
- * the {@code SESSION_ALREADY_EXISTS} refusal next to the field with the dates the API reports, in the academy's
- * zone. A successful submission is Post/Redirect/Get to the list with a flash confirmation; nothing travels in
- * the redirect URL but the course's id, taken from the API's answer. A course that is not found or not owned
- * has a notice page. The API's body never reaches the browser. Pages are never cached.
+ * the {@code SESSION_ALREADY_EXISTS} refusal with the dates the API reports, in the academy's zone: next to the
+ * date field for one session; for a range, which is all or nothing, in an alert that says nothing was created.
+ * A successful submission is Post/Redirect/Get to the list with a flash confirmation; nothing travels in the
+ * redirect URL but the course's id, taken from the API's answer. A course that is not found or not owned has a
+ * notice page. The API's body never reaches the browser. Pages are never cached.
  * </p>
  *
  * <p>Part of Clean Architecture infrastructure layer.
@@ -62,6 +66,8 @@ public class ManagementCourseSessionsController {
     static final String LOAD_FAILED =
             "No pudimos cargar las sesiones en este momento. Intentá nuevamente en unos minutos.";
     static final String ALREADY_EXISTS = "Ya existe una sesión de este curso el %s.";
+    static final String BATCH_UNAVAILABLE = "No pudimos crear las sesiones. Probá de nuevo en unos minutos.";
+    static final String NO_DATES = "No hay ninguna fecha del curso entre esas fechas.";
     static final String ALREADY_EXISTS_UNKNOWN = "Ya existe una sesión de este curso en ese horario.";
 
     private static final String BASE = "/gestion/cursos-presenciales";
@@ -74,6 +80,7 @@ public class ManagementCourseSessionsController {
     private final ListCourseSessionsUseCase listCourseSessionsUseCase;
     private final ResolveSessionWindowUseCase resolveSessionWindowUseCase;
     private final CreateCourseSessionUseCase createCourseSessionUseCase;
+    private final BatchCreateCourseSessionsUseCase batchCreateCourseSessionsUseCase;
     private final DescribeSessionConflictsUseCase describeSessionConflictsUseCase;
 
     // ---- list ----
@@ -115,11 +122,48 @@ public class ManagementCourseSessionsController {
             return reportCreateRefusal(e, courseId, accessToken, bindingResult, model, response);
         } catch (ServiceUnavailableException e) {
             log.warn("Session creation unavailable: {}", e.getMessage());
-            return reportFormError(CREATE_UNAVAILABLE, HttpStatus.SERVICE_UNAVAILABLE, courseId, accessToken, model,
-                    response);
+            return reportFormError("formError", CREATE_UNAVAILABLE, HttpStatus.SERVICE_UNAVAILABLE, courseId,
+                    accessToken, model, response);
         }
         redirectAttributes.addFlashAttribute("sessionsSaved", CREATED_MESSAGE);
         return backToSessions(created.courseId());
+    }
+
+    // ---- create a range ----
+
+    @PostMapping(SESSIONS + "/lote")
+    public String createBatch(
+            @PathVariable String courseId,
+            @Valid @ModelAttribute("batchForm") BatchForm batchForm,
+            BindingResult bindingResult,
+            HttpServletRequest request,
+            HttpServletResponse response,
+            Model model,
+            RedirectAttributes redirectAttributes) {
+        response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
+        String accessToken = accessToken(request);
+        if (bindingResult.hasErrors()) {
+            return page(courseId, resolveSessionWindowUseCase.execute(null, null), accessToken, model, response);
+        }
+        List<ManagedSessionView> created;
+        try {
+            created = batchCreateCourseSessionsUseCase.execute(
+                    accessToken, courseId, batchForm.fromDate(), batchForm.toDate());
+        } catch (CourseManagementException e) {
+            return reportBatchRefusal(e, courseId, accessToken, bindingResult, model, response);
+        } catch (ServiceUnavailableException e) {
+            log.warn("Batch session creation unavailable: {}", e.getMessage());
+            return reportFormError("batchError", BATCH_UNAVAILABLE, HttpStatus.SERVICE_UNAVAILABLE, courseId,
+                    accessToken, model, response);
+        }
+        if (created.isEmpty()) {
+            return rejectNoDates(courseId, accessToken, bindingResult, model, response);
+        }
+        redirectAttributes.addFlashAttribute("sessionsSaved",
+                created.size() == 1 ? "Creamos 1 sesión." : "Creamos " + created.size() + " sesiones.");
+        redirectAttributes.addFlashAttribute("createdSessions",
+                created.stream().map(ManagedSessionView::momentLabel).toList());
+        return backToSessions(created.get(0).courseId());
     }
 
     // ---- helpers ----
@@ -150,6 +194,9 @@ public class ManagementCourseSessionsController {
             model.addAttribute("windowLabel", "del " + DAY.format(window.from()) + " al " + DAY.format(window.to()));
             if (!model.containsAttribute("form")) {
                 model.addAttribute("form", SessionForm.forCourse(course));
+            }
+            if (!model.containsAttribute("batchForm")) {
+                model.addAttribute("batchForm", new BatchForm());
             }
             return PAGE_VIEW;
         } catch (CourseManagementException e) {
@@ -192,22 +239,53 @@ public class ManagementCourseSessionsController {
                 return page(courseId, resolveSessionWindowUseCase.execute(null, null), accessToken, model, response);
             }
             case INVALID_REQUEST -> {
-                return reportFormError(INVALID, HttpStatus.BAD_REQUEST, courseId, accessToken, model, response);
+                return reportFormError("formError", INVALID, HttpStatus.BAD_REQUEST, courseId, accessToken, model,
+                        response);
             }
             case COURSE_NOT_OWNED, COURSE_NOT_FOUND -> {
                 return problemOf(e.getCode(), model, response);
             }
             default -> {
-                return reportFormError(CREATE_UNAVAILABLE, HttpStatus.SERVICE_UNAVAILABLE, courseId, accessToken,
-                        model, response);
+                return reportFormError("formError", CREATE_UNAVAILABLE, HttpStatus.SERVICE_UNAVAILABLE, courseId,
+                        accessToken, model, response);
             }
         }
     }
 
-    /** Re-renders the page with a general error above the creation form. */
-    private String reportFormError(String message, HttpStatus status, String courseId, String accessToken,
-            Model model, HttpServletResponse response) {
-        model.addAttribute("formError", message);
+    /** Words a refusal of the API to a batch creation by its code. Returns the view to render. */
+    private String reportBatchRefusal(CourseManagementException e, String courseId, String accessToken,
+            BindingResult bindingResult, Model model, HttpServletResponse response) {
+        switch (e.getCode()) {
+            case SESSION_ALREADY_EXISTS -> {
+                model.addAttribute("batchConflicts", describeSessionConflictsUseCase.execute(e.getConflictingDates()));
+                response.setStatus(HttpStatus.CONFLICT.value());
+                return page(courseId, resolveSessionWindowUseCase.execute(null, null), accessToken, model, response);
+            }
+            case INVALID_REQUEST -> {
+                return rejectNoDates(courseId, accessToken, bindingResult, model, response);
+            }
+            case COURSE_NOT_OWNED, COURSE_NOT_FOUND -> {
+                return problemOf(e.getCode(), model, response);
+            }
+            default -> {
+                return reportFormError("batchError", BATCH_UNAVAILABLE, HttpStatus.SERVICE_UNAVAILABLE, courseId,
+                        accessToken, model, response);
+            }
+        }
+    }
+
+    /** The range has no date on the course's weekday: next to the end date, where the range is decided. */
+    private String rejectNoDates(String courseId, String accessToken, BindingResult bindingResult, Model model,
+            HttpServletResponse response) {
+        bindingResult.rejectValue("to", "batch.noDates", NO_DATES);
+        response.setStatus(HttpStatus.BAD_REQUEST.value());
+        return page(courseId, resolveSessionWindowUseCase.execute(null, null), accessToken, model, response);
+    }
+
+    /** Re-renders the page with a general error above one of the forms, named by the model attribute it uses. */
+    private String reportFormError(String attribute, String message, HttpStatus status, String courseId,
+            String accessToken, Model model, HttpServletResponse response) {
+        model.addAttribute(attribute, message);
         String view = page(courseId, resolveSessionWindowUseCase.execute(null, null), accessToken, model, response);
         if (PAGE_VIEW.equals(view)) {
             response.setStatus(status.value());
