@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -11,6 +12,7 @@ import com.menta.physical.application.dto.CreatePhysicalCourseCommand;
 import com.menta.physical.application.dto.PhysicalCourseManagementResult;
 import com.menta.physical.application.port.out.PhysicalCourseRepository;
 import com.menta.physical.domain.exception.ProfessorMismatchException;
+import com.menta.physical.domain.exception.ProfessorRequiredException;
 import com.menta.physical.domain.model.PhysicalCourse;
 import com.menta.physical.domain.model.PhysicalCourseLevel;
 import java.time.DayOfWeek;
@@ -65,15 +67,12 @@ class CreatePhysicalCourseUseCaseImplTest {
     }
 
     @Test
-    void admin_defaults_to_themself_when_no_professor_id_supplied() {
+    void admin_creating_without_a_professor_id_is_rejected_and_saves_nothing() {
         UUID adminId = UUID.randomUUID();
-        when(courseRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        useCase.create(command(null), adminId, true);
-
-        ArgumentCaptor<PhysicalCourse> captor = ArgumentCaptor.forClass(PhysicalCourse.class);
-        verify(courseRepository).save(captor.capture());
-        assertThat(captor.getValue().getProfessorId()).isEqualTo(adminId);
+        assertThatThrownBy(() -> useCase.create(command(null), adminId, true))
+            .isInstanceOf(ProfessorRequiredException.class);
+        verify(courseRepository, never()).save(any());
     }
 
     @Test

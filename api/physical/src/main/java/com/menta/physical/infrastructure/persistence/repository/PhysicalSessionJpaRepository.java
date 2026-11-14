@@ -2,6 +2,7 @@ package com.menta.physical.infrastructure.persistence.repository;
 
 import com.menta.physical.infrastructure.persistence.entity.PhysicalSessionJpaEntity;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -170,4 +171,13 @@ public interface PhysicalSessionJpaRepository extends JpaRepository<PhysicalSess
         nativeQuery = true
     )
     boolean existsFutureAssignedSession(@Param("courseId") UUID courseId, @Param("now") Instant now);
+
+    /** Instants of the course's sessions, whatever their status, among the given candidates (#743). */
+    @Query(
+        "SELECT s.scheduledAt FROM PhysicalSessionJpaEntity s "
+            + "WHERE s.courseId = :courseId AND s.scheduledAt IN :candidates ORDER BY s.scheduledAt ASC"
+    )
+    List<Instant> findScheduledAtByCourseIdAndScheduledAtIn(
+        @Param("courseId") UUID courseId, @Param("candidates") Collection<Instant> candidates
+    );
 }

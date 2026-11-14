@@ -209,6 +209,42 @@ verano), así que se acepta. Si la academia pasara a una zona con horario de ver
 o necesitara varias zonas, la recurrencia tendría que guardarse como hora local
 más zona (opción (b) de #729) y se enmendaría el ADR-0048.
 
+## Duplicados y profesor al crear (#743)
+
+La API decide los duplicados; los clientes (BFF, Android) sólo muestran el
+resultado y no repiten la regla.
+
+- **Sesiones repetidas.** Al crear una sesión (`POST .../sessions`) o un lote
+  (`POST .../sessions/batch`), la API busca las sesiones del curso en los
+  instantes UTC exactos que se van a crear. Si alguno ya existe responde
+  `409 Conflict` con `code: SESSION_ALREADY_EXISTS` y `conflictingDates`, la lista
+  de esos instantes (ISO-8601 con `Z`, ordenados). Una sesión `CANCELLED` cuenta
+  como existente. El lote es **todo o nada**: si una sola fecha se repite no se crea
+  ninguna, tampoco las libres. Las sesiones de otro curso en el mismo instante no
+  son conflicto. No hay restricción `UNIQUE` en la base: se asume un solo admin,
+  así que dos pedidos simultáneos podrían duplicar.
+- **Lote sin fechas.** Un rango invertido (`fromDate` posterior a `toDate`) o sin
+  ninguna fecha en el día de la semana UTC del curso responde `400` con
+  `code: INVALID_REQUEST`, en lugar de `201` con una lista vacía.
+- **Profesor del curso.** Un `ADMIN` debe enviar `professorId` al crear un curso;
+  si falta responde `400` con `code: PROFESSOR_REQUIRED` (ya no se le asigna por
+  omisión). Un `INSTRUCTOR` que lo omite queda como profesor del curso; si envía
+  el id de otro responde `400 PROFESSOR_MISMATCH`.
+
+Ejemplo de `409` al repetir el lote de diciembre de 2026 de un curso de los
+miércoles:
+
+```json
+{
+  "type": "https://menta.dance/problems/session_already_exists",
+  "title": "Conflict",
+  "status": 409,
+  "detail": "The course already has a session at one or more of the requested dates.",
+  "code": "SESSION_ALREADY_EXISTS",
+  "conflictingDates": ["2026-12-02T20:00:00Z", "2026-12-09T20:00:00Z", "2026-12-16T20:00:00Z", "2026-12-23T20:00:00Z", "2026-12-30T20:00:00Z"]
+}
+```
+
 ## Check-in
 
 `POST /sessions/{sessionId}/access-qr` permite al `ALUMNO` autenticado obtener

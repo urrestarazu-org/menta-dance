@@ -4,11 +4,15 @@ import com.menta.physical.domain.exception.CapacityBelowAssignedException;
 import com.menta.physical.domain.exception.CourseHasActiveAssignmentsException;
 import com.menta.physical.domain.exception.CourseNotFoundException;
 import com.menta.physical.domain.exception.CourseNotOwnedException;
+import com.menta.physical.domain.exception.EmptySessionBatchException;
 import com.menta.physical.domain.exception.InvalidSessionRangeException;
 import com.menta.physical.domain.exception.ProfessorMismatchException;
+import com.menta.physical.domain.exception.ProfessorRequiredException;
+import com.menta.physical.domain.exception.SessionAlreadyExistsException;
 import com.menta.physical.domain.exception.SessionAlreadyOccurredException;
 import com.menta.physical.domain.exception.SessionNotFoundException;
 import com.menta.physical.infrastructure.web.ProblemDetails;
+import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -51,6 +55,41 @@ public class PhysicalCourseExceptionHandler {
     ResponseEntity<ProblemDetail> professorMismatch(ProfessorMismatchException exception) {
         return ProblemDetails.response(
             HttpStatus.BAD_REQUEST, "professorId must match the authenticated instructor.",
+            exception.getErrorCode()
+        );
+    }
+
+    @ExceptionHandler(ProfessorRequiredException.class)
+    ResponseEntity<ProblemDetail> professorRequired(ProfessorRequiredException exception) {
+        return ProblemDetails.response(
+            HttpStatus.BAD_REQUEST, "professorId is required when an administrator creates a course.",
+            exception.getErrorCode()
+        );
+    }
+
+    /**
+     * A session creation that would repeat an instant the course already has: lists the conflicting
+     * instants, ISO-8601 in UTC, under {@code conflictingDates} (#743).
+     */
+    @ExceptionHandler(SessionAlreadyExistsException.class)
+    ResponseEntity<ProblemDetail> sessionAlreadyExists(SessionAlreadyExistsException exception) {
+        ResponseEntity<ProblemDetail> response = ProblemDetails.response(
+            HttpStatus.CONFLICT,
+            "The course already has a session at one or more of the requested dates.",
+            exception.getErrorCode()
+        );
+        response.getBody().setProperty(
+            "conflictingDates", exception.getConflictingInstants().stream().map(Instant::toString).toList()
+        );
+        return response;
+    }
+
+    /** A batch whose range is inverted or holds no date on the course's day of week (#743). */
+    @ExceptionHandler(EmptySessionBatchException.class)
+    ResponseEntity<ProblemDetail> emptySessionBatch(EmptySessionBatchException exception) {
+        return ProblemDetails.response(
+            HttpStatus.BAD_REQUEST,
+            "The range must have fromDate not after toDate and include a date on the course's day of week.",
             exception.getErrorCode()
         );
     }

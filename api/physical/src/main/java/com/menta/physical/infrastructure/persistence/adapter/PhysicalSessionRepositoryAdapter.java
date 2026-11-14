@@ -10,6 +10,7 @@ import com.menta.physical.infrastructure.persistence.entity.PhysicalSessionJpaEn
 import com.menta.physical.infrastructure.persistence.mapper.PhysicalSessionJpaMapper;
 import com.menta.physical.infrastructure.persistence.repository.PhysicalSessionJpaRepository;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
@@ -93,6 +94,15 @@ public class PhysicalSessionRepositoryAdapter implements PhysicalSessionReposito
         return sessionRepository.saveAll(entities).stream()
             .map(PhysicalSessionJpaMapper::toDomainFreshlyCreated)
             .toList();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public List<Instant> findExistingScheduledAt(CourseId courseId, Collection<Instant> candidates) {
+        if (candidates.isEmpty()) {
+            return List.of();
+        }
+        return sessionRepository.findScheduledAtByCourseIdAndScheduledAtIn(courseId.getValue(), candidates);
     }
 
     @Override

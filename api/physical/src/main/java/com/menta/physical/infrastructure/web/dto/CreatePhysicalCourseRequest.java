@@ -17,6 +17,7 @@ import java.time.LocalTime;
  * over-engineering. {@code professorId} is null for an INSTRUCTOR creating
  * their own course — it is resolved to the caller's own id; a non-null value
  * that doesn't match is rejected (see {@code ProfessorMismatchException}).
+ * An ADMIN must send it (see {@code ProfessorRequiredException}).
  */
 public record CreatePhysicalCourseRequest(
     @NotBlank String title,

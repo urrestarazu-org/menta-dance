@@ -10,8 +10,9 @@ public interface CreatePhysicalCourseUseCase {
     /**
      * Creates a recurring course that starts {@code ACTIVE}.
      *
-     * <p>Administrators may name any professor, defaulting to themselves; an instructor may only
-     * create courses for themselves and is rejected with {@code ProfessorMismatchException}
+     * <p>Administrators must name the professor and are rejected with {@code
+     * ProfessorRequiredException} otherwise; an instructor may omit it (the course is theirs) but
+     * may only create courses for themselves and is rejected with {@code ProfessorMismatchException}
      * otherwise.
      *
      * @param actingUserId the authenticated caller's user id.

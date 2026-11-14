@@ -182,6 +182,19 @@ class PhysicalCourseManagementIntegrationTest {
     }
 
     @Test
+    void admin_creating_a_course_without_a_professor_id_is_rejected() {
+        UUID adminId = issueUser(Role.ADMIN);
+
+        ResponseEntity<Map> response = http.exchange(
+            "/api/v1/admin/physical/courses", HttpMethod.POST,
+            authenticated(adminId, Role.ADMIN, createBody(null)), Map.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody().get("code")).isEqualTo("PROFESSOR_REQUIRED");
+    }
+
+    @Test
     void instructor_cannot_patch_a_course_they_do_not_own() {
         UUID ownerId = UUID.randomUUID();
         UUID courseId = seedCourse(ownerId, CourseStatus.ACTIVE);

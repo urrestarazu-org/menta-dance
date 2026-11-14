@@ -12,6 +12,9 @@ public interface CreatePhysicalSessionUseCase {
      *
      * <p>The date and start time are interpreted as UTC. When the command carries no capacity, the
      * course's own capacity is used.
+     *
+     * @throws com.menta.physical.domain.exception.SessionAlreadyExistsException if the course
+     *     already has a session, of any status, at the same instant.
      */
     PhysicalSessionManagementResult create(
         String courseId, CreatePhysicalSessionCommand command, UUID actingUserId, boolean actingAsAdmin
