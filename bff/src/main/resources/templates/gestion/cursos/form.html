@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/management :: page(${editing} ? 'Editar curso' : 'Nuevo curso', 'cursos-presenciales', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<div class="max-w-xl">
+    <h1 class="mb-6" th:text="${editing} ? 'Editar curso' : 'Nuevo curso'">Nuevo curso</h1>
+
+    <p class="mb-6">El día y la hora son los de la academia (Buenos Aires).</p>
+
+    <div th:if="${formError}" class="mb-4">
+        <div th:replace="~{fragments/components :: alert('error', ${formError})}"></div>
+    </div>
+
+    <form th:action="${editing} ? @{/gestion/cursos-presenciales/{id}/editar(id=${courseId})} : @{/gestion/cursos-presenciales/nuevo}"
+          th:object="${form}" method="post" novalidate class="card space-y-4">
+        <div th:replace="~{fragments/components :: errorSummary(${ {'title':'title', 'description':'description', 'professorId':'professorId', 'dayValid':'localDay', 'localTime':'localTime', 'durationMinutes':'durationMinutes', 'levelValid':'level', 'capacity':'capacity', 'statusValid':'status'} })}"></div>
+
+        <div th:replace="~{fragments/components :: field('title', 'Título', 'text', 'title', 'off', *{title}, null, ${!#fields.hasErrors('*')}, ${#fields.errors('title')})}"></div>
+        <div th:replace="~{fragments/components :: textareaField('description', 'Descripción', 'description', *{description}, 4, null, ${#fields.errors('description')})}"></div>
+
+        <div th:if="${editing}" class="field">
+            <span class="field-label">Profesor/a</span>
+            <p th:text="${course.professorName()}">Ada Lovelace</p>
+            <p class="text-sm">No se puede cambiar el profesor de un curso.</p>
+        </div>
+        <th:block th:unless="${editing}">
+            <th:block th:if="${isAdmin}">
+                <div th:replace="~{fragments/components :: selectField('professorId', 'Profesor/a', 'professorId', ${instructorChoices}, *{professorId}, 'Elegí un profesor/a', ${instructorsTruncated} ? 'Se muestran los primeros 50 profesores.' : null, ${#fields.errors('professorId')})}"></div>
+            </th:block>
+            <div th:unless="${isAdmin}" class="field" id="professorId">
+                <span class="field-label">Profesor/a</span>
+                <p th:text="${ownInstructor != null} ? ${ownInstructor.name()} : ''">Ada Lovelace</p>
+                <p class="field-error" th:each="message : ${#fields.errors('professorId')}" th:text="${message}">Error</p>
+            </div>
+        </th:block>
+
+        <div th:replace="~{fragments/components :: selectField('localDay', 'Día de la semana', 'localDay', ${days}, *{localDay}, 'Elegí un día', null, ${#fields.errors('dayValid')})}"></div>
+        <div th:replace="~{fragments/components :: field('localTime', 'Hora de inicio', 'time', 'localTime', 'off', *{localTime}, 'Formato HH:mm, por ejemplo 19:30.', false, ${#fields.errors('localTime')})}"></div>
+        <div th:replace="~{fragments/components :: field('durationMinutes', 'Duración (minutos)', 'number', 'durationMinutes', 'off', *{durationMinutes}, null, false, ${#fields.errors('durationMinutes')})}"></div>
+        <div th:replace="~{fragments/components :: selectField('level', 'Nivel', 'level', ${levels}, *{level}, 'Elegí un nivel', null, ${#fields.errors('levelValid')})}"></div>
+        <div th:replace="~{fragments/components :: field('capacity', 'Cupo', 'number', 'capacity', 'off', *{capacity}, 'Cantidad de lugares de cada clase.', false, ${#fields.errors('capacity')})}"></div>
+        <th:block th:if="${editing}">
+            <div th:replace="~{fragments/components :: selectField('status', 'Estado', 'status', ${statuses}, *{status}, null, 'Un curso inactivo deja de ofrecerse.', ${#fields.errors('statusValid')})}"></div>
+        </th:block>
+
+        <div class="flex items-center gap-4">
+            <button type="submit" class="btn btn-primary" th:text="${editing} ? 'Guardar cambios' : 'Crear curso'">Crear curso</button>
+            <a th:href="@{/gestion/cursos-presenciales}">Cancelar</a>
+        </div>
+    </form>
+</div>
+</th:block>
+</body>
+</html>

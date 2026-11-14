@@ -92,14 +92,16 @@ class ManagementLayoutIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("a role with no section gets only Inicio: the navigation never shows dead links")
-    void noDeadLinksForARoleWithoutSections() throws Exception {
+    @DisplayName("an instructor gets Inicio and the one section they can open: the navigation never shows dead links")
+    void noDeadLinksForAnInstructor() throws Exception {
         Cookie session = logIn("INSTRUCTOR");
 
         String main = mainOf(mockMvc.perform(get("/gestion").cookie(session))
                 .andReturn().getResponse().getContentAsString());
 
-        assertThat(main).doesNotContain("/gestion/")
+        assertThat(main).containsPattern("<a href=\"/gestion/cursos-presenciales\"[^>]*>Cursos presenciales</a>")
+                .doesNotContain("/gestion/recepcion").doesNotContain("/gestion/usuarios")
+                .doesNotContain("/gestion/sesiones").doesNotContain("/gestion/contenido")
                 .contains("Las secciones de gestión se irán habilitando");
     }
 

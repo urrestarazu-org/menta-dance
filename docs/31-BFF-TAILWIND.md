@@ -406,11 +406,53 @@ check-in manual es solo de recepción y la sección es de ella). Tres rutas, tod
   ids de alumnos o sesiones, ni el token van a un log (solo el nombre de la clase de la excepción o un texto fijo).
   Todo lo que se muestra pasa por `th:text` (escapado).
 
-### Cursos presenciales (`/gestion/cursos-presenciales`), base (#368)
+### Cursos presenciales (`/gestion/cursos-presenciales`) (#368)
 
-Primer paso de la gestión web de cursos y sesiones presenciales: **todavía sin pantallas** (el prefijo existe en
-`BffSecurityConfig` para `ADMIN` e `INSTRUCTOR` y responde 404; la entrada de navegación se habilita con las pantallas,
-que llegan en los PR siguientes). Lo que ya está:
+Gestión web de cursos presenciales para `ADMIN` e `INSTRUCTOR` (la API limita al instructor a sus cursos). Hoy están
+las pantallas de **cursos**; las de sesiones llegan en el PR siguiente (la entrada `Sesiones` de la navegación sigue
+deshabilitada y es otra: esta es `cursos-presenciales`, "Cursos presenciales").
+
+- **Rutas**: `GET /gestion/cursos-presenciales` (listado), `GET`/`POST .../nuevo` (alta) y `GET`/`POST
+  .../{courseId}/editar` (edición). `STUDENT` y `RECEPTIONIST` reciben 403; un anónimo va al login; todo POST lleva
+  CSRF (`th:action`). Un alta o una edición correctas son Post/Redirect/Get al listado con un aviso en una región
+  `role="status"` ("Creamos el curso.", "Guardamos los cambios del curso."), sin nada en la URL. Todas las respuestas
+  llevan `Cache-Control: no-store`.
+- **Listado**: tabla con `<caption>` y `<th scope>`: título, profesor, horario (`scheduleLabel`), duración, nivel en
+  español, cupo, estado como **texto** (Activo/Inactivo, además del color) y un enlace "Editar". Sin cursos, un aviso
+  informativo; con la API caída, el aviso propio (`role="alert"`) con status 503, sin detalles de la API.
+- **Formulario** (`CourseForm`, en `infrastructure/web/dto`): título, descripción, día de la semana, hora de inicio
+  (`HH:mm`), duración en minutos (>= 1), nivel (Principiante/Intermedio/Avanzado), cupo (>= 1) y, al editar, estado. Las
+  restricciones espejan las de la API y los mensajes están en español junto al campo, más el resumen de errores. Los
+  números y la hora viajan como texto y se validan con un patrón, así un valor mal formado es un mensaje y no un fallo de
+  binding. El día y la hora son los de la zona de la academia (`menta.classes.display-zone`); los casos de uso los
+  convierten a UTC y **la edición siempre envía día y hora juntos**.
+- **Profesor**:
+  - `ADMIN`: un `select` con los profesores que lista `AdminUsersApiClient.listUsers` (rol `INSTRUCTOR`, **primera
+    página de 50**, el máximo de la API; sin paginación: si hay más, un texto de ayuda dice que se muestran los primeros
+    50). El `professorId` es obligatorio y se valida en el formulario (nunca se confía en el valor por defecto de la
+    API); el nombre que se guarda es el de la lista (nombre y apellido, o el email si la cuenta no tiene perfil), jamás
+    uno enviado por el navegador, y un id que no está en la lista se rechaza como si faltara.
+  - `INSTRUCTOR`: sin selector; el curso es a su nombre. El id sale del `sub` del token (`AccessTokenClaimsReader`). **El
+    nombre no tiene fuente hoy**: el token no trae nombre y la API de auth no tiene un endpoint de "usuario actual". El
+    puerto `InstructorDisplayNameSource` es esa costura abierta; su implementación por defecto
+    (`UnavailableInstructorDisplayNameSource`) no sabe ningún nombre, así que el alta de un profesor muestra un aviso
+    (503) y no envía nada hasta que exista una fuente real, que reemplaza a esa clase. Editar y listar funcionan igual.
+  - Al editar, el profesor se muestra de solo lectura (no se puede cambiar).
+- **Errores de la API, por `code`** (el cuerpo nunca llega al navegador): `PROFESSOR_REQUIRED` y `PROFESSOR_MISMATCH`
+  → error en el campo del profesor (400); `COURSE_HAS_ACTIVE_ASSIGNMENTS` → error en el campo estado, "No se puede
+  desactivar: tiene alumnos asignados a sesiones futuras." (409); `INVALID_REQUEST` → alerta general del formulario
+  (400, la API no dice qué campo); `COURSE_NOT_OWNED` → página de aviso "No podés gestionar este curso." (403);
+  `COURSE_NOT_FOUND` → página de aviso "No encontramos ese curso." (404); cualquier otro código, caída o
+  `ServiceUnavailableException` → alerta general sin detalles (503). Un id que no es UUID es un 404 sin llamar a la API.
+  Para leer un curso al editar, `GetManagedCourse` lo busca entre los que la API lista al llamante (no hay lectura
+  individual), así que un instructor nunca abre un curso ajeno.
+- **Fragmentos nuevos** (`fragments/components`): `selectField` y `textareaField` (etiqueta, ayuda y error enlazados con
+  `aria-describedby`, `aria-invalid`, `<label for>`) y `fieldHelp`, el bloque de ayuda/error que comparten. Los campos
+  numéricos y de hora usan `field` con tipo `number` o `time`.
+- **Seguridad**: todo lo que se muestra pasa por `th:text`; las URL de redirección son fijas y la de edición se arma
+  con un UUID ya validado.
+
+Base de la issue (ya mergeada antes de las pantallas):
 
 - **Puerto y adaptador**: `PhysicalCourseManagementApiClient` / `PhysicalCourseManagementApiAdapter` consumen
   `/api/v1/admin/physical` con el token de la sesión (listar, crear y editar cursos; listar, crear, crear en lote y

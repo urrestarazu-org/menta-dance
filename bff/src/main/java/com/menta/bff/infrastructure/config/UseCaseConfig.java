@@ -5,6 +5,7 @@ import com.menta.bff.application.port.out.AdminUsersApiClient;
 import com.menta.bff.application.port.out.AuthApiClient;
 import com.menta.bff.application.port.out.BillingApiClient;
 import com.menta.bff.application.port.out.CatalogApiClient;
+import com.menta.bff.application.port.out.InstructorDisplayNameSource;
 import com.menta.bff.application.port.out.PhysicalCourseManagementApiClient;
 import com.menta.bff.application.port.out.PhysicalPurchaseApiClient;
 import com.menta.bff.application.port.out.PhysicalReceptionApiClient;
@@ -36,6 +37,8 @@ import com.menta.bff.application.usecase.GetCourseDetailViewUseCase;
 import com.menta.bff.application.usecase.GetCourseDetailViewUseCaseImpl;
 import com.menta.bff.application.usecase.GetLessonViewUseCase;
 import com.menta.bff.application.usecase.GetLessonViewUseCaseImpl;
+import com.menta.bff.application.usecase.GetManagedCourseUseCase;
+import com.menta.bff.application.usecase.GetManagedCourseUseCaseImpl;
 import com.menta.bff.application.usecase.GetPaymentProgressUseCase;
 import com.menta.bff.application.usecase.GetPaymentProgressUseCaseImpl;
 import com.menta.bff.application.usecase.GetPlansViewUseCase;
@@ -46,6 +49,8 @@ import com.menta.bff.application.usecase.GetValidAccessTokenUseCase;
 import com.menta.bff.application.usecase.GetValidAccessTokenUseCaseImpl;
 import com.menta.bff.application.usecase.ListCourseSessionsUseCase;
 import com.menta.bff.application.usecase.ListCourseSessionsUseCaseImpl;
+import com.menta.bff.application.usecase.ListInstructorsUseCase;
+import com.menta.bff.application.usecase.ListInstructorsUseCaseImpl;
 import com.menta.bff.application.usecase.ListManagedCoursesUseCase;
 import com.menta.bff.application.usecase.ListManagedCoursesUseCaseImpl;
 import com.menta.bff.application.usecase.ListTodaySessionsUseCase;
@@ -72,6 +77,8 @@ import com.menta.bff.application.usecase.ResendActivationUseCase;
 import com.menta.bff.application.usecase.ResendActivationUseCaseImpl;
 import com.menta.bff.application.usecase.ResetPasswordUseCase;
 import com.menta.bff.application.usecase.ResetPasswordUseCaseImpl;
+import com.menta.bff.application.usecase.ResolveOwnInstructorUseCase;
+import com.menta.bff.application.usecase.ResolveOwnInstructorUseCaseImpl;
 import com.menta.bff.application.usecase.SubscribeToPlanUseCase;
 import com.menta.bff.application.usecase.SubscribeToPlanUseCaseImpl;
 import com.menta.bff.application.usecase.UpdateCourseSessionUseCase;
@@ -273,6 +280,23 @@ public class UseCaseConfig {
     public ListManagedCoursesUseCase listManagedCoursesUseCase(
             PhysicalCourseManagementApiClient courseApiClient, ClassesProperties classesProperties) {
         return new ListManagedCoursesUseCaseImpl(courseApiClient, classesProperties.getDisplayZone());
+    }
+
+    @Bean
+    public GetManagedCourseUseCase getManagedCourseUseCase(
+            PhysicalCourseManagementApiClient courseApiClient, ClassesProperties classesProperties) {
+        return new GetManagedCourseUseCaseImpl(courseApiClient, classesProperties.getDisplayZone());
+    }
+
+    @Bean
+    public ListInstructorsUseCase listInstructorsUseCase(AdminUsersApiClient adminUsersApiClient) {
+        return new ListInstructorsUseCaseImpl(adminUsersApiClient);
+    }
+
+    @Bean
+    public ResolveOwnInstructorUseCase resolveOwnInstructorUseCase(
+            AccessTokenClaimsReader accessTokenClaimsReader, InstructorDisplayNameSource nameSource) {
+        return new ResolveOwnInstructorUseCaseImpl(accessTokenClaimsReader, nameSource);
     }
 
     @Bean
