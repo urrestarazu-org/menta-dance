@@ -11,8 +11,6 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static com.menta.bff.infrastructure.integration.HtmlSections.mainOf;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -22,11 +20,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.github.tomakehurst.wiremock.client.WireMock;
 import com.github.tomakehurst.wiremock.http.Fault;
-import com.menta.bff.application.port.out.InstructorDisplayNameSource;
 import jakarta.servlet.http.Cookie;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,7 +31,6 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
@@ -43,8 +38,8 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * The physical course screens (#368): who may open the list and the create and edit forms, what they render,
  * what they send to the Physical API (the weekday and time converted to UTC, always together) and how each answer
  * and each API error code comes back, without ever showing the API's body. Each case logs in for real against the
- * stubbed Auth API and reuses the session cookie. The instructor's display name has no real source yet, so it is
- * the one thing stubbed at the port.
+ * stubbed Auth API and reuses the session cookie. An instructor's own display name comes from the stubbed Auth API's
+ * current-user endpoint (#749).
  */
 @ExtendWith(OutputCaptureExtension.class)
 @DisplayName("Management courses Integration Tests")
@@ -58,6 +53,7 @@ class ManagementCoursesIntegrationTest extends BaseIntegrationTest {
     private static final String COURSES_API = "/api/v1/admin/physical/courses";
     private static final String COURSE_API = COURSES_API + "/" + COURSE_ID;
     private static final String USERS_API = "/api/v1/admin/users";
+    private static final String ME_API = "/api/v1/users/me";
     private static final String NO_STORE = "no-store";
     private static final String[] FIELDS = {"title", "description", "professorId", "localDay", "localTime",
         "durationMinutes", "level", "capacity"};
@@ -71,9 +67,6 @@ class ManagementCoursesIntegrationTest extends BaseIntegrationTest {
     }
 
     private static final String SALSA = courseJson(COURSE_ID, "Salsa", "ACTIVE");
-
-    @MockitoBean
-    private InstructorDisplayNameSource nameSource;
 
     private Cookie logInWith(String accessToken) throws Exception {
         WIRE_MOCK_SERVER.stubFor(WireMock.post(urlEqualTo("/api/v1/auth/login")).willReturn(aResponse()
@@ -137,6 +130,14 @@ class ManagementCoursesIntegrationTest extends BaseIntegrationTest {
 
     private static void stubAda() {
         stubInstructors(1, instructorItem(ADA_ID, "ada@example.com", "Ada", "Lovelace"));
+    }
+
+    /** The signed-in instructor's own account, as {@code GET /api/v1/users/me} answers it. */
+    private static void stubOwnAccount(String firstName, String lastName) {
+        WIRE_MOCK_SERVER.stubFor(WireMock.get(urlPathEqualTo(ME_API)).willReturn(aResponse()
+                .withStatus(200).withHeader("Content-Type", "application/json")
+                .withBody("{\"userId\":\"%s\",\"firstName\":%s,\"lastName\":%s,\"role\":\"INSTRUCTOR\"}"
+                        .formatted(ADA_ID, firstName, lastName))));
     }
 
     private static MockHttpServletRequestBuilder form(
@@ -526,9 +527,10 @@ class ManagementCoursesIntegrationTest extends BaseIntegrationTest {
     // ---- create as instructor ----
 
     @Test
-    @DisplayName("an instructor gets no picker: the course goes to their own id (from the token) and name")
+    @DisplayName("an instructor gets no picker: the course goes to their own id (from the token) and the name the "
+            + "Auth API knows for their account")
     void instructorCreates() throws Exception {
-        when(nameSource.displayNameOf(any())).thenReturn(Optional.of("Ada Lovelace"));
+        stubOwnAccount("\" Ada \"", "\"Lovelace\"");
         stubCreated();
         Cookie session = logInWith(instructorToken());
 
@@ -539,6 +541,8 @@ class ManagementCoursesIntegrationTest extends BaseIntegrationTest {
         assertThat(formPage).doesNotContain("name=\"professorId\"").contains("Ada Lovelace")
                 .containsPattern("<button[^>]*type=\"submit\"[^>]*>\\s*Crear curso\\s*</button>");
         WIRE_MOCK_SERVER.verify(0, getRequestedFor(urlPathEqualTo(USERS_API)));
+        WIRE_MOCK_SERVER.verify(getRequestedFor(urlPathEqualTo(ME_API))
+                .withHeader("Authorization", equalTo("Bearer " + instructorToken())));
         WIRE_MOCK_SERVER.verify(1, postRequestedFor(urlPathEqualTo(COURSES_API))
                 .withHeader("Authorization", equalTo("Bearer " + instructorToken()))
                 .withRequestBody(equalToJson("{\"professorId\":\"" + ADA_ID + "\","
@@ -546,9 +550,18 @@ class ManagementCoursesIntegrationTest extends BaseIntegrationTest {
                         + "\"startTime\":\"01:00:00\"}", true, true)));
     }
 
-    @Test
-    @DisplayName("while the instructor's name has no source, the form says so with a 503 and nothing is sent")
-    void instructorWithoutNameSource() throws Exception {
+    @ParameterizedTest(name = "current-user endpoint: {0}")
+    @ValueSource(strings = {"401", "500", "no-profile", "connection-reset"})
+    @DisplayName("when the Auth API cannot give the instructor's name, the form says so with a 503 and nothing is "
+            + "sent")
+    void instructorWithoutName(String failure, CapturedOutput output) throws Exception {
+        switch (failure) {
+            case "no-profile" -> stubOwnAccount("null", "null");
+            case "connection-reset" -> WIRE_MOCK_SERVER.stubFor(WireMock.get(urlPathEqualTo(ME_API))
+                    .willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)));
+            default -> stubProblem("GET", ME_API, Integer.parseInt(failure), "SOMETHING_ELSE");
+        }
+        stubCreated();
         Cookie session = logInWith(instructorToken());
 
         MvcResult get = mockMvc.perform(get(NEW).cookie(session)).andReturn();
@@ -558,15 +571,17 @@ class ManagementCoursesIntegrationTest extends BaseIntegrationTest {
             assertThat(result.getResponse().getStatus()).isEqualTo(503);
             assertThat(mainOf(result.getResponse().getContentAsString()))
                     .containsPattern("<[^>]*role=\"alert\"[^>]*>\\s*<p>Por ahora no podemos crear cursos desde tu "
-                            + "cuenta en la web. Pedile a un administrador que cree el curso a tu nombre.</p>");
+                            + "cuenta en la web. Pedile a un administrador que cree el curso a tu nombre.</p>")
+                    .doesNotContain("secret-detail");
         }
         WIRE_MOCK_SERVER.verify(0, postRequestedFor(urlPathEqualTo(COURSES_API)));
+        assertThat(output.getAll()).doesNotContain("secret-detail").doesNotContain(instructorToken());
     }
 
     @Test
     @DisplayName("an API refusal on the instructor's own course shows at the professor block")
     void instructorMismatch() throws Exception {
-        when(nameSource.displayNameOf(any())).thenReturn(Optional.of("Ada Lovelace"));
+        stubOwnAccount("\"Ada\"", "\"Lovelace\"");
         stubProblem("POST", COURSES_API, 400, "PROFESSOR_MISMATCH");
 
         String main = mainOf(mockMvc.perform(submission(post(NEW), logInWith(instructorToken()))).andReturn()
