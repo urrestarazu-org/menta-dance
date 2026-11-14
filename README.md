@@ -300,7 +300,7 @@ menta-dance/
 |---------------|-------------|
 | **Gestión Completa** | Acceso total a cursos, usuarios y configuración |
 | **Cuentas y roles** | Desde la web (`/gestion/usuarios`): listar y buscar cuentas, dar de alta profesores, recepcionistas y administradores (reciben un correo para activar la cuenta) y cambiar el rol de cualquier cuenta, lo que cierra sus sesiones |
-| **Cursos presenciales** | Desde la web (`/gestion/cursos-presenciales`): listar los cursos (el profesor ve solo los suyos), crearlos eligiendo el profesor (el administrador) y editarlos: título, descripción, día y hora (en la zona de la academia), duración, nivel, cupo y estado. Las sesiones de cada curso se gestionan en una etapa posterior de la misma issue (#368) |
+| **Cursos presenciales** | Desde la web (`/gestion/cursos-presenciales`): listar los cursos (el profesor ve solo los suyos), crearlos eligiendo el profesor (el administrador) y editarlos: título, descripción, día y hora (en la zona de la academia), duración, nivel, cupo y estado. Por curso (`/gestion/cursos-presenciales/{courseId}/sesiones`): listar sus sesiones con cupo ocupado y estado, crear una o varias a la vez (por ejemplo, todos los martes del mes) viendo las fechas que ya existen, y reprogramar o cancelar una sesión con confirmación. La lista de alumnos de cada sesión llega en una etapa posterior de la misma issue (#368) |
 | **Verificar Pagos** | Aprobar transferencias manuales |
 | **Conciliación** | Resolver discrepancias con el procesador de pagos |
 | **Dispositivos QR** | Registrar y administrar lectores de check-in |
