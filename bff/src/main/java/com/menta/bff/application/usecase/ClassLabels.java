@@ -5,6 +5,7 @@ import java.text.NumberFormat;
 import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -14,6 +15,7 @@ import java.time.format.DateTimeParseException;
 import java.time.temporal.TemporalAdjusters;
 import java.util.Currency;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.stream.Stream;
 
 /** Spanish display labels for the physical classes pages. */
@@ -104,15 +106,108 @@ final class ClassLabels {
             timePart = startTime;
         } else {
             DayOfWeek utcDay = day == null ? DayOfWeek.MONDAY : day;
-            ZonedDateTime local = REFERENCE_MONDAY.with(TemporalAdjusters.nextOrSame(utcDay))
-                    .atTime(time).atZone(ZoneOffset.UTC).withZoneSameInstant(zone);
-            dayPart = day == null ? null : dayLabel(local.getDayOfWeek());
-            timePart = TIME_FORMAT.format(local);
+            WeeklySlot local = toLocalSlot(utcDay, time, zone);
+            dayPart = day == null ? null : dayLabel(local.day());
+            timePart = TIME_FORMAT.format(local.time());
         }
         return Stream.of(dayPart, timePart)
                 .filter(part -> part != null && !part.isBlank())
                 .reduce((d, t) -> d + " " + t)
                 .orElse(null);
+    }
+
+    /**
+     * A weekday and a time of day, the shape of a weekly recurrence. Which zone it is in depends on the method
+     * that produced it.
+     */
+    record WeeklySlot(DayOfWeek day, LocalTime time) {
+    }
+
+    /** An inclusive range of dates. */
+    record DateRange(LocalDate from, LocalDate to) {
+    }
+
+    /**
+     * Converts the weekly recurrence of a class from the academy's zone to UTC, the inverse of
+     * {@link #toLocalSlot}: Tuesday 22:00 in Buenos Aires is Wednesday 01:00 UTC. The weekday rolls with the hour,
+     * forward west of UTC and backwards east of it. Like {@link #schedule}, it uses a fixed reference week, never
+     * the current date, so it is deterministic.
+     *
+     * <p>Limitation (ADR-0048): a recurrence fixed in UTC is exact only for zones without daylight saving time,
+     * as Buenos Aires. For a zone with it, the offset of the reference week (January) is used all year round.
+     * </p>
+     *
+     * @param localDay  weekday in the academy's zone
+     * @param localTime start time in the academy's zone
+     * @param zone      academy display zone
+     * @return the weekday and time in UTC
+     * @throws NullPointerException if any argument is {@code null}
+     */
+    static WeeklySlot toUtcSlot(DayOfWeek localDay, LocalTime localTime, ZoneId zone) {
+        Objects.requireNonNull(zone, "zone");
+        return convertSlot(localDay, localTime, zone, ZoneOffset.UTC);
+    }
+
+    /**
+     * Converts the weekly recurrence of a class from UTC (how the API stores it) to the academy's zone, e.g. to
+     * prefill an edit form. Same reference week and same daylight saving limitation as {@link #toUtcSlot}.
+     *
+     * @param utcDay  weekday in UTC
+     * @param utcTime start time in UTC
+     * @param zone    academy display zone
+     * @return the weekday and time in the academy's zone
+     * @throws NullPointerException if any argument is {@code null}
+     */
+    static WeeklySlot toLocalSlot(DayOfWeek utcDay, LocalTime utcTime, ZoneId zone) {
+        Objects.requireNonNull(zone, "zone");
+        return convertSlot(utcDay, utcTime, ZoneOffset.UTC, zone);
+    }
+
+    /**
+     * Converts a local date and time in the academy's zone to the UTC date and time the API expects for a single
+     * session: Tuesday 2026-11-17 22:00 in Buenos Aires is 2026-11-18 01:00 UTC. A local time that does not exist
+     * (a daylight saving gap) is moved forward by the zone rules.
+     *
+     * @param localDate date in the academy's zone
+     * @param localTime time in the academy's zone
+     * @param zone      academy display zone
+     * @return the UTC date and time
+     * @throws NullPointerException if any argument is {@code null}
+     */
+    static LocalDateTime toUtc(LocalDate localDate, LocalTime localTime, ZoneId zone) {
+        Objects.requireNonNull(localDate, "localDate");
+        Objects.requireNonNull(localTime, "localTime");
+        Objects.requireNonNull(zone, "zone");
+        return localDate.atTime(localTime).atZone(zone).withZoneSameInstant(ZoneOffset.UTC).toLocalDateTime();
+    }
+
+    /**
+     * Converts the local range of a batch of sessions to the UTC dates the API takes. The API generates one session
+     * per UTC date in the range whose UTC weekday is the course's, at the course's UTC time, so each end of the
+     * range is moved together with the course's local start time: for a course that is Tuesday 22:00 in Buenos
+     * Aires, the local range 2026-11-01..2026-11-30 becomes 2026-11-02..2026-12-01, and the four Wednesdays 01:00
+     * UTC inside it are the four local Tuesdays 22:00 the user expects. An inverted range stays inverted, and the
+     * API refuses it.
+     *
+     * @param localFrom       first local date, inclusive
+     * @param localTo         last local date, inclusive
+     * @param courseLocalTime start time of the course in the academy's zone
+     * @param zone            academy display zone
+     * @return the UTC dates, inclusive
+     * @throws NullPointerException if any argument is {@code null}
+     */
+    static DateRange toUtcDateRange(LocalDate localFrom, LocalDate localTo, LocalTime courseLocalTime, ZoneId zone) {
+        return new DateRange(
+                toUtc(localFrom, courseLocalTime, zone).toLocalDate(),
+                toUtc(localTo, courseLocalTime, zone).toLocalDate());
+    }
+
+    private static WeeklySlot convertSlot(DayOfWeek day, LocalTime time, ZoneId from, ZoneId to) {
+        Objects.requireNonNull(day, "day");
+        Objects.requireNonNull(time, "time");
+        ZonedDateTime moved = REFERENCE_MONDAY.with(TemporalAdjusters.nextOrSame(day))
+                .atTime(time).atZone(from).withZoneSameInstant(to);
+        return new WeeklySlot(moved.getDayOfWeek(), moved.toLocalTime());
     }
 
     private static DayOfWeek parseDay(String dayOfWeek) {
