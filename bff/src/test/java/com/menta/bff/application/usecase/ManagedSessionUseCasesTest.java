@@ -83,6 +83,17 @@ class ManagedSessionUseCasesTest {
     }
 
     @Test
+    @DisplayName("the sessions come in chronological order whatever the order of the API")
+    void listsInChronologicalOrder() {
+        ManagedSession later = new ManagedSession("b6f7c8e1-1d2a-4e3b-9c4d-0a1b2c3d4e5f", COURSE_ID,
+                Instant.parse("2026-11-25T01:00:00Z"), 15, 0, 0, 15, "SCHEDULED", null);
+        when(client.listCourseSessions(TOKEN, COURSE_ID, null, null)).thenReturn(List.of(later, SESSION));
+
+        assertThat(list.execute(TOKEN, COURSE_ID, null, null)).extracting(ManagedSessionView::startsAt)
+                .containsExactly(Instant.parse("2026-11-18T01:00:00Z"), Instant.parse("2026-11-25T01:00:00Z"));
+    }
+
+    @Test
     @DisplayName("listing without a range leaves it to the API, and a cancelled session reads as cancelled")
     void listsWithoutRange() {
         ManagedSession cancelled = new ManagedSession(SESSION_ID, COURSE_ID, Instant.parse("2026-11-18T01:00:00Z"),

@@ -1,9 +1,11 @@
 package com.menta.bff.application.usecase;
 
+import com.menta.bff.application.dto.ManagedSession;
 import com.menta.bff.application.port.out.PhysicalCourseManagementApiClient;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.Comparator;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 
@@ -11,7 +13,7 @@ import lombok.RequiredArgsConstructor;
  * Implementation of {@link ListCourseSessionsUseCase}. The backend works in UTC only (ADR-0048): the local days
  * become the half-open UTC range {@code [start of localFrom, start of the day after localTo)}. A session that
  * starts at the end of the range, which the API may or may not include, is left out, so the screen shows the
- * same days whatever the API does at the edge.
+ * same days whatever the API does at the edge. The sessions come in chronological order.
  */
 @RequiredArgsConstructor
 public class ListCourseSessionsUseCaseImpl implements ListCourseSessionsUseCase {
@@ -28,6 +30,7 @@ public class ListCourseSessionsUseCaseImpl implements ListCourseSessionsUseCase 
         Instant to = localTo == null ? null : localTo.plusDays(1).atStartOfDay(displayZone).toInstant();
         return courseApiClient.listCourseSessions(token, id, from, to).stream()
                 .filter(session -> to == null || session.scheduledAt().isBefore(to))
+                .sorted(Comparator.comparing(ManagedSession::scheduledAt))
                 .map(session -> CourseManagementSupport.view(session, displayZone))
                 .toList();
     }

@@ -48,8 +48,10 @@
                 <span class="badge" th:text="${course.active()} ? 'Activo' : 'Inactivo'"
                       th:classappend="${course.active()} ? 'badge-success' : 'badge-neutral'">Activo</span>
             </td>
-            <td class="p-3">
+            <td class="p-3 whitespace-nowrap">
                 <a th:href="@{/gestion/cursos-presenciales/{id}/editar(id=${course.courseId()})}">Editar<span class="sr-only" th:text="| el curso ${course.title()}|"> el curso Salsa</span></a>
+                ·
+                <a th:href="@{/gestion/cursos-presenciales/{id}/sesiones(id=${course.courseId()})}">Sesiones<span class="sr-only" th:text="| del curso ${course.title()}|"> del curso Salsa</span></a>
             </td>
         </tr>
         </tbody>

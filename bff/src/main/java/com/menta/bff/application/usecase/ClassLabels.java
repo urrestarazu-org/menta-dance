@@ -27,6 +27,9 @@ final class ClassLabels {
     private static final DateTimeFormatter DAY_FORMAT =
             DateTimeFormatter.ofPattern("EEEE d 'de' MMMM", Locale.forLanguageTag("es-AR"));
 
+    private static final DateTimeFormatter SHORT_MOMENT_FORMAT =
+            DateTimeFormatter.ofPattern("EEEE dd/MM HH:mm", Locale.forLanguageTag("es-AR"));
+
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
 
     private static final Locale AR = Locale.forLanguageTag("es-AR");
@@ -59,6 +62,17 @@ final class ClassLabels {
      */
     static String moment(Instant instant, ZoneId zone) {
         return MOMENT_FORMAT.format(instant.atZone(zone));
+    }
+
+    /**
+     * Words an instant in the academy's zone in its short form, e.g. {@code "martes 17/11 22:00"}.
+     *
+     * @param instant moment to word
+     * @param zone    academy display zone
+     * @return the Spanish label
+     */
+    static String shortMoment(Instant instant, ZoneId zone) {
+        return SHORT_MOMENT_FORMAT.format(instant.atZone(zone));
     }
 
     /**

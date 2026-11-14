@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/management :: page('Sesiones del curso', 'cursos-presenciales', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<p class="mb-4"><a th:href="@{/gestion/cursos-presenciales}">Volver a los cursos</a></p>
+
+<h1 class="mb-2">Sesiones de <span th:text="${course.title()}">Salsa</span></h1>
+<p class="mb-6">
+    <span th:text="${course.scheduleLabel()}">Martes 22:00</span>
+    · <span th:text="${course.professorName()}">Ada Lovelace</span>
+    · Cupo de cada sesión: <span th:text="${course.capacity()}">15</span>.
+    Las fechas y horas son las de la academia (Buenos Aires).
+</p>
+
+<div th:if="${sessionsSaved}" class="alert alert-success mb-4" role="status">
+    <p th:text="${sessionsSaved}">Creamos 4 sesiones.</p>
+    <ul th:if="${createdSessions != null}" class="mt-2 list-disc pl-6">
+        <li th:each="label : ${createdSessions}" th:text="${label}">martes 17 de noviembre a las 22:00</li>
+    </ul>
+</div>
+
+<h2 class="mb-4">Sesiones existentes</h2>
+
+<form th:action="@{/gestion/cursos-presenciales/{id}/sesiones(id=${course.courseId()})}" method="get"
+      aria-label="Elegir las fechas que se listan" class="card mb-6 grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+    <div th:replace="~{fragments/components :: optionalField('desde', 'Desde', 'date', 'desde', 'off', ${windowFrom}, null, false, null)}"></div>
+    <div th:replace="~{fragments/components :: optionalField('hasta', 'Hasta', 'date', 'hasta', 'off', ${windowTo}, null, false, null)}"></div>
+    <div class="flex items-center gap-4">
+        <button type="submit" class="btn btn-primary">Ver sesiones</button>
+        <a th:href="@{/gestion/cursos-presenciales/{id}/sesiones(id=${course.courseId()})}">Próximos 90 días</a>
+    </div>
+</form>
+
+<div th:if="${windowFallback}" class="mb-4">
+    <div th:replace="~{fragments/components :: alert('info', 'No pudimos usar esas fechas. Mostramos los próximos 90 días.')}"></div>
+</div>
+<div th:if="${sessions.isEmpty()}" class="mb-4">
+    <div th:replace="~{fragments/components :: alert('info', 'Este curso no tiene sesiones en estas fechas.')}"></div>
+</div>
+
+<div th:unless="${sessions.isEmpty()}" class="mb-8 overflow-x-auto" role="region" aria-label="Sesiones del curso" tabindex="0">
+    <table class="w-full text-left">
+        <caption class="mb-2 text-left font-semibold">
+            Sesiones <span th:text="${windowLabel}">del 14/11/2026 al 12/02/2027</span> (<span th:text="${sessions.size()}">0</span>)
+        </caption>
+        <thead>
+        <tr class="border-b border-brand-deep/30">
+            <th scope="col" class="p-3 font-semibold">Fecha y hora</th>
+            <th scope="col" class="p-3 font-semibold">Ocupados / cupo</th>
+            <th scope="col" class="p-3 font-semibold">Disponibles</th>
+            <th scope="col" class="p-3 font-semibold">Estado</th>
+        </tr>
+        </thead>
+        <tbody class="divide-y divide-brand-deep/15">
+        <tr th:each="item : ${sessions}">
+            <th scope="row" class="p-3 font-medium">
+                <time th:datetime="${item.startsAt()}" th:text="${item.momentLabel()}">martes 17 de noviembre a las 22:00</time>
+            </th>
+            <td class="p-3 whitespace-nowrap" th:text="|${item.occupied()} / ${item.capacity()}|">3 / 10</td>
+            <td class="p-3" th:text="${item.availableSpots()}">7</td>
+            <td class="p-3">
+                <span class="badge" th:text="${item.cancelled()} ? 'Cancelada' : 'Programada'"
+                      th:classappend="${item.cancelled()} ? 'badge-neutral' : 'badge-success'">Programada</span>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+</div>
+
+<div class="max-w-xl">
+    <h2 class="mb-4">Crear una sesión</h2>
+
+    <div th:if="${formError}" class="mb-4">
+        <div th:replace="~{fragments/components :: alert('error', ${formError})}"></div>
+    </div>
+
+    <form th:action="@{/gestion/cursos-presenciales/{id}/sesiones(id=${course.courseId()})}"
+          th:object="${form}" method="post" novalidate class="card mb-8 space-y-4">
+        <div th:replace="~{fragments/components :: errorSummary(${ {'localDate':'localDate', 'localTime':'localTime', 'capacity':'capacity', 'notes':'notes'} })}"></div>
+
+        <div th:replace="~{fragments/components :: field('localDate', 'Fecha', 'date', 'localDate', 'off', *{localDate}, null, false, ${#fields.errors('localDate')})}"></div>
+        <div th:replace="~{fragments/components :: field('localTime', 'Hora de inicio', 'time', 'localTime', 'off', *{localTime}, 'Formato HH:mm, por ejemplo 19:30.', false, ${#fields.errors('localTime')})}"></div>
+        <div th:replace="~{fragments/components :: optionalField('capacity', 'Cupo (opcional)', 'number', 'capacity', 'off', *{capacity}, 'Si lo dejás vacío, la sesión tiene el cupo del curso.', false, ${#fields.errors('capacity')})}"></div>
+        <div th:replace="~{fragments/components :: optionalField('notes', 'Notas (opcional)', 'text', 'notes', 'off', *{notes}, 'Hasta 500 caracteres.', false, ${#fields.errors('notes')})}"></div>
+
+        <div class="flex items-center gap-4">
+            <button type="submit" class="btn btn-primary">Crear sesión</button>
+        </div>
+    </form>
+
+    <h2 class="mb-4">Crear sesiones en lote</h2>
+
+    <p class="mb-4">
+        Se crea una sesión por cada día del curso (<span th:text="${course.scheduleLabel()}">Martes 22:00</span>)
+        entre las dos fechas, ambas incluidas. Si alguna de esas sesiones ya existe, no se crea ninguna.
+    </p>
+
+    <div th:if="${batchError}" class="mb-4">
+        <div th:replace="~{fragments/components :: alert('error', ${batchError})}"></div>
+    </div>
+    <div th:if="${batchConflicts != null}" class="alert alert-error mb-4" role="alert">
+        <p>No se creó ninguna sesión. Estas fechas ya tienen una sesión:</p>
+        <ul class="mt-2 list-disc pl-6">
+            <li th:each="label : ${batchConflicts}" th:text="${label}">martes 17/11 22:00</li>
+        </ul>
+    </div>
+
+    <form th:action="@{/gestion/cursos-presenciales/{id}/sesiones/lote(id=${course.courseId()})}"
+          th:object="${batchForm}" method="post" novalidate class="card space-y-4">
+        <div th:replace="~{fragments/components :: errorSummary(${ {'from':'batchFrom', 'to':'batchTo', 'toOrdered':'batchTo', 'toWithinLimit':'batchTo'} })}"></div>
+
+        <div th:replace="~{fragments/components :: field('batchFrom', 'Desde', 'date', 'from', 'off', *{from}, null, false, ${#fields.errors('from')})}"></div>
+        <div th:replace="~{fragments/components :: field('batchTo', 'Hasta', 'date', 'to', 'off', *{to}, 'El rango puede tener hasta 366 días.', false, ${#fields.errors('to*')})}"></div>
+
+        <div class="flex items-center gap-4">
+            <button type="submit" class="btn btn-primary">Crear sesiones</button>
+        </div>
+    </form>
+</div>
+</th:block>
+</body>
+</html>
