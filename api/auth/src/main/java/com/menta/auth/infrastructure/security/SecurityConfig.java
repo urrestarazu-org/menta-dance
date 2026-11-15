@@ -83,6 +83,10 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *   - DELETE /api/v1/admin/billing/subscriptions/{subscriptionId} → ADMIN
  *     (US-BILLING-011, #130; already covered by the generic
  *     /api/v1/admin/** rule below — no separate matcher needed.)
+ *   - POST /api/v1/admin/billing/plans → ADMIN
+ *     (#762; an admin creates a billing plan. Same as the rule above: the
+ *     generic /api/v1/admin/** rule below covers it, pinned by
+ *     SecurityConfigTest.)
  *   - /api/v1/catalog/courses and /api/v1/catalog/courses/** → permitAll
  *     (#95; public course catalog composed from Physical/Virtual, no
  *     account required to browse).

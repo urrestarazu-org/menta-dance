@@ -21,11 +21,12 @@ PUT  /api/v1/billing/physical/courses/{courseId}/pricing
 POST /api/v1/billing/payments/mercadopago/webhook
 GET  /api/v1/billing/admin/reconciliation
 POST /api/v1/billing/admin/reconciliation/{paymentId}/resolve
-GET  /api/v1/billing/admin/payments
-GET  /api/v1/billing/admin/payments/{paymentId}
-POST /api/v1/billing/admin/payments/{paymentId}/approve
-POST /api/v1/billing/admin/payments/{paymentId}/reject
-POST /api/v1/billing/admin/payments/{paymentId}/corrections
+GET  /api/v1/admin/billing/payments
+GET  /api/v1/admin/billing/payments/{paymentId}
+POST /api/v1/admin/billing/payments/{paymentId}/approve
+POST /api/v1/admin/billing/payments/{paymentId}/reject
+POST /api/v1/admin/billing/payments/{paymentId}/corrections
+POST /api/v1/admin/billing/plans
 POST /api/v1/billing/payments/{paymentId}/proof
 ```
 
@@ -39,6 +40,7 @@ son exclusivas de `ADMIN`. Los errores usan `application/problem+json`.
 | `GET /plans` | Ninguna (público) | `200` con `{ plans: [...] }`, `[]` si no hay planes activos |
 | `GET /plans/{planId}` | Ninguna (público) | `200` con el detalle completo del plan |
 | `POST /subscriptions` | Access token válido | `201` con la suscripción pendiente y la URL de Checkout Pro |
+| `POST /api/v1/admin/billing/plans` | Access token con rol `ADMIN` | `201` con el plan creado, mismo contrato que `GET /plans/{planId}` |
 
 `GET /plans` sólo devuelve planes con `status = ACTIVE`, ordenados por precio
 ascendente; el destacado se indica con el campo `featured`, no con el orden.
@@ -64,6 +66,32 @@ con el `id` guardado: el curso no se quita de `courses` y la respuesta sigue
 siendo `200` con el plan completo. Si un módulo falla, sólo se degradan a
 `null` los cursos que ese módulo habría respondido (se registra un `WARN` con
 el módulo y los ids afectados); el otro módulo conserva sus nombres.
+
+## Alta de planes (`POST /api/v1/admin/billing/plans`, #762)
+
+Un `ADMIN` crea un plan con `name`, `description`, `price` y `currency` (mismo par
+monto/moneda que el detalle público), `durationDays`, `featured`, `status` (`ACTIVE` o
+`INACTIVE`), `termsAndConditions`, `cancellationPolicy`, `paymentMethods`
+(`MERCADO_PAGO` y/o `BANK_TRANSFER`) y `courseIds`. Todos los campos son obligatorios;
+`courseIds` puede ser una lista vacía. El `id` lo genera el servidor (UUID) y la respuesta
+`201` tiene exactamente el contrato del detalle público, con los nombres de los cursos
+resueltos igual que en `GET /plans`.
+
+Un plan `ACTIVE` aparece desde ese momento en `GET /plans` y `GET /plans/{planId}`; uno
+`INACTIVE` se guarda pero nunca se muestra públicamente (`404 PLAN_NOT_FOUND` en el
+detalle). Los `courseIds` se toman por valor: Billing no valida que existan en Virtual ni
+en Physical, y un curso que no se puede resolver se devuelve con `name: null`.
+
+Cualquier dato inválido responde `400 INVALID_REQUEST` y no crea nada: campo ausente o
+JSON ilegible, precio cero o negativo (a diferencia de un plan ya guardado, que puede leerse
+con precio cero), más de dos decimales u ocho dígitos enteros, moneda que no es un código
+ISO-4217, `durationDays` cero o negativo, `status` o medio de pago desconocidos, sin medios
+de pago, o un `courseId` en blanco o de más de 64 caracteres. Sin token responde `401`;
+con un rol que no es `ADMIN`, `403` (regla genérica `/api/v1/admin/**` de `SecurityConfig`).
+
+No hay tabla de auditoría para planes: el alta queda registrada en el log de la API con el
+id del plan y el del admin. La request de Bruno es `bruno/API - Direct/billing/admin/Create
+Plan.bru`.
 
 ## Estado de un pago propio (`GET /api/v1/billing/payments/{paymentId}`)
 
@@ -172,7 +200,7 @@ ILLEGAL_PURCHASE_STATE_TRANSITION`. Ver `api/openapi/billing-v1.yaml`.
 
 Las transiciones originadas por proveedor son monotónicas: un webhook tardío o
 duplicado nunca puede retroceder ni reemplazar un estado ya aplicado. Sólo
-`POST /api/v1/billing/admin/payments/{paymentId}/corrections` puede aplicar una
+`POST /api/v1/admin/billing/payments/{paymentId}/corrections` puede aplicar una
 corrección excepcional; requiere `ADMIN`, motivo, evidencia y auditoría
 append-only.
 

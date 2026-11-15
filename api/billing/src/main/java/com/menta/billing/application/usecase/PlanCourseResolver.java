@@ -12,7 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Shared course-name enrichment for both plan use cases.
+ * Shared course-name enrichment for the plan use cases.
  *
  * <p>A course name is enrichment, not the resource itself. {@link
  * #resolveNames} resolves the distinct course ids of every plan of a request

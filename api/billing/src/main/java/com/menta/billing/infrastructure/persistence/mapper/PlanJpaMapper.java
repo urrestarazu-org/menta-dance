@@ -8,8 +8,10 @@ import com.menta.billing.domain.model.PlanId;
 import com.menta.billing.infrastructure.persistence.entity.PlanCourseJpaEntity;
 import com.menta.billing.infrastructure.persistence.entity.PlanJpaEntity;
 import com.menta.billing.infrastructure.persistence.entity.PlanPaymentMethodJpaEntity;
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /** Manual mapping between {@link PlanJpaEntity} and the domain {@link Plan}. */
@@ -39,6 +41,43 @@ public final class PlanJpaMapper {
             courses.stream().map(course -> PlanCourse.of(course.getCourseId())).toList(),
             toPaymentMethods(paymentMethods)
         );
+    }
+
+    /**
+     * Flattens a new plan into its {@code billing_plans} row (#762), splitting the price into an
+     * amount and a currency; {@code createdAt} is both the creation and the last-update instant.
+     */
+    public static PlanJpaEntity toEntity(Plan plan, Instant createdAt) {
+        return new PlanJpaEntity(
+            plan.getId().getValue(),
+            plan.getName(),
+            plan.getDescription(),
+            plan.getPrice().getAmount(),
+            plan.getPrice().getCurrency(),
+            plan.getDurationDays(),
+            plan.isFeatured(),
+            plan.getStatus(),
+            plan.getTermsAndConditions(),
+            plan.getCancellationPolicy(),
+            createdAt,
+            createdAt
+        );
+    }
+
+    /** One {@code billing_plan_courses} row per course of the plan, in the plan's own order. */
+    public static List<PlanCourseJpaEntity> toCourseEntities(Plan plan) {
+        UUID planId = plan.getId().getValue();
+        return plan.getCourses().stream()
+            .map(course -> new PlanCourseJpaEntity(planId, course.getCourseId()))
+            .toList();
+    }
+
+    /** One {@code billing_plan_payment_methods} row per accepted method, stored by enum name. */
+    public static List<PlanPaymentMethodJpaEntity> toPaymentMethodEntities(Plan plan) {
+        UUID planId = plan.getId().getValue();
+        return plan.getPaymentMethods().stream()
+            .map(method -> new PlanPaymentMethodJpaEntity(planId, method.name()))
+            .toList();
     }
 
     /**

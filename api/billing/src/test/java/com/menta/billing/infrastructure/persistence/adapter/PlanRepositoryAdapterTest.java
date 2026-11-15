@@ -2,10 +2,13 @@ package com.menta.billing.infrastructure.persistence.adapter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.menta.billing.domain.model.Money;
 import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.domain.model.Plan;
+import com.menta.billing.domain.model.PlanCourse;
 import com.menta.billing.domain.model.PlanId;
 import com.menta.billing.domain.model.PlanStatus;
 import com.menta.billing.infrastructure.persistence.entity.PlanCourseJpaEntity;
@@ -18,9 +21,11 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class PlanRepositoryAdapterTest {
 
@@ -148,5 +153,30 @@ class PlanRepositoryAdapterTest {
         List<Plan> plans = adapter.findAllActiveOrderByPriceAsc();
 
         assertThat(plans.get(0).getPaymentMethods()).containsExactly(PaymentMethod.BANK_TRANSFER);
+    }
+
+    @Test
+    void save_inserts_the_plan_row_its_payment_methods_and_its_courses() {
+        PlanId id = PlanId.generate();
+        Instant createdAt = Instant.parse("2026-11-15T12:00:00Z");
+        Plan plan = new Plan(
+            id, "Plan Mensual", "Acceso mensual", Money.of(new BigDecimal("15000.00"), "ARS"), 30, false,
+            PlanStatus.ACTIVE, "Términos", "Política", List.of(PlanCourse.of("course-1")),
+            Set.of(PaymentMethod.BANK_TRANSFER)
+        );
+
+        adapter.save(plan, createdAt);
+
+        ArgumentCaptor<PlanJpaEntity> row = ArgumentCaptor.forClass(PlanJpaEntity.class);
+        verify(planJpaRepository).save(row.capture());
+        assertThat(row.getValue().getId()).isEqualTo(id.getValue());
+        assertThat(row.getValue().getCreatedAt()).isEqualTo(createdAt);
+        ArgumentCaptor<List<PlanPaymentMethodJpaEntity>> methods = ArgumentCaptor.forClass(List.class);
+        verify(planPaymentMethodJpaRepository).saveAll(methods.capture());
+        assertThat(methods.getValue()).extracting(PlanPaymentMethodJpaEntity::getPaymentMethod)
+            .containsExactly("BANK_TRANSFER");
+        ArgumentCaptor<List<PlanCourseJpaEntity>> courses = ArgumentCaptor.forClass(List.class);
+        verify(planCourseJpaRepository).saveAll(courses.capture());
+        assertThat(courses.getValue()).extracting(PlanCourseJpaEntity::getCourseId).containsExactly("course-1");
     }
 }
