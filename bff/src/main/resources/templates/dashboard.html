@@ -7,6 +7,38 @@
 
 <p class="mb-6">Hola, <span th:text="${username}">User</span>!</p>
 
+<!-- Subscription card (#363): only a student gets ${subscription}; its state is always said in text. -->
+<section class="card mb-6" th:if="${subscription != null}" aria-labelledby="subscription-heading">
+    <h2 id="subscription-heading">Mi suscripción</h2>
+    <th:block th:switch="${subscription.kind().name()}">
+        <th:block th:case="'NONE'">
+            <p class="mt-2">Todavía no tenés una suscripción.</p>
+            <p class="mt-4"><a class="btn btn-primary" th:href="@{/plans}">Ver planes</a></p>
+        </th:block>
+        <th:block th:case="'ACTIVE'">
+            <p class="mt-2 font-semibold" th:text="${subscription.planName()}">Plan Mensual</p>
+            <p class="mt-2" th:text="'Activa hasta el ' + ${subscription.endDateLabel()}">Activa hasta el 31/10/2026</p>
+            <p class="mt-2" th:if="${subscription.remainingLabel() != null}"
+               th:text="${subscription.remainingLabel()}">Vence en 17 días</p>
+            <p class="mt-2" th:if="${subscription.expiringSoon()}"><span class="badge badge-warning">Está por vencer</span></p>
+            <p class="mt-4"><a th:href="@{/plans}">Ver planes</a></p>
+        </th:block>
+        <th:block th:case="'PENDING'">
+            <p class="mt-2 font-semibold" th:text="${subscription.planName()}">Plan Mensual</p>
+            <p class="mt-2">Tu suscripción está pendiente de pago.</p>
+            <p class="mt-4"><a th:href="@{/plans}">Ver planes</a></p>
+        </th:block>
+        <th:block th:case="'EXPIRED'">
+            <p class="mt-2 font-semibold" th:text="${subscription.planName()}">Plan Mensual</p>
+            <p class="mt-2" th:text="'Venció el ' + ${subscription.endDateLabel()}">Venció el 31/08/2026</p>
+            <p class="mt-4"><a class="btn btn-primary" th:href="@{/plans}">Renovar suscripción</a></p>
+        </th:block>
+        <th:block th:case="'UNAVAILABLE'">
+            <div class="mt-2" th:replace="~{fragments/components :: alert('info', 'No pudimos consultar tu suscripción ahora. Probá de nuevo en unos minutos.')}"></div>
+        </th:block>
+    </th:block>
+</section>
+
 <p class="mb-6"><a class="btn btn-primary" th:href="@{/classes}">Clases presenciales</a></p>
 
 <form th:action="@{/logout}" method="post">
