@@ -21,7 +21,7 @@ public final class CourseProgressAssembler {
      * the percentage is rounded half up, capped at 99 unless every lesson is completed.
      */
     public static CourseProgressView assemble(
-        String courseId, List<CourseProgressRowProjection> orderedRows, long totalLessons
+        String courseId, List<? extends CourseProgressRowProjection> orderedRows, long totalLessons
     ) {
         int completed = 0;
         for (CourseProgressRowProjection row : orderedRows) {

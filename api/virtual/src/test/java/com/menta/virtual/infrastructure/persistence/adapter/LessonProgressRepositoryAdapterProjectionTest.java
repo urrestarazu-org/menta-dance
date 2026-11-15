@@ -4,10 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.menta.testsupport.MySqlTestImage;
 import com.menta.virtual.application.port.out.CourseProgressRowProjection;
+import com.menta.virtual.application.port.out.InProgressCourseRowProjection;
+import com.menta.virtual.domain.model.CourseStatus;
 import com.menta.virtual.infrastructure.persistence.entity.LessonProgressJpaEntity;
+import com.menta.virtual.infrastructure.persistence.entity.VirtualCourseJpaEntity;
 import com.menta.virtual.infrastructure.persistence.entity.VirtualLessonJpaEntity;
 import com.menta.virtual.infrastructure.persistence.entity.VirtualModuleJpaEntity;
 import com.menta.virtual.infrastructure.persistence.repository.LessonProgressJpaRepository;
+import com.menta.virtual.infrastructure.persistence.repository.VirtualCourseJpaRepository;
 import com.menta.virtual.infrastructure.persistence.repository.VirtualLessonJpaRepository;
 import com.menta.virtual.infrastructure.persistence.repository.VirtualModuleJpaRepository;
 import java.time.Instant;
@@ -75,6 +79,7 @@ class LessonProgressRepositoryAdapterProjectionTest {
     @Autowired private LessonProgressJpaRepository progressRepository;
     @Autowired private VirtualLessonJpaRepository lessonRepository;
     @Autowired private VirtualModuleJpaRepository moduleRepository;
+    @Autowired private VirtualCourseJpaRepository courseRepository;
 
     @Test
     void resume_is_still_the_played_lesson_after_completing_a_different_never_played_one() {
@@ -115,5 +120,76 @@ class LessonProgressRepositoryAdapterProjectionTest {
         assertThat(rows.get(1).getLessonId()).isEqualTo(completedOnlyLessonId);
         assertThat(rows.get(1).getPositionUpdatedAt()).isNull();
         assertThat(rows.get(1).isCompleted()).isTrue();
+    }
+
+    /**
+     * #765: the cross-course read returns only the caller's rows in PUBLISHED courses, with both
+     * titles, ordered by activity first (NULL {@code position_updated_at} last under MySQL) so
+     * each course's first row is its most recent one — and the UUID/Instant columns still convert
+     * (JPQL, not native: see the Javadoc of {@code findRowsForUserAndCourse}).
+     */
+    @Test
+    void rows_across_published_courses_come_ordered_by_activity_with_titles_and_only_for_the_caller() {
+        UUID userId = UUID.randomUUID();
+        Instant t0 = Instant.parse("2026-01-05T10:00:00.000Z");
+        UUID olderCourse = seedCourse("Tango Básico", CourseStatus.PUBLISHED);
+        UUID recentCourse = seedCourse("Salsa", CourseStatus.PUBLISHED);
+        UUID draftCourse = seedCourse("Borrador", CourseStatus.DRAFT);
+        UUID olderPlayed = seedLesson(olderCourse, "Postura", 2);
+        UUID olderCompletedOnly = seedLesson(olderCourse, "Abrazo", 1);
+        UUID recentPlayed = seedLesson(recentCourse, "Básico", 0);
+        UUID draftPlayed = seedLesson(draftCourse, "Oculta", 0);
+        progressRepository.saveAllAndFlush(List.of(
+            progress(userId, olderPlayed, olderCourse, 40, false, t0.plusSeconds(10)),
+            progress(userId, olderCompletedOnly, olderCourse, 0, true, null),
+            progress(userId, recentPlayed, recentCourse, 75, false, t0.plusSeconds(20)),
+            progress(userId, draftPlayed, draftCourse, 5, false, t0.plusSeconds(30)),
+            progress(UUID.randomUUID(), olderPlayed, olderCourse, 99, false, t0.plusSeconds(40))
+        ));
+
+        List<InProgressCourseRowProjection> rows =
+            progressRepository.findRowsForUserInCoursesWithStatus(userId, CourseStatus.PUBLISHED);
+
+        assertThat(rows).extracting(InProgressCourseRowProjection::getLessonId)
+            .containsExactly(recentPlayed, olderPlayed, olderCompletedOnly);
+        InProgressCourseRowProjection first = rows.get(0);
+        assertThat(first.getCourseId()).isEqualTo(recentCourse);
+        assertThat(first.getCourseTitle()).isEqualTo("Salsa");
+        assertThat(first.getLessonTitle()).isEqualTo("Básico");
+        assertThat(first.getPositionSeconds()).isEqualTo(75);
+        assertThat(first.getPositionUpdatedAt()).isEqualTo(t0.plusSeconds(20));
+        assertThat(rows.get(1).getCourseTitle()).isEqualTo("Tango Básico");
+        assertThat(rows.get(2).isCompleted()).isTrue();
+        assertThat(rows.get(2).getPositionUpdatedAt()).isNull();
+    }
+
+    private UUID seedCourse(String title, CourseStatus status) {
+        UUID id = UUID.randomUUID();
+        Instant now = Instant.parse("2026-01-01T00:00:00Z");
+        courseRepository.saveAndFlush(new VirtualCourseJpaEntity(
+            id, title, "desc", "descripción larga", UUID.randomUUID(), "https://cdn/img.jpg", "tango",
+            "BEGINNER", true, status, now, now
+        ));
+        return id;
+    }
+
+    private UUID seedLesson(UUID courseId, String title, int displayOrder) {
+        UUID moduleId = UUID.randomUUID();
+        moduleRepository.saveAndFlush(new VirtualModuleJpaEntity(moduleId, courseId, "Modulo", false, 0));
+        UUID lessonId = UUID.randomUUID();
+        lessonRepository.saveAndFlush(
+            new VirtualLessonJpaEntity(lessonId, moduleId, courseId, title, "d", "v", 10, false, displayOrder)
+        );
+        return lessonId;
+    }
+
+    private static LessonProgressJpaEntity progress(
+        UUID userId, UUID lessonId, UUID courseId, int position, boolean completed, Instant positionUpdatedAt
+    ) {
+        Instant createdAt = Instant.parse("2026-01-01T00:00:00Z");
+        return new LessonProgressJpaEntity(
+            UUID.randomUUID(), userId, lessonId, courseId, position, completed, completed ? createdAt : null,
+            createdAt, positionUpdatedAt, createdAt
+        );
     }
 }

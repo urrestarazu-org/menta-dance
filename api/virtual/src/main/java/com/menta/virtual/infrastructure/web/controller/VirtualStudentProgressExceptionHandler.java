@@ -3,6 +3,7 @@ package com.menta.virtual.infrastructure.web.controller;
 import com.menta.virtual.domain.exception.CourseNotFoundException;
 import com.menta.virtual.domain.exception.ForbiddenCourseProgressException;
 import com.menta.virtual.domain.exception.ForbiddenLessonAccessException;
+import com.menta.virtual.domain.exception.InvalidInProgressCoursesLimitException;
 import com.menta.virtual.domain.exception.InvalidLessonPositionException;
 import com.menta.virtual.domain.exception.LessonNotFoundException;
 import com.menta.virtual.infrastructure.web.ProblemDetails;
@@ -11,6 +12,7 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 /**
  * RFC 9457 Problem Details mapping for Virtual's student-progress endpoints (US-VIRTUAL-005).
@@ -46,6 +48,28 @@ public class VirtualStudentProgressExceptionHandler {
     ResponseEntity<ProblemDetail> forbiddenCourseProgress(ForbiddenCourseProgressException exception) {
         return ProblemDetails.response(
             HttpStatus.FORBIDDEN, "Este curso requiere una suscripción activa", exception.getErrorCode()
+        );
+    }
+
+    /** #765: the in-progress listing was asked for a size outside {@code [1, 50]}. */
+    @ExceptionHandler(InvalidInProgressCoursesLimitException.class)
+    ResponseEntity<ProblemDetail> invalidLimit(InvalidInProgressCoursesLimitException exception) {
+        return ProblemDetails.response(
+            HttpStatus.BAD_REQUEST, "El parámetro limit debe ser un número entre 1 y 50.", exception.getErrorCode()
+        );
+    }
+
+    /**
+     * #765: a query parameter that is not of the declared type (a non-integer {@code limit}).
+     * Declared on its own because its cause, a {@link NumberFormatException}, is an {@link
+     * IllegalArgumentException}: without this branch Spring would fall back to the cause and the
+     * anti-enumeration {@code 404} below would answer instead of a {@code 400}.
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    ResponseEntity<ProblemDetail> typeMismatch(MethodArgumentTypeMismatchException exception) {
+        return ProblemDetails.response(
+            HttpStatus.BAD_REQUEST, "El parámetro " + exception.getName() + " tiene un valor inválido.",
+            "INVALID_REQUEST"
         );
     }
 

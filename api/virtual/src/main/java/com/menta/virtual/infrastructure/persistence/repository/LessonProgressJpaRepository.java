@@ -1,6 +1,8 @@
 package com.menta.virtual.infrastructure.persistence.repository;
 
 import com.menta.virtual.application.port.out.CourseProgressRowProjection;
+import com.menta.virtual.application.port.out.InProgressCourseRowProjection;
+import com.menta.virtual.domain.model.CourseStatus;
 import com.menta.virtual.infrastructure.persistence.entity.LessonProgressJpaEntity;
 import java.util.List;
 import java.util.Optional;
@@ -43,5 +45,29 @@ public interface LessonProgressJpaRepository extends JpaRepository<LessonProgres
     )
     List<CourseProgressRowProjection> findRowsForUserAndCourse(
         @Param("userId") UUID userId, @Param("courseId") UUID courseId
+    );
+
+    /**
+     * Every progress row of the user in a course with the given status, with the course and
+     * lesson titles (#765). Same JPQL-over-native reasoning and same MySQL NULLs-last ordering as
+     * {@link #findRowsForUserAndCourse}; {@code p.courseId} right after the timestamp keeps the
+     * per-course order of that query inside each course and breaks ties between courses. Served
+     * by the {@code (user_id, course_id)} index of {@code virtual_lesson_progress}.
+     */
+    @Query(
+        "SELECT p.courseId AS courseId, c.title AS courseTitle, p.lessonId AS lessonId, l.title AS lessonTitle, "
+            + "m.id AS moduleId, p.positionSeconds AS positionSeconds, p.completed AS completed, "
+            + "p.positionUpdatedAt AS positionUpdatedAt, l.displayOrder AS lessonOrder, "
+            + "m.displayOrder AS moduleOrder "
+            + "FROM LessonProgressJpaEntity p "
+            + "JOIN VirtualCourseJpaEntity c ON c.id = p.courseId "
+            + "JOIN VirtualLessonJpaEntity l ON l.id = p.lessonId "
+            + "JOIN VirtualModuleJpaEntity m ON m.id = l.moduleId "
+            + "WHERE p.userId = :userId AND c.status = :status "
+            + "ORDER BY p.positionUpdatedAt DESC, p.courseId ASC, m.displayOrder ASC, l.displayOrder ASC, "
+            + "p.lessonId ASC"
+    )
+    List<InProgressCourseRowProjection> findRowsForUserInCoursesWithStatus(
+        @Param("userId") UUID userId, @Param("status") CourseStatus status
     );
 }

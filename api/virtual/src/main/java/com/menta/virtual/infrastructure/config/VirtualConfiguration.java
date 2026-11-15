@@ -10,6 +10,7 @@ import com.menta.virtual.application.port.in.GetCourseProgressUseCase;
 import com.menta.virtual.application.port.in.GetLessonProgressUseCase;
 import com.menta.virtual.application.port.in.GetPublicLessonStreamUseCase;
 import com.menta.virtual.application.port.in.GetPublicLessonUseCase;
+import com.menta.virtual.application.port.in.ListInProgressCoursesUseCase;
 import com.menta.virtual.application.port.in.ListManagedVirtualCoursesUseCase;
 import com.menta.virtual.application.port.in.PublishVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.ReorderVirtualModulesUseCase;
@@ -37,6 +38,7 @@ import com.menta.virtual.application.usecase.GetLessonProgressUseCaseImpl;
 import com.menta.virtual.application.usecase.GetPublicLessonStreamUseCaseImpl;
 import com.menta.virtual.application.usecase.GetPublicLessonUseCaseImpl;
 import com.menta.virtual.application.usecase.LessonAccessPolicy;
+import com.menta.virtual.application.usecase.ListInProgressCoursesUseCaseImpl;
 import com.menta.virtual.application.usecase.ListManagedVirtualCoursesUseCaseImpl;
 import com.menta.virtual.application.usecase.PublishVirtualCourseUseCaseImpl;
 import com.menta.virtual.application.usecase.ReorderVirtualModulesUseCaseImpl;
@@ -413,5 +415,17 @@ public class VirtualConfiguration {
         CourseProgressAccessPolicy courseProgressAccessPolicy
     ) {
         return new GetCourseProgressUseCaseImpl(courseRepository, progressRepository, courseProgressAccessPolicy);
+    }
+
+    /**
+     * #765. Read-only like {@link #getCourseProgressUseCase}, so no transactional/retry decorator,
+     * and the same {@link CourseProgressAccessPolicy} bean: the listing applies exactly the access
+     * rule of the per-course progress.
+     */
+    @Bean
+    public ListInProgressCoursesUseCase listInProgressCoursesUseCase(
+        LessonProgressRepository progressRepository, CourseProgressAccessPolicy courseProgressAccessPolicy
+    ) {
+        return new ListInProgressCoursesUseCaseImpl(progressRepository, courseProgressAccessPolicy);
     }
 }
