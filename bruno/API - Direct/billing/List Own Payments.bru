@@ -1,0 +1,63 @@
+meta {
+  name: List Own Payments
+  type: http
+  seq: 15
+}
+
+get {
+  url: {{baseUrl}}/api/v1/billing/payments/me?limit=20
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+params:query {
+  limit: 20
+}
+
+docs {
+  #767. Lists the authenticated user's own payments, newest first. Run Auth
+  Login first with a student; the user always comes from the token, never
+  from a parameter. limit is optional: default 20, between 1 and 100.
+
+  Success contract (200, [] when the student has no payments):
+    [{ paymentId, status, amount, currency, paymentMethod, createdAt,
+       item: { type, id, name } }]
+
+    status        → AWAITING_PROVIDER | AWAITING_MANUAL_VERIFICATION |
+                    RECONCILIATION_REQUIRED | COMPLETED | REJECTED |
+                    CANCELLED | EXPIRED
+    paymentMethod → MERCADO_PAGO | BANK_TRANSFER
+    item.type     → SUBSCRIPTION (id = planId, name = plan name) |
+                    PHYSICAL_COURSE (id = courseId, name always null)
+
+  Never exposes the transfer proof, provider ids, the external reference,
+  the merchant account or a reconciliation reason.
+
+  Error contract:
+    400 INVALID_REQUEST → limit is not an integer between 1 and 100
+    401                 → no access token
+}
+
+tests {
+  test("Returns the student's own payments, newest first", function() {
+    expect(res.getStatus()).to.equal(200);
+    const payments = res.getBody();
+    expect(payments).to.be.an("array");
+    for (let i = 1; i < payments.length; i++) {
+      expect(payments[i - 1].createdAt >= payments[i].createdAt).to.equal(true);
+    }
+    payments.forEach(function(payment) {
+      expect(payment).to.have.all.keys(
+        "paymentId", "status", "amount", "currency", "paymentMethod", "createdAt", "item"
+      );
+    });
+  });
+}
+
+assert {
+  res.status: eq 200
+}

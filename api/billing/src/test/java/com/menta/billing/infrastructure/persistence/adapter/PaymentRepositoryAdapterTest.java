@@ -2,22 +2,28 @@ package com.menta.billing.infrastructure.persistence.adapter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.menta.billing.application.dto.OwnPaymentEntry;
 import com.menta.billing.domain.model.Money;
 import com.menta.billing.domain.model.Payment;
 import com.menta.billing.domain.model.PaymentId;
+import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.domain.model.PaymentStatus;
 import com.menta.billing.domain.model.PaymentTarget;
 import com.menta.billing.infrastructure.persistence.mapper.PaymentJpaMapper;
+import com.menta.billing.infrastructure.persistence.projection.OwnPaymentRow;
 import com.menta.billing.infrastructure.persistence.repository.PaymentJpaRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.PageRequest;
 
 class PaymentRepositoryAdapterTest {
 
@@ -95,5 +101,75 @@ class PaymentRepositoryAdapterTest {
         when(jpaRepository.findByExpectedExternalReference("missing")).thenReturn(Optional.empty());
 
         assertThat(adapter.findByExternalReference("missing")).isEmpty();
+    }
+
+    // --- #767: the student's own payments ------------------------------------------------------
+
+    private static final UUID OWNER = UUID.randomUUID();
+    private static final Instant CREATED_AT = Instant.parse("2026-11-10T12:00:00Z");
+
+    private static OwnPaymentRow virtualRow(String providerPreferenceId) {
+        return new OwnPaymentRow(
+            UUID.randomUUID(), "COMPLETED", new BigDecimal("15000.00"), "ARS", "SUB-1", "VIRTUAL", "plan-1",
+            CREATED_AT, providerPreferenceId, "Plan Mensual", null
+        );
+    }
+
+    private static OwnPaymentRow physicalRow(String externalReference) {
+        return new OwnPaymentRow(
+            UUID.randomUUID(), "COMPLETED", new BigDecimal("8000.00"), "ARS", externalReference,
+            "PHYSICAL", "quote-1", CREATED_AT, null, null, "course-1"
+        );
+    }
+
+    private OwnPaymentEntry onlyEntryFor(OwnPaymentRow row) {
+        when(jpaRepository.findOwnNewestFirst(eq(OWNER), eq(PageRequest.of(0, 20)))).thenReturn(List.of(row));
+        List<OwnPaymentEntry> entries = adapter.findOwnNewestFirst(OWNER, 20);
+        assertThat(entries).hasSize(1);
+        return entries.get(0);
+    }
+
+    @Test
+    void findOwnNewestFirst_maps_a_subscription_payment_with_its_plan_name() {
+        OwnPaymentRow row = virtualRow("pref-1");
+
+        OwnPaymentEntry entry = onlyEntryFor(row);
+
+        assertThat(entry.paymentId()).isEqualTo(row.id().toString());
+        assertThat(entry.status()).isEqualTo("COMPLETED");
+        assertThat(entry.amount()).isEqualTo(Money.of(new BigDecimal("15000.00"), "ARS"));
+        assertThat(entry.createdAt()).isEqualTo(CREATED_AT);
+        assertThat(entry.item()).isEqualTo(
+            new OwnPaymentEntry.Item(OwnPaymentEntry.ItemType.SUBSCRIPTION, "plan-1", "Plan Mensual")
+        );
+    }
+
+    @Test
+    void findOwnNewestFirst_reads_a_subscription_with_a_checkout_preference_as_mercado_pago() {
+        assertThat(onlyEntryFor(virtualRow("pref-1")).paymentMethod()).isEqualTo(PaymentMethod.MERCADO_PAGO);
+    }
+
+    @Test
+    void findOwnNewestFirst_reads_a_subscription_without_a_checkout_preference_as_bank_transfer() {
+        assertThat(onlyEntryFor(virtualRow(null)).paymentMethod()).isEqualTo(PaymentMethod.BANK_TRANSFER);
+    }
+
+    @Test
+    void findOwnNewestFirst_maps_a_physical_purchase_to_its_course_without_a_name() {
+        OwnPaymentEntry entry = onlyEntryFor(physicalRow("PHY-BT-1"));
+
+        assertThat(entry.item()).isEqualTo(
+            new OwnPaymentEntry.Item(OwnPaymentEntry.ItemType.PHYSICAL_COURSE, "course-1", null)
+        );
+    }
+
+    @Test
+    void findOwnNewestFirst_reads_a_physical_bank_transfer_reference_as_bank_transfer() {
+        assertThat(onlyEntryFor(physicalRow("PHY-BT-1")).paymentMethod()).isEqualTo(PaymentMethod.BANK_TRANSFER);
+    }
+
+    @Test
+    void findOwnNewestFirst_reads_a_physical_checkout_pro_reference_as_mercado_pago() {
+        assertThat(onlyEntryFor(physicalRow("PHY-1")).paymentMethod()).isEqualTo(PaymentMethod.MERCADO_PAGO);
     }
 }

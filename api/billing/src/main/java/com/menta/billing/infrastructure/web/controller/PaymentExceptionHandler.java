@@ -4,6 +4,7 @@ import com.menta.billing.domain.exception.BankTransferRateLimitedException;
 import com.menta.billing.domain.exception.BillingDegradedException;
 import com.menta.billing.domain.exception.IllegalPaymentStateTransitionException;
 import com.menta.billing.domain.exception.IllegalPurchaseStateTransitionException;
+import com.menta.billing.domain.exception.InvalidPaymentsLimitException;
 import com.menta.billing.domain.exception.InvalidProofAccessTokenException;
 import com.menta.billing.domain.exception.PaymentNotFoundException;
 import com.menta.billing.domain.exception.PaymentProofRejectedException;
@@ -145,7 +146,19 @@ public class PaymentExceptionHandler {
         );
     }
 
-    /** A malformed path/body field — for instance a {@code paymentId} that is not a UUID. Never a 500. */
+    /** #767: the own-payments {@code limit} is outside {@code [1, 100]}. */
+    @ExceptionHandler(InvalidPaymentsLimitException.class)
+    ResponseEntity<ProblemDetail> invalidPaymentsLimit(InvalidPaymentsLimitException exception) {
+        return ProblemDetails.response(
+            HttpStatus.BAD_REQUEST, "El parámetro limit debe ser un número entre 1 y 100.", exception.getErrorCode()
+        );
+    }
+
+    /**
+     * A malformed path/body field — for instance a {@code paymentId} that is not a UUID. Never a 500.
+     * Also answers a non-integer {@code limit} (#767): Spring matches this handler on the {@link
+     * NumberFormatException} cause of the type-mismatch exception.
+     */
     @ExceptionHandler(IllegalArgumentException.class)
     ResponseEntity<ProblemDetail> malformedRequest(IllegalArgumentException exception) {
         return ProblemDetails.response(HttpStatus.BAD_REQUEST, "La solicitud es inválida.", "INVALID_REQUEST");

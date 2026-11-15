@@ -15,6 +15,7 @@ import com.menta.billing.application.port.in.GetCurrentSubscriptionUseCase;
 import com.menta.billing.application.port.in.GetPaymentUseCase;
 import com.menta.billing.application.port.in.GetPlanUseCase;
 import com.menta.billing.application.port.in.GetSubscriptionHistoryUseCase;
+import com.menta.billing.application.port.in.ListOwnPaymentsUseCase;
 import com.menta.billing.application.port.in.ListPlansUseCase;
 import com.menta.billing.application.port.in.ReceiveWebhookUseCase;
 import com.menta.billing.application.port.in.ResolveExceptionPurchaseUseCase;
@@ -45,6 +46,7 @@ import com.menta.billing.application.usecase.CreatePlanUseCaseImpl;
 import com.menta.billing.application.usecase.GetCurrentSubscriptionUseCaseImpl;
 import com.menta.billing.application.usecase.GetPlanUseCaseImpl;
 import com.menta.billing.application.usecase.GetSubscriptionHistoryUseCaseImpl;
+import com.menta.billing.application.usecase.ListOwnPaymentsUseCaseImpl;
 import com.menta.billing.application.usecase.ListPlansUseCaseImpl;
 import com.menta.billing.application.usecase.PaymentFulfillmentService;
 import com.menta.billing.application.usecase.PaymentVerificationService;
@@ -238,6 +240,13 @@ class BillingConfigurationTest {
         );
 
         assertThat(useCase).isInstanceOf(GetSubscriptionHistoryUseCaseImpl.class);
+    }
+
+    @Test
+    void wires_the_list_own_payments_use_case_bean() {
+        ListOwnPaymentsUseCase useCase = configuration.listOwnPaymentsUseCase(mock(PaymentRepository.class));
+
+        assertThat(useCase).isInstanceOf(ListOwnPaymentsUseCaseImpl.class);
     }
 
     /** Design D7/C2, not wrapped in its own transactional decorator — same rationale as the subscription twin. */

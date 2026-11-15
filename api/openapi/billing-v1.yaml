@@ -48,7 +48,7 @@ tags:
   - name: Compras presenciales
     description: Compra de cursos presenciales (#41, US-PHYSICAL-004).
   - name: Pagos
-    description: Consulta del estado de los pagos propios (#559).
+    description: Listado de los pagos propios (#767) y consulta del estado de uno (#559).
   - name: Webhooks
     description: Notificaciones asíncronas de proveedores de pago.
   - name: Verificación manual de pagos
@@ -998,6 +998,61 @@ paths:
                     detail: El pago no está en un estado que admita esta operación.
                     code: ILLEGAL_PAYMENT_STATE_TRANSITION
 
+  /api/v1/billing/payments/me:
+    get:
+      tags: [Pagos]
+      summary: Listar los pagos propios
+      description: |
+        Devuelve los pagos del usuario autenticado, del más nuevo al más viejo (por fecha de
+        creación y, ante el mismo instante, por `paymentId` descendente). El usuario sale del
+        token: no hay parámetro de usuario, así que nunca se ven los pagos de otro. Sin pagos
+        responde `200 []`.
+
+        Incluye todos los estados y los dos medios de pago (Mercado Pago y transferencia). `item`
+        indica qué se compró: una suscripción a un plan (`id` del plan y su nombre) o un curso
+        presencial (`id` del curso; `name` siempre `null`, porque el nombre vive en el módulo
+        presencial y no se resuelve con otra consulta).
+
+        Nunca expone el comprobante de una transferencia ni su archivo, identificadores ni
+        respuestas del proveedor de pago, la referencia externa, la cuenta de cobro ni el motivo
+        de una conciliación.
+      operationId: listOwnPayments
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: Cantidad máxima de pagos a devolver.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Pagos del usuario, del más nuevo al más viejo; `[]` si no tiene.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OwnPaymentResponse'
+        '400':
+          description: "`limit` no es un entero entre 1 y 100."
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                limit_invalido:
+                  value:
+                    type: https://menta.dance/problems/invalid_request
+                    title: Bad Request
+                    status: 400
+                    detail: El parámetro limit debe ser un número entre 1 y 100.
+                    code: INVALID_REQUEST
+        '401':
+          description: Falta un access token válido.
+
   /api/v1/billing/payments/{paymentId}:
     get:
       tags: [Pagos]
@@ -1773,6 +1828,51 @@ components:
           description: Sesiones que cubría la compra; nunca se asignaron. `[]` si no tenía ninguna.
           items:
             type: string
+
+    OwnPaymentResponse:
+      type: object
+      description: |
+        Un pago propio (#767). Monto y moneda van planos, como en el resto de Billing. Nunca
+        expone datos internos del pago ni de su comprobante.
+      required: [paymentId, status, amount, currency, paymentMethod, createdAt, item]
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+            [AWAITING_PROVIDER, AWAITING_MANUAL_VERIFICATION, RECONCILIATION_REQUIRED, COMPLETED, REJECTED, CANCELLED, EXPIRED]
+        amount:
+          type: number
+          format: decimal
+        currency:
+          type: string
+          description: Código ISO-4217.
+        paymentMethod:
+          type: string
+          enum: [MERCADO_PAGO, BANK_TRANSFER]
+        createdAt:
+          type: string
+          format: date-time
+        item:
+          $ref: '#/components/schemas/OwnPaymentItem'
+
+    OwnPaymentItem:
+      type: object
+      description: Qué se compró con el pago.
+      required: [type, id, name]
+      properties:
+        type:
+          type: string
+          enum: [SUBSCRIPTION, PHYSICAL_COURSE]
+          description: "`SUBSCRIPTION`: suscripción a un plan virtual. `PHYSICAL_COURSE`: compra de un curso presencial."
+        id:
+          type: string
+          description: Id del plan (`SUBSCRIPTION`) o del curso presencial (`PHYSICAL_COURSE`).
+        name:
+          type: ["string", "null"]
+          description: Nombre del plan; siempre `null` para un curso presencial.
 
     PaymentStatusResponse:
       type: object

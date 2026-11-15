@@ -1,6 +1,7 @@
 package com.menta.billing.infrastructure.persistence.repository;
 
 import com.menta.billing.infrastructure.persistence.entity.PaymentJpaEntity;
+import com.menta.billing.infrastructure.persistence.projection.OwnPaymentRow;
 import com.menta.billing.infrastructure.persistence.projection.PendingVerificationRow;
 import java.time.Instant;
 import java.util.List;
@@ -16,7 +17,8 @@ import org.springframework.data.repository.query.Param;
  * Spring Data repository over {@code billing_payments}.
  *
  * <p>Used only through {@code PaymentRepositoryAdapter}. Besides the lookups by unique column it
- * hosts the two paged queries behind the expiry sweep and the admin verification inbox.
+ * hosts the paged queries behind the expiry sweep, the admin verification inbox and the student's
+ * own payments.
  */
 public interface PaymentJpaRepository extends JpaRepository<PaymentJpaEntity, UUID> {
 
@@ -61,4 +63,27 @@ public interface PaymentJpaRepository extends JpaRepository<PaymentJpaEntity, UU
         countQuery = "SELECT COUNT(p) FROM PaymentJpaEntity p WHERE p.statusType = :statusType")
     Page<PendingVerificationRow> findByStatusTypeOrderByCreatedAt(
         @Param("statusType") String statusType, Pageable pageable);
+
+    /**
+     * The student's own payments (#767), newest first with the id as tie-break so the order is
+     * stable, capped by {@code pageable}'s size (no count query). One statement whatever the number
+     * of rows: the plan name and the quote's course come from {@code LEFT JOIN}s, never from a
+     * query per row. Each join matches at most one row ({@code billing_subscriptions.payment_id}
+     * is unique, plan and quote are joined by primary key), so no payment is repeated. Filtered by
+     * {@code user_id}, ordered by {@code created_at}: {@code idx_billing_payments_user_created}
+     * (V31) serves both.
+     */
+    @Query(
+        """
+        SELECT new com.menta.billing.infrastructure.persistence.projection.OwnPaymentRow(
+            p.id, p.statusType, p.expectedAmount, p.expectedCurrency, p.expectedExternalReference,
+            p.targetModality, p.targetReference, p.createdAt, s.providerPreferenceId, pl.name, q.courseId)
+          FROM PaymentJpaEntity p
+          LEFT JOIN SubscriptionJpaEntity s ON s.paymentId = p.id
+          LEFT JOIN PlanJpaEntity pl ON pl.id = s.planId
+          LEFT JOIN PhysicalCourseQuoteJpaEntity q ON q.id = p.targetReference AND p.targetModality = 'PHYSICAL'
+         WHERE p.userId = :userId
+         ORDER BY p.createdAt DESC, p.id DESC
+        """)
+    List<OwnPaymentRow> findOwnNewestFirst(@Param("userId") UUID userId, Pageable pageable);
 }

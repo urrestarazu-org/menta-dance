@@ -647,6 +647,30 @@ class SecurityConfigTest {
             .andExpect(status().isNotFound());
     }
 
+    /**
+     * #767. The student's own payments come from the JWT principal. {@code /me} is a single path
+     * segment after {@code payments}, so the {@code GET .../payments/*} rule already gates it:
+     * this pins that an anonymous caller is still rejected instead of reaching {@code
+     * anyRequest()}'s permissive grant.
+     */
+    @Test
+    void an_unauthenticated_get_of_the_own_payments_route_is_rejected() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get("/api/v1/billing/payments/me"))
+            .andExpect(status().isUnauthorized());
+    }
+
+    /** #767. Every role lists its own payments: all four reach the (unmapped) dispatcher. */
+    @ParameterizedTest
+    @ValueSource(strings = {"ADMIN", "INSTRUCTOR", "STUDENT", "RECEPTIONIST"})
+    void an_authenticated_get_of_the_own_payments_route_passes_the_security_layer(String role) throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get("/api/v1/billing/payments/me").with(user("someone").roles(role)))
+            .andExpect(status().isNotFound());
+    }
+
     // --- #33, US-BILLING-005 (design C6): the signed-token proof-viewer matcher ---
 
     /**

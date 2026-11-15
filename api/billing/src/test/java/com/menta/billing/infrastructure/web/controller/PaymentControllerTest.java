@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -14,17 +15,24 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.menta.billing.application.dto.OwnPaymentEntry;
 import com.menta.billing.application.dto.PaymentStatusResult;
 import com.menta.billing.application.dto.SubmitPaymentProofCommand;
 import com.menta.billing.application.port.in.GetPaymentUseCase;
+import com.menta.billing.application.port.in.ListOwnPaymentsUseCase;
 import com.menta.billing.application.port.in.SubmitPaymentProofUseCase;
 import com.menta.billing.domain.exception.BankTransferRateLimitedException;
+import com.menta.billing.domain.exception.InvalidPaymentsLimitException;
 import com.menta.billing.domain.exception.PaymentNotFoundException;
 import com.menta.billing.domain.exception.PaymentProofRejectedException;
 import com.menta.billing.domain.model.FulfillmentStatus;
+import com.menta.billing.domain.model.Money;
 import com.menta.billing.domain.model.PaymentId;
+import com.menta.billing.domain.model.PaymentMethod;
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -52,6 +60,7 @@ class PaymentControllerTest {
 
     private SubmitPaymentProofUseCase submitPaymentProofUseCase;
     private GetPaymentUseCase getPaymentUseCase;
+    private ListOwnPaymentsUseCase listOwnPaymentsUseCase;
     private PaymentController controller;
     private MockMvc mockMvc;
 
@@ -59,7 +68,8 @@ class PaymentControllerTest {
     void setUp() {
         submitPaymentProofUseCase = mock(SubmitPaymentProofUseCase.class);
         getPaymentUseCase = mock(GetPaymentUseCase.class);
-        controller = new PaymentController(submitPaymentProofUseCase, getPaymentUseCase);
+        listOwnPaymentsUseCase = mock(ListOwnPaymentsUseCase.class);
+        controller = new PaymentController(submitPaymentProofUseCase, getPaymentUseCase, listOwnPaymentsUseCase);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
             .setControllerAdvice(new PaymentExceptionHandler())
             // Matches production's Spring Boot auto-configured ObjectMapper — registers the
@@ -212,5 +222,77 @@ class PaymentControllerTest {
             .andExpect(status().isNotFound())
             .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
             .andExpect(jsonPath("$.code", is("PAYMENT_NOT_FOUND")));
+    }
+
+    // --- #767: GET /me ----------------------------------------------------------------------------
+
+    @Test
+    void own_payments_render_the_agreed_fields_and_nothing_else() throws Exception {
+        String paymentId = PAYMENT_ID.toString();
+        when(listOwnPaymentsUseCase.list(USER_ID, ListOwnPaymentsUseCase.DEFAULT_LIMIT)).thenReturn(List.of(
+            new OwnPaymentEntry(
+                paymentId, "COMPLETED", Money.of(new BigDecimal("15000.00"), "ARS"), PaymentMethod.MERCADO_PAGO,
+                Instant.parse("2026-11-10T12:00:00Z"),
+                new OwnPaymentEntry.Item(OwnPaymentEntry.ItemType.PHYSICAL_COURSE, "course-1", null)
+            )
+        ));
+
+        mockMvc.perform(get("/api/v1/billing/payments/me").with(authenticatedAs(USER_ID)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].paymentId", is(paymentId)))
+            .andExpect(jsonPath("$[0].status", is("COMPLETED")))
+            .andExpect(jsonPath("$[0].amount", is(15000.00)))
+            .andExpect(jsonPath("$[0].currency", is("ARS")))
+            .andExpect(jsonPath("$[0].paymentMethod", is("MERCADO_PAGO")))
+            .andExpect(jsonPath("$[0].createdAt", is("2026-11-10T12:00:00Z")))
+            .andExpect(jsonPath("$[0].item.type", is("PHYSICAL_COURSE")))
+            .andExpect(jsonPath("$[0].item.id", is("course-1")))
+            .andExpect(jsonPath("$[0].item", org.hamcrest.Matchers.hasKey("name")))
+            .andExpect(jsonPath("$[0].item.name").value(org.hamcrest.Matchers.nullValue()))
+            .andExpect(jsonPath("$[0].*", org.hamcrest.Matchers.hasSize(7)))
+            .andExpect(jsonPath("$[0].item.*", org.hamcrest.Matchers.hasSize(3)));
+    }
+
+    @Test
+    void own_payments_read_the_user_from_the_token_and_pass_the_requested_limit() throws Exception {
+        when(listOwnPaymentsUseCase.list(any(), org.mockito.ArgumentMatchers.anyInt())).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/v1/billing/payments/me").param("limit", "5").with(authenticatedAs(USER_ID)))
+            .andExpect(status().isOk())
+            .andExpect(content().json("[]"));
+
+        verify(listOwnPaymentsUseCase).list(USER_ID, 5);
+    }
+
+    /** The literal {@code /me} route wins over {@code /{paymentId}}: the single-payment read is never reached. */
+    @Test
+    void the_me_route_is_never_read_as_a_payment_id() throws Exception {
+        when(listOwnPaymentsUseCase.list(any(), org.mockito.ArgumentMatchers.anyInt())).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/v1/billing/payments/me").with(authenticatedAs(USER_ID)))
+            .andExpect(status().isOk());
+
+        verifyNoInteractions(getPaymentUseCase);
+    }
+
+    @Test
+    void a_non_numeric_limit_is_a_400_invalid_request() throws Exception {
+        mockMvc.perform(get("/api/v1/billing/payments/me").param("limit", "abc").with(authenticatedAs(USER_ID)))
+            .andExpect(status().isBadRequest())
+            .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.code", is("INVALID_REQUEST")));
+
+        verifyNoInteractions(listOwnPaymentsUseCase);
+    }
+
+    @Test
+    void an_out_of_range_limit_is_a_400_invalid_request() throws Exception {
+        when(listOwnPaymentsUseCase.list(USER_ID, 101)).thenThrow(new InvalidPaymentsLimitException(101, 100));
+
+        mockMvc.perform(get("/api/v1/billing/payments/me").param("limit", "101").with(authenticatedAs(USER_ID)))
+            .andExpect(status().isBadRequest())
+            .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.code", is("INVALID_REQUEST")))
+            .andExpect(jsonPath("$.detail", is("El parámetro limit debe ser un número entre 1 y 100.")));
     }
 }

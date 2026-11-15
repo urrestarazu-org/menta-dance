@@ -15,6 +15,7 @@ import com.menta.billing.application.port.in.GetPaymentUseCase;
 import com.menta.billing.application.port.in.GetPhysicalCoursePricingUseCase;
 import com.menta.billing.application.port.in.GetPlanUseCase;
 import com.menta.billing.application.port.in.GetSubscriptionHistoryUseCase;
+import com.menta.billing.application.port.in.ListOwnPaymentsUseCase;
 import com.menta.billing.application.port.in.ListPlansUseCase;
 import com.menta.billing.application.port.in.ReceiveWebhookUseCase;
 import com.menta.billing.application.port.in.ResolveExceptionPurchaseUseCase;
@@ -62,6 +63,7 @@ import com.menta.billing.application.usecase.GetPaymentUseCaseImpl;
 import com.menta.billing.application.usecase.GetPhysicalCoursePricingUseCaseImpl;
 import com.menta.billing.application.usecase.GetPlanUseCaseImpl;
 import com.menta.billing.application.usecase.GetSubscriptionHistoryUseCaseImpl;
+import com.menta.billing.application.usecase.ListOwnPaymentsUseCaseImpl;
 import com.menta.billing.application.usecase.ListPlansUseCaseImpl;
 import com.menta.billing.application.usecase.MarkPurchaseAssignedUseCase;
 import com.menta.billing.application.usecase.MarkPurchaseExceptionUseCase;
@@ -455,6 +457,12 @@ public class BillingConfiguration {
         SubscriptionRepository subscriptionRepository
     ) {
         return new GetSubscriptionHistoryUseCaseImpl(subscriptionRepository);
+    }
+
+    /** #767. Same rationale as {@code getSubscriptionHistoryUseCase} above. */
+    @Bean
+    public ListOwnPaymentsUseCase listOwnPaymentsUseCase(PaymentRepository paymentRepository) {
+        return new ListOwnPaymentsUseCaseImpl(paymentRepository);
     }
 
     @Bean
