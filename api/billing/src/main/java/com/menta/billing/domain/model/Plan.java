@@ -9,9 +9,9 @@ import java.util.Set;
 /**
  * A subscription plan (US-BILLING-001).
  *
- * <p>Read-only for now: this issue only lists and shows plans, it never
- * creates or edits one. Immutable by construction rather than by convention
- * — there is no mutator to forget to call.</p>
+ * <p>Listed and shown publicly, created by an admin (#762), never edited:
+ * immutable by construction rather than by convention — there is no mutator
+ * to forget to call.</p>
  */
 public final class Plan {
 

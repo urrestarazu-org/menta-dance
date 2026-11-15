@@ -11,6 +11,7 @@ import com.menta.billing.infrastructure.persistence.mapper.PlanJpaMapper;
 import com.menta.billing.infrastructure.persistence.repository.PlanCourseJpaRepository;
 import com.menta.billing.infrastructure.persistence.repository.PlanJpaRepository;
 import com.menta.billing.infrastructure.persistence.repository.PlanPaymentMethodJpaRepository;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -79,6 +80,18 @@ public class PlanRepositoryAdapter implements PlanRepository {
     @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
     public Optional<Plan> findById(PlanId id) {
         return planJpaRepository.findById(id.getValue()).map(this::toDomain);
+    }
+
+    /**
+     * One transaction for the three tables, so a plan is never visible without the payment
+     * methods {@code Plan} requires — the reason the use case needs no decorator of its own.
+     */
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED)
+    public void save(Plan plan, Instant createdAt) {
+        planJpaRepository.save(PlanJpaMapper.toEntity(plan, createdAt));
+        planPaymentMethodJpaRepository.saveAll(PlanJpaMapper.toPaymentMethodEntities(plan));
+        planCourseJpaRepository.saveAll(PlanJpaMapper.toCourseEntities(plan));
     }
 
     private Plan toDomain(PlanJpaEntity entity) {

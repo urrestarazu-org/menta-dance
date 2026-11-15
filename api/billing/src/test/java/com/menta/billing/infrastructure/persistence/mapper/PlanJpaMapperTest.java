@@ -2,8 +2,11 @@ package com.menta.billing.infrastructure.persistence.mapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.menta.billing.domain.model.Money;
 import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.domain.model.Plan;
+import com.menta.billing.domain.model.PlanCourse;
+import com.menta.billing.domain.model.PlanId;
 import com.menta.billing.domain.model.PlanStatus;
 import com.menta.billing.infrastructure.persistence.entity.PlanCourseJpaEntity;
 import com.menta.billing.infrastructure.persistence.entity.PlanJpaEntity;
@@ -11,6 +14,7 @@ import com.menta.billing.infrastructure.persistence.entity.PlanPaymentMethodJpaE
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -80,5 +84,60 @@ class PlanJpaMapperTest {
         Plan plan = PlanJpaMapper.toDomain(entity, List.of(), List.of());
 
         assertThat(plan.getPaymentMethods()).containsExactly(PaymentMethod.MERCADO_PAGO);
+    }
+
+    private static Plan newPlan(PlanId id, List<PlanCourse> courses, Set<PaymentMethod> methods) {
+        return new Plan(
+            id, "Plan Mensual", "Acceso mensual", Money.of(new BigDecimal("15000.00"), "ARS"), 30, true,
+            PlanStatus.INACTIVE, "Términos", "Política de cancelación", courses, methods
+        );
+    }
+
+    @Test
+    void flattens_a_new_plan_into_its_row_stamped_with_the_creation_instant() {
+        PlanId id = PlanId.generate();
+        Instant createdAt = Instant.parse("2026-11-15T12:00:00Z");
+
+        PlanJpaEntity entity = PlanJpaMapper.toEntity(
+            newPlan(id, List.of(), Set.of(PaymentMethod.MERCADO_PAGO)), createdAt
+        );
+
+        assertThat(entity.getId()).isEqualTo(id.getValue());
+        assertThat(entity.getName()).isEqualTo("Plan Mensual");
+        assertThat(entity.getDescription()).isEqualTo("Acceso mensual");
+        assertThat(entity.getPrice()).isEqualByComparingTo("15000.00");
+        assertThat(entity.getCurrency()).isEqualTo("ARS");
+        assertThat(entity.getDurationDays()).isEqualTo(30);
+        assertThat(entity.isFeatured()).isTrue();
+        assertThat(entity.getStatus()).isEqualTo(PlanStatus.INACTIVE);
+        assertThat(entity.getTermsAndConditions()).isEqualTo("Términos");
+        assertThat(entity.getCancellationPolicy()).isEqualTo("Política de cancelación");
+        assertThat(entity.getCreatedAt()).isEqualTo(createdAt);
+        assertThat(entity.getUpdatedAt()).isEqualTo(createdAt);
+    }
+
+    @Test
+    void flattens_the_courses_of_a_plan_into_one_row_each_in_the_plan_order() {
+        PlanId id = PlanId.generate();
+        Plan plan = newPlan(
+            id, List.of(PlanCourse.of("course-2"), PlanCourse.of("course-1")), Set.of(PaymentMethod.MERCADO_PAGO)
+        );
+
+        List<PlanCourseJpaEntity> rows = PlanJpaMapper.toCourseEntities(plan);
+
+        assertThat(rows).extracting(PlanCourseJpaEntity::getPlanId).containsOnly(id.getValue());
+        assertThat(rows).extracting(PlanCourseJpaEntity::getCourseId).containsExactly("course-2", "course-1");
+    }
+
+    @Test
+    void flattens_the_payment_methods_of_a_plan_into_one_row_each_by_name() {
+        PlanId id = PlanId.generate();
+        Plan plan = newPlan(id, List.of(), Set.of(PaymentMethod.MERCADO_PAGO, PaymentMethod.BANK_TRANSFER));
+
+        List<PlanPaymentMethodJpaEntity> rows = PlanJpaMapper.toPaymentMethodEntities(plan);
+
+        assertThat(rows).extracting(PlanPaymentMethodJpaEntity::getPlanId).containsOnly(id.getValue());
+        assertThat(rows).extracting(PlanPaymentMethodJpaEntity::getPaymentMethod)
+            .containsExactlyInAnyOrder("MERCADO_PAGO", "BANK_TRANSFER");
     }
 }

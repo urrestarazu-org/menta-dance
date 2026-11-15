@@ -13,9 +13,9 @@ info:
   title: Menta Dance — Billing API
   version: "1.0.0"
   description: |
-    Catálogo público de planes de suscripción (US-BILLING-001), inicio de
-    Checkout Pro (US-BILLING-010) y confirmación de pago por webhook de
-    Mercado Pago (US-BILLING-002).
+    Catálogo público de planes de suscripción (US-BILLING-001), alta de planes
+    por un admin (#762), inicio de Checkout Pro (US-BILLING-010) y
+    confirmación de pago por webhook de Mercado Pago (US-BILLING-002).
 
     ## Errores
 
@@ -37,6 +37,8 @@ servers:
 tags:
   - name: Planes
     description: Catálogo público de planes de suscripción.
+  - name: Gestión de planes
+    description: Alta de planes de facturación (ADMIN, #762).
   - name: Suscripciones
     description: Inicio de checkout y cancelación autogestionada de la propia suscripción.
   - name: Gestión de suscripciones
@@ -120,6 +122,61 @@ paths:
           $ref: '#/components/responses/PlanRateLimited'
         '503':
           $ref: '#/components/responses/BillingDegraded'
+
+  /api/v1/admin/billing/plans:
+    post:
+      tags: [Gestión de planes]
+      summary: Crear un plan (ADMIN)
+      description: |
+        Crea un plan de facturación con un `id` generado por el servidor y responde con el mismo
+        contrato que el detalle público (`GET /api/v1/billing/plans/{planId}`). Un plan `ACTIVE`
+        aparece desde ese momento en el catálogo público; uno `INACTIVE` se guarda pero nunca se
+        lista ni se muestra públicamente.
+
+        Los `courseIds` son ids de cursos de Virtual o Physical, tomados por valor: Billing no
+        valida que existan. Un curso que no se puede resolver se devuelve con `name: null`, igual
+        que en el catálogo público. La lista puede ser vacía.
+
+        No hay tabla de auditoría para planes: el alta queda registrada en el log de la API con el
+        id del plan y el del admin.
+      operationId: createPlan
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePlanRequest'
+      responses:
+        '201':
+          description: Plan creado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanDetailResponse'
+        '400':
+          description: >-
+            Cuerpo incompleto o ilegible, precio cero o negativo, más de dos decimales o más de
+            ocho dígitos enteros, moneda que no es un código ISO-4217, `durationDays` cero o
+            negativo, `status` o medio de pago desconocidos, sin medios de pago, o un `courseId`
+            en blanco o de más de 64 caracteres. No se crea ningún plan.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                datos_invalidos:
+                  value:
+                    type: https://menta.dance/problems/invalid_request
+                    title: Bad Request
+                    status: 400
+                    detail: La solicitud contiene datos inválidos.
+                    code: INVALID_REQUEST
+        '401':
+          description: Falta un access token válido.
+        '403':
+          description: El caller autenticado no tiene rol ADMIN.
 
   /api/v1/billing/subscriptions:
     post:
@@ -1498,6 +1555,65 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PlanCourseResponse'
+
+    CreatePlanRequest:
+      type: object
+      required:
+        [
+          name, description, price, currency, durationDays, featured, status, termsAndConditions,
+          cancellationPolicy, paymentMethods, courseIds,
+        ]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+          minLength: 1
+          maxLength: 16000
+        price:
+          type: number
+          format: decimal
+          exclusiveMinimum: 0
+          description: Mayor a cero, con hasta ocho dígitos enteros y dos decimales.
+          example: 15000.00
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          description: Código ISO-4217.
+          example: ARS
+        durationDays:
+          type: integer
+          minimum: 1
+        featured:
+          type: boolean
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+          description: Sólo un plan `ACTIVE` aparece en el catálogo público.
+        termsAndConditions:
+          type: string
+          minLength: 1
+          maxLength: 16000
+        cancellationPolicy:
+          type: string
+          minLength: 1
+          maxLength: 16000
+        paymentMethods:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum: [MERCADO_PAGO, BANK_TRANSFER]
+        courseIds:
+          type: array
+          description: Ids de cursos de Virtual o Physical que cubre el plan; puede ser vacía.
+          items:
+            type: string
+            minLength: 1
+            maxLength: 64
 
     PendingVerificationItemResponse:
       type: object

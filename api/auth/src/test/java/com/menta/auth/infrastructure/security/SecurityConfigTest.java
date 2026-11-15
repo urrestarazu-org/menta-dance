@@ -494,6 +494,37 @@ class SecurityConfigTest {
             .andExpect(status().isNotFound());
     }
 
+    private static final String ADMIN_PLANS_URL = "/api/v1/admin/billing/plans";
+
+    /**
+     * #762. Creating a billing plan needs no new matcher: the generic {@code /api/v1/admin/**} rule
+     * already requires ADMIN, declared before {@code anyRequest()}. These tests pin it, because an
+     * unmapped path would otherwise fall through to {@code anyRequest()}'s permissive grant.
+     */
+    @Test
+    void an_unauthenticated_post_of_the_admin_plan_creation_route_is_rejected() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(post(ADMIN_PLANS_URL)).andExpect(status().isUnauthorized());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"STUDENT", "INSTRUCTOR", "RECEPTIONIST"})
+    void a_non_admin_post_of_the_admin_plan_creation_route_is_forbidden(String role) throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(post(ADMIN_PLANS_URL).with(user("someone").roles(role)))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void an_admin_post_of_the_admin_plan_creation_route_passes_the_security_layer() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(post(ADMIN_PLANS_URL).with(user("admin").roles("ADMIN")))
+            .andExpect(status().isNotFound());
+    }
+
     /**
      * #52, US-VIRTUAL-005 (Slice 1). Before this matcher existed, {@code
      * /api/v1/virtual/lessons/**} was granted by {@code permitAll()} with no

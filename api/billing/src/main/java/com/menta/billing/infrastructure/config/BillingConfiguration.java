@@ -8,6 +8,7 @@ import com.menta.billing.application.port.in.CreateBankTransferPhysicalPurchaseU
 import com.menta.billing.application.port.in.CreateBankTransferSubscriptionUseCase;
 import com.menta.billing.application.port.in.CreatePhysicalCourseQuoteUseCase;
 import com.menta.billing.application.port.in.CreatePhysicalPurchaseCheckoutUseCase;
+import com.menta.billing.application.port.in.CreatePlanUseCase;
 import com.menta.billing.application.port.in.CreateSubscriptionCheckoutUseCase;
 import com.menta.billing.application.port.in.GetCurrentSubscriptionUseCase;
 import com.menta.billing.application.port.in.GetPaymentUseCase;
@@ -53,6 +54,7 @@ import com.menta.billing.application.usecase.CreateBankTransferPhysicalPurchaseU
 import com.menta.billing.application.usecase.CreateBankTransferSubscriptionUseCaseImpl;
 import com.menta.billing.application.usecase.CreatePhysicalCourseQuoteUseCaseImpl;
 import com.menta.billing.application.usecase.CreatePhysicalPurchaseCheckoutUseCaseImpl;
+import com.menta.billing.application.usecase.CreatePlanUseCaseImpl;
 import com.menta.billing.application.usecase.CreatePurchaseFromPaymentEventUseCase;
 import com.menta.billing.application.usecase.CreateSubscriptionCheckoutUseCaseImpl;
 import com.menta.billing.application.usecase.GetCurrentSubscriptionUseCaseImpl;
@@ -421,6 +423,18 @@ public class BillingConfiguration {
         BillingPlansRateLimitPort billingPlansRateLimitPort
     ) {
         return new GetPlanUseCaseImpl(planRepository, courseCatalogPort, billingPlansRateLimitPort);
+    }
+
+    /**
+     * #762. No {@code Transactional*} decorator: the plan and its rows are written in the
+     * adapter's own transaction, and the course names of the answer must be resolved outside any
+     * transaction (see {@code PlanCourseResolver}).
+     */
+    @Bean
+    public CreatePlanUseCase createPlanUseCase(
+        PlanRepository planRepository, CourseCatalogPort courseCatalogPort, Clock clock
+    ) {
+        return new CreatePlanUseCaseImpl(planRepository, courseCatalogPort, clock);
     }
 
     /**

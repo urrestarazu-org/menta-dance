@@ -9,6 +9,7 @@ import com.menta.billing.application.port.in.AssignTrialSubscriptionUseCase;
 import com.menta.billing.application.port.in.CreateBankTransferPhysicalPurchaseUseCase;
 import com.menta.billing.application.port.in.CreateBankTransferSubscriptionUseCase;
 import com.menta.billing.application.port.in.CreatePhysicalPurchaseCheckoutUseCase;
+import com.menta.billing.application.port.in.CreatePlanUseCase;
 import com.menta.billing.application.port.in.CreateSubscriptionCheckoutUseCase;
 import com.menta.billing.application.port.in.GetCurrentSubscriptionUseCase;
 import com.menta.billing.application.port.in.GetPaymentUseCase;
@@ -40,6 +41,7 @@ import com.menta.billing.application.port.out.WebhookInboxAppender;
 import com.menta.billing.application.port.out.WebhookSignatureVerifier;
 import com.menta.billing.application.usecase.CreateBankTransferPhysicalPurchaseUseCaseImpl;
 import com.menta.billing.application.usecase.CreateBankTransferSubscriptionUseCaseImpl;
+import com.menta.billing.application.usecase.CreatePlanUseCaseImpl;
 import com.menta.billing.application.usecase.GetCurrentSubscriptionUseCaseImpl;
 import com.menta.billing.application.usecase.GetPlanUseCaseImpl;
 import com.menta.billing.application.usecase.GetSubscriptionHistoryUseCaseImpl;
@@ -209,6 +211,15 @@ class BillingConfigurationTest {
         );
 
         assertThat(useCase).isInstanceOf(GetPlanUseCaseImpl.class);
+    }
+
+    @Test
+    void wires_the_create_plan_use_case_bean() {
+        CreatePlanUseCase useCase = configuration.createPlanUseCase(
+            mock(PlanRepository.class), mock(CourseCatalogPort.class), mock(Clock.class)
+        );
+
+        assertThat(useCase).isInstanceOf(CreatePlanUseCaseImpl.class);
     }
 
     @Test

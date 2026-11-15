@@ -1,0 +1,89 @@
+meta {
+  name: Create Plan
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/admin/billing/plans
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  content-type: application/json
+}
+
+body:json {
+  {
+    "name": "Plan Mensual",
+    "description": "Acceso a todos los cursos online durante un mes.",
+    "price": 15000.00,
+    "currency": "ARS",
+    "durationDays": 30,
+    "featured": true,
+    "status": "ACTIVE",
+    "termsAndConditions": "La suscripción se renueva sólo si la volvés a comprar.",
+    "cancellationPolicy": "Podés cancelar cuando quieras; no hay reembolsos parciales.",
+    "paymentMethods": ["MERCADO_PAGO", "BANK_TRANSFER"],
+    "courseIds": []
+  }
+}
+
+script:post-response {
+  if (res.getStatus() === 201) {
+    bru.setVar("planId", res.getBody().id);
+  }
+}
+
+docs {
+  #762. Requires an ADMIN bearer token (log in first with an admin account,
+  for instance admin@menta.dance locally). Creates a billing plan with a
+  server-generated id and stores it in the runtime-only `planId` variable, so
+  "Get Plan" and the checkout requests can use it right away.
+
+  courseIds are Virtual or Physical course ids taken by value — billing does
+  not check that they exist — and the list may be empty. A course that cannot
+  be resolved is returned with name: null, as in the public catalog.
+
+  An ACTIVE plan shows up in "List Plans" immediately; an INACTIVE one is
+  stored but never listed nor shown publicly.
+
+  Success contract (201) — the same shape as the public plan detail:
+    { id, name, description, price, currency, durationDays, featured,
+      termsAndConditions, cancellationPolicy, courses: [{ id, name }] }
+
+  Error contract:
+    400 INVALID_REQUEST → missing or unreadable field, price zero/negative or
+                          with more than two decimals, currency that is not
+                          ISO-4217, durationDays zero/negative, unknown status
+                          or payment method, no payment method, or a blank
+                          courseId
+    401                 → no valid access token
+    403                 → caller is not ADMIN
+}
+
+tests {
+  test("Creates the plan with a server-generated id", function() {
+    expect(res.getStatus()).to.equal(201);
+    expect(res.getBody().id).to.be.a('string');
+    expect(res.getBody().name).to.equal("Plan Mensual");
+    expect(res.getBody().durationDays).to.equal(30);
+    expect(res.getBody().courses).to.be.an('array');
+  });
+
+  test("Answers exactly the public plan detail shape", function() {
+    expect(Object.keys(res.getBody()).sort()).to.eql([
+      "cancellationPolicy", "courses", "currency", "description", "durationDays",
+      "featured", "id", "name", "price", "termsAndConditions"
+    ]);
+  });
+}
+
+assert {
+  res.status: eq 201
+}

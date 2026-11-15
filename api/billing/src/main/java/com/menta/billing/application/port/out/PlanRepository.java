@@ -2,6 +2,7 @@ package com.menta.billing.application.port.out;
 
 import com.menta.billing.domain.model.Plan;
 import com.menta.billing.domain.model.PlanId;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -27,4 +28,11 @@ public interface PlanRepository {
      * the meantime must not silently strip the snapshot of its courses.
      */
     Optional<Plan> findById(PlanId id);
+
+    /**
+     * Inserts a new plan together with its payment methods and courses, atomically (#762).
+     *
+     * @param createdAt stamped as both the creation and the last-update instant of the plan row
+     */
+    void save(Plan plan, Instant createdAt);
 }

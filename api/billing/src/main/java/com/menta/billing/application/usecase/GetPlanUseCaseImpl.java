@@ -11,7 +11,6 @@ import com.menta.billing.domain.exception.PlanRateLimitedException;
 import com.menta.billing.domain.model.Plan;
 import com.menta.billing.domain.model.PlanId;
 import java.util.List;
-import java.util.Map;
 
 /** Implementation of {@link GetPlanUseCase}. */
 public class GetPlanUseCaseImpl implements GetPlanUseCase {
@@ -36,7 +35,7 @@ public class GetPlanUseCaseImpl implements GetPlanUseCase {
             throw new PlanRateLimitedException(decision.getRetryAfter());
         }
         Plan plan = planRepository.findActiveById(parseId(planId)).orElseThrow(PlanNotFoundException::new);
-        return toDetail(plan, PlanCourseResolver.resolveNames(List.of(plan), courseCatalogPort));
+        return PlanDetails.of(plan, PlanCourseResolver.resolveNames(List.of(plan), courseCatalogPort));
     }
 
     private static PlanId parseId(String planId) {
@@ -47,20 +46,5 @@ public class GetPlanUseCaseImpl implements GetPlanUseCase {
             // that does not exist — both must read as "not found".
             throw new PlanNotFoundException();
         }
-    }
-
-    private static PlanDetailResult toDetail(Plan plan, Map<String, String> courseNames) {
-        return new PlanDetailResult(
-            plan.getId().toString(),
-            plan.getName(),
-            plan.getDescription(),
-            plan.getPrice().getAmount(),
-            plan.getPrice().getCurrency(),
-            plan.getDurationDays(),
-            plan.isFeatured(),
-            plan.getTermsAndConditions(),
-            plan.getCancellationPolicy(),
-            PlanCourseResolver.toResults(plan.getCourses(), courseNames)
-        );
     }
 }
