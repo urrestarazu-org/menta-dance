@@ -6,6 +6,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.verify;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -15,6 +16,7 @@ import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import com.menta.bff.application.dto.CourseDetail;
 import com.menta.bff.application.dto.CourseProgress;
+import com.menta.bff.application.dto.InProgressCourse;
 import com.menta.bff.application.dto.LessonDetail;
 import com.menta.bff.application.dto.LessonStream;
 import com.menta.bff.application.port.out.VirtualApiClient;
@@ -25,6 +27,8 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.web.reactive.function.client.WebClient;
 
 @WireMockTest
@@ -43,6 +47,7 @@ class VirtualApiAdapterTest {
     private static final String LESSON_STREAM_PATH = LESSON_PATH + "/stream";
     private static final String COURSE_PROGRESS_PATH = "/api/v1/virtual/courses/" + COURSE_ID + "/progress";
     private static final String ACCESS_TOKEN = "eyJhbGciOiJIUzI1NiJ9.token";
+    private static final String IN_PROGRESS_PATH = "/api/v1/virtual/courses/me/in-progress";
 
     private VirtualApiAdapter virtualApiAdapter;
     private ObjectMapper objectMapper;
@@ -539,6 +544,108 @@ class VirtualApiAdapterTest {
         // getLesson/getStream's conditional header, there is no anonymous form
         // for this call at all (design D3).
         verify(0, getRequestedFor(urlEqualTo(COURSE_PROGRESS_PATH)));
+    }
+
+    private static void stubInProgress(int status, String body) {
+        stubFor(get(urlPathEqualTo(IN_PROGRESS_PATH)).willReturn(aResponse().withStatus(status)
+                .withHeader("Content-Type", status < 300 ? "application/json" : "application/problem+json")
+                .withBody(body)));
+    }
+
+    @Test
+    @DisplayName("lists the courses in progress in API order, sending the Bearer token and the limit")
+    void listsInProgressCourses() {
+        stubInProgress(200,
+                """
+                [{"courseId": "c-2", "courseTitle": "Bachata", "completedLessons": 1, "totalLessons": 4,
+                  "percentage": 25, "resumeLesson": {"lessonId": "l-21", "moduleId": "m-2",
+                  "lessonTitle": "Paso básico", "positionSeconds": 42}},
+                 {"courseId": "c-1", "courseTitle": "Salsa", "completedLessons": 3, "totalLessons": 10,
+                  "percentage": 30, "resumeLesson": {"lessonId": "l-13", "moduleId": "m-1",
+                  "lessonTitle": "Giros", "positionSeconds": 0}}]
+                """);
+
+        List<InProgressCourse> courses = virtualApiAdapter.listInProgressCourses(ACCESS_TOKEN, 5);
+
+        assertThat(courses).containsExactly(
+                new InProgressCourse("c-2", "Bachata", 1, 4, 25, "l-21", "Paso básico"),
+                new InProgressCourse("c-1", "Salsa", 3, 10, 30, "l-13", "Giros"));
+        verify(getRequestedFor(urlPathEqualTo(IN_PROGRESS_PATH))
+                .withQueryParam("limit", equalTo("5"))
+                .withHeader("Authorization", equalTo("Bearer " + ACCESS_TOKEN)));
+    }
+
+    @Test
+    @DisplayName("fields the BFF does not render may be missing, and unknown fields are ignored")
+    void ignoresFieldsItDoesNotRender() {
+        stubInProgress(200,
+                """
+                [{"courseId": "c-1", "courseTitle": "Salsa", "completedLessons": 0, "totalLessons": 2,
+                  "percentage": 0, "addedLater": true,
+                  "resumeLesson": {"lessonId": "l-1", "lessonTitle": "Intro", "moduleId": null}}]
+                """);
+
+        assertThat(virtualApiAdapter.listInProgressCourses(ACCESS_TOKEN, 5))
+                .containsExactly(new InProgressCourse("c-1", "Salsa", 0, 2, 0, "l-1", "Intro"));
+    }
+
+    @Test
+    @DisplayName("an empty array means no course in progress")
+    void emptyList() {
+        stubInProgress(200, "[]");
+
+        assertThat(virtualApiAdapter.listInProgressCourses(ACCESS_TOKEN, 5)).isEmpty();
+    }
+
+    @ParameterizedTest(name = "a {0} answer fails closed")
+    @ValueSource(ints = {400, 401, 403, 404, 429, 500, 503})
+    void nonSuccessFailsClosed(int status) {
+        stubInProgress(status, "{\"status\": " + status + ", \"code\": \"SECRET_DETAIL\"}");
+
+        assertThatThrownBy(() -> virtualApiAdapter.listInProgressCourses(ACCESS_TOKEN, 5))
+                .isInstanceOf(VirtualApiClient.ServiceUnavailableException.class)
+                .hasMessageNotContaining("SECRET_DETAIL")
+                .hasMessageNotContaining(ACCESS_TOKEN);
+    }
+
+    @ParameterizedTest(name = "an unusable 200 body fails closed: {0}")
+    @ValueSource(strings = {
+        "not json",
+        "",
+        "{\"courseId\": \"c-1\"}",
+        "[null]",
+        "[{\"courseTitle\": \"Salsa\", \"completedLessons\": 1, \"totalLessons\": 2, \"percentage\": 50,"
+                + " \"resumeLesson\": {\"lessonId\": \"l-1\", \"lessonTitle\": \"Intro\"}}]",
+        "[{\"courseId\": \"c-1\", \"courseTitle\": null, \"completedLessons\": 1, \"totalLessons\": 2,"
+                + " \"percentage\": 50, \"resumeLesson\": {\"lessonId\": \"l-1\", \"lessonTitle\": \"Intro\"}}]",
+        "[{\"courseId\": \"c-1\", \"courseTitle\": \"Salsa\", \"totalLessons\": 2, \"percentage\": 50,"
+                + " \"resumeLesson\": {\"lessonId\": \"l-1\", \"lessonTitle\": \"Intro\"}}]",
+        "[{\"courseId\": \"c-1\", \"courseTitle\": \"Salsa\", \"completedLessons\": 1, \"totalLessons\": 2,"
+                + " \"percentage\": 50}]",
+        "[{\"courseId\": \"c-1\", \"courseTitle\": \"Salsa\", \"completedLessons\": 1, \"totalLessons\": 2,"
+                + " \"percentage\": 50, \"resumeLesson\": {\"lessonTitle\": \"Intro\"}}]",
+        "[{\"courseId\": \"c-1\", \"courseTitle\": \"Salsa\", \"completedLessons\": 1, \"totalLessons\": 2,"
+                + " \"percentage\": 50, \"resumeLesson\": {\"lessonId\": \"l-1\"}}]"
+    })
+    void unusableBodyFailsClosed(String body) {
+        stubInProgress(200, body);
+
+        assertThatThrownBy(() -> virtualApiAdapter.listInProgressCourses(ACCESS_TOKEN, 5))
+                .isInstanceOf(VirtualApiClient.ServiceUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("a slow answer fails closed once the configured timeout elapses")
+    void timeoutFailsClosed(WireMockRuntimeInfo wmRuntimeInfo) {
+        VirtualApiProperties properties = new VirtualApiProperties();
+        properties.setTimeout(Duration.ofMillis(100));
+        VirtualApiAdapter impatient = new VirtualApiAdapter(
+                WebClient.builder().baseUrl(wmRuntimeInfo.getHttpBaseUrl()).build(), properties);
+        stubFor(get(urlPathEqualTo(IN_PROGRESS_PATH)).willReturn(aResponse().withStatus(200)
+                .withHeader("Content-Type", "application/json").withBody("[]").withFixedDelay(1000)));
+
+        assertThatThrownBy(() -> impatient.listInProgressCourses(ACCESS_TOKEN, 5))
+                .isInstanceOf(VirtualApiClient.ServiceUnavailableException.class);
     }
 
     private Map<String, Object> courseProgressResponseBody(boolean withResumeLesson) {

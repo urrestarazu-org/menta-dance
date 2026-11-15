@@ -1,6 +1,7 @@
 package com.menta.bff.infrastructure.web.controller;
 
 import com.menta.bff.application.dto.DashboardView;
+import com.menta.bff.application.usecase.GetContinueLearningUseCase;
 import com.menta.bff.application.usecase.GetDashboardViewUseCase;
 import com.menta.bff.infrastructure.web.filter.TokenRefreshFilter;
 import jakarta.servlet.http.HttpServletRequest;
@@ -27,6 +28,12 @@ import org.springframework.web.bind.annotation.GetMapping;
  * is made and the card shows the unavailable notice. Any other role keeps the dashboard without the
  * card and without any Billing call.
  * </p>
+ *
+ * <p>A student also gets the "Continuar" section (#363), read through {@link
+ * GetContinueLearningUseCase} with the same token. It is independent of the subscription card: the
+ * use case fails closed on its own (a missing token included, with no Virtual API call), so a failure
+ * of either one never hides the other. Other roles get neither the section nor the call.
+ * </p>
  */
 @Controller
 @RequiredArgsConstructor
@@ -35,6 +42,7 @@ public class DashboardController {
     private static final String STUDENT_AUTHORITY = "ROLE_STUDENT";
 
     private final GetDashboardViewUseCase getDashboardViewUseCase;
+    private final GetContinueLearningUseCase getContinueLearningUseCase;
 
     @GetMapping("/dashboard")
     public String dashboard(
@@ -49,6 +57,7 @@ public class DashboardController {
                     : getDashboardViewUseCase.execute(accessToken);
             response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
             model.addAttribute("subscription", subscription);
+            model.addAttribute("continueLearning", getContinueLearningUseCase.execute(accessToken));
         }
         return "dashboard";
     }

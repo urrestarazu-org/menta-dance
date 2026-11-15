@@ -12,6 +12,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
 import com.menta.bff.application.dto.DashboardView;
+import com.menta.bff.application.dto.InProgressCourse;
+import com.menta.bff.application.usecase.ContinueLearningView;
+import com.menta.bff.application.usecase.GetContinueLearningUseCase;
 import com.menta.bff.application.usecase.GetDashboardViewUseCase;
 import com.menta.bff.infrastructure.web.filter.TokenRefreshFilter;
 import java.util.List;
@@ -40,8 +43,10 @@ class DashboardControllerTest {
     private static final String TOKEN = "access-token-abc";
 
     private final GetDashboardViewUseCase getDashboardViewUseCase = mock(GetDashboardViewUseCase.class);
+    private final GetContinueLearningUseCase getContinueLearningUseCase = mock(GetContinueLearningUseCase.class);
 
-    private final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new DashboardController(getDashboardViewUseCase))
+    private final MockMvc mockMvc = MockMvcBuilders
+            .standaloneSetup(new DashboardController(getDashboardViewUseCase, getContinueLearningUseCase))
             .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
             .setViewResolvers(new InternalResourceViewResolver("/templates/", ".html"))
             .build();
@@ -105,8 +110,36 @@ class DashboardControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(view().name("dashboard"))
                 .andExpect(model().attributeDoesNotExist("subscription"))
+                .andExpect(model().attributeDoesNotExist("continueLearning"))
                 .andExpect(model().attribute("username", "user@menta.dance"));
         verify(getDashboardViewUseCase, never()).execute(any());
+        verify(getContinueLearningUseCase, never()).execute(any());
+    }
+
+    @Test
+    @DisplayName("a student gets the courses to continue read with the request's access token, never cached")
+    void studentGetsTheContinueLearningSection() throws Exception {
+        ContinueLearningView section = new ContinueLearningView(
+                List.of(new InProgressCourse("c-1", "Salsa", 3, 10, 30, "l-13", "Giros")), false);
+        when(getContinueLearningUseCase.execute(TOKEN)).thenReturn(section);
+
+        mockMvc.perform(get("/dashboard").principal(signedIn("ROLE_STUDENT"))
+                        .requestAttr(TokenRefreshFilter.ACCESS_TOKEN_ATTRIBUTE, TOKEN))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(model().attribute("continueLearning", section));
+    }
+
+    @Test
+    @DisplayName("a student without a token still gets the section, which the use case fails closed")
+    void studentWithoutTokenStillGetsTheSection() throws Exception {
+        ContinueLearningView unavailable = new ContinueLearningView(List.of(), true);
+        when(getContinueLearningUseCase.execute(null)).thenReturn(unavailable);
+
+        mockMvc.perform(get("/dashboard").principal(signedIn("ROLE_STUDENT")))
+                .andExpect(status().isOk())
+                .andExpect(model().attribute("continueLearning", unavailable))
+                .andExpect(model().attribute("subscription", new DashboardView.Unavailable()));
     }
 
     @ParameterizedTest(name = "a student whose token is \"{0}\" fails closed to the unavailable card")

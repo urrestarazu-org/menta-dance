@@ -2,8 +2,10 @@ package com.menta.bff.application.port.out;
 
 import com.menta.bff.application.dto.CourseDetail;
 import com.menta.bff.application.dto.CourseProgress;
+import com.menta.bff.application.dto.InProgressCourse;
 import com.menta.bff.application.dto.LessonDetail;
 import com.menta.bff.application.dto.LessonStream;
+import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ResponseStatus;
 
@@ -87,6 +89,23 @@ public interface VirtualApiClient {
      * @throws ServiceUnavailableException if the upstream is unreachable (503)
      */
     CourseProgress getCourseProgress(String courseId, String accessToken);
+
+    /**
+     * Lists the courses the caller is in the middle of (#363).
+     *
+     * <p>Calls GET /api/v1/virtual/courses/me/in-progress?limit={limit}, always with the
+     * {@code Authorization} header. Unlike the other calls of this port it fails closed on every
+     * outcome that is not a usable 200: the dashboard only shows a notice, so no status is told
+     * apart from another.
+     * </p>
+     *
+     * @param accessToken caller's access token; must not be {@code null}
+     * @param limit       most courses to return, 1 to 50
+     * @return the courses, most recent activity first; empty when there is none
+     * @throws ServiceUnavailableException on any non-2xx answer, an unreadable or incomplete body,
+     *         a timeout or a transport error
+     */
+    List<InProgressCourse> listInProgressCourses(String accessToken, int limit);
 
     /**
      * Exception thrown when the requested resource does not exist upstream (404).
