@@ -849,6 +849,67 @@ El perfil `prod` no siembra usuarios (`DemoProfileGuard` impide el perfil `demo`
 
 Un mecanismo de arranque que cree el primer admin desde variables de entorno quedó fuera de alcance de #709.
 
+### 2.15 Demo pública sobre producción (#380)
+
+La demo pública **no usa el perfil `demo`**: corre sobre este mismo despliegue, con el perfil `prod` y datos de demo cargados a mano (decisión en la enmienda #380 de [ADR-0045](adr/0045-despliegue-vps-donweb.md)). Sirve para mostrar la aplicación en `https://mentadance.com` (TFM, evaluación, presentaciones) sin un segundo servidor. **Estado (2026-11-14): sin ejecutar.** Esta sección es el procedimiento; nada de lo que sigue se hizo todavía en el VPS.
+
+**Requisitos previos.**
+
+1. **Una versión que traiga lo necesario.** El último tag publicado es `v0.3.0` y no incluye la migración V28 (`auth_users.demo`), las pantallas `/gestion/**` (#368, #373, #378) ni `GET /api/v1/users/me` (#749); están en `develop`. Hace falta desplegar un release que las incluya (`docs/16-CICD-PIPELINE.md`, "Release a producción"). Qué tag corre en el VPS no se verificó (ver la nota de 2.13). Para confirmar la migración, el `DESCRIBE auth_users` de 2.14 (paso 1) tiene que mostrar la columna `demo`.
+2. **Clave de Bunny.net.** `APP_CDN_BUNNYNET_SECURITYKEY` cargada en `/opt/menta/.env` **antes** de desplegar esa versión (2.9, "Antes del próximo despliegue (#751)"): sin ella la API no arranca.
+3. **Mercado Pago de pruebas.** El token y la cuenta del vendedor de prueba ya están cargados (2.9, 2026-10-20). Para que una compra con Mercado Pago se confirme falta el webhook de "Modo productivo" (#647); mientras tanto, la compra se prueba por transferencia.
+4. **Un administrador real**, que ya existe (2.14), y un punto de retorno: anotar el nombre del backup que `deploy.sh` deja en `/opt/menta/backups/` al desplegar la versión del paso 1 (2.10), antes de cargar nada.
+
+**Cuentas de demo.** Una por rol: `ADMIN`, `INSTRUCTOR`, `STUDENT` y `RECEPTIONIST`, con emails elegidos por quien opera. **Regla de contraseñas:** cada cuenta lleva una contraseña fuerte y única, generada por quien opera y guardada solo en su gestor de contraseñas; nunca se escribe en el repositorio, en un issue, en `/opt/menta/.env` ni en el historial del shell, y nunca se usan los valores por defecto de `application-demo.yml`. Por cada cuenta:
+
+1. Generar el hash con `mk_hash` (2.14, paso 2).
+2. Insertarla con el `INSERT` de 2.14 (paso 3), cambiando `'ADMIN'` por el rol de la cuenta. El estado tiene que ser `ACTIVE`.
+3. **Solo el profesor:** cargarle nombre y apellido. El alta de cursos presenciales lee el nombre de `GET /api/v1/users/me` y, si los dos están vacíos, muestra un aviso y no crea el curso (#749). El `INSERT` de 2.14 no los carga: se completan con un `UPDATE` con el mismo patrón de 2.13 (`SET first_name = '…', last_name = '…' WHERE email = '…'`, una fila afectada).
+4. Marcarla como de prueba con 2.13 (`SELECT` previo y `SET demo = TRUE`, una fila afectada). Desde ahí no recibe ningún correo, tampoco el de recuperación de contraseña.
+5. Comprobar el inicio de sesión en `https://mentadance.com/`: el personal aterriza en `/gestion` y el alumno en `/dashboard`.
+
+No se usa `/gestion/usuarios/nuevo` (#378): crea solo cuentas de personal (no alumnos) y la persona elige la contraseña desde un correo de activación, y el correo en producción sigue sin probarse con un envío real (sección 2.9, #633).
+
+**Contenido de demo.**
+
+- **Cursos y sesiones presenciales:** con la cuenta del profesor, en `/gestion/cursos-presenciales` ("nuevo" para el curso; en el curso, alta de una sesión o por lote).
+- **Precio del curso presencial:** no tiene pantalla. Se publica con `PUT /api/v1/billing/physical/courses/{courseId}/pricing` (`monthlyPrice`, `individualSurchargePercent` y motivo; ver `docs/06-BILLING-API.md`, "Pricing presencial"), con el token del profesor dueño o de un admin. Sin precio, la cotización responde `404 PHYSICAL_COURSE_PRICING_NOT_FOUND` y no se puede comprar. No hay request de Bruno para este endpoint.
+- **Cursos virtuales, módulos y lecciones:** tampoco tienen pantalla (la sección "Contenido" de `/gestion` está desactivada). Se crean con los requests de `bruno/API - Direct/virtual/admin/` (`Create Course`, `Create Module`, `Create Lesson`, `Publish Course`), con el token que deja `bruno/API - Direct/auth/Login.bru` y `baseUrl` apuntando a `https://api.mentadance.com`. La lección restringida va con `free: false` y el `videoId` de un video real de la biblioteca de Bunny.net.
+- **Suscripción de demo:** `Assign Trial Subscription` (`POST /api/v1/admin/billing/subscriptions/trial`, solo admin) da al alumno una suscripción `TRIAL` sin pago, pero necesita un plan `ACTIVE`. **Bloqueante:** el repositorio no tiene alta de planes por API ni por pantalla (la API de planes es de solo lectura); en `demo` los crea `DemoBillingFixture` y ninguna migración inserta planes. Antes, mirar si la base tiene alguno con `List Plans` de Bruno. Crear uno por SQL no está documentado ni probado (no verificado), así que sin plan este paso del recorrido queda pendiente.
+
+**Recorrido de validación** (de #380). **A completar y fechar por quien opera**; nada de esto se ejecutó.
+
+1. `curl -fsS https://mentadance.com/health` responde `ok` (lo contesta Nginx, no el BFF); `curl -fsS -o /dev/null -w '%{http_code}\n' https://mentadance.com/` da 200 (el BFF) y `curl -fsS https://api.mentadance.com/actuator/health` responde `"status":"UP"`.
+2. Inicio de sesión con las cuatro cuentas.
+3. Catálogo: la home y `/classes` muestran los cursos cargados.
+4. Lección restringida: antes de asignarle la suscripción de demo, el alumno no puede abrirla; después, sí.
+5. Compra presencial: el alumno cotiza y paga en `/classes/{courseId}`. Con Mercado Pago (comprador de prueba) depende de #647. Por transferencia (`/compras/transferencia`), el alumno sube un comprobante y un admin aprueba el pago con `POST /api/v1/admin/billing/payments/{paymentId}/approve` (sin pantalla: "Facturación" está desactivada; `List Pending Verification Payments` de Bruno da el `paymentId`). El simulador de Mercado Pago no existe en el VPS.
+6. Check-in: la recepcionista, en `/gestion/recepcion`, abre la sesión y registra la asistencia manual del alumno, que necesita un cupo confirmado en esa sesión.
+
+| Paso | Fecha | Resultado | Notas |
+|---|---|---|---|
+| 1. Salud | | | |
+| 2. Inicio de sesión | | | |
+| 3. Catálogo | | | |
+| 4. Lección restringida | | | |
+| 5. Compra presencial | | | |
+| 6. Check-in | | | |
+
+**Limitaciones conocidas.**
+
+- **Videos de las lecciones:** dependen de la clave real y de la configuración de la biblioteca de Bunny.net (2.9), y la firma de #751 no se contrastó contra la biblioteca real. #493 (los videos de las lecciones no se reproducen) sigue abierto.
+- **Webhook de Mercado Pago:** con la clave de "Modo de prueba" en el `.env`, la API rechaza los webhooks del vendedor de prueba por firma inválida (2.9, #515); el cambio a "Modo productivo" es #647.
+- **Transferencia:** la pantalla muestra los datos bancarios reales cargados en 2.9. Una compra de demo no mueve dinero, pero la aprueba un admin a mano.
+- **Planes:** sin alta por API ni pantalla (ver "Contenido de demo").
+- **Misma base:** los datos de demo conviven con los reales y entran en los backups de 2.11.
+
+**Cómo volver atrás.**
+
+- **Cuentas:** la aplicación no borra cuentas (la auditoría de V29 apunta a ellas con una clave foránea). Para cortar el acceso, `UPDATE auth_users SET status = 'INACTIVE' WHERE email = '…'` con el patrón de 2.13 (el inicio de sesión pasa a dar 401, ver 2.14); `SET demo = FALSE` solo vuelve a habilitar los correos. No borrar filas a mano: pagos, suscripciones y asistencias dependen de ellas.
+- **Cursos presenciales:** pasarlos a "Inactivo" al editarlos en `/gestion/cursos-presenciales`.
+- **Cursos virtuales y suscripción:** `Unpublish Course` (o `Delete Course`) y `Cancel Subscription (Admin)` de Bruno.
+- **Volver al estado anterior completo:** restaurar el backup anotado en los requisitos ("Restaurar un backup", 2.10). Se pierde todo lo que se escribió en la base después de ese backup, también lo real. Para volver a la versión anterior de la aplicación, el rollback de 2.10.
+
 ### Decisiones diferidas
 
 - **SSH con `root` y contraseña** (descartado por ahora, decisión del operador del 2026-10-16): sigue permitido. Endurecerlo (solo clave, sin `root`, puerto 22 cerrado en `sshd`) se descarta porque un error de configuración puede dejar al operador sin acceso al servidor, y el beneficio para esta demo no lo justifica. La defensa es fail2ban y el firewall del panel, que bloquea el 22. Si se retoma: en `/etc/ssh/sshd_config.d/` hay `custom.conf` (`PermitRootLogin yes`) y `80-step.conf` (origen desconocido, parece Smallstep); SSH arranca por socket de systemd (`ssh.socket`), así que cerrar el 22 se hace ahí y no en `sshd_config`. Antes de cambiar nada, confirmar el acceso con clave de `mentaadmin` desde otra terminal y mantener abierta la sesión actual.

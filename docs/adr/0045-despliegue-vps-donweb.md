@@ -1,6 +1,6 @@
 # ADR-0045: Despliegue en un VPS de DonWeb con Docker Compose
 
-**Estado:** Aceptado
+**Estado:** Aceptado (enmendado el 2026-11-14, ver «Enmienda 2026-11-14 (#380)»)
 **Fecha:** 2026-10-16
 **Decisores:** Alejandro Urrestarazu
 
@@ -101,7 +101,7 @@ tenía el proyecto anterior cubre solo `mentavirtual.com` y `www`, vence el
 * **Secretos de la aplicación** (JWT, cifrado de activación, base de datos,
   credenciales de proveedores): en `/opt/menta/.env` del servidor, con `chmod 600`
   y dueño `deploy`. Nunca pasan por GitHub ni por el repositorio; el repositorio
-  solo tiene un `.env.production.example` con los nombres.
+  solo tiene un `infra/docker/prod/production.env.example` con los nombres.
 * **Secretos de despliegue** (`DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`,
   `DEPLOY_KNOWN_HOSTS`): en el Environment `production` de GitHub, visible solo
   para el job de deploy.
@@ -165,10 +165,74 @@ Encrypt evita una renovación anual manual y cubre ambos subdominios sin costo.
   volumen; migrar a otro proveedor es crear un servidor, restaurar el backup y
   cambiar el DNS.
 
+## Enmienda 2026-11-14 (#380): demo pública sobre producción
+
+Esta enmienda no cambia el proveedor ni el servidor: fija cómo se muestra la demo
+pública sobre el despliegue que ya existe. El criterio de #380 que pedía el perfil
+`demo` (#379) activo en la URL pública queda reemplazado por lo siguiente.
+
+**Contexto.** El VPS corre con el perfil `prod` (`SPRING_PROFILES_ACTIVE: prod` en
+`infra/docker/prod/docker-compose.prod.yml`). `DemoProfileGuard`
+(`api/app/src/main/java/com/menta/app/demo/DemoProfileGuard.java`) aborta el arranque
+si `demo` se combina con `prod`, `production` o `staging`, y el factory de
+`BunnyNetSignatureService` aplica el mismo guard cuando elige el adaptador local
+(ADR-0040, enmienda #751, punto 3). Los guards existen para que no lleguen a
+producción las contraseñas por defecto de `application-demo.yml`, que son públicas en
+el repositorio, ni los adaptadores locales del perfil `demo`.
+
+**Decisión.** La demo pública corre sobre el despliegue de producción existente, con
+el perfil `prod` y datos de demo cargados a mano: las cuentas por SQL, con los
+procedimientos del runbook (secciones 2.13 y 2.14), y los cursos y sesiones
+presenciales desde `/gestion/cursos-presenciales` (#368). Lo que no tiene pantalla se
+carga por la API de administración. El procedimiento está en la sección 2.15 de
+[`docs/32-VPS-DONWEB-RUNBOOK.md`](../32-VPS-DONWEB-RUNBOOK.md).
+
+**Justificación.**
+
+* El guard protege a producción de credenciales públicas y adaptadores locales;
+  saltearlo para la demo anularía esa protección.
+* El servidor tiene 4 GB: los `mem_limit` del stack ya suman unos 3 GB (API 1 GB,
+  BFF 768 MB, MySQL 1 GB, Redis 128 MB y Nginx 128 MB, ver «Memoria» y la sección 2.9
+  del runbook). Un segundo stack con API, BFF, MySQL y Redis pediría casi otros 3 GB.
+
+**Consecuencias.**
+
+* Las cuentas de demo llevan contraseñas fuertes y únicas, generadas por quien opera y
+  nunca versionadas; nunca las de `application-demo.yml`. Se marcan con `demo = TRUE`
+  (runbook 2.13) para que no reciban ningún correo, recuperación de contraseña
+  incluida.
+* Los datos de demo conviven con los reales en la misma base y entran en los mismos
+  backups (runbook 2.11): tienen que poder identificarse y desactivarse.
+* La API necesita la `APP_CDN_BUNNYNET_SECURITYKEY` real de la biblioteca Stream: en
+  `prod` el adaptador es el real y falla cerrado sin ella (ADR-0040, enmienda #751,
+  punto 4).
+* Mercado Pago sigue con el token del vendedor de prueba (runbook 2.9): no hay cobros
+  reales. Mientras el `.env` tenga la clave de «Modo de prueba», la API rechaza los
+  webhooks del vendedor de prueba por firma inválida (#515); configurar el de «Modo
+  productivo» sigue pendiente en #647.
+* El simulador de Mercado Pago (perfil `e2e-mercadopago`, con un endpoint público que
+  prepara webhooks firmados) no se expone en el VPS: el compose solo activa `prod` y
+  no se le agrega ese perfil.
+
+**Alternativas descartadas.**
+
+1. **Un segundo stack con perfil `demo` en el mismo VPS:** no entra en 4 GB (ver
+   arriba).
+2. **Reemplazar `prod` por `demo`:** el VPS dejaría de ser producción; ya tiene un
+   administrador real (runbook 2.14) y datos de transferencia reales (runbook 2.9), y
+   volverían los adaptadores locales y las contraseñas por defecto si no se pisan.
+3. **Relajar el guard:** es un cambio de código, fuera del alcance de #380, que se
+   limita a `infra/`, configuración y `docs/`.
+
+**Reversibilidad.** Alta: las cuentas de demo se desactivan y los cursos se desactivan
+o despublican sin migraciones (runbook 2.15, «Cómo volver atrás»).
+
 ## Referencias y Decisiones Relacionadas
 
 * #380 (despliegue público de la demo) y #586 (este ADR).
 * Complementa a: ADR-0018 (CI/CD, GHCR y despliegue por digest), ADR-0027 (Flyway
   como única vía de esquema).
+* Enmienda 2026-11-14 (#380): ADR-0040 (enmienda #751), `DemoProfileGuard`, #515 y
+  #647.
 * [`docs/32-VPS-DONWEB-RUNBOOK.md`](../32-VPS-DONWEB-RUNBOOK.md)
 * [`docs/16-CICD-PIPELINE.md`](../16-CICD-PIPELINE.md)
