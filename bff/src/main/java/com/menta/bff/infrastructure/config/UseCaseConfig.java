@@ -35,6 +35,8 @@ import com.menta.bff.application.usecase.GetClassDetailViewUseCase;
 import com.menta.bff.application.usecase.GetClassDetailViewUseCaseImpl;
 import com.menta.bff.application.usecase.GetClassesViewUseCase;
 import com.menta.bff.application.usecase.GetClassesViewUseCaseImpl;
+import com.menta.bff.application.usecase.GetContinueLearningUseCase;
+import com.menta.bff.application.usecase.GetContinueLearningUseCaseImpl;
 import com.menta.bff.application.usecase.GetCourseDetailViewUseCase;
 import com.menta.bff.application.usecase.GetCourseDetailViewUseCaseImpl;
 import com.menta.bff.application.usecase.GetCourseSessionRosterUseCase;
@@ -195,6 +197,12 @@ public class UseCaseConfig {
             ClassesProperties classesProperties) {
         return new GetDashboardViewUseCaseImpl(
                 billingApiClient, subscriptionApiClient, classesProperties.getDisplayZone());
+    }
+
+    /** The "Continuar" section of a student's dashboard (#363). */
+    @Bean
+    public GetContinueLearningUseCase getContinueLearningUseCase(VirtualApiClient virtualApiClient) {
+        return new GetContinueLearningUseCaseImpl(virtualApiClient);
     }
 
     @Bean

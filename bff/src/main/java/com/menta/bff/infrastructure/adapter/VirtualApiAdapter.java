@@ -2,12 +2,15 @@ package com.menta.bff.infrastructure.adapter;
 
 import com.menta.bff.application.dto.CourseDetail;
 import com.menta.bff.application.dto.CourseProgress;
+import com.menta.bff.application.dto.InProgressCourse;
 import com.menta.bff.application.dto.LessonDetail;
 import com.menta.bff.application.dto.LessonStream;
 import com.menta.bff.application.dto.Nav;
 import com.menta.bff.application.port.out.VirtualApiClient;
 import com.menta.bff.infrastructure.config.VirtualApiProperties;
 import java.time.Instant;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -17,6 +20,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
+import reactor.core.publisher.Mono;
 
 /**
  * WebClient adapter for the upstream catalog and virtual lesson endpoints.
@@ -38,6 +42,7 @@ public class VirtualApiAdapter implements VirtualApiClient {
     private static final String LESSON_ENDPOINT = "/api/v1/virtual/lessons/{lessonId}";
     private static final String LESSON_STREAM_ENDPOINT = "/api/v1/virtual/lessons/{lessonId}/stream";
     private static final String COURSE_PROGRESS_ENDPOINT = "/api/v1/virtual/courses/{courseId}/progress";
+    private static final String IN_PROGRESS_ENDPOINT = "/api/v1/virtual/courses/me/in-progress";
     private static final String RETRY_AFTER_HEADER = "Retry-After";
 
     private final WebClient webClient;
@@ -159,6 +164,59 @@ public class VirtualApiAdapter implements VirtualApiClient {
             log.error("Virtual API course progress call failed: {}", e.getMessage());
             throw new ServiceUnavailableException("Virtual API unavailable: " + e.getMessage(), e);
         }
+    }
+
+    @Override
+    public List<InProgressCourse> listInProgressCourses(String accessToken, int limit) {
+        Objects.requireNonNull(accessToken, "accessToken cannot be null");
+
+        try {
+            InProgressWire[] wire = webClient.get()
+                    .uri(uri -> uri.path(IN_PROGRESS_ENDPOINT).queryParam("limit", limit).build())
+                    .headers(headers -> headers.setBearerAuth(accessToken))
+                    .exchangeToMono(VirtualApiAdapter::readInProgress)
+                    .timeout(virtualApiProperties.getTimeout())
+                    .block();
+            if (wire == null) {
+                throw new ServiceUnavailableException("Courses in progress response has no body");
+            }
+            return Arrays.stream(wire).map(VirtualApiAdapter::toInProgressCourse).toList();
+        } catch (ServiceUnavailableException e) {
+            // Our own messages carry the status at most, never a body or the token.
+            log.warn("Virtual API courses in progress call failed: {}", e.getMessage());
+            throw e;
+        } catch (RuntimeException e) {
+            // Class name only: nothing from the request (headers, body) may reach a log.
+            log.error("Virtual API courses in progress call failed: {}", e.getClass().getSimpleName());
+            throw new ServiceUnavailableException("Virtual API unavailable", e);
+        }
+    }
+
+    /**
+     * Reads a usable 200 body; any other status is released unread and fails closed.
+     */
+    private static Mono<InProgressWire[]> readInProgress(ClientResponse response) {
+        if (response.statusCode().is2xxSuccessful()) {
+            return response.bodyToMono(InProgressWire[].class);
+        }
+        return response.releaseBody().then(Mono.error(new ServiceUnavailableException(
+                "Courses in progress unavailable: " + response.statusCode().value())));
+    }
+
+    private static InProgressCourse toInProgressCourse(InProgressWire wire) {
+        InProgressWire course = required(wire);
+        InProgressWire.ResumeWire resume = required(course.resumeLesson());
+        return new InProgressCourse(
+                required(course.courseId()), required(course.courseTitle()),
+                required(course.completedLessons()), required(course.totalLessons()),
+                required(course.percentage()), required(resume.lessonId()), required(resume.lessonTitle()));
+    }
+
+    private static <T> T required(T value) {
+        if (value == null) {
+            throw new ServiceUnavailableException("Courses in progress response is incomplete");
+        }
+        return value;
     }
 
     /**
@@ -365,6 +423,19 @@ public class VirtualApiAdapter implements VirtualApiClient {
     private record StreamWireResponse(StreamBlock stream) {
 
         private record StreamBlock(String url, Instant expiresAt) {
+        }
+    }
+
+    /**
+     * Wire shape of one item of {@code GET /api/v1/virtual/courses/me/in-progress}, mirroring
+     * {@code InProgressCourseResponse}. Only what the dashboard renders is bound, every field of it
+     * required; {@code moduleId}, {@code positionSeconds} and anything added later are ignored.
+     */
+    private record InProgressWire(
+            String courseId, String courseTitle, Integer completedLessons, Integer totalLessons,
+            Integer percentage, ResumeWire resumeLesson) {
+
+        private record ResumeWire(String lessonId, String lessonTitle) {
         }
     }
 }

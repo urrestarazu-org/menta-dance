@@ -39,6 +39,32 @@
     </th:block>
 </section>
 
+<!-- Continue learning (#363): only a student gets ${continueLearning}; independent of the subscription card. -->
+<section class="card mb-6" th:if="${continueLearning != null}" aria-labelledby="continue-heading">
+    <h2 id="continue-heading">Continuar</h2>
+    <th:block th:if="${continueLearning.unavailable()}">
+        <div class="mt-2" th:replace="~{fragments/components :: alert('info', 'No pudimos cargar tus cursos en progreso en este momento.')}"></div>
+    </th:block>
+    <p class="mt-2" th:if="${continueLearning.empty()}">
+        Todavía no empezaste ningún curso.
+        <a th:href="@{/(modality=virtual)}">Ver cursos virtuales</a>
+    </p>
+    <ul class="mt-2 space-y-4" th:unless="${continueLearning.courses().isEmpty()}">
+        <li th:each="course, iter : ${continueLearning.courses()}">
+            <h3 class="font-semibold" th:id="'continue-course-' + ${iter.index}" th:text="${course.title()}">Salsa</h3>
+            <p class="mt-1" th:text="${course.completedLessons()} + ' de ' + ${course.totalLessons()} + ' lecciones'">3 de 10 lecciones</p>
+            <p class="mt-1">
+                <progress max="100" th:aria-labelledby="'continue-course-' + ${iter.index}" th:value="${course.percentage()}" th:text="${course.percentage()} + '%'">30%</progress>
+                <span th:text="${course.percentage()} + '% completado'">30% completado</span>
+            </p>
+            <p class="mt-1">Te quedaste en: <span th:text="${course.resumeLessonTitle()}">Giros</span></p>
+            <p class="mt-2">
+                <a class="btn btn-primary" th:href="@{/courses/{courseId}/lessons/{lessonId}(courseId=${course.courseId()},lessonId=${course.resumeLessonId()})}">Continuar<span class="sr-only" th:text="': ' + ${course.title()}">: Salsa</span></a>
+            </p>
+        </li>
+    </ul>
+</section>
+
 <p class="mb-6"><a class="btn btn-primary" th:href="@{/classes}">Clases presenciales</a></p>
 
 <form th:action="@{/logout}" method="post">
