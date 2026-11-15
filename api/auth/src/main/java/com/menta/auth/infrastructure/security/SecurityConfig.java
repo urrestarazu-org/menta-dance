@@ -115,7 +115,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *     (#31, US-BILLING-003, design C9; the payment's owner reads their own
  *     status, resolved from the token. A single-segment wildcard can never
  *     match the two-segment webhook path above, so both rules stay mutually
- *     exclusive regardless of declaration order).
+ *     exclusive regardless of declaration order). The same wildcard also gates
+ *     GET /api/v1/billing/payments/me (#767), the student's own payments.
  *   - GET /api/v1/physical/attendance/me        → authenticated (any role)
  *     (#39, US-PHYSICAL-002 P1; the acting student reads their OWN month —
  *     the student id comes from the JWT principal, this endpoint has no
@@ -285,7 +286,8 @@ public class SecurityConfig {
                 // extra /mercadopago/webhook suffix) nor the /proof matcher immediately above
                 // (different HTTP method — Spring Security matches per method), so all three rules
                 // stay mutually exclusive regardless of declaration order — verified end-to-end by
-                // SecurityConfigTest.
+                // SecurityConfigTest. #767: it also gates GET .../payments/me (one segment), the
+                // student's own payments — pinned by SecurityConfigTest too.
                 .requestMatchers(HttpMethod.GET, "/api/v1/billing/payments/*").authenticated()
                 // #33, US-BILLING-005 (design C5/C6): the signed-token proof viewer. permitAll is the
                 // credential decision, not an absence of one — the HMAC token in ?token= IS the credential

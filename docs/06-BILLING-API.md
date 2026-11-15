@@ -12,7 +12,7 @@ GET  /api/v1/billing/plans/{planId}
 POST /api/v1/billing/subscriptions
 GET  /api/v1/billing/subscriptions/me
 GET  /api/v1/billing/subscriptions/me/history
-GET  /api/v1/billing/payments
+GET  /api/v1/billing/payments/me
 GET  /api/v1/billing/payments/{paymentId}
 POST /api/v1/billing/physical/quotes
 POST /api/v1/billing/physical/purchases
@@ -30,7 +30,7 @@ POST /api/v1/admin/billing/plans
 POST /api/v1/billing/payments/{paymentId}/proof
 ```
 
-Las rutas `/me` y `/payments` son autoservicio del alumno; las de conciliación
+Las rutas `/me` y `/payments/...` (salvo el webhook) son autoservicio del alumno; las de conciliación
 son exclusivas de `ADMIN`. Los errores usan `application/problem+json`.
 
 ## Contrato HTTP implementado (v1)
@@ -40,6 +40,7 @@ son exclusivas de `ADMIN`. Los errores usan `application/problem+json`.
 | `GET /plans` | Ninguna (público) | `200` con `{ plans: [...] }`, `[]` si no hay planes activos |
 | `GET /plans/{planId}` | Ninguna (público) | `200` con el detalle completo del plan |
 | `POST /subscriptions` | Access token válido | `201` con la suscripción pendiente y la URL de Checkout Pro |
+| `GET /payments/me` | Access token válido | `200` con los pagos propios, del más nuevo al más viejo; `[]` si no hay |
 | `POST /api/v1/admin/billing/plans` | Access token con rol `ADMIN` | `201` con el plan creado, mismo contrato que `GET /plans/{planId}` |
 
 `GET /plans` sólo devuelve planes con `status = ACTIVE`, ordenados por precio
@@ -92,6 +93,49 @@ con un rol que no es `ADMIN`, `403` (regla genérica `/api/v1/admin/**` de `Secu
 No hay tabla de auditoría para planes: el alta queda registrada en el log de la API con el
 id del plan y el del admin. La request de Bruno es `bruno/API - Direct/billing/admin/Create
 Plan.bru`.
+
+## Pagos propios (`GET /api/v1/billing/payments/me`)
+
+Requiere un access token válido y devuelve los pagos del propio usuario (#767), del más nuevo al
+más viejo. El usuario sale del token: no hay parámetro de usuario, así que un alumno nunca ve el
+pago de otro.
+
+```json
+[
+  {
+    "paymentId": "…",
+    "status": "COMPLETED",
+    "amount": 15000.00,
+    "currency": "ARS",
+    "paymentMethod": "MERCADO_PAGO",
+    "createdAt": "2026-11-10T12:00:00Z",
+    "item": { "type": "SUBSCRIPTION", "id": "<planId>", "name": "Plan Mensual" }
+  }
+]
+```
+
+- `limit` es opcional: por defecto 20, entre 1 y 100. Fuera de rango o no numérico responde
+  `400 INVALID_REQUEST`. Sin pagos responde `200 []`.
+- El orden es por fecha de creación descendente y, ante el mismo instante, por `paymentId`
+  descendente, así que es estable entre llamadas.
+- `status` es el mismo vocabulario de `GET /payments/{paymentId}`: `AWAITING_PROVIDER`,
+  `AWAITING_MANUAL_VERIFICATION`, `RECONCILIATION_REQUIRED`, `COMPLETED`, `REJECTED`,
+  `CANCELLED` y `EXPIRED`.
+- `paymentMethod` es `MERCADO_PAGO` o `BANK_TRANSFER`. `billing_payments` no guarda el medio:
+  se deduce de lo que escribe cada checkout. Una compra presencial por transferencia tiene la
+  referencia externa `PHY-BT-…`; una suscripción por Mercado Pago siempre tiene preferencia de
+  Checkout Pro y una por transferencia nunca la tiene.
+- `item.type` es `SUBSCRIPTION` (el `id` es el plan y `name` su nombre) o `PHYSICAL_COURSE` (el
+  `id` es el curso presencial de la cotización y `name` es siempre `null`: el nombre vive en
+  Physical y no se consulta).
+- Nunca expone el comprobante ni su archivo, identificadores ni respuestas del proveedor, la
+  referencia externa, la cuenta de cobro ni el motivo de una conciliación.
+- Es una sola consulta acotada por `limit`, sin una consulta por pago: el plan y la cotización
+  salen de `LEFT JOIN` en la misma sentencia. La sirve `idx_billing_payments_user_created
+  (user_id, created_at)` (V31), que reemplaza al índice simple sobre `user_id`.
+- El contrato vive en `api/openapi/billing-v1.yaml` y `OwnPaymentsContractTest` falla si el
+  record, los enums del dominio y el YAML divergen. La request de Bruno es
+  `bruno/API - Direct/billing/List Own Payments.bru`.
 
 ## Estado de un pago propio (`GET /api/v1/billing/payments/{paymentId}`)
 

@@ -1,5 +1,6 @@
 package com.menta.billing.application.port.out;
 
+import com.menta.billing.application.dto.OwnPaymentEntry;
 import com.menta.billing.application.dto.PendingVerificationPage;
 import com.menta.billing.domain.model.Payment;
 import com.menta.billing.domain.model.PaymentId;
@@ -52,4 +53,12 @@ public interface PaymentRepository {
      * does not clamp.
      */
     PendingVerificationPage findAwaitingManualVerification(int page, int size);
+
+    /**
+     * The student's own payments (#767): at most {@code limit} of {@code userId}'s payments, newest
+     * created first and, for the same instant, by id descending. One bounded query whatever the
+     * number of rows, with what each payment bought already resolved. The caller validates {@code
+     * limit}; this port does not clamp.
+     */
+    List<OwnPaymentEntry> findOwnNewestFirst(UUID userId, int limit);
 }

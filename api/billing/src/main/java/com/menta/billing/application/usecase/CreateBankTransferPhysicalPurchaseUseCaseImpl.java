@@ -51,9 +51,10 @@ public class CreateBankTransferPhysicalPurchaseUseCaseImpl implements CreateBank
      * C1) — both physical arms would otherwise derive the same reference from the same {@code
      * (userId, idempotencyKey)} pair, letting a bank-transfer replay resolve an {@code
      * AwaitingProvider} payment whose {@code expectedMerchantAccountId} is the Mercado Pago
-     * merchant id, not the CBU.
+     * merchant id, not the CBU. Public because it is also what tells a physical bank-transfer
+     * payment apart when the student lists their payments (#767): the method is not stored.
      */
-    private static final String EXTERNAL_REFERENCE_PREFIX = "PHY-BT-";
+    public static final String EXTERNAL_REFERENCE_PREFIX = "PHY-BT-";
 
     private final PhysicalCourseQuoteRepository quoteRepository;
     private final PaymentRepository paymentRepository;
