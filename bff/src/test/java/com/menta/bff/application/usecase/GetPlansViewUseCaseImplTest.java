@@ -107,7 +107,8 @@ class GetPlansViewUseCaseImplTest {
     @DisplayName("a student with an ACTIVE subscription sees its end date in the display zone and no control")
     void studentActive() {
         when(billingApiClient.getPlans()).thenReturn(PLANS);
-        when(subscriptionApiClient.getCurrentSubscription(TOKEN)).thenReturn(new CurrentSubscription.Active(END));
+        when(subscriptionApiClient.getCurrentSubscription(TOKEN))
+                .thenReturn(new CurrentSubscription.Active("plan-1", END, 1L, true));
 
         PlansView view = useCase.execute(PlansViewer.STUDENT, TOKEN);
 
@@ -122,7 +123,7 @@ class GetPlansViewUseCaseImplTest {
     void studentPending() {
         when(billingApiClient.getPlans()).thenReturn(PLANS);
         when(subscriptionApiClient.getCurrentSubscription(TOKEN))
-                .thenReturn(new CurrentSubscription.Pending("0f0e0d0c-1111-2222-3333-444444444444"));
+                .thenReturn(new CurrentSubscription.Pending("0f0e0d0c-1111-2222-3333-444444444444", "plan-1"));
 
         PlansView view = useCase.execute(PlansViewer.STUDENT, TOKEN);
 
@@ -135,7 +136,8 @@ class GetPlansViewUseCaseImplTest {
     @DisplayName("a student with an EXPIRED subscription sees the end date and can subscribe again")
     void studentExpired() {
         when(billingApiClient.getPlans()).thenReturn(PLANS);
-        when(subscriptionApiClient.getCurrentSubscription(TOKEN)).thenReturn(new CurrentSubscription.Expired(END));
+        when(subscriptionApiClient.getCurrentSubscription(TOKEN))
+                .thenReturn(new CurrentSubscription.Expired("plan-1", END));
 
         PlansView view = useCase.execute(PlansViewer.STUDENT, TOKEN);
 

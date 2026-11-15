@@ -136,9 +136,10 @@ public class SubscriptionApiAdapter implements SubscriptionApiClient {
             throw unavailable("subscription status is missing");
         }
         return switch (wire.status()) {
-            case "ACTIVE" -> new CurrentSubscription.Active(required(wire.endDate()));
-            case "EXPIRED" -> new CurrentSubscription.Expired(required(wire.endDate()));
-            case "PENDING" -> new CurrentSubscription.Pending(required(wire.subscriptionId()));
+            case "ACTIVE" -> new CurrentSubscription.Active(wire.planId(), required(wire.endDate()),
+                    wire.daysRemaining(), Boolean.TRUE.equals(wire.expiringSoon()));
+            case "EXPIRED" -> new CurrentSubscription.Expired(wire.planId(), required(wire.endDate()));
+            case "PENDING" -> new CurrentSubscription.Pending(required(wire.subscriptionId()), wire.planId());
             default -> throw unavailable("unknown subscription status");
         };
     }
@@ -154,7 +155,14 @@ public class SubscriptionApiAdapter implements SubscriptionApiClient {
         return new BillingApiClient.ServiceUnavailableException("Billing API unavailable: " + reason);
     }
 
-    private record CurrentWire(String subscriptionId, String status, Instant endDate) {
+    /**
+     * The fields of {@code GET /me} the BFF reads; the rest of the body ({@code startDate}, {@code
+     * checkoutUrl}, {@code plansUrl}, anything added later) is ignored. Only {@code status} and the
+     * fields the state cannot exist without are required; the others are enrichment.
+     */
+    private record CurrentWire(
+            String subscriptionId, String planId, String status, Instant endDate,
+            Long daysRemaining, Boolean expiringSoon) {
     }
 
     private record CheckoutRequest(String planId, String paymentMethod, String idempotencyKey) {

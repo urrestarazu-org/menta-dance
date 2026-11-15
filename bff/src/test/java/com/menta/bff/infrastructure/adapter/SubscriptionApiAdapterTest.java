@@ -71,7 +71,7 @@ class SubscriptionApiAdapterTest {
     }
 
     @Test
-    @DisplayName("an ACTIVE subscription maps its end date and sends the bearer token")
+    @DisplayName("an ACTIVE subscription maps plan, end date, days remaining and expiring soon, sending the token")
     void active() {
         stubMe(200,
                 """
@@ -81,12 +81,49 @@ class SubscriptionApiAdapterTest {
                 """);
 
         assertThat(adapter.getCurrentSubscription(TOKEN))
-                .isEqualTo(new CurrentSubscription.Active(Instant.parse("2026-10-31T00:00:00Z")));
+                .isEqualTo(new CurrentSubscription.Active("p-1", Instant.parse("2026-10-31T00:00:00Z"), 17L, false));
         verify(getRequestedFor(urlEqualTo(ME)).withHeader("Authorization", equalTo("Bearer " + TOKEN)));
     }
 
     @Test
-    @DisplayName("a PENDING subscription maps the full subscription id")
+    @DisplayName("an ACTIVE subscription about to expire keeps the expiring soon flag")
+    void activeExpiringSoon() {
+        stubMe(200,
+                """
+                {"subscriptionId": "s-1", "planId": "p-1", "status": "ACTIVE",
+                "startDate": "2026-10-01T00:00:00Z", "endDate": "2026-10-31T00:00:00Z",
+                "daysRemaining": 3, "expiringSoon": true, "checkoutUrl": null, "plansUrl": null}
+                """);
+
+        assertThat(adapter.getCurrentSubscription(TOKEN))
+                .isEqualTo(new CurrentSubscription.Active("p-1", Instant.parse("2026-10-31T00:00:00Z"), 3L, true));
+    }
+
+    @Test
+    @DisplayName("an ACTIVE subscription without the enrichment fields still maps, with no plan, days or flag")
+    void activeWithoutEnrichment() {
+        stubMe(200, "{\"subscriptionId\":\"s-1\",\"status\":\"ACTIVE\",\"endDate\":\"2026-10-31T00:00:00Z\"}");
+
+        assertThat(adapter.getCurrentSubscription(TOKEN))
+                .isEqualTo(new CurrentSubscription.Active(null, Instant.parse("2026-10-31T00:00:00Z"), null, false));
+    }
+
+    @Test
+    @DisplayName("fields the BFF does not know are ignored")
+    void unknownFieldsAreIgnored() {
+        stubMe(200,
+                """
+                {"subscriptionId": "s-1", "planId": "p-1", "status": "ACTIVE",
+                "endDate": "2026-10-31T00:00:00Z", "daysRemaining": 17, "expiringSoon": false,
+                "autoRenew": true, "links": {"self": "/api/v1/billing/subscriptions/me"}}
+                """);
+
+        assertThat(adapter.getCurrentSubscription(TOKEN))
+                .isEqualTo(new CurrentSubscription.Active("p-1", Instant.parse("2026-10-31T00:00:00Z"), 17L, false));
+    }
+
+    @Test
+    @DisplayName("a PENDING subscription maps the full subscription id and the plan")
     void pending() {
         stubMe(200,
                 """
@@ -95,11 +132,11 @@ class SubscriptionApiAdapterTest {
                 """);
 
         assertThat(adapter.getCurrentSubscription(TOKEN))
-                .isEqualTo(new CurrentSubscription.Pending("0f0e0d0c-1111-2222-3333-444444444444"));
+                .isEqualTo(new CurrentSubscription.Pending("0f0e0d0c-1111-2222-3333-444444444444", "p-1"));
     }
 
     @Test
-    @DisplayName("an EXPIRED subscription maps its end date")
+    @DisplayName("an EXPIRED subscription maps its plan and end date")
     void expired() {
         stubMe(200,
                 """
@@ -109,7 +146,7 @@ class SubscriptionApiAdapterTest {
                 """);
 
         assertThat(adapter.getCurrentSubscription(TOKEN))
-                .isEqualTo(new CurrentSubscription.Expired(Instant.parse("2026-08-31T00:00:00Z")));
+                .isEqualTo(new CurrentSubscription.Expired("p-1", Instant.parse("2026-08-31T00:00:00Z")));
     }
 
     @Test

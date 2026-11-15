@@ -41,6 +41,8 @@ import com.menta.bff.application.usecase.GetCourseSessionRosterUseCase;
 import com.menta.bff.application.usecase.GetCourseSessionRosterUseCaseImpl;
 import com.menta.bff.application.usecase.GetCourseSessionUseCase;
 import com.menta.bff.application.usecase.GetCourseSessionUseCaseImpl;
+import com.menta.bff.application.usecase.GetDashboardViewUseCase;
+import com.menta.bff.application.usecase.GetDashboardViewUseCaseImpl;
 import com.menta.bff.application.usecase.GetLessonViewUseCase;
 import com.menta.bff.application.usecase.GetLessonViewUseCaseImpl;
 import com.menta.bff.application.usecase.GetManagedCourseUseCase;
@@ -181,6 +183,18 @@ public class UseCaseConfig {
             ClassesProperties classesProperties) {
         return new GetPlansViewUseCaseImpl(billingApiClient, subscriptionApiClient,
                 classesProperties.getDisplayZone(), () -> UUID.randomUUID().toString());
+    }
+
+    /**
+     * The subscription card of a student's dashboard (#363). Dates are shown in the academy's
+     * display zone; the API speaks UTC (ADR-0048).
+     */
+    @Bean
+    public GetDashboardViewUseCase getDashboardViewUseCase(
+            BillingApiClient billingApiClient, SubscriptionApiClient subscriptionApiClient,
+            ClassesProperties classesProperties) {
+        return new GetDashboardViewUseCaseImpl(
+                billingApiClient, subscriptionApiClient, classesProperties.getDisplayZone());
     }
 
     @Bean
