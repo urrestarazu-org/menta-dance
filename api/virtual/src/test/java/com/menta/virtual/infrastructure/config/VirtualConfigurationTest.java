@@ -15,6 +15,7 @@ import com.menta.virtual.application.port.in.GetCourseProgressUseCase;
 import com.menta.virtual.application.port.in.GetLessonProgressUseCase;
 import com.menta.virtual.application.port.in.GetPublicLessonStreamUseCase;
 import com.menta.virtual.application.port.in.GetPublicLessonUseCase;
+import com.menta.virtual.application.port.in.ListInProgressCoursesUseCase;
 import com.menta.virtual.application.port.in.ListManagedVirtualCoursesUseCase;
 import com.menta.virtual.application.port.in.PublishVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.ReorderVirtualModulesUseCase;
@@ -37,6 +38,7 @@ import com.menta.virtual.application.usecase.GetLessonProgressUseCaseImpl;
 import com.menta.virtual.application.usecase.GetPublicLessonStreamUseCaseImpl;
 import com.menta.virtual.application.usecase.GetPublicLessonUseCaseImpl;
 import com.menta.virtual.application.usecase.LessonAccessPolicy;
+import com.menta.virtual.application.usecase.ListInProgressCoursesUseCaseImpl;
 import com.menta.virtual.application.usecase.VirtualCourseCatalogPortImpl;
 import com.menta.virtual.infrastructure.cdn.BunnyNetProperties;
 import com.menta.virtual.infrastructure.cdn.CapturedLogs;
@@ -282,6 +284,17 @@ class VirtualConfigurationTest {
         );
 
         assertThat(useCase).isInstanceOf(GetCourseProgressUseCaseImpl.class);
+    }
+
+    @Test
+    void wires_the_list_in_progress_courses_use_case_bean() {
+        LessonProgressRepository progressRepository = mock(LessonProgressRepository.class);
+
+        ListInProgressCoursesUseCase useCase = configuration.listInProgressCoursesUseCase(
+            progressRepository, new CourseProgressAccessPolicy(entitlementPort)
+        );
+
+        assertThat(useCase).isInstanceOf(ListInProgressCoursesUseCaseImpl.class);
     }
 
     /**

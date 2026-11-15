@@ -1,0 +1,60 @@
+meta {
+  name: Get My In-Progress Courses
+  type: http
+  seq: 12
+}
+
+get {
+  url: {{baseUrl}}/api/v1/virtual/courses/me/in-progress?limit=10
+  body: none
+  auth: bearer
+}
+
+params:query {
+  limit: 10
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+script:pre-request {
+  if (!bru.getEnvVar("authToken")) {
+    bru.runner.skipRequest();
+  }
+}
+
+tests {
+  test("Status is 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("Body is an array of at most limit courses", function() {
+    expect(res.getBody()).to.be.an("array");
+    expect(res.getBody().length).to.be.at.most(10);
+  });
+
+  test("Every course is unfinished and carries its titles and resume lesson", function() {
+    res.getBody().forEach(function(course) {
+      expect(course).to.have.all.keys(
+        "courseId", "courseTitle", "completedLessons", "totalLessons", "percentage", "resumeLesson"
+      );
+      expect(course.percentage).to.be.below(100);
+      expect(course.resumeLesson).to.have.all.keys("lessonId", "moduleId", "lessonTitle", "positionSeconds");
+    });
+  });
+}
+
+docs {
+  #765. The caller's own in-progress courses (the user comes from the token,
+  there is no user parameter), most recent activity first. A course is listed
+  only when it is published, has progress in at least one lesson, is not
+  complete and the caller currently has access to it (same rule as Get Course
+  Progress): a course whose access was lost is left out instead of a 403.
+
+  limit is optional (default 10, max 50); a value that is not an integer in
+  [1, 50] returns 400 with code INVALID_REQUEST. No course in progress returns
+  200 []; no token returns 401.
+
+  Authenticate as a student with progress (e.g. after Save Lesson Progress).
+}

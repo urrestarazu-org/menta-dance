@@ -47,6 +47,8 @@ tags:
     description: Administración de lecciones de un módulo (ADMIN/PROFESOR).
   - name: Lecciones públicas
     description: Detalle y streaming de lecciones con autorización de suscripción.
+  - name: Progreso del alumno
+    description: Progreso del usuario autenticado en los cursos virtuales.
 
 paths:
   /api/v1/virtual/lessons/{lessonId}:
@@ -137,6 +139,111 @@ paths:
                     code: LESSON_FORBIDDEN_SUBSCRIPTION_REQUIRED
         '404':
           description: Lección inexistente, inválida o no publicada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /api/v1/virtual/courses/me/in-progress:
+    get:
+      tags: [Progreso del alumno]
+      summary: Listar los cursos en progreso del alumno autenticado
+      description: |
+        Devuelve los cursos que el usuario del token está cursando, con la
+        lección para continuar cada uno (#765). El usuario sale siempre del
+        token: no hay parámetro de usuario. Cualquier rol autenticado puede
+        consultarlo.
+
+        Un curso aparece solo si está publicado, el usuario tiene progreso en
+        al menos una de sus lecciones, no completó todas (`percentage < 100`) y
+        hoy tiene acceso con la misma regla que `GET .../{courseId}/progress`
+        (suscripción vigente). Un curso al que perdió acceso no aparece, en vez
+        de responder `403`.
+
+        Orden: actividad más reciente primero (último guardado de posición en
+        el curso; un curso con lecciones solo completadas y nunca reproducidas
+        va al final). `percentage`, `completedLessons`, `totalLessons` y
+        `resumeLesson` tienen la misma definición que en el progreso por curso.
+      operationId: listMyInProgressVirtualCourses
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: Cantidad máxima de cursos a devolver.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+      responses:
+        '200':
+          description: Cursos en progreso; arreglo vacío si no hay ninguno.
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 50
+                items:
+                  $ref: '#/components/schemas/InProgressCourseResponse'
+        '400':
+          description: '`limit` no es un entero entre 1 y 50.'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                limite_invalido:
+                  value:
+                    type: https://menta.dance/problems/invalid_request
+                    title: Bad Request
+                    status: 400
+                    detail: El parámetro limit debe ser un número entre 1 y 50.
+                    code: INVALID_REQUEST
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+
+  /api/v1/virtual/courses/{courseId}/progress:
+    get:
+      tags: [Progreso del alumno]
+      summary: Obtener el progreso del alumno autenticado en un curso
+      description: |
+        Lecciones completadas sobre el total del curso, porcentaje y lección
+        para continuar (la de posición guardada más reciente). El porcentaje se
+        redondea hacia arriba desde la mitad y vale 100 solo si todas las
+        lecciones están completadas. Cualquier rol autenticado puede
+        consultarlo; requiere acceso vigente al curso.
+      operationId: getMyVirtualCourseProgress
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CourseId'
+      responses:
+        '200':
+          description: Progreso del usuario en el curso.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourseProgressResponse'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          description: El usuario no tiene un entitlement vigente para el curso.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                subscription_required:
+                  value:
+                    type: https://menta.dance/problems/course_progress_forbidden_subscription_required
+                    title: Forbidden
+                    status: 403
+                    detail: Este curso requiere una suscripción activa
+                    code: COURSE_PROGRESS_FORBIDDEN_SUBSCRIPTION_REQUIRED
+        '404':
+          description: Curso inexistente, con id inválido o no publicado.
           content:
             application/problem+json:
               schema:
@@ -568,6 +675,21 @@ components:
                 detail: Course not found.
                 code: COURSE_NOT_FOUND
 
+    AuthenticationRequired:
+      description: Falta el token o no es válido.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            sin_token:
+              value:
+                type: https://menta.dance/problems/authentication_required
+                title: Unauthorized
+                status: 401
+                detail: Authentication is required.
+                code: AUTHENTICATION_REQUIRED
+
   schemas:
     Problem:
       type: object
@@ -955,6 +1077,78 @@ components:
           type: boolean
         order:
           type: integer
+
+    InProgressCourseResponse:
+      type: object
+      required: [courseId, courseTitle, completedLessons, totalLessons, percentage, resumeLesson]
+      properties:
+        courseId:
+          type: string
+          format: uuid
+        courseTitle:
+          type: string
+        completedLessons:
+          type: integer
+          minimum: 0
+        totalLessons:
+          type: integer
+          minimum: 1
+        percentage:
+          type: integer
+          minimum: 0
+          maximum: 99
+          description: Nunca 100 en este listado (un curso completo no aparece).
+        resumeLesson:
+          type: object
+          required: [lessonId, moduleId, lessonTitle, positionSeconds]
+          properties:
+            lessonId:
+              type: string
+              format: uuid
+            moduleId:
+              type: string
+              format: uuid
+            lessonTitle:
+              type: string
+            positionSeconds:
+              type: integer
+              minimum: 0
+
+    CourseProgressResponse:
+      type: object
+      required: [courseId, completedLessons, totalLessons, percentage, resumeLesson]
+      properties:
+        courseId:
+          type: string
+          format: uuid
+        completedLessons:
+          type: integer
+          minimum: 0
+        totalLessons:
+          type: integer
+          minimum: 0
+        percentage:
+          type: integer
+          minimum: 0
+          maximum: 100
+        resumeLesson:
+          description: '`null` si el curso no tiene lecciones o el usuario no tiene progreso.'
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [lessonId, moduleId, positionSeconds, completed]
+              properties:
+                lessonId:
+                  type: string
+                  format: uuid
+                moduleId:
+                  type: string
+                  format: uuid
+                positionSeconds:
+                  type: integer
+                  minimum: 0
+                completed:
+                  type: boolean
 
 security:
   - bearerAuth: []

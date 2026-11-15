@@ -19,6 +19,7 @@ GET  /api/v1/virtual/lessons/{lessonId}
 GET  /api/v1/virtual/lessons/{lessonId}/stream
 GET  /api/v1/virtual/materials/{materialId}
 GET  /api/v1/virtual/courses/{courseId}/progress
+GET  /api/v1/virtual/courses/me/in-progress
 GET  /api/v1/virtual/lessons/{lessonId}/progress
 PUT  /api/v1/virtual/lessons/{lessonId}/progress
 POST /api/v1/virtual/lessons/{lessonId}/complete
@@ -53,6 +54,20 @@ por **alumno + lección** y nunca se actualiza como contador independiente.
 
 - `GET /api/v1/virtual/courses/{courseId}/progress` devuelve porcentaje, lecciones
   completadas, total y última lección.
+- `GET /api/v1/virtual/courses/me/in-progress` lista, en una sola consulta, los
+  cursos que el alumno del token está cursando (#765), para la sección
+  "Continuar" del panel:
+  - entra un curso publicado con al menos una lección con progreso, que no está
+    completo (`percentage < 100`) y al que el alumno **hoy** tiene acceso, con la
+    misma regla que el progreso por curso (suscripción vigente). Un curso al que
+    perdió acceso no aparece, en vez de responder `403`;
+  - orden por actividad más reciente primero (el último guardado de posición
+    en el curso); `limit` opcional, por defecto 10 y máximo 50. Un `limit` que no
+    es un entero entre 1 y 50 responde `400` con `code: INVALID_REQUEST`;
+  - cada elemento es
+    `{courseId, courseTitle, completedLessons, totalLessons, percentage, resumeLesson: {lessonId, moduleId, lessonTitle, positionSeconds}}`,
+    con `percentage` y `resumeLesson` iguales a los del progreso por curso; sin
+    cursos en progreso responde `200 []`, y sin token `401`.
 - `GET`/`PUT /api/v1/virtual/lessons/{lessonId}/progress` guarda posición para
   retomar video.
 - Una lección sólo pasa a completada cuando el alumno ejecuta

@@ -38,6 +38,10 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *     (any role) (#52, US-VIRTUAL-005; unmapped otherwise, which would fall
  *     through to anyRequest()'s permissive default grant — same
  *     explicit-matcher reasoning as #130's DELETE rule below).
+ *   - GET /api/v1/virtual/courses/me/in-progress → authenticated (any role)
+ *     (#765; the caller's own in-progress courses, the user id comes from
+ *     the JWT principal. Not covered by the course-progress rule above and
+ *     unmapped otherwise, same explicit-matcher reasoning).
  *   - /api/v1/auth/login and /api/v1/auth/refresh → permitAll (controllers handle credentials).
  *   - /api/v1/auth/logout → authenticated Bearer access token required.
  *   - /api/v1/auth/forgot-password and /api/v1/auth/reset-password → permitAll
@@ -222,6 +226,13 @@ public class SecurityConfig {
                 // authentication (see that rule's comment further down).
                 .requestMatchers(
                     HttpMethod.GET, "/api/v1/virtual/courses/*/progress"
+                ).authenticated()
+                // #765: the caller's own in-progress courses (the user id comes from the
+                // token). The rule above never matches this path (its last segment is
+                // in-progress, not progress), so without this entry it would also fall
+                // through to anyRequest()'s permissive default grant.
+                .requestMatchers(
+                    HttpMethod.GET, "/api/v1/virtual/courses/me/in-progress"
                 ).authenticated()
                 // Login and refresh authenticate their own credentials. Logout requires
                 // a valid access Bearer token, while its refresh is supplied separately.

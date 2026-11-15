@@ -27,4 +27,16 @@ public interface LessonProgressRepository {
 
     /** Live denominator for the course-progress percentage (design.md decision 2). */
     long countLessonsByCourseId(UUID courseId);
+
+    /**
+     * Every progress row of the user in a {@code PUBLISHED} course, in one query and already
+     * ordered as {@link InProgressCourseRowProjection} describes (#765).
+     */
+    java.util.List<InProgressCourseRowProjection> findRowsForUserInPublishedCourses(UUID userId);
+
+    /**
+     * Same denominator as {@link #countLessonsByCourseId} for several courses in one grouped
+     * query (#765); a course without lessons is absent from the map.
+     */
+    java.util.Map<UUID, Long> countLessonsByCourseIds(java.util.Collection<UUID> courseIds);
 }

@@ -3,19 +3,25 @@ package com.menta.virtual.infrastructure.persistence.adapter;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.menta.virtual.application.port.out.CourseProgressRowProjection;
+import com.menta.virtual.application.port.out.InProgressCourseRowProjection;
 import com.menta.virtual.domain.model.CourseId;
+import com.menta.virtual.domain.model.CourseStatus;
 import com.menta.virtual.domain.model.LessonId;
 import com.menta.virtual.domain.model.LessonProgress;
 import com.menta.virtual.domain.model.LessonProgressId;
 import com.menta.virtual.infrastructure.persistence.entity.LessonProgressJpaEntity;
+import com.menta.virtual.infrastructure.persistence.repository.LessonAggregateProjection;
 import com.menta.virtual.infrastructure.persistence.repository.LessonProgressJpaRepository;
 import com.menta.virtual.infrastructure.persistence.repository.VirtualLessonJpaRepository;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -101,5 +107,40 @@ class LessonProgressRepositoryAdapterTest {
         when(lessonJpaRepository.countByCourseId(courseId)).thenReturn(3L);
 
         assertThat(adapter.countLessonsByCourseId(courseId)).isEqualTo(3L);
+    }
+
+    @Test
+    void find_rows_for_user_in_published_courses_asks_only_for_published_courses() {
+        UUID userId = UUID.randomUUID();
+        InProgressCourseRowProjection row = mock(InProgressCourseRowProjection.class);
+        when(jpaRepository.findRowsForUserInCoursesWithStatus(userId, CourseStatus.PUBLISHED)).thenReturn(List.of(row));
+
+        assertThat(adapter.findRowsForUserInPublishedCourses(userId)).containsExactly(row);
+    }
+
+    @Test
+    void count_lessons_by_course_ids_maps_the_grouped_aggregate() {
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+        LessonAggregateProjection firstAggregate = aggregate(first, 4L);
+        LessonAggregateProjection secondAggregate = aggregate(second, 1L);
+        when(lessonJpaRepository.aggregateByCourseIdIn(List.of(first, second)))
+            .thenReturn(List.of(firstAggregate, secondAggregate));
+
+        assertThat(adapter.countLessonsByCourseIds(List.of(first, second)))
+            .containsExactlyInAnyOrderEntriesOf(Map.of(first, 4L, second, 1L));
+    }
+
+    @Test
+    void count_lessons_by_course_ids_skips_the_query_for_no_course() {
+        assertThat(adapter.countLessonsByCourseIds(Set.of())).isEmpty();
+        verifyNoInteractions(lessonJpaRepository);
+    }
+
+    private static LessonAggregateProjection aggregate(UUID courseId, long lessonCount) {
+        LessonAggregateProjection aggregate = mock(LessonAggregateProjection.class);
+        when(aggregate.getCourseId()).thenReturn(courseId);
+        when(aggregate.getLessonCount()).thenReturn(lessonCount);
+        return aggregate;
     }
 }

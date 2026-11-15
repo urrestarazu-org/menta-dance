@@ -578,6 +578,32 @@ class SecurityConfigTest {
     }
 
     /**
+     * #765. The student's in-progress courses come from the JWT principal. Before this matcher
+     * existed the path was unmapped (the {@code /courses/*}{@code /progress} rule above never
+     * matches it: its last segment is {@code in-progress}, not {@code progress}) and fell
+     * through to {@code anyRequest().access(roleAuthorizationManager)}, which grants unmapped
+     * paths even to an anonymous caller.
+     */
+    @Test
+    void an_unauthenticated_get_of_the_in_progress_courses_route_is_rejected() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get("/api/v1/virtual/courses/me/in-progress"))
+            .andExpect(status().isUnauthorized());
+    }
+
+    /** #765. Every role lists its own in-progress courses: all four reach the (unmapped) dispatcher. */
+    @ParameterizedTest
+    @ValueSource(strings = {"ADMIN", "INSTRUCTOR", "STUDENT", "RECEPTIONIST"})
+    void an_authenticated_get_of_the_in_progress_courses_route_passes_the_security_layer(String role)
+        throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get("/api/v1/virtual/courses/me/in-progress").with(user("someone").roles(role)))
+            .andExpect(status().isNotFound());
+    }
+
+    /**
      * #41, US-PHYSICAL-004. Before this matcher existed, this path had no
      * matcher at all and fell through to {@code
      * anyRequest().access(roleAuthorizationManager)}, whose own fall-through
