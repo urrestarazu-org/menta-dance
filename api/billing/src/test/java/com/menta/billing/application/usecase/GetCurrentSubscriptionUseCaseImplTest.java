@@ -18,6 +18,7 @@ import com.menta.billing.domain.model.PlanId;
 import com.menta.billing.domain.model.Subscription;
 import com.menta.billing.domain.model.SubscriptionStatus;
 import com.menta.billing.domain.model.SubscriptionType;
+import com.menta.billing.domain.model.TrialGrant;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -53,6 +54,13 @@ class GetCurrentSubscriptionUseCaseImplTest {
         );
     }
 
+    private static Subscription trial(UUID userId) {
+        return Subscription.trial(
+            UUID.randomUUID(), userId, PlanId.generate(), NOW.minusSeconds(86400 * 14), List.of("course-1"),
+            new TrialGrant(NOW.minusSeconds(86400 * 14), UUID.randomUUID(), "demo", 14)
+        );
+    }
+
     @Test
     void slot_first_active_beats_an_older_expired_row_and_never_consults_the_expired_fallback() {
         UUID userId = UUID.randomUUID();
@@ -72,7 +80,35 @@ class GetCurrentSubscriptionUseCaseImplTest {
         assertThat(activeResult.planId()).isEqualTo(planId.toString());
         assertThat(activeResult.daysRemaining()).isEqualTo(20L);
         assertThat(activeResult.expiringSoon()).isFalse();
+        assertThat(activeResult.type()).isEqualTo(SubscriptionType.PAID);
         verify(subscriptionRepository, never()).findLatestExpiredByUserId(any());
+    }
+
+    /** #766: an admin-granted trial is told apart from a paid subscription by its own type. */
+    @Test
+    void an_active_trial_carries_the_trial_type() {
+        UUID userId = UUID.randomUUID();
+        Subscription trial = trial(userId);
+        when(subscriptionRepository.findCurrentByUserId(userId)).thenReturn(Optional.of(trial));
+
+        CurrentSubscriptionResult result = useCase.current(userId);
+
+        CurrentSubscriptionResult.Active activeResult = (CurrentSubscriptionResult.Active) result;
+        assertThat(activeResult.subscriptionId()).isEqualTo(trial.getId().toString());
+        assertThat(activeResult.type()).isEqualTo(SubscriptionType.TRIAL);
+    }
+
+    @Test
+    void an_expired_trial_fallback_carries_the_trial_type() {
+        UUID userId = UUID.randomUUID();
+        Subscription expiredTrial = trial(userId).expire(NOW);
+        when(subscriptionRepository.findCurrentByUserId(userId)).thenReturn(Optional.empty());
+        when(subscriptionRepository.findLatestExpiredByUserId(userId)).thenReturn(Optional.of(expiredTrial));
+
+        CurrentSubscriptionResult result = useCase.current(userId);
+
+        CurrentSubscriptionResult.Expired expiredResult = (CurrentSubscriptionResult.Expired) result;
+        assertThat(expiredResult.type()).isEqualTo(SubscriptionType.TRIAL);
     }
 
     @Test
@@ -110,6 +146,7 @@ class GetCurrentSubscriptionUseCaseImplTest {
         assertThat(pendingResult.subscriptionId()).isEqualTo(subscriptionId.toString());
         assertThat(pendingResult.planId()).isEqualTo(planId.toString());
         assertThat(pendingResult.checkoutUrl()).isEqualTo("https://mp.example/checkout/pref-1");
+        assertThat(pendingResult.type()).isEqualTo(SubscriptionType.PAID);
         verify(subscriptionRepository, never()).findLatestExpiredByUserId(any());
     }
 
@@ -133,6 +170,7 @@ class GetCurrentSubscriptionUseCaseImplTest {
         assertThat(expiredResult.planId()).isEqualTo(planId.toString());
         assertThat(expiredResult.startDate()).isEqualTo(expired.getStartDate().orElseThrow());
         assertThat(expiredResult.endDate()).isEqualTo(expired.getEndDate().orElseThrow());
+        assertThat(expiredResult.type()).isEqualTo(SubscriptionType.PAID);
     }
 
     @Test

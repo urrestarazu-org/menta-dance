@@ -1,0 +1,56 @@
+meta {
+  name: Get Own Subscription
+  type: http
+  seq: 16
+}
+
+get {
+  url: {{baseUrl}}/api/v1/billing/subscriptions/me
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  US-BILLING-004, #766. Returns the authenticated user's current subscription.
+  Run Auth Login first with a student who has a subscription (Assign Trial
+  Subscription as an admin, or Create Subscription Checkout + the webhook
+  flow). The user always comes from the token, never from a parameter.
+
+  Resolves PENDING or ACTIVE first and, when there is none, the latest
+  EXPIRED. A CANCELLED subscription is never resolved here, even with
+  remaining access: read it from List Own Subscription History.
+
+  Success contract (200, every field always present, null when it does not
+  apply to the status):
+    { subscriptionId, planId, status, startDate, endDate, daysRemaining,
+      expiringSoon, checkoutUrl, plansUrl, type }
+
+    status → ACTIVE (dates, daysRemaining, expiringSoon) |
+             EXPIRED (dates, plansUrl) | PENDING (checkoutUrl only)
+    type   → TRIAL (granted by an admin) | PAID
+
+  Error contract:
+    401                 → no access token
+    404 NO_SUBSCRIPTION → no PENDING, ACTIVE or EXPIRED subscription (with plansUrl)
+}
+
+tests {
+  test("Returns the student's current subscription with its type", function() {
+    expect(res.getStatus()).to.equal(200);
+    const subscription = res.getBody();
+    expect(subscription).to.have.all.keys(
+      "subscriptionId", "planId", "status", "startDate", "endDate", "daysRemaining",
+      "expiringSoon", "checkoutUrl", "plansUrl", "type"
+    );
+    expect(["ACTIVE", "EXPIRED", "PENDING"]).to.include(subscription.status);
+    expect(["PAID", "TRIAL"]).to.include(subscription.type);
+  });
+}
+
+assert {
+  res.status: eq 200
+}

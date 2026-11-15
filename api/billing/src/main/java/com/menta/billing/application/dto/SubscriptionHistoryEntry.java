@@ -1,6 +1,7 @@
 package com.menta.billing.application.dto;
 
 import com.menta.billing.domain.model.SubscriptionStatus;
+import com.menta.billing.domain.model.SubscriptionType;
 import java.time.Instant;
 
 /**
@@ -12,8 +13,11 @@ import java.time.Instant;
  * caller discards, and would hand back a domain object whose course snapshot was silently
  * falsified to empty. The infrastructure adapter maps {@code SubscriptionJpaEntity} directly into
  * this record — the application layer never sees the JPA entity.</p>
+ *
+ * <p>{@code type} (#766) tells an admin-granted trial from a paid subscription.</p>
  */
 public record SubscriptionHistoryEntry(
-    String id, String planId, SubscriptionStatus status, Instant startDate, Instant endDate, Instant createdAt
+    String id, String planId, SubscriptionStatus status, Instant startDate, Instant endDate, Instant createdAt,
+    SubscriptionType type
 ) {
 }

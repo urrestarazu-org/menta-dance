@@ -49,6 +49,7 @@ import com.menta.shared.domain.vo.Email;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -237,6 +238,22 @@ class SubscriptionTrialIntegrationTest extends AbstractBillingMySqlIntegrationTe
         );
     }
 
+    @SuppressWarnings("rawtypes")
+    private ResponseEntity<Map> currentOwn(UUID userId) {
+        return http.exchange(
+            "/api/v1/billing/subscriptions/me", HttpMethod.GET,
+            new HttpEntity<>(headersFor(userId, Role.STUDENT)), Map.class
+        );
+    }
+
+    @SuppressWarnings("rawtypes")
+    private ResponseEntity<List> historyOwn(UUID userId) {
+        return http.exchange(
+            "/api/v1/billing/subscriptions/me/history", HttpMethod.GET,
+            new HttpEntity<>(headersFor(userId, Role.STUDENT)), List.class
+        );
+    }
+
     /** Simulates the Phase 5 sweep's effect directly at the persistence level — the sweep itself ships later. */
     private void simulateExpiry(UUID subscriptionId) {
         SubscriptionJpaEntity current = subscriptionRepository.findById(subscriptionId).orElseThrow();
@@ -397,6 +414,58 @@ class SubscriptionTrialIntegrationTest extends AbstractBillingMySqlIntegrationTe
         assertThat(stillExpiredTrial.getStatus()).isEqualTo("EXPIRED");
         UUID newSubscriptionId = UUID.fromString((String) repurchase.getBody().get("subscriptionId"));
         assertThat(newSubscriptionId).isNotEqualTo(trialSubscriptionId);
+    }
+
+    // --- #766: the student's own read views expose the subscription type ----
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void an_admin_granted_trial_is_exposed_as_trial_in_me_and_in_history() {
+        UUID adminId = seedUser(Role.ADMIN);
+        UUID studentId = seedUser(Role.STUDENT);
+        UUID planId = seedPlan();
+        ResponseEntity<Map> grant = assignTrial(adminId, studentId.toString(), planId.toString(), "demo", 7);
+        String trialSubscriptionId = (String) grant.getBody().get("subscriptionId");
+
+        ResponseEntity<Map> current = currentOwn(studentId);
+        ResponseEntity<List> history = historyOwn(studentId);
+
+        assertThat(current.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(current.getBody().get("subscriptionId")).isEqualTo(trialSubscriptionId);
+        assertThat(current.getBody().get("status")).isEqualTo("ACTIVE");
+        assertThat(current.getBody().get("type")).isEqualTo("TRIAL");
+        assertThat(current.getBody().get("daysRemaining")).isEqualTo(7);
+        assertThat(history.getStatusCode()).isEqualTo(HttpStatus.OK);
+        List<Map<String, Object>> rows = history.getBody();
+        assertThat(rows).extracting(row -> row.get("id")).containsExactly(trialSubscriptionId);
+        assertThat(rows).extracting(row -> row.get("type")).containsExactly("TRIAL");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void a_paid_subscription_after_a_cancelled_trial_is_exposed_as_paid_and_the_trial_stays_in_history() {
+        UUID adminId = seedUser(Role.ADMIN);
+        UUID studentId = seedUser(Role.STUDENT);
+        UUID planId = seedPlan();
+        ResponseEntity<Map> grant = assignTrial(adminId, studentId.toString(), planId.toString(), "demo", 7);
+        UUID trialSubscriptionId = UUID.fromString((String) grant.getBody().get("subscriptionId"));
+        assertThat(cancelAsAdmin(adminId, trialSubscriptionId, "fin de la demo").getStatusCode())
+            .isEqualTo(HttpStatus.OK);
+        ResponseEntity<Map> checkout = checkoutAndActivateFor(studentId, planId);
+        String paidSubscriptionId = (String) checkout.getBody().get("subscriptionId");
+
+        ResponseEntity<Map> current = currentOwn(studentId);
+        ResponseEntity<List> history = historyOwn(studentId);
+
+        assertThat(current.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(current.getBody().get("subscriptionId")).isEqualTo(paidSubscriptionId);
+        assertThat(current.getBody().get("status")).isEqualTo("ACTIVE");
+        assertThat(current.getBody().get("type")).isEqualTo("PAID");
+        List<Map<String, Object>> rows = history.getBody();
+        assertThat(rows).extracting(row -> row.get("id"))
+            .containsExactly(paidSubscriptionId, trialSubscriptionId.toString());
+        assertThat(rows).extracting(row -> row.get("status")).containsExactly("ACTIVE", "CANCELLED");
+        assertThat(rows).extracting(row -> row.get("type")).containsExactly("PAID", "TRIAL");
     }
 
     // --- Non-admin defense-in-depth, real security chain [S4] ---------------

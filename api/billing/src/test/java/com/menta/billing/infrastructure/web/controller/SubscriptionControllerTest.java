@@ -33,6 +33,7 @@ import com.menta.billing.domain.exception.SubscriptionAlreadyActiveException;
 import com.menta.billing.domain.exception.SubscriptionNotFoundException;
 import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.domain.model.SubscriptionStatus;
+import com.menta.billing.domain.model.SubscriptionType;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
@@ -325,7 +326,8 @@ class SubscriptionControllerTest {
     @Test
     void current_own_resolves_by_the_token_subject_never_a_request_parameter() throws Exception {
         when(getCurrentSubscriptionUseCase.current(any())).thenReturn(new CurrentSubscriptionResult.Active(
-            "sub-1", PLAN_ID, Instant.parse("2026-09-01T00:00:00Z"), Instant.parse("2026-10-01T00:00:00Z"), 20, false
+            "sub-1", PLAN_ID, Instant.parse("2026-09-01T00:00:00Z"), Instant.parse("2026-10-01T00:00:00Z"), 20, false,
+            SubscriptionType.PAID
         ));
 
         mockMvc.perform(get("/api/v1/billing/subscriptions/me").with(authenticatedAs(USER_ID)))
@@ -339,7 +341,8 @@ class SubscriptionControllerTest {
     @Test
     void current_own_maps_an_active_subscription() throws Exception {
         when(getCurrentSubscriptionUseCase.current(any())).thenReturn(new CurrentSubscriptionResult.Active(
-            "sub-1", PLAN_ID, Instant.parse("2026-09-01T00:00:00Z"), Instant.parse("2026-10-01T00:00:00Z"), 20, false
+            "sub-1", PLAN_ID, Instant.parse("2026-09-01T00:00:00Z"), Instant.parse("2026-10-01T00:00:00Z"), 20, false,
+            SubscriptionType.PAID
         ));
 
         mockMvc.perform(get("/api/v1/billing/subscriptions/me").with(authenticatedAs(USER_ID)))
@@ -352,13 +355,30 @@ class SubscriptionControllerTest {
             .andExpect(jsonPath("$.daysRemaining", is(20)))
             .andExpect(jsonPath("$.expiringSoon", is(false)))
             .andExpect(jsonPath("$.checkoutUrl").value(org.hamcrest.Matchers.nullValue()))
-            .andExpect(jsonPath("$.plansUrl").value(org.hamcrest.Matchers.nullValue()));
+            .andExpect(jsonPath("$.plansUrl").value(org.hamcrest.Matchers.nullValue()))
+            .andExpect(jsonPath("$.type", is("PAID")));
+    }
+
+    /** #766: an admin-granted trial renders its type next to the unchanged ACTIVE fields. */
+    @Test
+    void current_own_maps_an_active_trial_with_its_type() throws Exception {
+        when(getCurrentSubscriptionUseCase.current(any())).thenReturn(new CurrentSubscriptionResult.Active(
+            "sub-1", PLAN_ID, Instant.parse("2026-09-01T00:00:00Z"), Instant.parse("2026-09-15T00:00:00Z"), 14, false,
+            SubscriptionType.TRIAL
+        ));
+
+        mockMvc.perform(get("/api/v1/billing/subscriptions/me").with(authenticatedAs(USER_ID)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status", is("ACTIVE")))
+            .andExpect(jsonPath("$.daysRemaining", is(14)))
+            .andExpect(jsonPath("$.type", is("TRIAL")));
     }
 
     @Test
     void current_own_maps_an_active_subscription_expiring_soon() throws Exception {
         when(getCurrentSubscriptionUseCase.current(any())).thenReturn(new CurrentSubscriptionResult.Active(
-            "sub-1", PLAN_ID, Instant.parse("2026-09-01T00:00:00Z"), Instant.parse("2026-09-08T00:00:00Z"), 7, true
+            "sub-1", PLAN_ID, Instant.parse("2026-09-01T00:00:00Z"), Instant.parse("2026-09-08T00:00:00Z"), 7, true,
+            SubscriptionType.PAID
         ));
 
         mockMvc.perform(get("/api/v1/billing/subscriptions/me").with(authenticatedAs(USER_ID)))
@@ -371,7 +391,8 @@ class SubscriptionControllerTest {
     @Test
     void current_own_maps_an_expired_subscription_with_a_plans_hint() throws Exception {
         when(getCurrentSubscriptionUseCase.current(any())).thenReturn(new CurrentSubscriptionResult.Expired(
-            "sub-1", PLAN_ID, Instant.parse("2026-08-01T00:00:00Z"), Instant.parse("2026-08-31T00:00:00Z")
+            "sub-1", PLAN_ID, Instant.parse("2026-08-01T00:00:00Z"), Instant.parse("2026-08-31T00:00:00Z"),
+            SubscriptionType.TRIAL
         ));
 
         mockMvc.perform(get("/api/v1/billing/subscriptions/me").with(authenticatedAs(USER_ID)))
@@ -380,6 +401,7 @@ class SubscriptionControllerTest {
             .andExpect(jsonPath("$.startDate", is("2026-08-01T00:00:00Z")))
             .andExpect(jsonPath("$.endDate", is("2026-08-31T00:00:00Z")))
             .andExpect(jsonPath("$.plansUrl", is("/api/v1/billing/plans")))
+            .andExpect(jsonPath("$.type", is("TRIAL")))
             .andExpect(jsonPath("$.daysRemaining").value(org.hamcrest.Matchers.nullValue()))
             .andExpect(jsonPath("$.expiringSoon").value(org.hamcrest.Matchers.nullValue()))
             .andExpect(jsonPath("$.checkoutUrl").value(org.hamcrest.Matchers.nullValue()));
@@ -388,13 +410,14 @@ class SubscriptionControllerTest {
     @Test
     void current_own_maps_a_pending_subscription_with_no_dates() throws Exception {
         when(getCurrentSubscriptionUseCase.current(any())).thenReturn(new CurrentSubscriptionResult.PendingPayment(
-            "sub-1", PLAN_ID, "https://mp.example/checkout/pref-1"
+            "sub-1", PLAN_ID, "https://mp.example/checkout/pref-1", SubscriptionType.PAID
         ));
 
         mockMvc.perform(get("/api/v1/billing/subscriptions/me").with(authenticatedAs(USER_ID)))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status", is("PENDING")))
             .andExpect(jsonPath("$.checkoutUrl", is("https://mp.example/checkout/pref-1")))
+            .andExpect(jsonPath("$.type", is("PAID")))
             .andExpect(jsonPath("$.startDate").value(org.hamcrest.Matchers.nullValue()))
             .andExpect(jsonPath("$.endDate").value(org.hamcrest.Matchers.nullValue()))
             .andExpect(jsonPath("$.daysRemaining").value(org.hamcrest.Matchers.nullValue()))
@@ -435,11 +458,11 @@ class SubscriptionControllerTest {
         when(getSubscriptionHistoryUseCase.history(any())).thenReturn(List.of(
             new SubscriptionHistoryEntry(
                 "sub-2", PLAN_ID, SubscriptionStatus.ACTIVE, Instant.parse("2026-09-01T00:00:00Z"),
-                Instant.parse("2026-10-01T00:00:00Z"), Instant.parse("2026-09-01T00:00:00Z")
+                Instant.parse("2026-10-01T00:00:00Z"), Instant.parse("2026-09-01T00:00:00Z"), SubscriptionType.PAID
             ),
             new SubscriptionHistoryEntry(
                 "sub-1", PLAN_ID, SubscriptionStatus.EXPIRED, Instant.parse("2026-08-01T00:00:00Z"),
-                Instant.parse("2026-08-31T00:00:00Z"), Instant.parse("2026-08-01T00:00:00Z")
+                Instant.parse("2026-08-31T00:00:00Z"), Instant.parse("2026-08-01T00:00:00Z"), SubscriptionType.TRIAL
             )
         ));
 
@@ -447,8 +470,10 @@ class SubscriptionControllerTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$[0].id", is("sub-2")))
             .andExpect(jsonPath("$[0].status", is("ACTIVE")))
+            .andExpect(jsonPath("$[0].type", is("PAID")))
             .andExpect(jsonPath("$[1].id", is("sub-1")))
-            .andExpect(jsonPath("$[1].status", is("EXPIRED")));
+            .andExpect(jsonPath("$[1].status", is("EXPIRED")))
+            .andExpect(jsonPath("$[1].type", is("TRIAL")));
     }
 
     @Test
