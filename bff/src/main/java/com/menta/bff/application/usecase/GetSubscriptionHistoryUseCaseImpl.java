@@ -6,7 +6,6 @@ import com.menta.bff.application.port.out.BillingApiClient;
 import com.menta.bff.application.port.out.SubscriptionApiClient;
 import java.time.Instant;
 import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,8 +28,6 @@ import lombok.extern.slf4j.Slf4j;
 public class GetSubscriptionHistoryUseCaseImpl implements GetSubscriptionHistoryUseCase {
 
     static final String NO_DATE = "Sin fecha";
-
-    private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private final SubscriptionApiClient subscriptionApiClient;
     private final BillingApiClient billingApiClient;
@@ -75,6 +72,6 @@ public class GetSubscriptionHistoryUseCaseImpl implements GetSubscriptionHistory
     }
 
     private String label(Instant instant) {
-        return instant == null ? NO_DATE : DATE.format(instant.atZone(displayZone));
+        return instant == null ? NO_DATE : DateLabels.of(instant, displayZone);
     }
 }

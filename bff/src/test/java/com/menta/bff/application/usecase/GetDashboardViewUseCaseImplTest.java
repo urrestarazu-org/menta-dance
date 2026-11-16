@@ -1,6 +1,8 @@
 package com.menta.bff.application.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -11,11 +13,14 @@ import ch.qos.logback.core.read.ListAppender;
 import com.menta.bff.application.dto.CurrentSubscription;
 import com.menta.bff.application.dto.DashboardView;
 import com.menta.bff.application.dto.PlanSummary;
+import com.menta.bff.application.dto.SubscriptionHistoryEntry;
 import com.menta.bff.application.port.out.BillingApiClient;
 import com.menta.bff.application.port.out.SubscriptionApiClient;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,6 +44,7 @@ class GetDashboardViewUseCaseImplTest {
     private static final String TOKEN = "access-token-abc";
     // 2026-10-31T01:30Z is still 30/10 in Buenos Aires: the label must use the display zone.
     private static final Instant END = Instant.parse("2026-10-31T01:30:00Z");
+    private static final Instant NOW = Instant.parse("2026-11-16T12:00:00Z");
 
     private static final List<PlanSummary> PLANS = List.of(
             new PlanSummary("plan-1", "Plan Mensual", "Un mes", BigDecimal.valueOf(1000), "ARS", 30, false),
@@ -57,7 +63,8 @@ class GetDashboardViewUseCaseImplTest {
     @BeforeEach
     void setUp() {
         useCase = new GetDashboardViewUseCaseImpl(
-                billingApiClient, subscriptionApiClient, ZoneId.of("America/Argentina/Buenos_Aires"));
+                billingApiClient, subscriptionApiClient, ZoneId.of("America/Argentina/Buenos_Aires"),
+                Clock.fixed(NOW, ZoneOffset.UTC));
         logger = (Logger) LoggerFactory.getLogger(GetDashboardViewUseCaseImpl.class);
         logs = new ListAppender<>();
         logs.start();
@@ -204,5 +211,94 @@ class GetDashboardViewUseCaseImplTest {
         assertThat(new DashboardView.Pending("p").kind()).isEqualTo(DashboardView.Kind.PENDING);
         assertThat(new DashboardView.Expired("p", "d").kind()).isEqualTo(DashboardView.Kind.EXPIRED);
         assertThat(new DashboardView.Unavailable().kind()).isEqualTo(DashboardView.Kind.UNAVAILABLE);
+        assertThat(new DashboardView.Cancelled("p", "d").kind()).isEqualTo(DashboardView.Kind.CANCELLED);
+    }
+
+    private static SubscriptionHistoryEntry entry(
+            SubscriptionHistoryEntry.Status status, Instant endDate) {
+        return new SubscriptionHistoryEntry(
+                "plan-1", status, Instant.parse("2026-10-01T03:00:00Z"), endDate, SubscriptionHistoryEntry.Type.PAID);
+    }
+
+    private void noCurrentSubscription(SubscriptionHistoryEntry... history) {
+        when(subscriptionApiClient.getCurrentSubscription(TOKEN)).thenReturn(new CurrentSubscription.None());
+        when(subscriptionApiClient.listSubscriptionHistory(TOKEN)).thenReturn(List.of(history));
+    }
+
+    @Test
+    @DisplayName("no current subscription but a CANCELLED one that still grants access shows the cancelled card")
+    void cancelledWithAccess() {
+        // 2026-12-01T01:30Z is still 30/11 in Buenos Aires: the label uses the display zone.
+        noCurrentSubscription(entry(SubscriptionHistoryEntry.Status.CANCELLED, Instant.parse("2026-12-01T01:30:00Z")));
+        when(billingApiClient.getPlans()).thenReturn(PLANS);
+
+        assertThat(useCase.execute(TOKEN)).isEqualTo(new DashboardView.Cancelled("Plan Mensual", "30/11/2026"));
+    }
+
+    @Test
+    @DisplayName("with several CANCELLED ones still granting access, the one that lasts longest is shown")
+    void latestCancelledWins() {
+        noCurrentSubscription(
+                entry(SubscriptionHistoryEntry.Status.CANCELLED, Instant.parse("2026-11-20T12:00:00Z")),
+                entry(SubscriptionHistoryEntry.Status.CANCELLED, Instant.parse("2026-12-20T12:00:00Z")),
+                entry(SubscriptionHistoryEntry.Status.CANCELLED, Instant.parse("2026-11-25T12:00:00Z")));
+        when(billingApiClient.getPlans()).thenReturn(PLANS);
+
+        assertThat(useCase.execute(TOKEN)).isEqualTo(new DashboardView.Cancelled("Plan Mensual", "20/12/2026"));
+    }
+
+    @Test
+    @DisplayName("the cancelled card degrades to the generic plan name when the catalog fails")
+    void cancelledCatalogUnavailable() {
+        noCurrentSubscription(entry(SubscriptionHistoryEntry.Status.CANCELLED, Instant.parse("2026-12-20T12:00:00Z")));
+        when(billingApiClient.getPlans()).thenThrow(new BillingApiClient.ServiceUnavailableException("down"));
+
+        assertThat(useCase.execute(TOKEN)).isEqualTo(new DashboardView.Cancelled("Tu plan", "20/12/2026"));
+    }
+
+    @Test
+    @DisplayName("a CANCELLED one whose access already ended, or ends right now, is not \"access until\": none card")
+    void cancelledWithoutAccess() {
+        noCurrentSubscription(
+                entry(SubscriptionHistoryEntry.Status.CANCELLED, Instant.parse("2026-11-01T12:00:00Z")),
+                entry(SubscriptionHistoryEntry.Status.CANCELLED, NOW),
+                entry(SubscriptionHistoryEntry.Status.CANCELLED, null));
+
+        assertThat(useCase.execute(TOKEN)).isEqualTo(new DashboardView.None());
+        verifyNoInteractions(billingApiClient);
+    }
+
+    @Test
+    @DisplayName("only a CANCELLED entry counts: other states with a future end date keep the none card")
+    void otherStatesAreIgnored() {
+        noCurrentSubscription(
+                entry(SubscriptionHistoryEntry.Status.ACTIVE, Instant.parse("2026-12-20T12:00:00Z")),
+                entry(SubscriptionHistoryEntry.Status.UNKNOWN, Instant.parse("2026-12-20T12:00:00Z")));
+
+        assertThat(useCase.execute(TOKEN)).isEqualTo(new DashboardView.None());
+    }
+
+    @Test
+    @DisplayName("a history failure leaves the none card, logs a warning and never the token")
+    void historyUnavailable() {
+        when(subscriptionApiClient.getCurrentSubscription(TOKEN)).thenReturn(new CurrentSubscription.None());
+        when(subscriptionApiClient.listSubscriptionHistory(TOKEN))
+                .thenThrow(new BillingApiClient.ServiceUnavailableException("down"));
+
+        assertThat(useCase.execute(TOKEN)).isEqualTo(new DashboardView.None());
+        assertThat(logs.list).anySatisfy(event -> assertThat(event.getLevel()).isEqualTo(Level.WARN))
+                .noneMatch(event -> event.getFormattedMessage().contains(TOKEN));
+    }
+
+    @Test
+    @DisplayName("a current subscription never reads the history")
+    void currentSubscriptionSkipsHistory() {
+        when(subscriptionApiClient.getCurrentSubscription(TOKEN))
+                .thenReturn(new CurrentSubscription.Expired("plan-1", END));
+        when(billingApiClient.getPlans()).thenReturn(PLANS);
+
+        useCase.execute(TOKEN);
+
+        verify(subscriptionApiClient, never()).listSubscriptionHistory(TOKEN);
     }
 }

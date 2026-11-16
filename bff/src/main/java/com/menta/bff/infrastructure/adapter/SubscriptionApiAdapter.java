@@ -1,5 +1,6 @@
 package com.menta.bff.infrastructure.adapter;
 
+import com.menta.bff.application.dto.CancelledSubscription;
 import com.menta.bff.application.dto.CurrentSubscription;
 import com.menta.bff.application.dto.SubscriptionCheckout;
 import com.menta.bff.application.dto.SubscriptionHistoryEntry;
@@ -39,6 +40,8 @@ public class SubscriptionApiAdapter implements SubscriptionApiClient {
     private static final String SUBSCRIPTIONS = "/api/v1/billing/subscriptions";
     private static final String PAYMENT_METHOD = "MERCADO_PAGO";
     private static final String NO_SUBSCRIPTION = "NO_SUBSCRIPTION";
+    private static final String NOT_CANCELLABLE = "SUBSCRIPTION_NOT_FOUND";
+    private static final String CANCEL_CONFLICT = "SUBSCRIPTION_CONFLICT";
     private static final String ALREADY_ACTIVE = "SUBSCRIPTION_ALREADY_ACTIVE";
     private static final String PLAN_NOT_AVAILABLE = "PLAN_NOT_AVAILABLE";
 
@@ -112,6 +115,48 @@ public class SubscriptionApiAdapter implements SubscriptionApiClient {
             log.error("Billing API subscription checkout call failed: {}", e.getClass().getSimpleName());
             throw new BillingApiClient.ServiceUnavailableException("Billing API unavailable", e);
         }
+    }
+
+    @Override
+    public CancelledSubscription cancelSubscription(String accessToken) {
+        try {
+            CancelWire wire = webClient.delete().uri(ME)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                    .exchangeToMono(SubscriptionApiAdapter::readCancel)
+                    .timeout(properties.getTimeout())
+                    .block();
+            if (wire == null || wire.accessEndsAt() == null) {
+                throw unavailable("cancel response is incomplete");
+            }
+            return new CancelledSubscription(wire.accessEndsAt());
+        } catch (SubscriptionApiClient.SubscriptionFailureException
+                 | BillingApiClient.ServiceUnavailableException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            log.error("Billing API subscription cancel call failed: {}", e.getClass().getSimpleName());
+            throw new BillingApiClient.ServiceUnavailableException("Billing API unavailable", e);
+        }
+    }
+
+    private static Mono<CancelWire> readCancel(ClientResponse response) {
+        int status = response.statusCode().value();
+        if (response.statusCode().is2xxSuccessful()) {
+            return response.bodyToMono(CancelWire.class);
+        }
+        return response.bodyToMono(ProblemWire.class)
+                .onErrorResume(e -> Mono.empty())
+                .defaultIfEmpty(new ProblemWire(null, null))
+                .flatMap(problem -> Mono.error(mapCancelError(status, problem)));
+    }
+
+    private static RuntimeException mapCancelError(int status, ProblemWire problem) {
+        if (status == 404 && NOT_CANCELLABLE.equals(problem.code())) {
+            return new SubscriptionApiClient.NoCancellableSubscriptionException("No cancellable subscription");
+        }
+        if (status == 409 && CANCEL_CONFLICT.equals(problem.code())) {
+            return new SubscriptionApiClient.SubscriptionConflictException("Subscription changed concurrently");
+        }
+        return unavailable("answered " + status);
     }
 
     private Mono<CheckoutWire> readCheckout(ClientResponse response) {
@@ -211,6 +256,10 @@ public class SubscriptionApiAdapter implements SubscriptionApiClient {
      * The dates are {@code null} while the subscription is pending payment, so they are optional.
      */
     private record HistoryWire(String planId, String status, Instant startDate, Instant endDate, String type) {
+    }
+
+    /** The only field of the cancel answer the BFF reads; the rest of the body is ignored. */
+    private record CancelWire(Instant accessEndsAt) {
     }
 
     private record CheckoutRequest(String planId, String paymentMethod, String idempotencyKey) {
