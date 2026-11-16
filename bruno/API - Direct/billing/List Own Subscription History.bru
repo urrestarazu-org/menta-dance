@@ -1,0 +1,49 @@
+meta {
+  name: List Own Subscription History
+  type: http
+  seq: 17
+}
+
+get {
+  url: {{baseUrl}}/api/v1/billing/subscriptions/me/history
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  US-BILLING-004, #766. Lists every subscription of the authenticated user,
+  newest first by creation date, in any status. Run Auth Login first with a
+  student; the user always comes from the token, never from a parameter.
+
+  Success contract (200, [] when the student has no subscriptions):
+    [{ id, planId, status, startDate, endDate, type }]
+
+    status → PENDING | ACTIVE | EXPIRED | CANCELLED
+             (startDate and endDate are null while PENDING)
+    type   → TRIAL (granted by an admin) | PAID
+
+  Never includes the subscription's courses.
+
+  Error contract:
+    401 → no access token
+}
+
+tests {
+  test("Returns the student's subscriptions with their type", function() {
+    expect(res.getStatus()).to.equal(200);
+    const history = res.getBody();
+    expect(history).to.be.an("array");
+    history.forEach(function(subscription) {
+      expect(subscription).to.have.all.keys("id", "planId", "status", "startDate", "endDate", "type");
+      expect(["PAID", "TRIAL"]).to.include(subscription.type);
+    });
+  });
+}
+
+assert {
+  res.status: eq 200
+}

@@ -41,21 +41,22 @@ public class GetCurrentSubscriptionUseCaseImpl implements GetCurrentSubscription
         if (subscription.getStatus() == SubscriptionStatus.PENDING) {
             return new CurrentSubscriptionResult.PendingPayment(
                 subscription.getId().toString(), subscription.getPlanId().toString(),
-                subscription.getCheckoutUrl().orElse(null)
+                subscription.getCheckoutUrl().orElse(null), subscription.getType()
             );
         }
         var now = clock.now();
         return new CurrentSubscriptionResult.Active(
             subscription.getId().toString(), subscription.getPlanId().toString(),
             subscription.getStartDate().orElse(null), subscription.getEndDate().orElse(null),
-            subscription.daysRemaining(now).orElse(0L), subscription.isExpiringSoon(now)
+            subscription.daysRemaining(now).orElse(0L), subscription.isExpiringSoon(now), subscription.getType()
         );
     }
 
     private CurrentSubscriptionResult fromExpired(Subscription subscription) {
         return new CurrentSubscriptionResult.Expired(
             subscription.getId().toString(), subscription.getPlanId().toString(),
-            subscription.getStartDate().orElse(null), subscription.getEndDate().orElse(null)
+            subscription.getStartDate().orElse(null), subscription.getEndDate().orElse(null),
+            subscription.getType()
         );
     }
 }
