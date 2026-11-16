@@ -275,6 +275,57 @@ paths:
                     code: PAYMENT_PREFERENCE_UNAVAILABLE
 
   /api/v1/billing/subscriptions/me:
+    get:
+      tags: [Suscripciones]
+      summary: Consultar la propia suscripción
+      description: |
+        Devuelve la suscripción vigente del usuario autenticado (US-BILLING-004). El usuario sale
+        del token: no hay parámetro de usuario. Resuelve un único estado, en este orden: la
+        suscripción `PENDING` o `ACTIVE` que ocupa el lugar del alumno y, si no tiene ninguna, la
+        `EXPIRED` más reciente. Una suscripción `CANCELLED` nunca se resuelve aquí, aunque todavía
+        otorgue acceso: se lee desde `GET /me/history`.
+
+        `type` (#766) distingue una prueba asignada por un admin (`TRIAL`) de una suscripción
+        pagada (`PAID`). Es un campo agregado: ningún otro campo cambió, y un cliente que lo
+        ignora sigue funcionando.
+      operationId: getOwnSubscription
+      responses:
+        '200':
+          description: Suscripción vigente del usuario, en estado `ACTIVE`, `EXPIRED` o `PENDING`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentSubscriptionResponse'
+              examples:
+                prueba_activa:
+                  value:
+                    subscriptionId: 6f1c2a9e-0d4b-4a57-9a43-2f6f3c1d8e10
+                    planId: 0b6e9d3a-5c1f-4e2b-8a7d-1c9f0e2d3b4a
+                    status: ACTIVE
+                    startDate: '2026-11-10T12:00:00Z'
+                    endDate: '2026-11-17T12:00:00Z'
+                    daysRemaining: 7
+                    expiringSoon: true
+                    checkoutUrl: null
+                    plansUrl: null
+                    type: TRIAL
+        '401':
+          description: Falta un access token válido.
+        '404':
+          description: El usuario no tiene ninguna suscripción `PENDING`, `ACTIVE` ni `EXPIRED`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                sin_suscripcion:
+                  value:
+                    type: https://menta.dance/problems/no_subscription
+                    title: Not Found
+                    status: 404
+                    detail: No tenés ninguna suscripción.
+                    code: NO_SUBSCRIPTION
+                    plansUrl: /api/v1/billing/plans
     delete:
       tags: [Suscripciones]
       summary: Cancelar la propia suscripción activa
@@ -326,6 +377,30 @@ paths:
                     status: 409
                     detail: La suscripción fue modificada por otra operación. Reintentá la solicitud.
                     code: SUBSCRIPTION_CONFLICT
+
+  /api/v1/billing/subscriptions/me/history:
+    get:
+      tags: [Suscripciones]
+      summary: Listar el historial de suscripciones propio
+      description: |
+        Devuelve todas las suscripciones del usuario autenticado, de la más nueva a la más vieja
+        por fecha de creación, en cualquier estado (US-BILLING-004). El usuario sale del token.
+        Sin suscripciones responde `200 []`. Nunca incluye los cursos de cada suscripción.
+
+        `type` (#766) distingue una prueba asignada por un admin (`TRIAL`) de una suscripción
+        pagada (`PAID`) en cada elemento.
+      operationId: listOwnSubscriptionHistory
+      responses:
+        '200':
+          description: Suscripciones del usuario, de la más nueva a la más vieja; `[]` si no tiene.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SubscriptionHistoryItemResponse'
+        '401':
+          description: Falta un access token válido.
 
   /api/v1/admin/billing/subscriptions/{subscriptionId}:
     delete:
@@ -1363,6 +1438,82 @@ components:
           description: >-
             `endDate` de la suscripción cancelada más reciente que aún otorga acceso para
             este plan.
+
+    CurrentSubscriptionResponse:
+      type: object
+      description: |
+        Un único objeto plano discriminado por `status`. Todos los campos están siempre presentes;
+        los que no aplican a un estado van en `null`, nunca se omiten:
+
+        - `ACTIVE`: `startDate`, `endDate`, `daysRemaining` y `expiringSoon` con valor;
+          `checkoutUrl` y `plansUrl` en `null`.
+        - `EXPIRED`: `startDate`, `endDate` y `plansUrl` (catálogo de planes, para renovar) con
+          valor; `daysRemaining`, `expiringSoon` y `checkoutUrl` en `null`.
+        - `PENDING`: sólo `checkoutUrl`; fechas y campos calculados en `null`.
+
+        `type` tiene valor en los tres estados.
+      required:
+        [subscriptionId, planId, status, startDate, endDate, daysRemaining, expiringSoon, checkoutUrl, plansUrl, type]
+      properties:
+        subscriptionId:
+          type: string
+          format: uuid
+        planId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [ACTIVE, EXPIRED, PENDING]
+        startDate:
+          type: ["string", "null"]
+          format: date-time
+        endDate:
+          type: ["string", "null"]
+          format: date-time
+        daysRemaining:
+          type: ["integer", "null"]
+          description: Días que faltan hasta `endDate`; sólo en `ACTIVE`.
+        expiringSoon:
+          type: ["boolean", "null"]
+          description: "`true` si faltan 7 días o menos para `endDate`; sólo en `ACTIVE`."
+        checkoutUrl:
+          type: ["string", "null"]
+          format: uri
+          description: URL de Checkout Pro para completar el pago; sólo en `PENDING`.
+        plansUrl:
+          type: ["string", "null"]
+          description: Ruta del catálogo de planes, para renovar; sólo en `EXPIRED`.
+        type:
+          type: string
+          enum: [PAID, TRIAL]
+          description: "`TRIAL`: prueba asignada por un admin. `PAID`: suscripción pagada."
+
+    SubscriptionHistoryItemResponse:
+      type: object
+      description: |
+        Una suscripción del historial. `startDate` y `endDate` van en `null` (nunca se omiten)
+        mientras la suscripción está `PENDING`.
+      required: [id, planId, status, startDate, endDate, type]
+      properties:
+        id:
+          type: string
+          format: uuid
+        planId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PENDING, ACTIVE, EXPIRED, CANCELLED]
+        startDate:
+          type: ["string", "null"]
+          format: date-time
+        endDate:
+          type: ["string", "null"]
+          format: date-time
+        type:
+          type: string
+          enum: [PAID, TRIAL]
+          description: "`TRIAL`: prueba asignada por un admin. `PAID`: suscripción pagada."
 
     CancelSubscriptionResponse:
       type: object

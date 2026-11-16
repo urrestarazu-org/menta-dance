@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import com.menta.billing.application.dto.SubscriptionHistoryEntry;
 import com.menta.billing.application.port.out.SubscriptionRepository;
 import com.menta.billing.domain.model.SubscriptionStatus;
+import com.menta.billing.domain.model.SubscriptionType;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -31,11 +32,12 @@ class GetSubscriptionHistoryUseCaseImplTest {
         UUID userId = UUID.randomUUID();
         SubscriptionHistoryEntry newest = new SubscriptionHistoryEntry(
             UUID.randomUUID().toString(), UUID.randomUUID().toString(), SubscriptionStatus.ACTIVE,
-            NOW.minusSeconds(86400), NOW.plusSeconds(86400 * 10), NOW
+            NOW.minusSeconds(86400), NOW.plusSeconds(86400 * 10), NOW, SubscriptionType.TRIAL
         );
         SubscriptionHistoryEntry oldest = new SubscriptionHistoryEntry(
             UUID.randomUUID().toString(), UUID.randomUUID().toString(), SubscriptionStatus.EXPIRED,
-            NOW.minusSeconds(86400 * 60), NOW.minusSeconds(86400 * 30), NOW.minusSeconds(86400 * 60)
+            NOW.minusSeconds(86400 * 60), NOW.minusSeconds(86400 * 30), NOW.minusSeconds(86400 * 60),
+            SubscriptionType.PAID
         );
         when(subscriptionRepository.findHistoryByUserId(userId)).thenReturn(List.of(newest, oldest));
 
