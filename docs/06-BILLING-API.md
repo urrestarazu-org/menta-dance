@@ -40,6 +40,8 @@ son exclusivas de `ADMIN`. Los errores usan `application/problem+json`.
 | `GET /plans` | Ninguna (público) | `200` con `{ plans: [...] }`, `[]` si no hay planes activos |
 | `GET /plans/{planId}` | Ninguna (público) | `200` con el detalle completo del plan |
 | `POST /subscriptions` | Access token válido | `201` con la suscripción pendiente y la URL de Checkout Pro |
+| `GET /subscriptions/me` | Access token válido | `200` con la suscripción vigente y su `type`; `404 NO_SUBSCRIPTION` si no tiene |
+| `GET /subscriptions/me/history` | Access token válido | `200` con todas las suscripciones propias y su `type`, de la más nueva a la más vieja; `[]` si no hay |
 | `GET /payments/me` | Access token válido | `200` con los pagos propios, del más nuevo al más viejo; `[]` si no hay |
 | `POST /api/v1/admin/billing/plans` | Access token con rol `ADMIN` | `201` con el plan creado, mismo contrato que `GET /plans/{planId}` |
 
@@ -93,6 +95,46 @@ con un rol que no es `ADMIN`, `403` (regla genérica `/api/v1/admin/**` de `Secu
 No hay tabla de auditoría para planes: el alta queda registrada en el log de la API con el
 id del plan y el del admin. La request de Bruno es `bruno/API - Direct/billing/admin/Create
 Plan.bru`.
+
+## Suscripción propia (`GET /api/v1/billing/subscriptions/me` y `/me/history`)
+
+Requieren un access token válido; el usuario sale del token, nunca de un parámetro
+(US-BILLING-004).
+
+`GET /me` resuelve un único estado: la suscripción `PENDING` o `ACTIVE` que ocupa el lugar del
+alumno y, si no tiene ninguna, la `EXPIRED` más reciente. Una `CANCELLED` nunca se resuelve aquí,
+aunque todavía otorgue acceso: el cliente la lee desde el historial. Sin ninguna de esas responde
+`404 NO_SUBSCRIPTION` con `plansUrl`.
+
+```json
+{
+  "subscriptionId": "…",
+  "planId": "…",
+  "status": "ACTIVE",
+  "startDate": "2026-11-10T12:00:00Z",
+  "endDate": "2026-11-17T12:00:00Z",
+  "daysRemaining": 7,
+  "expiringSoon": true,
+  "checkoutUrl": null,
+  "plansUrl": null,
+  "type": "TRIAL"
+}
+```
+
+- Todos los campos están siempre presentes; los que no aplican al estado van en `null`. `ACTIVE`
+  trae fechas, `daysRemaining` y `expiringSoon` (7 días o menos); `EXPIRED` trae fechas y
+  `plansUrl`; `PENDING` sólo `checkoutUrl`.
+- `GET /me/history` devuelve `[{ id, planId, status, startDate, endDate, type }]`, de la más
+  nueva a la más vieja por fecha de creación, en cualquier estado (`PENDING`, `ACTIVE`, `EXPIRED`,
+  `CANCELLED`). Las fechas van en `null` mientras está `PENDING`. Sin suscripciones responde
+  `200 []`; nunca incluye los cursos.
+- `type` (#766) es `TRIAL` para una prueba asignada por un admin
+  (`POST /api/v1/admin/billing/subscriptions/trial`) y `PAID` para una suscripción pagada. Es
+  descriptivo: una prueba da el mismo acceso que una pagada. Se agregó sin cambiar ningún otro
+  campo, así que un cliente que lo ignora sigue funcionando.
+- El contrato vive en `api/openapi/billing-v1.yaml` y `OwnSubscriptionContractTest` falla si los
+  records, los enums del dominio y el YAML divergen. Las requests de Bruno son
+  `bruno/API - Direct/billing/Get Own Subscription.bru` y `List Own Subscription History.bru`.
 
 ## Pagos propios (`GET /api/v1/billing/payments/me`)
 

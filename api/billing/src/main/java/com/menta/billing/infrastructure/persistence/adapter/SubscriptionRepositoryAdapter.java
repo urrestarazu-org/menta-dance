@@ -7,6 +7,7 @@ import com.menta.billing.domain.model.PaymentId;
 import com.menta.billing.domain.model.PlanId;
 import com.menta.billing.domain.model.Subscription;
 import com.menta.billing.domain.model.SubscriptionStatus;
+import com.menta.billing.domain.model.SubscriptionType;
 import com.menta.billing.infrastructure.persistence.entity.SubscriptionCourseJpaEntity;
 import com.menta.billing.infrastructure.persistence.entity.SubscriptionJpaEntity;
 import com.menta.billing.infrastructure.persistence.mapper.SubscriptionJpaMapper;
@@ -162,7 +163,8 @@ public class SubscriptionRepositoryAdapter implements SubscriptionRepository {
             SubscriptionStatus.valueOf(entity.getStatus()),
             entity.getStartDate(),
             entity.getEndDate(),
-            entity.getCreatedAt()
+            entity.getCreatedAt(),
+            SubscriptionType.valueOf(entity.getType())
         );
     }
 

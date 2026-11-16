@@ -15,6 +15,7 @@ import com.menta.billing.domain.exception.SubscriptionAlreadyActiveException;
 import com.menta.billing.domain.model.PaymentId;
 import com.menta.billing.domain.model.PlanId;
 import com.menta.billing.domain.model.Subscription;
+import com.menta.billing.domain.model.SubscriptionType;
 import com.menta.billing.domain.model.TrialGrant;
 import com.menta.billing.infrastructure.persistence.entity.SubscriptionCourseJpaEntity;
 import com.menta.billing.infrastructure.persistence.mapper.SubscriptionJpaMapper;
@@ -342,6 +343,21 @@ class SubscriptionRepositoryAdapterTest {
         assertThat(found).extracting(SubscriptionHistoryEntry::id)
             .containsExactly(newer.getId().toString(), older.getId().toString());
         verify(courseJpaRepository, never()).findBySubscriptionId(any());
+    }
+
+    /** #766: each history row carries its persisted type, so a trial is told apart from a paid row. */
+    @Test
+    void findHistoryByUserId_maps_the_persisted_type_of_every_row() {
+        Subscription trial = trialSubscription();
+        Subscription paid = pending();
+        when(jpaRepository.findAllByUserIdOrderByCreatedAtDesc(USER_ID)).thenReturn(List.of(
+            SubscriptionJpaMapper.toEntity(trial), SubscriptionJpaMapper.toEntity(paid)
+        ));
+
+        List<SubscriptionHistoryEntry> found = adapter.findHistoryByUserId(USER_ID);
+
+        assertThat(found).extracting(SubscriptionHistoryEntry::type)
+            .containsExactly(SubscriptionType.TRIAL, SubscriptionType.PAID);
     }
 
     @Test
