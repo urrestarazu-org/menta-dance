@@ -1,5 +1,6 @@
 package com.menta.bff.application.port.out;
 
+import com.menta.bff.application.dto.CancelledSubscription;
 import com.menta.bff.application.dto.CurrentSubscription;
 import com.menta.bff.application.dto.SubscriptionCheckout;
 import com.menta.bff.application.dto.SubscriptionHistoryEntry;
@@ -56,6 +57,20 @@ public interface SubscriptionApiClient {
      */
     SubscriptionCheckout createSubscriptionCheckout(String accessToken, String planId, String idempotencyKey);
 
+    /**
+     * Cancels the caller's own {@code ACTIVE} subscription ({@code DELETE /api/v1/billing/subscriptions/me}).
+     * The renewal stops; the access lasts until the end of the paid period. Never retried here: the caller
+     * decides, because the call is not idempotent from the student's point of view.
+     *
+     * @param accessToken caller's access token
+     * @return when the access ends
+     * @throws NoCancellableSubscriptionException if there is no {@code ACTIVE} subscription to cancel (404)
+     * @throws SubscriptionConflictException      if the subscription changed concurrently (409)
+     * @throws BillingApiClient.ServiceUnavailableException on any other outcome: 401, any other 4xx or 5xx,
+     *         an unreadable or incomplete body, a timeout or a transport error
+     */
+    CancelledSubscription cancelSubscription(String accessToken);
+
     /** Base of the failures this port defines, so adapters can tell them from transport errors. */
     abstract class SubscriptionFailureException extends RuntimeException {
         protected SubscriptionFailureException(String message) {
@@ -90,6 +105,13 @@ public interface SubscriptionApiClient {
     /** The subscription changed while it was being processed (409 {@code SUBSCRIPTION_CONFLICT}). */
     class SubscriptionConflictException extends SubscriptionFailureException {
         public SubscriptionConflictException(String message) {
+            super(message);
+        }
+    }
+
+    /** The caller has no {@code ACTIVE} subscription to cancel (404 {@code SUBSCRIPTION_NOT_FOUND}). */
+    class NoCancellableSubscriptionException extends SubscriptionFailureException {
+        public NoCancellableSubscriptionException(String message) {
             super(message);
         }
     }

@@ -18,6 +18,8 @@ import com.menta.bff.application.usecase.AccountActivationUseCase;
 import com.menta.bff.application.usecase.AccountActivationUseCaseImpl;
 import com.menta.bff.application.usecase.BatchCreateCourseSessionsUseCase;
 import com.menta.bff.application.usecase.BatchCreateCourseSessionsUseCaseImpl;
+import com.menta.bff.application.usecase.CancelSubscriptionUseCase;
+import com.menta.bff.application.usecase.CancelSubscriptionUseCaseImpl;
 import com.menta.bff.application.usecase.ChangeUserRoleUseCase;
 import com.menta.bff.application.usecase.ChangeUserRoleUseCaseImpl;
 import com.menta.bff.application.usecase.CreateCourseSessionUseCase;
@@ -199,9 +201,17 @@ public class UseCaseConfig {
     @Bean
     public GetDashboardViewUseCase getDashboardViewUseCase(
             BillingApiClient billingApiClient, SubscriptionApiClient subscriptionApiClient,
-            ClassesProperties classesProperties) {
+            ClassesProperties classesProperties, ObjectProvider<Clock> clockProvider) {
         return new GetDashboardViewUseCaseImpl(
-                billingApiClient, subscriptionApiClient, classesProperties.getDisplayZone());
+                billingApiClient, subscriptionApiClient, classesProperties.getDisplayZone(),
+                clockProvider.getIfAvailable(Clock::systemUTC));
+    }
+
+    /** The student cancelling their own subscription (#363). The access end is shown in the display zone. */
+    @Bean
+    public CancelSubscriptionUseCase cancelSubscriptionUseCase(
+            SubscriptionApiClient subscriptionApiClient, ClassesProperties classesProperties) {
+        return new CancelSubscriptionUseCaseImpl(subscriptionApiClient, classesProperties.getDisplayZone());
     }
 
     /** The "Continuar" section of a student's dashboard (#363). */

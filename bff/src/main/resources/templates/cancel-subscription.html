@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('Cancelar suscripción', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<div class="max-w-xl">
+    <h1 class="mb-6">Cancelar suscripción</h1>
+
+    <form th:action="@{/suscripciones/cancelar}" method="post" class="card space-y-4">
+        <p th:if="${planName != null}">
+            Suscripción: <strong th:text="${planName}">Plan Mensual</strong>.
+        </p>
+        <p>¿Cancelamos tu suscripción? Se cancela la renovación.</p>
+        <p th:if="${endDateLabel != null}"
+           th:text="'Mantenés el acceso hasta el ' + ${endDateLabel} + '.'">Mantenés el acceso hasta el 31/12/2026.</p>
+        <p th:if="${endDateLabel == null}">Mantenés el acceso hasta el fin del período que ya pagaste.</p>
+        <div class="flex items-center gap-4">
+            <button type="submit" class="btn btn-primary">Sí, cancelar suscripción</button>
+            <a th:href="@{/dashboard}">Volver</a>
+        </div>
+    </form>
+</div>
+</th:block>
+</body>
+</html>

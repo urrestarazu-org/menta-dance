@@ -3,11 +3,14 @@ package com.menta.bff.application.usecase;
 import com.menta.bff.application.dto.CurrentSubscription;
 import com.menta.bff.application.dto.DashboardView;
 import com.menta.bff.application.dto.PlanSummary;
+import com.menta.bff.application.dto.SubscriptionHistoryEntry;
 import com.menta.bff.application.port.out.BillingApiClient;
 import com.menta.bff.application.port.out.SubscriptionApiClient;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -27,11 +30,10 @@ public class GetDashboardViewUseCaseImpl implements GetDashboardViewUseCase {
 
     static final String GENERIC_PLAN_NAME = "Tu plan";
 
-    private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
-
     private final BillingApiClient billingApiClient;
     private final SubscriptionApiClient subscriptionApiClient;
     private final ZoneId displayZone;
+    private final Clock clock;
 
     @Override
     public DashboardView execute(String accessToken) {
@@ -44,7 +46,7 @@ public class GetDashboardViewUseCaseImpl implements GetDashboardViewUseCase {
             return new DashboardView.Unavailable();
         }
         return switch (current) {
-            case CurrentSubscription.None none -> new DashboardView.None();
+            case CurrentSubscription.None none -> cancelledWithAccess(accessToken);
             case CurrentSubscription.Active active -> new DashboardView.Active(
                     planName(active.planId()), label(active.endDate()),
                     remainingLabel(active.daysRemaining()), active.expiringSoon());
@@ -52,6 +54,30 @@ public class GetDashboardViewUseCaseImpl implements GetDashboardViewUseCase {
             case CurrentSubscription.Expired expired -> new DashboardView.Expired(
                     planName(expired.planId()), label(expired.endDate()));
         };
+    }
+
+    /**
+     * {@code GET /me} never reports a CANCELLED subscription, so a student who cancelled and still has access
+     * looks like one who never subscribed. Only then is the history read, to tell them apart. A cancelled one
+     * whose access already ended is not "access until": it stays the none card. The history is enrichment: if
+     * it fails the card is the none card, never a broken dashboard.
+     */
+    private DashboardView cancelledWithAccess(String accessToken) {
+        Instant now = clock.instant();
+        try {
+            Optional<SubscriptionHistoryEntry> cancelled = subscriptionApiClient.listSubscriptionHistory(accessToken)
+                    .stream()
+                    .filter(entry -> entry.status() == SubscriptionHistoryEntry.Status.CANCELLED
+                            && entry.endDate() != null && entry.endDate().isAfter(now))
+                    .max(Comparator.comparing(SubscriptionHistoryEntry::endDate));
+            return cancelled.<DashboardView>map(entry -> new DashboardView.Cancelled(
+                            planName(entry.planId()), label(entry.endDate())))
+                    .orElseGet(DashboardView.None::new);
+        } catch (BillingApiClient.ServiceUnavailableException e) {
+            log.warn("Subscription history unavailable, rendering the card without it: {}",
+                    e.getClass().getSimpleName());
+            return new DashboardView.None();
+        }
     }
 
     private String planName(String planId) {
@@ -81,6 +107,6 @@ public class GetDashboardViewUseCaseImpl implements GetDashboardViewUseCase {
     }
 
     private String label(Instant instant) {
-        return DATE.format(instant.atZone(displayZone));
+        return DateLabels.of(instant, displayZone);
     }
 }

@@ -25,7 +25,10 @@ class DashboardSubscriptionIntegrationTest extends BaseIntegrationTest {
 
     private static final String PLANS = "/api/v1/billing/plans";
     private static final String ME = "/api/v1/billing/subscriptions/me";
+    private static final String HISTORY = "/api/v1/billing/subscriptions/me/history";
     private static final String CARD_HEADING = "Mi suscripción";
+    private static final String CANCEL_PATH = "href=\"/suscripciones/cancelar\"";
+    private static final String NO_SUBSCRIPTION = "{\"status\":404,\"code\":\"NO_SUBSCRIPTION\"}";
 
     private static final String PLANS_BODY =
             """
@@ -43,6 +46,17 @@ class DashboardSubscriptionIntegrationTest extends BaseIntegrationTest {
         WIRE_MOCK_SERVER.stubFor(WireMock.get(urlEqualTo(ME)).willReturn(aResponse().withStatus(status)
                 .withHeader("Content-Type", status < 300 ? "application/json" : "application/problem+json")
                 .withBody(body)));
+    }
+
+    private static void stubHistory(int status, String body) {
+        WIRE_MOCK_SERVER.stubFor(WireMock.get(urlEqualTo(HISTORY)).willReturn(aResponse().withStatus(status)
+                .withHeader("Content-Type", status < 300 ? "application/json" : "application/problem+json")
+                .withBody(body)));
+    }
+
+    private static String historyOf(String status, String endDate) {
+        return "[{\"planId\":\"plan-1\",\"status\":\"%s\",\"startDate\":\"2020-01-01T15:00:00Z\","
+                .formatted(status) + "\"endDate\":\"%s\",\"type\":\"PAID\"}]".formatted(endDate);
     }
 
     private Cookie logIn(String role) throws Exception {
@@ -87,9 +101,10 @@ class DashboardSubscriptionIntegrationTest extends BaseIntegrationTest {
 
         assertThat(main).contains("<h2", CARD_HEADING).contains("Plan Mensual")
                 .contains("Activa hasta el 31/10/2026").contains("Vence en 17 días")
-                .contains("href=\"/plans\"")
+                .contains("href=\"/plans\"").contains(CANCEL_PATH).contains("Cancelar suscripción")
                 .doesNotContain("Está por vencer").doesNotContain("Todavía no tenés");
         assertRestOfDashboard(main);
+        WIRE_MOCK_SERVER.verify(0, getRequestedFor(urlEqualTo(HISTORY)));
         WIRE_MOCK_SERVER.verify(getRequestedFor(urlEqualTo(ME))
                 .withHeader("Authorization", equalTo("Bearer " + TestAccessTokens.withRole("STUDENT"))));
     }
@@ -121,6 +136,56 @@ class DashboardSubscriptionIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("without a subscription but with a CANCELLED one still granting access, the card says until when")
+    void cancelledWithAccess() throws Exception {
+        stubPlans();
+        stubMe(404, NO_SUBSCRIPTION);
+        stubHistory(200, historyOf("CANCELLED", "2099-12-31T15:00:00Z"));
+
+        String main = studentDashboard();
+
+        assertThat(main).contains(CARD_HEADING).contains("Plan Mensual")
+                .contains("Cancelada, acceso hasta el 31/12/2099")
+                .contains("href=\"/plans\"").doesNotContain(CANCEL_PATH)
+                .doesNotContain("Todavía no tenés una suscripción.");
+        assertRestOfDashboard(main);
+    }
+
+    @Test
+    @DisplayName("a CANCELLED subscription whose access already ended leaves the card as without a subscription")
+    void cancelledWithoutAccess() throws Exception {
+        stubMe(404, NO_SUBSCRIPTION);
+        stubHistory(200, historyOf("CANCELLED", "2020-12-31T15:00:00Z"));
+
+        String main = studentDashboard();
+
+        assertThat(main).contains("Todavía no tenés una suscripción.")
+                .doesNotContain("Cancelada, acceso hasta").doesNotContain(CANCEL_PATH);
+        WIRE_MOCK_SERVER.verify(0, getRequestedFor(urlEqualTo(PLANS)));
+    }
+
+    @Test
+    @DisplayName("a history failure leaves the card as without a subscription and the rest of the dashboard intact")
+    void historyUnavailable() throws Exception {
+        stubMe(404, NO_SUBSCRIPTION);
+        stubHistory(503, "{\"status\":503,\"code\":\"SECRET_DETAIL\"}");
+
+        String main = studentDashboard();
+
+        assertThat(main).contains("Todavía no tenés una suscripción.").doesNotContain("SECRET_DETAIL")
+                .doesNotContain("Cancelada, acceso hasta");
+        assertRestOfDashboard(main);
+    }
+
+    @Test
+    @DisplayName("a staff member gets no history call either")
+    void staffGetsNoHistoryCall() throws Exception {
+        mockMvc.perform(get("/dashboard").cookie(logIn("ADMIN"))).andExpect(status().isOk());
+
+        WIRE_MOCK_SERVER.verify(0, getRequestedFor(urlEqualTo(HISTORY)));
+    }
+
+    @Test
     @DisplayName("a PENDING subscription says the payment is pending and never exposes the checkout URL")
     void pending() throws Exception {
         stubPlans();
@@ -133,7 +198,7 @@ class DashboardSubscriptionIntegrationTest extends BaseIntegrationTest {
         String main = studentDashboard();
 
         assertThat(main).contains("Plan Mensual").contains("Tu suscripción está pendiente de pago.")
-                .contains("href=\"/plans\"").doesNotContain("pay.example.com");
+                .contains("href=\"/plans\"").doesNotContain("pay.example.com").doesNotContain(CANCEL_PATH);
     }
 
     @Test
@@ -150,7 +215,8 @@ class DashboardSubscriptionIntegrationTest extends BaseIntegrationTest {
         String main = studentDashboard();
 
         assertThat(main).contains("Plan Mensual").contains("Venció el 31/08/2026")
-                .contains("href=\"/plans\"").doesNotContain("href=\"/api/v1/billing/plans\"");
+                .contains("href=\"/plans\"").doesNotContain("href=\"/api/v1/billing/plans\"")
+                .doesNotContain(CANCEL_PATH);
     }
 
     @Test

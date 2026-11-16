@@ -130,6 +130,11 @@ public class BffSecurityConfig {
                         // Subscription checkout (#361): students only. Any other role gets 403
                         // before the controller runs; anonymous callers go to /login.
                         .requestMatchers(HttpMethod.POST, "/suscripciones").hasRole("STUDENT")
+                        // Cancelling the own subscription (#363): students only, exact path, GET (the
+                        // confirmation) and POST (the cancel, CSRF-protected). Any other role gets 403
+                        // before the controller runs; anonymous callers go to /login.
+                        .requestMatchers(HttpMethod.GET, "/suscripciones/cancelar").hasRole("STUDENT")
+                        .requestMatchers(HttpMethod.POST, "/suscripciones/cancelar").hasRole("STUDENT")
                         // History of subscriptions and payments (#363): students only, exact path and
                         // GET-only. Any other role gets 403 before the controller runs; anonymous go to /login.
                         .requestMatchers(HttpMethod.GET, "/dashboard/history").hasRole("STUDENT")

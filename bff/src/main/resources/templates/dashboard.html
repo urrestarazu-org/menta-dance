@@ -7,6 +7,11 @@
 
 <p class="mb-6">Hola, <span th:text="${username}">User</span>!</p>
 
+<!-- Outcome of cancelling the subscription (#363): a flash notice, so it shows once. -->
+<div class="mb-6" th:if="${subscriptionNotice != null}">
+    <div th:replace="~{fragments/components :: alert(${subscriptionNoticeKind}, ${subscriptionNotice})}"></div>
+</div>
+
 <!-- Subscription card (#363): only a student gets ${subscription}; its state is always said in text. -->
 <section class="card mb-6" th:if="${subscription != null}" aria-labelledby="subscription-heading">
     <h2 id="subscription-heading">Mi suscripción</h2>
@@ -21,6 +26,12 @@
             <p class="mt-2" th:if="${subscription.remainingLabel() != null}"
                th:text="${subscription.remainingLabel()}">Vence en 17 días</p>
             <p class="mt-2" th:if="${subscription.expiringSoon()}"><span class="badge badge-warning">Está por vencer</span></p>
+            <p class="mt-4"><a th:href="@{/plans}">Ver planes</a></p>
+            <p class="mt-2"><a th:href="@{/suscripciones/cancelar}">Cancelar suscripción</a></p>
+        </th:block>
+        <th:block th:case="'CANCELLED'">
+            <p class="mt-2 font-semibold" th:text="${subscription.planName()}">Plan Mensual</p>
+            <p class="mt-2" th:text="'Cancelada, acceso hasta el ' + ${subscription.accessEndsLabel()}">Cancelada, acceso hasta el 31/12/2026</p>
             <p class="mt-4"><a th:href="@{/plans}">Ver planes</a></p>
         </th:block>
         <th:block th:case="'PENDING'">
