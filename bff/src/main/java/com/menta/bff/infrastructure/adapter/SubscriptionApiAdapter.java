@@ -2,10 +2,13 @@ package com.menta.bff.infrastructure.adapter;
 
 import com.menta.bff.application.dto.CurrentSubscription;
 import com.menta.bff.application.dto.SubscriptionCheckout;
+import com.menta.bff.application.dto.SubscriptionHistoryEntry;
 import com.menta.bff.application.port.out.BillingApiClient;
 import com.menta.bff.application.port.out.SubscriptionApiClient;
 import com.menta.bff.infrastructure.config.BillingApiProperties;
 import java.time.Instant;
+import java.util.Arrays;
+import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
@@ -32,6 +35,7 @@ import reactor.core.publisher.Mono;
 public class SubscriptionApiAdapter implements SubscriptionApiClient {
 
     private static final String ME = "/api/v1/billing/subscriptions/me";
+    private static final String HISTORY = "/api/v1/billing/subscriptions/me/history";
     private static final String SUBSCRIPTIONS = "/api/v1/billing/subscriptions";
     private static final String PAYMENT_METHOD = "MERCADO_PAGO";
     private static final String NO_SUBSCRIPTION = "NO_SUBSCRIPTION";
@@ -64,6 +68,26 @@ public class SubscriptionApiAdapter implements SubscriptionApiClient {
         } catch (RuntimeException e) {
             // Class name only: nothing from the request (headers, body) may reach a log.
             log.error("Billing API current subscription call failed: {}", e.getClass().getSimpleName());
+            throw new BillingApiClient.ServiceUnavailableException("Billing API unavailable", e);
+        }
+    }
+
+    @Override
+    public List<SubscriptionHistoryEntry> listSubscriptionHistory(String accessToken) {
+        try {
+            HistoryWire[] wire = webClient.get().uri(HISTORY)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                    .exchangeToMono(SubscriptionApiAdapter::readHistory)
+                    .timeout(properties.getTimeout())
+                    .block();
+            if (wire == null) {
+                throw unavailable("subscription history has no body");
+            }
+            return Arrays.stream(wire).map(SubscriptionApiAdapter::toEntry).toList();
+        } catch (BillingApiClient.ServiceUnavailableException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            log.error("Billing API subscription history call failed: {}", e.getClass().getSimpleName());
             throw new BillingApiClient.ServiceUnavailableException("Billing API unavailable", e);
         }
     }
@@ -131,6 +155,23 @@ public class SubscriptionApiAdapter implements SubscriptionApiClient {
         return Mono.error(unavailable("answered " + status));
     }
 
+    private static Mono<HistoryWire[]> readHistory(ClientResponse response) {
+        if (response.statusCode().is2xxSuccessful()) {
+            return response.bodyToMono(HistoryWire[].class);
+        }
+        return response.releaseBody()
+                .then(Mono.error(unavailable("answered " + response.statusCode().value())));
+    }
+
+    private static SubscriptionHistoryEntry toEntry(HistoryWire wire) {
+        HistoryWire item = required(wire);
+        return new SubscriptionHistoryEntry(
+                required(item.planId()),
+                ApiEnums.parse(SubscriptionHistoryEntry.Status.class, required(item.status())),
+                item.startDate(), item.endDate(),
+                ApiEnums.parse(SubscriptionHistoryEntry.Type.class, required(item.type())));
+    }
+
     private static CurrentSubscription toDomain(CurrentWire wire) {
         if (wire.status() == null) {
             throw unavailable("subscription status is missing");
@@ -163,6 +204,13 @@ public class SubscriptionApiAdapter implements SubscriptionApiClient {
     private record CurrentWire(
             String subscriptionId, String planId, String status, Instant endDate,
             Long daysRemaining, Boolean expiringSoon) {
+    }
+
+    /**
+     * The fields of a history item the BFF reads; {@code id} and anything added later are ignored.
+     * The dates are {@code null} while the subscription is pending payment, so they are optional.
+     */
+    private record HistoryWire(String planId, String status, Instant startDate, Instant endDate, String type) {
     }
 
     private record CheckoutRequest(String planId, String paymentMethod, String idempotencyKey) {
