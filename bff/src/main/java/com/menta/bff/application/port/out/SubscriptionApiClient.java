@@ -2,7 +2,9 @@ package com.menta.bff.application.port.out;
 
 import com.menta.bff.application.dto.CurrentSubscription;
 import com.menta.bff.application.dto.SubscriptionCheckout;
+import com.menta.bff.application.dto.SubscriptionHistoryEntry;
 import java.time.Instant;
+import java.util.List;
 
 /**
  * Port for the authenticated subscription endpoints of the Billing API. Kept apart from
@@ -25,6 +27,17 @@ public interface SubscriptionApiClient {
      *         code, 401, 429, 5xx, an unexpected or incomplete answer, or a transport error
      */
     CurrentSubscription getCurrentSubscription(String accessToken);
+
+    /**
+     * Lists every subscription of the caller ({@code GET /api/v1/billing/subscriptions/me/history}),
+     * in any state, cancelled ones included (#363).
+     *
+     * @param accessToken caller's access token
+     * @return the subscriptions, newest first; empty when there is none
+     * @throws BillingApiClient.ServiceUnavailableException on any non-2xx answer, an unreadable or
+     *         incomplete body, a timeout or a transport error
+     */
+    List<SubscriptionHistoryEntry> listSubscriptionHistory(String accessToken);
 
     /**
      * Starts a Mercado Pago payment for a plan ({@code POST /api/v1/billing/subscriptions}).

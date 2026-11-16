@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('Mi historial', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<h1 class="mb-4">Mi historial</h1>
+
+<p class="mb-6"><a th:href="@{/dashboard}">Volver al panel</a></p>
+
+<!-- Subscriptions (#363): independent of the payments section; every state is said in text, not only in colour. -->
+<section class="card mb-6" aria-labelledby="subscription-history-heading">
+    <h2 id="subscription-history-heading">Suscripciones</h2>
+    <th:block th:if="${subscriptionHistory.unavailable()}">
+        <div class="mt-2" th:replace="~{fragments/components :: alert('info', 'No pudimos cargar tus suscripciones en este momento. Probá de nuevo en unos minutos.')}"></div>
+    </th:block>
+    <p class="mt-2" th:if="${subscriptionHistory.empty()}">
+        Todavía no tenés suscripciones.
+        <a th:href="@{/plans}">Ver planes</a>
+    </p>
+    <div class="mt-2 overflow-x-auto" th:unless="${subscriptionHistory.rows().isEmpty()}"
+         role="region" aria-label="Listado de suscripciones" tabindex="0">
+        <table class="w-full text-left">
+            <caption class="sr-only">Tus suscripciones, de la más nueva a la más vieja</caption>
+            <thead>
+            <tr class="border-b border-brand-deep/30">
+                <th scope="col" class="p-3 font-semibold">Plan</th>
+                <th scope="col" class="p-3 font-semibold">Estado</th>
+                <th scope="col" class="p-3 font-semibold">Inicio</th>
+                <th scope="col" class="p-3 font-semibold">Fin</th>
+            </tr>
+            </thead>
+            <tbody class="divide-y divide-brand-deep/15">
+            <tr th:each="row : ${subscriptionHistory.rows()}">
+                <th scope="row" class="p-3 font-semibold">
+                    <span th:text="${row.planName()}">Plan Mensual</span>
+                    <span class="badge badge-neutral" th:if="${row.trial()}">En prueba</span>
+                </th>
+                <td class="p-3"><span class="badge" th:classappend="${row.tone().cssClass()}" th:text="${row.statusLabel()}">Activa</span></td>
+                <td class="p-3 whitespace-nowrap" th:text="${row.startLabel()}">01/11/2026</td>
+                <td class="p-3 whitespace-nowrap" th:text="${row.endLabel()}">01/12/2026</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<!-- Payments (#363): the latest ones, newest first. -->
+<section class="card mb-6" aria-labelledby="payment-history-heading">
+    <h2 id="payment-history-heading">Pagos</h2>
+    <th:block th:if="${paymentHistory.unavailable()}">
+        <div class="mt-2" th:replace="~{fragments/components :: alert('info', 'No pudimos cargar tus pagos en este momento. Probá de nuevo en unos minutos.')}"></div>
+    </th:block>
+    <p class="mt-2" th:if="${paymentHistory.empty()}">Todavía no tenés pagos.</p>
+    <div class="mt-2 overflow-x-auto" th:unless="${paymentHistory.rows().isEmpty()}"
+         role="region" aria-label="Listado de pagos" tabindex="0">
+        <table class="w-full text-left">
+            <caption class="sr-only">Tus últimos pagos, del más nuevo al más viejo</caption>
+            <thead>
+            <tr class="border-b border-brand-deep/30">
+                <th scope="col" class="p-3 font-semibold">Fecha</th>
+                <th scope="col" class="p-3 font-semibold">Concepto</th>
+                <th scope="col" class="p-3 font-semibold">Monto</th>
+                <th scope="col" class="p-3 font-semibold">Medio de pago</th>
+                <th scope="col" class="p-3 font-semibold">Estado</th>
+            </tr>
+            </thead>
+            <tbody class="divide-y divide-brand-deep/15">
+            <tr th:each="row : ${paymentHistory.rows()}">
+                <td class="p-3 whitespace-nowrap" th:text="${row.dateLabel()}">02/11/2026</td>
+                <th scope="row" class="p-3 font-semibold" th:text="${row.concept()}">Plan Mensual</th>
+                <td class="p-3 whitespace-nowrap" th:text="${row.amountLabel()}">$ 4.999,00</td>
+                <td class="p-3" th:text="${row.methodLabel()}">Mercado Pago</td>
+                <td class="p-3"><span class="badge" th:classappend="${row.tone().cssClass()}" th:text="${row.statusLabel()}">Pagado</span></td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+</th:block>
+</body>
+</html>

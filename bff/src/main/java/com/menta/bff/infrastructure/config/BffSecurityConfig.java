@@ -130,6 +130,9 @@ public class BffSecurityConfig {
                         // Subscription checkout (#361): students only. Any other role gets 403
                         // before the controller runs; anonymous callers go to /login.
                         .requestMatchers(HttpMethod.POST, "/suscripciones").hasRole("STUDENT")
+                        // History of subscriptions and payments (#363): students only, exact path and
+                        // GET-only. Any other role gets 403 before the controller runs; anonymous go to /login.
+                        .requestMatchers(HttpMethod.GET, "/dashboard/history").hasRole("STUDENT")
                         // Management area (#354), from the most specific rule to the most general: the
                         // first match wins. The Management API decides the real authorization; these
                         // rules only keep the BFF from showing screens a role cannot use. Anonymous

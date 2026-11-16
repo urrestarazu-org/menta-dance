@@ -6,6 +6,7 @@ import com.menta.bff.application.port.out.AuthApiClient;
 import com.menta.bff.application.port.out.BillingApiClient;
 import com.menta.bff.application.port.out.CatalogApiClient;
 import com.menta.bff.application.port.out.InstructorDisplayNameSource;
+import com.menta.bff.application.port.out.PaymentApiClient;
 import com.menta.bff.application.port.out.PhysicalCourseManagementApiClient;
 import com.menta.bff.application.port.out.PhysicalPurchaseApiClient;
 import com.menta.bff.application.port.out.PhysicalReceptionApiClient;
@@ -49,12 +50,16 @@ import com.menta.bff.application.usecase.GetLessonViewUseCase;
 import com.menta.bff.application.usecase.GetLessonViewUseCaseImpl;
 import com.menta.bff.application.usecase.GetManagedCourseUseCase;
 import com.menta.bff.application.usecase.GetManagedCourseUseCaseImpl;
+import com.menta.bff.application.usecase.GetPaymentHistoryUseCase;
+import com.menta.bff.application.usecase.GetPaymentHistoryUseCaseImpl;
 import com.menta.bff.application.usecase.GetPaymentProgressUseCase;
 import com.menta.bff.application.usecase.GetPaymentProgressUseCaseImpl;
 import com.menta.bff.application.usecase.GetPlansViewUseCase;
 import com.menta.bff.application.usecase.GetPlansViewUseCaseImpl;
 import com.menta.bff.application.usecase.GetSessionRosterUseCase;
 import com.menta.bff.application.usecase.GetSessionRosterUseCaseImpl;
+import com.menta.bff.application.usecase.GetSubscriptionHistoryUseCase;
+import com.menta.bff.application.usecase.GetSubscriptionHistoryUseCaseImpl;
 import com.menta.bff.application.usecase.GetValidAccessTokenUseCase;
 import com.menta.bff.application.usecase.GetValidAccessTokenUseCaseImpl;
 import com.menta.bff.application.usecase.ListCourseSessionsUseCase;
@@ -203,6 +208,22 @@ public class UseCaseConfig {
     @Bean
     public GetContinueLearningUseCase getContinueLearningUseCase(VirtualApiClient virtualApiClient) {
         return new GetContinueLearningUseCaseImpl(virtualApiClient);
+    }
+
+    /** The subscriptions section of the student's history page (#363). Dates in the display zone. */
+    @Bean
+    public GetSubscriptionHistoryUseCase getSubscriptionHistoryUseCase(
+            SubscriptionApiClient subscriptionApiClient, BillingApiClient billingApiClient,
+            ClassesProperties classesProperties) {
+        return new GetSubscriptionHistoryUseCaseImpl(
+                subscriptionApiClient, billingApiClient, classesProperties.getDisplayZone());
+    }
+
+    /** The payments section of the student's history page (#363). Dates in the display zone. */
+    @Bean
+    public GetPaymentHistoryUseCase getPaymentHistoryUseCase(
+            PaymentApiClient paymentApiClient, ClassesProperties classesProperties) {
+        return new GetPaymentHistoryUseCaseImpl(paymentApiClient, classesProperties.getDisplayZone());
     }
 
     @Bean
