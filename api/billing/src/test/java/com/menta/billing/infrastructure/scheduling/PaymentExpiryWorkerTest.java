@@ -14,6 +14,7 @@ import com.menta.billing.application.usecase.PaymentFulfillmentService;
 import com.menta.billing.domain.model.Money;
 import com.menta.billing.domain.model.Payment;
 import com.menta.billing.domain.model.PaymentId;
+import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.domain.model.PaymentStatus;
 import com.menta.billing.domain.model.PaymentTarget;
 import java.lang.annotation.Annotation;
@@ -45,7 +46,7 @@ class PaymentExpiryWorkerTest {
     private static Payment paymentWith(PaymentStatus status, Instant createdAt) {
         return new Payment(
             PAYMENT_ID, USER_ID, null, AMOUNT, "ext-1", "merchant-1",
-            new PaymentTarget.Virtual("plan-1"), status, createdAt
+            PaymentMethod.BANK_TRANSFER, new PaymentTarget.Virtual("plan-1"), status, createdAt
         );
     }
 

@@ -49,7 +49,8 @@ class PaymentJpaRepositoryTest {
 
     private PaymentJpaEntity awaitingManualVerification(UUID id, Instant createdAt) {
         return new PaymentJpaEntity(
-            id, UUID.randomUUID(), null, BigDecimal.TEN, "ARS", "ext-" + id, "merchant-1", "SUBSCRIPTION",
+            id, UUID.randomUUID(), null, BigDecimal.TEN, "ARS", "ext-" + id, "merchant-1", "BANK_TRANSFER",
+            "SUBSCRIPTION",
             "plan-basic", "AWAITING_MANUAL_VERIFICATION", null, null, createdAt
         );
     }
@@ -78,7 +79,7 @@ class PaymentJpaRepositoryTest {
     void excludes_payments_in_a_different_status() {
         paymentJpaRepository.saveAndFlush(new PaymentJpaEntity(
             UUID.randomUUID(), UUID.randomUUID(), "mp-1", BigDecimal.TEN, "ARS", "ext-completed",
-            "merchant-1", "SUBSCRIPTION", "plan-basic", "COMPLETED", null, BASE, BASE
+            "merchant-1", "MERCADO_PAGO", "SUBSCRIPTION", "plan-basic", "COMPLETED", null, BASE, BASE
         ));
 
         Page<PendingVerificationRow> page = paymentJpaRepository.findByStatusTypeOrderByCreatedAt(
@@ -91,10 +92,10 @@ class PaymentJpaRepositoryTest {
 
     // --- #767: the student's own payments ------------------------------------------------------
 
-    private UUID ownedPayment(UUID userId, String modality, String reference, Instant createdAt) {
+    private UUID ownedPayment(UUID userId, String modality, String reference, String paymentMethod, Instant createdAt) {
         UUID id = UUID.randomUUID();
         paymentJpaRepository.saveAndFlush(new PaymentJpaEntity(
-            id, userId, null, BigDecimal.TEN, "ARS", "ext-" + id, "merchant-1", modality, reference,
+            id, userId, null, BigDecimal.TEN, "ARS", "ext-" + id, "merchant-1", paymentMethod, modality, reference,
             "AWAITING_PROVIDER", null, null, createdAt
         ));
         return id;
@@ -102,17 +103,19 @@ class PaymentJpaRepositoryTest {
 
     private void ownedPayment(UUID id, UUID userId, Instant createdAt) {
         paymentJpaRepository.saveAndFlush(new PaymentJpaEntity(
-            id, userId, null, BigDecimal.TEN, "ARS", "ext-" + id, "merchant-1", "VIRTUAL", "plan-x",
+            id, userId, null, BigDecimal.TEN, "ARS", "ext-" + id, "merchant-1", "MERCADO_PAGO", "VIRTUAL", "plan-x",
             "AWAITING_PROVIDER", null, null, createdAt
         ));
     }
 
-    private UUID subscriptionPayment(UUID userId, String planName, String providerPreferenceId, Instant createdAt) {
+    private UUID subscriptionPayment(
+        UUID userId, String planName, String paymentMethod, String providerPreferenceId, Instant createdAt
+    ) {
         UUID planId = UUID.randomUUID();
         planJpaRepository.saveAndFlush(new PlanJpaEntity(
             planId, planName, "desc", BigDecimal.TEN, "ARS", 30, false, PlanStatus.ACTIVE, "terms", "policy", BASE, BASE
         ));
-        UUID paymentId = ownedPayment(userId, "VIRTUAL", planId.toString(), createdAt);
+        UUID paymentId = ownedPayment(userId, "VIRTUAL", planId.toString(), paymentMethod, createdAt);
         UUID subscriptionId = UUID.randomUUID();
         subscriptionJpaRepository.saveAndFlush(new SubscriptionJpaEntity(
             subscriptionId, paymentId, userId, planId, "idem-" + subscriptionId, null, "PENDING", "ASSIGNED",
@@ -121,39 +124,51 @@ class PaymentJpaRepositoryTest {
         return paymentId;
     }
 
-    private UUID physicalPayment(UUID userId, String courseId, Instant createdAt) {
+    private UUID physicalPayment(UUID userId, String courseId, String paymentMethod, Instant createdAt) {
         String quoteId = UUID.randomUUID().toString();
         quoteJpaRepository.saveAndFlush(new PhysicalCourseQuoteJpaEntity(
             quoteId, courseId, "MONTHLY", BigDecimal.TEN, "ARS", BigDecimal.ZERO, 1, 4, null, BigDecimal.TEN, "ARS",
             "AVAILABLE", BASE, BASE.plusSeconds(900)
         ));
-        return ownedPayment(userId, "PHYSICAL", quoteId, createdAt);
+        return ownedPayment(userId, "PHYSICAL", quoteId, paymentMethod, createdAt);
     }
 
     @Test
     void own_payments_resolve_the_plan_name_and_the_quote_course_in_the_same_query() {
         UUID userId = UUID.randomUUID();
-        UUID subscription = subscriptionPayment(userId, "Plan Mensual", "pref-1", BASE);
-        UUID physical = physicalPayment(userId, "course-1", BASE.plusSeconds(60));
+        UUID subscription = subscriptionPayment(userId, "Plan Mensual", "MERCADO_PAGO", "pref-1", BASE);
+        UUID physical = physicalPayment(userId, "course-1", "BANK_TRANSFER", BASE.plusSeconds(60));
 
         List<OwnPaymentRow> rows = paymentJpaRepository.findOwnNewestFirst(userId, PageRequest.of(0, 20));
 
         assertThat(rows).extracting(OwnPaymentRow::id).containsExactly(physical, subscription);
         assertThat(rows.get(0).courseId()).isEqualTo("course-1");
         assertThat(rows.get(0).planName()).isNull();
-        assertThat(rows.get(0).providerPreferenceId()).isNull();
         assertThat(rows.get(1).planName()).isEqualTo("Plan Mensual");
-        assertThat(rows.get(1).providerPreferenceId()).isEqualTo("pref-1");
         assertThat(rows.get(1).courseId()).isNull();
+    }
+
+    @Test
+    void own_payments_carry_the_stored_payment_method_whatever_the_reference_or_the_subscription_say() {
+        UUID userId = UUID.randomUUID();
+        // The subscription has a checkout preference (what the old deduction read as Mercado Pago), yet the
+        // stored method wins; and a physical payment keeps its method whatever its reference looks like.
+        UUID subscription = subscriptionPayment(userId, "Plan Mensual", "BANK_TRANSFER", "pref-1", BASE);
+        UUID physical = physicalPayment(userId, "course-1", "MERCADO_PAGO", BASE.plusSeconds(60));
+
+        List<OwnPaymentRow> rows = paymentJpaRepository.findOwnNewestFirst(userId, PageRequest.of(0, 20));
+
+        assertThat(rows).extracting(OwnPaymentRow::id).containsExactly(physical, subscription);
+        assertThat(rows).extracting(OwnPaymentRow::paymentMethod).containsExactly("MERCADO_PAGO", "BANK_TRANSFER");
     }
 
     @Test
     void own_payments_exclude_other_users_and_honour_the_limit() {
         UUID userId = UUID.randomUUID();
-        ownedPayment(UUID.randomUUID(), "VIRTUAL", "plan-x", BASE.plusSeconds(600));
-        UUID oldest = ownedPayment(userId, "VIRTUAL", "plan-x", BASE);
-        UUID middle = ownedPayment(userId, "VIRTUAL", "plan-x", BASE.plusSeconds(60));
-        UUID newest = ownedPayment(userId, "VIRTUAL", "plan-x", BASE.plusSeconds(120));
+        ownedPayment(UUID.randomUUID(), "VIRTUAL", "plan-x", "MERCADO_PAGO", BASE.plusSeconds(600));
+        UUID oldest = ownedPayment(userId, "VIRTUAL", "plan-x", "MERCADO_PAGO", BASE);
+        UUID middle = ownedPayment(userId, "VIRTUAL", "plan-x", "MERCADO_PAGO", BASE.plusSeconds(60));
+        UUID newest = ownedPayment(userId, "VIRTUAL", "plan-x", "MERCADO_PAGO", BASE.plusSeconds(120));
 
         assertThat(paymentJpaRepository.findOwnNewestFirst(userId, PageRequest.of(0, 20)))
             .extracting(OwnPaymentRow::id).containsExactly(newest, middle, oldest);

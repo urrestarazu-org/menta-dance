@@ -20,6 +20,7 @@ import com.menta.billing.domain.model.FulfillmentStatus;
 import com.menta.billing.domain.model.Money;
 import com.menta.billing.domain.model.Payment;
 import com.menta.billing.domain.model.PaymentId;
+import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.domain.model.PaymentStatus;
 import com.menta.billing.domain.model.PaymentTarget;
 import com.menta.billing.domain.model.Purchase;
@@ -78,7 +79,7 @@ class MarkPurchaseExceptionUseCaseTest {
     private static Payment physicalPayment() {
         return new Payment(
             PAYMENT_ID, USER_ID, "mp-1", AMOUNT, "ext-1", "merchant-1",
-            new PaymentTarget.Physical(SESSION_ID), new PaymentStatus.Completed(NOW), NOW
+            PaymentMethod.MERCADO_PAGO, new PaymentTarget.Physical(SESSION_ID), new PaymentStatus.Completed(NOW), NOW
         );
     }
 

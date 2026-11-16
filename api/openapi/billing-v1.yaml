@@ -2003,6 +2003,7 @@ components:
         paymentMethod:
           type: string
           enum: [MERCADO_PAGO, BANK_TRANSFER]
+          description: Medio con el que se creó el pago; se guarda con el pago, no se deduce al leer.
         createdAt:
           type: string
           format: date-time

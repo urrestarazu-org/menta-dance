@@ -17,6 +17,7 @@ import com.menta.billing.application.port.out.BillingOutboxAppenderPort;
 import com.menta.billing.domain.model.Money;
 import com.menta.billing.domain.model.Payment;
 import com.menta.billing.domain.model.PaymentId;
+import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.domain.model.PaymentStatus;
 import com.menta.billing.domain.model.PaymentTarget;
 import java.math.BigDecimal;
@@ -64,7 +65,7 @@ class PublishPhysicalPaymentCompletedUseCaseTest {
     private static Payment physicalPayment(PaymentStatus status) {
         return new Payment(
             PAYMENT_ID, USER_ID, "mp-1", AMOUNT, "ext-1", "merchant-1",
-            new PaymentTarget.Physical(SESSION_ID.toString()), status, NOW
+            PaymentMethod.MERCADO_PAGO, new PaymentTarget.Physical(SESSION_ID.toString()), status, NOW
         );
     }
 
@@ -103,7 +104,7 @@ class PublishPhysicalPaymentCompletedUseCaseTest {
         void does_not_append_when_target_is_virtual() {
             Payment virtual = new Payment(
                 PaymentId.generate(), USER_ID, "mp-virtual", AMOUNT, "ext-v", "merchant-1",
-                new PaymentTarget.Virtual("plan-1"),
+                PaymentMethod.MERCADO_PAGO, new PaymentTarget.Virtual("plan-1"),
                 new PaymentStatus.Completed(NOW), NOW
             );
 
@@ -116,7 +117,7 @@ class PublishPhysicalPaymentCompletedUseCaseTest {
         void does_not_append_when_target_is_virtual_pending() {
             Payment virtualPending = new Payment(
                 PaymentId.generate(), USER_ID, null, AMOUNT, "ext-v", "merchant-1",
-                new PaymentTarget.Virtual("plan-1"),
+                PaymentMethod.MERCADO_PAGO, new PaymentTarget.Virtual("plan-1"),
                 new PaymentStatus.AwaitingProvider(), NOW
             );
 
@@ -146,7 +147,7 @@ class PublishPhysicalPaymentCompletedUseCaseTest {
         void publishes_the_event_for_a_completed_physical_payment_with_no_provider_payment_id() {
             Payment bankTransferOriginPayment = new Payment(
                 PAYMENT_ID, USER_ID, null, AMOUNT, "ext-1", "merchant-1",
-                new PaymentTarget.Physical(SESSION_ID.toString()),
+                PaymentMethod.BANK_TRANSFER, new PaymentTarget.Physical(SESSION_ID.toString()),
                 new PaymentStatus.Completed(NOW), NOW
             );
 

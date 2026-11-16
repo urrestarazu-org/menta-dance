@@ -30,6 +30,7 @@ import com.menta.billing.application.port.out.PaymentProviderPort;
 import com.menta.billing.domain.model.Money;
 import com.menta.billing.domain.model.Payment;
 import com.menta.billing.domain.model.PaymentId;
+import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.domain.model.PaymentTarget;
 import com.menta.billing.infrastructure.persistence.mapper.PaymentJpaMapper;
 import com.menta.billing.infrastructure.persistence.repository.PaymentJpaRepository;
@@ -155,7 +156,7 @@ class PaymentProofSubmissionIntegrationTest extends AbstractBillingMySqlIntegrat
         PaymentId paymentId = PaymentId.generate();
         Payment payment = Payment.awaitingManualVerification(
             paymentId, ownerId, Money.of(new BigDecimal("15000.00"), "ARS"), "SUB-" + paymentId,
-            "0000003100000000000000", new PaymentTarget.Virtual("plan-1"), Instant.now()
+            "0000003100000000000000", PaymentMethod.BANK_TRANSFER, new PaymentTarget.Virtual("plan-1"), Instant.now()
         );
         paymentRepository.save(PaymentJpaMapper.toEntity(payment));
         return paymentId.toString();

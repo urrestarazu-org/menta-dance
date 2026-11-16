@@ -17,6 +17,7 @@ import com.menta.billing.domain.exception.PlanNotAvailableException;
 import com.menta.billing.domain.exception.SubscriptionAlreadyActiveException;
 import com.menta.billing.domain.model.Payment;
 import com.menta.billing.domain.model.PaymentId;
+import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.domain.model.PaymentTarget;
 import com.menta.billing.domain.model.Plan;
 import com.menta.billing.domain.model.PlanId;
@@ -85,7 +86,7 @@ public class CreateBankTransferSubscriptionUseCaseImpl implements CreateBankTran
         String externalReference = externalReferenceFor(paymentId);
         paymentRepository.save(Payment.awaitingManualVerification(
             paymentId, command.userId(), plan.getPrice(), externalReference, bankAccountDetails.cbu(),
-            new PaymentTarget.Virtual(plan.getId().toString()), now
+            PaymentMethod.BANK_TRANSFER, new PaymentTarget.Virtual(plan.getId().toString()), now
         ));
 
         Subscription subscription = subscriptionRepository.saveNewCheckout(Subscription.pendingCheckout(

@@ -15,6 +15,7 @@ import com.menta.billing.domain.exception.BankTransferRateLimitedException;
 import com.menta.billing.domain.exception.PhysicalCourseQuoteExpiredException;
 import com.menta.billing.domain.model.Payment;
 import com.menta.billing.domain.model.PaymentId;
+import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.domain.model.PaymentTarget;
 import com.menta.billing.domain.model.PhysicalCourseQuote;
 import java.nio.charset.StandardCharsets;
@@ -51,10 +52,9 @@ public class CreateBankTransferPhysicalPurchaseUseCaseImpl implements CreateBank
      * C1) — both physical arms would otherwise derive the same reference from the same {@code
      * (userId, idempotencyKey)} pair, letting a bank-transfer replay resolve an {@code
      * AwaitingProvider} payment whose {@code expectedMerchantAccountId} is the Mercado Pago
-     * merchant id, not the CBU. Public because it is also what tells a physical bank-transfer
-     * payment apart when the student lists their payments (#767): the method is not stored.
+     * merchant id, not the CBU.
      */
-    public static final String EXTERNAL_REFERENCE_PREFIX = "PHY-BT-";
+    private static final String EXTERNAL_REFERENCE_PREFIX = "PHY-BT-";
 
     private final PhysicalCourseQuoteRepository quoteRepository;
     private final PaymentRepository paymentRepository;
@@ -105,7 +105,7 @@ public class CreateBankTransferPhysicalPurchaseUseCaseImpl implements CreateBank
         PaymentId paymentId = PaymentId.generate();
         Payment payment = paymentRepository.save(Payment.awaitingManualVerification(
             paymentId, command.userId(), quote.getAmount(), externalReference, bankAccountDetails.cbu(),
-            new PaymentTarget.Physical(quote.getId().toString()), now
+            PaymentMethod.BANK_TRANSFER, new PaymentTarget.Physical(quote.getId().toString()), now
         ));
 
         return toResult(payment);

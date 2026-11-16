@@ -158,15 +158,15 @@ class OwnPaymentsIntegrationTest extends AbstractBillingMySqlIntegrationTest {
     }
 
     private UUID payment(
-        UUID userId, String modality, String reference, String externalReference, String merchant, String status,
-        int minutesAfterBase
+        UUID userId, String modality, String reference, String externalReference, String merchant,
+        String paymentMethod, String status, int minutesAfterBase
     ) {
         UUID id = UUID.randomUUID();
         Instant createdAt = base.plus(minutesAfterBase, ChronoUnit.MINUTES);
         boolean terminal = List.of("COMPLETED", "REJECTED", "CANCELLED", "EXPIRED").contains(status);
         paymentRepository.save(new PaymentJpaEntity(
             id, userId, "COMPLETED".equals(status) ? PROVIDER_PAYMENT_ID + "-" + id : null, new BigDecimal("15000.00"),
-            "ARS", externalReference + id, merchant, modality, reference, status,
+            "ARS", externalReference + id, merchant, paymentMethod, modality, reference, status,
             "RECONCILIATION_REQUIRED".equals(status) ? RECONCILIATION_REASON : null,
             terminal ? createdAt.plusSeconds(60) : null, createdAt
         ));
@@ -183,7 +183,8 @@ class OwnPaymentsIntegrationTest extends AbstractBillingMySqlIntegrationTest {
         ));
         planIds.add(planId);
         UUID paymentId = payment(
-            userId, "VIRTUAL", planId.toString(), "SUB-", mercadoPago ? MERCHANT_ACCOUNT_ID : CBU, status, minutes
+            userId, "VIRTUAL", planId.toString(), "SUB-", mercadoPago ? MERCHANT_ACCOUNT_ID : CBU,
+            mercadoPago ? "MERCADO_PAGO" : "BANK_TRANSFER", status, minutes
         );
         UUID subscriptionId = UUID.randomUUID();
         subscriptionRepository.save(new SubscriptionJpaEntity(
@@ -205,7 +206,7 @@ class OwnPaymentsIntegrationTest extends AbstractBillingMySqlIntegrationTest {
         quoteIds.add(quoteId);
         return payment(
             userId, "PHYSICAL", quoteId, mercadoPago ? "PHY-" : "PHY-BT-", mercadoPago ? MERCHANT_ACCOUNT_ID : CBU,
-            status, minutes
+            mercadoPago ? "MERCADO_PAGO" : "BANK_TRANSFER", status, minutes
         );
     }
 

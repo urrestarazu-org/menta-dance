@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.menta.billing.domain.model.Money;
 import com.menta.billing.domain.model.Payment;
 import com.menta.billing.domain.model.PaymentId;
+import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.domain.model.PaymentStatus;
 import com.menta.billing.domain.model.PaymentTarget;
 import com.menta.billing.infrastructure.persistence.entity.PaymentJpaEntity;
@@ -22,7 +23,8 @@ class PaymentJpaMapperTest {
 
     private static Payment payment(PaymentTarget target, PaymentStatus status) {
         return new Payment(
-            PaymentId.generate(), USER_ID, "mp-1", AMOUNT, "ext-1", "merchant-1", target, status, NOW
+            PaymentId.generate(), USER_ID, "mp-1", AMOUNT, "ext-1", "merchant-1", PaymentMethod.MERCADO_PAGO,
+            target, status, NOW
         );
     }
 
@@ -65,12 +67,27 @@ class PaymentJpaMapperTest {
         }
     }
 
+    @Test
+    void stores_the_payment_method_name_and_reads_it_back_for_every_method() {
+        for (PaymentMethod method : PaymentMethod.values()) {
+            Payment original = Payment.awaitingManualVerification(
+                PaymentId.generate(), USER_ID, AMOUNT, "ext-1", "merchant-1", method,
+                new PaymentTarget.Physical("session-1"), NOW
+            );
+
+            PaymentJpaEntity entity = PaymentJpaMapper.toEntity(original);
+
+            assertThat(entity.getPaymentMethod()).isEqualTo(method.name());
+            assertThat(PaymentJpaMapper.toDomain(entity).getPaymentMethod()).isEqualTo(method);
+        }
+    }
+
     /** US-BILLING-010: a checkout payment has no provider id, and the column must carry that absence. */
     @Test
     void round_trips_an_unbound_checkout_payment() {
         Payment original = Payment.awaitingProvider(
             PaymentId.generate(), USER_ID, AMOUNT, "SUB-ext", "merchant-1",
-            new PaymentTarget.Virtual("plan-1"), NOW
+            PaymentMethod.MERCADO_PAGO, new PaymentTarget.Virtual("plan-1"), NOW
         );
 
         PaymentJpaEntity entity = PaymentJpaMapper.toEntity(original);

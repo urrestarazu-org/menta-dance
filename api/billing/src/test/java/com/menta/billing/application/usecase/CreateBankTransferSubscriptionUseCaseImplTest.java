@@ -104,6 +104,7 @@ class CreateBankTransferSubscriptionUseCaseImplTest {
         assertThat(payment.getValue().getExpectedAmount()).isEqualTo(PRICE);
         assertThat(payment.getValue().getStatus()).isEqualTo(new PaymentStatus.AwaitingManualVerification());
         assertThat(payment.getValue().getProviderPaymentId()).isEmpty();
+        assertThat(payment.getValue().getPaymentMethod()).isEqualTo(PaymentMethod.BANK_TRANSFER);
         assertThat(payment.getValue().getTarget()).isEqualTo(new PaymentTarget.Virtual(PLAN_ID.toString()));
 
         ArgumentCaptor<Subscription> claimed = ArgumentCaptor.forClass(Subscription.class);

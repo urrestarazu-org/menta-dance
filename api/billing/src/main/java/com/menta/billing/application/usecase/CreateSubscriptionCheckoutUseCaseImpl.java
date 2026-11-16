@@ -102,7 +102,7 @@ public class CreateSubscriptionCheckoutUseCaseImpl implements CreateSubscription
         String externalReference = externalReferenceFor(paymentId);
         paymentRepository.save(Payment.awaitingProvider(
             paymentId, command.userId(), plan.getPrice(), externalReference, merchantAccountId,
-            new PaymentTarget.Virtual(plan.getId().toString()), now
+            PaymentMethod.MERCADO_PAGO, new PaymentTarget.Virtual(plan.getId().toString()), now
         ));
 
         // The unique constraint behind saveNewCheckout — not the lookup above —

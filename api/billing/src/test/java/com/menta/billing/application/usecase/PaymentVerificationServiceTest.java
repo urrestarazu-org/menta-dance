@@ -76,21 +76,21 @@ class PaymentVerificationServiceTest {
     private static Payment boundPhysicalPayment(PaymentStatus status) {
         return new Payment(
             PaymentId.generate(), USER_ID, "mp-1", AMOUNT, "ext-1", "merchant-1",
-            new PaymentTarget.Physical("session-1"), status, NOW
+            PaymentMethod.MERCADO_PAGO, new PaymentTarget.Physical("session-1"), status, NOW
         );
     }
 
     private static Payment boundVirtualPayment(PaymentStatus status) {
         return new Payment(
             PaymentId.generate(), USER_ID, "mp-1", AMOUNT, "ext-1", "merchant-1",
-            new PaymentTarget.Virtual(PLAN_ID.toString()), status, NOW
+            PaymentMethod.MERCADO_PAGO, new PaymentTarget.Virtual(PLAN_ID.toString()), status, NOW
         );
     }
 
     private static Payment unboundVirtualPayment() {
         return Payment.awaitingProvider(
             PaymentId.generate(), USER_ID, AMOUNT, "ext-1", "merchant-1",
-            new PaymentTarget.Virtual(PLAN_ID.toString()), NOW
+            PaymentMethod.MERCADO_PAGO, new PaymentTarget.Virtual(PLAN_ID.toString()), NOW
         );
     }
 
@@ -378,7 +378,7 @@ class PaymentVerificationServiceTest {
     void a_rejected_physical_payment_releases_nothing() {
         Payment payment = Payment.awaitingProvider(
             PaymentId.generate(), USER_ID, AMOUNT, "ext-1", "merchant-1",
-            new PaymentTarget.Physical("session-1"), NOW
+            PaymentMethod.MERCADO_PAGO, new PaymentTarget.Physical("session-1"), NOW
         );
         when(paymentRepository.findByProviderPaymentId("mp-1")).thenReturn(Optional.empty());
         when(paymentProviderPort.fetchPayment("mp-1"))
@@ -411,7 +411,7 @@ class PaymentVerificationServiceTest {
     void a_mismatch_on_the_external_reference_path_never_binds_the_provider_id() {
         Payment payment = Payment.awaitingProvider(
             PaymentId.generate(), USER_ID, Money.of(BigDecimal.ONE, "ARS"), "ext-1", "merchant-1",
-            new PaymentTarget.Virtual(PLAN_ID.toString()), NOW
+            PaymentMethod.MERCADO_PAGO, new PaymentTarget.Virtual(PLAN_ID.toString()), NOW
         );
         when(paymentRepository.findByProviderPaymentId("mp-1")).thenReturn(Optional.empty());
         when(paymentProviderPort.fetchPayment("mp-1")).thenReturn(approved());
@@ -449,6 +449,7 @@ class PaymentVerificationServiceTest {
     void an_unbound_payment_already_terminal_short_circuits_on_the_external_reference_path() {
         Payment expired = new Payment(
             PaymentId.generate(), USER_ID, null, AMOUNT, "ext-1", "merchant-1",
+            PaymentMethod.MERCADO_PAGO,
             new PaymentTarget.Virtual(PLAN_ID.toString()), new PaymentStatus.Expired(NOW), NOW
         );
         when(paymentRepository.findByProviderPaymentId("mp-1")).thenReturn(Optional.empty());
@@ -466,6 +467,7 @@ class PaymentVerificationServiceTest {
     void an_unbound_completed_payment_re_ensures_fulfillment_idempotently() {
         Payment completed = new Payment(
             PaymentId.generate(), USER_ID, null, AMOUNT, "ext-1", "merchant-1",
+            PaymentMethod.MERCADO_PAGO,
             new PaymentTarget.Virtual(PLAN_ID.toString()), new PaymentStatus.Completed(NOW), NOW
         );
         Subscription active = pendingSubscriptionFor(completed).activate(NOW, 30, List.of("course-1")).assigned();

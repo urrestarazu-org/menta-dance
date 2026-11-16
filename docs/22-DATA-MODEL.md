@@ -79,6 +79,8 @@ como valor y se validan mediante puertos; no se crean FKs ni `JOIN`s cruzados.
   `CANCELLED`, `EXPIRED`; `substatus` sólo para pendientes:
   `AWAITING_PROVIDER`, `AWAITING_MANUAL_VERIFICATION`,
   `RECONCILIATION_REQUIRED`.
+- `billing_payments.payment_method`: `MERCADO_PAGO` o `BANK_TRANSFER`, obligatorio;
+  lo fija el caso de uso que crea el pago y no cambia (V32, #771).
 - `billing_purchases.fulfillment_status`: `PENDING_FULFILLMENT`, `ASSIGNED` o
   `EXCEPTION`; es independiente de la liquidación de `billing_payments`.
 - Cada pago guarda clave de idempotencia y referencia del proveedor. Una tarea de

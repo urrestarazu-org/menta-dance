@@ -4,7 +4,6 @@ import com.menta.billing.application.dto.OwnPaymentEntry;
 import com.menta.billing.application.dto.PendingVerificationItem;
 import com.menta.billing.application.dto.PendingVerificationPage;
 import com.menta.billing.application.port.out.PaymentRepository;
-import com.menta.billing.application.usecase.CreateBankTransferPhysicalPurchaseUseCaseImpl;
 import com.menta.billing.domain.model.Money;
 import com.menta.billing.domain.model.Payment;
 import com.menta.billing.domain.model.PaymentId;
@@ -32,17 +31,8 @@ import org.springframework.transaction.annotation.Transactional;
  * read-only one. The admin inbox query pages through a projection that carries a correlated proof
  * count, and the expiry candidate query is capped by the {@code limit} argument.
  *
- * <p>The student's own payments (#767) derive the payment method, because {@code billing_payments}
- * does not store it. Both signals are written once at checkout and never changed afterwards:
- * <ul>
- *   <li>a physical payment is a bank transfer when its external reference starts with {@link
- *       CreateBankTransferPhysicalPurchaseUseCaseImpl#EXTERNAL_REFERENCE_PREFIX}, and Checkout Pro
- *       otherwise ({@code "PHY-"});</li>
- *   <li>a subscription payment is Checkout Pro when its subscription has a provider preference: the
- *       Mercado Pago checkout always stores one in the same transaction that creates the payment,
- *       and the bank-transfer checkout never does. Both rails share the {@code "SUB-"} reference,
- *       so the reference alone cannot tell them apart.</li>
- * </ul>
+ * <p>The student's own payments (#767) carry the payment method stored with each row (#771), read as
+ * written; nothing here works it out from references or subscriptions.
  */
 @Component
 public class PaymentRepositoryAdapter implements PaymentRepository {
@@ -117,17 +107,7 @@ public class PaymentRepositoryAdapter implements PaymentRepository {
             : new OwnPaymentEntry.Item(OwnPaymentEntry.ItemType.SUBSCRIPTION, row.targetReference(), row.planName());
         return new OwnPaymentEntry(
             row.id().toString(), row.statusType(), Money.of(row.expectedAmount(), row.expectedCurrency()),
-            physical ? physicalPaymentMethod(row) : subscriptionPaymentMethod(row), row.createdAt(), item
+            PaymentMethod.valueOf(row.paymentMethod()), row.createdAt(), item
         );
-    }
-
-    private static PaymentMethod physicalPaymentMethod(OwnPaymentRow row) {
-        return row.expectedExternalReference().startsWith(
-            CreateBankTransferPhysicalPurchaseUseCaseImpl.EXTERNAL_REFERENCE_PREFIX
-        ) ? PaymentMethod.BANK_TRANSFER : PaymentMethod.MERCADO_PAGO;
-    }
-
-    private static PaymentMethod subscriptionPaymentMethod(OwnPaymentRow row) {
-        return row.providerPreferenceId() == null ? PaymentMethod.BANK_TRANSFER : PaymentMethod.MERCADO_PAGO;
     }
 }

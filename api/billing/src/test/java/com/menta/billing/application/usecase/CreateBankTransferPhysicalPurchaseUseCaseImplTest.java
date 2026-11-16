@@ -126,6 +126,7 @@ class CreateBankTransferPhysicalPurchaseUseCaseImplTest {
         assertThat(payment.getValue().getUserId()).isEqualTo(USER_ID);
         assertThat(payment.getValue().getExpectedAmount()).isEqualTo(quote.getAmount());
         assertThat(payment.getValue().getExpectedMerchantAccountId()).isEqualTo(ACCOUNT.cbu());
+        assertThat(payment.getValue().getPaymentMethod()).isEqualTo(PaymentMethod.BANK_TRANSFER);
         assertThat(payment.getValue().getStatus()).isEqualTo(new PaymentStatus.AwaitingManualVerification());
         assertThat(payment.getValue().getTarget()).isEqualTo(new PaymentTarget.Physical(quote.getId().toString()));
 

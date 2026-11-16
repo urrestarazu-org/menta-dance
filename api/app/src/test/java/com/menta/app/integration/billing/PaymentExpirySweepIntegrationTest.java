@@ -11,6 +11,7 @@ import com.menta.auth.application.port.out.TokenBlacklistPort;
 import com.menta.billing.domain.model.Money;
 import com.menta.billing.domain.model.Payment;
 import com.menta.billing.domain.model.PaymentId;
+import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.domain.model.PaymentTarget;
 import com.menta.billing.domain.model.PlanId;
 import com.menta.billing.domain.model.Subscription;
@@ -108,7 +109,7 @@ class PaymentExpirySweepIntegrationTest extends AbstractBillingMySqlIntegrationT
         PaymentId paymentId = PaymentId.generate();
         Payment payment = Payment.awaitingManualVerification(
             paymentId, ownerId, Money.of(new BigDecimal("15000.00"), "ARS"), "SUB-" + paymentId,
-            "0000003100000000000000", new PaymentTarget.Virtual("plan-1"), createdAt
+            "0000003100000000000000", PaymentMethod.BANK_TRANSFER, new PaymentTarget.Virtual("plan-1"), createdAt
         );
         paymentRepository.save(PaymentJpaMapper.toEntity(payment));
         subscriptionRepository.save(SubscriptionJpaMapper.toEntity(Subscription.pendingCheckout(
@@ -127,7 +128,8 @@ class PaymentExpirySweepIntegrationTest extends AbstractBillingMySqlIntegrationT
         PaymentId paymentId = PaymentId.generate();
         Payment payment = Payment.awaitingManualVerification(
             paymentId, ownerId, Money.of(new BigDecimal("300.00"), "ARS"), "PHY-BT-" + paymentId,
-            "0000003100000000000000", new PaymentTarget.Physical(UUID.randomUUID().toString()), createdAt
+            "0000003100000000000000", PaymentMethod.BANK_TRANSFER,
+            new PaymentTarget.Physical(UUID.randomUUID().toString()), createdAt
         );
         paymentRepository.save(PaymentJpaMapper.toEntity(payment));
         return paymentId;

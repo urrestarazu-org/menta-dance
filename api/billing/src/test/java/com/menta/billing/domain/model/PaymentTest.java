@@ -21,34 +21,70 @@ class PaymentTest {
     private static Payment pendingPayment() {
         return new Payment(
             PaymentId.generate(), USER_ID, "mp-1", EXPECTED_AMOUNT, "ext-1", "merchant-1",
-            new PaymentTarget.Physical("session-1"), new PaymentStatus.AwaitingProvider(), CREATED_AT
+            PaymentMethod.MERCADO_PAGO, new PaymentTarget.Physical("session-1"),
+            new PaymentStatus.AwaitingProvider(), CREATED_AT
         );
     }
 
     private static Payment terminalPayment(PaymentStatus status) {
         return new Payment(
             PaymentId.generate(), USER_ID, "mp-1", EXPECTED_AMOUNT, "ext-1", "merchant-1",
-            new PaymentTarget.Physical("session-1"), status, CREATED_AT
+            PaymentMethod.MERCADO_PAGO, new PaymentTarget.Physical("session-1"), status, CREATED_AT
         );
     }
 
     private static Payment unboundPayment() {
         return Payment.awaitingProvider(
             PaymentId.generate(), USER_ID, EXPECTED_AMOUNT, "ext-1", "merchant-1",
-            new PaymentTarget.Virtual(UUID.randomUUID().toString()), CREATED_AT
+            PaymentMethod.MERCADO_PAGO, new PaymentTarget.Virtual(UUID.randomUUID().toString()), CREATED_AT
         );
     }
 
     private static Payment awaitingManualVerificationPayment() {
         return new Payment(
             PaymentId.generate(), USER_ID, null, EXPECTED_AMOUNT, "ext-1", "merchant-1",
-            new PaymentTarget.Virtual(UUID.randomUUID().toString()),
+            PaymentMethod.BANK_TRANSFER, new PaymentTarget.Virtual(UUID.randomUUID().toString()),
             new PaymentStatus.AwaitingManualVerification(), CREATED_AT
         );
     }
 
     private static ProviderOutcome matchingOutcome(String providerStatus) {
         return new ProviderOutcome(providerStatus, EXPECTED_AMOUNT, "ext-1", "merchant-1");
+    }
+
+    @Test
+    void awaitingProvider_records_the_payment_method_it_was_created_with() {
+        assertThat(unboundPayment().getPaymentMethod()).isEqualTo(PaymentMethod.MERCADO_PAGO);
+    }
+
+    @Test
+    void awaitingManualVerification_records_the_payment_method_it_was_created_with() {
+        Payment payment = Payment.awaitingManualVerification(
+            PaymentId.generate(), USER_ID, EXPECTED_AMOUNT, "ext-1", "cbu-1",
+            PaymentMethod.BANK_TRANSFER, new PaymentTarget.Virtual("plan-1"), CREATED_AT
+        );
+
+        assertThat(payment.getPaymentMethod()).isEqualTo(PaymentMethod.BANK_TRANSFER);
+    }
+
+    @Test
+    void the_payment_method_survives_binding_and_every_status_transition() {
+        Payment bound = unboundPayment().bindProviderPaymentId("mp-9");
+        Payment completed = bound.applyProviderOutcome(matchingOutcome("approved"), NOW);
+        Payment manuallyResolved = awaitingManualVerificationPayment()
+            .resolveManually(ManualVerificationDecision.APPROVED, NOW);
+
+        assertThat(bound.getPaymentMethod()).isEqualTo(PaymentMethod.MERCADO_PAGO);
+        assertThat(completed.getPaymentMethod()).isEqualTo(PaymentMethod.MERCADO_PAGO);
+        assertThat(manuallyResolved.getPaymentMethod()).isEqualTo(PaymentMethod.BANK_TRANSFER);
+    }
+
+    @Test
+    void a_payment_cannot_be_created_without_a_payment_method() {
+        assertThatThrownBy(() -> new Payment(
+            PaymentId.generate(), USER_ID, "mp-1", EXPECTED_AMOUNT, "ext-1", "merchant-1",
+            null, new PaymentTarget.Physical("session-1"), new PaymentStatus.AwaitingProvider(), CREATED_AT
+        )).isInstanceOf(NullPointerException.class);
     }
 
     @Test
@@ -225,6 +261,7 @@ class PaymentTest {
     void rejects_a_blank_provider_payment_id_at_construction() {
         assertThatThrownBy(() -> new Payment(
             PaymentId.generate(), USER_ID, " ", EXPECTED_AMOUNT, "ext-1", "merchant-1",
+            PaymentMethod.MERCADO_PAGO,
             new PaymentTarget.Physical("session-1"), new PaymentStatus.AwaitingProvider(), CREATED_AT
         )).isInstanceOf(IllegalArgumentException.class);
     }
@@ -233,6 +270,7 @@ class PaymentTest {
     void rejects_a_null_user_id() {
         assertThatThrownBy(() -> new Payment(
             PaymentId.generate(), null, "mp-1", EXPECTED_AMOUNT, "ext-1", "merchant-1",
+            PaymentMethod.MERCADO_PAGO,
             new PaymentTarget.Physical("session-1"), new PaymentStatus.AwaitingProvider(), CREATED_AT
         )).isInstanceOf(NullPointerException.class);
     }

@@ -191,7 +191,7 @@ class PhysicalSessionManagementIntegrationTest extends AbstractPhysicalMySqlInte
         UUID paymentId = UUID.randomUUID();
         paymentRepository.save(new PaymentJpaEntity(
             paymentId, studentId, providerPaymentId, new BigDecimal("100.00"), "ARS",
-            "ext-" + providerPaymentId, "merchant-1", "PHYSICAL", targetReference,
+            "ext-" + providerPaymentId, "merchant-1", "MERCADO_PAGO", "PHYSICAL", targetReference,
             "AWAITING_PROVIDER", null, null, Instant.now()
         ));
         return paymentId;

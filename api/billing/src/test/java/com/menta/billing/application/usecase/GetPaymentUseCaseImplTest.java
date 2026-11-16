@@ -14,6 +14,7 @@ import com.menta.billing.domain.model.FulfillmentStatus;
 import com.menta.billing.domain.model.Money;
 import com.menta.billing.domain.model.Payment;
 import com.menta.billing.domain.model.PaymentId;
+import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.domain.model.PaymentStatus;
 import com.menta.billing.domain.model.PaymentTarget;
 import com.menta.billing.domain.model.Purchase;
@@ -42,7 +43,7 @@ class GetPaymentUseCaseImplTest {
     private static Payment paymentWith(PaymentStatus status) {
         return new Payment(
             PAYMENT_ID, USER_ID, null, AMOUNT, "ext-1", "merchant-1",
-            new PaymentTarget.Virtual("plan-1"), status, CREATED_AT
+            PaymentMethod.MERCADO_PAGO, new PaymentTarget.Virtual("plan-1"), status, CREATED_AT
         );
     }
 

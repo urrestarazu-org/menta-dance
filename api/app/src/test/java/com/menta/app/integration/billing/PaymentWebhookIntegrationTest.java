@@ -177,7 +177,7 @@ class PaymentWebhookIntegrationTest extends AbstractBillingMySqlIntegrationTest 
         String quoteId = seedIndividualQuoteFor(sessionId).toString();
         paymentRepository.save(new PaymentJpaEntity(
             id, studentId, providerPaymentId, new BigDecimal("100.00"), "ARS",
-            "ext-1", "merchant-1", "PHYSICAL", quoteId, "AWAITING_PROVIDER",
+            "ext-1", "merchant-1", "MERCADO_PAGO", "PHYSICAL", quoteId, "AWAITING_PROVIDER",
             null, null, Instant.now()
         ));
         return id;

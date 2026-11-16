@@ -109,6 +109,7 @@ class CreateSubscriptionCheckoutUseCaseImplTest {
         assertThat(payment.getValue().getExpectedAmount()).isEqualTo(PRICE);
         assertThat(payment.getValue().getExpectedMerchantAccountId()).isEqualTo(MERCHANT_ACCOUNT_ID);
         assertThat(payment.getValue().getStatus()).isEqualTo(new PaymentStatus.AwaitingProvider());
+        assertThat(payment.getValue().getPaymentMethod()).isEqualTo(PaymentMethod.MERCADO_PAGO);
         assertThat(payment.getValue().getProviderPaymentId()).isEmpty();
         assertThat(payment.getValue().getTarget()).isEqualTo(new PaymentTarget.Virtual(PLAN_ID.toString()));
         assertThat(payment.getValue().getExpectedExternalReference())

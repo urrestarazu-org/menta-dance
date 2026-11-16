@@ -3,6 +3,7 @@ package com.menta.billing.infrastructure.persistence.mapper;
 import com.menta.billing.domain.model.Money;
 import com.menta.billing.domain.model.Payment;
 import com.menta.billing.domain.model.PaymentId;
+import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.domain.model.PaymentStatus;
 import com.menta.billing.domain.model.PaymentTarget;
 import com.menta.billing.infrastructure.persistence.entity.PaymentJpaEntity;
@@ -18,7 +19,7 @@ public final class PaymentJpaMapper {
      *
      * <p>The target modality {@code PHYSICAL} selects a physical target and any other value a
      * virtual one. The status is rebuilt from {@code status_type}, and an unknown status type fails
-     * with {@link IllegalStateException}.
+     * with {@link IllegalStateException}; the stored payment method is the {@link PaymentMethod} enum name.
      */
     public static Payment toDomain(PaymentJpaEntity entity) {
         return new Payment(
@@ -28,6 +29,7 @@ public final class PaymentJpaMapper {
             Money.of(entity.getExpectedAmount(), entity.getExpectedCurrency()),
             entity.getExpectedExternalReference(),
             entity.getExpectedMerchantAccountId(),
+            PaymentMethod.valueOf(entity.getPaymentMethod()),
             toTarget(entity),
             toStatus(entity),
             entity.getCreatedAt()
@@ -52,6 +54,7 @@ public final class PaymentJpaMapper {
             payment.getExpectedAmount().getCurrency(),
             payment.getExpectedExternalReference(),
             payment.getExpectedMerchantAccountId(),
+            payment.getPaymentMethod().name(),
             targetColumns.modality(),
             targetColumns.reference(),
             statusColumns.type(),

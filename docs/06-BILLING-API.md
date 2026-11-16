@@ -163,10 +163,10 @@ pago de otro.
 - `status` es el mismo vocabulario de `GET /payments/{paymentId}`: `AWAITING_PROVIDER`,
   `AWAITING_MANUAL_VERIFICATION`, `RECONCILIATION_REQUIRED`, `COMPLETED`, `REJECTED`,
   `CANCELLED` y `EXPIRED`.
-- `paymentMethod` es `MERCADO_PAGO` o `BANK_TRANSFER`. `billing_payments` no guarda el medio:
-  se deduce de lo que escribe cada checkout. Una compra presencial por transferencia tiene la
-  referencia externa `PHY-BT-…`; una suscripción por Mercado Pago siempre tiene preferencia de
-  Checkout Pro y una por transferencia nunca la tiene.
+- `paymentMethod` es `MERCADO_PAGO` o `BANK_TRANSFER`. Es el medio con el que se creó el pago:
+  `billing_payments.payment_method` lo guarda el checkout (V32, #771) y la lectura lo devuelve
+  tal cual, sin deducirlo de la referencia externa ni de la suscripción. La migración rellenó
+  los pagos anteriores con la regla que antes se aplicaba al leer.
 - `item.type` es `SUBSCRIPTION` (el `id` es el plan y `name` su nombre) o `PHYSICAL_COURSE` (el
   `id` es el curso presencial de la cotización y `name` es siempre `null`: el nombre vive en
   Physical y no se consulta).

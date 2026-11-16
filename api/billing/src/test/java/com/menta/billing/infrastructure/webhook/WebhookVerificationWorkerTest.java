@@ -13,6 +13,7 @@ import com.menta.billing.application.usecase.VerificationOutcome;
 import com.menta.billing.domain.model.Money;
 import com.menta.billing.domain.model.Payment;
 import com.menta.billing.domain.model.PaymentId;
+import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.domain.model.PaymentStatus;
 import com.menta.billing.domain.model.PaymentTarget;
 import com.menta.billing.infrastructure.persistence.entity.ReconciliationTaskJpaEntity;
@@ -56,7 +57,7 @@ class WebhookVerificationWorkerTest {
     private static Payment payment(PaymentStatus status) {
         return new Payment(
             PaymentId.generate(), java.util.UUID.randomUUID(), "mp-1", Money.of(BigDecimal.TEN, "ARS"),
-            "ext-1", "merchant-1", new PaymentTarget.Physical("session-1"), status, NOW
+            "ext-1", "merchant-1", PaymentMethod.MERCADO_PAGO, new PaymentTarget.Physical("session-1"), status, NOW
         );
     }
 
