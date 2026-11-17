@@ -144,7 +144,7 @@ class InProgressCoursesIntegrationTest extends CatalogAccessMocksIntegrationTest
         UUID paymentId = UUID.randomUUID();
         paymentRepository.save(new PaymentJpaEntity(
             paymentId, userId, "mp-" + paymentId, new BigDecimal("100.00"), "ARS",
-            "SUB-" + paymentId, "merchant-1", "VIRTUAL", planId.toString(), "COMPLETED",
+            "SUB-" + paymentId, "merchant-1", "MERCADO_PAGO", "VIRTUAL", planId.toString(), "COMPLETED",
             null, NOW, NOW
         ));
         UUID subscriptionId = UUID.randomUUID();

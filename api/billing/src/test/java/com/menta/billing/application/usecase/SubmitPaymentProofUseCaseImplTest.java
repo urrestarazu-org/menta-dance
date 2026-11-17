@@ -26,6 +26,7 @@ import com.menta.billing.domain.model.ManualVerificationDecision;
 import com.menta.billing.domain.model.Money;
 import com.menta.billing.domain.model.Payment;
 import com.menta.billing.domain.model.PaymentId;
+import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.domain.model.PaymentProof;
 import com.menta.billing.domain.model.PaymentTarget;
 import com.menta.billing.domain.service.PaymentProofContentValidator;
@@ -78,7 +79,7 @@ class SubmitPaymentProofUseCaseImplTest {
     private static Payment awaitingVerificationPayment(UUID ownerId) {
         return Payment.awaitingManualVerification(
             PAYMENT_ID, ownerId, Money.of(new BigDecimal("15000.00"), "ARS"), "SUB-" + PAYMENT_ID,
-            "0000003100000000000000", new PaymentTarget.Virtual("plan-1"), NOW
+            "0000003100000000000000", PaymentMethod.BANK_TRANSFER, new PaymentTarget.Virtual("plan-1"), NOW
         );
     }
 

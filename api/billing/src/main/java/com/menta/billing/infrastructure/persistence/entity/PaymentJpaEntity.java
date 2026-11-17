@@ -15,6 +15,9 @@ import java.util.UUID;
  * status_changed_at} (the terminal states' instant — one column for all
  * four, since only one is ever set at a time). See {@code PaymentJpaMapper}.
  *
+ * <p>{@code payment_method} stores the {@code PaymentMethod} enum name (#771), written once when the
+ * payment is created; reads take it as stored instead of deducing it.</p>
+ *
  * <p>{@code provider_payment_id} is nullable and {@code
  * expected_external_reference} is the unique correlation key
  * (US-BILLING-010): a Checkout Pro payment has no provider id until the buyer
@@ -47,6 +50,9 @@ public class PaymentJpaEntity {
     @Column(name = "expected_merchant_account_id", nullable = false)
     private String expectedMerchantAccountId;
 
+    @Column(name = "payment_method", nullable = false, columnDefinition = "VARCHAR(30)")
+    private String paymentMethod;
+
     @Column(name = "target_modality", nullable = false, columnDefinition = "VARCHAR(20)")
     private String targetModality;
 
@@ -71,8 +77,8 @@ public class PaymentJpaEntity {
 
     public PaymentJpaEntity(
         UUID id, UUID userId, String providerPaymentId, BigDecimal expectedAmount, String expectedCurrency,
-        String expectedExternalReference, String expectedMerchantAccountId, String targetModality,
-        String targetReference, String statusType, String statusReason, Instant statusChangedAt,
+        String expectedExternalReference, String expectedMerchantAccountId, String paymentMethod,
+        String targetModality, String targetReference, String statusType, String statusReason, Instant statusChangedAt,
         Instant createdAt
     ) {
         this.id = id;
@@ -82,6 +88,7 @@ public class PaymentJpaEntity {
         this.expectedCurrency = expectedCurrency;
         this.expectedExternalReference = expectedExternalReference;
         this.expectedMerchantAccountId = expectedMerchantAccountId;
+        this.paymentMethod = paymentMethod;
         this.targetModality = targetModality;
         this.targetReference = targetReference;
         this.statusType = statusType;
@@ -116,6 +123,10 @@ public class PaymentJpaEntity {
 
     public String getExpectedMerchantAccountId() {
         return expectedMerchantAccountId;
+    }
+
+    public String getPaymentMethod() {
+        return paymentMethod;
     }
 
     public String getTargetModality() {

@@ -39,8 +39,8 @@ class PaymentRepositoryAdapterTest {
     private static Payment payment() {
         return new Payment(
             PaymentId.generate(), UUID.randomUUID(), "mp-1", Money.of(BigDecimal.TEN, "ARS"), "ext-1",
-            "merchant-1", new PaymentTarget.Physical("session-1"), new PaymentStatus.AwaitingProvider(),
-            Instant.now()
+            "merchant-1", PaymentMethod.MERCADO_PAGO, new PaymentTarget.Physical("session-1"),
+            new PaymentStatus.AwaitingProvider(), Instant.now()
         );
     }
 
@@ -108,17 +108,17 @@ class PaymentRepositoryAdapterTest {
     private static final UUID OWNER = UUID.randomUUID();
     private static final Instant CREATED_AT = Instant.parse("2026-11-10T12:00:00Z");
 
-    private static OwnPaymentRow virtualRow(String providerPreferenceId) {
+    private static OwnPaymentRow virtualRow(String paymentMethod) {
         return new OwnPaymentRow(
-            UUID.randomUUID(), "COMPLETED", new BigDecimal("15000.00"), "ARS", "SUB-1", "VIRTUAL", "plan-1",
-            CREATED_AT, providerPreferenceId, "Plan Mensual", null
+            UUID.randomUUID(), "COMPLETED", new BigDecimal("15000.00"), "ARS", paymentMethod, "VIRTUAL", "plan-1",
+            CREATED_AT, "Plan Mensual", null
         );
     }
 
-    private static OwnPaymentRow physicalRow(String externalReference) {
+    private static OwnPaymentRow physicalRow(String paymentMethod) {
         return new OwnPaymentRow(
-            UUID.randomUUID(), "COMPLETED", new BigDecimal("8000.00"), "ARS", externalReference,
-            "PHYSICAL", "quote-1", CREATED_AT, null, null, "course-1"
+            UUID.randomUUID(), "COMPLETED", new BigDecimal("8000.00"), "ARS", paymentMethod,
+            "PHYSICAL", "quote-1", CREATED_AT, null, "course-1"
         );
     }
 
@@ -131,7 +131,7 @@ class PaymentRepositoryAdapterTest {
 
     @Test
     void findOwnNewestFirst_maps_a_subscription_payment_with_its_plan_name() {
-        OwnPaymentRow row = virtualRow("pref-1");
+        OwnPaymentRow row = virtualRow("MERCADO_PAGO");
 
         OwnPaymentEntry entry = onlyEntryFor(row);
 
@@ -145,18 +145,14 @@ class PaymentRepositoryAdapterTest {
     }
 
     @Test
-    void findOwnNewestFirst_reads_a_subscription_with_a_checkout_preference_as_mercado_pago() {
-        assertThat(onlyEntryFor(virtualRow("pref-1")).paymentMethod()).isEqualTo(PaymentMethod.MERCADO_PAGO);
-    }
-
-    @Test
-    void findOwnNewestFirst_reads_a_subscription_without_a_checkout_preference_as_bank_transfer() {
-        assertThat(onlyEntryFor(virtualRow(null)).paymentMethod()).isEqualTo(PaymentMethod.BANK_TRANSFER);
+    void findOwnNewestFirst_returns_the_stored_method_of_a_subscription_payment() {
+        assertThat(onlyEntryFor(virtualRow("MERCADO_PAGO")).paymentMethod()).isEqualTo(PaymentMethod.MERCADO_PAGO);
+        assertThat(onlyEntryFor(virtualRow("BANK_TRANSFER")).paymentMethod()).isEqualTo(PaymentMethod.BANK_TRANSFER);
     }
 
     @Test
     void findOwnNewestFirst_maps_a_physical_purchase_to_its_course_without_a_name() {
-        OwnPaymentEntry entry = onlyEntryFor(physicalRow("PHY-BT-1"));
+        OwnPaymentEntry entry = onlyEntryFor(physicalRow("BANK_TRANSFER"));
 
         assertThat(entry.item()).isEqualTo(
             new OwnPaymentEntry.Item(OwnPaymentEntry.ItemType.PHYSICAL_COURSE, "course-1", null)
@@ -164,12 +160,8 @@ class PaymentRepositoryAdapterTest {
     }
 
     @Test
-    void findOwnNewestFirst_reads_a_physical_bank_transfer_reference_as_bank_transfer() {
-        assertThat(onlyEntryFor(physicalRow("PHY-BT-1")).paymentMethod()).isEqualTo(PaymentMethod.BANK_TRANSFER);
-    }
-
-    @Test
-    void findOwnNewestFirst_reads_a_physical_checkout_pro_reference_as_mercado_pago() {
-        assertThat(onlyEntryFor(physicalRow("PHY-1")).paymentMethod()).isEqualTo(PaymentMethod.MERCADO_PAGO);
+    void findOwnNewestFirst_returns_the_stored_method_of_a_physical_payment() {
+        assertThat(onlyEntryFor(physicalRow("BANK_TRANSFER")).paymentMethod()).isEqualTo(PaymentMethod.BANK_TRANSFER);
+        assertThat(onlyEntryFor(physicalRow("MERCADO_PAGO")).paymentMethod()).isEqualTo(PaymentMethod.MERCADO_PAGO);
     }
 }

@@ -23,6 +23,7 @@ import com.menta.billing.domain.exception.PurchaseResolutionConflictException;
 import com.menta.billing.domain.model.Money;
 import com.menta.billing.domain.model.Payment;
 import com.menta.billing.domain.model.PaymentId;
+import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.domain.model.PaymentStatus;
 import com.menta.billing.domain.model.PaymentTarget;
 import com.menta.billing.domain.model.Purchase;
@@ -60,7 +61,7 @@ class ResolveExceptionPurchaseUseCaseImplTest {
         when(purchaseRepository.save(any(Purchase.class))).thenAnswer(inv -> inv.getArgument(0));
         when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(new Payment(
             PAYMENT_ID, USER_ID, "mp-1", Money.of(new BigDecimal("1500.00"), "ARS"), "ext-1", "merchant-1",
-            new PaymentTarget.Physical("quote-1"), new PaymentStatus.Completed(NOW), NOW
+            PaymentMethod.MERCADO_PAGO, new PaymentTarget.Physical("quote-1"), new PaymentStatus.Completed(NOW), NOW
         )));
         useCase = new ResolveExceptionPurchaseUseCaseImpl(
             purchaseRepository, paymentRepository, outboxAppender, clock);

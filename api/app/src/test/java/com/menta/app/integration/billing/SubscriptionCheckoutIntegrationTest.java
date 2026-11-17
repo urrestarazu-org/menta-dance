@@ -22,6 +22,7 @@ import com.menta.auth.domain.model.UserStatus;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.billing.application.dto.PaymentPreferenceResult;
 import com.menta.billing.application.dto.ProviderPaymentResult;
+import com.menta.billing.application.dto.RateLimitDecision;
 import com.menta.billing.application.port.out.BankTransferRateLimitPort;
 import com.menta.billing.application.port.out.BillingPlansRateLimitPort;
 import com.menta.billing.application.port.out.CourseCatalogPort;
@@ -228,6 +229,21 @@ class SubscriptionCheckoutIntegrationTest extends AbstractBillingMySqlIntegratio
     // --- Escenario 1 --------------------------------------------------------
 
     @Test
+    void a_bank_transfer_checkout_stores_its_payment_method_on_the_payment() {
+        when(bankTransferRateLimitPort.consumeBankTransferCreation(any())).thenReturn(RateLimitDecision.allowed());
+        UUID userId = seedStudent();
+        UUID planId = seedPlan(PlanStatus.ACTIVE, "BANK_TRANSFER", "course-1");
+
+        ResponseEntity<Map> response = checkout(userId, planId, "BANK_TRANSFER", "idem-bt");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(paymentRepository.findAll()).hasSize(1);
+        var payment = paymentRepository.findAll().get(0);
+        assertThat(payment.getStatusType()).isEqualTo("AWAITING_MANUAL_VERIFICATION");
+        assertThat(payment.getPaymentMethod()).isEqualTo("BANK_TRANSFER");
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     void checkout_creates_a_pending_subscription_and_an_unbound_payment_then_returns_the_checkout_url() {
         UUID userId = seedStudent();
@@ -244,6 +260,7 @@ class SubscriptionCheckoutIntegrationTest extends AbstractBillingMySqlIntegratio
         var payment = paymentRepository.findAll().get(0);
         assertThat(payment.getUserId()).isEqualTo(userId);
         assertThat(payment.getStatusType()).isEqualTo("AWAITING_PROVIDER");
+        assertThat(payment.getPaymentMethod()).isEqualTo("MERCADO_PAGO");
         // The provider id genuinely does not exist yet — that is the whole point.
         assertThat(payment.getProviderPaymentId()).isNull();
         assertThat(payment.getExpectedExternalReference()).isEqualTo(response.getBody().get("externalReference"));

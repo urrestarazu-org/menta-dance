@@ -31,6 +31,7 @@ import com.menta.billing.domain.model.FulfillmentStatus;
 import com.menta.billing.domain.model.Money;
 import com.menta.billing.domain.model.Payment;
 import com.menta.billing.domain.model.PaymentId;
+import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.domain.model.PaymentStatus;
 import com.menta.billing.domain.model.PaymentTarget;
 import com.menta.billing.domain.model.PhysicalCourseQuote;
@@ -144,7 +145,7 @@ class PhysicalCapacityAssignmentOutboxEventHandlerTest {
             PAYMENT_ID, STUDENT_UUID, "mp-1",
             Money.of(new BigDecimal("1500.00"), "ARS"),
             "ext-1", "merchant-1",
-            new PaymentTarget.Physical(QUOTE_ID_STR),
+            PaymentMethod.MERCADO_PAGO, new PaymentTarget.Physical(QUOTE_ID_STR),
             new PaymentStatus.Completed(NOW),
             NOW
         );

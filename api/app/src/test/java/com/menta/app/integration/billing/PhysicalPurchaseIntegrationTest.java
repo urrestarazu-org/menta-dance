@@ -39,6 +39,7 @@ import com.menta.billing.application.port.out.PaymentProviderPort;
 import com.menta.billing.domain.model.Money;
 import com.menta.billing.domain.model.Payment;
 import com.menta.billing.domain.model.PaymentId;
+import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.domain.model.PaymentTarget;
 import com.menta.billing.domain.model.Purchase;
 import com.menta.billing.infrastructure.persistence.entity.PaymentJpaEntity;
@@ -344,7 +345,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         PaymentId paymentId = PaymentId.generate();
         Payment payment = Payment.awaitingManualVerification(
             paymentId, ownerId, Money.of(amount, "ARS"), "PHY-BT-" + paymentId, BANK_CBU,
-            new PaymentTarget.Physical(quoteId), Instant.now()
+            PaymentMethod.BANK_TRANSFER, new PaymentTarget.Physical(quoteId), Instant.now()
         );
         paymentRepository.save(PaymentJpaMapper.toEntity(payment));
         return paymentId;
@@ -419,7 +420,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         UUID paymentId = UUID.randomUUID();
         paymentRepository.save(new PaymentJpaEntity(
             paymentId, userId, providerPaymentId, new BigDecimal("100.00"), "ARS",
-            externalReference, MERCHANT_ACCOUNT_ID, "PHYSICAL", quoteId, "AWAITING_PROVIDER",
+            externalReference, MERCHANT_ACCOUNT_ID, "MERCADO_PAGO", "PHYSICAL", quoteId, "AWAITING_PROVIDER",
             null, null, Instant.now()
         ));
         return paymentId;
@@ -1375,6 +1376,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
 
         assertThat(paymentRepository.findAll()).hasSize(1);
         assertThat(paymentRepository.findAll().get(0).getStatusType()).isEqualTo("AWAITING_MANUAL_VERIFICATION");
+        assertThat(paymentRepository.findAll().get(0).getPaymentMethod()).isEqualTo("BANK_TRANSFER");
         assertThat(holdRepository.findAll()).isEmpty();
         verifyNoInteractions(paymentPreferencePort);
     }
@@ -1400,6 +1402,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
         assertThat(response.getBody().get("bankTransferInstructions")).isNull();
         UUID paymentId = UUID.fromString((String) response.getBody().get("paymentId"));
         assertThat(holdRepository.findByPaymentIdOrdered(paymentId)).hasSize(1);
+        assertThat(paymentRepository.findById(paymentId).orElseThrow().getPaymentMethod()).isEqualTo("MERCADO_PAGO");
     }
 
     /** Requirement "An expired quote is rejected with 410" — no {@code Payment} created. */

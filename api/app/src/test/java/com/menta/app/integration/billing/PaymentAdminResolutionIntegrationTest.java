@@ -26,6 +26,7 @@ import com.menta.billing.application.port.out.PaymentProviderPort;
 import com.menta.billing.domain.model.Money;
 import com.menta.billing.domain.model.Payment;
 import com.menta.billing.domain.model.PaymentId;
+import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.domain.model.PaymentTarget;
 import com.menta.billing.domain.model.PlanStatus;
 import com.menta.billing.domain.model.Subscription;
@@ -163,7 +164,8 @@ class PaymentAdminResolutionIntegrationTest extends AbstractBillingMySqlIntegrat
         PaymentId paymentId = PaymentId.generate();
         Payment payment = Payment.awaitingManualVerification(
             paymentId, ownerId, Money.of(PLAN_PRICE, "ARS"), "SUB-" + paymentId,
-            "0000003100000000000000", new PaymentTarget.Virtual(planId.toString()), Instant.now()
+            "0000003100000000000000", PaymentMethod.BANK_TRANSFER,
+            new PaymentTarget.Virtual(planId.toString()), Instant.now()
         );
         paymentRepository.save(PaymentJpaMapper.toEntity(payment));
         subscriptionRepository.save(SubscriptionJpaMapper.toEntity(Subscription.pendingCheckout(

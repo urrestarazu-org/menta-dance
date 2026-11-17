@@ -20,6 +20,7 @@ import com.menta.billing.domain.model.Money;
 import com.menta.billing.domain.model.Payment;
 import com.menta.billing.domain.model.PaymentAuditAction;
 import com.menta.billing.domain.model.PaymentId;
+import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.domain.model.PaymentStatus;
 import com.menta.billing.domain.model.PaymentTarget;
 import java.math.BigDecimal;
@@ -46,7 +47,7 @@ class CorrectPaymentUseCaseImplTest {
     private static Payment paymentWith(PaymentStatus status) {
         return new Payment(
             PAYMENT_ID, USER_ID, null, AMOUNT, "ext-1", "merchant-1",
-            new PaymentTarget.Virtual("plan-1"), status, CREATED_AT
+            PaymentMethod.BANK_TRANSFER, new PaymentTarget.Virtual("plan-1"), status, CREATED_AT
         );
     }
 

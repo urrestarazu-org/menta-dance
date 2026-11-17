@@ -121,7 +121,7 @@ class PresentialPurchaseExceptionPathIntegrationTest extends AbstractBillingMySq
         String quoteId = seedIndividualQuote(courseId, sessionId).toString();
         paymentRepository.save(new PaymentJpaEntity(
             paymentId, studentId, "mp-exception-path", new BigDecimal("100.00"), "ARS",
-            "ext-1", "merchant-1", "PHYSICAL", quoteId, "AWAITING_PROVIDER",
+            "ext-1", "merchant-1", "MERCADO_PAGO", "PHYSICAL", quoteId, "AWAITING_PROVIDER",
             null, null, Instant.now()
         ));
         when(paymentProviderPort.fetchPayment("mp-exception-path")).thenReturn(
@@ -164,7 +164,7 @@ class PresentialPurchaseExceptionPathIntegrationTest extends AbstractBillingMySq
         String quoteId = seedIndividualQuote(courseId, sessionId).toString();
         paymentRepository.save(new PaymentJpaEntity(
             paymentId, studentId, "mp-assigned-path", new BigDecimal("100.00"), "ARS",
-            "ext-2", "merchant-1", "PHYSICAL", quoteId, "AWAITING_PROVIDER",
+            "ext-2", "merchant-1", "MERCADO_PAGO", "PHYSICAL", quoteId, "AWAITING_PROVIDER",
             null, null, Instant.now()
         ));
         when(paymentProviderPort.fetchPayment("mp-assigned-path")).thenReturn(

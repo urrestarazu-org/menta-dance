@@ -78,14 +78,14 @@ class PaymentFulfillmentServiceTest {
     private static Payment virtualPayment(PaymentStatus status) {
         return new Payment(
             PaymentId.generate(), USER_ID, "mp-1", AMOUNT, "ext-1", "merchant-1",
-            new PaymentTarget.Virtual(PLAN_ID.toString()), status, NOW
+            PaymentMethod.MERCADO_PAGO, new PaymentTarget.Virtual(PLAN_ID.toString()), status, NOW
         );
     }
 
     private static Payment physicalPayment(PaymentStatus status) {
         return new Payment(
             PaymentId.generate(), USER_ID, "mp-1", AMOUNT, "ext-1", "merchant-1",
-            new PaymentTarget.Physical("session-1"), status, NOW
+            PaymentMethod.MERCADO_PAGO, new PaymentTarget.Physical("session-1"), status, NOW
         );
     }
 

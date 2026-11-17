@@ -96,7 +96,7 @@ class BillingOutboxAppenderAfterCommitIntegrationTest extends AbstractBillingMyS
     private void seedPendingPhysicalPayment(String providerPaymentId, String externalReference) {
         paymentRepository.save(new PaymentJpaEntity(
             UUID.randomUUID(), UUID.randomUUID(), providerPaymentId, new BigDecimal("100.00"),
-            "ARS", externalReference, "merchant-1", "PHYSICAL", UUID.randomUUID().toString(),
+            "ARS", externalReference, "merchant-1", "MERCADO_PAGO", "PHYSICAL", UUID.randomUUID().toString(),
             "AWAITING_PROVIDER", null, null, Instant.now()
         ));
     }
@@ -128,7 +128,7 @@ class BillingOutboxAppenderAfterCommitIntegrationTest extends AbstractBillingMyS
         UUID paymentId = UUID.randomUUID();
         paymentRepository.save(new PaymentJpaEntity(
             paymentId, UUID.randomUUID(), providerId, new BigDecimal("100.00"),
-            "ARS", externalRef, "merchant-1", "PHYSICAL", UUID.randomUUID().toString(),
+            "ARS", externalRef, "merchant-1", "MERCADO_PAGO", "PHYSICAL", UUID.randomUUID().toString(),
             "AWAITING_PROVIDER", null, null, Instant.now()
         ));
         wireApproved(providerId, externalRef);

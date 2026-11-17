@@ -31,6 +31,7 @@ import com.menta.billing.application.port.out.PaymentProviderPort;
 import com.menta.billing.domain.model.Money;
 import com.menta.billing.domain.model.Payment;
 import com.menta.billing.domain.model.PaymentId;
+import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.domain.model.PaymentTarget;
 import com.menta.billing.domain.model.Purchase;
 import com.menta.billing.infrastructure.persistence.entity.PurchaseJpaEntity;
@@ -141,7 +142,8 @@ class PurchaseAdminResolutionIntegrationTest extends AbstractBillingMySqlIntegra
         PaymentId paymentId = PaymentId.generate();
         Payment payment = Payment.awaitingManualVerification(
             paymentId, ownerId, Money.of(new BigDecimal("100.00"), "ARS"), "PHY-RES-" + paymentId,
-            "0000003100000000000000", new PaymentTarget.Physical(UUID.randomUUID().toString()), Instant.now()
+            "0000003100000000000000", PaymentMethod.BANK_TRANSFER,
+            new PaymentTarget.Physical(UUID.randomUUID().toString()), Instant.now()
         );
         paymentRepository.save(PaymentJpaMapper.toEntity(payment));
         Purchase purchase = inException

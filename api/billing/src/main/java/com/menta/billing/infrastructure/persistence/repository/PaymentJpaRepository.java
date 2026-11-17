@@ -76,8 +76,8 @@ public interface PaymentJpaRepository extends JpaRepository<PaymentJpaEntity, UU
     @Query(
         """
         SELECT new com.menta.billing.infrastructure.persistence.projection.OwnPaymentRow(
-            p.id, p.statusType, p.expectedAmount, p.expectedCurrency, p.expectedExternalReference,
-            p.targetModality, p.targetReference, p.createdAt, s.providerPreferenceId, pl.name, q.courseId)
+            p.id, p.statusType, p.expectedAmount, p.expectedCurrency, p.paymentMethod,
+            p.targetModality, p.targetReference, p.createdAt, pl.name, q.courseId)
           FROM PaymentJpaEntity p
           LEFT JOIN SubscriptionJpaEntity s ON s.paymentId = p.id
           LEFT JOIN PlanJpaEntity pl ON pl.id = s.planId

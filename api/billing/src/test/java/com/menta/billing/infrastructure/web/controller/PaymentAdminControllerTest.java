@@ -23,6 +23,7 @@ import com.menta.billing.domain.model.ManualVerificationDecision;
 import com.menta.billing.domain.model.Money;
 import com.menta.billing.domain.model.Payment;
 import com.menta.billing.domain.model.PaymentId;
+import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.domain.model.PaymentProof;
 import com.menta.billing.domain.model.PaymentProofId;
 import com.menta.billing.domain.model.PaymentTarget;
@@ -281,7 +282,8 @@ class PaymentAdminControllerTest {
     private static Payment paymentFixture() {
         return Payment.awaitingManualVerification(
             PAYMENT_ID, UUID.randomUUID(), Money.of(new BigDecimal("15000.00"), "ARS"), "SUB-" + PAYMENT_ID,
-            "0000003100000000000000", new PaymentTarget.Virtual("plan-basic"), Instant.parse("2026-09-01T10:00:00Z")
+            "0000003100000000000000", PaymentMethod.BANK_TRANSFER,
+            new PaymentTarget.Virtual("plan-basic"), Instant.parse("2026-09-01T10:00:00Z")
         );
     }
 

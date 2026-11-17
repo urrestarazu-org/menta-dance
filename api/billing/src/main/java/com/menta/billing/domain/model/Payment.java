@@ -23,6 +23,11 @@ import java.util.UUID;
  * {@link #bindProviderPaymentId(String)} — and only after the provider's own
  * authenticated response has been matched against every expected field. The
  * webhook itself contributes nothing but a {@code data.id}.</p>
+ *
+ * <p>The {@link PaymentMethod} is a fact of the payment from the moment it is created (#771): the
+ * checkout that creates it states the rail, it is stored with the row, and no other layer has to work
+ * it out afterwards. It is mandatory, with no default, so a creator that forgets it fails to compile
+ * instead of silently recording the wrong rail.</p>
  */
 public final class Payment {
 
@@ -32,14 +37,15 @@ public final class Payment {
     private final Money expectedAmount;
     private final String expectedExternalReference;
     private final String expectedMerchantAccountId;
+    private final PaymentMethod paymentMethod;
     private final PaymentTarget target;
     private final PaymentStatus status;
     private final Instant createdAt;
 
     public Payment(
         PaymentId id, UUID userId, String providerPaymentId, Money expectedAmount,
-        String expectedExternalReference, String expectedMerchantAccountId, PaymentTarget target,
-        PaymentStatus status, Instant createdAt
+        String expectedExternalReference, String expectedMerchantAccountId, PaymentMethod paymentMethod,
+        PaymentTarget target, PaymentStatus status, Instant createdAt
     ) {
         this.id = Objects.requireNonNull(id, "id cannot be null");
         this.userId = Objects.requireNonNull(userId, "userId cannot be null");
@@ -52,6 +58,7 @@ public final class Payment {
             Objects.requireNonNull(expectedExternalReference, "expectedExternalReference cannot be null");
         this.expectedMerchantAccountId =
             Objects.requireNonNull(expectedMerchantAccountId, "expectedMerchantAccountId cannot be null");
+        this.paymentMethod = Objects.requireNonNull(paymentMethod, "paymentMethod cannot be null");
         this.target = Objects.requireNonNull(target, "target cannot be null");
         this.status = Objects.requireNonNull(status, "status cannot be null");
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt cannot be null");
@@ -64,11 +71,11 @@ public final class Payment {
      */
     public static Payment awaitingProvider(
         PaymentId id, UUID userId, Money expectedAmount, String expectedExternalReference,
-        String expectedMerchantAccountId, PaymentTarget target, Instant createdAt
+        String expectedMerchantAccountId, PaymentMethod paymentMethod, PaymentTarget target, Instant createdAt
     ) {
         return new Payment(
             id, userId, null, expectedAmount, expectedExternalReference, expectedMerchantAccountId,
-            target, new PaymentStatus.AwaitingProvider(), createdAt
+            paymentMethod, target, new PaymentStatus.AwaitingProvider(), createdAt
         );
     }
 
@@ -82,11 +89,11 @@ public final class Payment {
      */
     public static Payment awaitingManualVerification(
         PaymentId id, UUID userId, Money expectedAmount, String expectedExternalReference,
-        String expectedMerchantAccountId, PaymentTarget target, Instant createdAt
+        String expectedMerchantAccountId, PaymentMethod paymentMethod, PaymentTarget target, Instant createdAt
     ) {
         return new Payment(
             id, userId, null, expectedAmount, expectedExternalReference, expectedMerchantAccountId,
-            target, new PaymentStatus.AwaitingManualVerification(), createdAt
+            paymentMethod, target, new PaymentStatus.AwaitingManualVerification(), createdAt
         );
     }
 
@@ -254,7 +261,7 @@ public final class Payment {
     private Payment copyWith(String newProviderPaymentId, PaymentStatus newStatus) {
         return new Payment(
             id, userId, newProviderPaymentId, expectedAmount, expectedExternalReference,
-            expectedMerchantAccountId, target, newStatus, createdAt
+            expectedMerchantAccountId, paymentMethod, target, newStatus, createdAt
         );
     }
 
@@ -282,6 +289,11 @@ public final class Payment {
 
     public String getExpectedMerchantAccountId() {
         return expectedMerchantAccountId;
+    }
+
+    /** The rail this payment was created for and is settled through; stored, never deduced. */
+    public PaymentMethod getPaymentMethod() {
+        return paymentMethod;
     }
 
     public PaymentTarget getTarget() {

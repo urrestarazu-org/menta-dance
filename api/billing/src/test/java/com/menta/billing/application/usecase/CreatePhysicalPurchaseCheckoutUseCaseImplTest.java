@@ -126,6 +126,7 @@ class CreatePhysicalPurchaseCheckoutUseCaseImplTest {
         assertThat(payment.getValue().getExpectedMerchantAccountId()).isEqualTo(MERCHANT_ACCOUNT_ID);
         assertThat(payment.getValue().getStatus()).isEqualTo(new PaymentStatus.AwaitingProvider());
         assertThat(payment.getValue().getTarget()).isEqualTo(new PaymentTarget.Physical(quote.getId().toString()));
+        assertThat(payment.getValue().getPaymentMethod()).isEqualTo(PaymentMethod.MERCADO_PAGO);
 
         assertThat(result.status()).isEqualTo("PENDING");
         assertThat(result.quoteId()).isEqualTo(quote.getId().toString());
@@ -419,7 +420,7 @@ class CreatePhysicalPurchaseCheckoutUseCaseImplTest {
         PaymentId existingPaymentId = PaymentId.generate();
         Payment existing = Payment.awaitingProvider(
             existingPaymentId, USER_ID, quote.getAmount(), "does-not-matter-before-lookup", MERCHANT_ACCOUNT_ID,
-            new PaymentTarget.Physical(quote.getId().toString()), NOW.minusSeconds(120)
+            PaymentMethod.MERCADO_PAGO, new PaymentTarget.Physical(quote.getId().toString()), NOW.minusSeconds(120)
         );
         when(paymentRepository.findByExternalReference(any())).thenReturn(Optional.of(existing));
 
@@ -514,7 +515,7 @@ class CreatePhysicalPurchaseCheckoutUseCaseImplTest {
         PaymentId existingPaymentId = PaymentId.generate();
         Payment existing = Payment.awaitingProvider(
             existingPaymentId, USER_ID, quote.getAmount(), "does-not-matter-before-lookup", MERCHANT_ACCOUNT_ID,
-            new PaymentTarget.Physical(quote.getId().toString()), NOW.minusSeconds(120)
+            PaymentMethod.MERCADO_PAGO, new PaymentTarget.Physical(quote.getId().toString()), NOW.minusSeconds(120)
         );
         when(paymentRepository.findByExternalReference(any())).thenReturn(Optional.of(existing));
 

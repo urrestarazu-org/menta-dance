@@ -130,7 +130,7 @@ public class CreatePhysicalPurchaseCheckoutUseCaseImpl implements CreatePhysical
 
         Payment payment = paymentRepository.save(Payment.awaitingProvider(
             paymentId, command.userId(), quote.getAmount(), externalReference, merchantAccountId,
-            new PaymentTarget.Physical(quote.getId().toString()), now
+            PaymentMethod.MERCADO_PAGO, new PaymentTarget.Physical(quote.getId().toString()), now
         ));
 
         return toResult(payment, holdExpiresAt);

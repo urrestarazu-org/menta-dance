@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.menta.billing.domain.model.Money;
 import com.menta.billing.domain.model.Payment;
 import com.menta.billing.domain.model.PaymentId;
+import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.domain.model.PaymentTarget;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -27,14 +28,14 @@ class PhysicalPurchaseCheckoutResultTest {
     private static Payment manualVerificationPayment() {
         return Payment.awaitingManualVerification(
             PaymentId.generate(), UUID.randomUUID(), AMOUNT, "PHY-BT-abc", "0000003100000000000000",
-            new PaymentTarget.Physical(QUOTE_ID), NOW
+            PaymentMethod.BANK_TRANSFER, new PaymentTarget.Physical(QUOTE_ID), NOW
         );
     }
 
     private static Payment awaitingProviderPayment() {
         return Payment.awaitingProvider(
             PaymentId.generate(), UUID.randomUUID(), AMOUNT, "PHY-abc", "merchant-1",
-            new PaymentTarget.Physical(QUOTE_ID), NOW
+            PaymentMethod.MERCADO_PAGO, new PaymentTarget.Physical(QUOTE_ID), NOW
         );
     }
 
