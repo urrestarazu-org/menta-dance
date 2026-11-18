@@ -2,24 +2,33 @@ openapi: 3.1.0
 
 # Contrato HTTP de la superficie Physical v1.
 #
-# Escrito y versionado a mano, mismo criterio que auth-v1.yaml/billing-v1.yaml:
-# el diff se revisa en el PR igual que la colección Bruno.
+# Escrito y versionado a mano, mismo criterio que auth-v1.yaml/billing-v1.yaml/
+# virtual-v1.yaml: el diff se revisa en el PR igual que la colección Bruno.
 #
-# Sólo describe endpoints IMPLEMENTADOS. El catálogo de sólo lectura de
-# Physical vive compuesto en api:app (docs/07-CATALOG-API.md, #95). Este
-# contrato cubre la gestión ADMIN/PROFESOR (US-PHYSICAL-005, US-PHYSICAL-006)
-# y, desde US-PHYSICAL-001, el primer endpoint público de Physical: el flujo
-# de check-in con QR para el alumno y el lector de puerta.
+# Sólo describe endpoints IMPLEMENTADOS. Cubre todas las rutas de producción
+# de los controllers de physical (19): gestión de cursos y sesiones
+# (ADMIN/INSTRUCTOR), agenda y roster del staff (también RECEPTIONIST), las
+# sesiones, el QR y el historial de asistencia del alumno, el check-in (QR del
+# lector de puerta y MANUAL de recepción) y el registro de dispositivos
+# (ADMIN). El catálogo de sólo lectura de Physical vive compuesto en api:app
+# (docs/07-CATALOG-API.md, #95) y no está en este contrato.
+#
+# Un test (PhysicalOpenApiContractTest) lee los controllers y los records reales
+# y falla si una ruta, un campo, un enum o el conjunto de respuestas cambian sin
+# este contrato.
 
 info:
   title: Menta Dance — Physical API
   version: "1.0.0"
   description: |
     Gestión de cursos y sesiones presenciales (US-PHYSICAL-005,
-    US-PHYSICAL-006) para ADMIN/PROFESOR, más el check-in con QR
-    (US-PHYSICAL-001) para el alumno confirmado y el lector de puerta, y el
-    check-in MANUAL (#45, US-PHYSICAL-008) para el recepcionista/ADMIN
-    cuando el flujo QR no es viable.
+    US-PHYSICAL-006) para ADMIN/PROFESOR, agenda y roster de las sesiones para
+    el staff (#355), sesiones e historial de asistencia del propio alumno
+    (#356, #39), el check-in con QR (US-PHYSICAL-001) para el alumno
+    confirmado y el lector de puerta, el check-in MANUAL (#45,
+    US-PHYSICAL-008) para el recepcionista/ADMIN cuando el flujo QR no es
+    viable, y el registro de los lectores de puerta (#44, US-PHYSICAL-007,
+    sólo ADMIN).
 
     ## Errores
 
@@ -27,7 +36,17 @@ info:
     miembro adicional `code` estable. Los clientes deben discriminar por
     `code`, no por `detail`.
 
+    ## Fechas
+
+    Los instantes van en UTC, ISO-8601 con `Z`. El `dayOfWeek` y el
+    `startTime` de un curso también son UTC; el cliente convierte a la zona del
+    usuario (ADR-0048). `startTime` se responde como `HH:mm` y sólo lleva
+    `:ss` cuando los segundos no son cero.
+
     ## Autorización
+
+    Sin token, toda ruta protegida responde `401 AUTHENTICATION_REQUIRED`; con
+    un rol sin acceso, `403 ACCESS_DENIED`.
 
     `/api/v1/admin/physical/courses/**` y `/api/v1/admin/physical/sessions/**`
     aceptan tanto `ADMIN` como `INSTRUCTOR` (rol interno de `PROFESOR`) — la
@@ -45,8 +64,13 @@ info:
     Segunda excepción (#355): `GET /api/v1/admin/physical/sessions/{sessionId}/roster`
     (alumnos con cupo confirmado de una sesión y su asistencia) también admite a
     `RECEPTIONIST`, con la misma regla exacta por método y ruta: recepción sigue sin
-    poder leer la sesión (`GET .../sessions/{sessionId}`), ni hacer `POST`, `PUT`,
-    `PATCH` o `DELETE` sobre ella.
+    poder modificar la sesión (`PATCH .../sessions/{sessionId}`): el resto de
+    `/api/v1/admin/physical/sessions/**` sigue siendo sólo `ADMIN`/`INSTRUCTOR`.
+
+    `GET /api/v1/physical/sessions/me` es sólo `STUDENT`. `GET
+    /api/v1/physical/attendance/me` acepta cualquier rol autenticado y
+    `GET /api/v1/admin/physical/attendance/{studentId}` acepta `ADMIN` e
+    `INSTRUCTOR`. `/api/v1/admin/physical/devices/**` es sólo `ADMIN`.
 
     `POST /api/v1/physical/sessions/{sessionId}/access-qr` requiere sólo un
     Bearer token válido (sin rol específico) — el alumno autenticado es su
@@ -60,8 +84,7 @@ info:
     el recepcionista/ADMIN (variante MANUAL, #45) sí envía un Bearer token
     de usuario, pero su rol se verifica DENTRO del caso de uso, no en el
     filtro de seguridad — `RoleAuthorizationManager` sólo discrimina por
-    prefijo de URL y no puede leer el body para elegir entre variantes
-    (`SecurityConfig` no se modifica por este endpoint).
+    prefijo de URL y no puede leer el body para elegir entre variantes.
 
 servers:
   - url: http://localhost:8081
@@ -93,7 +116,7 @@ tags:
       Lectura del historial de asistencia mensual (#39, US-PHYSICAL-002).
       Un endpoint self-service para el alumno y uno elevado para
       ADMIN/PROFESOR, ambos de sólo lectura — sin paginación, acotados a un
-      mes calendario.
+      rango de a lo sumo 92 días.
   - name: Gestión de dispositivos
     description: |
       Registro, rotación y revocación de lectores QR de puerta, más el
@@ -139,9 +162,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/PhysicalCourseManagementResponse'
         '400':
-          $ref: '#/components/responses/InvalidRequest'
+          $ref: '#/components/responses/InvalidCourseRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '403':
-          description: Rol sin acceso a este prefijo (ni ADMIN ni INSTRUCTOR).
+          $ref: '#/components/responses/AccessDenied'
 
     get:
       tags: [Gestión de cursos]
@@ -158,8 +183,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PhysicalCourseManagementListResponse'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '403':
-          description: Rol sin acceso a este prefijo (ni ADMIN ni INSTRUCTOR).
+          $ref: '#/components/responses/AccessDenied'
 
   /api/v1/admin/physical/courses/{courseId}:
     patch:
@@ -196,36 +223,12 @@ paths:
                 $ref: '#/components/schemas/PhysicalCourseManagementResponse'
         '400':
           $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '403':
-          description: |
-            Rol sin acceso a este prefijo, o un PROFESOR autenticado que no
-            es dueño de este curso (`COURSE_NOT_OWNED`).
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-              examples:
-                no_es_dueno:
-                  value:
-                    type: https://menta.dance/problems/course_not_owned
-                    title: Forbidden
-                    status: 403
-                    detail: You do not own this course.
-                    code: COURSE_NOT_OWNED
+          $ref: '#/components/responses/NotOwned'
         '404':
-          description: Curso inexistente.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-              examples:
-                no_encontrado:
-                  value:
-                    type: https://menta.dance/problems/course_not_found
-                    title: Not Found
-                    status: 404
-                    detail: Course not found.
-                    code: COURSE_NOT_FOUND
+          $ref: '#/components/responses/CourseNotFound'
         '409':
           description: Desactivación rechazada por sesiones futuras con cupos asignados.
           content:
@@ -278,10 +281,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PhysicalSessionManagementResponse'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '403':
-          description: Rol sin acceso, o PROFESOR que no es dueño del curso (`COURSE_NOT_OWNED`).
+          $ref: '#/components/responses/NotOwned'
         '404':
-          description: Curso inexistente.
+          $ref: '#/components/responses/CourseNotFound'
         '409':
           $ref: '#/components/responses/SessionAlreadyExists'
 
@@ -321,8 +328,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PhysicalSessionManagementListResponse'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '403':
-          description: Rol sin acceso, o PROFESOR que no es dueño del curso (`COURSE_NOT_OWNED`).
+          $ref: '#/components/responses/NotOwned'
+        '404':
+          $ref: '#/components/responses/CourseNotFound'
 
   /api/v1/admin/physical/courses/{courseId}/sessions/batch:
     post:
@@ -369,12 +382,21 @@ paths:
               schema:
                 $ref: '#/components/schemas/PhysicalSessionManagementListResponse'
         '400':
-          description: Body inválido, rango invertido o sin ninguna fecha en el día de la semana del curso (`INVALID_REQUEST`).
+          description: >-
+            `courseId` malformado, body inválido, rango invertido o sin ninguna fecha en el día de la
+            semana del curso (`INVALID_REQUEST`).
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
               examples:
+                id_malformado:
+                  value:
+                    type: https://menta.dance/problems/invalid_request
+                    title: Bad Request
+                    status: 400
+                    detail: Malformed request.
+                    code: INVALID_REQUEST
                 rango_sin_fechas:
                   value:
                     type: https://menta.dance/problems/invalid_request
@@ -382,10 +404,12 @@ paths:
                     status: 400
                     detail: The range must have fromDate not after toDate and include a date on the course's day of week.
                     code: INVALID_REQUEST
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '403':
-          description: Rol sin acceso, o PROFESOR que no es dueño del curso (`COURSE_NOT_OWNED`).
+          $ref: '#/components/responses/NotOwned'
         '404':
-          description: Curso inexistente.
+          $ref: '#/components/responses/CourseNotFound'
         '409':
           $ref: '#/components/responses/SessionAlreadyExists'
 
@@ -482,9 +506,9 @@ paths:
                     detail: The range must have from before to and span at most 7 days.
                     code: INVALID_REQUEST
         '401':
-          description: Sin credencial de autenticación.
+          $ref: '#/components/responses/AuthenticationRequired'
         '403':
-          description: El rol del token no es `ADMIN`, `INSTRUCTOR` ni `RECEPTIONIST`.
+          $ref: '#/components/responses/AccessDenied'
 
   /api/v1/admin/physical/sessions/{sessionId}:
     patch:
@@ -517,10 +541,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PhysicalSessionManagementResponse'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '403':
-          description: Rol sin acceso, o PROFESOR que no es dueño del curso de la sesión (`COURSE_NOT_OWNED`).
+          $ref: '#/components/responses/NotOwned'
         '404':
-          description: Sesión inexistente.
+          $ref: '#/components/responses/SessionNotFound'
         '409':
           description: Capacidad por debajo de lo asignado, o la sesión ya ocurrió.
           content:
@@ -613,23 +641,11 @@ paths:
                     detail: Malformed request.
                     code: INVALID_REQUEST
         '401':
-          description: Sin credencial de autenticación.
+          $ref: '#/components/responses/AuthenticationRequired'
         '403':
-          description: El rol del token no es `ADMIN`, `INSTRUCTOR` ni `RECEPTIONIST`.
+          $ref: '#/components/responses/AccessDenied'
         '404':
-          description: Sesión inexistente (`SESSION_NOT_FOUND`).
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-              examples:
-                sesion_inexistente:
-                  value:
-                    type: https://menta.dance/problems/session_not_found
-                    title: Not Found
-                    status: 404
-                    detail: Session not found.
-                    code: SESSION_NOT_FOUND
+          $ref: '#/components/responses/SessionNotFound'
 
   /api/v1/physical/sessions/me:
     get:
@@ -663,10 +679,8 @@ paths:
         El id del alumno sale siempre del token — este endpoint no tiene
         parámetro `studentId`; si se envía uno, se ignora.
 
-        Pendiente: la sala o ubicación y el tipo de asignación
-        (mensual/individual) no se exponen porque el modelo de physical no los
-        persiste hoy (la sesión no tiene sala y la asignación no guarda el
-        tipo de compra).
+        Cada sesión informa cómo se obtuvo el lugar en `assignmentType`. La sala
+        o ubicación no se expone: la sesión no tiene sala.
       operationId: listOwnPhysicalSessions
       parameters:
         - $ref: '#/components/parameters/StudentRangeFrom'
@@ -681,9 +695,9 @@ paths:
         '400':
           $ref: '#/components/responses/InvalidRange'
         '401':
-          description: Sin credencial de autenticación.
+          $ref: '#/components/responses/AuthenticationRequired'
         '403':
-          description: El rol del token no es `STUDENT`.
+          $ref: '#/components/responses/AccessDenied'
 
   /api/v1/physical/sessions/{sessionId}/access-qr:
     post:
@@ -711,14 +725,42 @@ paths:
               schema:
                 $ref: '#/components/schemas/AccessQrResponse'
         '400':
-          description: '`sessionId` malformado (`INVALID_REQUEST`).'
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '403':
           description: |
             Sesión cancelada (`SESSION_CANCELLED`), fuera de la ventana de
             check-in (`OUTSIDE_CHECK_IN_WINDOW`), o sin asignación de cupo
             confirmada (`CAPACITY_ASSIGNMENT_REQUIRED`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                sesion_cancelada:
+                  value:
+                    type: https://menta.dance/problems/session_cancelled
+                    title: Forbidden
+                    status: 403
+                    detail: This session has been cancelled and no longer accepts check-ins.
+                    code: SESSION_CANCELLED
+                fuera_de_ventana:
+                  value:
+                    type: https://menta.dance/problems/outside_check_in_window
+                    title: Forbidden
+                    status: 403
+                    detail: Check-in is not open for this session.
+                    code: OUTSIDE_CHECK_IN_WINDOW
+                sin_cupo:
+                  value:
+                    type: https://menta.dance/problems/capacity_assignment_required
+                    title: Forbidden
+                    status: 403
+                    detail: Confirmed capacity assignment is required to check in.
+                    code: CAPACITY_ASSIGNMENT_REQUIRED
         '404':
-          description: Sesión inexistente (`SESSION_NOT_FOUND`).
+          $ref: '#/components/responses/SessionNotFound'
 
   /api/v1/physical/sessions/{sessionId}/check-ins:
     post:
@@ -831,7 +873,7 @@ paths:
           description: |
             Body inválido (`INVALID_REQUEST`) — `type` distinto de `QR`
             o `MANUAL`, un body mixto que mezcla campos de ambas variantes,
-            o un `studentId` mal formado; o, sólo para QR, `qrCredentials`
+            un `sessionId` o un `studentId` mal formado; o, sólo para QR, `qrCredentials`
             malformado o de otra sesión (`INVALID_QR_CREDENTIAL`).
           content:
             application/problem+json:
@@ -1040,7 +1082,7 @@ paths:
         '400':
           $ref: '#/components/responses/InvalidRange'
         '401':
-          description: Sin credencial de autenticación.
+          $ref: '#/components/responses/AuthenticationRequired'
 
   /api/v1/admin/physical/attendance/{studentId}:
     get:
@@ -1093,9 +1135,9 @@ paths:
         '400':
           $ref: '#/components/responses/InvalidRange'
         '401':
-          description: Sin credencial de autenticación.
+          $ref: '#/components/responses/AuthenticationRequired'
         '403':
-          description: Rol sin acceso a este endpoint (ni ADMIN ni INSTRUCTOR).
+          $ref: '#/components/responses/AccessDenied'
 
   /api/v1/admin/physical/devices:
     post:
@@ -1123,11 +1165,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/PhysicalDeviceSecretResponse'
         '400':
-          description: Body inválido (bean validation).
+          $ref: '#/components/responses/InvalidRequest'
         '401':
-          description: Sin credencial de autenticación.
+          $ref: '#/components/responses/AuthenticationRequired'
         '403':
-          description: Rol autenticado distinto de ADMIN.
+          $ref: '#/components/responses/AccessDenied'
 
     get:
       tags: [Gestión de dispositivos]
@@ -1145,9 +1187,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/PhysicalDeviceListResponse'
         '401':
-          description: Sin credencial de autenticación.
+          $ref: '#/components/responses/AuthenticationRequired'
         '403':
-          description: Rol autenticado distinto de ADMIN.
+          $ref: '#/components/responses/AccessDenied'
 
   /api/v1/admin/physical/devices/{deviceId}:
     get:
@@ -1172,25 +1214,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/PhysicalDeviceResponse'
         '400':
-          description: '`deviceId` malformado (`INVALID_REQUEST`).'
+          $ref: '#/components/responses/InvalidRequest'
         '401':
-          description: Sin credencial de autenticación.
+          $ref: '#/components/responses/AuthenticationRequired'
         '403':
-          description: Rol autenticado distinto de ADMIN.
+          $ref: '#/components/responses/AccessDenied'
         '404':
-          description: Dispositivo inexistente (`DEVICE_NOT_FOUND`).
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-              examples:
-                no_encontrado:
-                  value:
-                    type: https://menta.dance/problems/device_not_found
-                    title: Not Found
-                    status: 404
-                    detail: Device not found.
-                    code: DEVICE_NOT_FOUND
+          $ref: '#/components/responses/DeviceNotFound'
 
   /api/v1/admin/physical/devices/{deviceId}/rotate-secret:
     post:
@@ -1220,13 +1250,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/PhysicalDeviceSecretResponse'
         '400':
-          description: '`deviceId` malformado (`INVALID_REQUEST`).'
+          $ref: '#/components/responses/InvalidRequest'
         '401':
-          description: Sin credencial de autenticación.
+          $ref: '#/components/responses/AuthenticationRequired'
         '403':
-          description: Rol autenticado distinto de ADMIN.
+          $ref: '#/components/responses/AccessDenied'
         '404':
-          description: Dispositivo inexistente (`DEVICE_NOT_FOUND`).
+          $ref: '#/components/responses/DeviceNotFound'
         '409':
           description: Dispositivo `REVOKED` — la rotación está terminantemente rechazada.
           content:
@@ -1266,13 +1296,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/PhysicalDeviceResponse'
         '400':
-          description: '`deviceId` malformado (`INVALID_REQUEST`).'
+          $ref: '#/components/responses/InvalidRequest'
         '401':
-          description: Sin credencial de autenticación.
+          $ref: '#/components/responses/AuthenticationRequired'
         '403':
-          description: Rol autenticado distinto de ADMIN.
+          $ref: '#/components/responses/AccessDenied'
         '404':
-          description: Dispositivo inexistente (`DEVICE_NOT_FOUND`).
+          $ref: '#/components/responses/DeviceNotFound'
         '409':
           description: Dispositivo ya `REVOKED` — rechazado, no un no-op.
           content:
@@ -1353,13 +1383,42 @@ components:
                 code: INVALID_REQUEST
     InvalidRequest:
       description: >-
-        Body inválido (bean validation), `professorId` no coincide con el actor (`PROFESSOR_MISMATCH`)
-        o un ADMIN que omite `professorId` (`PROFESSOR_REQUIRED`).
+        Un id del path no es un UUID o el body no pasa la validación (`INVALID_REQUEST`).
       content:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
           examples:
+            id_invalido:
+              value:
+                type: https://menta.dance/problems/invalid_request
+                title: Bad Request
+                status: 400
+                detail: Malformed request.
+                code: INVALID_REQUEST
+            body_invalido:
+              value:
+                type: https://menta.dance/problems/invalid_request
+                title: Bad Request
+                status: 400
+                detail: La solicitud contiene datos inválidos.
+                code: INVALID_REQUEST
+    InvalidCourseRequest:
+      description: >-
+        `professorId` malformado o body inválido (`INVALID_REQUEST`), `professorId` no coincide con el
+        actor (`PROFESSOR_MISMATCH`) o un ADMIN que omite `professorId` (`PROFESSOR_REQUIRED`).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            body_invalido:
+              value:
+                type: https://menta.dance/problems/invalid_request
+                title: Bad Request
+                status: 400
+                detail: La solicitud contiene datos inválidos.
+                code: INVALID_REQUEST
             professor_mismatch:
               value:
                 type: https://menta.dance/problems/professor_mismatch
@@ -1374,6 +1433,101 @@ components:
                 status: 400
                 detail: professorId is required when an administrator creates a course.
                 code: PROFESSOR_REQUIRED
+    AuthenticationRequired:
+      description: Falta el token o no es válido.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            sin_token:
+              value:
+                type: https://menta.dance/problems/authentication_required
+                title: Unauthorized
+                status: 401
+                detail: Authentication is required.
+                code: AUTHENTICATION_REQUIRED
+    AccessDenied:
+      description: >-
+        El rol del token no tiene acceso a la ruta (`ACCESS_DENIED`); los roles que la ven están en
+        la descripción de la operación.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            acceso_denegado:
+              value:
+                type: https://menta.dance/problems/access_denied
+                title: Forbidden
+                status: 403
+                detail: You are not authorized to access this resource.
+                code: ACCESS_DENIED
+    NotOwned:
+      description: >-
+        El rol del token no tiene acceso a la ruta (`ACCESS_DENIED`), o es un PROFESOR que no es dueño
+        del curso (`COURSE_NOT_OWNED`).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            no_es_dueno:
+              value:
+                type: https://menta.dance/problems/course_not_owned
+                title: Forbidden
+                status: 403
+                detail: You do not own this course.
+                code: COURSE_NOT_OWNED
+            acceso_denegado:
+              value:
+                type: https://menta.dance/problems/access_denied
+                title: Forbidden
+                status: 403
+                detail: You are not authorized to access this resource.
+                code: ACCESS_DENIED
+    CourseNotFound:
+      description: Curso inexistente (`COURSE_NOT_FOUND`).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            no_encontrado:
+              value:
+                type: https://menta.dance/problems/course_not_found
+                title: Not Found
+                status: 404
+                detail: Course not found.
+                code: COURSE_NOT_FOUND
+    SessionNotFound:
+      description: Sesión inexistente (`SESSION_NOT_FOUND`).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            sesion_inexistente:
+              value:
+                type: https://menta.dance/problems/session_not_found
+                title: Not Found
+                status: 404
+                detail: Session not found.
+                code: SESSION_NOT_FOUND
+    DeviceNotFound:
+      description: Dispositivo inexistente (`DEVICE_NOT_FOUND`).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            no_encontrado:
+              value:
+                type: https://menta.dance/problems/device_not_found
+                title: Not Found
+                status: 404
+                detail: Device not found.
+                code: DEVICE_NOT_FOUND
     SessionAlreadyExists:
       description: >-
         El curso ya tiene una sesión, en cualquier estado (una `CANCELLED` cuenta como existente), en uno
@@ -1536,20 +1690,26 @@ components:
           type: string
         dayOfWeek:
           type: string
+          enum: [MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY]
           description: Día de la semana de la recurrencia, **en UTC**. El cliente lo convierte a la zona de la academia para mostrarlo (ADR-0048).
           example: WEDNESDAY
         startTime:
           type: string
-          description: Hora de inicio de cada clase, `HH:mm:ss` **en UTC**. El cliente la convierte a la zona de la academia, junto con `dayOfWeek`, para mostrarla (ADR-0048).
-          example: "01:00:00"
+          description: >-
+            Hora de inicio de cada clase **en UTC**, `HH:mm`; sólo lleva `:ss` cuando los segundos no son cero
+            (se responde `LocalTime.toString()`). El cliente la convierte a la zona de la academia, junto con
+            `dayOfWeek`, para mostrarla (ADR-0048).
+          example: "01:00"
         durationMinutes:
           type: integer
         level:
           type: string
+          enum: [BEGINNER, INTERMEDIATE, ADVANCED]
         capacity:
           type: integer
         status:
           type: string
+          enum: [ACTIVE, INACTIVE]
 
     PhysicalCourseManagementListResponse:
       type: object
@@ -1620,7 +1780,7 @@ components:
     PhysicalSessionManagementResponse:
       type: object
       required:
-        [sessionId, courseId, scheduledAt, capacity, assignedSpots, activeCapacityHolds, availableSpots, status]
+        [sessionId, courseId, scheduledAt, capacity, assignedSpots, activeCapacityHolds, availableSpots, status, notes]
       properties:
         sessionId:
           type: string
@@ -1641,6 +1801,7 @@ components:
           type: integer
         status:
           type: string
+          enum: [SCHEDULED, CANCELLED]
         notes:
           type: [string, "null"]
 
@@ -1943,7 +2104,7 @@ components:
 
     AttendanceSessionResponse:
       type: object
-      required: [sessionId, scheduledAt, courseName, instructorName, status]
+      required: [sessionId, scheduledAt, courseName, instructorName, status, recordedAt, kind]
       properties:
         sessionId:
           type: string
@@ -1987,7 +2148,7 @@ components:
     PhysicalDeviceResponse:
       type: object
       description: Nunca incluye secreto ni hash bajo ningún nombre de campo (#44, design C2).
-      required: [id, name, location, status, createdAt, updatedAt]
+      required: [id, name, location, status, expiresAt, createdAt, updatedAt]
       properties:
         id:
           type: string
