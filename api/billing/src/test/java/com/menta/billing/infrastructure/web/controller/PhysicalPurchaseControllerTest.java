@@ -7,6 +7,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -15,6 +17,8 @@ import com.menta.billing.application.dto.BankTransferInstructions;
 import com.menta.billing.application.dto.CreatePhysicalPurchaseCheckoutCommand;
 import com.menta.billing.application.dto.PhysicalPurchaseCheckoutResult;
 import com.menta.billing.application.port.in.CreatePhysicalPurchaseCheckoutUseCase;
+import com.menta.billing.domain.exception.BankTransferRateLimitedException;
+import com.menta.billing.domain.exception.BillingDegradedException;
 import com.menta.billing.domain.exception.NoNewSessionsToPurchaseException;
 import com.menta.billing.domain.exception.PaymentPreferenceUnavailableException;
 import com.menta.billing.domain.exception.PhysicalCapacityUnavailableException;
@@ -23,6 +27,7 @@ import com.menta.billing.domain.model.Money;
 import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.domain.model.PurchaseType;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -30,6 +35,7 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
@@ -284,5 +290,75 @@ class PhysicalPurchaseControllerTest {
                 .content(body(QUOTE_ID, "MERCADO_PAGO", "idem-1")))
             .andExpect(status().isServiceUnavailable())
             .andExpect(jsonPath("$.code", is("PAYMENT_PREFERENCE_UNAVAILABLE")));
+    }
+
+    // --- #787: bank-transfer budget (shared with the subscription flow) and fail-closed Redis ---
+
+    /** The shared 10 creations/user/day budget is spent: 429 with the wait the limiter reported. */
+    @Test
+    void a_spent_bank_transfer_budget_maps_to_429_with_retry_after() throws Exception {
+        when(useCase.create(any()))
+            .thenThrow(new BankTransferRateLimitedException(Duration.ofSeconds(7200)));
+
+        mockMvc.perform(post("/api/v1/billing/physical/purchases")
+                .with(authenticatedAs(USER_ID))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body(QUOTE_ID, "BANK_TRANSFER", "idem-1")))
+            .andExpect(status().isTooManyRequests())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(header().string("Retry-After", "7200"))
+            .andExpect(jsonPath("$.code", is("BANK_TRANSFER_RATE_LIMITED")))
+            .andExpect(jsonPath("$.status", is(429)));
+    }
+
+    /** A sub-second wait is rounded up: {@code Retry-After: 0} would invite an immediate retry storm. */
+    @Test
+    void a_sub_second_wait_is_reported_as_one_second() throws Exception {
+        when(useCase.create(any()))
+            .thenThrow(new BankTransferRateLimitedException(Duration.ofMillis(400)));
+
+        mockMvc.perform(post("/api/v1/billing/physical/purchases")
+                .with(authenticatedAs(USER_ID))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body(QUOTE_ID, "BANK_TRANSFER", "idem-1")))
+            .andExpect(status().isTooManyRequests())
+            .andExpect(header().string("Retry-After", "1"));
+    }
+
+    /** Redis is unreachable: the limiter fails closed, so the route answers 503 with a fixed Retry-After. */
+    @Test
+    void an_unreachable_rate_limiter_maps_to_503_with_retry_after() throws Exception {
+        when(useCase.create(any()))
+            .thenThrow(new BillingDegradedException(new RedisConnectionFailureException("redis down")));
+
+        mockMvc.perform(post("/api/v1/billing/physical/purchases")
+                .with(authenticatedAs(USER_ID))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body(QUOTE_ID, "BANK_TRANSFER", "idem-1")))
+            .andExpect(status().isServiceUnavailable())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(header().string("Retry-After", "30"))
+            .andExpect(jsonPath("$.code", is("BILLING_DEGRADED")))
+            .andExpect(jsonPath("$.status", is(503)));
+    }
+
+    /**
+     * Spring resolves {@code @ExceptionHandler} methods by walking the cause chain. The top-level
+     * exception must win over the {@code IllegalArgumentException} handler even when the Redis
+     * failure wraps one (e.g. a driver rejecting an argument) — otherwise a degraded limiter would
+     * surface as a 400 and the client would never learn to retry.
+     */
+    @Test
+    void an_illegal_argument_in_the_cause_chain_does_not_turn_the_503_into_a_400() throws Exception {
+        Throwable chain = new IllegalStateException("limiter", new IllegalArgumentException("bad script argument"));
+        when(useCase.create(any())).thenThrow(new BillingDegradedException(chain));
+
+        mockMvc.perform(post("/api/v1/billing/physical/purchases")
+                .with(authenticatedAs(USER_ID))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body(QUOTE_ID, "BANK_TRANSFER", "idem-1")))
+            .andExpect(status().isServiceUnavailable())
+            .andExpect(header().string("Retry-After", "30"))
+            .andExpect(jsonPath("$.code", is("BILLING_DEGRADED")));
     }
 }

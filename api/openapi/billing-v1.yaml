@@ -751,25 +751,17 @@ paths:
                     detail: La cotización expiró o no existe. Solicitá una nueva.
                     code: PHYSICAL_COURSE_QUOTE_EXPIRED
         '429':
-          description: >-
-            Sólo para `BANK_TRANSFER` (#36, design D4): se agotó el cupo compartido de 10
-            creaciones por transferencia/usuario/día — el mismo contador que
-            `POST /api/v1/billing/subscriptions` con `BANK_TRANSFER` consume
-            (`consumeBankTransferCreation`), no uno independiente por endpoint.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-              examples:
-                bank_transfer_rate_limited:
-                  value:
-                    type: https://menta.dance/problems/bank_transfer_rate_limited
-                    title: Too Many Requests
-                    status: 429
-                    detail: Demasiadas solicitudes de transferencia bancaria; reintentá más tarde.
-                    code: BANK_TRANSFER_RATE_LIMITED
+          $ref: '#/components/responses/BankTransferRateLimited'
         '503':
-          description: No fue posible crear la preferencia; no se creó un cobro.
+          description: >-
+            `PAYMENT_PREFERENCE_UNAVAILABLE` (`MERCADO_PAGO`): no fue posible crear la preferencia;
+            no se creó un cobro. `BILLING_DEGRADED` (`BANK_TRANSFER`): el limitador de Redis no
+            está disponible y la ruta falla cerrada, con `Retry-After`.
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Segundos hasta poder reintentar; sólo con `BILLING_DEGRADED`.
           content:
             application/problem+json:
               schema:
@@ -782,6 +774,13 @@ paths:
                     status: 503
                     detail: No pudimos iniciar el pago en este momento. Intentá de nuevo en unos minutos.
                     code: PAYMENT_PREFERENCE_UNAVAILABLE
+                billing_degraded:
+                  value:
+                    type: https://menta.dance/problems/billing_degraded
+                    title: Service Unavailable
+                    status: 503
+                    detail: El servicio de facturación no está disponible temporalmente.
+                    code: BILLING_DEGRADED
 
   /api/v1/billing/physical/courses/{courseId}/pricing:
     get:
