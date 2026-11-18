@@ -5,17 +5,27 @@ openapi: 3.1.0
 # Escrito y versionado a mano, mismo criterio que auth-v1.yaml: el diff se
 # revisa en el PR igual que la colección Bruno.
 #
-# Sólo describe endpoints IMPLEMENTADOS. El resto del contrato de
-# docs/06-BILLING-API.md (pagos, pricing presencial y conciliación) no está
-# acá porque todavía no existe.
+# Sólo describe endpoints IMPLEMENTADOS. Cubre todas las rutas de producción
+# de los controllers de billing: planes, suscripciones, compras presenciales,
+# pagos (comprobante, verificación manual y corrección), precios y cotizaciones
+# presenciales y el webhook de Mercado Pago. Quedan fuera los endpoints de
+# soporte del perfil e2e-mercadopago (no son superficie de producción).
+#
+# La conciliación de docs/06-BILLING-API.md (GET .../admin/reconciliation y
+# POST .../admin/reconciliation/{paymentId}/resolve) está planificada y NO
+# existe todavía: no se documenta acá. Hoy un pago en RECONCILIATION_REQUIRED
+# se resuelve con POST /api/v1/admin/billing/payments/{paymentId}/corrections.
 
 info:
   title: Menta Dance — Billing API
   version: "1.0.0"
   description: |
     Catálogo público de planes de suscripción (US-BILLING-001), alta de planes
-    por un admin (#762), inicio de Checkout Pro (US-BILLING-010) y
-    confirmación de pago por webhook de Mercado Pago (US-BILLING-002).
+    por un admin (#762), inicio de checkout por Checkout Pro o transferencia
+    bancaria (US-BILLING-010, US-BILLING-003), confirmación de pago por webhook
+    de Mercado Pago (US-BILLING-002), comprobantes y verificación manual de
+    transferencias (#31, #33), y precios y cotizaciones de cursos presenciales
+    (US-BILLING-009, US-BILLING-006).
 
     ## Errores
 
@@ -47,6 +57,12 @@ tags:
       (ADMIN).
   - name: Compras presenciales
     description: Compra de cursos presenciales (#41, US-PHYSICAL-004).
+  - name: Precios y cotizaciones presenciales
+    description: >-
+      Precio vigente de un curso presencial (lectura pública, edición ADMIN o profesor del curso)
+      y cotización de una compra por el alumno (US-BILLING-009, US-BILLING-006).
+  - name: Excepciones de compras presenciales
+    description: Inventario y cierre auditable de compras presenciales en EXCEPTION (#237, #539).
   - name: Pagos
     description: Listado de los pagos propios (#767) y consulta del estado de uno (#559).
   - name: Webhooks
@@ -181,15 +197,22 @@ paths:
   /api/v1/billing/subscriptions:
     post:
       tags: [Suscripciones]
-      summary: Iniciar Checkout Pro para una suscripción
+      summary: Iniciar el checkout de una suscripción (Checkout Pro o transferencia bancaria)
       description: |
-        Crea localmente un pago y una suscripción `PENDING` antes de pedir la
-        preferencia a Mercado Pago. El usuario siempre se obtiene del access
-        token, nunca del body. Repetir la misma `idempotencyKey` para ese
-        usuario devuelve el checkout original y no crea un segundo cobro.
+        El usuario siempre se obtiene del access token, nunca del body.
 
-        `checkoutUrl` sólo sirve para navegar al Checkout Pro. La confirmación
-        financiera llega exclusivamente por el webhook firmado.
+        Con `paymentMethod: MERCADO_PAGO` crea localmente un pago y una suscripción `PENDING`
+        antes de pedir la preferencia a Mercado Pago. Repetir la misma `idempotencyKey` para ese
+        usuario devuelve el checkout original y no crea un segundo cobro. `checkoutUrl` sólo sirve
+        para navegar al Checkout Pro. La confirmación financiera llega exclusivamente por el
+        webhook firmado.
+
+        Con `paymentMethod: BANK_TRANSFER` (#31, US-BILLING-003) el pago nace en espera de
+        verificación manual y la respuesta trae `bankTransferInstructions`; `providerPreferenceId`,
+        `checkoutUrl` y `overlapNotice` van en `null` y no se llama a Mercado Pago. Esta rama no
+        busca replays por `idempotencyKey`. Consume el cupo diario de 10 creaciones por
+        transferencia y usuario, compartido con `POST /api/v1/billing/physical/purchases`; el
+        comprobante se sube después con `POST /api/v1/billing/payments/{paymentId}/proof`.
       operationId: createSubscriptionCheckout
       requestBody:
         required: true
@@ -199,7 +222,9 @@ paths:
               $ref: '#/components/schemas/CreateSubscriptionCheckoutRequest'
       responses:
         '201':
-          description: Suscripción pendiente y preferencia de Checkout Pro creadas.
+          description: >-
+            Suscripción pendiente creada, con la preferencia de Checkout Pro (`MERCADO_PAGO`) o con
+            las instrucciones de transferencia (`BANK_TRANSFER`).
           content:
             application/json:
               schema:
@@ -259,8 +284,18 @@ paths:
                     detail: El plan no acepta el método de pago solicitado.
                     code: PAYMENT_METHOD_NOT_ACCEPTED
                     acceptedPaymentMethods: [MERCADO_PAGO]
+        '429':
+          $ref: '#/components/responses/BankTransferRateLimited'
         '503':
-          description: No fue posible crear la preferencia; no se creó un cobro.
+          description: >-
+            `PAYMENT_PREFERENCE_UNAVAILABLE` (`MERCADO_PAGO`): no fue posible crear la preferencia;
+            no se creó un cobro. `BILLING_DEGRADED` (`BANK_TRANSFER`): el limitador de Redis no
+            está disponible y la ruta falla cerrada, con `Retry-After`.
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Segundos hasta poder reintentar; sólo con `BILLING_DEGRADED`.
           content:
             application/problem+json:
               schema:
@@ -273,6 +308,13 @@ paths:
                     status: 503
                     detail: No pudimos iniciar el pago en este momento. Intentá de nuevo en unos minutos.
                     code: PAYMENT_PREFERENCE_UNAVAILABLE
+                billing_degraded:
+                  value:
+                    type: https://menta.dance/problems/billing_degraded
+                    title: Service Unavailable
+                    status: 503
+                    detail: El servicio de facturación no está disponible temporalmente.
+                    code: BILLING_DEGRADED
 
   /api/v1/billing/subscriptions/me:
     get:
@@ -741,6 +783,232 @@ paths:
                     detail: No pudimos iniciar el pago en este momento. Intentá de nuevo en unos minutos.
                     code: PAYMENT_PREFERENCE_UNAVAILABLE
 
+  /api/v1/billing/physical/courses/{courseId}/pricing:
+    get:
+      tags: [Precios y cotizaciones presenciales]
+      summary: Consultar el precio vigente de un curso presencial
+      description: |
+        Devuelve el precio mensual vigente, el recargo por clase individual y la versión del precio
+        publicado para el curso (US-BILLING-009). Lectura pública: no requiere cuenta.
+      operationId: getPhysicalCoursePricing
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/CourseIdPath'
+      responses:
+        '200':
+          description: Precio vigente del curso.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalCoursePricingResponse'
+        '404':
+          description: Todavía no se publicó un precio para el curso.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                sin_precio:
+                  value:
+                    type: https://menta.dance/problems/physical_course_pricing_not_found
+                    title: Not Found
+                    status: 404
+                    detail: Todavía no se publicó un precio para este curso.
+                    code: PHYSICAL_COURSE_PRICING_NOT_FOUND
+    put:
+      tags: [Precios y cotizaciones presenciales]
+      summary: Publicar o revisar el precio de un curso presencial (ADMIN o profesor del curso)
+      description: |
+        Crea la versión 1 del precio o publica la versión siguiente, y deja una revisión auditable
+        con el `reason` (US-BILLING-009). Lo puede hacer un ADMIN o un INSTRUCTOR que sea el
+        profesor responsable del curso. `currency` es opcional y por defecto `ARS`.
+      operationId: updatePhysicalCoursePricing
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CourseIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePhysicalCoursePricingRequest'
+      responses:
+        '200':
+          description: Precio publicado; `version` es la nueva.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalCoursePricingResponse'
+        '400':
+          description: >-
+            Cuerpo incompleto o ilegible, `monthlyPrice` negativo, `currency` que no es un código
+            ISO-4217 de tres letras mayúsculas, o `reason` ausente o en blanco.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                datos_invalidos:
+                  value:
+                    type: https://menta.dance/problems/invalid_request
+                    title: Bad Request
+                    status: 400
+                    detail: La solicitud contiene datos inválidos.
+                    code: INVALID_REQUEST
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          description: >-
+            `ACCESS_DENIED`: el caller no es ADMIN ni INSTRUCTOR. `PRICING_NOT_OWNED`: es
+            INSTRUCTOR pero no el profesor responsable del curso.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                no_es_el_profesor:
+                  value:
+                    type: https://menta.dance/problems/pricing_not_owned
+                    title: Forbidden
+                    status: 403
+                    detail: No sos el profesor responsable de este curso.
+                    code: PRICING_NOT_OWNED
+        '404':
+          description: El curso presencial no existe.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                curso_inexistente:
+                  value:
+                    type: https://menta.dance/problems/physical_course_not_found
+                    title: Not Found
+                    status: 404
+                    detail: El curso presencial no existe.
+                    code: PHYSICAL_COURSE_NOT_FOUND
+        '422':
+          description: '`individualSurchargePercent` es cero o negativo. No se publica ninguna versión.'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                recargo_invalido:
+                  value:
+                    type: https://menta.dance/problems/invalid_individual_surcharge
+                    title: Unprocessable Entity
+                    status: 422
+                    detail: El recargo individual debe ser mayor a cero.
+                    code: INVALID_INDIVIDUAL_SURCHARGE
+
+  /api/v1/billing/physical/quotes:
+    post:
+      tags: [Precios y cotizaciones presenciales]
+      summary: Cotizar la compra de un curso presencial
+      description: |
+        Calcula, con el precio vigente del curso, lo que costaría una compra `MONTHLY` (todas las
+        sesiones del mes calendario en curso, en UTC) o `INDIVIDUAL` (una sesión elegida), y guarda
+        la cotización durante 1 hora (US-BILLING-006). El `id` devuelto es el `quoteId` de
+        `POST /api/v1/billing/physical/purchases`. `selectedSessionId` es obligatorio con
+        `INDIVIDUAL` y está prohibido con `MONTHLY`. `availability` es informativa: nunca reserva
+        cupo. El usuario sale del token y sólo se usa para saber qué sesiones ya tiene.
+      operationId: createPhysicalCourseQuote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePhysicalCourseQuoteRequest'
+      responses:
+        '201':
+          description: Cotización creada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalCourseQuoteResponse'
+        '400':
+          description: Cuerpo incompleto o ilegible, `courseId` en blanco o `purchaseType` ausente o desconocido.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                datos_invalidos:
+                  value:
+                    type: https://menta.dance/problems/invalid_request
+                    title: Bad Request
+                    status: 400
+                    detail: La solicitud contiene datos inválidos.
+                    code: INVALID_REQUEST
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '404':
+          description: >-
+            `PHYSICAL_COURSE_PRICING_NOT_FOUND`: el curso no tiene precio publicado.
+            `PHYSICAL_SESSION_NOT_FOUND`: la sesión elegida no existe en el período cotizado.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                sin_precio:
+                  value:
+                    type: https://menta.dance/problems/physical_course_pricing_not_found
+                    title: Not Found
+                    status: 404
+                    detail: Todavía no se publicó un precio para este curso.
+                    code: PHYSICAL_COURSE_PRICING_NOT_FOUND
+                sesion_inexistente:
+                  value:
+                    type: https://menta.dance/problems/physical_session_not_found
+                    title: Not Found
+                    status: 404
+                    detail: La sesión seleccionada no existe en el período cotizado.
+                    code: PHYSICAL_SESSION_NOT_FOUND
+        '409':
+          description: >-
+            `NO_NEW_SESSIONS`: el alumno ya tiene lugar en todas las sesiones que cubriría la
+            mensualidad, o en la sesión elegida; no hay nada para comprar. Sólo cambia el `detail`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                no_new_sessions:
+                  value:
+                    type: https://menta.dance/problems/no_new_sessions
+                    title: Conflict
+                    status: 409
+                    detail: Ya tenés lugar en todas las sesiones que cubriría esta mensualidad.
+                    code: NO_NEW_SESSIONS
+        '422':
+          description: >-
+            Una de `NO_SCHEDULED_SESSIONS` (el período no tiene sesiones programadas),
+            `INDIVIDUAL_SURCHARGE_TOO_SMALL` (el recargo no cambia el precio tras el redondeo),
+            `SELECTED_SESSION_REQUIRED` (`INDIVIDUAL` sin `selectedSessionId`) o
+            `SELECTED_SESSION_NOT_ALLOWED` (`MONTHLY` con `selectedSessionId`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                sin_sesiones:
+                  value:
+                    type: https://menta.dance/problems/no_scheduled_sessions
+                    title: Unprocessable Entity
+                    status: 422
+                    detail: No hay sesiones programadas para este período.
+                    code: NO_SCHEDULED_SESSIONS
+                sesion_requerida:
+                  value:
+                    type: https://menta.dance/problems/selected_session_required
+                    title: Unprocessable Entity
+                    status: 422
+                    detail: Debés indicar una sesión para una cotización individual.
+                    code: SELECTED_SESSION_REQUIRED
+
   /api/v1/admin/billing/payments:
     get:
       tags: [Verificación manual de pagos]
@@ -970,7 +1238,8 @@ paths:
       description: |
         Devuelve el pago, su comprador y su plan/curso destino. Cuando existe un comprobante
         subido, incluye `proofUrl`: una URL firmada con expiración embebida de 15 minutos,
-        recién emitida en cada llamada — nunca una URL cacheada o persistida.
+        recién emitida en cada llamada — nunca una URL cacheada o persistida. Es una ruta relativa
+        a la API.
       operationId: getPaymentDetail
       security:
         - bearerAuth: []
@@ -983,11 +1252,13 @@ paths:
             format: uuid
       responses:
         '200':
-          description: Detalle del pago, con `proofUrl` presente sólo si hay un comprobante subido.
+          description: Detalle del pago, con `proofUrl` en `null` si no hay un comprobante subido.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaymentDetailResponse'
+        '400':
+          $ref: '#/components/responses/InvalidPaymentId'
         '401':
           description: Falta un access token válido.
         '403':
@@ -1041,7 +1312,9 @@ paths:
         '200':
           description: Corrección aplicada; el pago pasó a su estado terminal elegido.
         '400':
-          description: '`reason` o `evidence` ausentes o en blanco.'
+          description: >-
+            `reason` o `evidence` ausentes o en blanco, o `paymentId` que no es un UUID
+            (`INVALID_REQUEST`).
           content:
             application/problem+json:
               schema:
@@ -1072,6 +1345,79 @@ paths:
                     status: 409
                     detail: El pago no está en un estado que admita esta operación.
                     code: ILLEGAL_PAYMENT_STATE_TRANSITION
+
+  /api/v1/admin/billing/payments/{paymentId}/approve:
+    post:
+      tags: [Verificación manual de pagos]
+      summary: Aprobar un pago por transferencia en verificación manual (ADMIN)
+      description: |
+        Pasa el pago de `AWAITING_MANUAL_VERIFICATION` a `COMPLETED`, asegura el cumplimiento de
+        lo comprado, registra la aprobación en `billing_audit_log` y avisa por email al comprador
+        (#31, US-BILLING-003). No lleva body: el admin sale del token.
+      operationId: approvePayment
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PaymentIdPath'
+      responses:
+        '200':
+          description: Pago aprobado. Sin body.
+        '400':
+          $ref: '#/components/responses/InvalidPaymentId'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/PaymentNotFound'
+        '409':
+          $ref: '#/components/responses/IllegalPaymentStateTransition'
+
+  /api/v1/admin/billing/payments/{paymentId}/reject:
+    post:
+      tags: [Verificación manual de pagos]
+      summary: Rechazar un pago por transferencia en verificación manual (ADMIN)
+      description: |
+        Pasa el pago de `AWAITING_MANUAL_VERIFICATION` a `REJECTED`, libera el cupo retenido,
+        registra el rechazo con su `reason` en `billing_audit_log` y avisa por email al comprador
+        (#31, US-BILLING-003). `reason` es obligatorio.
+      operationId: rejectPayment
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PaymentIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejectPaymentRequest'
+      responses:
+        '200':
+          description: Pago rechazado. Sin body.
+        '400':
+          description: >-
+            `paymentId` que no es un UUID (`INVALID_REQUEST`), o `reason` ausente o en blanco.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                payment_id_invalido:
+                  value:
+                    type: https://menta.dance/problems/invalid_request
+                    title: Bad Request
+                    status: 400
+                    detail: La solicitud es inválida.
+                    code: INVALID_REQUEST
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/PaymentNotFound'
+        '409':
+          $ref: '#/components/responses/IllegalPaymentStateTransition'
 
   /api/v1/billing/payments/me:
     get:
@@ -1160,6 +1506,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaymentStatusResponse'
+        '400':
+          $ref: '#/components/responses/InvalidPaymentId'
         '401':
           description: Falta un access token válido.
         '404':
@@ -1211,12 +1559,24 @@ paths:
           description: Token HMAC firmado, emitido por el detalle del pago (ADMIN). Ausente ⇒ `401`.
       responses:
         '200':
-          description: "Bytes del comprobante, con `Content-Disposition: inline` y `Cache-Control: no-store`."
+          description: >-
+            Bytes del comprobante, con `Content-Disposition: inline` y `Cache-Control: no-store`. El
+            `Content-Type` es el que se declaró al subirlo.
           content:
-            application/octet-stream:
+            image/png:
               schema:
                 type: string
                 format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/InvalidPaymentId'
         '401':
           description: El parámetro `token` está ausente.
         '403':
@@ -1235,6 +1595,60 @@ paths:
                     status: 403
                     detail: El enlace de comprobante no es válido o expiró.
                     code: INVALID_PROOF_TOKEN
+
+    post:
+      tags: [Verificación manual de pagos]
+      summary: Subir o reemplazar el comprobante de una transferencia propia
+      description: |
+        El dueño del pago sube el comprobante (PNG, JPEG o PDF, hasta 5 MB, con firma de contenido
+        coincidente con el tipo declarado) mientras el pago está en `AWAITING_MANUAL_VERIFICATION`
+        (#31, US-BILLING-003). Un comprobante nuevo reemplaza al anterior. La cuota de subidas
+        sólo se consume si el archivo es válido: por defecto 3 subidas cada 72 horas por pago.
+
+        Un pago inexistente, de otro usuario o que ya no espera verificación responden el mismo
+        `404 PAYMENT_NOT_FOUND` (anti-enumeración): nunca `403`.
+      operationId: submitPaymentProof
+      parameters:
+        - $ref: '#/components/parameters/PaymentIdPath'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Comprobante, `image/png`, `image/jpeg` o `application/pdf`.
+      responses:
+        '200':
+          description: Comprobante guardado. Sin body.
+        '400':
+          description: >-
+            `PAYMENT_PROOF_REJECTED`: tipo no permitido, archivo vacío o de más de 5 MB, o contenido
+            que no coincide con el tipo declarado. `INVALID_REQUEST`: `paymentId` que no es un UUID.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                comprobante_rechazado:
+                  value:
+                    type: https://menta.dance/problems/payment_proof_rejected
+                    title: Bad Request
+                    status: 400
+                    detail: "El comprobante no cumple los requisitos: debe ser PNG, JPG/JPEG o PDF de hasta 5MB."
+                    code: PAYMENT_PROOF_REJECTED
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '404':
+          $ref: '#/components/responses/PaymentNotFound'
+        '429':
+          $ref: '#/components/responses/BankTransferRateLimited'
+        '503':
+          $ref: '#/components/responses/BillingDegraded'
 
   /api/v1/billing/payments/mercadopago/webhook:
     post:
@@ -1301,7 +1715,124 @@ components:
       bearerFormat: JWT
       description: Access token JWT emitido por Auth.
 
+  parameters:
+    PaymentIdPath:
+      name: paymentId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    CourseIdPath:
+      name: courseId
+      in: path
+      required: true
+      description: Id del curso presencial.
+      schema:
+        type: string
+
   responses:
+    AuthenticationRequired:
+      description: Falta un access token válido.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            authentication_required:
+              value:
+                type: https://menta.dance/problems/authentication_required
+                title: Unauthorized
+                status: 401
+                detail: Authentication is required.
+                code: AUTHENTICATION_REQUIRED
+
+    AccessDenied:
+      description: El caller autenticado no tiene rol ADMIN.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            access_denied:
+              value:
+                type: https://menta.dance/problems/access_denied
+                title: Forbidden
+                status: 403
+                detail: You are not authorized to access this resource.
+                code: ACCESS_DENIED
+
+    InvalidPaymentId:
+      description: '`paymentId` no es un UUID.'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            payment_id_invalido:
+              value:
+                type: https://menta.dance/problems/invalid_request
+                title: Bad Request
+                status: 400
+                detail: La solicitud es inválida.
+                code: INVALID_REQUEST
+
+    PaymentNotFound:
+      description: >-
+        El pago no existe. En las rutas del alumno también cuando es de otro usuario o ya no espera
+        verificación (anti-enumeración).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            pago_no_encontrado:
+              value:
+                type: https://menta.dance/problems/payment_not_found
+                title: Not Found
+                status: 404
+                detail: No se encontró el pago indicado.
+                code: PAYMENT_NOT_FOUND
+
+    IllegalPaymentStateTransition:
+      description: >-
+        El pago no está en `AWAITING_MANUAL_VERIFICATION` (por ejemplo, ya fue aprobado o rechazado).
+        No se modifica nada.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            estado_no_admite_la_operacion:
+              value:
+                type: https://menta.dance/problems/illegal_payment_state_transition
+                title: Conflict
+                status: 409
+                detail: El pago no está en un estado que admita esta operación.
+                code: ILLEGAL_PAYMENT_STATE_TRANSITION
+
+    BankTransferRateLimited:
+      description: >-
+        Se agotó el cupo por transferencia bancaria: las creaciones por usuario (compartidas entre
+        suscripciones y compras presenciales) o las subidas de comprobante por pago.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Segundos hasta poder reintentar.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            bank_transfer_rate_limited:
+              value:
+                type: https://menta.dance/problems/bank_transfer_rate_limited
+                title: Too Many Requests
+                status: 429
+                detail: Demasiadas solicitudes de suscripción por transferencia; reintentá más tarde.
+                code: BANK_TRANSFER_RATE_LIMITED
+
     PlanRateLimited:
       description: Presupuesto de 60 req/min por IP agotado.
       headers:
@@ -1368,6 +1899,9 @@ components:
           description: Medios de pago que acepta el plan cuando se rechaza el solicitado.
           items:
             type: string
+        plansUrl:
+          type: string
+          description: Ruta del catálogo de planes; sólo en el `404 NO_SUBSCRIPTION`.
 
     CreateSubscriptionCheckoutRequest:
       type: object
@@ -1378,8 +1912,10 @@ components:
           format: uuid
         paymentMethod:
           type: string
-          enum: [MERCADO_PAGO]
-          description: Este endpoint implementa exclusivamente Checkout Pro. La transferencia bancaria se incorporará con su propio flujo en US-BILLING-003.
+          enum: [MERCADO_PAGO, BANK_TRANSFER]
+          description: >-
+            `MERCADO_PAGO` usa Checkout Pro. `BANK_TRANSFER` (US-BILLING-003) deja el pago en espera
+            de verificación manual y devuelve `bankTransferInstructions`.
         idempotencyKey:
           type: string
           minLength: 1
@@ -1387,10 +1923,12 @@ components:
 
     SubscriptionCheckoutResponse:
       type: object
+      description: |
+        Todos los campos están siempre presentes; los que no aplican al medio de pago van en `null`.
       required:
         [
           subscriptionId, paymentId, planId, status, providerPreferenceId, externalReference, checkoutUrl,
-          overlapNotice,
+          overlapNotice, bankTransferInstructions,
         ]
       properties:
         subscriptionId:
@@ -1404,25 +1942,35 @@ components:
           format: uuid
         status:
           type: string
-          enum: [PENDING]
+          enum: [PENDING, ACTIVE, EXPIRED, CANCELLED]
+          description: >-
+            `PENDING` al crear el checkout. Un replay por `idempotencyKey` (`MERCADO_PAGO`)
+            devuelve la suscripción con su estado actual, que puede haber avanzado.
         providerPreferenceId:
-          type: string
-          description: Identificador de la preferencia de Checkout Pro, no del pago.
+          type: ["string", "null"]
+          description: >-
+            Identificador de la preferencia de Checkout Pro, no del pago. `null` con
+            `BANK_TRANSFER`.
         externalReference:
           type: string
           description: Referencia local usada para correlacionar el webhook verificado.
         checkoutUrl:
-          type: string
+          type: ["string", "null"]
           format: uri
-          description: URL de redirección al Checkout Pro.
+          description: URL de redirección al Checkout Pro. `null` con `BANK_TRANSFER`.
         overlapNotice:
           description: |
             Presente y no bloqueante (`null` en caso contrario) cuando este checkout se
             superpone con una suscripción `CANCELLED` del mismo plan cuyo `endDate` todavía no
             venció (US-BILLING-011 D3). Se recalcula también en la respuesta de un replay por
-            `idempotencyKey`.
+            `idempotencyKey`. Siempre `null` con `BANK_TRANSFER`.
           oneOf:
             - $ref: "#/components/schemas/OverlapNotice"
+            - type: "null"
+        bankTransferInstructions:
+          description: Presente sólo con `BANK_TRANSFER` (US-BILLING-003); `null` con Checkout Pro.
+          oneOf:
+            - $ref: "#/components/schemas/BankTransferInstructions"
             - type: "null"
 
     OverlapNotice:
@@ -1660,7 +2208,10 @@ components:
           description: Referencia de `PaymentTarget.Physical` — la cotización comprada, no una sesión (design A5).
         status:
           type: string
-          enum: [PENDING]
+          enum: [PENDING, COMPLETED, REJECTED, CANCELLED, EXPIRED]
+          description: >-
+            `PENDING` al crear el checkout. Un replay por `idempotencyKey` devuelve el pago con su
+            estado actual, que puede haber avanzado.
         providerPreferenceId:
           type: [string, "null"]
           description: >-
@@ -2052,10 +2603,11 @@ components:
     PaymentDetailResponse:
       type: object
       description: |
-        `proofUrl` es `null` cuando nunca se subió un comprobante; en caso contrario embebe un
-        token firmado recién emitido con expiración de 15 minutos, nunca uno cacheado.
+        `proofUrl` siempre se serializa: es `null` cuando nunca se subió un comprobante; en caso
+        contrario embebe un token firmado recién emitido con expiración de 15 minutos, nunca uno
+        cacheado.
       required:
-        [paymentId, userId, targetModality, targetReference, amount, currency, statusType, createdAt]
+        [paymentId, userId, targetModality, targetReference, amount, currency, statusType, createdAt, proofUrl]
       properties:
         paymentId:
           type: string
@@ -2082,7 +2634,9 @@ components:
           format: date-time
         proofUrl:
           type: ["string", "null"]
-          description: Presente sólo si el pago tiene un comprobante subido.
+          description: >-
+            Ruta relativa a la API (`/api/v1/billing/payments/{paymentId}/proof?token=...`) con el
+            token firmado; `null` si el pago no tiene un comprobante subido.
 
     CorrectPaymentRequest:
       type: object
@@ -2102,6 +2656,121 @@ components:
           type: string
           minLength: 1
           description: Evidencia verificable presentada por el admin — compuesta en `billing_audit_log` (D4).
+
+    RejectPaymentRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          description: Motivo del rechazo — obligatorio, auditable y enviado al comprador por email.
+
+    PhysicalCoursePricingResponse:
+      type: object
+      description: Precio vigente de un curso presencial. Todos los campos están siempre presentes.
+      required: [courseId, monthlyPrice, currency, individualSurchargePercent, version, updatedAt]
+      properties:
+        courseId:
+          type: string
+        monthlyPrice:
+          type: number
+          format: decimal
+        currency:
+          type: string
+          description: Código ISO-4217.
+          example: ARS
+        individualSurchargePercent:
+          type: number
+          format: decimal
+          description: Recargo porcentual de una clase individual sobre su parte del precio mensual.
+        version:
+          type: integer
+          description: Número de versión del precio; la primera publicación es la 1.
+        updatedAt:
+          type: string
+          format: date-time
+
+    UpdatePhysicalCoursePricingRequest:
+      type: object
+      required: [monthlyPrice, individualSurchargePercent, reason]
+      properties:
+        monthlyPrice:
+          type: number
+          format: decimal
+          minimum: 0
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          default: ARS
+          description: Código ISO-4217. Si se omite o va en blanco, `ARS`.
+        individualSurchargePercent:
+          type: number
+          format: decimal
+          exclusiveMinimum: 0
+          description: Debe ser mayor a cero; si no, `422 INVALID_INDIVIDUAL_SURCHARGE`.
+        reason:
+          type: string
+          minLength: 1
+          description: Motivo del cambio — obligatorio y auditable.
+
+    CreatePhysicalCourseQuoteRequest:
+      type: object
+      required: [courseId, purchaseType]
+      properties:
+        courseId:
+          type: string
+          minLength: 1
+        purchaseType:
+          type: string
+          enum: [MONTHLY, INDIVIDUAL]
+        selectedSessionId:
+          type: string
+          description: Obligatorio con `INDIVIDUAL`; prohibido con `MONTHLY`.
+
+    PhysicalCourseQuoteResponse:
+      type: object
+      description: Cotización vigente durante 1 hora. Todos los campos están siempre presentes.
+      required:
+        [
+          id, courseId, purchaseType, scheduledSessionCount, selectedSessionId, amount, currency, availability,
+          pricingVersion, createdAt, expiresAt,
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Es el `quoteId` de `POST /api/v1/billing/physical/purchases`.
+        courseId:
+          type: string
+        purchaseType:
+          type: string
+          enum: [MONTHLY, INDIVIDUAL]
+        scheduledSessionCount:
+          type: integer
+          description: Sesiones programadas del período cotizado.
+        selectedSessionId:
+          type: ["string", "null"]
+          description: La sesión elegida; `null` con `MONTHLY`.
+        amount:
+          type: number
+          format: decimal
+        currency:
+          type: string
+          example: ARS
+        availability:
+          type: string
+          enum: [AVAILABLE, UNAVAILABLE]
+          description: Informativa; nunca reserva cupo.
+        pricingVersion:
+          type: integer
+          description: Versión del precio con la que se calculó `amount`.
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
 
 security:
   - bearerAuth: []
