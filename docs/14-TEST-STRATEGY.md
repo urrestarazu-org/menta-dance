@@ -9,7 +9,9 @@
 - **E2E:** BFF, Android/API y flujos críticos con Playwright.
 - **Carga:** Gatling para login, catálogo, streaming y check-in.
 - **Manual:** Bruno para pruebas exploratorias y validación de endpoints. La
-  colección queda versionada en `bruno/` como complemento a Swagger UI.
+  colección queda versionada en `bruno/`; los contratos OpenAPI escritos a mano se
+  leen en un Swagger UI local (`scripts/api-docs.sh`, ver
+  [24-LOCAL-DEV-SETUP-REQUIREMENTS.md](24-LOCAL-DEV-SETUP-REQUIREMENTS.md)).
 
 ## Reglas obligatorias
 

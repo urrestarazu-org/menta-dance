@@ -7,10 +7,35 @@ No se requiere Gradle global.
 
 ### Bruno (cliente API)
 
-Bruno es el cliente HTTP oficial para pruebas manuales de endpoints, complementario
-a Swagger UI. La colección queda versionada en el repositorio bajo `bruno/`.
+Bruno es el cliente HTTP oficial para pruebas manuales de endpoints. La colección
+queda versionada en el repositorio bajo `bruno/`.
 
 Instalación: `brew install bruno` (macOS) o descarga desde [usebruno.com](https://www.usebruno.com/)
+
+### Swagger UI local (contratos OpenAPI)
+
+La API **no** sirve Swagger UI ni `/v3/api-docs`: no usa `springdoc` y sus contratos
+están escritos a mano en [`api/openapi/`](../api/openapi/README.md). Para leerlos en
+el navegador, el repositorio trae un Swagger UI local y de solo lectura:
+
+```bash
+./scripts/api-docs.sh start     # sirve los contratos en http://localhost:8090
+./scripts/api-docs.sh status
+./scripts/api-docs.sh stop
+```
+
+- **Requisito:** Docker en ejecución (imagen oficial `swaggerapi/swagger-ui`, con
+  versión fija). La primera vez descarga la imagen.
+- **URL y puerto:** `http://localhost:8090`, publicado sólo en `127.0.0.1`. Se cambia
+  con `API_DOCS_PORT=<puerto> ./scripts/api-docs.sh start`; el script rechaza los
+  puertos que ya usa el proyecto (API 8081, BFF 8080, MySQL 3306, etc.).
+- **Qué muestra:** un selector con cada `api/openapi/*-v1.yaml` (`auth`, `billing`,
+  `catalog`, `physical`, `virtual`). Monta el directorio en solo lectura: un contrato
+  nuevo aparece sin tocar el script.
+- **Qué no hace:** no levanta ni detiene la API, el BFF ni la infraestructura, y
+  "Try it out" está deshabilitado a propósito. Para llamar a la API real usá Bruno.
+- Es idempotente: `start` con la UI ya levantada no hace nada y `stop` sin contenedor
+  tampoco.
 
 ## Servicios locales
 
