@@ -2,10 +2,13 @@
 
 Contratos HTTP versionados de la API, escritos a mano.
 
-| Archivo | Alcance |
-|---------|---------|
-| `auth-v1.yaml` | Auth v1: sesión (login, refresh, logout), activación de cuentas, recuperación de contraseña y administración de usuarios (listado, alta de cuentas de staff y cambio de rol) |
-| `billing-v1.yaml` | Billing v1: catálogo público de planes de suscripción (US-BILLING-001) |
+| Archivo | Alcance | Test de contrato |
+|---------|---------|------------------|
+| `auth-v1.yaml` | Auth v1 (14 rutas): sesión (login, refresh, logout), registro y activación de cuentas, recuperación de contraseña, cuenta propia y administración de usuarios (listado, alta de cuentas de staff y cambio de rol) | `AuthOpenApiContractTest` (`api/auth`) |
+| `billing-v1.yaml` | Billing v1 (25 rutas): planes, suscripciones, compras presenciales, precios y cotizaciones, pagos, webhooks y verificación manual de pagos | `BillingOpenApiContractTest` (`api/billing`) |
+| `catalog-v1.yaml` | Catalog v1 (2 rutas): catálogo público compuesto de cursos presenciales y virtuales, que vive en `api:app` | `CatalogOpenApiContractTest` (`api/app`) |
+| `physical-v1.yaml` | Physical v1 (19 rutas): cursos y sesiones presenciales, agenda y roster, QR, asistencia, check-in y dispositivos de lectura | `PhysicalOpenApiContractTest` (`api/physical`) |
+| `virtual-v1.yaml` | Virtual v1 (19 rutas): gestión de cursos, módulos y lecciones, lecciones públicas y progreso del alumno | `VirtualOpenApiContractTest` (`api/virtual`) |
 
 ## Por qué a mano y no generado
 
@@ -23,6 +26,11 @@ El costo aceptado es el mantenimiento manual. La mitigación es doble:
 
 - `AGENTS.md` exige actualizar este contrato en el **mismo cambio** que modifique una
   ruta, método, parámetro, autenticación, respuesta, error o rate limit.
+- Un test por contrato (columna de arriba) lee los controllers y los records reales y
+  falla si una ruta, un campo, un enum, un código de error o el conjunto de respuestas
+  cambian sin el YAML. Corre con el `test` normal de su módulo, p. ej.
+  `./gradlew :api:auth:test --tests '*AuthOpenApiContractTest'`. Un contrato nuevo
+  necesita su propio test.
 - El job `openapi-validation` del workflow de PR corre `redocly lint` sobre los 5
   contratos (`auth`, `billing`, `catalog`, `physical`, `virtual`) y falla ante
   errores estructurales. La lista es explícita: un contrato nuevo se agrega en
@@ -46,8 +54,7 @@ Dos warnings son esperados y aceptados:
 
 Estos archivos describen únicamente endpoints **implementados**. Los endpoints
 planificados que figuran en [`docs/03-AUTH-API.md`](../../docs/03-AUTH-API.md)
-(`logout-all`, `forgot-password`, `reset-password`, `change-password`, `me`,
-`me/roles`) no aparecen acá hasta que existan: un contrato que promete rutas
+(`logout-all`, `change-password`, `me/roles`) no aparecen acá hasta que existan: un contrato que promete rutas
 inexistentes es peor que no tener contrato.
 
 ## Relación con Bruno
