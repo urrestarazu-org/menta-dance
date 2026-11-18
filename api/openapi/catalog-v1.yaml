@@ -2,12 +2,18 @@ openapi: 3.1.0
 
 # Contrato HTTP de la superficie Catalog v1.
 #
-# Escrito y versionado a mano, mismo criterio que auth-v1.yaml y
-# billing-v1.yaml: el diff se revisa en el PR igual que la colección Bruno.
+# Escrito y versionado a mano, mismo criterio que auth-v1.yaml, billing-v1.yaml,
+# physical-v1.yaml y virtual-v1.yaml: el diff se revisa en el PR igual que la
+# colección Bruno.
 #
 # Primer endpoint público propio de api:app fuera de auth (#95). Compone,
 # sin tabla compartida ni HTTP interno, los puertos de Physical (#40) y
 # Virtual (#46) — ver docs/07-CATALOG-API.md y docs/adr/0037-catalog-course-id-routing.md.
+# Cubre las 2 rutas de CatalogController, las únicas del catálogo.
+#
+# Un test (CatalogOpenApiContractTest) lee el controller y los records reales y
+# falla si una ruta, un campo, un enum, un código de error o el conjunto de
+# respuestas cambian sin este contrato.
 
 info:
   title: Menta Dance — Catalog API
@@ -26,7 +32,15 @@ info:
     ## No enumeración
 
     `GET /courses/{courseId}` no distingue un curso inexistente de uno no
-    publicado/inactivo — ambos responden el mismo `404 COURSE_NOT_FOUND`.
+    publicado/inactivo, ni de un `courseId` que no es un UUID — todos responden
+    el mismo `404 COURSE_NOT_FOUND`.
+
+    ## Fechas
+
+    El `dayOfWeek` y el `startTime` de un curso presencial van en UTC y el
+    cliente los convierte a la zona del usuario (ADR-0048). `startTime` se
+    responde como `HH:mm` y sólo lleva `:ss` cuando los segundos no son cero;
+    `scheduledAt` es un instante ISO-8601 con `Z`.
 
 servers:
   - url: http://localhost:8081
@@ -82,6 +96,7 @@ paths:
         - name: courseId
           in: path
           required: true
+          description: Un valor que no es un UUID responde `404 COURSE_NOT_FOUND`, no `400`.
           schema:
             type: string
             format: uuid
@@ -124,37 +139,33 @@ components:
         title:
           type: string
         level:
-          type: string
+          $ref: '#/components/schemas/CourseLevel'
         physical:
-          $ref: '#/components/schemas/PhysicalCatalogBlock'
-          nullable: true
+          description: Presente (no nulo) sólo en cursos `PHYSICAL`; en los `VIRTUAL` es `null`.
+          oneOf:
+            - $ref: '#/components/schemas/PhysicalCatalogBlock'
+            - type: 'null'
         virtual:
-          $ref: '#/components/schemas/VirtualCatalogBlock'
-          nullable: true
-      required: [courseId, modality, title, level]
+          description: Presente (no nulo) sólo en cursos `VIRTUAL`; en los `PHYSICAL` es `null`.
+          oneOf:
+            - $ref: '#/components/schemas/VirtualCatalogBlock'
+            - type: 'null'
+      required: [courseId, modality, title, level, physical, virtual]
     PhysicalCatalogBlock:
       type: object
+      required: [professorName, dayOfWeek, startTime, capacity]
       properties:
         professorName:
           type: string
         dayOfWeek:
-          type: string
-          description: >-
-            Día de la semana de la recurrencia del curso, **en UTC** (no en la
-            zona del usuario). El cliente lo convierte junto con `startTime`
-            para mostrarlo; la conversión puede cambiar el día (ADR-0048).
-          example: WEDNESDAY
+          $ref: '#/components/schemas/DayOfWeek'
         startTime:
-          type: string
-          description: >-
-            Hora de inicio de cada clase, **en UTC**. El cliente la convierte a
-            su zona, junto con `dayOfWeek`, para mostrarla: `WEDNESDAY` a las
-            `01:00:00` UTC es martes 22:00 en Buenos Aires (UTC-3).
-          example: "01:00:00"
+          $ref: '#/components/schemas/StartTime'
         capacity:
           type: integer
     VirtualCatalogBlock:
       type: object
+      required: [shortDescription, imageUrl, category, premium, moduleCount, lessonCount, totalDurationMinutes]
       properties:
         shortDescription:
           type: string
@@ -188,7 +199,7 @@ components:
         category:
           type: string
         level:
-          type: string
+          $ref: '#/components/schemas/CourseLevel'
         isPremium:
           type: boolean
         modules:
@@ -233,7 +244,7 @@ components:
               type: string
               description: '`Xm` bajo 60 minutos, `Xh Ym` desde 60.'
           required: [moduleCount, lessonCount, totalDuration]
-      required: [courseId, title, level, isPremium, modules, stats]
+      required: [courseId, title, description, thumbnailUrl, category, level, isPremium, modules, stats]
     CatalogPhysicalCourseDetail:
       type: object
       description: >-
@@ -250,28 +261,16 @@ components:
         title:
           type: string
         level:
-          type: string
+          $ref: '#/components/schemas/CourseLevel'
         physical:
           type: object
           properties:
             professorName:
               type: string
             dayOfWeek:
-              type: string
-              description: >-
-                Día de la semana de la recurrencia del curso, **en UTC** (no en
-                la zona del usuario). El cliente lo convierte junto con
-                `startTime` para mostrarlo; la conversión puede cambiar el día
-                (ADR-0048).
-              example: WEDNESDAY
+              $ref: '#/components/schemas/DayOfWeek'
             startTime:
-              type: string
-              description: >-
-                Hora de inicio de cada clase, **en UTC**. El cliente la
-                convierte a su zona, junto con `dayOfWeek`, para mostrarla:
-                `WEDNESDAY` a las `01:00:00` UTC es martes 22:00 en Buenos Aires
-                (UTC-3).
-              example: "01:00:00"
+              $ref: '#/components/schemas/StartTime'
             capacity:
               type: integer
             sessions:
@@ -304,21 +303,48 @@ components:
           minimum: 0
           description: Cupos libres; 0 si la sesión está agotada.
       required: [sessionId, scheduledAt, capacity, availableSpots]
+    CourseLevel:
+      type: string
+      description: Nivel del curso, igual para las dos modalidades.
+      enum: [BEGINNER, INTERMEDIATE, ADVANCED]
+      example: BEGINNER
+    DayOfWeek:
+      type: string
+      description: >-
+        Día de la semana de la recurrencia del curso, **en UTC** (no en la zona
+        del usuario). El cliente lo convierte junto con `startTime` para
+        mostrarlo; la conversión puede cambiar el día (ADR-0048).
+      enum: [MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY]
+      example: WEDNESDAY
+    StartTime:
+      type: string
+      description: >-
+        Hora de inicio de cada clase, **en UTC**, como `HH:mm`; sólo lleva `:ss`
+        (y fracción) cuando no son cero. El cliente la convierte a su zona,
+        junto con `dayOfWeek`, para mostrarla: `WEDNESDAY` a las `01:00` UTC es
+        martes 22:00 en Buenos Aires (UTC-3).
+      pattern: '^\d{2}:\d{2}(:\d{2}(\.\d{1,9})?)?$'
+      example: "01:00"
     ProblemDetail:
       type: object
+      required: [type, title, status, detail, code]
       properties:
         type:
           type: string
           format: uri
+          description: '`https://menta.dance/problems/<code en minúsculas>`.'
         title:
           type: string
+          description: Frase de estado HTTP.
         status:
           type: integer
         detail:
           type: string
+          description: Texto legible. No apto para lógica de cliente.
         code:
           type: string
-      required: [status, code]
+          description: Identificador estable por el que un cliente debe discriminar.
+          enum: [COURSE_NOT_FOUND, CATALOG_DEGRADED]
   responses:
     CourseNotFound:
       description: Ningún módulo dueño tiene ese courseId (o existe pero no está publicado/activo).
@@ -326,13 +352,28 @@ components:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/ProblemDetail'
+          example:
+            type: https://menta.dance/problems/course_not_found
+            title: Not Found
+            status: 404
+            detail: Course not found in any modality.
+            code: COURSE_NOT_FOUND
     CatalogDegraded:
       description: El módulo dueño (Physical o Virtual) falló al resolver la consulta.
       headers:
         Retry-After:
+          description: Segundos a esperar antes de reintentar; siempre `30`.
+          required: true
           schema:
             type: integer
+          example: 30
       content:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/ProblemDetail'
+          example:
+            type: https://menta.dance/problems/catalog_degraded
+            title: Service Unavailable
+            status: 503
+            detail: The physical catalog is temporarily unavailable
+            code: CATALOG_DEGRADED

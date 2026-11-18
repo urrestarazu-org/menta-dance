@@ -9,9 +9,15 @@ openapi: 3.1.0
 # AGENTS.md exige actualizar este archivo en el mismo cambio que modifique una
 # ruta, método, parámetro, autenticación, respuesta, error o rate limit.
 #
-# Sólo describe endpoints IMPLEMENTADOS. Los endpoints planificados que figuran
-# en docs/03-AUTH-API.md (logout-all, change-password, me/roles) no están
-# acá porque todavía no existen.
+# Sólo describe endpoints IMPLEMENTADOS. Cubre todas las rutas de producción de
+# los controllers de auth (14): sesión, registro y activación, recuperación de
+# contraseña, la cuenta propia y la administración de usuarios. Los endpoints
+# planificados que figuran en docs/03-AUTH-API.md (logout-all, change-password,
+# me/roles) no están acá porque todavía no existen.
+#
+# Un test (AuthOpenApiContractTest) lee los controllers, los records, los enums
+# y las excepciones reales y falla si una ruta, un campo, un enum, un código de
+# error o el conjunto de respuestas cambian sin este contrato.
 
 info:
   title: Menta Dance — Auth API
@@ -35,6 +41,23 @@ info:
     Todos los errores usan `application/problem+json` (RFC 9457) con un miembro
     adicional `code` estable. **Los clientes deben discriminar por `code`, no por
     `detail`**, que es texto legible y puede cambiar.
+
+    ## Autorización
+
+    Sin token, toda ruta protegida responde `401 AUTHENTICATION_REQUIRED`; con un
+    rol sin acceso, `403 ACCESS_DENIED`. `logout` y `GET /users/me` aceptan
+    cualquier rol; `/api/v1/admin/**` exige `ADMIN`. El resto de las rutas es
+    público.
+
+    ## Cuerpos de petición
+
+    Las propiedades desconocidas de un cuerpo JSON se ignoran, no se rechazan.
+
+    ## Fechas
+
+    `UserSummary.createdAt` es la única fecha de este contrato y sale **sin
+    zona** (`YYYY-MM-DDTHH:mm:ss`): es deuda frente al ADR-0048, que pide UTC con
+    `Z`, y cambiarla es un cambio de contrato.
 
     ## No enumeración de cuentas
 
@@ -254,11 +277,30 @@ paths:
         '400':
           $ref: '#/components/responses/InvalidAuthRequest'
         '401':
-          description: Access o refresh inválido.
+          description: |
+            Access token ausente o inválido (`AUTHENTICATION_REQUIRED`), o refresh
+            desconocido, ya revocado o reutilizado (`REFRESH_TOKEN_COMPROMISED`).
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+              examples:
+                accessInvalid:
+                  summary: Falta el access token o no es válido
+                  value:
+                    type: https://menta.dance/problems/authentication_required
+                    title: Unauthorized
+                    status: 401
+                    detail: Authentication is required.
+                    code: AUTHENTICATION_REQUIRED
+                refreshInvalid:
+                  summary: El refresh no corresponde a una sesión vigente
+                  value:
+                    type: https://menta.dance/problems/refresh_token_compromised
+                    title: Unauthorized
+                    status: 401
+                    detail: Authentication failed.
+                    code: REFRESH_TOKEN_COMPROMISED
         '503':
           $ref: '#/components/responses/AuthDegraded'
 
@@ -387,17 +429,31 @@ paths:
               schema:
                 $ref: '#/components/schemas/ActivationTokenValidation'
         '400':
-          description: Token inválido, expirado o reutilizado — indistinguibles entre sí.
+          description: |
+            Token inválido, expirado o reutilizado — indistinguibles entre sí. Un
+            `IllegalArgumentException` del caso de uso se responde también como
+            `INVALID_ACTIVATION_REQUEST` (el handler es de toda la clase).
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
-              example:
-                type: https://menta.dance/problems/activation_token_invalid
-                title: Bad Request
-                status: 400
-                detail: El token de activación es inválido o expiró.
-                code: ACTIVATION_TOKEN_INVALID
+              examples:
+                tokenInvalid:
+                  summary: Token inválido, expirado o reutilizado
+                  value:
+                    type: https://menta.dance/problems/activation_token_invalid
+                    title: Bad Request
+                    status: 400
+                    detail: El token de activación es inválido o expiró.
+                    code: ACTIVATION_TOKEN_INVALID
+                semantica:
+                  summary: Solicitud rechazada por el caso de uso
+                  value:
+                    type: https://menta.dance/problems/invalid_activation_request
+                    title: Bad Request
+                    status: 400
+                    detail: La solicitud de activación no es válida.
+                    code: INVALID_ACTIVATION_REQUEST
         '503':
           $ref: '#/components/responses/AuthDegraded'
 
@@ -439,7 +495,8 @@ paths:
         '400':
           description: |
             Token inválido, expirado o reutilizado — indistinguibles entre sí — o, para una cuenta creada por un
-            administrador, contraseña ausente o que no cumple la política.
+            administrador, contraseña ausente o que no cumple la política. Un `token` ausente o en blanco es
+            `INVALID_REQUEST`; un `IllegalArgumentException` del caso de uso es `INVALID_ACTIVATION_REQUEST`.
           content:
             application/problem+json:
               schema:
@@ -469,6 +526,22 @@ paths:
                     status: 400
                     detail: 'La contraseña no cumple los requisitos: al menos 8 caracteres, al menos un número.'
                     code: WEAK_PASSWORD
+                validacion:
+                  summary: Falta el token o está en blanco
+                  value:
+                    type: https://menta.dance/problems/invalid_request
+                    title: Bad Request
+                    status: 400
+                    detail: La solicitud contiene datos inválidos.
+                    code: INVALID_REQUEST
+                semantica:
+                  summary: Solicitud rechazada por el caso de uso
+                  value:
+                    type: https://menta.dance/problems/invalid_activation_request
+                    title: Bad Request
+                    status: 400
+                    detail: La solicitud de activación no es válida.
+                    code: INVALID_ACTIVATION_REQUEST
         '503':
           $ref: '#/components/responses/AuthDegraded'
 
@@ -681,7 +754,7 @@ paths:
             default: 20
       responses:
         '200':
-          description: Una página de usuarios. Una página pasada del final vuelve sin `items` pero con los totales.
+          description: Una página de usuarios. Una página pasada del final vuelve con `items` vacío y con los totales.
           content:
             application/json:
               schema:
@@ -865,10 +938,12 @@ components:
       required: true
       description: |
         Refresh token opaco. **Sólo por header**: enviarlo en el cuerpo JSON no
-        es una alternativa soportada y se rechaza con `400`.
+        es una alternativa soportada y se rechaza con `400`. Ausente o en blanco
+        es `400`; cualquier otro valor se acepta y uno que no corresponde a un
+        refresh vigente es `401 REFRESH_TOKEN_COMPROMISED`.
       schema:
         type: string
-        format: uuid
+        minLength: 1
       example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
 
   headers:
@@ -903,7 +978,6 @@ components:
           type: string
           format: password
           example: SecurePass123!
-      additionalProperties: false
 
     RegisterRequest:
       type: object
@@ -918,7 +992,11 @@ components:
           format: password
           example: SecurePass123!
         role:
-          $ref: '#/components/schemas/Role'
+          $ref: '#/components/schemas/UserRole'
+          description: |
+            Acepta cualquier valor de `UserRole`, pero el registro público sólo
+            honra `STUDENT`: pedir otro rol no produce un error distinguible, la
+            respuesta sigue siendo `202` vacío.
         firstName:
           type: string
           description: Nombre. Obligatorio; se recorta de espacios y admite hasta 100 caracteres.
@@ -945,7 +1023,6 @@ components:
           format: date
           description: Fecha de nacimiento (ISO 8601, `YYYY-MM-DD`). Opcional; si se envía debe ser anterior a hoy.
           example: '1990-05-17'
-      additionalProperties: false
 
     ResendActivationRequest:
       type: object
@@ -955,7 +1032,6 @@ components:
           type: string
           format: email
           example: alumno@example.com
-      additionalProperties: false
 
     ForgotPasswordRequest:
       type: object
@@ -965,7 +1041,6 @@ components:
           type: string
           format: email
           example: alumno@example.com
-      additionalProperties: false
 
     ResetPasswordRequest:
       type: object
@@ -980,7 +1055,6 @@ components:
           format: password
           description: Mínimo 8 caracteres, al menos una mayúscula y un dígito.
           example: NewSecurePass1
-      additionalProperties: false
 
     TokenResponse:
       type: object
@@ -1003,14 +1077,6 @@ components:
             Vigencia del access token en **segundos**, como número — no como
             duración ISO-8601.
           example: 900.0
-
-    Role:
-      type: string
-      description: |
-        El registro público sólo admite `STUDENT`. Pedir otro rol no produce un
-        error distinguible: la respuesta sigue siendo `202` vacío.
-      enum: [STUDENT, INSTRUCTOR, ADMIN]
-      example: STUDENT
 
     ActivateAccountRequest:
       type: object
@@ -1039,9 +1105,7 @@ components:
 
     UserRole:
       type: string
-      description: |
-        Rol de una cuenta. A diferencia de `Role` (el que acepta el registro
-        público), incluye `RECEPTIONIST`.
+      description: Rol de una cuenta.
       enum: [ADMIN, INSTRUCTOR, STUDENT, RECEPTIONIST]
       example: INSTRUCTOR
 
@@ -1056,7 +1120,6 @@ components:
       properties:
         role:
           $ref: '#/components/schemas/UserRole'
-      additionalProperties: false
 
     CreateUserRequest:
       type: object
@@ -1085,14 +1148,13 @@ components:
           description: Rol de staff. `STUDENT` no se puede crear acá.
           enum: [INSTRUCTOR, RECEPTIONIST, ADMIN]
           example: RECEPTIONIST
-      additionalProperties: false
 
     UserSummary:
       type: object
       description: |
         Lo que ve un administrador de una cuenta. Nunca incluye el hash de la
         contraseña ni la versión de token.
-      required: [id, email, role, status, demo, createdAt]
+      required: [id, email, firstName, lastName, role, status, demo, createdAt]
       properties:
         id:
           type: string
@@ -1127,7 +1189,7 @@ components:
         Lo que ve el usuario autenticado de su propia cuenta. Nunca incluye el
         email, el hash de la contraseña, el estado, el teléfono ni la fecha de
         nacimiento.
-      required: [userId, role]
+      required: [userId, firstName, lastName, role]
       properties:
         userId:
           type: string
@@ -1307,9 +1369,18 @@ components:
       description: |
         Autenticación temporalmente no disponible.
 
-        Ocurre cuando la reflexión de revocaciones en Redis no está reconciliada o
-        el almacén de rate limiting no responde. **No existe modo fail-open**: la
-        operación se deniega antes que aceptar un token que podría estar revocado.
+        Ocurre en `login`, `refresh` y `logout` cuando el reconciliador del outbox
+        está degradado, y en `login`, `register` y `resend-activation` cuando el
+        almacén de rate limiting (Redis) no responde. **No existe modo
+        fail-open**: la operación se deniega antes que aceptar un token que
+        podría estar revocado.
+
+        `GET /activate/{token}` y `POST /activate` la declaran también, aunque hoy
+        ningún caso de uso detrás de ellas la produce.
+
+        El filtro JWT nunca responde `503`: si no puede comprobar la revocación de
+        un access token lo trata como revocado y la respuesta es `401
+        AUTHENTICATION_REQUIRED`.
       headers:
         Retry-After:
           $ref: '#/components/headers/RetryAfter'
