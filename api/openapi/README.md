@@ -36,6 +36,20 @@ El costo aceptado es el mantenimiento manual. La mitigación es doble:
   errores estructurales. La lista es explícita: un contrato nuevo se agrega en
   `.github/workflows/pr-develop.yml`, o queda sin validar.
 
+## Vista navegable
+
+La API no sirve Swagger UI; para leer los contratos en el navegador hay un Swagger UI
+local y de solo lectura que monta este directorio:
+
+```bash
+./scripts/api-docs.sh start   # http://localhost:8090, con selector de contrato
+./scripts/api-docs.sh stop
+```
+
+Requiere Docker. Es independiente de la API y del BFF, y "Try it out" está
+deshabilitado: es un visor, no un cliente. Detalles en
+[`docs/24-LOCAL-DEV-SETUP-REQUIREMENTS.md`](../../docs/24-LOCAL-DEV-SETUP-REQUIREMENTS.md).
+
 ## Validación local
 
 ```bash
