@@ -19,8 +19,8 @@ POST /api/v1/billing/physical/purchases
 GET  /api/v1/billing/physical/courses/{courseId}/pricing
 PUT  /api/v1/billing/physical/courses/{courseId}/pricing
 POST /api/v1/billing/payments/mercadopago/webhook
-GET  /api/v1/billing/admin/reconciliation
-POST /api/v1/billing/admin/reconciliation/{paymentId}/resolve
+GET  /api/v1/billing/admin/reconciliation                       # planificada, no implementada
+POST /api/v1/billing/admin/reconciliation/{paymentId}/resolve   # planificada, no implementada
 GET  /api/v1/admin/billing/payments
 GET  /api/v1/admin/billing/payments/{paymentId}
 POST /api/v1/admin/billing/payments/{paymentId}/approve
@@ -32,6 +32,10 @@ POST /api/v1/billing/payments/{paymentId}/proof
 
 Las rutas `/me` y `/payments/...` (salvo el webhook) son autoservicio del alumno; las de conciliación
 son exclusivas de `ADMIN`. Los errores usan `application/problem+json`.
+
+> Las dos rutas de conciliación están **planificadas, no implementadas**: no existe ningún controller
+> y tampoco figuran en `api/openapi/billing-v1.yaml`. Hoy un pago en `RECONCILIATION_REQUIRED` se
+> resuelve con `POST /api/v1/admin/billing/payments/{paymentId}/corrections`.
 
 ## Contrato HTTP implementado (v1)
 
