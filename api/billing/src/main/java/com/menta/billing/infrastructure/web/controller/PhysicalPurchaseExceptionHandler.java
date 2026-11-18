@@ -1,12 +1,16 @@
 package com.menta.billing.infrastructure.web.controller;
 
+import com.menta.billing.domain.exception.BankTransferRateLimitedException;
+import com.menta.billing.domain.exception.BillingDegradedException;
 import com.menta.billing.domain.exception.NoNewSessionsToPurchaseException;
 import com.menta.billing.domain.exception.PaymentPreferenceUnavailableException;
 import com.menta.billing.domain.exception.PhysicalCapacityUnavailableException;
 import com.menta.billing.domain.exception.PhysicalCourseQuoteExpiredException;
 import com.menta.billing.domain.model.PurchaseType;
 import com.menta.billing.infrastructure.web.ProblemDetails;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -26,6 +30,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  */
 @RestControllerAdvice(annotations = PhysicalPurchaseEndpoint.class)
 public class PhysicalPurchaseExceptionHandler {
+
+    private static final String RETRY_AFTER_DEGRADED_SECONDS = "30";
 
     /**
      * A7: a time-limited artifact whose remedy is a fresh one — same precedent as
@@ -67,6 +73,41 @@ public class PhysicalPurchaseExceptionHandler {
             "No pudimos iniciar el pago en este momento. Intentá de nuevo en unos minutos.",
             exception.getErrorCode()
         );
+    }
+
+    /**
+     * #787, design D4 (#36): the 10 creations/user/day bank-transfer budget — shared with {@code
+     * POST /subscriptions} — is spent. Only reachable with {@code BANK_TRANSFER}.
+     */
+    @ExceptionHandler(BankTransferRateLimitedException.class)
+    ResponseEntity<ProblemDetail> bankTransferRateLimited(BankTransferRateLimitedException exception) {
+        long seconds = Math.max(1, exception.getRetryAfter().toSeconds());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+            .header(HttpHeaders.RETRY_AFTER, Long.toString(seconds))
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(ProblemDetails.body(
+                HttpStatus.TOO_MANY_REQUESTS,
+                "Demasiadas solicitudes de transferencia bancaria; reintentá más tarde.",
+                exception.getErrorCode()
+            ));
+    }
+
+    /**
+     * #787: the bank-transfer rate limiter could not reach Redis. Fail closed — never let an
+     * unbounded number of checkouts through while the budget is unreachable. Matched on the
+     * top-level exception, so a wrapped {@code IllegalArgumentException} in the cause chain does
+     * not reroute it to {@link #malformedRequest}.
+     */
+    @ExceptionHandler(BillingDegradedException.class)
+    ResponseEntity<ProblemDetail> degraded(BillingDegradedException exception) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+            .header(HttpHeaders.RETRY_AFTER, RETRY_AFTER_DEGRADED_SECONDS)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(ProblemDetails.body(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "El servicio de facturación no está disponible temporalmente.",
+                exception.getErrorCode()
+            ));
     }
 
     /** A malformed body field — never a 500. */
