@@ -18,6 +18,7 @@ import com.menta.auth.application.dto.RequestPasswordResetResult;
 import com.menta.auth.application.dto.ResetPasswordCommand;
 import com.menta.auth.application.port.in.RequestPasswordResetUseCase;
 import com.menta.auth.application.port.in.ResetPasswordUseCase;
+import com.menta.auth.domain.exception.AuthDegradedException;
 import com.menta.auth.domain.exception.PasswordResetRateLimitedException;
 import com.menta.auth.domain.exception.PasswordResetTokenAlreadyUsedException;
 import com.menta.auth.domain.exception.PasswordResetTokenExpiredException;
@@ -29,6 +30,7 @@ import java.time.Duration;
 import java.util.EnumSet;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -204,5 +206,60 @@ class PasswordResetControllerTest {
             .andExpect(content().string(org.hamcrest.Matchers.not(
                 org.hamcrest.Matchers.containsString("El token es obligatorio")
             )));
+    }
+
+    @Test
+    void forgot_password_returns_503_with_retry_after_when_the_rate_limiter_is_degraded() throws Exception {
+        when(requestPasswordResetUseCase.request(any())).thenThrow(new AuthDegradedException());
+
+        mockMvc.perform(post("/api/v1/auth/forgot-password")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"email\":\"pending@example.com\"}"))
+            .andExpect(status().isServiceUnavailable())
+            .andExpect(header().string("Retry-After", is("30")))
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.type", is("https://menta.dance/problems/auth_degraded")))
+            .andExpect(jsonPath("$.status", is(503)))
+            .andExpect(jsonPath("$.code", is("AUTH_DEGRADED")));
+    }
+
+    @Test
+    void reset_password_returns_503_with_retry_after_when_the_rate_limiter_is_degraded() throws Exception {
+        doThrow(new AuthDegradedException()).when(resetPasswordUseCase).reset(any());
+
+        mockMvc.perform(post("/api/v1/auth/reset-password")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"token\":\"raw-token\",\"newPassword\":\"NewSecurePass1\"}"))
+            .andExpect(status().isServiceUnavailable())
+            .andExpect(header().string("Retry-After", is("30")))
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.type", is("https://menta.dance/problems/auth_degraded")))
+            .andExpect(jsonPath("$.status", is(503)))
+            .andExpect(jsonPath("$.code", is("AUTH_DEGRADED")));
+    }
+
+    /**
+     * Spring resolves an {@code @ExceptionHandler} by walking the cause chain, so a degraded signal whose chain
+     * holds an {@link IllegalArgumentException} must still end in the 503 handler and never in a 400.
+     */
+    @Test
+    void degraded_signal_with_a_redis_failure_and_an_illegal_argument_in_its_chain_is_still_503() throws Exception {
+        AuthDegradedException degraded = new AuthDegradedException();
+        degraded.initCause(new RedisConnectionFailureException(
+            "Unable to connect to Redis", new IllegalArgumentException("bad fingerprint")
+        ));
+        when(requestPasswordResetUseCase.request(any())).thenThrow(degraded);
+        doThrow(degraded).when(resetPasswordUseCase).reset(any());
+
+        mockMvc.perform(post("/api/v1/auth/forgot-password")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"email\":\"pending@example.com\"}"))
+            .andExpect(status().isServiceUnavailable())
+            .andExpect(jsonPath("$.code", is("AUTH_DEGRADED")));
+        mockMvc.perform(post("/api/v1/auth/reset-password")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"token\":\"raw-token\",\"newPassword\":\"NewSecurePass1\"}"))
+            .andExpect(status().isServiceUnavailable())
+            .andExpect(jsonPath("$.code", is("AUTH_DEGRADED")));
     }
 }

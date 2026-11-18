@@ -1,5 +1,6 @@
 package com.menta.auth.infrastructure.web.controller;
 
+import com.menta.auth.domain.exception.AuthDegradedException;
 import com.menta.auth.domain.exception.PasswordResetRateLimitedException;
 import com.menta.auth.domain.exception.PasswordResetTokenAlreadyUsedException;
 import com.menta.auth.domain.exception.PasswordResetTokenExpiredException;
@@ -31,6 +32,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice(annotations = PublicPasswordResetEndpoint.class)
 public class PasswordResetExceptionHandler {
 
+    private static final String RETRY_AFTER_DEGRADED_SECONDS = "30";
+
     @ExceptionHandler(PasswordResetRateLimitedException.class)
     ResponseEntity<ProblemDetail> rateLimited(PasswordResetRateLimitedException exception) {
         long seconds = Math.max(1, exception.getRetryAfter().toSeconds());
@@ -40,6 +43,22 @@ public class PasswordResetExceptionHandler {
             .body(ProblemDetails.body(
                 HttpStatus.TOO_MANY_REQUESTS,
                 "Demasiados intentos; reintentá más tarde.",
+                exception.getErrorCode()
+            ));
+    }
+
+    /**
+     * Fail-closed answer when the Redis-backed rate limiter is unavailable: the limiter guards an endpoint that
+     * sends email, so an outage must refuse the request rather than skip the limit.
+     */
+    @ExceptionHandler(AuthDegradedException.class)
+    ResponseEntity<ProblemDetail> degraded(AuthDegradedException exception) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+            .header(HttpHeaders.RETRY_AFTER, RETRY_AFTER_DEGRADED_SECONDS)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(ProblemDetails.body(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "La autenticación no está disponible temporalmente.",
                 exception.getErrorCode()
             ));
     }

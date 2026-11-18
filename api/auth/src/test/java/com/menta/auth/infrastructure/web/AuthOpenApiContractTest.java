@@ -298,11 +298,11 @@ class AuthOpenApiContractTest {
                 + "AUTH_DEGRADED");
         expect(expected, RESEND, "202,400,429,503",
             "INVALID_REQUEST,INVALID_ACTIVATION_REQUEST,ACTIVATION_RATE_LIMITED,AUTH_DEGRADED");
-        // Password reset has no AuthDegraded handler (a Redis outage ends in a 500), so no 503 is documented.
-        expect(expected, FORGOT, "202,400,429", "INVALID_REQUEST,PASSWORD_RESET_RATE_LIMITED");
-        expect(expected, RESET, "200,400,404,410,429",
+        // Password reset: PasswordResetExceptionHandler. A Redis outage in either rate limiter is a 503.
+        expect(expected, FORGOT, "202,400,429,503", "INVALID_REQUEST,PASSWORD_RESET_RATE_LIMITED,AUTH_DEGRADED");
+        expect(expected, RESET, "200,400,404,410,429,503",
             "INVALID_REQUEST,WEAK_PASSWORD,SAME_PASSWORD,PASSWORD_RESET_TOKEN_NOT_FOUND,PASSWORD_RESET_TOKEN_EXPIRED,"
-                + "PASSWORD_RESET_TOKEN_ALREADY_USED,PASSWORD_RESET_RATE_LIMITED");
+                + "PASSWORD_RESET_TOKEN_ALREADY_USED,PASSWORD_RESET_RATE_LIMITED,AUTH_DEGRADED");
         // /api/v1/admin/** is ADMIN only: 401 and 403 come from SecurityConfig.
         expect(expected, LIST_USERS, "200,400,401,403", "INVALID_REQUEST,AUTHENTICATION_REQUIRED,ACCESS_DENIED");
         expect(expected, CREATE_USER, "201,400,401,403,409",
