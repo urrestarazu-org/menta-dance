@@ -426,9 +426,9 @@ paths:
         Un id inexistente o mal formado responde `404 COURSE_NOT_FOUND`; esta
         lectura no tiene 400.
 
-        Sólo exige el rol (ADMIN o INSTRUCTOR): hoy no comprueba la propiedad
-        del curso, así que un PROFESOR puede leer también cursos ajenos, a
-        diferencia de las operaciones de escritura (`403 COURSE_NOT_OWNED`).
+        Además del rol (ADMIN o INSTRUCTOR), comprueba la propiedad del curso,
+        igual que las operaciones de escritura: un ADMIN lee cualquier curso,
+        un PROFESOR sólo los suyos y uno ajeno responde `403 COURSE_NOT_OWNED`.
       operationId: getManagedVirtualCourse
       parameters:
         - $ref: '#/components/parameters/CourseId'
@@ -442,7 +442,7 @@ paths:
         '401':
           $ref: '#/components/responses/AuthenticationRequired'
         '403':
-          $ref: '#/components/responses/AccessDenied'
+          $ref: '#/components/responses/NotOwned'
         '404':
           $ref: '#/components/responses/CourseNotFound'
 

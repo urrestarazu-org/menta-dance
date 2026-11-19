@@ -203,6 +203,62 @@ class VirtualCourseManagementIntegrationTest {
     }
 
     @Test
+    void instructor_cannot_read_the_detail_of_a_course_they_do_not_own() {
+        UUID courseId = seedCourse(UUID.randomUUID(), CourseStatus.DRAFT);
+        UUID moduleId = seedModule(courseId, 1);
+        seedCompleteLesson(moduleId, courseId);
+        UUID otherInstructorId = issueUser(Role.INSTRUCTOR);
+
+        ResponseEntity<Map> response = http.exchange(
+            "/api/v1/admin/virtual/courses/" + courseId, HttpMethod.GET,
+            new HttpEntity<>(headersFor(otherInstructorId, Role.INSTRUCTOR)), Map.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(response.getBody().get("code")).isEqualTo("COURSE_NOT_OWNED");
+        assertThat(response.getBody()).doesNotContainKey("modules");
+    }
+
+    @Test
+    void instructor_reads_the_detail_of_their_own_course() {
+        UUID ownerId = issueUser(Role.INSTRUCTOR);
+        UUID courseId = seedCourse(ownerId, CourseStatus.DRAFT);
+
+        ResponseEntity<Map> response = http.exchange(
+            "/api/v1/admin/virtual/courses/" + courseId, HttpMethod.GET,
+            new HttpEntity<>(headersFor(ownerId, Role.INSTRUCTOR)), Map.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().get("status")).isEqualTo("DRAFT");
+    }
+
+    @Test
+    void admin_reads_the_detail_of_any_course() {
+        UUID courseId = seedCourse(UUID.randomUUID(), CourseStatus.DRAFT);
+        UUID adminId = issueUser(Role.ADMIN);
+
+        ResponseEntity<Map> response = http.exchange(
+            "/api/v1/admin/virtual/courses/" + courseId, HttpMethod.GET,
+            new HttpEntity<>(headersFor(adminId, Role.ADMIN)), Map.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    void reading_the_detail_of_a_missing_course_is_404_for_an_instructor() {
+        UUID instructorId = issueUser(Role.INSTRUCTOR);
+
+        ResponseEntity<Map> response = http.exchange(
+            "/api/v1/admin/virtual/courses/" + UUID.randomUUID(), HttpMethod.GET,
+            new HttpEntity<>(headersFor(instructorId, Role.INSTRUCTOR)), Map.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
     void admin_lists_every_course_regardless_of_owner() {
         seedCourse(UUID.randomUUID(), CourseStatus.DRAFT);
         seedCourse(UUID.randomUUID(), CourseStatus.PUBLISHED);

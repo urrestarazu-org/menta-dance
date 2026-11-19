@@ -10,6 +10,7 @@ import com.menta.virtual.application.port.in.GetCourseProgressUseCase;
 import com.menta.virtual.application.port.in.GetLessonProgressUseCase;
 import com.menta.virtual.application.port.in.GetPublicLessonStreamUseCase;
 import com.menta.virtual.application.port.in.GetPublicLessonUseCase;
+import com.menta.virtual.application.port.in.GetVirtualCourseAdminDetailUseCase;
 import com.menta.virtual.application.port.in.ListInProgressCoursesUseCase;
 import com.menta.virtual.application.port.in.ListManagedVirtualCoursesUseCase;
 import com.menta.virtual.application.port.in.PublishVirtualCourseUseCase;
@@ -37,6 +38,7 @@ import com.menta.virtual.application.usecase.GetCourseProgressUseCaseImpl;
 import com.menta.virtual.application.usecase.GetLessonProgressUseCaseImpl;
 import com.menta.virtual.application.usecase.GetPublicLessonStreamUseCaseImpl;
 import com.menta.virtual.application.usecase.GetPublicLessonUseCaseImpl;
+import com.menta.virtual.application.usecase.GetVirtualCourseAdminDetailUseCaseImpl;
 import com.menta.virtual.application.usecase.LessonAccessPolicy;
 import com.menta.virtual.application.usecase.ListInProgressCoursesUseCaseImpl;
 import com.menta.virtual.application.usecase.ListManagedVirtualCoursesUseCaseImpl;
@@ -257,6 +259,13 @@ public class VirtualConfiguration {
         return new TransactionalCreateVirtualCourseUseCase(
             new CreateVirtualCourseUseCaseImpl(courseRepository, auditRepository)
         );
+    }
+
+    @Bean
+    public GetVirtualCourseAdminDetailUseCase getVirtualCourseAdminDetailUseCase(
+        VirtualCourseRepository courseRepository, VirtualCourseCatalogPort virtualCourseCatalogPort
+    ) {
+        return new GetVirtualCourseAdminDetailUseCaseImpl(courseRepository, virtualCourseCatalogPort);
     }
 
     @Bean
