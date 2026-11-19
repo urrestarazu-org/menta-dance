@@ -230,11 +230,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/SubscriptionCheckoutResponse'
         '400':
-          description: Body inválido o `planId` mal formado.
+          description: Cuerpo ilegible o inválido, o `planId` mal formado.
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+              examples:
+                solicitud_invalida:
+                  value:
+                    type: https://menta.dance/problems/invalid_request
+                    title: Bad Request
+                    status: 400
+                    detail: La solicitud contiene datos inválidos.
+                    code: INVALID_REQUEST
         '401':
           description: Falta un access token válido.
         '409':
@@ -477,7 +485,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/CancelSubscriptionResponse'
         '400':
-          description: '`reason` ausente o en blanco. No se modifica la suscripción.'
+          description: '`reason` ausente o en blanco, o cuerpo ilegible. No se modifica la suscripción.'
           content:
             application/problem+json:
               schema:
@@ -558,8 +566,8 @@ paths:
                 $ref: '#/components/schemas/AssignTrialResponse'
         '400':
           description: >-
-            `reason` ausente o en blanco, o `days` ausente, cero o negativo. No se crea
-            ninguna suscripción.
+            `reason` ausente o en blanco, `days` ausente, cero o negativo, o cuerpo ilegible. No se
+            crea ninguna suscripción.
           content:
             application/problem+json:
               schema:
@@ -676,7 +684,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/PhysicalPurchaseCheckoutResponse'
         '400':
-          description: Body inválido, `quoteId` ausente o `idempotencyKey` ausente.
+          description: Cuerpo ilegible o inválido, `quoteId` ausente o `idempotencyKey` ausente.
           content:
             application/problem+json:
               schema:
@@ -1174,8 +1182,8 @@ paths:
                 $ref: '#/components/schemas/PurchaseResolutionResponse'
         '400':
           description: >-
-            `resolution` ausente o desconocida, `note` vacía o de más de 500 caracteres, o
-            `purchaseId` que no es un UUID.
+            `resolution` ausente o desconocida, `note` vacía o de más de 500 caracteres, cuerpo
+            ilegible, o `purchaseId` que no es un UUID (`INVALID_REQUEST`).
           content:
             application/problem+json:
               schema:
@@ -1186,7 +1194,7 @@ paths:
                     type: https://menta.dance/problems/invalid_request
                     title: Bad Request
                     status: 400
-                    detail: La solicitud es inválida.
+                    detail: La solicitud contiene datos inválidos.
                     code: INVALID_REQUEST
         '401':
           description: Falta un access token válido.
@@ -1312,12 +1320,20 @@ paths:
           description: Corrección aplicada; el pago pasó a su estado terminal elegido.
         '400':
           description: >-
-            `reason` o `evidence` ausentes o en blanco, o `paymentId` que no es un UUID
-            (`INVALID_REQUEST`).
+            `reason` o `evidence` ausentes o en blanco, cuerpo ilegible, o `paymentId` que no es un
+            UUID (`INVALID_REQUEST`).
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+              examples:
+                datos_invalidos:
+                  value:
+                    type: https://menta.dance/problems/invalid_request
+                    title: Bad Request
+                    status: 400
+                    detail: La solicitud contiene datos inválidos.
+                    code: INVALID_REQUEST
         '401':
           description: Falta un access token válido.
         '403':
@@ -1396,7 +1412,8 @@ paths:
           description: Pago rechazado. Sin body.
         '400':
           description: >-
-            `paymentId` que no es un UUID (`INVALID_REQUEST`), o `reason` ausente o en blanco.
+            `paymentId` que no es un UUID, `reason` ausente o en blanco, o cuerpo ilegible
+            (`INVALID_REQUEST`).
           content:
             application/problem+json:
               schema:
@@ -1408,6 +1425,13 @@ paths:
                     title: Bad Request
                     status: 400
                     detail: La solicitud es inválida.
+                    code: INVALID_REQUEST
+                datos_invalidos:
+                  value:
+                    type: https://menta.dance/problems/invalid_request
+                    title: Bad Request
+                    status: 400
+                    detail: La solicitud contiene datos inválidos.
                     code: INVALID_REQUEST
         '401':
           $ref: '#/components/responses/AuthenticationRequired'
@@ -1627,7 +1651,8 @@ paths:
         '400':
           description: >-
             `PAYMENT_PROOF_REJECTED`: tipo no permitido, archivo vacío o de más de 5 MB, o contenido
-            que no coincide con el tipo declarado. `INVALID_REQUEST`: `paymentId` que no es un UUID.
+            que no coincide con el tipo declarado. `INVALID_REQUEST`: `paymentId` que no es un UUID
+            o solicitud sin la parte `file`.
           content:
             application/problem+json:
               schema:
@@ -1640,6 +1665,13 @@ paths:
                     status: 400
                     detail: "El comprobante no cumple los requisitos: debe ser PNG, JPG/JPEG o PDF de hasta 5MB."
                     code: PAYMENT_PROOF_REJECTED
+                archivo_ausente:
+                  value:
+                    type: https://menta.dance/problems/invalid_request
+                    title: Bad Request
+                    status: 400
+                    detail: Falta una parte requerida de la solicitud.
+                    code: INVALID_REQUEST
         '401':
           $ref: '#/components/responses/AuthenticationRequired'
         '404':

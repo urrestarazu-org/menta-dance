@@ -31,6 +31,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.Predicate;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.config.BeanDefinition;
@@ -38,8 +39,10 @@ import org.springframework.context.annotation.ClassPathScanningCandidateComponen
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.core.type.filter.AnnotationTypeFilter;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 import org.yaml.snakeyaml.Yaml;
 
 /**
@@ -117,6 +120,17 @@ class BillingOpenApiContractTest {
     }
 
     private static Set<String> codeRoutes() {
+        return routes(method -> true);
+    }
+
+    /** Routes that decode a JSON body or a multipart part: where Spring can fail to read the request. */
+    private static Set<String> bodyRoutes() {
+        return routes(method -> Arrays.stream(method.getParameters()).anyMatch(parameter ->
+            parameter.isAnnotationPresent(RequestBody.class)
+                || parameter.getType().equals(MultipartFile.class)));
+    }
+
+    private static Set<String> routes(Predicate<Method> include) {
         ClassPathScanningCandidateComponentProvider scanner = new ClassPathScanningCandidateComponentProvider(false);
         scanner.addIncludeFilter(new AnnotationTypeFilter(RestController.class));
         Set<String> routes = new TreeSet<>();
@@ -129,7 +143,7 @@ class BillingOpenApiContractTest {
             String prefix = base == null || base.path().length == 0 ? "" : base.path()[0];
             for (Method method : controller.getDeclaredMethods()) {
                 RequestMapping mapping = AnnotatedElementUtils.findMergedAnnotation(method, RequestMapping.class);
-                if (mapping != null) {
+                if (mapping != null && include.test(method)) {
                     String suffix = mapping.path().length == 0 ? "" : mapping.path()[0];
                     routes.add(mapping.method()[0].name() + " " + normalized(prefix + suffix));
                 }
@@ -173,6 +187,53 @@ class BillingOpenApiContractTest {
         assertResponses("GET " + ADMIN_PAYMENTS, "200", "400", "401", "403", "404");
         assertResponses("POST " + ADMIN_PAYMENTS + "/corrections", "200", "400", "401", "403", "404", "409");
         assertResponses("GET " + PAYMENTS, "200", "400", "401", "404");
+    }
+
+    @Test
+    void every_route_that_reads_a_request_part_documents_the_invalid_request_problem() {
+        List<String> missing = new ArrayList<>();
+        for (String route : bodyRoutes()) {
+            if (!documentsInvalidRequest(operationOf(route))) {
+                missing.add(route);
+            }
+        }
+        assertThat(bodyRoutes()).as("routes that read a body or a part").isNotEmpty();
+        assertThat(missing)
+            .as("body routes whose 400 is not an application/problem+json with code INVALID_REQUEST")
+            .isEmpty();
+    }
+
+    /** Looks a code route (its path variables normalized to {}) up in the yaml. */
+    private static Map<String, Object> operationOf(String route) {
+        String[] parts = route.split(" ", 2);
+        Map<String, Object> paths = map(spec, "paths");
+        String path = paths.keySet().stream()
+            .filter(candidate -> normalized(candidate).equals(parts[1]))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("undocumented route " + route));
+        return map(map(paths, path), parts[0].toLowerCase(Locale.ROOT));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static boolean documentsInvalidRequest(Map<String, Object> operation) {
+        Object response = map(operation, "responses").get("400");
+        if (!(response instanceof Map<?, ?> badRequest)) {
+            return false;
+        }
+        Map<String, Object> resolved = (Map<String, Object>) badRequest;
+        if (resolved.containsKey("$ref")) {
+            String name = resolved.get("$ref").toString().substring("#/components/responses/".length());
+            resolved = map(map(spec, "components"), "responses");
+            resolved = map(resolved, name);
+        }
+        Map<String, Object> content = (Map<String, Object>) resolved.getOrDefault("content", Map.of());
+        Object problem = content.get("application/problem+json");
+        if (!(problem instanceof Map<?, ?> media) || !(media.get("examples") instanceof Map<?, ?> examples)) {
+            return false;
+        }
+        return examples.values().stream().anyMatch(example ->
+            example instanceof Map<?, ?> body && body.get("value") instanceof Map<?, ?> value
+                && "INVALID_REQUEST".equals(value.get("code")));
     }
 
     @Test
