@@ -10,6 +10,7 @@ import com.menta.virtual.domain.exception.LessonNotFoundException;
 import com.menta.virtual.infrastructure.web.dto.CourseProgressResponse;
 import com.menta.virtual.infrastructure.web.dto.LessonProgressResponse;
 import com.menta.virtual.infrastructure.web.dto.SaveLessonProgressRequest;
+import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -51,7 +52,8 @@ public class VirtualStudentProgressController {
 
     @PutMapping("/api/v1/virtual/lessons/{lessonId}/progress")
     public ResponseEntity<LessonProgressResponse> save(
-        @PathVariable String lessonId, @RequestBody SaveLessonProgressRequest request, Authentication authentication
+        @PathVariable String lessonId, @Valid @RequestBody SaveLessonProgressRequest request,
+        Authentication authentication
     ) {
         LessonProgressView view =
             saveLessonProgressUseCase.save(lessonId, actingUserId(authentication), request.positionSeconds());

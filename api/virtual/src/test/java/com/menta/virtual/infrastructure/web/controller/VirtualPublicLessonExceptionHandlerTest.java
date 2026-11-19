@@ -53,6 +53,7 @@ class VirtualPublicLessonExceptionHandlerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(response.getBody().getDetail()).isEqualTo("Lección no encontrada.");
+        assertThat(response.getBody().getProperties().get("code")).isEqualTo("LESSON_NOT_FOUND");
     }
 
     @Test

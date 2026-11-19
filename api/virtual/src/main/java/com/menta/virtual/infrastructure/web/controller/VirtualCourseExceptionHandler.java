@@ -12,11 +12,14 @@ import com.menta.virtual.infrastructure.web.ProblemDetails;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-/** RFC 9457 Problem Details mapping for Virtual's management endpoints (US-VIRTUAL-006). */
+/**
+ * RFC 9457 Problem Details mapping for Virtual's management endpoints (US-VIRTUAL-006). Request
+ * decoding failures (a body that is unreadable, empty or fails bean validation) are answered by
+ * {@link VirtualRequestExceptionHandler}.
+ */
 @RestControllerAdvice(annotations = VirtualManagementEndpoint.class)
 public class VirtualCourseExceptionHandler {
 
@@ -75,17 +78,5 @@ public class VirtualCourseExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     ResponseEntity<ProblemDetail> malformedId(IllegalArgumentException exception) {
         return ProblemDetails.response(HttpStatus.BAD_REQUEST, "Malformed request.", "INVALID_REQUEST");
-    }
-
-    /**
-     * Maps bean-validation failures to a generic RFC 9457 problem instead of
-     * falling through to Spring's default handler, which would echo raw
-     * field messages back to the client.
-     */
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    ResponseEntity<ProblemDetail> invalidRequestBody(MethodArgumentNotValidException exception) {
-        return ProblemDetails.response(
-            HttpStatus.BAD_REQUEST, "La solicitud contiene datos inválidos.", "INVALID_REQUEST"
-        );
     }
 }
