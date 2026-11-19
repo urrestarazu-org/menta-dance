@@ -121,11 +121,16 @@ public interface VirtualCourseCatalogPort {
      * handler chain and already returns a 404 {@code ProblemDetail} on
      * empty, so collapsing the malformed-input case into the same response
      * keeps the admin UI contract uniform. Specifically: the admin
-     * controller throws {@code CourseNotFoundException} on {@code
+     * course-detail use case throws {@code CourseNotFoundException} on {@code
      * Optional.empty()}, mapped to {@code 404} by the @RestControllerAdvice
      * — there is no operator-facing benefit to distinguishing 400 from
      * 404 here, and forcing the admin UI to render a different error shape
      * for "wrong UUID" vs. "missing course" would be busywork.</p>
+     *
+     * <p>This method performs NO ownership check: it returns any course to
+     * whoever asks. Callers exposing it over HTTP must authorize first —
+     * {@code GetVirtualCourseAdminDetailUseCase} does, with the same course
+     * ownership rule as the other management use cases (#789).</p>
      *
      * @param courseId the opaque course id to look up.
      * @return the rich detail with {@code status}/{@code videoId}/etc.,

@@ -10,13 +10,12 @@ import com.menta.virtual.application.dto.VirtualModuleManagementResult;
 import com.menta.virtual.application.port.in.CreateVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.CreateVirtualModuleUseCase;
 import com.menta.virtual.application.port.in.DeleteVirtualCourseUseCase;
+import com.menta.virtual.application.port.in.GetVirtualCourseAdminDetailUseCase;
 import com.menta.virtual.application.port.in.ListManagedVirtualCoursesUseCase;
 import com.menta.virtual.application.port.in.PublishVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.ReorderVirtualModulesUseCase;
 import com.menta.virtual.application.port.in.UnpublishVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.UpdateVirtualCourseUseCase;
-import com.menta.virtual.application.port.in.VirtualCourseCatalogPort;
-import com.menta.virtual.domain.exception.CourseNotFoundException;
 import com.menta.virtual.infrastructure.web.dto.CreateVirtualCourseRequest;
 import com.menta.virtual.infrastructure.web.dto.CreateVirtualModuleRequest;
 import com.menta.virtual.infrastructure.web.dto.ReorderVirtualModulesRequest;
@@ -62,7 +61,7 @@ public class VirtualCourseAdminController {
     private final UnpublishVirtualCourseUseCase unpublishVirtualCourseUseCase;
     private final CreateVirtualModuleUseCase createVirtualModuleUseCase;
     private final ReorderVirtualModulesUseCase reorderVirtualModulesUseCase;
-    private final VirtualCourseCatalogPort virtualCourseCatalogPort;
+    private final GetVirtualCourseAdminDetailUseCase getVirtualCourseAdminDetailUseCase;
 
     public VirtualCourseAdminController(
         CreateVirtualCourseUseCase createVirtualCourseUseCase,
@@ -73,7 +72,7 @@ public class VirtualCourseAdminController {
         UnpublishVirtualCourseUseCase unpublishVirtualCourseUseCase,
         CreateVirtualModuleUseCase createVirtualModuleUseCase,
         ReorderVirtualModulesUseCase reorderVirtualModulesUseCase,
-        VirtualCourseCatalogPort virtualCourseCatalogPort
+        GetVirtualCourseAdminDetailUseCase getVirtualCourseAdminDetailUseCase
     ) {
         this.createVirtualCourseUseCase = createVirtualCourseUseCase;
         this.listManagedVirtualCoursesUseCase = listManagedVirtualCoursesUseCase;
@@ -83,7 +82,7 @@ public class VirtualCourseAdminController {
         this.unpublishVirtualCourseUseCase = unpublishVirtualCourseUseCase;
         this.createVirtualModuleUseCase = createVirtualModuleUseCase;
         this.reorderVirtualModulesUseCase = reorderVirtualModulesUseCase;
-        this.virtualCourseCatalogPort = virtualCourseCatalogPort;
+        this.getVirtualCourseAdminDetailUseCase = getVirtualCourseAdminDetailUseCase;
     }
 
     @PostMapping
@@ -114,18 +113,20 @@ public class VirtualCourseAdminController {
      * Admin course-detail read (US-VIRTUAL-002 escenario 5, #125). Returns
      * the full course — including modules/lessons with {@code videoId} and
      * the lifecycle {@code status} — for any of {@code DRAFT}/
-     * {@code PUBLISHED}/{@code ARCHIVED}; the {@code findByIdForAdmin} port
-     * method intentionally inverts the public non-enumeration discipline so
-     * a {@code DRAFT} or {@code ARCHIVED} course shows up here. A missing
-     * id (or a malformed one — see the port contract) is
+     * {@code PUBLISHED}/{@code ARCHIVED}, to an ADMIN or to the course's own
+     * INSTRUCTOR. The use case enforces ownership: a course owned by someone
+     * else is {@link com.menta.virtual.domain.exception.CourseNotOwnedException}
+     * → {@code 403 COURSE_NOT_OWNED}, and a missing or malformed id is
      * {@link com.menta.virtual.domain.exception.CourseNotFoundException} →
-     * {@code 404 ProblemDetail} via
-     * {@link VirtualCourseExceptionHandler}.
+     * {@code 404}, both via {@link VirtualCourseExceptionHandler}.
      */
     @GetMapping("/{courseId}")
-    public ResponseEntity<VirtualCourseAdminDetailResponse> get(@PathVariable String courseId) {
-        VirtualCourseAdminDetailView view = virtualCourseCatalogPort.findByIdForAdmin(courseId)
-            .orElseThrow(CourseNotFoundException::new);
+    public ResponseEntity<VirtualCourseAdminDetailResponse> get(
+        @PathVariable String courseId, Authentication authentication
+    ) {
+        VirtualCourseAdminDetailView view = getVirtualCourseAdminDetailUseCase.get(
+            courseId, actingUserId(authentication), isAdmin(authentication)
+        );
         return ResponseEntity.ok(VirtualCourseAdminDetailResponse.fromVirtualAdmin(view));
     }
 

@@ -16,13 +16,14 @@ import com.menta.virtual.application.dto.VirtualModuleManagementResult;
 import com.menta.virtual.application.port.in.CreateVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.CreateVirtualModuleUseCase;
 import com.menta.virtual.application.port.in.DeleteVirtualCourseUseCase;
+import com.menta.virtual.application.port.in.GetVirtualCourseAdminDetailUseCase;
 import com.menta.virtual.application.port.in.ListManagedVirtualCoursesUseCase;
 import com.menta.virtual.application.port.in.PublishVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.ReorderVirtualModulesUseCase;
 import com.menta.virtual.application.port.in.UnpublishVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.UpdateVirtualCourseUseCase;
-import com.menta.virtual.application.port.in.VirtualCourseCatalogPort;
 import com.menta.virtual.domain.exception.CourseNotFoundException;
+import com.menta.virtual.domain.exception.CourseNotOwnedException;
 import com.menta.virtual.domain.model.CourseStatus;
 import com.menta.virtual.infrastructure.web.dto.CreateVirtualCourseRequest;
 import com.menta.virtual.infrastructure.web.dto.CreateVirtualModuleRequest;
@@ -34,7 +35,6 @@ import com.menta.virtual.infrastructure.web.dto.VirtualCourseManagementResponse;
 import com.menta.virtual.infrastructure.web.dto.VirtualModuleManagementListResponse;
 import com.menta.virtual.infrastructure.web.dto.VirtualModuleManagementResponse;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -54,7 +54,7 @@ class VirtualCourseAdminControllerTest {
     private UnpublishVirtualCourseUseCase unpublishUseCase;
     private CreateVirtualModuleUseCase createModuleUseCase;
     private ReorderVirtualModulesUseCase reorderUseCase;
-    private VirtualCourseCatalogPort catalogPort;
+    private GetVirtualCourseAdminDetailUseCase getDetailUseCase;
     private VirtualCourseAdminController controller;
 
     @BeforeEach
@@ -67,10 +67,10 @@ class VirtualCourseAdminControllerTest {
         unpublishUseCase = mock(UnpublishVirtualCourseUseCase.class);
         createModuleUseCase = mock(CreateVirtualModuleUseCase.class);
         reorderUseCase = mock(ReorderVirtualModulesUseCase.class);
-        catalogPort = mock(VirtualCourseCatalogPort.class);
+        getDetailUseCase = mock(GetVirtualCourseAdminDetailUseCase.class);
         controller = new VirtualCourseAdminController(
             createUseCase, listUseCase, updateUseCase, deleteUseCase, publishUseCase, unpublishUseCase,
-            createModuleUseCase, reorderUseCase, catalogPort
+            createModuleUseCase, reorderUseCase, getDetailUseCase
         );
     }
 
@@ -221,11 +221,12 @@ class VirtualCourseAdminControllerTest {
 
     @Test
     void get_returns_200_with_detail_for_a_DRAFT_course() {
+        UUID ownerId = UUID.randomUUID();
         String courseId = UUID.randomUUID().toString();
-        when(catalogPort.findByIdForAdmin(courseId))
-            .thenReturn(Optional.of(adminView(CourseStatus.DRAFT, "vid-draft")));
+        when(getDetailUseCase.get(courseId, ownerId, false)).thenReturn(adminView(CourseStatus.DRAFT, "vid-draft"));
 
-        ResponseEntity<VirtualCourseAdminDetailResponse> response = controller.get(courseId);
+        ResponseEntity<VirtualCourseAdminDetailResponse> response =
+            controller.get(courseId, authOf(ownerId, "INSTRUCTOR"));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().status()).isEqualTo("DRAFT");
@@ -234,11 +235,13 @@ class VirtualCourseAdminControllerTest {
 
     @Test
     void get_returns_200_with_detail_for_a_PUBLISHED_course() {
+        UUID ownerId = UUID.randomUUID();
         String courseId = UUID.randomUUID().toString();
-        when(catalogPort.findByIdForAdmin(courseId))
-            .thenReturn(Optional.of(adminView(CourseStatus.PUBLISHED, "vid-published")));
+        when(getDetailUseCase.get(courseId, ownerId, false))
+            .thenReturn(adminView(CourseStatus.PUBLISHED, "vid-published"));
 
-        ResponseEntity<VirtualCourseAdminDetailResponse> response = controller.get(courseId);
+        ResponseEntity<VirtualCourseAdminDetailResponse> response =
+            controller.get(courseId, authOf(ownerId, "INSTRUCTOR"));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().status()).isEqualTo("PUBLISHED");
@@ -247,11 +250,13 @@ class VirtualCourseAdminControllerTest {
 
     @Test
     void get_returns_200_with_detail_for_an_ARCHIVED_course() {
+        UUID ownerId = UUID.randomUUID();
         String courseId = UUID.randomUUID().toString();
-        when(catalogPort.findByIdForAdmin(courseId))
-            .thenReturn(Optional.of(adminView(CourseStatus.ARCHIVED, "vid-archived")));
+        when(getDetailUseCase.get(courseId, ownerId, false))
+            .thenReturn(adminView(CourseStatus.ARCHIVED, "vid-archived"));
 
-        ResponseEntity<VirtualCourseAdminDetailResponse> response = controller.get(courseId);
+        ResponseEntity<VirtualCourseAdminDetailResponse> response =
+            controller.get(courseId, authOf(ownerId, "INSTRUCTOR"));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().status()).isEqualTo("ARCHIVED");
@@ -259,16 +264,38 @@ class VirtualCourseAdminControllerTest {
     }
 
     @Test
-    void get_throws_CourseNotFoundException_when_courseId_does_not_exist() {
-        // The @RestControllerAdvice maps CourseNotFoundException to a 404
-        // ProblemDetail (see VirtualCourseExceptionHandler) — the unit
-        // assertion here is the side: the controller raises the right
-        // domain exception, NOT a generic ResponseStatusException or a
-        // silently-empty 200.
+    void get_passes_the_admin_flag_so_an_admin_reads_any_course() {
+        UUID adminId = UUID.randomUUID();
         String courseId = UUID.randomUUID().toString();
-        when(catalogPort.findByIdForAdmin(courseId)).thenReturn(Optional.empty());
+        when(getDetailUseCase.get(courseId, adminId, true)).thenReturn(adminView(CourseStatus.DRAFT, "vid-draft"));
 
-        assertThatThrownBy(() -> controller.get(courseId))
+        ResponseEntity<VirtualCourseAdminDetailResponse> response =
+            controller.get(courseId, authOf(adminId, "ADMIN"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    void get_propagates_CourseNotOwnedException_for_an_instructor_who_does_not_own_the_course() {
+        // The @RestControllerAdvice maps CourseNotOwnedException to 403 COURSE_NOT_OWNED (see
+        // VirtualCourseExceptionHandler); the controller must not swallow it nor return a body.
+        UUID otherInstructorId = UUID.randomUUID();
+        String courseId = UUID.randomUUID().toString();
+        when(getDetailUseCase.get(courseId, otherInstructorId, false)).thenThrow(new CourseNotOwnedException());
+
+        assertThatThrownBy(() -> controller.get(courseId, authOf(otherInstructorId, "INSTRUCTOR")))
+            .isInstanceOf(CourseNotOwnedException.class);
+    }
+
+    @Test
+    void get_propagates_CourseNotFoundException_when_the_course_does_not_exist() {
+        // The @RestControllerAdvice maps CourseNotFoundException to a 404 ProblemDetail (see
+        // VirtualCourseExceptionHandler).
+        UUID ownerId = UUID.randomUUID();
+        String courseId = UUID.randomUUID().toString();
+        when(getDetailUseCase.get(courseId, ownerId, false)).thenThrow(new CourseNotFoundException());
+
+        assertThatThrownBy(() -> controller.get(courseId, authOf(ownerId, "INSTRUCTOR")))
             .isInstanceOf(CourseNotFoundException.class);
     }
 }
