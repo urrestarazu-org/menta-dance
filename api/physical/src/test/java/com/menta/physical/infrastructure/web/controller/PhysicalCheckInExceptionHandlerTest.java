@@ -1,7 +1,6 @@
 package com.menta.physical.infrastructure.web.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 
 import com.menta.physical.domain.exception.CapacityAssignmentRequiredException;
 import com.menta.physical.domain.exception.CheckInAlreadyProcessingException;
@@ -25,7 +24,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.MethodArgumentNotValidException;
 
 class PhysicalCheckInExceptionHandlerTest {
 
@@ -177,15 +175,6 @@ class PhysicalCheckInExceptionHandlerTest {
     void maps_malformed_id_to_400() {
         ResponseEntity<ProblemDetail> response =
             handler.malformedId(new IllegalArgumentException("bad uuid"));
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(codeOf(response)).isEqualTo("INVALID_REQUEST");
-    }
-
-    @Test
-    void maps_bean_validation_failures_to_400() {
-        ResponseEntity<ProblemDetail> response =
-            handler.invalidRequestBody(mock(MethodArgumentNotValidException.class));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(codeOf(response)).isEqualTo("INVALID_REQUEST");

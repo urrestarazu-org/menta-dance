@@ -18,7 +18,7 @@ import jakarta.validation.constraints.Size;
  * mixed body never collects two contradictory violations, and an unknown
  * {@code type} is rejected by {@code @Pattern} alone. Any violation raises
  * {@code MethodArgumentNotValidException}, mapped by {@code
- * PhysicalCheckInExceptionHandler} to {@code 400 INVALID_REQUEST} before
+ * PhysicalRequestExceptionHandler} to {@code 400 INVALID_REQUEST} before
  * either use case runs.</p>
  *
  * <p>ADR-0044: the QR-only fields are length-capped so the device token hash and the

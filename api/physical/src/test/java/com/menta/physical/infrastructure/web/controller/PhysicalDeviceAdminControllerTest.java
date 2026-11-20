@@ -65,7 +65,7 @@ class PhysicalDeviceAdminControllerTest {
         mockMvc = MockMvcBuilders.standaloneSetup(new PhysicalDeviceAdminController(
                 registerUseCase, getUseCase, rotateUseCase, revokeUseCase, listUseCase
             ))
-            .setControllerAdvice(new PhysicalDeviceExceptionHandler())
+            .setControllerAdvice(new PhysicalRequestExceptionHandler(), new PhysicalDeviceExceptionHandler())
             .build();
     }
 
