@@ -25,6 +25,7 @@ import com.menta.billing.domain.exception.PlanNotAvailableException;
 import com.menta.billing.domain.exception.SubscriptionAlreadyActiveException;
 import com.menta.billing.domain.model.Money;
 import com.menta.billing.domain.model.Payment;
+import com.menta.billing.domain.model.PaymentId;
 import com.menta.billing.domain.model.PaymentMethod;
 import com.menta.billing.domain.model.PaymentStatus;
 import com.menta.billing.domain.model.PaymentTarget;
@@ -52,6 +53,8 @@ class CreateBankTransferSubscriptionUseCaseImplTest {
     private static final UUID USER_ID = UUID.randomUUID();
     private static final PlanId PLAN_ID = PlanId.generate();
     private static final Money PRICE = Money.of(new BigDecimal("15000.00"), "ARS");
+    /** What the original payment expects — deliberately not {@link #PRICE}, the plan's current price. */
+    private static final Money ORIGINAL_AMOUNT = Money.of(new BigDecimal("12000.00"), "ARS");
     private static final BankAccountDetails ACCOUNT =
         new BankAccountDetails("0000003100000000000000", "menta.dance", "Menta Dance SRL", "30-00000000-0");
 
@@ -194,6 +197,148 @@ class CreateBankTransferSubscriptionUseCaseImplTest {
 
         verify(paymentRepository, never()).save(any());
         verify(subscriptionRepository, never()).saveNewCheckout(any());
+    }
+
+    // --- #793: replaying the idempotency key ---------------------------------
+
+    private Subscription storedCheckoutFundedBy(Payment payment) {
+        Subscription stored = Subscription.pendingCheckout(
+            UUID.randomUUID(), payment.getId(), USER_ID, PLAN_ID, "idem-1", NOW.minusSeconds(30)
+        );
+        when(subscriptionRepository.findByUserIdAndIdempotencyKey(USER_ID, "idem-1")).thenReturn(Optional.of(stored));
+        when(paymentRepository.findById(payment.getId())).thenReturn(Optional.of(payment));
+        return stored;
+    }
+
+    private static Payment bankTransferPayment() {
+        PaymentId paymentId = PaymentId.generate();
+        return Payment.awaitingManualVerification(
+            paymentId, USER_ID, ORIGINAL_AMOUNT, "SUB-" + paymentId, ACCOUNT.cbu(), PaymentMethod.BANK_TRANSFER,
+            new PaymentTarget.Virtual(PLAN_ID.toString()), NOW.minusSeconds(30)
+        );
+    }
+
+    private void verifyNothingWasChargedOrWritten() {
+        verify(rateLimitPort, never()).consumeBankTransferCreation(any());
+        verify(planRepository, never()).findActiveById(any());
+        verify(subscriptionRepository, never()).findCurrentByUserId(any());
+        verify(paymentRepository, never()).save(any());
+        verify(subscriptionRepository, never()).saveNewCheckout(any());
+    }
+
+    /**
+     * Same key, same answer (#793): the instructions are rebuilt from the stored payment — its
+     * amount and reference, not the plan's current price — and the retry costs no daily quota.
+     */
+    @Test
+    void a_replayed_key_returns_the_original_instructions_without_quota_plan_lookup_or_write() {
+        Payment payment = bankTransferPayment();
+        Subscription stored = storedCheckoutFundedBy(payment);
+
+        SubscriptionCheckoutResult result = useCase.create(command());
+
+        assertThat(result.subscriptionId()).isEqualTo(stored.getId().toString());
+        assertThat(result.paymentId()).isEqualTo(payment.getId().toString());
+        assertThat(result.status()).isEqualTo(SubscriptionStatus.PENDING);
+        assertThat(result.externalReference()).isEqualTo(payment.getExpectedExternalReference());
+        assertThat(result.checkoutUrl()).isNull();
+        assertThat(result.providerPreferenceId()).isNull();
+        assertThat(result.overlapNotice()).isNull();
+        assertThat(result.bankTransferInstructions()).isEqualTo(new BankTransferInstructions(
+            ACCOUNT.cbu(), ACCOUNT.alias(), ACCOUNT.holder(), ACCOUNT.cuit(), ORIGINAL_AMOUNT,
+            payment.getExpectedExternalReference()
+        ));
+        verifyNothingWasChargedOrWritten();
+    }
+
+    /** Like the Mercado Pago replay, the subscription comes back in its current state. */
+    @Test
+    void a_replayed_key_whose_slot_was_released_still_returns_the_original_checkout() {
+        Payment payment = bankTransferPayment();
+        Subscription cancelled = storedCheckoutFundedBy(payment).cancelled();
+        when(subscriptionRepository.findByUserIdAndIdempotencyKey(USER_ID, "idem-1"))
+            .thenReturn(Optional.of(cancelled));
+
+        SubscriptionCheckoutResult result = useCase.create(command());
+
+        assertThat(result.subscriptionId()).isEqualTo(cancelled.getId().toString());
+        assertThat(result.status()).isEqualTo(SubscriptionStatus.CANCELLED);
+        assertThat(result.bankTransferInstructions().reference()).isEqualTo(payment.getExpectedExternalReference());
+        verifyNothingWasChargedOrWritten();
+    }
+
+    /**
+     * A key first used for Checkout Pro answers with that checkout, mirroring how the Mercado Pago
+     * replay ignores the retried body: building transfer instructions for a payment whose
+     * expected merchant is the Mercado Pago account would send the student's money to a reference
+     * no admin inbox ever lists.
+     */
+    @Test
+    void a_replayed_mercado_pago_key_returns_the_checkout_pro_answer_never_transfer_instructions() {
+        PaymentId paymentId = PaymentId.generate();
+        Payment payment = Payment.awaitingProvider(
+            paymentId, USER_ID, ORIGINAL_AMOUNT, "SUB-" + paymentId, "merchant-mp", PaymentMethod.MERCADO_PAGO,
+            new PaymentTarget.Virtual(PLAN_ID.toString()), NOW.minusSeconds(30)
+        );
+        Subscription stored = storedCheckoutFundedBy(payment)
+            .withCheckout("pref-1", "https://mp.example/checkout/pref-1");
+        when(subscriptionRepository.findByUserIdAndIdempotencyKey(USER_ID, "idem-1")).thenReturn(Optional.of(stored));
+
+        SubscriptionCheckoutResult result = useCase.create(command());
+
+        assertThat(result.subscriptionId()).isEqualTo(stored.getId().toString());
+        assertThat(result.externalReference()).isEqualTo("SUB-" + paymentId);
+        assertThat(result.providerPreferenceId()).isEqualTo("pref-1");
+        assertThat(result.checkoutUrl()).isEqualTo("https://mp.example/checkout/pref-1");
+        assertThat(result.bankTransferInstructions()).isNull();
+        verifyNothingWasChargedOrWritten();
+    }
+
+    /**
+     * A key that never opened a checkout — an admin trial's server-generated one has no payment —
+     * is not a replay: the request takes the ordinary path and meets the already-active rule.
+     */
+    @Test
+    void a_key_without_a_payment_is_not_a_replay_and_takes_the_ordinary_path() {
+        Subscription trial = Subscription.trial(
+            UUID.randomUUID(), USER_ID, PLAN_ID, NOW, List.of("course-1"),
+            new com.menta.billing.domain.model.TrialGrant(NOW, UUID.randomUUID(), "cortesía", 7)
+        );
+        when(subscriptionRepository.findByUserIdAndIdempotencyKey(USER_ID, "idem-1")).thenReturn(Optional.of(trial));
+        when(planRepository.findActiveById(PLAN_ID)).thenReturn(Optional.of(activePlan(PaymentMethod.BANK_TRANSFER)));
+        when(subscriptionRepository.findCurrentByUserId(USER_ID)).thenReturn(Optional.of(trial));
+
+        assertThatThrownBy(() -> useCase.create(command())).isInstanceOf(SubscriptionAlreadyActiveException.class);
+
+        verify(rateLimitPort).consumeBankTransferCreation(USER_ID);
+        verify(paymentRepository, never()).save(any());
+    }
+
+    /** A stored checkout whose payment row cannot be read is not answered with invented instructions. */
+    @Test
+    void a_key_whose_payment_is_missing_is_not_a_replay_and_takes_the_ordinary_path() {
+        Payment payment = bankTransferPayment();
+        storedCheckoutFundedBy(payment);
+        when(paymentRepository.findById(payment.getId())).thenReturn(Optional.empty());
+        when(planRepository.findActiveById(PLAN_ID)).thenReturn(Optional.of(activePlan(PaymentMethod.BANK_TRANSFER)));
+
+        SubscriptionCheckoutResult result = useCase.create(command());
+
+        verify(rateLimitPort).consumeBankTransferCreation(USER_ID);
+        verify(subscriptionRepository).saveNewCheckout(any());
+        assertThat(result.bankTransferInstructions().amount()).isEqualTo(PRICE);
+    }
+
+    /** #793: the replay lookup precedes the limiter, so only a genuinely new checkout is charged. */
+    @Test
+    void the_replay_lookup_runs_before_the_limiter() {
+        when(planRepository.findActiveById(PLAN_ID)).thenReturn(Optional.of(activePlan(PaymentMethod.BANK_TRANSFER)));
+
+        useCase.create(command());
+
+        InOrder order = inOrder(subscriptionRepository, rateLimitPort);
+        order.verify(subscriptionRepository).findByUserIdAndIdempotencyKey(USER_ID, "idem-1");
+        order.verify(rateLimitPort).consumeBankTransferCreation(USER_ID);
     }
 
     @Test

@@ -209,10 +209,20 @@ paths:
 
         Con `paymentMethod: BANK_TRANSFER` (#31, US-BILLING-003) el pago nace en espera de
         verificación manual y la respuesta trae `bankTransferInstructions`; `providerPreferenceId`,
-        `checkoutUrl` y `overlapNotice` van en `null` y no se llama a Mercado Pago. Esta rama no
-        busca replays por `idempotencyKey`. Consume el cupo diario de 10 creaciones por
-        transferencia y usuario, compartido con `POST /api/v1/billing/physical/purchases`; el
-        comprobante se sube después con `POST /api/v1/billing/payments/{paymentId}/proof`.
+        `checkoutUrl` y `overlapNotice` van en `null` y no se llama a Mercado Pago. Consume el cupo
+        diario de 10 creaciones por transferencia y usuario, compartido con
+        `POST /api/v1/billing/physical/purchases`; el comprobante se sube después con
+        `POST /api/v1/billing/payments/{paymentId}/proof`.
+
+        Repetir la misma `idempotencyKey` con `BANK_TRANSFER` (#793) también devuelve el checkout
+        original con `201`: las mismas `bankTransferInstructions`, con el monto y la referencia
+        del pago original aunque el precio del plan haya cambiado, sin crear otro pago ni otra
+        suscripción y sin consumir cupo. El replay se resuelve antes que el `409`, así que un
+        reintento nunca choca con la suscripción que él mismo creó, aunque ya haya liberado el
+        cupo del usuario. Como en `MERCADO_PAGO`, el replay ignora el resto del body: una clave
+        usada primero con `MERCADO_PAGO` devuelve ese checkout de Checkout Pro (con su
+        `checkoutUrl` y su `providerPreferenceId`), nunca instrucciones de transferencia para ese
+        pago.
       operationId: createSubscriptionCheckout
       requestBody:
         required: true
@@ -224,7 +234,8 @@ paths:
         '201':
           description: >-
             Suscripción pendiente creada, con la preferencia de Checkout Pro (`MERCADO_PAGO`) o con
-            las instrucciones de transferencia (`BANK_TRANSFER`).
+            las instrucciones de transferencia (`BANK_TRANSFER`). Un replay por `idempotencyKey`
+            responde también `201`, con el checkout original.
           content:
             application/json:
               schema:
@@ -1975,12 +1986,12 @@ components:
           type: string
           enum: [PENDING, ACTIVE, EXPIRED, CANCELLED]
           description: >-
-            `PENDING` al crear el checkout. Un replay por `idempotencyKey` (`MERCADO_PAGO`)
-            devuelve la suscripción con su estado actual, que puede haber avanzado.
+            `PENDING` al crear el checkout. Un replay por `idempotencyKey` devuelve la suscripción
+            con su estado actual, que puede haber avanzado.
         providerPreferenceId:
           type: ["string", "null"]
           description: >-
-            Identificador de la preferencia de Checkout Pro, no del pago. `null` con
+            Identificador de la preferencia de Checkout Pro, no del pago. `null` en un checkout
             `BANK_TRANSFER`.
         externalReference:
           type: string
@@ -1988,7 +1999,7 @@ components:
         checkoutUrl:
           type: ["string", "null"]
           format: uri
-          description: URL de redirección al Checkout Pro. `null` con `BANK_TRANSFER`.
+          description: URL de redirección al Checkout Pro. `null` en un checkout `BANK_TRANSFER`.
         overlapNotice:
           description: |
             Presente y no bloqueante (`null` en caso contrario) cuando este checkout se
