@@ -15,7 +15,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.MethodArgumentNotValidException;
 
 class VirtualCourseExceptionHandlerTest {
 
@@ -89,15 +88,6 @@ class VirtualCourseExceptionHandlerTest {
     @Test
     void maps_malformed_id_to_400() {
         ResponseEntity<ProblemDetail> response = handler.malformedId(new IllegalArgumentException("bad uuid"));
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(response.getBody().getProperties().get("code")).isEqualTo("INVALID_REQUEST");
-    }
-
-    @Test
-    void maps_bean_validation_failures_to_400() {
-        ResponseEntity<ProblemDetail> response =
-            handler.invalidRequestBody(mock(MethodArgumentNotValidException.class));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody().getProperties().get("code")).isEqualTo("INVALID_REQUEST");

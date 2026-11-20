@@ -52,6 +52,7 @@ import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.core.type.filter.AnnotationTypeFilter;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.yaml.snakeyaml.Yaml;
@@ -199,6 +200,16 @@ class VirtualOpenApiContractTest {
     }
 
     private static Set<String> codeRoutes() {
+        return routes(method -> true);
+    }
+
+    /** The routes whose handler reads a {@code @RequestBody}. */
+    private static Set<String> bodyRoutes() {
+        return routes(method -> Arrays.stream(method.getParameters())
+            .anyMatch(parameter -> parameter.isAnnotationPresent(RequestBody.class)));
+    }
+
+    private static Set<String> routes(java.util.function.Predicate<Method> filter) {
         ClassPathScanningCandidateComponentProvider scanner = new ClassPathScanningCandidateComponentProvider(false);
         scanner.addIncludeFilter(new AnnotationTypeFilter(RestController.class));
         Set<String> routes = new TreeSet<>();
@@ -209,7 +220,7 @@ class VirtualOpenApiContractTest {
             String prefix = base == null || base.path().length == 0 ? "" : base.path()[0];
             for (Method method : controller.getDeclaredMethods()) {
                 RequestMapping mapping = AnnotatedElementUtils.findMergedAnnotation(method, RequestMapping.class);
-                if (mapping != null) {
+                if (mapping != null && filter.test(method)) {
                     String suffix = mapping.path().length == 0 ? "" : mapping.path()[0];
                     routes.add(mapping.method()[0].name() + " " + normalized(prefix + suffix));
                 }
@@ -276,6 +287,44 @@ class VirtualOpenApiContractTest {
         Map<String, Set<String>> documented = new LinkedHashMap<>();
         expected.keySet().forEach(route -> documented.put(route, documentedStatuses(route)));
         assertThat(documented).isEqualTo(expected);
+    }
+
+    @Test
+    void every_route_with_a_body_documents_a_400_problem_with_the_invalid_request_code() {
+        // An unreadable or empty body (and a bean-validation failure) answers 400 INVALID_REQUEST on every
+        // route that reads a body (#790), so each one must show that problem among its 400 examples.
+        Set<String> routes = bodyRoutes();
+        assertThat(routes).isNotEmpty();
+
+        List<String> undocumented = new ArrayList<>();
+        for (String route : routes) {
+            Map<String, Object> response = resolveResponse(map(map(documentedOperation(route), "responses"), "400"));
+            Map<String, Object> examples = map(map(map(response, "content"), "application/problem+json"), "examples");
+            boolean documented = examples.values().stream()
+                .map(example -> map(example, "value").get("code"))
+                .anyMatch(code -> "INVALID_REQUEST".equals(code));
+            if (!documented) {
+                undocumented.add(route);
+            }
+        }
+        assertThat(undocumented).isEmpty();
+    }
+
+    /** The operation of a route whose path parameters are normalized to {@code {}}. */
+    private static Map<String, Object> documentedOperation(String route) {
+        String[] parts = route.split(" ", 2);
+        String path = map(spec, "paths").keySet().stream()
+            .filter(candidate -> normalized(candidate).equals(parts[1]))
+            .findFirst().orElseThrow();
+        return operation(parts[0] + " " + path);
+    }
+
+    /** Follows a {@code $ref} into {@code components/responses}. */
+    private static Map<String, Object> resolveResponse(Map<String, Object> response) {
+        if (response.get("$ref") instanceof String ref) {
+            return map(map(map(spec, "components"), "responses"), ref.substring(ref.lastIndexOf('/') + 1));
+        }
+        return response;
     }
 
     @Test

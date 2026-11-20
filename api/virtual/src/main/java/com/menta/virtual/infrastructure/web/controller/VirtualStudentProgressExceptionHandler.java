@@ -81,7 +81,6 @@ public class VirtualStudentProgressExceptionHandler {
     /** Anti-enumeration: a malformed path id collapses into the same 404 a missing row would produce. */
     @ExceptionHandler(IllegalArgumentException.class)
     ResponseEntity<ProblemDetail> malformedId(IllegalArgumentException exception) {
-        String code = LessonNotFoundException.class.getSimpleName().toUpperCase(java.util.Locale.ROOT);
-        return ProblemDetails.response(HttpStatus.NOT_FOUND, "Lección no encontrada.", code);
+        return lessonNotFound(new LessonNotFoundException());
     }
 }

@@ -274,8 +274,9 @@ paths:
       description: |
         Guarda la posición (en segundos) del usuario del token; no altera el
         estado de completada. La posición debe estar entre 0 y la duración de
-        la lección (`durationMinutes * 60`). Si el body no trae
-        `positionSeconds` se toma 0. Aplica la misma regla de acceso que el
+        la lección (`durationMinutes * 60`). `positionSeconds` es obligatorio:
+        un body sin él (o `null`), vacío o ilegible responde
+        `400 INVALID_REQUEST` y no modifica la posición guardada. Aplica la misma regla de acceso que el
         detalle de la lección: lección gratuita, módulo preview o suscripción
         vigente.
       operationId: saveMyVirtualLessonProgress
@@ -295,7 +296,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/LessonProgressResponse'
         '400':
-          description: La posición es negativa o supera la duración de la lección.
+          description: >-
+            La posición es negativa o supera la duración de la lección (`INVALID_LESSON_POSITION`), o el
+            body es ilegible, está vacío o no trae `positionSeconds` (`INVALID_REQUEST`).
           content:
             application/problem+json:
               schema:
@@ -308,6 +311,13 @@ paths:
                     status: 400
                     detail: Posición inválida.
                     code: INVALID_LESSON_POSITION
+                body_invalido:
+                  value:
+                    type: https://menta.dance/problems/invalid_request
+                    title: Bad Request
+                    status: 400
+                    detail: La solicitud contiene datos inválidos.
+                    code: INVALID_REQUEST
         '401':
           $ref: '#/components/responses/AuthenticationRequired'
         '403':
@@ -642,8 +652,8 @@ paths:
                 $ref: '#/components/schemas/VirtualModuleManagementListResponse'
         '400':
           description: >-
-            La lista no coincide con el conjunto actual de módulos, o el body o un id no son válidos
-            (`INVALID_REQUEST`).
+            La lista no coincide con el conjunto actual de módulos, o el body es inválido, ilegible o
+            está vacío, o un id no es válido (`INVALID_REQUEST`).
           content:
             application/problem+json:
               schema:
@@ -818,8 +828,8 @@ components:
   responses:
     InvalidRequest:
       description: >-
-        Un id del path no es un UUID, un valor de enum (`level`) no existe, un número es negativo
-        o el body no pasa la validación.
+        Un id del path no es un UUID, un valor de enum (`level`) no existe, un número es negativo,
+        el body no pasa la validación o es ilegible (JSON mal formado) o está vacío.
       content:
         application/problem+json:
           schema:
@@ -842,8 +852,8 @@ components:
 
     InvalidCourseRequest:
       description: >-
-        Body inválido (`INVALID_REQUEST`) o `professorId` no coincide con el PROFESOR autenticado
-        (`PROFESSOR_MISMATCH`).
+        Body inválido, ilegible (JSON mal formado) o vacío (`INVALID_REQUEST`), o `professorId` no
+        coincide con el PROFESOR autenticado (`PROFESSOR_MISMATCH`).
       content:
         application/problem+json:
           schema:
@@ -1404,14 +1414,14 @@ components:
 
     SaveLessonProgressRequest:
       type: object
+      required: [positionSeconds]
       properties:
         positionSeconds:
           type: integer
           minimum: 0
-          default: 0
           description: >-
-            Posición de reproducción en segundos, entre 0 y `durationMinutes * 60` de la lección; si se
-            omite se toma 0.
+            Posición de reproducción en segundos, entre 0 y `durationMinutes * 60` de la lección.
+            Obligatorio y no nulo.
 
     LessonProgressResponse:
       type: object

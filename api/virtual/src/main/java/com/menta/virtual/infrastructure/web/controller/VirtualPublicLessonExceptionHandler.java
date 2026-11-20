@@ -55,8 +55,6 @@ public class VirtualPublicLessonExceptionHandler {
      */
     @ExceptionHandler(IllegalArgumentException.class)
     ResponseEntity<ProblemDetail> malformedLessonId(IllegalArgumentException exception) {
-        return ProblemDetails.response(
-            HttpStatus.NOT_FOUND, "Lección no encontrada.", LessonNotFoundException.class.getSimpleName().toUpperCase()
-        );
+        return lessonNotFound(new LessonNotFoundException());
     }
 }
