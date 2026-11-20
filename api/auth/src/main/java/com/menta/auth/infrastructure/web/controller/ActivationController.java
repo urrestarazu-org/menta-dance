@@ -14,6 +14,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -81,5 +82,15 @@ public class ActivationController {
         return ProblemDetails.response(
             HttpStatus.BAD_REQUEST, "La solicitud de activación no es válida.", "INVALID_ACTIVATION_REQUEST"
         );
+    }
+
+    /**
+     * A controller-local handler beats every advice and also matches an exception through its cause chain, so the
+     * handler above would answer {@code INVALID_ACTIVATION_REQUEST} for an unreadable body whose cause is an
+     * {@code IllegalArgumentException}. Matching the exact type here keeps a decoding failure {@code INVALID_REQUEST}.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    ResponseEntity<ProblemDetail> handleUnreadableBody() {
+        return AuthRequestExceptionHandler.invalidRequest();
     }
 }

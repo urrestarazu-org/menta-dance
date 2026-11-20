@@ -56,7 +56,7 @@ class ActivationControllerTest {
                     validateActivationTokenUseCase,
                     new ClientFingerprint("172.16.0.0/12")
                 ))
-            .setControllerAdvice(new ActivationExceptionHandler())
+            .setControllerAdvice(new ActivationExceptionHandler(), new AuthRequestExceptionHandler())
             .build();
     }
 

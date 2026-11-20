@@ -12,7 +12,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -88,18 +87,5 @@ public class ActivationExceptionHandler {
                 "La autenticación no está disponible temporalmente.",
                 exception.getErrorCode()
             ));
-    }
-
-    /**
-     * Maps bean-validation failures (e.g. malformed email) to a generic RFC 9457 problem instead
-     * of falling through to Spring's default error handler, which — with
-     * {@code server.error.include-binding-errors: always} — would echo the raw field messages
-     * back to the client.
-     */
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    ResponseEntity<ProblemDetail> invalidRequestBody(MethodArgumentNotValidException exception) {
-        return ProblemDetails.response(
-            HttpStatus.BAD_REQUEST, "La solicitud contiene datos inválidos.", "INVALID_REQUEST"
-        );
     }
 }

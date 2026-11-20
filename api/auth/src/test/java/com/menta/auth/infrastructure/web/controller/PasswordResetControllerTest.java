@@ -51,7 +51,7 @@ class PasswordResetControllerTest {
                     resetPasswordUseCase,
                     new ClientFingerprint("172.16.0.0/12")
                 ))
-            .setControllerAdvice(new PasswordResetExceptionHandler())
+            .setControllerAdvice(new PasswordResetExceptionHandler(), new AuthRequestExceptionHandler())
             .build();
     }
 

@@ -13,7 +13,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -97,18 +96,6 @@ public class PasswordResetExceptionHandler {
             HttpStatus.BAD_REQUEST,
             "La nueva contraseña debe ser diferente a la actual.",
             exception.getErrorCode()
-        );
-    }
-
-    /**
-     * Maps bean-validation failures (e.g. malformed email, blank fields) to a generic RFC 9457
-     * problem instead of falling through to Spring's default error handler, which would echo the
-     * raw field messages back to the client.
-     */
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    ResponseEntity<ProblemDetail> invalidRequestBody(MethodArgumentNotValidException exception) {
-        return ProblemDetails.response(
-            HttpStatus.BAD_REQUEST, "La solicitud contiene datos inválidos.", "INVALID_REQUEST"
         );
     }
 }
