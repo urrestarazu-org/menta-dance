@@ -23,6 +23,7 @@ import com.menta.billing.domain.model.Plan;
 import com.menta.billing.domain.model.PlanId;
 import com.menta.billing.domain.model.Subscription;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -33,6 +34,14 @@ import java.util.UUID;
  * AwaitingManualVerification} with the configured bank account's CBU as its {@code
  * expectedMerchantAccountId} (design C2) — see {@link Payment#awaitingManualVerification} for why
  * that is a safety property, not filler.</p>
+ *
+ * <p>A retry of the request that already opened a checkout — same {@code (userId,
+ * idempotencyKey)} — is answered first, with the original instructions rebuilt from the stored
+ * {@code Payment} (#793), exactly as {@link CreateSubscriptionCheckoutUseCaseImpl} does for its
+ * escenario 5: same key, same answer, no second charge. It runs before the budget and before the
+ * already-active rule on purpose — a retry is not a new checkout, so it neither costs quota nor
+ * conflicts with the subscription it created. The {@code uq_billing_subscriptions_idempotency}
+ * index stays the actual guarantee for two simultaneous first attempts.</p>
  *
  * <p>The daily creation budget (design C7) is consumed <strong>before</strong> the plan lookup or
  * any write, since attempting a checkout is itself the cost the budget bounds — matching {@code
@@ -66,6 +75,11 @@ public class CreateBankTransferSubscriptionUseCaseImpl implements CreateBankTran
 
     @Override
     public SubscriptionCheckoutResult create(CreateSubscriptionCheckoutCommand command) {
+        Optional<SubscriptionCheckoutResult> replay = replayOf(command);
+        if (replay.isPresent()) {
+            return replay.get();
+        }
+
         RateLimitDecision decision = rateLimitPort.consumeBankTransferCreation(command.userId());
         if (!decision.isAllowed()) {
             throw new BankTransferRateLimitedException(decision.getRetryAfter());
@@ -95,6 +109,34 @@ public class CreateBankTransferSubscriptionUseCaseImpl implements CreateBankTran
 
         BankTransferInstructions instructions =
             BankTransferInstructions.of(bankAccountDetails, plan.getPrice(), externalReference);
+        return SubscriptionCheckoutResult.fromBankTransfer(subscription, externalReference, instructions);
+    }
+
+    /**
+     * The original answer for a key this user already used, or empty when the key opened no
+     * checkout this use case can answer for — a trial's server-generated key has no payment — in
+     * which case the request takes the ordinary path and the unique index still decides.
+     */
+    private Optional<SubscriptionCheckoutResult> replayOf(CreateSubscriptionCheckoutCommand command) {
+        return subscriptionRepository.findByUserIdAndIdempotencyKey(command.userId(), command.idempotencyKey())
+            .flatMap(subscription -> subscription.getPaymentId()
+                .flatMap(paymentRepository::findById)
+                .map(payment -> replayResult(subscription, payment)));
+    }
+
+    /**
+     * Rebuilt from what was stored, never from the plan's current price. A key first used for
+     * Checkout Pro answers with that checkout, as the Mercado Pago replay ignores the retried body
+     * too: transfer instructions for a payment whose expected merchant is not the CBU would send
+     * the student's money to a reference no admin inbox lists.
+     */
+    private SubscriptionCheckoutResult replayResult(Subscription subscription, Payment payment) {
+        String externalReference = payment.getExpectedExternalReference();
+        if (payment.getPaymentMethod() != PaymentMethod.BANK_TRANSFER) {
+            return SubscriptionCheckoutResult.from(subscription, externalReference, null);
+        }
+        BankTransferInstructions instructions =
+            BankTransferInstructions.of(bankAccountDetails, payment.getExpectedAmount(), externalReference);
         return SubscriptionCheckoutResult.fromBankTransfer(subscription, externalReference, instructions);
     }
 
