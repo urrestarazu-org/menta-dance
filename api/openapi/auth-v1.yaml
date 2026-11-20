@@ -318,8 +318,9 @@ paths:
         está registrado o si se pide un rol distinto de `STUDENT`. Nunca devuelve el
         email, el ID ni el estado de la cuenta: distinguir esos casos permitiría
         enumerar cuentas. Un cuerpo inválido (por ejemplo un teléfono que no está en
-        formato E.164, un nombre vacío o una fecha de nacimiento futura) responde
-        `400` genérico, sin eco de los valores enviados.
+        formato E.164, un nombre vacío o una fecha de nacimiento futura), un JSON
+        ilegible, un cuerpo vacío o un `role` que no existe responde `400
+        INVALID_REQUEST` genérico, sin eco de los valores enviados.
 
         Disponible también en `POST /api/v1/users/register`, alias temporal con el
         mismo comportamiento.
@@ -495,8 +496,9 @@ paths:
         '400':
           description: |
             Token inválido, expirado o reutilizado — indistinguibles entre sí — o, para una cuenta creada por un
-            administrador, contraseña ausente o que no cumple la política. Un `token` ausente o en blanco es
-            `INVALID_REQUEST`; un `IllegalArgumentException` del caso de uso es `INVALID_ACTIVATION_REQUEST`.
+            administrador, contraseña ausente o que no cumple la política. Un `token` ausente o en blanco, un JSON
+            ilegible o un cuerpo vacío es `INVALID_REQUEST`; un `IllegalArgumentException` del caso de uso es
+            `INVALID_ACTIVATION_REQUEST`.
           content:
             application/problem+json:
               schema:
@@ -527,7 +529,7 @@ paths:
                     detail: 'La contraseña no cumple los requisitos: al menos 8 caracteres, al menos un número.'
                     code: WEAK_PASSWORD
                 validacion:
-                  summary: Falta el token o está en blanco
+                  summary: Falta el token o está en blanco, el JSON es ilegible o el cuerpo está vacío
                   value:
                     type: https://menta.dance/problems/invalid_request
                     title: Bad Request
@@ -564,13 +566,16 @@ paths:
         '202':
           description: Solicitud aceptada, sin revelar el estado de la cuenta.
         '400':
-          description: Cuerpo inválido.
+          description: |
+            Cuerpo inválido, ilegible (JSON mal formado) o vacío (`INVALID_REQUEST`); un `IllegalArgumentException`
+            del caso de uso es `INVALID_ACTIVATION_REQUEST`.
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
               examples:
                 validacion:
+                  summary: Cuerpo inválido, JSON ilegible o cuerpo vacío
                   value:
                     type: https://menta.dance/problems/invalid_request
                     title: Bad Request
@@ -641,13 +646,16 @@ paths:
         '200':
           description: Contraseña actualizada; el token queda consumido.
         '400':
-          description: Cuerpo inválido, contraseña débil o igual a la actual.
+          description: |
+            Cuerpo inválido, ilegible (JSON mal formado) o vacío (`INVALID_REQUEST`), contraseña débil o igual a la
+            actual.
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
               examples:
                 validacion:
+                  summary: Cuerpo inválido, JSON ilegible o cuerpo vacío
                   value:
                     type: https://menta.dance/problems/invalid_request
                     title: Bad Request
@@ -811,7 +819,7 @@ paths:
                 demo: false
                 createdAt: '2026-11-10T09:30:00'
         '400':
-          description: Cuerpo inválido, email mal formado, nombre vacío o demasiado largo, rol desconocido o `STUDENT`.
+          description: Cuerpo inválido, ilegible (JSON mal formado) o vacío, email mal formado, nombre vacío o demasiado largo, rol desconocido o `STUDENT`.
           content:
             application/problem+json:
               schema:
@@ -884,7 +892,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/UserSummary'
         '400':
-          description: Cuerpo inválido, rol desconocido o `userId` que no es un UUID.
+          description: Cuerpo inválido, ilegible (JSON mal formado) o vacío, rol desconocido o `userId` que no es un UUID.
           content:
             application/problem+json:
               schema:
@@ -1299,7 +1307,9 @@ components:
             code: INVALID_AUTH_REQUEST
 
     InvalidRequest:
-      description: El cuerpo no pasó la validación.
+      description: |
+        El cuerpo no pasó la validación, es ilegible (JSON mal formado), está vacío o trae un valor que no se
+        puede interpretar (por ejemplo un `role` inexistente). El `detail` es genérico y no repite lo enviado.
       content:
         application/problem+json:
           schema:

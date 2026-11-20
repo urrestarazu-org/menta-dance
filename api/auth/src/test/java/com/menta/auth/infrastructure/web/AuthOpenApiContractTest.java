@@ -44,6 +44,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -53,6 +54,7 @@ import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.core.type.filter.AnnotationTypeFilter;
 import org.springframework.core.type.filter.AssignableTypeFilter;
 import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.yaml.snakeyaml.Yaml;
@@ -199,6 +201,16 @@ class AuthOpenApiContractTest {
     }
 
     private static Set<String> codeRoutes() {
+        return routes(method -> true);
+    }
+
+    /** Routes whose handler reads a {@code @RequestBody}. */
+    private static Set<String> bodyRoutes() {
+        return routes(method -> Arrays.stream(method.getParameters())
+            .anyMatch(parameter -> parameter.isAnnotationPresent(RequestBody.class)));
+    }
+
+    private static Set<String> routes(Predicate<Method> filter) {
         ClassPathScanningCandidateComponentProvider scanner = new ClassPathScanningCandidateComponentProvider(false);
         scanner.addIncludeFilter(new AnnotationTypeFilter(RestController.class));
         Set<String> routes = new TreeSet<>();
@@ -209,7 +221,7 @@ class AuthOpenApiContractTest {
             String[] prefixes = base == null || base.path().length == 0 ? new String[] {""} : base.path();
             for (Method method : controller.getDeclaredMethods()) {
                 RequestMapping mapping = AnnotatedElementUtils.findMergedAnnotation(method, RequestMapping.class);
-                if (mapping == null) {
+                if (mapping == null || !filter.test(method)) {
                     continue;
                 }
                 String[] suffixes = mapping.path().length == 0 ? new String[] {""} : mapping.path();
@@ -323,6 +335,45 @@ class AuthOpenApiContractTest {
             String[] parts = route.split(" ", 2);
             return parts[0] + " " + normalized(parts[1]);
         }).toList()).containsExactlyInAnyOrderElementsOf(codeRoutes());
+    }
+
+    @Test
+    void every_route_with_a_body_documents_its_400_for_an_unreadable_or_empty_body() {
+        // An unreadable (malformed JSON), empty or undecodable body answers 400 on every route that reads one
+        // (#791): INVALID_AUTH_REQUEST from AuthController for login, INVALID_REQUEST everywhere else. Each
+        // route must show that problem among its 400 examples and say so in the response description.
+        Set<String> routes = bodyRoutes();
+        assertThat(routes).isNotEmpty();
+
+        List<String> undocumented = new ArrayList<>();
+        for (String route : routes) {
+            String code = LOGIN.equals(route) ? "INVALID_AUTH_REQUEST" : "INVALID_REQUEST";
+            Map<String, Object> response = response(map(map(documentedOperation(route), "responses"), "400"));
+            Map<String, Object> problem = map(map(response, "content"), "application/problem+json");
+            Set<Object> codes = new TreeSet<>();
+            if (problem.get("example") != null) {
+                codes.add(asMap(problem.get("example")).get("code"));
+            }
+            if (problem.get("examples") != null) {
+                asMap(problem.get("examples")).values().forEach(example ->
+                    codes.add(asMap(asMap(example).get("value")).get("code")));
+            }
+            boolean mentionsUnreadable = LOGIN.equals(route)
+                || ((String) response.get("description")).contains("ilegible");
+            if (!codes.contains(code) || !mentionsUnreadable) {
+                undocumented.add(route);
+            }
+        }
+        assertThat(undocumented).isEmpty();
+    }
+
+    /** The operation of a route whose path parameters are normalized to {@code {}}. */
+    private static Map<String, Object> documentedOperation(String route) {
+        String[] parts = route.split(" ", 2);
+        String path = map(spec, "paths").keySet().stream()
+            .filter(candidate -> normalized(candidate).equals(parts[1]))
+            .findFirst().orElseThrow();
+        return operation(parts[0] + " " + path);
     }
 
     @Test

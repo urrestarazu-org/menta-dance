@@ -51,7 +51,7 @@ class UserControllerTest {
             registerUserUseCase, new ClientFingerprint("172.16.0.0/12")
         );
         this.mockMvc = MockMvcBuilders.standaloneSetup(controller)
-            .setControllerAdvice(new ActivationExceptionHandler())
+            .setControllerAdvice(new ActivationExceptionHandler(), new AuthRequestExceptionHandler())
             .build();
     }
 
