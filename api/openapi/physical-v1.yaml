@@ -222,7 +222,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/PhysicalCourseManagementResponse'
         '400':
-          $ref: '#/components/responses/InvalidRequest'
+          $ref: '#/components/responses/InvalidBodyRequest'
         '401':
           $ref: '#/components/responses/AuthenticationRequired'
         '403':
@@ -282,7 +282,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/PhysicalSessionManagementResponse'
         '400':
-          $ref: '#/components/responses/InvalidRequest'
+          $ref: '#/components/responses/InvalidBodyRequest'
         '401':
           $ref: '#/components/responses/AuthenticationRequired'
         '403':
@@ -383,8 +383,9 @@ paths:
                 $ref: '#/components/schemas/PhysicalSessionManagementListResponse'
         '400':
           description: >-
-            `courseId` malformado, body inválido, rango invertido o sin ninguna fecha en el día de la
-            semana del curso (`INVALID_REQUEST`).
+            `courseId` malformado, body inválido, ilegible (JSON mal formado), vacío o con una fecha
+            mal formada, rango invertido o sin ninguna fecha en el día de la semana del curso
+            (`INVALID_REQUEST`).
           content:
             application/problem+json:
               schema:
@@ -396,6 +397,14 @@ paths:
                     title: Bad Request
                     status: 400
                     detail: Malformed request.
+                    code: INVALID_REQUEST
+                body_invalido:
+                  summary: Body inválido, JSON ilegible, cuerpo vacío o fecha mal formada
+                  value:
+                    type: https://menta.dance/problems/invalid_request
+                    title: Bad Request
+                    status: 400
+                    detail: La solicitud contiene datos inválidos.
                     code: INVALID_REQUEST
                 rango_sin_fechas:
                   value:
@@ -542,7 +551,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/PhysicalSessionManagementResponse'
         '400':
-          $ref: '#/components/responses/InvalidRequest'
+          $ref: '#/components/responses/InvalidBodyRequest'
         '401':
           $ref: '#/components/responses/AuthenticationRequired'
         '403':
@@ -873,6 +882,7 @@ paths:
           description: |
             Body inválido (`INVALID_REQUEST`) — `type` distinto de `QR`
             o `MANUAL`, un body mixto que mezcla campos de ambas variantes,
+            un JSON ilegible (mal formado), un cuerpo vacío,
             un `sessionId` o un `studentId` mal formado; o, sólo para QR, `qrCredentials`
             malformado o de otra sesión (`INVALID_QR_CREDENTIAL`).
           content:
@@ -880,6 +890,14 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
               examples:
+                body_invalido:
+                  summary: Body inválido o mixto, JSON ilegible o cuerpo vacío
+                  value:
+                    type: https://menta.dance/problems/invalid_request
+                    title: Bad Request
+                    status: 400
+                    detail: La solicitud contiene datos inválidos.
+                    code: INVALID_REQUEST
                 credencial_invalida:
                   value:
                     type: https://menta.dance/problems/invalid_qr_credential
@@ -1165,7 +1183,22 @@ paths:
               schema:
                 $ref: '#/components/schemas/PhysicalDeviceSecretResponse'
         '400':
-          $ref: '#/components/responses/InvalidRequest'
+          description: >-
+            Body inválido, ilegible (JSON mal formado), vacío o con un `expiresAt` que no es un
+            instante ISO-8601 (`INVALID_REQUEST`). El `detail` es genérico y no repite lo enviado.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                body_invalido:
+                  summary: Body inválido, JSON ilegible, cuerpo vacío o valor que no se puede interpretar
+                  value:
+                    type: https://menta.dance/problems/invalid_request
+                    title: Bad Request
+                    status: 400
+                    detail: La solicitud contiene datos inválidos.
+                    code: INVALID_REQUEST
         '401':
           $ref: '#/components/responses/AuthenticationRequired'
         '403':
@@ -1383,7 +1416,25 @@ components:
                 code: INVALID_REQUEST
     InvalidRequest:
       description: >-
-        Un id del path no es un UUID o el body no pasa la validación (`INVALID_REQUEST`).
+        Un id del path no es un UUID (`INVALID_REQUEST`).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            id_invalido:
+              value:
+                type: https://menta.dance/problems/invalid_request
+                title: Bad Request
+                status: 400
+                detail: Malformed request.
+                code: INVALID_REQUEST
+    InvalidBodyRequest:
+      description: >-
+        Un id del path no es un UUID, o el body no pasa la validación, es ilegible (JSON mal
+        formado), está vacío o trae un valor que no se puede interpretar (un `status` o un `level`
+        inexistente, una fecha o una hora mal formada) (`INVALID_REQUEST`). El `detail` de un body
+        inválido es genérico y no repite lo enviado.
       content:
         application/problem+json:
           schema:
@@ -1397,6 +1448,7 @@ components:
                 detail: Malformed request.
                 code: INVALID_REQUEST
             body_invalido:
+              summary: Body inválido, JSON ilegible, cuerpo vacío o valor que no se puede interpretar
               value:
                 type: https://menta.dance/problems/invalid_request
                 title: Bad Request
@@ -1405,14 +1457,17 @@ components:
                 code: INVALID_REQUEST
     InvalidCourseRequest:
       description: >-
-        `professorId` malformado o body inválido (`INVALID_REQUEST`), `professorId` no coincide con el
-        actor (`PROFESSOR_MISMATCH`) o un ADMIN que omite `professorId` (`PROFESSOR_REQUIRED`).
+        `professorId` malformado, o body inválido, ilegible (JSON mal formado), vacío o con un valor
+        que no se puede interpretar (un `dayOfWeek` o un `level` inexistente, una hora mal formada)
+        (`INVALID_REQUEST`); `professorId` no coincide con el actor (`PROFESSOR_MISMATCH`) o un ADMIN
+        que omite `professorId` (`PROFESSOR_REQUIRED`).
       content:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
           examples:
             body_invalido:
+              summary: Body inválido, JSON ilegible, cuerpo vacío o valor que no se puede interpretar
               value:
                 type: https://menta.dance/problems/invalid_request
                 title: Bad Request

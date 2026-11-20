@@ -6,9 +6,10 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Marks {@link PhysicalCheckInController}, whose domain exceptions and
- * bean-validation failures are mapped to RFC 9457 problems by
- * {@link PhysicalCheckInExceptionHandler} (US-PHYSICAL-001).
+ * Marks {@link PhysicalCheckInController}, whose domain exceptions are mapped
+ * to RFC 9457 problems by {@link PhysicalCheckInExceptionHandler}
+ * (US-PHYSICAL-001), and whose bean-validation and body-decoding failures by
+ * {@link PhysicalRequestExceptionHandler}.
  *
  * <p>Deliberately a separate marker from {@link PhysicalManagementEndpoint},
  * not a reuse of it: that one is scoped to ADMIN/INSTRUCTOR management

@@ -21,11 +21,15 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-/** RFC 9457 Problem Details mapping for Physical's check-in endpoints (US-PHYSICAL-001). */
+/**
+ * RFC 9457 Problem Details mapping for Physical's check-in endpoints (US-PHYSICAL-001). A body that
+ * fails bean validation (e.g. {@code type} other than {@code QR}/{@code MANUAL}, a mixed body) or
+ * cannot be decoded is mapped by {@link PhysicalRequestExceptionHandler}, never echoing raw field
+ * messages back to the door reader.
+ */
 @RestControllerAdvice(annotations = PhysicalCheckInEndpoint.class)
 public class PhysicalCheckInExceptionHandler {
 
@@ -180,19 +184,6 @@ public class PhysicalCheckInExceptionHandler {
     ResponseEntity<ProblemDetail> malformedId(IllegalArgumentException exception) {
         return ProblemDetails.response(
             HttpStatus.BAD_REQUEST, "Malformed request.", "INVALID_REQUEST"
-        );
-    }
-
-    /**
-     * Maps bean-validation failures (e.g. {@code type != "QR"}, blank
-     * fields) to a generic RFC 9457 problem instead of falling through to
-     * Spring's default handler, which would echo raw field messages back to
-     * the door reader.
-     */
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    ResponseEntity<ProblemDetail> invalidRequestBody(MethodArgumentNotValidException exception) {
-        return ProblemDetails.response(
-            HttpStatus.BAD_REQUEST, "La solicitud contiene datos inválidos.", "INVALID_REQUEST"
         );
     }
 }

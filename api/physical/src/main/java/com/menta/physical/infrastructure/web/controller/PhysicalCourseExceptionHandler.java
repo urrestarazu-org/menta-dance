@@ -17,12 +17,14 @@ import java.time.format.DateTimeParseException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-/** RFC 9457 Problem Details mapping for Physical's management endpoints (US-PHYSICAL-005, US-PHYSICAL-006). */
+/**
+ * RFC 9457 Problem Details mapping for Physical's management endpoints (US-PHYSICAL-005, US-PHYSICAL-006).
+ * A body that fails bean validation or cannot be decoded is mapped by {@link PhysicalRequestExceptionHandler}.
+ */
 @RestControllerAdvice(annotations = PhysicalManagementEndpoint.class)
 public class PhysicalCourseExceptionHandler {
 
@@ -153,18 +155,6 @@ public class PhysicalCourseExceptionHandler {
             HttpStatus.BAD_REQUEST,
             "The range must have from before to and span at most " + exception.getMaxDays() + " days.",
             exception.getErrorCode()
-        );
-    }
-
-    /**
-     * Maps bean-validation failures to a generic RFC 9457 problem instead of
-     * falling through to Spring's default handler, which would echo raw
-     * field messages back to the client.
-     */
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    ResponseEntity<ProblemDetail> invalidRequestBody(MethodArgumentNotValidException exception) {
-        return ProblemDetails.response(
-            HttpStatus.BAD_REQUEST, "La solicitud contiene datos inválidos.", "INVALID_REQUEST"
         );
     }
 }

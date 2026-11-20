@@ -7,7 +7,6 @@ import com.menta.physical.infrastructure.web.ProblemDetails;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -17,7 +16,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * this module maps every "well-formed request, wrong resource state" case to {@code CONFLICT}
  * ({@code CourseHasActiveAssignmentsException}, {@code CapacityBelowAssignedException}, {@code
  * SessionAlreadyOccurredException} are all {@code 409}); re-revoking and rotating-after-revoke are
- * exactly that shape.
+ * exactly that shape. A body that fails bean validation or cannot be decoded is mapped by {@link
+ * PhysicalRequestExceptionHandler}.
  */
 @RestControllerAdvice(annotations = PhysicalDeviceEndpoint.class)
 public class PhysicalDeviceExceptionHandler {
@@ -45,16 +45,5 @@ public class PhysicalDeviceExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     ResponseEntity<ProblemDetail> malformedId(IllegalArgumentException exception) {
         return ProblemDetails.response(HttpStatus.BAD_REQUEST, "Malformed request.", "INVALID_REQUEST");
-    }
-
-    /**
-     * Maps bean-validation failures to a generic RFC 9457 problem instead of falling through to
-     * Spring's default handler, which would echo raw field messages back to the client.
-     */
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    ResponseEntity<ProblemDetail> invalidRequestBody(MethodArgumentNotValidException exception) {
-        return ProblemDetails.response(
-            HttpStatus.BAD_REQUEST, "La solicitud contiene datos inválidos.", "INVALID_REQUEST"
-        );
     }
 }

@@ -7,7 +7,8 @@ import java.lang.annotation.Target;
 
 /**
  * Marks {@link PhysicalDeviceAdminController}, whose exceptions are mapped to RFC 9457 problems by
- * {@link PhysicalDeviceExceptionHandler} (#44, US-PHYSICAL-007, design C6).
+ * {@link PhysicalDeviceExceptionHandler} (#44, US-PHYSICAL-007, design C6), and whose bean-validation
+ * and body-decoding failures by {@link PhysicalRequestExceptionHandler}.
  *
  * <p>A separate marker/advice pair from {@link PhysicalManagementEndpoint}/{@link
  * PhysicalAttendanceEndpoint}, mirroring how #39 introduced its own {@code

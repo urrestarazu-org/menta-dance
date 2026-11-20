@@ -1,7 +1,6 @@
 package com.menta.physical.infrastructure.web.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 
 import com.menta.physical.domain.exception.CapacityBelowAssignedException;
 import com.menta.physical.domain.exception.CourseHasActiveAssignmentsException;
@@ -22,7 +21,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 
 class PhysicalCourseExceptionHandlerTest {
@@ -152,15 +150,6 @@ class PhysicalCourseExceptionHandlerTest {
     void maps_a_missing_request_parameter_to_400() {
         ResponseEntity<ProblemDetail> response =
             handler.missingParameter(new MissingServletRequestParameterException("from", "String"));
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(response.getBody().getProperties().get("code")).isEqualTo("INVALID_REQUEST");
-    }
-
-    @Test
-    void maps_bean_validation_failures_to_400() {
-        ResponseEntity<ProblemDetail> response =
-            handler.invalidRequestBody(mock(MethodArgumentNotValidException.class));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody().getProperties().get("code")).isEqualTo("INVALID_REQUEST");
