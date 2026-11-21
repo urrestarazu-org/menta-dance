@@ -131,6 +131,12 @@ class ManagementAccessIntegrationTest extends BaseIntegrationTest {
                 Arguments.of("/gestion/usuarios", RECEPTIONIST, false),
                 Arguments.of("/gestion/usuarios", STUDENT, false),
                 Arguments.of("/gestion/usuarios/nuevo", INSTRUCTOR, false),
+                // manual payment proof (#370): administrator only. Its allowed case is not a 404 (the endpoint
+                // exists), so it is covered by ManagementPaymentProofIntegrationTest.
+                Arguments.of("/gestion/pagos/1/comprobante", INSTRUCTOR, false),
+                Arguments.of("/gestion/pagos/1/comprobante", RECEPTIONIST, false),
+                Arguments.of("/gestion/pagos/1/comprobante", STUDENT, false),
+                Arguments.of("/gestion/pagos/otra-cosa", ADMIN, true),
                 // any prefix nobody planned stays closed to everyone but the administrator
                 Arguments.of("/gestion/otra-cosa", ADMIN, true),
                 Arguments.of("/gestion/otra-cosa", INSTRUCTOR, false),

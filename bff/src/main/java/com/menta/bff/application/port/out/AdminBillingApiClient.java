@@ -2,6 +2,7 @@ package com.menta.bff.application.port.out;
 
 import com.menta.bff.application.dto.CorrectionDecision;
 import com.menta.bff.application.dto.PaymentDetail;
+import com.menta.bff.application.dto.PaymentProof;
 import com.menta.bff.application.dto.PendingPaymentPage;
 
 /**
@@ -42,6 +43,22 @@ public interface AdminBillingApiClient {
      * @return the payment; whether it has a proof, never the proof's signed URL
      */
     PaymentDetail getPaymentDetail(String accessToken, String paymentId);
+
+    /**
+     * Fetches the transfer proof of a payment: asks the detail for its signed link and follows it, inside the
+     * adapter, so neither the link nor its token ever leave it. The proof endpoint is not an admin one: the
+     * signed token is its credential, so that second call carries no bearer token.
+     *
+     * @param accessToken caller's access token
+     * @param paymentId   identifier of the payment, already validated as a UUID by the caller
+     * @return the proof's bytes and its declared type, one of {@code image/png}, {@code image/jpeg} or
+     *         {@code application/pdf}
+     * @throws PaymentRefusalException with {@code PAYMENT_NOT_FOUND} when the payment does not exist, or
+     *         {@code PROOF_NOT_FOUND} when it has no proof
+     * @throws ServiceUnavailableException also when the link is not the expected relative one (the BFF never
+     *         follows an arbitrary URL), the proof call fails, or its type is not allowed
+     */
+    PaymentProof fetchPaymentProof(String accessToken, String paymentId);
 
     /**
      * Approves a payment awaiting manual verification ({@code POST /payments/{paymentId}/approve}, 200 without
@@ -88,6 +105,8 @@ public interface AdminBillingApiClient {
             INVALID_REQUEST,
             /** 404: the payment does not exist. */
             PAYMENT_NOT_FOUND,
+            /** The payment exists but has no transfer proof. */
+            PROOF_NOT_FOUND,
             /** 409: the payment is not in a state that admits the operation, for instance it was already resolved. */
             ILLEGAL_PAYMENT_STATE_TRANSITION
         }
