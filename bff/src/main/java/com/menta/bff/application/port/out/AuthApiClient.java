@@ -88,6 +88,7 @@ public interface AuthApiClient {
      * </p>
      *
      * @param command Email, password, role and originating client address
+     * @throws PasswordRejectedException   if the password does not meet the policy (400 WEAK_PASSWORD)
      * @throws InvalidRequestException     if the API rejects the input (400)
      * @throws RateLimitedException        if the API rate limit was hit (429)
      * @throws ServiceUnavailableException if Auth API is unreachable or degraded (503)

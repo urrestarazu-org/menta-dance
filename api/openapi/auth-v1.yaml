@@ -72,7 +72,10 @@ info:
       `SUSPENDED` siguen siendo `401` genérico. Quien recibe ese dato ya conoce
       la contraseña, así que no hay enumeración de cuentas.
     - `POST /register` responde `202` vacío tanto para alta nueva como para email
-      ya registrado o rol no permitido.
+      ya registrado o rol no permitido. Una contraseña que no cumple la política
+      responde `400 WEAK_PASSWORD`, pero se valida **antes** de consultar si el
+      email existe: la respuesta depende sólo de la contraseña enviada, igual
+      para un email nuevo y para uno ya registrado, así que no lo revela.
     - `POST /resend-activation` responde `202` vacío para email inexistente,
       pendiente o ya activo.
     - `GET /activate/{token}` valida el token sin consumirlo; `POST /activate` ejecuta la activación y no distingue token inválido, expirado ni reutilizado. Para una cuenta creada por un administrador, ambos piden además la contraseña que elige el titular (ver `passwordRequired`); sólo se llega a ese detalle con un token válido.
@@ -322,6 +325,14 @@ paths:
         ilegible, un cuerpo vacío o un `role` que no existe responde `400
         INVALID_REQUEST` genérico, sin eco de los valores enviados.
 
+        Una contraseña que no cumple la política (mínimo 8 caracteres, una
+        mayúscula y un número) responde `400 WEAK_PASSWORD` con el mismo detalle
+        que el reseteo y la activación, sin eco de la contraseña. Se valida
+        **antes** de consultar si el email ya existe y de gastar el presupuesto de
+        activación, de modo que el `400` es idéntico para un email nuevo y para uno
+        ya registrado y no permite enumerar cuentas; el `202` de una solicitud
+        válida no cambia.
+
         Disponible también en `POST /api/v1/users/register`, alias temporal con el
         mismo comportamiento.
       operationId: register
@@ -338,7 +349,7 @@ paths:
             Solicitud aceptada. Respuesta idéntica para alta nueva, email ya
             registrado y rol no permitido.
         '400':
-          $ref: '#/components/responses/InvalidRequest'
+          $ref: '#/components/responses/RegisterBadRequest'
         '429':
           $ref: '#/components/responses/ActivationRateLimited'
         '503':
@@ -363,7 +374,7 @@ paths:
         '202':
           description: Solicitud aceptada.
         '400':
-          $ref: '#/components/responses/InvalidRequest'
+          $ref: '#/components/responses/RegisterBadRequest'
         '429':
           $ref: '#/components/responses/ActivationRateLimited'
         '503':
@@ -1002,6 +1013,9 @@ components:
         password:
           type: string
           format: password
+          description: |
+            Debe cumplir la política de contraseñas: al menos 8 caracteres, una mayúscula y un número. Si no,
+            `400 WEAK_PASSWORD`.
           example: SecurePass123!
         role:
           $ref: '#/components/schemas/UserRole'
@@ -1318,6 +1332,34 @@ components:
             status: 400
             detail: La solicitud contiene datos inválidos.
             code: INVALID_REQUEST
+
+    RegisterBadRequest:
+      description: |
+        El cuerpo no pasó la validación, es ilegible (JSON mal formado), está vacío o trae un valor que no se
+        puede interpretar (`INVALID_REQUEST`, `detail` genérico), o la contraseña no cumple la política
+        (`WEAK_PASSWORD`). La contraseña se valida antes de consultar si el email existe: el `400` no depende de
+        que esté registrado.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            validacion:
+              summary: Cuerpo inválido, JSON ilegible o cuerpo vacío
+              value:
+                type: https://menta.dance/problems/invalid_request
+                title: Bad Request
+                status: 400
+                detail: La solicitud contiene datos inválidos.
+                code: INVALID_REQUEST
+            weakPassword:
+              summary: La contraseña no cumple la política
+              value:
+                type: https://menta.dance/problems/weak_password
+                title: Bad Request
+                status: 400
+                detail: 'La contraseña no cumple los requisitos: al menos 8 caracteres, al menos un número.'
+                code: WEAK_PASSWORD
 
     ActivationRateLimited:
       description: Presupuesto de activación agotado, por email o por origen.

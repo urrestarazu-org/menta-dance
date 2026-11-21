@@ -10,6 +10,7 @@ import com.menta.auth.application.port.out.RateLimitDecision;
 import com.menta.auth.domain.crypto.Sha256Hex;
 import com.menta.auth.domain.exception.ActivationRateLimitedException;
 import com.menta.auth.domain.exception.DuplicateRegistrationException;
+import com.menta.auth.domain.model.Password;
 import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.model.UserProfile;
@@ -27,6 +28,12 @@ import java.time.Instant;
  * {@code TransactionalRegisterUserUseCase}), mirroring the login/logout/
  * refresh pattern (auth-account-activation spec: "Registro pendiente y
  * entrega durable").</p>
+ *
+ * <p>The password policy ({@link Password#of(String)}) is checked right after the command is validated and
+ * <em>before</em> the rate-limit budget is spent and before the duplicate-email lookup. The outcome of that check
+ * depends only on the submitted password, never on whether the email is registered, so the {@code 400
+ * WEAK_PASSWORD} cannot be used to enumerate accounts and the anti-enumeration {@code 202} of a valid registration
+ * (new or duplicate) is unchanged (#718).</p>
  */
 public class RegisterUserUseCaseImpl implements RegisterUserUseCase {
 
@@ -58,6 +65,7 @@ public class RegisterUserUseCaseImpl implements RegisterUserUseCase {
         UserProfile profile = new UserProfile(
             command.firstName(), command.lastName(), command.phone(), command.birthDate()
         );
+        Password password = Password.of(command.password());
 
         RateLimitDecision decision = activationRateLimitPort.consume(
             emailFingerprint(email), command.clientFingerprint()
@@ -70,7 +78,7 @@ public class RegisterUserUseCaseImpl implements RegisterUserUseCase {
             throw new DuplicateRegistrationException();
         }
 
-        String passwordHash = passwordEncoder.encode(command.password());
+        String passwordHash = passwordEncoder.encode(password.value());
         Instant now = clock.now();
         User user = User.register(email, passwordHash, role, profile, now);
         User savedUser = userRepository.save(user);

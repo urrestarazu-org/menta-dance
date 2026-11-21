@@ -184,6 +184,23 @@ class RegistrationControllerTest {
     }
 
     @Test
+    @DisplayName("an API WEAK_PASSWORD rejection re-renders the form with a password field error and no password")
+    void apiWeakPasswordShowsAPasswordFieldError() throws Exception {
+        doThrow(new AuthApiClient.PasswordRejectedException(AuthApiClient.PasswordRejectedException.Reason.WEAK))
+                .when(registerAccountUseCase).execute(any());
+
+        mockMvc.perform(registration())
+                .andExpect(status().isOk())
+                .andExpect(view().name("register"))
+                .andExpect(model().attributeHasFieldErrorCode("form", "password", "api.rejected"))
+                .andExpect(result -> {
+                    RegisterForm form = (RegisterForm) result.getModelAndView().getModel().get("form");
+                    assertThat(form.getPassword()).isNull();
+                    assertThat(form.getPasswordConfirmation()).isNull();
+                });
+    }
+
+    @Test
     @DisplayName("GET /registro/pendiente renders the neutral check-your-email screen")
     void rendersThePendingScreen() throws Exception {
         mockMvc.perform(get("/registro/pendiente"))

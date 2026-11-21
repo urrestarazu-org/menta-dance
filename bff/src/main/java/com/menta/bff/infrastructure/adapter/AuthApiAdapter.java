@@ -194,7 +194,7 @@ public class AuthApiAdapter implements AuthApiClient {
                 .bodyValue(requestBody), "register");
 
         if (reply.status() != HttpStatus.ACCEPTED.value()) {
-            throw failure(reply, "register");
+            throw registerFailure(reply);
         }
     }
 
@@ -350,6 +350,17 @@ public class AuthApiAdapter implements AuthApiClient {
             return new InvalidRequestException("Auth API rejected the " + operation + " request");
         }
         return new ServiceUnavailableException("Auth API unavailable: " + status);
+    }
+
+    /**
+     * Registration also tells a weak password apart from a malformed request: the form checks the policy first, so
+     * this only happens when the API policy diverges from the form; everything else follows {@link #failure}.
+     */
+    private static RuntimeException registerFailure(ApiReply reply) {
+        if (reply.status() == HttpStatus.BAD_REQUEST.value() && "WEAK_PASSWORD".equals(reply.code())) {
+            return new PasswordRejectedException(PasswordRejectedException.Reason.WEAK);
+        }
+        return failure(reply, "register");
     }
 
     /**
