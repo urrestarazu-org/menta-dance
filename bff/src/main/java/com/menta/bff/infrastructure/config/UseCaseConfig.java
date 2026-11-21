@@ -1,6 +1,7 @@
 package com.menta.bff.infrastructure.config;
 
 import com.menta.bff.application.port.out.AccessTokenClaimsReader;
+import com.menta.bff.application.port.out.AdminBillingApiClient;
 import com.menta.bff.application.port.out.AdminUsersApiClient;
 import com.menta.bff.application.port.out.AuthApiClient;
 import com.menta.bff.application.port.out.BillingApiClient;
@@ -16,12 +17,16 @@ import com.menta.bff.application.port.out.SubscriptionApiClient;
 import com.menta.bff.application.port.out.VirtualApiClient;
 import com.menta.bff.application.usecase.AccountActivationUseCase;
 import com.menta.bff.application.usecase.AccountActivationUseCaseImpl;
+import com.menta.bff.application.usecase.ApprovePaymentUseCase;
+import com.menta.bff.application.usecase.ApprovePaymentUseCaseImpl;
 import com.menta.bff.application.usecase.BatchCreateCourseSessionsUseCase;
 import com.menta.bff.application.usecase.BatchCreateCourseSessionsUseCaseImpl;
 import com.menta.bff.application.usecase.CancelSubscriptionUseCase;
 import com.menta.bff.application.usecase.CancelSubscriptionUseCaseImpl;
 import com.menta.bff.application.usecase.ChangeUserRoleUseCase;
 import com.menta.bff.application.usecase.ChangeUserRoleUseCaseImpl;
+import com.menta.bff.application.usecase.CorrectPaymentUseCase;
+import com.menta.bff.application.usecase.CorrectPaymentUseCaseImpl;
 import com.menta.bff.application.usecase.CreateCourseSessionUseCase;
 import com.menta.bff.application.usecase.CreateCourseSessionUseCaseImpl;
 import com.menta.bff.application.usecase.CreateManagedCourseUseCase;
@@ -52,6 +57,8 @@ import com.menta.bff.application.usecase.GetLessonViewUseCase;
 import com.menta.bff.application.usecase.GetLessonViewUseCaseImpl;
 import com.menta.bff.application.usecase.GetManagedCourseUseCase;
 import com.menta.bff.application.usecase.GetManagedCourseUseCaseImpl;
+import com.menta.bff.application.usecase.GetPaymentDetailUseCase;
+import com.menta.bff.application.usecase.GetPaymentDetailUseCaseImpl;
 import com.menta.bff.application.usecase.GetPaymentHistoryUseCase;
 import com.menta.bff.application.usecase.GetPaymentHistoryUseCaseImpl;
 import com.menta.bff.application.usecase.GetPaymentProgressUseCase;
@@ -70,6 +77,8 @@ import com.menta.bff.application.usecase.ListInstructorsUseCase;
 import com.menta.bff.application.usecase.ListInstructorsUseCaseImpl;
 import com.menta.bff.application.usecase.ListManagedCoursesUseCase;
 import com.menta.bff.application.usecase.ListManagedCoursesUseCaseImpl;
+import com.menta.bff.application.usecase.ListPendingPaymentsUseCase;
+import com.menta.bff.application.usecase.ListPendingPaymentsUseCaseImpl;
 import com.menta.bff.application.usecase.ListTodaySessionsUseCase;
 import com.menta.bff.application.usecase.ListTodaySessionsUseCaseImpl;
 import com.menta.bff.application.usecase.ListUsersUseCase;
@@ -88,6 +97,8 @@ import com.menta.bff.application.usecase.RegisterAccountUseCase;
 import com.menta.bff.application.usecase.RegisterAccountUseCaseImpl;
 import com.menta.bff.application.usecase.RegisterManualCheckInUseCase;
 import com.menta.bff.application.usecase.RegisterManualCheckInUseCaseImpl;
+import com.menta.bff.application.usecase.RejectPaymentUseCase;
+import com.menta.bff.application.usecase.RejectPaymentUseCaseImpl;
 import com.menta.bff.application.usecase.RequestPasswordResetUseCase;
 import com.menta.bff.application.usecase.RequestPasswordResetUseCaseImpl;
 import com.menta.bff.application.usecase.ResendActivationUseCase;
@@ -423,5 +434,34 @@ public class UseCaseConfig {
     @Bean
     public DescribeSessionConflictsUseCase describeSessionConflictsUseCase(ClassesProperties classesProperties) {
         return new DescribeSessionConflictsUseCaseImpl(classesProperties.getDisplayZone());
+    }
+
+    /**
+     * The manual verification of payments (#370): the inbox, the detail and the three actions on a payment. The
+     * API decides whether a payment admits each action (ADR-0038).
+     */
+    @Bean
+    public ListPendingPaymentsUseCase listPendingPaymentsUseCase(AdminBillingApiClient adminBillingApiClient) {
+        return new ListPendingPaymentsUseCaseImpl(adminBillingApiClient);
+    }
+
+    @Bean
+    public GetPaymentDetailUseCase getPaymentDetailUseCase(AdminBillingApiClient adminBillingApiClient) {
+        return new GetPaymentDetailUseCaseImpl(adminBillingApiClient);
+    }
+
+    @Bean
+    public ApprovePaymentUseCase approvePaymentUseCase(AdminBillingApiClient adminBillingApiClient) {
+        return new ApprovePaymentUseCaseImpl(adminBillingApiClient);
+    }
+
+    @Bean
+    public RejectPaymentUseCase rejectPaymentUseCase(AdminBillingApiClient adminBillingApiClient) {
+        return new RejectPaymentUseCaseImpl(adminBillingApiClient);
+    }
+
+    @Bean
+    public CorrectPaymentUseCase correctPaymentUseCase(AdminBillingApiClient adminBillingApiClient) {
+        return new CorrectPaymentUseCaseImpl(adminBillingApiClient);
     }
 }
