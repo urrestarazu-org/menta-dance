@@ -138,7 +138,7 @@ class PhysicalConfigurationTest {
     @Test
     void wires_the_list_managed_sessions_use_case_bean() {
         ListManagedPhysicalSessionsUseCase useCase = configuration.listManagedPhysicalSessionsUseCase(
-            mock(PhysicalCourseRepository.class), mock(PhysicalSessionRepository.class)
+            mock(PhysicalCourseRepository.class), mock(PhysicalSessionRepository.class), mock(Clock.class)
         );
 
         assertThat(useCase).isInstanceOf(ListManagedPhysicalSessionsUseCaseImpl.class);
@@ -208,7 +208,7 @@ class PhysicalConfigurationTest {
     @Test
     void wires_the_update_session_use_case_bean() {
         UpdatePhysicalSessionUseCase useCase = configuration.updatePhysicalSessionUseCase(
-            mock(PhysicalCourseRepository.class), mock(PhysicalSessionRepository.class)
+            mock(PhysicalCourseRepository.class), mock(PhysicalSessionRepository.class), mock(Clock.class)
         );
 
         assertThat(useCase).isInstanceOf(UpdatePhysicalSessionUseCaseImpl.class);

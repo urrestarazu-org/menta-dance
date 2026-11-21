@@ -28,7 +28,10 @@ import org.mockito.ArgumentCaptor;
 class PhysicalCourseRepositoryAdapterTest {
 
     private final PhysicalCourseJpaRepository courseRepository = mock(PhysicalCourseJpaRepository.class);
-    private final PhysicalCourseRepositoryAdapter adapter = new PhysicalCourseRepositoryAdapter(courseRepository);
+    // Fixed far from the wall clock so an adapter that read Instant.now() could not pass by chance.
+    private static final Instant NOW = Instant.parse("2030-03-15T12:00:00Z");
+    private final PhysicalCourseRepositoryAdapter adapter =
+        new PhysicalCourseRepositoryAdapter(courseRepository, () -> NOW);
 
     private static PhysicalCourseJpaEntity entity(UUID id, CourseStatus status, Instant now) {
         return new PhysicalCourseJpaEntity(
@@ -137,6 +140,7 @@ class PhysicalCourseRepositoryAdapterTest {
         ArgumentCaptor<PhysicalCourseJpaEntity> captor = ArgumentCaptor.forClass(PhysicalCourseJpaEntity.class);
         verify(courseRepository).save(captor.capture());
         assertThat(captor.getValue().getCreatedAt()).isEqualTo(originalCreatedAt);
+        assertThat(captor.getValue().getUpdatedAt()).isEqualTo(NOW);
     }
 
     @Test
@@ -152,6 +156,10 @@ class PhysicalCourseRepositoryAdapterTest {
         PhysicalCourse saved = adapter.save(course);
 
         assertThat(saved.getId()).isEqualTo(course.getId());
+        ArgumentCaptor<PhysicalCourseJpaEntity> captor = ArgumentCaptor.forClass(PhysicalCourseJpaEntity.class);
+        verify(courseRepository).save(captor.capture());
+        assertThat(captor.getValue().getCreatedAt()).isEqualTo(NOW);
+        assertThat(captor.getValue().getUpdatedAt()).isEqualTo(NOW);
     }
 
     @Test

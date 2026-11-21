@@ -1,5 +1,6 @@
 package com.menta.physical.infrastructure.persistence.adapter;
 
+import com.menta.physical.application.port.out.Clock;
 import com.menta.physical.application.port.out.PhysicalCourseRepository;
 import com.menta.physical.domain.model.CourseId;
 import com.menta.physical.domain.model.CourseStatus;
@@ -12,6 +13,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -19,13 +21,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 /** JPA adapter for {@link PhysicalCourseRepository}. */
 @Component
+@RequiredArgsConstructor
 public class PhysicalCourseRepositoryAdapter implements PhysicalCourseRepository {
 
     private final PhysicalCourseJpaRepository courseRepository;
-
-    public PhysicalCourseRepositoryAdapter(PhysicalCourseJpaRepository courseRepository) {
-        this.courseRepository = courseRepository;
-    }
+    private final Clock clock;
 
     @Override
     @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
@@ -81,7 +81,7 @@ public class PhysicalCourseRepositoryAdapter implements PhysicalCourseRepository
     @Override
     @Transactional(propagation = Propagation.REQUIRED)
     public PhysicalCourse save(PhysicalCourse course) {
-        Instant now = Instant.now();
+        Instant now = clock.now();
         Instant createdAt = courseRepository.findById(course.getId().getValue())
             .map(PhysicalCourseJpaEntity::getCreatedAt)
             .orElse(now);

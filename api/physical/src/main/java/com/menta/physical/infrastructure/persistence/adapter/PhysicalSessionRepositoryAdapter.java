@@ -1,6 +1,7 @@
 package com.menta.physical.infrastructure.persistence.adapter;
 
 import com.menta.physical.application.dto.SessionWithCourse;
+import com.menta.physical.application.port.out.Clock;
 import com.menta.physical.application.port.out.PhysicalSessionRepository;
 import com.menta.physical.domain.exception.SessionNotFoundException;
 import com.menta.physical.domain.model.CourseId;
@@ -13,25 +14,24 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /** JPA adapter for {@link PhysicalSessionRepository}. */
 @Component
+@RequiredArgsConstructor
 public class PhysicalSessionRepositoryAdapter implements PhysicalSessionRepository {
 
     private final PhysicalSessionJpaRepository sessionRepository;
-
-    public PhysicalSessionRepositoryAdapter(PhysicalSessionJpaRepository sessionRepository) {
-        this.sessionRepository = sessionRepository;
-    }
+    private final Clock clock;
 
     @Override
     @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
     public List<PhysicalSession> findScheduled(CourseId courseId, Instant from, Instant to) {
         return sessionRepository
-            .findScheduledWithAvailability(courseId.getValue(), from, to, Instant.now())
+            .findScheduledWithAvailability(courseId.getValue(), from, to, clock.now())
             .stream()
             .map(PhysicalSessionJpaMapper::toDomain)
             .toList();
@@ -41,7 +41,7 @@ public class PhysicalSessionRepositoryAdapter implements PhysicalSessionReposito
     @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
     public List<PhysicalSession> findManaged(CourseId courseId, Instant from, Instant to) {
         return sessionRepository
-            .findManagedWithAvailability(courseId.getValue(), from, to, Instant.now())
+            .findManagedWithAvailability(courseId.getValue(), from, to, clock.now())
             .stream()
             .map(PhysicalSessionJpaMapper::toDomain)
             .toList();
@@ -51,7 +51,7 @@ public class PhysicalSessionRepositoryAdapter implements PhysicalSessionReposito
     @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
     public List<SessionWithCourse> findManagedAcrossCourses(Instant from, Instant to) {
         return sessionRepository
-            .findManagedAcrossCoursesWithAvailability(from, to, Instant.now())
+            .findManagedAcrossCoursesWithAvailability(from, to, clock.now())
             .stream()
             .map(row -> new SessionWithCourse(
                 PhysicalSessionJpaMapper.toDomain(row), row.getCourseTitle(), row.getCourseDurationMinutes()
@@ -63,7 +63,7 @@ public class PhysicalSessionRepositoryAdapter implements PhysicalSessionReposito
     @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
     public Optional<PhysicalSession> findById(SessionId sessionId) {
         return sessionRepository
-            .findByIdWithAvailability(sessionId.getValue(), Instant.now())
+            .findByIdWithAvailability(sessionId.getValue(), clock.now())
             .map(PhysicalSessionJpaMapper::toDomain);
     }
 
@@ -108,6 +108,6 @@ public class PhysicalSessionRepositoryAdapter implements PhysicalSessionReposito
     @Override
     @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
     public boolean hasFutureAssignedSessions(CourseId courseId) {
-        return sessionRepository.existsFutureAssignedSession(courseId.getValue(), Instant.now());
+        return sessionRepository.existsFutureAssignedSession(courseId.getValue(), clock.now());
     }
 }

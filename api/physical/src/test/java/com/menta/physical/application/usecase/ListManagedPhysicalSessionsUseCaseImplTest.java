@@ -32,8 +32,10 @@ class ListManagedPhysicalSessionsUseCaseImplTest {
 
     private final PhysicalCourseRepository courseRepository = mock(PhysicalCourseRepository.class);
     private final PhysicalSessionRepository sessionRepository = mock(PhysicalSessionRepository.class);
+    // Fixed far from the wall clock so a use case that read Instant.now() could not pass by chance.
+    private static final Instant NOW = Instant.parse("2030-03-15T12:00:00Z");
     private final ListManagedPhysicalSessionsUseCaseImpl useCase =
-        new ListManagedPhysicalSessionsUseCaseImpl(courseRepository, sessionRepository);
+        new ListManagedPhysicalSessionsUseCaseImpl(courseRepository, sessionRepository, () -> NOW);
 
     private static PhysicalCourse course(CourseId id, UUID professorId) {
         return new PhysicalCourse(
@@ -47,7 +49,7 @@ class ListManagedPhysicalSessionsUseCaseImplTest {
         CourseId id = CourseId.generate();
         UUID ownerId = UUID.randomUUID();
         when(courseRepository.findById(id)).thenReturn(Optional.of(course(id, ownerId)));
-        Instant from = Instant.now();
+        Instant from = NOW;
         Instant to = from.plusSeconds(86400);
 
         assertThatThrownBy(() -> useCase.list(id.toString(), from, to, UUID.randomUUID(), false))
@@ -59,7 +61,7 @@ class ListManagedPhysicalSessionsUseCaseImplTest {
         CourseId id = CourseId.generate();
         UUID ownerId = UUID.randomUUID();
         when(courseRepository.findById(id)).thenReturn(Optional.of(course(id, ownerId)));
-        Instant from = Instant.now();
+        Instant from = NOW;
         Instant to = from.plusSeconds(86400);
         PhysicalSession cancelled = new PhysicalSession(
             com.menta.physical.domain.model.SessionId.generate(), id, from.plusSeconds(3600),
@@ -87,5 +89,30 @@ class ListManagedPhysicalSessionsUseCaseImplTest {
         verify(sessionRepository).findManaged(eq(id), fromCaptor.capture(), toCaptor.capture());
         Duration window = Duration.between(fromCaptor.getValue(), toCaptor.getValue());
         assertThat(window).isCloseTo(Duration.ofDays(7300), Duration.ofSeconds(5));
+    }
+
+    @Test
+    void default_window_is_centered_on_the_instant_given_by_the_clock() {
+        CourseId id = CourseId.generate();
+        UUID ownerId = UUID.randomUUID();
+        when(courseRepository.findById(id)).thenReturn(Optional.of(course(id, ownerId)));
+        when(sessionRepository.findManaged(eq(id), notNull(), notNull())).thenReturn(List.of());
+
+        useCase.list(id.toString(), null, null, ownerId, false);
+
+        verify(sessionRepository).findManaged(id, NOW.minus(Duration.ofDays(3650)), NOW.plus(Duration.ofDays(3650)));
+    }
+
+    @Test
+    void an_omitted_bound_defaults_around_the_clock_while_the_given_bound_is_kept() {
+        CourseId id = CourseId.generate();
+        UUID ownerId = UUID.randomUUID();
+        when(courseRepository.findById(id)).thenReturn(Optional.of(course(id, ownerId)));
+        when(sessionRepository.findManaged(eq(id), notNull(), notNull())).thenReturn(List.of());
+        Instant givenFrom = Instant.parse("2031-01-01T00:00:00Z");
+
+        useCase.list(id.toString(), givenFrom, null, ownerId, false);
+
+        verify(sessionRepository).findManaged(id, givenFrom, NOW.plus(Duration.ofDays(3650)));
     }
 }

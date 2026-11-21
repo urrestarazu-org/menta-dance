@@ -62,8 +62,15 @@ class PhysicalDeviceAuditRepositoryAdapterTest {
     @Autowired private PhysicalDeviceJpaRepository deviceRepository;
     @Autowired private PhysicalDeviceAuditJpaRepository auditRepository;
 
+    // Fixed far from the wall clock so an adapter that read Instant.now() could not pass by chance.
+    private static final Instant NOW = Instant.parse("2030-03-15T12:00:00Z");
+
     private PhysicalDeviceAuditRepositoryAdapter adapter() {
-        return new PhysicalDeviceAuditRepositoryAdapter(auditRepository);
+        return adapterAt(NOW);
+    }
+
+    private PhysicalDeviceAuditRepositoryAdapter adapterAt(Instant now) {
+        return new PhysicalDeviceAuditRepositoryAdapter(auditRepository, () -> now);
     }
 
     private UUID seedDevice() {
@@ -93,6 +100,16 @@ class PhysicalDeviceAuditRepositoryAdapterTest {
     }
 
     @Test
+    void append_stamps_the_row_with_the_instant_given_by_the_clock() {
+        UUID deviceId = seedDevice();
+
+        adapter().append(DeviceId.of(deviceId), UUID.randomUUID(), "DEVICE_REGISTERED", null, "status=ACTIVE");
+
+        List<PhysicalDeviceAuditJpaEntity> rows = auditRepository.findByDeviceIdOrderByCreatedAtAsc(deviceId);
+        assertThat(rows).singleElement().satisfies(row -> assertThat(row.getCreatedAt()).isEqualTo(NOW));
+    }
+
+    @Test
     void rows_are_append_only_and_survive_a_subsequent_device_update() {
         UUID deviceId = seedDevice();
         UUID actorId = UUID.randomUUID();
@@ -104,7 +121,9 @@ class PhysicalDeviceAuditRepositoryAdapterTest {
             current.getId(), current.getName(), current.getLocation(), "b".repeat(64), "REVOKED",
             current.getExpiresAt(), current.getCreatedAt(), Instant.now()
         ));
-        adapter().append(DeviceId.of(deviceId), actorId, "DEVICE_REVOKED", "status=ACTIVE;secretHashPrefix=aaaaaaaa",
+        // A later instant: rows are ordered by createdAt, so equal timestamps would make the order ambiguous.
+        adapterAt(NOW.plusSeconds(1)).append(
+            DeviceId.of(deviceId), actorId, "DEVICE_REVOKED", "status=ACTIVE;secretHashPrefix=aaaaaaaa",
             "status=REVOKED;secretHashPrefix=aaaaaaaa");
 
         List<PhysicalDeviceAuditJpaEntity> rows = auditRepository.findByDeviceIdOrderByCreatedAtAsc(deviceId);
