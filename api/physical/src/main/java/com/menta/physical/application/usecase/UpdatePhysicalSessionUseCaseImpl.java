@@ -3,6 +3,7 @@ package com.menta.physical.application.usecase;
 import com.menta.physical.application.dto.PhysicalSessionManagementResult;
 import com.menta.physical.application.dto.UpdatePhysicalSessionCommand;
 import com.menta.physical.application.port.in.UpdatePhysicalSessionUseCase;
+import com.menta.physical.application.port.out.Clock;
 import com.menta.physical.application.port.out.PhysicalCourseRepository;
 import com.menta.physical.application.port.out.PhysicalSessionRepository;
 import com.menta.physical.domain.exception.SessionAlreadyOccurredException;
@@ -15,6 +16,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 
 /**
  * Applies a partial update to a session, authorizing through its parent course.
@@ -23,17 +25,12 @@ import java.util.UUID;
  * when the session has already occurred. Fields are applied through the domain's copy-on-write
  * methods, so the capacity invariant is enforced by the aggregate.
  */
+@RequiredArgsConstructor
 public class UpdatePhysicalSessionUseCaseImpl implements UpdatePhysicalSessionUseCase {
 
     private final PhysicalCourseRepository courseRepository;
     private final PhysicalSessionRepository sessionRepository;
-
-    public UpdatePhysicalSessionUseCaseImpl(
-        PhysicalCourseRepository courseRepository, PhysicalSessionRepository sessionRepository
-    ) {
-        this.courseRepository = courseRepository;
-        this.sessionRepository = sessionRepository;
-    }
+    private final Clock clock;
 
     @Override
     public PhysicalSessionManagementResult update(
@@ -45,7 +42,7 @@ public class UpdatePhysicalSessionUseCaseImpl implements UpdatePhysicalSessionUs
             courseRepository, CourseId.of(session.getCourseId().toString()), actingUserId, actingAsAdmin
         );
 
-        Instant now = Instant.now();
+        Instant now = clock.now();
         if (session.hasOccurred(now)) {
             throw new SessionAlreadyOccurredException();
         }

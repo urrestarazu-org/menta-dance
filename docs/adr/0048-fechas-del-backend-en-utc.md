@@ -2,7 +2,7 @@
 
 **Estado:** Aceptado
 **Fecha:** 2026-11-12
-**Actualizado:** 2026-11-13 (#729): decisión sobre la recurrencia de los cursos y lecturas de `physical` en UTC
+**Actualizado:** 2026-11-20 (#794): `physical` toma el "ahora" siempre del puerto `Clock`. Antes, 2026-11-13 (#729): decisión sobre la recurrencia de los cursos y lecturas de `physical` en UTC
 **Decisores:** Dueño del proyecto / Arquitectura
 
 ## Contexto y Problema
@@ -192,6 +192,15 @@ corrige de forma gradual y cada punto necesita su propio cambio:
   ningún `docker-compose` lo fija; en una máquina de desarrollo en otra zona guardaría hora local.
 * `UserProfile` valida la fecha de nacimiento con `LocalDate.now()`.
 * El módulo `billing` no se auditó para este ADR.
+
+En `physical`, el "ahora" de `main` sale siempre del puerto `Clock` (#794): ya no queda ningún
+`Instant.now()` en `api/physical/src/main`. Los casos de uso `ListManagedPhysicalSessionsUseCaseImpl`
+y `UpdatePhysicalSessionUseCaseImpl` y los adaptadores `PhysicalSessionRepositoryAdapter`,
+`PhysicalCourseRepositoryAdapter` y `PhysicalDeviceAuditRepositoryAdapter` reciben el `Clock` por
+constructor. Se migraron también los adaptadores (en lugar de aceptarlos como excepción) porque el
+cambio era chico (siete usos, cinco construcciones en tests) y porque así los tests pueden fijar la
+hora y verificar que el repositorio JPA recibe el `now` del reloj, en vez de depender del reloj
+de pared.
 
 La regla **todavía no se verifica de forma automática**. Una regla de ArchUnit que prohíba
 `ZoneId`, `LocalDateTime.now()` y `LocalDate.now()` en `main` es el paso siguiente, pero solo

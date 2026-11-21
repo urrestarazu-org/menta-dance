@@ -73,7 +73,7 @@ class PhysicalSessionRepositoryAdapterAcrossCoursesTest {
     @Autowired private PhysicalCapacityHoldJpaRepository holdRepository;
 
     private PhysicalSessionRepositoryAdapter adapter() {
-        return new PhysicalSessionRepositoryAdapter(sessionRepository);
+        return new PhysicalSessionRepositoryAdapter(sessionRepository, Instant::now);
     }
 
     private UUID seedCourse(String title, int durationMinutes, CourseStatus status) {

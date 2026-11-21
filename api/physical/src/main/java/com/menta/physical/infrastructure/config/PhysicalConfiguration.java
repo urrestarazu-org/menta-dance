@@ -252,16 +252,16 @@ public class PhysicalConfiguration {
 
     @Bean
     public ListManagedPhysicalSessionsUseCase listManagedPhysicalSessionsUseCase(
-        PhysicalCourseRepository courseRepository, PhysicalSessionRepository sessionRepository
+        PhysicalCourseRepository courseRepository, PhysicalSessionRepository sessionRepository, Clock clock
     ) {
-        return new ListManagedPhysicalSessionsUseCaseImpl(courseRepository, sessionRepository);
+        return new ListManagedPhysicalSessionsUseCaseImpl(courseRepository, sessionRepository, clock);
     }
 
     @Bean
     public UpdatePhysicalSessionUseCase updatePhysicalSessionUseCase(
-        PhysicalCourseRepository courseRepository, PhysicalSessionRepository sessionRepository
+        PhysicalCourseRepository courseRepository, PhysicalSessionRepository sessionRepository, Clock clock
     ) {
-        return new UpdatePhysicalSessionUseCaseImpl(courseRepository, sessionRepository);
+        return new UpdatePhysicalSessionUseCaseImpl(courseRepository, sessionRepository, clock);
     }
 
     /**

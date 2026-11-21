@@ -3,6 +3,7 @@ package com.menta.physical.infrastructure.persistence.adapter;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -22,7 +23,10 @@ import org.junit.jupiter.api.Test;
 class PhysicalSessionRepositoryAdapterTest {
 
     private final PhysicalSessionJpaRepository sessionRepository = mock(PhysicalSessionJpaRepository.class);
-    private final PhysicalSessionRepositoryAdapter adapter = new PhysicalSessionRepositoryAdapter(sessionRepository);
+    // Fixed far from the wall clock so an adapter that read Instant.now() could not pass by chance.
+    private static final Instant NOW = Instant.parse("2030-03-15T12:00:00Z");
+    private final PhysicalSessionRepositoryAdapter adapter =
+        new PhysicalSessionRepositoryAdapter(sessionRepository, () -> NOW);
 
     private static byte[] toBytes(UUID uuid) {
         ByteBuffer buffer = ByteBuffer.wrap(new byte[16]);
@@ -145,5 +149,60 @@ class PhysicalSessionRepositoryAdapterTest {
 
         assertThat(adapter.findExistingScheduledAt(courseId, List.of())).isEmpty();
         verifyNoInteractions(sessionRepository);
+    }
+
+    @Test
+    void find_scheduled_passes_the_clock_now_to_the_availability_query() {
+        CourseId courseId = CourseId.generate();
+        Instant from = NOW.minusSeconds(60);
+        Instant to = NOW.plusSeconds(86400);
+        when(sessionRepository.findScheduledWithAvailability(any(), any(), any(), any())).thenReturn(List.of());
+
+        adapter.findScheduled(courseId, from, to);
+
+        verify(sessionRepository).findScheduledWithAvailability(courseId.getValue(), from, to, NOW);
+    }
+
+    @Test
+    void find_managed_passes_the_clock_now_to_the_availability_query() {
+        CourseId courseId = CourseId.generate();
+        Instant from = NOW.minusSeconds(60);
+        Instant to = NOW.plusSeconds(86400);
+        when(sessionRepository.findManagedWithAvailability(any(), any(), any(), any())).thenReturn(List.of());
+
+        adapter.findManaged(courseId, from, to);
+
+        verify(sessionRepository).findManagedWithAvailability(courseId.getValue(), from, to, NOW);
+    }
+
+    @Test
+    void find_managed_across_courses_passes_the_clock_now_to_the_availability_query() {
+        Instant from = NOW.minusSeconds(60);
+        Instant to = NOW.plusSeconds(86400);
+        when(sessionRepository.findManagedAcrossCoursesWithAvailability(any(), any(), any())).thenReturn(List.of());
+
+        adapter.findManagedAcrossCourses(from, to);
+
+        verify(sessionRepository).findManagedAcrossCoursesWithAvailability(from, to, NOW);
+    }
+
+    @Test
+    void find_by_id_passes_the_clock_now_to_the_availability_query() {
+        SessionId id = SessionId.generate();
+        when(sessionRepository.findByIdWithAvailability(any(), any())).thenReturn(Optional.empty());
+
+        adapter.findById(id);
+
+        verify(sessionRepository).findByIdWithAvailability(id.getValue(), NOW);
+    }
+
+    @Test
+    void has_future_assigned_sessions_passes_the_clock_now_to_the_repository() {
+        CourseId courseId = CourseId.generate();
+        when(sessionRepository.existsFutureAssignedSession(any(), any())).thenReturn(false);
+
+        adapter.hasFutureAssignedSessions(courseId);
+
+        verify(sessionRepository).existsFutureAssignedSession(courseId.getValue(), NOW);
     }
 }

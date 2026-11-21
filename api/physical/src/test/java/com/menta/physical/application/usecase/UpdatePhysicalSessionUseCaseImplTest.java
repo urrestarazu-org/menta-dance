@@ -34,8 +34,10 @@ class UpdatePhysicalSessionUseCaseImplTest {
 
     private final PhysicalCourseRepository courseRepository = mock(PhysicalCourseRepository.class);
     private final PhysicalSessionRepository sessionRepository = mock(PhysicalSessionRepository.class);
+    // Fixed far from the wall clock so a use case that read NOW could not pass by chance.
+    private static final Instant NOW = Instant.parse("2030-03-15T12:00:00Z");
     private final UpdatePhysicalSessionUseCaseImpl useCase =
-        new UpdatePhysicalSessionUseCaseImpl(courseRepository, sessionRepository);
+        new UpdatePhysicalSessionUseCaseImpl(courseRepository, sessionRepository, () -> NOW);
 
     private static final UpdatePhysicalSessionCommand EMPTY_PATCH = new UpdatePhysicalSessionCommand(
         Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()
@@ -70,7 +72,7 @@ class UpdatePhysicalSessionUseCaseImplTest {
         SessionId sessionId = SessionId.generate();
         CourseId courseId = CourseId.generate();
         UUID ownerId = UUID.randomUUID();
-        Instant future = Instant.now().plusSeconds(86400);
+        Instant future = NOW.plusSeconds(86400);
         when(sessionRepository.findById(sessionId))
             .thenReturn(Optional.of(session(sessionId, courseId, future, 20, 0)));
         when(courseRepository.findById(courseId)).thenReturn(Optional.of(course(courseId, ownerId)));
@@ -85,7 +87,7 @@ class UpdatePhysicalSessionUseCaseImplTest {
         SessionId sessionId = SessionId.generate();
         CourseId courseId = CourseId.generate();
         UUID ownerId = UUID.randomUUID();
-        Instant future = Instant.now().plusSeconds(86400);
+        Instant future = NOW.plusSeconds(86400);
         when(sessionRepository.findById(sessionId))
             .thenReturn(Optional.of(session(sessionId, courseId, future, 20, 0)));
         when(courseRepository.findById(courseId)).thenReturn(Optional.of(course(courseId, ownerId)));
@@ -105,7 +107,7 @@ class UpdatePhysicalSessionUseCaseImplTest {
         SessionId sessionId = SessionId.generate();
         CourseId courseId = CourseId.generate();
         UUID ownerId = UUID.randomUUID();
-        Instant future = Instant.now().plusSeconds(86400);
+        Instant future = NOW.plusSeconds(86400);
         when(sessionRepository.findById(sessionId))
             .thenReturn(Optional.of(session(sessionId, courseId, future, 20, 10)));
         when(courseRepository.findById(courseId)).thenReturn(Optional.of(course(courseId, ownerId)));
@@ -124,7 +126,7 @@ class UpdatePhysicalSessionUseCaseImplTest {
         SessionId sessionId = SessionId.generate();
         CourseId courseId = CourseId.generate();
         UUID ownerId = UUID.randomUUID();
-        Instant future = Instant.now().plusSeconds(86400);
+        Instant future = NOW.plusSeconds(86400);
         when(sessionRepository.findById(sessionId))
             .thenReturn(Optional.of(session(sessionId, courseId, future, 20, 5)));
         when(courseRepository.findById(courseId)).thenReturn(Optional.of(course(courseId, ownerId)));
@@ -145,7 +147,7 @@ class UpdatePhysicalSessionUseCaseImplTest {
         SessionId sessionId = SessionId.generate();
         CourseId courseId = CourseId.generate();
         UUID ownerId = UUID.randomUUID();
-        Instant past = Instant.now().minusSeconds(86400);
+        Instant past = NOW.minusSeconds(86400);
         when(sessionRepository.findById(sessionId))
             .thenReturn(Optional.of(session(sessionId, courseId, past, 20, 0)));
         when(courseRepository.findById(courseId)).thenReturn(Optional.of(course(courseId, ownerId)));
@@ -160,7 +162,7 @@ class UpdatePhysicalSessionUseCaseImplTest {
         SessionId sessionId = SessionId.generate();
         CourseId courseId = CourseId.generate();
         UUID ownerId = UUID.randomUUID();
-        Instant past = Instant.now().minusSeconds(86400);
+        Instant past = NOW.minusSeconds(86400);
         when(sessionRepository.findById(sessionId))
             .thenReturn(Optional.of(session(sessionId, courseId, past, 20, 5)));
         when(courseRepository.findById(courseId)).thenReturn(Optional.of(course(courseId, ownerId)));
@@ -181,7 +183,7 @@ class UpdatePhysicalSessionUseCaseImplTest {
         UUID ownerId = UUID.randomUUID();
         // Relative to now, not a hardcoded calendar date (#227): a literal date
         // stops being "future" the moment real time catches up to it.
-        Instant future = Instant.now().plusSeconds(400L * 86400);
+        Instant future = NOW.plusSeconds(400L * 86400);
         java.time.LocalDate originalDate = future.atZone(java.time.ZoneOffset.UTC).toLocalDate();
         java.time.LocalDate rescheduledDate = originalDate.plusDays(5);
         when(sessionRepository.findById(sessionId))
@@ -207,7 +209,7 @@ class UpdatePhysicalSessionUseCaseImplTest {
         UUID ownerId = UUID.randomUUID();
         // Relative to now, not a hardcoded calendar date (#227): a literal date
         // stops being "future" the moment real time catches up to it.
-        Instant future = Instant.now().plusSeconds(400L * 86400);
+        Instant future = NOW.plusSeconds(400L * 86400);
         java.time.LocalDate originalDate = future.atZone(java.time.ZoneOffset.UTC).toLocalDate();
         when(sessionRepository.findById(sessionId))
             .thenReturn(Optional.of(session(sessionId, courseId, future, 20, 0)));
@@ -230,7 +232,7 @@ class UpdatePhysicalSessionUseCaseImplTest {
         SessionId sessionId = SessionId.generate();
         CourseId courseId = CourseId.generate();
         UUID ownerId = UUID.randomUUID();
-        Instant future = Instant.now().plusSeconds(86400);
+        Instant future = NOW.plusSeconds(86400);
         when(sessionRepository.findById(sessionId))
             .thenReturn(Optional.of(session(sessionId, courseId, future, 20, 0)));
         when(courseRepository.findById(courseId)).thenReturn(Optional.of(course(courseId, ownerId)));
@@ -251,7 +253,7 @@ class UpdatePhysicalSessionUseCaseImplTest {
         SessionId sessionId = SessionId.generate();
         CourseId courseId = CourseId.generate();
         UUID ownerId = UUID.randomUUID();
-        Instant future = Instant.now().plusSeconds(86400);
+        Instant future = NOW.plusSeconds(86400);
         when(sessionRepository.findById(sessionId))
             .thenReturn(Optional.of(session(sessionId, courseId, future, 20, 0)));
         when(courseRepository.findById(courseId)).thenReturn(Optional.of(course(courseId, ownerId)));
@@ -259,6 +261,40 @@ class UpdatePhysicalSessionUseCaseImplTest {
 
         PhysicalSessionManagementResult result =
             useCase.update(sessionId.toString(), EMPTY_PATCH, UUID.randomUUID(), true);
+
+        assertThat(result).isNotNull();
+    }
+
+    @Test
+    void a_session_that_started_before_the_clock_now_is_rejected_even_if_it_is_in_the_future_of_the_wall_clock() {
+        SessionId sessionId = SessionId.generate();
+        CourseId courseId = CourseId.generate();
+        UUID ownerId = UUID.randomUUID();
+        // NOW is in 2030: one hour earlier is "already occurred" for the clock, but still in the future
+        // of the real wall clock, so only a use case reading the Clock port rejects it.
+        when(sessionRepository.findById(sessionId))
+            .thenReturn(Optional.of(session(sessionId, courseId, NOW.minusSeconds(3600), 20, 0)));
+        when(courseRepository.findById(courseId)).thenReturn(Optional.of(course(courseId, ownerId)));
+
+        assertThatThrownBy(() -> useCase.update(sessionId.toString(), EMPTY_PATCH, ownerId, false))
+            .isInstanceOf(SessionAlreadyOccurredException.class);
+        verify(sessionRepository, never()).save(any());
+    }
+
+    @Test
+    void a_session_after_the_clock_now_is_editable_even_if_it_is_in_the_past_of_the_wall_clock() {
+        SessionId sessionId = SessionId.generate();
+        CourseId courseId = CourseId.generate();
+        UUID ownerId = UUID.randomUUID();
+        Instant pastClockNow = Instant.parse("2020-01-01T00:00:00Z");
+        UpdatePhysicalSessionUseCaseImpl pastUseCase =
+            new UpdatePhysicalSessionUseCaseImpl(courseRepository, sessionRepository, () -> pastClockNow);
+        when(sessionRepository.findById(sessionId))
+            .thenReturn(Optional.of(session(sessionId, courseId, pastClockNow.plusSeconds(3600), 20, 0)));
+        when(courseRepository.findById(courseId)).thenReturn(Optional.of(course(courseId, ownerId)));
+        when(sessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PhysicalSessionManagementResult result = pastUseCase.update(sessionId.toString(), EMPTY_PATCH, ownerId, false);
 
         assertThat(result).isNotNull();
     }
