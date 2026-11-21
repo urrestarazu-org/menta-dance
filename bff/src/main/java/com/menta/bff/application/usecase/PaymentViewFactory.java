@@ -1,5 +1,6 @@
 package com.menta.bff.application.usecase;
 
+import com.menta.bff.application.dto.ExceptionPurchase;
 import com.menta.bff.application.dto.PaymentModality;
 import com.menta.bff.application.dto.PaymentStatusType;
 import java.math.BigDecimal;
@@ -27,6 +28,13 @@ final class PaymentViewFactory {
         return new PaymentVerificationView(paymentId, shortId(userId), amount(amount, currency), createdAt,
                 MOMENT_FORMAT.format(createdAt.atZone(displayZone)), "Transferencia", modality(modality), status,
                 status(status), hasProof);
+    }
+
+    ExceptionPurchaseView of(ExceptionPurchase purchase) {
+        return new ExceptionPurchaseView(purchase.purchaseId(), shortId(purchase.userId()),
+                modality(purchase.targetModality()), amount(purchase.amount(), purchase.currency()),
+                purchase.createdAt(), MOMENT_FORMAT.format(purchase.createdAt().atZone(displayZone)),
+                purchase.physicalSessionIds().size(), "En excepción");
     }
 
     private static String shortId(String userId) {

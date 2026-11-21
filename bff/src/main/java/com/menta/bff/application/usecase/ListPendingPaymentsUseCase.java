@@ -11,10 +11,10 @@ package com.menta.bff.application.usecase;
 public interface ListPendingPaymentsUseCase {
 
     /** Page size when the caller names none. */
-    int DEFAULT_SIZE = 20;
+    int DEFAULT_SIZE = ManualPaymentSupport.DEFAULT_SIZE;
 
     /** Largest page the API accepts: a bigger request is cut here, because the API would answer 400. */
-    int MAX_SIZE = 50;
+    int MAX_SIZE = ManualPaymentSupport.MAX_SIZE;
 
     /**
      * Lists one page, oldest first.

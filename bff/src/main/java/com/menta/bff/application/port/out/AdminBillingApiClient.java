@@ -1,9 +1,11 @@
 package com.menta.bff.application.port.out;
 
 import com.menta.bff.application.dto.CorrectionDecision;
+import com.menta.bff.application.dto.ExceptionPurchasePage;
 import com.menta.bff.application.dto.PaymentDetail;
 import com.menta.bff.application.dto.PaymentProof;
 import com.menta.bff.application.dto.PendingPaymentPage;
+import com.menta.bff.application.dto.PurchaseResolution;
 
 /**
  * Port for the administrator's manual payment verification (#370): the calls of the Billing API under
@@ -93,9 +95,32 @@ public interface AdminBillingApiClient {
             String evidence);
 
     /**
+     * Lists the purchases stranded in {@code EXCEPTION}, oldest first
+     * ({@code GET /purchases?status=EXCEPTION}).
+     *
+     * @param accessToken caller's access token
+     * @param page        zero-based page index
+     * @param size        page size, at most 50: the API rejects a larger one instead of cutting it
+     * @return the requested page; past the last page it has no items but carries the totals
+     */
+    ExceptionPurchasePage listPurchasesInException(String accessToken, int page, int size);
+
+    /**
+     * Closes a purchase in {@code EXCEPTION} ({@code POST /purchases/{purchaseId}/resolution}, 200 whose body
+     * is not needed). Repeating the same decision with the same note is idempotent; any other one on a resolved
+     * purchase is {@code PURCHASE_ALREADY_RESOLVED}.
+     *
+     * @param accessToken caller's access token
+     * @param purchaseId  identifier of the purchase, already validated as a UUID by the caller
+     * @param resolution  how it is closed
+     * @param note        why, already trimmed and not blank
+     */
+    void resolvePurchase(String accessToken, String purchaseId, PurchaseResolution resolution, String note);
+
+    /**
      * The API refused the request with a code the screens word: {@code INVALID_REQUEST} (400),
-     * {@code PAYMENT_NOT_FOUND} (404) or {@code ILLEGAL_PAYMENT_STATE_TRANSITION} (409). Anything else is a
-     * {@link ServiceUnavailableException}. Its message is for logs only.
+     * {@code PAYMENT_NOT_FOUND} or {@code PURCHASE_NOT_FOUND} (404), or a 409 for a state that does not admit the
+     * operation. Anything else is a {@link ServiceUnavailableException}. Its message is for logs only.
      */
     class PaymentRefusalException extends RuntimeException {
 
@@ -108,7 +133,13 @@ public interface AdminBillingApiClient {
             /** The payment exists but has no transfer proof. */
             PROOF_NOT_FOUND,
             /** 409: the payment is not in a state that admits the operation, for instance it was already resolved. */
-            ILLEGAL_PAYMENT_STATE_TRANSITION
+            ILLEGAL_PAYMENT_STATE_TRANSITION,
+            /** 404: the purchase does not exist. */
+            PURCHASE_NOT_FOUND,
+            /** 409: the purchase is not in {@code EXCEPTION} any more. */
+            ILLEGAL_PURCHASE_STATE_TRANSITION,
+            /** 409: the purchase was already resolved with another decision or note. */
+            PURCHASE_ALREADY_RESOLVED
         }
 
         private final Code code;

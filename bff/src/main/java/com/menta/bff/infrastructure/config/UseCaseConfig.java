@@ -75,6 +75,8 @@ import com.menta.bff.application.usecase.GetValidAccessTokenUseCase;
 import com.menta.bff.application.usecase.GetValidAccessTokenUseCaseImpl;
 import com.menta.bff.application.usecase.ListCourseSessionsUseCase;
 import com.menta.bff.application.usecase.ListCourseSessionsUseCaseImpl;
+import com.menta.bff.application.usecase.ListExceptionPurchasesUseCase;
+import com.menta.bff.application.usecase.ListExceptionPurchasesUseCaseImpl;
 import com.menta.bff.application.usecase.ListInstructorsUseCase;
 import com.menta.bff.application.usecase.ListInstructorsUseCaseImpl;
 import com.menta.bff.application.usecase.ListManagedCoursesUseCase;
@@ -107,6 +109,8 @@ import com.menta.bff.application.usecase.ResendActivationUseCase;
 import com.menta.bff.application.usecase.ResendActivationUseCaseImpl;
 import com.menta.bff.application.usecase.ResetPasswordUseCase;
 import com.menta.bff.application.usecase.ResetPasswordUseCaseImpl;
+import com.menta.bff.application.usecase.ResolveExceptionPurchaseUseCase;
+import com.menta.bff.application.usecase.ResolveExceptionPurchaseUseCaseImpl;
 import com.menta.bff.application.usecase.ResolveOwnInstructorUseCase;
 import com.menta.bff.application.usecase.ResolveOwnInstructorUseCaseImpl;
 import com.menta.bff.application.usecase.ResolveSessionWindowUseCase;
@@ -472,5 +476,18 @@ public class UseCaseConfig {
     @Bean
     public CorrectPaymentUseCase correctPaymentUseCase(AdminBillingApiClient adminBillingApiClient) {
         return new CorrectPaymentUseCaseImpl(adminBillingApiClient);
+    }
+
+    /** The purchases stranded in exception (#370): the list and their resolution. */
+    @Bean
+    public ListExceptionPurchasesUseCase listExceptionPurchasesUseCase(
+            AdminBillingApiClient adminBillingApiClient, ClassesProperties classesProperties) {
+        return new ListExceptionPurchasesUseCaseImpl(adminBillingApiClient, classesProperties.getDisplayZone());
+    }
+
+    @Bean
+    public ResolveExceptionPurchaseUseCase resolveExceptionPurchaseUseCase(
+            AdminBillingApiClient adminBillingApiClient) {
+        return new ResolveExceptionPurchaseUseCaseImpl(adminBillingApiClient);
     }
 }
