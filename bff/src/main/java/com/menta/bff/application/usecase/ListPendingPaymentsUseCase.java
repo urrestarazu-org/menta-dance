@@ -1,7 +1,5 @@
 package com.menta.bff.application.usecase;
 
-import com.menta.bff.application.dto.PendingPaymentPage;
-
 /**
  * Use case that lists the payments awaiting manual verification, for the administrator's inbox (#370).
  *
@@ -25,7 +23,7 @@ public interface ListPendingPaymentsUseCase {
      * @param page        zero-based page index; {@code null} or negative reads the first page
      * @param size        page size; {@code null} or below 1 reads {@value #DEFAULT_SIZE}, above
      *                    {@value #MAX_SIZE} reads {@value #MAX_SIZE}
-     * @return the page
+     * @return the page, with every row already worded for the screen
      */
-    PendingPaymentPage execute(String accessToken, Integer page, Integer size);
+    PendingPaymentsView execute(String accessToken, Integer page, Integer size);
 }

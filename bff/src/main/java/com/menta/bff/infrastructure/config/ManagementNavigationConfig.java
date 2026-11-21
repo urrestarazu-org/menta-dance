@@ -22,7 +22,7 @@ public class ManagementNavigationConfig {
      * Every planned section is declared, but only the ones with a screen are enabled: an enabled entry
      * without one would be a dead link. Each screen issue (#367, #368, #370, #372, #373, ...) turns its own
      * section on ({@code enabled = true}) in the same change that adds its controller. Users (#378) was the
-     * first one, then Recepción (#373) and Cursos presenciales (#368). The
+     * first one, then Recepción (#373), Cursos presenciales (#368) and Pagos (#370). The
      * {@code sessions} entry stays disabled: it is for the sessions screens that come after the courses ones.
      */
     @Bean
@@ -36,8 +36,8 @@ public class ManagementNavigationConfig {
                         Set.of("ADMIN", "INSTRUCTOR"), true),
                 new ManagementSection("reception", "Recepción", "/gestion/recepcion",
                         Set.of("RECEPTIONIST", "ADMIN"), true),
-                new ManagementSection("billing", "Facturación", "/gestion/billing",
-                        Set.of("ADMIN"), false),
+                new ManagementSection("payments", "Pagos", "/gestion/pagos",
+                        Set.of("ADMIN"), true),
                 new ManagementSection("devices", "Dispositivos", "/gestion/dispositivos",
                         Set.of("ADMIN"), false),
                 new ManagementSection("users", "Usuarios", "/gestion/usuarios",

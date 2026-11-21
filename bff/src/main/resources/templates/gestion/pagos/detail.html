@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/management :: page('Pago', 'payments', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<div class="max-w-3xl">
+    <p class="mb-4"><a th:href="@{/gestion/pagos}">Volver a los pagos</a></p>
+    <h1 class="mb-6">Pago</h1>
+
+    <div th:if="${paymentsSaved}" class="mb-4">
+        <div th:replace="~{fragments/components :: alert('success', ${paymentsSaved})}"></div>
+    </div>
+    <div th:if="${paymentsError}" class="mb-4">
+        <div th:replace="~{fragments/components :: alert('error', ${paymentsError})}"></div>
+    </div>
+
+    <dl class="card mb-6 flex flex-wrap gap-x-8 gap-y-3">
+        <div><dt class="font-semibold">Alumno</dt><dd class="m-0" th:text="${payment.studentLabel()}">5b6f7c8e</dd></div>
+        <div><dt class="font-semibold">Monto</dt><dd class="m-0" th:text="${payment.amountLabel()}">25.000,00 ARS</dd></div>
+        <div><dt class="font-semibold">Fecha</dt>
+            <dd class="m-0"><time th:datetime="${payment.createdAt()}" th:text="${payment.createdLabel()}">20 de noviembre de 2026, 23:30</time></dd></div>
+        <div><dt class="font-semibold">Medio</dt><dd class="m-0" th:text="${payment.methodLabel()}">Transferencia</dd></div>
+        <div><dt class="font-semibold">Modalidad</dt><dd class="m-0" th:text="${payment.modalityLabel()}">Presencial</dd></div>
+        <div><dt class="font-semibold">Estado</dt>
+            <dd class="m-0"><span class="badge badge-neutral" th:text="${payment.statusLabel()}">Pendiente de verificación</span></dd></div>
+        <div><dt class="font-semibold">Comprobante</dt>
+            <dd class="m-0">
+                <a th:if="${payment.hasProof()}" th:href="@{/gestion/pagos/{id}/comprobante(id=${payment.paymentId()})}"
+                   target="_blank" rel="noopener">Ver comprobante<span class="sr-only"> (se abre en una pestaña nueva)</span></a>
+                <span th:unless="${payment.hasProof()}">No adjuntado</span>
+            </dd></div>
+    </dl>
+
+    <div th:if="${payment.awaitingVerification() and !payment.hasProof()}" class="mb-6">
+        <div th:replace="~{fragments/components :: alert('info', 'Este pago no tiene comprobante adjunto. Igualmente se puede aprobar o rechazar.')}"></div>
+    </div>
+
+    <th:block th:if="${payment.awaitingVerification()}">
+        <form th:action="@{/gestion/pagos/{id}/aprobar(id=${payment.paymentId()})}" method="post" class="card mb-6 space-y-4">
+            <h2>Aprobar el pago</h2>
+            <button type="submit" class="btn btn-primary">Aprobar pago</button>
+        </form>
+
+        <form th:action="@{/gestion/pagos/{id}/rechazar(id=${payment.paymentId()})}" th:object="${rejectForm}"
+              method="post" novalidate class="card mb-6 space-y-4">
+            <h2>Rechazar el pago</h2>
+            <div th:replace="~{fragments/components :: errorSummary(${ {'reason':'reject-reason'} })}"></div>
+            <div th:replace="~{fragments/components :: limitedTextareaField('reject-reason', 'Motivo del rechazo', 'reason', *{reason}, 4, 500, 'Se le envía por email al alumno. Hasta 500 caracteres.', ${#fields.errors('reason')})}"></div>
+            <button type="submit" class="btn btn-secondary">Rechazar pago</button>
+        </form>
+    </th:block>
+
+    <form th:if="${payment.needsReconciliation()}" th:action="@{/gestion/pagos/{id}/corregir(id=${payment.paymentId()})}"
+          th:object="${correctForm}" method="post" novalidate class="card mb-6 space-y-4">
+        <h2>Corregir el pago</h2>
+        <div th:replace="~{fragments/components :: errorSummary(${ {'decision':'correct-decision','reason':'correct-reason','evidence':'correct-evidence'} })}"></div>
+        <div th:replace="~{fragments/components :: selectField('correct-decision', 'Decisión', 'decision', ${ {'APPROVED':'Aprobar el pago','REJECTED':'Rechazar el pago'} }, *{decision}, 'Elegí una decisión', null, ${#fields.errors('decision')})}"></div>
+        <div th:replace="~{fragments/components :: limitedTextareaField('correct-reason', 'Motivo de la corrección', 'reason', *{reason}, 4, 500, 'Hasta 500 caracteres.', ${#fields.errors('reason')})}"></div>
+        <div th:replace="~{fragments/components :: limitedTextareaField('correct-evidence', 'Evidencia', 'evidence', *{evidence}, 4, 500, 'Dato verificable que respalda la decisión. Hasta 500 caracteres.', ${#fields.errors('evidence')})}"></div>
+        <button type="submit" class="btn btn-primary">Registrar corrección</button>
+    </form>
+</div>
+</th:block>
+</body>
+</html>

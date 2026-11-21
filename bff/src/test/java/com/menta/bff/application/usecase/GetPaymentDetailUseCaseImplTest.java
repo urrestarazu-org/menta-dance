@@ -14,11 +14,13 @@ import com.menta.bff.application.port.out.AdminBillingApiClient.PaymentRefusalEx
 import com.menta.bff.application.port.out.AdminBillingApiClient.ServiceUnavailableException;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.ZoneId;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
@@ -41,15 +43,40 @@ class GetPaymentDetailUseCaseImplTest {
 
     @BeforeEach
     void setUp() {
-        useCase = new GetPaymentDetailUseCaseImpl(adminBillingApiClient);
+        useCase = new GetPaymentDetailUseCaseImpl(adminBillingApiClient, ZoneId.of("America/Argentina/Buenos_Aires"));
     }
 
     @Test
-    @DisplayName("normalizes the id (strip, lower case) before asking the API")
-    void normalizesTheId() {
+    @DisplayName("normalizes the id (strip, lower case) before asking the API, and words the payment")
+    void normalizesTheIdAndWordsThePayment() {
         when(adminBillingApiClient.getPaymentDetail(TOKEN, PAYMENT_ID)).thenReturn(DETAIL);
 
-        assertThat(useCase.execute(TOKEN, "  " + PAYMENT_ID.toUpperCase() + " ")).isSameAs(DETAIL);
+        PaymentVerificationView view = useCase.execute(TOKEN, "  " + PAYMENT_ID.toUpperCase() + " ");
+
+        assertThat(view.paymentId()).isEqualTo(PAYMENT_ID);
+        assertThat(view.studentLabel()).isEqualTo("user-1");
+        assertThat(view.amountLabel()).isEqualTo("25.000,00 ARS");
+        assertThat(view.createdLabel()).isEqualTo("20 de noviembre de 2026, 12:30");
+        assertThat(view.modalityLabel()).isEqualTo("Presencial");
+        assertThat(view.hasProof()).isTrue();
+        assertThat(view.awaitingVerification()).isTrue();
+        assertThat(view.needsReconciliation()).isFalse();
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @EnumSource(PaymentStatusType.class)
+    @DisplayName("every status has a Spanish label, and only two of them admit an action")
+    void wordsTheStatus(PaymentStatusType status) {
+        PaymentDetail detail = new PaymentDetail(PAYMENT_ID, "user-1", PaymentModality.VIRTUAL, "plan-1",
+                BigDecimal.ONE, "USD", status, Instant.parse("2026-11-20T15:30:00Z"), false);
+        when(adminBillingApiClient.getPaymentDetail(TOKEN, PAYMENT_ID)).thenReturn(detail);
+
+        PaymentVerificationView view = useCase.execute(TOKEN, PAYMENT_ID);
+
+        assertThat(view.statusLabel()).isNotBlank().doesNotContain("_");
+        assertThat(view.awaitingVerification()).isEqualTo(status == PaymentStatusType.AWAITING_MANUAL_VERIFICATION);
+        assertThat(view.needsReconciliation()).isEqualTo(status == PaymentStatusType.RECONCILIATION_REQUIRED);
+        assertThat(view.statusType()).isEqualTo(status);
     }
 
     @ParameterizedTest
