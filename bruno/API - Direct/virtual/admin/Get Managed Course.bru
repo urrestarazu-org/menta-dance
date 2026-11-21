@@ -1,0 +1,36 @@
+meta {
+  name: Get Managed Virtual Course
+  type: http
+  seq: 12
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admin/virtual/courses/{{virtualCourseId}}
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  US-VIRTUAL-002 escenario 5. Course detail for management, in any status
+  (DRAFT, PUBLISHED or ARCHIVED), with its modules and lessons. Besides the
+  read fields it carries what the edit forms are prefilled with:
+  shortDescription and professorId (course), preview (module) and
+  description (lesson). Run "Create Course" first so virtualCourseId is set.
+
+  Success contract: 200 with VirtualCourseAdminDetailResponse.
+  Error contract:
+    403 COURSE_NOT_OWNED → INSTRUCTOR is not the course's professor
+    404 COURSE_NOT_FOUND → courseId does not exist or is malformed
+}
+
+assert {
+  res.status: eq 200
+  res.body.courseId: isString
+  res.body.shortDescription: isString
+  res.body.professorId: isString
+  res.body.modules: isArray
+  res.body.stats: isDefined
+}

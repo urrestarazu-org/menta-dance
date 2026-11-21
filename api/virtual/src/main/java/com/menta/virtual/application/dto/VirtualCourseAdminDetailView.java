@@ -19,12 +19,11 @@ import java.util.List;
  *       ({@code moduleCount}/{@code lessonCount}/{@code totalDurationMinutes})
  *       so the admin view can show how much content belongs to a course in
  *       any state without recomputing from the lesson walk,</li>
- *   <li>does NOT carry {@code shortDescription}/{@code professorId} — those
- *       are owned by the management summary contract (US-VIRTUAL-006) and
- *       the public catalog uses {@code shortDescription} only at the list
- *       level (#95); the rich detail view for both audiences deliberately
- *       skips them (see {@link VirtualCourseDetailView} for the public
- *       rationale).</li>
+ *   <li>carries {@code shortDescription} and {@code professorId} (as a UUID
+ *       string) so the web editor can prefill the course form; the public
+ *       {@link VirtualCourseDetailView} deliberately skips them, and
+ *       {@code professorId} is only exposed here because the read already
+ *       requires ADMIN or the owning INSTRUCTOR.</li>
  * </ul>
  *
  * <p>Unlike the public path
@@ -45,7 +44,9 @@ import java.util.List;
 public record VirtualCourseAdminDetailView(
     String courseId,
     String title,
+    String shortDescription,
     String description,
+    String professorId,
     String imageUrl,
     String category,
     String level,

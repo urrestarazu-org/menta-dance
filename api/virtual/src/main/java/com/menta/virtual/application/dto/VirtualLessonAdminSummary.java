@@ -23,6 +23,7 @@ package com.menta.virtual.application.dto;
 public record VirtualLessonAdminSummary(
     String lessonId,
     String title,
+    String description,
     int durationMinutes,
     boolean isFree,
     int order,

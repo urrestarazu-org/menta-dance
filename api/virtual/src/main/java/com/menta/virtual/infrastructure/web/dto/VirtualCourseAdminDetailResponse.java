@@ -14,6 +14,10 @@ import java.util.List;
  * <ul>
  *   <li>every lesson exposes {@code videoId} (operators need the Bunny.net
  *       reference to wire the editor),</li>
+ *   <li>the course also carries {@code shortDescription} and {@code professorId}, each module its
+ *       {@code preview} flag and each lesson its {@code description}, so the editor can prefill its forms
+ *       (the {@code professorId} is only visible to ADMIN or the owning INSTRUCTOR, who already see the
+ *       whole course),</li>
  *   <li>the course carries {@code status} ({@code DRAFT}/{@code PUBLISHED}/
  *       {@code ARCHIVED}) so the UI can render a "visible to visitors?"
  *       badge and an unpublish/publish affordance,</li>
@@ -35,7 +39,9 @@ import java.util.List;
 public record VirtualCourseAdminDetailResponse(
     String courseId,
     String title,
+    String shortDescription,
     String description,
+    String professorId,
     String thumbnailUrl,
     String category,
     String level,
@@ -50,7 +56,9 @@ public record VirtualCourseAdminDetailResponse(
         return new VirtualCourseAdminDetailResponse(
             view.courseId(),
             view.title(),
+            view.shortDescription(),
             view.description(),
+            view.professorId(),
             view.imageUrl(),
             view.category(),
             view.level(),
@@ -64,6 +72,7 @@ public record VirtualCourseAdminDetailResponse(
     public record AdminModuleDetail(
         String moduleId,
         String title,
+        boolean preview,
         int order,
         List<AdminLessonDetail> lessons
     ) {
@@ -73,6 +82,7 @@ public record VirtualCourseAdminDetailResponse(
             return new AdminModuleDetail(
                 module.moduleId(),
                 module.title(),
+                module.preview(),
                 module.order(),
                 module.lessons().stream().map(AdminLessonDetail::from).toList()
             );
@@ -82,6 +92,7 @@ public record VirtualCourseAdminDetailResponse(
     public record AdminLessonDetail(
         String lessonId,
         String title,
+        String description,
         int durationMinutes,
         boolean isFree,
         int order,
@@ -93,6 +104,7 @@ public record VirtualCourseAdminDetailResponse(
             return new AdminLessonDetail(
                 lesson.lessonId(),
                 lesson.title(),
+                lesson.description(),
                 lesson.durationMinutes(),
                 lesson.isFree(),
                 lesson.order(),

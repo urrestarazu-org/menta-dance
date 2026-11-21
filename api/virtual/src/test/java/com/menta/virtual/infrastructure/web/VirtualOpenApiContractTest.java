@@ -443,4 +443,12 @@ class VirtualOpenApiContractTest {
             assertThat(at(path).get("enum")).as(path).isEqualTo(names(CourseStatus.class));
         }
     }
+
+    @Test
+    void the_admin_detail_requires_the_fields_the_edit_forms_are_prefilled_with() {
+        assertThat(requiredNames(at("VirtualCourseAdminDetailResponse"))).contains("shortDescription", "professorId");
+        assertThat(requiredNames(at("VirtualCourseAdminDetailResponse/modules/[]"))).contains("preview");
+        assertThat(requiredNames(at("VirtualCourseAdminDetailResponse/modules/[]/lessons/[]")))
+            .contains("description");
+    }
 }

@@ -165,6 +165,7 @@ public class VirtualCourseCatalogPortImpl implements VirtualCourseCatalogPort {
             .map(module -> new VirtualModuleAdminDetail(
                 module.getId().toString(),
                 module.getTitle(),
+                module.isPreview(),
                 module.getOrder(),
                 lessonRepository.findByModuleId(module.getId()).stream()
                     .map(VirtualCourseCatalogPortImpl::toAdminLessonSummary)
@@ -179,7 +180,9 @@ public class VirtualCourseCatalogPortImpl implements VirtualCourseCatalogPort {
         return new VirtualCourseAdminDetailView(
             course.getId().toString(),
             course.getTitle(),
+            course.getShortDescription(),
             course.getDescription(),
+            course.getProfessorId().toString(),
             course.getImageUrl(),
             course.getCategory().getValue(),
             course.getLevel().name(),
@@ -198,6 +201,7 @@ public class VirtualCourseCatalogPortImpl implements VirtualCourseCatalogPort {
         return new VirtualLessonAdminSummary(
             lesson.getId().toString(),
             lesson.getTitle(),
+            lesson.getDescription(),
             lesson.getDurationMinutes(),
             lesson.isFree(),
             lesson.getOrder(),

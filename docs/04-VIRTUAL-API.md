@@ -29,6 +29,12 @@ Las lecturas de cursos para alumnos y visitantes usan exclusivamente
 `/api/v1/catalog/courses`; las rutas `/admin/virtual/courses` son de gestión de
 contenido para `ADMIN` o el `PROFESOR` propietario.
 
+`GET /api/v1/admin/virtual/courses/{courseId}` devuelve el curso con sus módulos y
+lecciones en cualquier estado, con lo necesario para precargar los formularios de
+edición: `shortDescription` y `professorId` del curso, `preview` de cada módulo y
+`description` de cada lección. Comprueba la propiedad del curso (`403
+COURSE_NOT_OWNED`) y por eso `professorId` sólo lo ve quien ya puede leer el detalle.
+
 `/stream` devuelve una URL firmada de Bunny con TTL limitado; no expone el
 origen del video. `GET /api/v1/virtual/lessons/{lessonId}` devuelve metadatos de una lección
 protegida antes de solicitar el stream. Todos los errores usan

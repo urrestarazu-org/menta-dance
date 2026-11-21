@@ -224,6 +224,9 @@ class VirtualCourseManagementIntegrationTest {
     void instructor_reads_the_detail_of_their_own_course() {
         UUID ownerId = issueUser(Role.INSTRUCTOR);
         UUID courseId = seedCourse(ownerId, CourseStatus.DRAFT);
+        UUID moduleId = UUID.randomUUID();
+        moduleRepository.save(new VirtualModuleJpaEntity(moduleId, courseId, "Módulo 1", true, 1));
+        seedCompleteLesson(moduleId, courseId);
 
         ResponseEntity<Map> response = http.exchange(
             "/api/v1/admin/virtual/courses/" + courseId, HttpMethod.GET,
@@ -231,7 +234,14 @@ class VirtualCourseManagementIntegrationTest {
         );
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody().get("status")).isEqualTo("DRAFT");
+        Map<?, ?> body = response.getBody();
+        assertThat(body.get("status")).isEqualTo("DRAFT");
+        assertThat(body.get("shortDescription")).isEqualTo("corta");
+        assertThat(body.get("professorId")).isEqualTo(ownerId.toString());
+        Map<?, ?> module = (Map<?, ?>) ((List<?>) body.get("modules")).get(0);
+        assertThat(module.get("preview")).isEqualTo(true);
+        Map<?, ?> lesson = (Map<?, ?>) ((List<?>) module.get("lessons")).get(0);
+        assertThat(lesson.get("description")).isEqualTo("d");
     }
 
     @Test

@@ -38,8 +38,8 @@ class GetVirtualCourseAdminDetailUseCaseImplTest {
 
     private static VirtualCourseAdminDetailView view(CourseId id) {
         return new VirtualCourseAdminDetailView(
-            id.toString(), "t", "d", "i", "tango", "BEGINNER", false, CourseStatus.DRAFT, List.of(),
-            new VirtualCourseStats(0, 0, 0)
+            id.toString(), "t", "s", "d", UUID.randomUUID().toString(), "i", "tango", "BEGINNER", false,
+            CourseStatus.DRAFT, List.of(), new VirtualCourseStats(0, 0, 0)
         );
     }
 
