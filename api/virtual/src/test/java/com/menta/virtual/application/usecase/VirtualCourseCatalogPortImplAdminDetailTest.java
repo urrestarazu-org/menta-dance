@@ -51,12 +51,14 @@ class VirtualCourseCatalogPortImplAdminDetailTest {
     private final VirtualCourseCatalogPortImpl port =
         new VirtualCourseCatalogPortImpl(courseRepository, moduleRepository, lessonRepository);
 
+    private static final UUID PROFESSOR_ID = UUID.fromString("00000000-0000-0000-0000-0000000000a1");
+
     private static VirtualCourse course(CourseId id, CourseStatus status) {
         // Aggregate counts are deliberately realistic (2 modules × 2 lessons,
         // 30 + 40 minutes) so the happy-path test can assert
         // stats.lessonCount is the AGGREGATE count (4), not a recomputed walk.
         return new VirtualCourse(
-            id, "Tango Básico", "Aprendé los pasos fundamentales", "Descripción larga", UUID.randomUUID(),
+            id, "Tango Básico", "Aprendé los pasos fundamentales", "Descripción larga", PROFESSOR_ID,
             "https://cdn/tango.jpg", CourseCategory.of("tango"), CourseLevel.BEGINNER, true,
             status, 2, 4, 70
         );
@@ -78,7 +80,7 @@ class VirtualCourseCatalogPortImplAdminDetailTest {
 
     private void stubAggregatesAndModules(CourseId courseId, ModuleId m1, ModuleId m2) {
         when(moduleRepository.findByCourseId(courseId)).thenReturn(List.of(
-            module(courseId, m1, "Introducción", 1),
+            new VirtualModule(m1, courseId, "Introducción", true, 1),
             module(courseId, m2, "Postura", 2)
         ));
         when(lessonRepository.findByModuleId(m1)).thenReturn(List.of(
@@ -143,7 +145,8 @@ class VirtualCourseCatalogPortImplAdminDetailTest {
         // reviewers see a regression.
         RecordComponent[] components = VirtualLessonAdminSummary.class.getRecordComponents();
         assertThat(components).extracting(RecordComponent::getName)
-            .containsExactlyInAnyOrder("lessonId", "title", "durationMinutes", "isFree", "order", "videoId");
+            .containsExactlyInAnyOrder("lessonId", "title", "description", "durationMinutes", "isFree", "order",
+                "videoId");
 
         // Behavior check: the port passes the source's videoId through,
         // even for free and for premium-alike lessons alike.
@@ -223,5 +226,24 @@ class VirtualCourseCatalogPortImplAdminDetailTest {
         assertThat(view.stats().moduleCount()).isEqualTo(2);
         assertThat(view.stats().lessonCount()).isEqualTo(4);
         assertThat(view.stats().totalDurationMinutes()).isEqualTo(70);
+    }
+
+    @Test
+    void find_by_id_for_admin_carries_the_fields_the_edit_forms_are_prefilled_with() {
+        CourseId courseId = CourseId.generate();
+        ModuleId m1 = ModuleId.generate();
+        ModuleId m2 = ModuleId.generate();
+
+        when(courseRepository.findByIdAnyStatus(courseId))
+            .thenReturn(Optional.of(course(courseId, CourseStatus.DRAFT)));
+        stubAggregatesAndModules(courseId, m1, m2);
+
+        VirtualCourseAdminDetailView view = port.findByIdForAdmin(courseId.toString()).orElseThrow();
+
+        assertThat(view.shortDescription()).isEqualTo("Aprendé los pasos fundamentales");
+        assertThat(view.professorId()).isEqualTo(PROFESSOR_ID.toString());
+        assertThat(view.modules()).extracting(VirtualModuleAdminDetail::preview).containsExactly(true, false);
+        assertThat(view.modules().get(0).lessons()).extracting(VirtualLessonAdminSummary::description)
+            .containsExactly("desc Historia", "desc Caminada");
     }
 }

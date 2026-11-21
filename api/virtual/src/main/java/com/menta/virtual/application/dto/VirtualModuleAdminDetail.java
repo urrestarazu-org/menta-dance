@@ -14,6 +14,7 @@ import java.util.List;
 public record VirtualModuleAdminDetail(
     String moduleId,
     String title,
+    boolean preview,
     int order,
     List<VirtualLessonAdminSummary> lessons
 ) {

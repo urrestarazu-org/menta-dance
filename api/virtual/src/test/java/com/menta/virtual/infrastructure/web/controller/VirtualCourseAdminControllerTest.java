@@ -192,11 +192,15 @@ class VirtualCourseAdminControllerTest {
         assertThat(response.getBody().modules()).hasSize(1);
     }
 
+    private static final String PROFESSOR_ID = "00000000-0000-0000-0000-0000000000a1";
+
     private static VirtualCourseAdminDetailView adminView(CourseStatus status, String videoId) {
         return new VirtualCourseAdminDetailView(
             UUID.randomUUID().toString(),
             "Tango Básico",
+            "Aprendé los pasos fundamentales",
             "Descripción larga",
+            PROFESSOR_ID,
             "https://cdn/tango.jpg",
             "tango",
             "BEGINNER",
@@ -205,10 +209,12 @@ class VirtualCourseAdminControllerTest {
             List.of(new VirtualModuleAdminDetail(
                 UUID.randomUUID().toString(),
                 "Introducción",
+                true,
                 1,
                 List.of(new VirtualLessonAdminSummary(
                     UUID.randomUUID().toString(),
                     "Historia",
+                    "Un repaso del origen del tango",
                     30,
                     true,
                     1,
@@ -231,6 +237,20 @@ class VirtualCourseAdminControllerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().status()).isEqualTo("DRAFT");
         assertThat(response.getBody().modules().get(0).lessons().get(0).videoId()).isEqualTo("vid-draft");
+    }
+
+    @Test
+    void get_maps_the_fields_the_edit_forms_are_prefilled_with() {
+        UUID ownerId = UUID.randomUUID();
+        String courseId = UUID.randomUUID().toString();
+        when(getDetailUseCase.get(courseId, ownerId, false)).thenReturn(adminView(CourseStatus.DRAFT, "vid-draft"));
+
+        VirtualCourseAdminDetailResponse body = controller.get(courseId, authOf(ownerId, "INSTRUCTOR")).getBody();
+
+        assertThat(body.shortDescription()).isEqualTo("Aprendé los pasos fundamentales");
+        assertThat(body.professorId()).isEqualTo(PROFESSOR_ID);
+        assertThat(body.modules().get(0).preview()).isTrue();
+        assertThat(body.modules().get(0).lessons().get(0).description()).isEqualTo("Un repaso del origen del tango");
     }
 
     @Test

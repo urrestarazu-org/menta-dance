@@ -40,8 +40,9 @@ info:
     Ni un módulo ni una lección tienen `professorId` propio: la autorización
     siempre se resuelve a través del curso padre. Sin token responde
     `401 AUTHENTICATION_REQUIRED`; con otro rol, `403 ACCESS_DENIED`.
-    `GET /api/v1/admin/virtual/courses/{courseId}` sólo exige el rol: no
-    comprueba la propiedad del curso.
+    `GET /api/v1/admin/virtual/courses/{courseId}` también comprueba la
+    propiedad del curso (`403 COURSE_NOT_OWNED`; un id inexistente responde
+    `404 COURSE_NOT_FOUND`).
 
     Las rutas de progreso del alumno aceptan cualquier rol autenticado y el
     usuario sale siempre del token. Las dos lecturas públicas de lecciones
@@ -1442,15 +1443,27 @@ components:
 
     VirtualCourseAdminDetailResponse:
       type: object
-      required: [courseId, title, description, thumbnailUrl, category, level, isPremium, status, modules, stats]
+      required: [courseId, title, shortDescription, description, professorId, thumbnailUrl, category, level,
+                 isPremium, status, modules, stats]
       properties:
         courseId:
           type: string
           format: uuid
         title:
           type: string
+        shortDescription:
+          type: string
+          description: Descripción corta del curso, la que se muestra en los listados.
+          example: Aprendé los pasos fundamentales del tango argentino.
         description:
           type: string
+        professorId:
+          type: string
+          format: uuid
+          description: >-
+            Id del profesor dueño del curso. Sólo lo ven el ADMIN y el INSTRUCTOR dueño, que son quienes pueden
+            leer este detalle.
+          example: 11111111-1111-4111-8111-111111111111
         thumbnailUrl:
           type: string
           description: Es el `imageUrl` del curso (en las respuestas de gestión se llama `imageUrl`).
@@ -1468,25 +1481,30 @@ components:
           type: array
           items:
             type: object
-            required: [moduleId, title, order, lessons]
+            required: [moduleId, title, preview, order, lessons]
             properties:
               moduleId:
                 type: string
                 format: uuid
               title:
                 type: string
+              preview:
+                type: boolean
+                description: Si es `true`, las lecciones del módulo se sirven sin suscripción.
               order:
                 type: integer
               lessons:
                 type: array
                 items:
                   type: object
-                  required: [lessonId, title, durationMinutes, isFree, order, videoId]
+                  required: [lessonId, title, description, durationMinutes, isFree, order, videoId]
                   properties:
                     lessonId:
                       type: string
                       format: uuid
                     title:
+                      type: string
+                    description:
                       type: string
                     durationMinutes:
                       type: integer
