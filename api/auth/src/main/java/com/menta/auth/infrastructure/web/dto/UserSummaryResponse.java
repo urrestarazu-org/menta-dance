@@ -1,10 +1,9 @@
 package com.menta.auth.infrastructure.web.dto;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
 import com.menta.auth.application.dto.UserSummary;
 import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.UserStatus;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /** A user as the admin endpoints show it. Never carries the password hash or the token version. */
 public record UserSummaryResponse(
@@ -15,7 +14,7 @@ public record UserSummaryResponse(
     Role role,
     UserStatus status,
     boolean demo,
-    @JsonFormat(shape = JsonFormat.Shape.STRING) LocalDateTime createdAt
+    Instant createdAt
 ) {
 
     /** Copies the summary as the HTTP representation. */

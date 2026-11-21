@@ -4,16 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.UserStatus;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class UserJpaEntityTest {
 
     private static final UUID ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
-    private static final LocalDateTime CREATED_AT = LocalDateTime.of(2026, 8, 16, 12, 0);
-    private static final LocalDateTime UPDATED_AT = LocalDateTime.of(2026, 8, 16, 13, 0);
+    private static final Instant CREATED_AT = Instant.parse("2026-08-16T12:00:00Z");
+    private static final Instant UPDATED_AT = Instant.parse("2026-08-16T13:00:00Z");
     private static final LocalDate BIRTH_DATE = LocalDate.of(1990, 5, 17);
 
     @Test
@@ -50,8 +51,8 @@ class UserJpaEntityTest {
         entity.setPasswordHash("new-hash");
         entity.setRole(Role.ADMIN);
         entity.setStatus(UserStatus.LOCKED);
-        entity.setCreatedAt(CREATED_AT.plusDays(1));
-        entity.setUpdatedAt(UPDATED_AT.plusDays(1));
+        entity.setCreatedAt(CREATED_AT.plus(Duration.ofDays(1)));
+        entity.setUpdatedAt(UPDATED_AT.plus(Duration.ofDays(1)));
         entity.setTokenVersion(2L);
         entity.setFirstName("Grace");
         entity.setLastName("Hopper");
@@ -63,8 +64,8 @@ class UserJpaEntityTest {
         assertThat(entity.getPasswordHash()).isEqualTo("new-hash");
         assertThat(entity.getRole()).isEqualTo(Role.ADMIN);
         assertThat(entity.getStatus()).isEqualTo(UserStatus.LOCKED);
-        assertThat(entity.getCreatedAt()).isEqualTo(CREATED_AT.plusDays(1));
-        assertThat(entity.getUpdatedAt()).isEqualTo(UPDATED_AT.plusDays(1));
+        assertThat(entity.getCreatedAt()).isEqualTo(CREATED_AT.plus(Duration.ofDays(1)));
+        assertThat(entity.getUpdatedAt()).isEqualTo(UPDATED_AT.plus(Duration.ofDays(1)));
         assertThat(entity.getTokenVersion()).isEqualTo(2L);
         assertThat(entity.getFirstName()).isEqualTo("Grace");
         assertThat(entity.getLastName()).isEqualTo("Hopper");

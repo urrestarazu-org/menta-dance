@@ -117,7 +117,7 @@ class ManagementCoursesIntegrationTest extends BaseIntegrationTest {
 
     private static String instructorItem(String id, String email, String first, String last) {
         return ("{\"id\":\"%s\",\"email\":\"%s\",\"firstName\":\"%s\",\"lastName\":\"%s\",\"role\":\"INSTRUCTOR\","
-                + "\"status\":\"ACTIVE\",\"demo\":false,\"createdAt\":\"2026-11-10T09:30:00\"}")
+                + "\"status\":\"ACTIVE\",\"demo\":false,\"createdAt\":\"2026-11-10T09:30:00Z\"}")
                 .formatted(id, email, first, last);
     }
 

@@ -14,8 +14,9 @@ import com.menta.bff.application.dto.UserRole;
 import com.menta.bff.application.dto.UserStatus;
 import com.menta.bff.application.dto.UserSummary;
 import com.menta.bff.application.port.out.AdminUsersApiClient;
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -33,6 +34,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class ListUsersUseCaseImplTest {
 
     private static final String TOKEN = "access-token-abc";
+    private static final ZoneId BUENOS_AIRES = ZoneId.of("America/Argentina/Buenos_Aires");
 
     @Mock
     private AdminUsersApiClient adminUsersApiClient;
@@ -41,12 +43,12 @@ class ListUsersUseCaseImplTest {
 
     @BeforeEach
     void setUp() {
-        useCase = new ListUsersUseCaseImpl(adminUsersApiClient);
+        useCase = new ListUsersUseCaseImpl(adminUsersApiClient, BUENOS_AIRES);
     }
 
     private static UserSummary user(String email, String first, String last) {
         return new UserSummary("id-" + email, email, first, last, UserRole.INSTRUCTOR, UserStatus.ACTIVE,
-                LocalDateTime.of(2026, 10, 1, 9, 30));
+                Instant.parse("2026-10-01T09:30:00Z"));
     }
 
     private static UserPage page(int index, int totalPages, long total, UserSummary... items) {
@@ -57,6 +59,21 @@ class ListUsersUseCaseImplTest {
         ArgumentCaptor<UserListQuery> captor = ArgumentCaptor.forClass(UserListQuery.class);
         verify(adminUsersApiClient).listUsers(eq(TOKEN), captor.capture());
         return captor.getValue();
+    }
+
+    @Test
+    @DisplayName("shows the sign-up day in the academy zone, not the UTC day of the instant")
+    void showsTheSignUpDayInTheAcademyZone() {
+        // 2030-03-16T01:30Z is still the evening of the 15th in Buenos Aires (UTC-3).
+        UserSummary lateNight = new UserSummary("id-late", "late@example.com", "Late", "Night", UserRole.STUDENT,
+                UserStatus.ACTIVE, Instant.parse("2030-03-16T01:30:00Z"));
+        when(adminUsersApiClient.listUsers(TOKEN, new UserListQuery(null, null, 0, 20)))
+                .thenReturn(page(0, 1, 1, lateNight));
+
+        UsersListView view = useCase.execute(TOKEN, null, null, null);
+
+        assertThat(view.rows()).extracting(UserRow::createdDate).containsExactly(LocalDate.of(2030, 3, 15));
+        assertThat(view.rows()).extracting(UserRow::createdLabel).containsExactly("15 de marzo de 2030");
     }
 
     @Test

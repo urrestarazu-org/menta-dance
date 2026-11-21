@@ -34,7 +34,7 @@ import java.lang.reflect.RecordComponent;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -450,10 +450,17 @@ class AuthOpenApiContractTest {
     void the_user_responses_match_what_jackson_writes_including_the_null_names() throws IOException {
         UserSummaryResponse summary = new UserSummaryResponse(
             UUID.randomUUID().toString(), "a@example.com", null, null, Role.ADMIN, UserStatus.ACTIVE, false,
-            LocalDateTime.of(2026, 11, 10, 9, 30));
+            Instant.parse("2026-11-10T09:30:00Z"));
         JsonNode json = wire(summary, "UserSummary", "firstName", "lastName");
-        // A whole minute still carries its seconds: the schema's pattern is what clients can rely on.
-        assertThat(json.get("createdAt").asText()).matches((String) at("UserSummary/createdAt").get("pattern"));
+        // ADR-0048: a moment is an RFC 3339 date-time in UTC: it carries the "Z" and the seconds of a whole minute.
+        String createdAt = json.get("createdAt").asText();
+        assertThat(createdAt).isEqualTo("2026-11-10T09:30:00Z");
+        assertThat(at("UserSummary/createdAt").get("format")).isEqualTo("date-time");
+        assertThat((String) at("UserSummary/createdAt").get("description")).contains("UTC");
+        String example = (String) at("UserSummary/createdAt").get("example");
+        assertThat(example).endsWith("Z");
+        assertThat(Instant.parse(example)).hasToString(example);
+        assertThat(Instant.parse(createdAt)).hasToString(createdAt);
 
         wire(new CurrentUserResponse(UUID.randomUUID(), null, null, Role.STUDENT),
             "CurrentUser", "firstName", "lastName");

@@ -177,7 +177,8 @@ class AuthRevocationIntegrationTest extends AbstractAuthMySqlIntegrationTest {
     @Test
     void refresh_reuse_detection_invalidates_every_access_token_already_issued() {
         String email = "revoked-" + System.nanoTime() + "@example.com";
-        userRepository.save(User.create(Email.of(email), passwordEncoder.encode(RAW_PASSWORD), Role.STUDENT));
+        userRepository.save(User.create(Email.of(email), passwordEncoder.encode(RAW_PASSWORD), Role.STUDENT,
+            java.time.Instant.now()));
 
         ResponseEntity<Map> loginResponse = http.exchange(
             "/api/v1/auth/login", HttpMethod.POST,
@@ -224,8 +225,10 @@ class AuthRevocationIntegrationTest extends AbstractAuthMySqlIntegrationTest {
     void revoking_one_users_family_does_not_touch_another_users_session() {
         String victimEmail = "victim-" + System.nanoTime() + "@example.com";
         String bystanderEmail = "bystander-" + System.nanoTime() + "@example.com";
-        userRepository.save(User.create(Email.of(victimEmail), passwordEncoder.encode(RAW_PASSWORD), Role.STUDENT));
-        userRepository.save(User.create(Email.of(bystanderEmail), passwordEncoder.encode(RAW_PASSWORD), Role.STUDENT));
+        userRepository.save(User.create(Email.of(victimEmail), passwordEncoder.encode(RAW_PASSWORD), Role.STUDENT,
+            java.time.Instant.now()));
+        userRepository.save(User.create(Email.of(bystanderEmail), passwordEncoder.encode(RAW_PASSWORD), Role.STUDENT,
+            java.time.Instant.now()));
 
         ResponseEntity<Map> victimLogin = http.exchange(
             "/api/v1/auth/login", HttpMethod.POST,
@@ -257,7 +260,8 @@ class AuthRevocationIntegrationTest extends AbstractAuthMySqlIntegrationTest {
     @Test
     void a_revoked_access_token_comes_back_as_a_proper_rfc_9457_401() {
         String email = "shape-" + System.nanoTime() + "@example.com";
-        userRepository.save(User.create(Email.of(email), passwordEncoder.encode(RAW_PASSWORD), Role.STUDENT));
+        userRepository.save(User.create(Email.of(email), passwordEncoder.encode(RAW_PASSWORD), Role.STUDENT,
+            java.time.Instant.now()));
 
         ResponseEntity<Map> loginResponse = http.exchange(
             "/api/v1/auth/login", HttpMethod.POST,

@@ -14,7 +14,7 @@ import com.menta.auth.application.port.out.UserAdminRepository;
 import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.UserId;
 import com.menta.auth.domain.model.UserStatus;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -31,7 +31,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ResolveUserDisplayNamesUseCaseImplTest {
 
-    private static final LocalDateTime NOW = LocalDateTime.of(2026, 11, 1, 10, 0);
+    private static final Instant NOW = Instant.parse("2026-11-01T10:00:00Z");
 
     @Mock private UserAdminRepository userAdminRepository;
     @Captor private ArgumentCaptor<Collection<UserId>> requestedIds;

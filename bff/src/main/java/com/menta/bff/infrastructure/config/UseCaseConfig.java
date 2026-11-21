@@ -293,8 +293,9 @@ public class UseCaseConfig {
     }
 
     @Bean
-    public ListUsersUseCase listUsersUseCase(AdminUsersApiClient adminUsersApiClient) {
-        return new ListUsersUseCaseImpl(adminUsersApiClient);
+    public ListUsersUseCase listUsersUseCase(
+            AdminUsersApiClient adminUsersApiClient, ClassesProperties classesProperties) {
+        return new ListUsersUseCaseImpl(adminUsersApiClient, classesProperties.getDisplayZone());
     }
 
     @Bean

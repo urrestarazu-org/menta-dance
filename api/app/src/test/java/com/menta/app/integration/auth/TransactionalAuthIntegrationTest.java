@@ -123,7 +123,7 @@ class TransactionalAuthIntegrationTest extends AbstractAuthMySqlIntegrationTest 
 
         // Seed test user
         String passwordHash = passwordEncoder.encode(PASSWORD);
-        testUser = User.create(Email.of(EMAIL), passwordHash, Role.STUDENT);
+        testUser = User.create(Email.of(EMAIL), passwordHash, Role.STUDENT, java.time.Instant.now());
         userRepository.save(testUser);
     }
 

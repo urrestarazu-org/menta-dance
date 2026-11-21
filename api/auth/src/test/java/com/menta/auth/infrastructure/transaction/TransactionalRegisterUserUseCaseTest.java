@@ -10,7 +10,7 @@ import com.menta.auth.application.port.in.RegisterUserUseCase;
 import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.UserStatus;
 import java.lang.reflect.Method;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -29,7 +29,7 @@ class TransactionalRegisterUserUseCaseTest {
         );
         UserResult expected = new UserResult(
             "user-id", "student@example.com", Role.STUDENT,
-            UserStatus.PENDING_ACTIVATION, LocalDateTime.now()
+            UserStatus.PENDING_ACTIVATION, Instant.now()
         );
         when(delegate.register(command)).thenReturn(expected);
 

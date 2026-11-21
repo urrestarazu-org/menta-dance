@@ -36,7 +36,8 @@ docs {
   Contrato de éxito (200):
     { items: [{ id, email, firstName, lastName, role, status, demo, createdAt }],
       page, size, totalElements, totalPages }
-  La respuesta nunca incluye passwordHash ni tokenVersion.
+  La respuesta nunca incluye passwordHash ni tokenVersion. createdAt es un
+  instante en UTC, ISO-8601 con Z (ADR-0048).
 
   Contrato de error:
     400 INVALID_REQUEST → size > 50, q > 100 caracteres, role inválido, page < 0

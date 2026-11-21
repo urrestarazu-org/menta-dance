@@ -47,7 +47,6 @@ import com.menta.shared.domain.vo.Email;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -131,7 +130,8 @@ class PaymentAdminResolutionIntegrationTest extends AbstractBillingMySqlIntegrat
 
     private UUID seedStudent() {
         User user = User.create(
-            Email.of("student-" + UUID.randomUUID() + "@example.com"), "irrelevant-hash", Role.STUDENT
+            Email.of("student-" + UUID.randomUUID() + "@example.com"), "irrelevant-hash", Role.STUDENT,
+            java.time.Instant.now()
         );
         userRepository.save(user);
         return user.getId().getValue();
@@ -139,7 +139,8 @@ class PaymentAdminResolutionIntegrationTest extends AbstractBillingMySqlIntegrat
 
     private UUID seedAdmin() {
         User user = User.create(
-            Email.of("admin-" + UUID.randomUUID() + "@example.com"), "irrelevant-hash", Role.ADMIN
+            Email.of("admin-" + UUID.randomUUID() + "@example.com"), "irrelevant-hash", Role.ADMIN,
+            java.time.Instant.now()
         );
         userRepository.save(user);
         return user.getId().getValue();
@@ -178,7 +179,7 @@ class PaymentAdminResolutionIntegrationTest extends AbstractBillingMySqlIntegrat
     private static User principal(UUID userId, Role role) {
         return new User(
             UserId.of(userId), Email.of("token-" + UUID.randomUUID() + "@example.com"), "hash", role,
-            UserStatus.ACTIVE, LocalDateTime.now(), LocalDateTime.now()
+            UserStatus.ACTIVE, Instant.now(), Instant.now()
         );
     }
 

@@ -228,7 +228,8 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
 
     private UUID seedStudent() {
         User user = User.create(
-            Email.of("student-" + UUID.randomUUID() + "@example.com"), "irrelevant-hash", Role.STUDENT
+            Email.of("student-" + UUID.randomUUID() + "@example.com"), "irrelevant-hash", Role.STUDENT,
+            java.time.Instant.now()
         );
         userRepository.save(user);
         return user.getId().getValue();
@@ -237,7 +238,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
     private HttpHeaders headersFor(UUID userId) {
         User user = new User(
             UserId.of(userId), Email.of("token@example.com"), "hash", Role.STUDENT, UserStatus.ACTIVE,
-            java.time.LocalDateTime.now(), java.time.LocalDateTime.now()
+            java.time.Instant.now(), java.time.Instant.now()
         );
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -248,7 +249,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
     private HttpHeaders headersFor(UUID userId, Role role) {
         User user = new User(
             UserId.of(userId), Email.of("token-" + UUID.randomUUID() + "@example.com"), "hash", role,
-            UserStatus.ACTIVE, java.time.LocalDateTime.now(), java.time.LocalDateTime.now()
+            UserStatus.ACTIVE, java.time.Instant.now(), java.time.Instant.now()
         );
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -329,7 +330,8 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
 
     private UUID seedAdmin() {
         User user = User.create(
-            Email.of("admin-" + UUID.randomUUID() + "@example.com"), "irrelevant-hash", Role.ADMIN
+            Email.of("admin-" + UUID.randomUUID() + "@example.com"), "irrelevant-hash", Role.ADMIN,
+            java.time.Instant.now()
         );
         userRepository.save(user);
         return user.getId().getValue();
@@ -399,7 +401,7 @@ class PhysicalPurchaseIntegrationTest extends AbstractBillingMySqlIntegrationTes
 
     private SeededStudent seedStudentWithKnownEmail() {
         String email = "purchase-exception-" + UUID.randomUUID() + "@example.com";
-        User user = User.create(Email.of(email), "irrelevant-hash", Role.STUDENT);
+        User user = User.create(Email.of(email), "irrelevant-hash", Role.STUDENT, java.time.Instant.now());
         userRepository.save(user);
         return new SeededStudent(user.getId().getValue(), email);
     }

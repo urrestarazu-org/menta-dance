@@ -138,7 +138,8 @@ class PaymentProofIntegrationTest {
 
     private UUID seedStudent() {
         User user = User.create(
-            Email.of("student-" + UUID.randomUUID() + "@example.com"), "irrelevant-hash", Role.STUDENT
+            Email.of("student-" + UUID.randomUUID() + "@example.com"), "irrelevant-hash", Role.STUDENT,
+            java.time.Instant.now()
         );
         userRepository.save(user);
         return user.getId().getValue();

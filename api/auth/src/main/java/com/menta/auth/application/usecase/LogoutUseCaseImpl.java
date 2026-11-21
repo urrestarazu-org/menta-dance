@@ -4,6 +4,7 @@ import com.menta.auth.application.contract.AuthOutboxEventTypes;
 import com.menta.auth.application.dto.LogoutCommand;
 import com.menta.auth.application.port.in.LogoutUseCase;
 import com.menta.auth.application.port.out.AuthDegradedGuard;
+import com.menta.auth.application.port.out.Clock;
 import com.menta.auth.application.port.out.OutboxAppender;
 import com.menta.auth.application.port.out.RefreshTokenRepository;
 import com.menta.auth.application.port.out.TokenHasher;
@@ -14,6 +15,7 @@ import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.repository.UserRepository;
 import java.util.Optional;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 
 /**
  * Implementation of the logout use case.
@@ -26,6 +28,7 @@ import java.util.UUID;
  *      event; throw RefreshTokenCompromisedException.
  *   5. ACTIVE → mark REVOKED + publish UserLoggedOut (atomic in same tx).
  */
+@RequiredArgsConstructor
 public class LogoutUseCaseImpl implements LogoutUseCase {
 
     private final UserRepository userRepository;
@@ -33,20 +36,7 @@ public class LogoutUseCaseImpl implements LogoutUseCase {
     private final TokenHasher tokenHasher;
     private final OutboxAppender outboxAppender;
     private final AuthDegradedGuard authDegradedGuard;
-
-    public LogoutUseCaseImpl(
-        UserRepository userRepository,
-        RefreshTokenRepository refreshTokenRepository,
-        TokenHasher tokenHasher,
-        OutboxAppender outboxAppender,
-        AuthDegradedGuard authDegradedGuard
-    ) {
-        this.userRepository = userRepository;
-        this.refreshTokenRepository = refreshTokenRepository;
-        this.tokenHasher = tokenHasher;
-        this.outboxAppender = outboxAppender;
-        this.authDegradedGuard = authDegradedGuard;
-    }
+    private final Clock clock;
 
     @Override
     public void execute(LogoutCommand command) {
@@ -74,7 +64,7 @@ public class LogoutUseCaseImpl implements LogoutUseCase {
         if (presented.isCompromised()) {
             Optional<User> maybeUser = userRepository.findById(presented.getUserId());
             User user = maybeUser.orElseThrow(RefreshTokenCompromisedException::new);
-            user.bumpTokenVersion();
+            user.bumpTokenVersion(clock.now());
             userRepository.save(user);
             refreshTokenRepository.revokeFamily(presented.getFamilyId());
             outboxAppender.append(
@@ -105,7 +95,7 @@ public class LogoutUseCaseImpl implements LogoutUseCase {
         // token's jti, so there is nothing to blacklist per-token.
         Optional<User> maybeLoggedOutUser = userRepository.findById(presented.getUserId());
         User loggedOutUser = maybeLoggedOutUser.orElseThrow(RefreshTokenCompromisedException::new);
-        loggedOutUser.bumpTokenVersion();
+        loggedOutUser.bumpTokenVersion(clock.now());
         userRepository.save(loggedOutUser);
 
         outboxAppender.append(

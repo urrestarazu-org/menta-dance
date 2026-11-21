@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 import com.menta.auth.application.contract.AuthOutboxEventTypes;
 import com.menta.auth.application.dto.LogoutCommand;
 import com.menta.auth.application.port.out.AuthDegradedGuard;
+import com.menta.auth.application.port.out.Clock;
 import com.menta.auth.application.port.out.OutboxAppender;
 import com.menta.auth.application.port.out.RefreshTokenRepository;
 import com.menta.auth.application.port.out.TokenHasher;
@@ -28,7 +29,6 @@ import com.menta.auth.domain.repository.UserRepository;
 import com.menta.shared.domain.vo.Email;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -57,12 +57,15 @@ class LogoutUseCaseImplTest {
     private static final UUID FAMILY_ID = UUID.fromString("99999999-9999-9999-9999-999999999999");
     private static final long TOKEN_VERSION = 1L;
     private static final Email EMAIL = Email.of("alice@example.com");
+    private static final Instant SEEDED_AT = Instant.parse("2030-01-01T00:00:00Z");
+    private static final Instant FIXED_NOW = Instant.parse("2030-03-15T12:00:00Z");
 
     @Mock private UserRepository userRepository;
     @Mock private RefreshTokenRepository refreshTokenRepository;
     @Mock private TokenHasher tokenHasher;
     @Mock private OutboxAppender outboxAppender;
     @Mock private AuthDegradedGuard authDegradedGuard;
+    @Mock private Clock clock;
 
     private LogoutUseCaseImpl useCase;
 
@@ -73,7 +76,8 @@ class LogoutUseCaseImplTest {
             refreshTokenRepository,
             tokenHasher,
             outboxAppender,
-            authDegradedGuard
+            authDegradedGuard,
+            clock
         );
     }
 
@@ -95,6 +99,7 @@ class LogoutUseCaseImplTest {
             when(refreshTokenRepository.findByHash(anyString())).thenReturn(Optional.of(presented));
             when(userRepository.findById(any())).thenReturn(Optional.of(user));
             when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            when(clock.now()).thenReturn(FIXED_NOW);
 
             String raw = UUID.randomUUID().toString();
             useCase.execute(new LogoutCommand(raw));
@@ -114,6 +119,7 @@ class LogoutUseCaseImplTest {
             // available: LogoutCommand never carries the access token's jti,
             // so there is nothing to blacklist per-token.
             assertThat(user.getTokenVersion()).isGreaterThan(TOKEN_VERSION);
+            assertThat(user.getUpdatedAt()).isEqualTo(FIXED_NOW);
             verify(userRepository).save(user);
 
             // The aggregateId is the REFRESH token id, not a jti — no access
@@ -166,6 +172,7 @@ class LogoutUseCaseImplTest {
             when(refreshTokenRepository.findByHash(anyString())).thenReturn(Optional.of(presented));
             when(userRepository.findById(any())).thenReturn(Optional.of(user));
             when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            when(clock.now()).thenReturn(FIXED_NOW);
 
             String raw = UUID.randomUUID().toString();
             assertThatThrownBy(() -> useCase.execute(new LogoutCommand(raw)))
@@ -173,6 +180,7 @@ class LogoutUseCaseImplTest {
 
             // Spec: presented-as-USED on any request MUST revoke family + bump token_version.
             assertThat(user.getTokenVersion()).isGreaterThan(TOKEN_VERSION);
+            assertThat(user.getUpdatedAt()).isEqualTo(FIXED_NOW);
             verify(refreshTokenRepository).revokeFamily(FAMILY_ID);
             verify(outboxAppender).append(
                 eq(AuthOutboxEventTypes.REFRESH_REVOKED),
@@ -221,11 +229,11 @@ class LogoutUseCaseImplTest {
             "bcrypt$2a$10$hash",
             role,
             UserStatus.ACTIVE,
-            LocalDateTime.now(),
-            LocalDateTime.now()
+            SEEDED_AT,
+            SEEDED_AT
         );
         for (long i = 1; i < tokenVersion; i++) {
-            user.bumpTokenVersion();
+            user.bumpTokenVersion(SEEDED_AT);
         }
         return user;
     }

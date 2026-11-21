@@ -37,7 +37,7 @@ import com.menta.auth.domain.model.UserStatus;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.shared.domain.vo.Email;
 import java.time.Duration;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -658,8 +658,8 @@ class LoginUseCaseImplTest {
             passwordHash,
             role,
             status,
-            LocalDateTime.now(),
-            LocalDateTime.now()
+            Instant.now(),
+            Instant.now()
         );
     }
 }

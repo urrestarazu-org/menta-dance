@@ -16,7 +16,6 @@ import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.Optional;
 import java.util.UUID;
@@ -63,11 +62,11 @@ class JwtServiceTest {
             "$2a$10$hashplaceholder",
             role,
             UserStatus.ACTIVE,
-            LocalDateTime.now(),
-            LocalDateTime.now()
+            Instant.now(),
+            Instant.now()
         );
         for (long i = 1; i < tokenVersion; i++) {
-            base.bumpTokenVersion();
+            base.bumpTokenVersion(Instant.now());
         }
         return base;
     }

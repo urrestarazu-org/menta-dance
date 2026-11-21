@@ -1,5 +1,6 @@
 package com.menta.auth.infrastructure.e2e;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -7,11 +8,15 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.menta.auth.application.port.out.Clock;
 import com.menta.auth.application.port.out.PasswordEncoderPort;
+import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.shared.domain.vo.Email;
+import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.core.env.Environment;
 
 class E2eCatalogContentAuthFixtureTest {
@@ -25,9 +30,16 @@ class E2eCatalogContentAuthFixtureTest {
         when(users.findByEmail(Email.of(E2eCatalogContentAuthFixture.ADMIN_EMAIL))).thenReturn(Optional.empty());
         when(passwords.encode(E2eCatalogContentAuthFixture.ADMIN_PASSWORD)).thenReturn("hash");
 
-        new E2eCatalogContentAuthFixture(environment, users, passwords).run(mock());
+        Clock clock = mock(Clock.class);
+        Instant now = Instant.parse("2030-03-15T12:00:00Z");
+        when(clock.now()).thenReturn(now);
 
-        verify(users).save(any());
+        new E2eCatalogContentAuthFixture(environment, users, passwords, clock).run(mock());
+
+        ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+        verify(users).save(saved.capture());
+        assertThat(saved.getValue().getCreatedAt()).isEqualTo(now);
+        assertThat(saved.getValue().getUpdatedAt()).isEqualTo(now);
     }
 
     @Test
@@ -38,7 +50,7 @@ class E2eCatalogContentAuthFixtureTest {
         when(environment.getActiveProfiles()).thenReturn(new String[] {"e2e-catalog-content"});
         when(users.findByEmail(Email.of(E2eCatalogContentAuthFixture.ADMIN_EMAIL))).thenReturn(Optional.of(mock()));
 
-        new E2eCatalogContentAuthFixture(environment, users, passwords).run(mock());
+        new E2eCatalogContentAuthFixture(environment, users, passwords, mock(Clock.class)).run(mock());
 
         verify(users, never()).save(any());
         verify(passwords, never()).encode(any());
@@ -51,7 +63,8 @@ class E2eCatalogContentAuthFixtureTest {
         when(environment.getActiveProfiles()).thenReturn(new String[] {"e2e-catalog-content", "production"});
 
         E2eCatalogContentAuthFixture fixture =
-            new E2eCatalogContentAuthFixture(environment, users, mock(PasswordEncoderPort.class));
+            new E2eCatalogContentAuthFixture(
+                environment, users, mock(PasswordEncoderPort.class), mock(Clock.class));
 
         assertThatThrownBy(() -> fixture.run(mock()))
             .isInstanceOf(IllegalStateException.class)

@@ -43,9 +43,9 @@ public class CreateUserUseCaseImpl implements CreateUserUseCase {
             throw new EmailAlreadyRegisteredException();
         }
 
-        User saved = userRepository.save(User.invite(email, passwordEncoder.encodeUnusable(), role, profile));
-
         Instant now = clock.now();
+        User saved = userRepository.save(User.invite(email, passwordEncoder.encodeUnusable(), role, profile, now));
+
         activationTokenIssuer.issueFor(saved, now);
         userAuditRepository.append(
             saved.getId(), command.actorId(), UserAuditRepository.USER_CREATED, null, role.name(), now

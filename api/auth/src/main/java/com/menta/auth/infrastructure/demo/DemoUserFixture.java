@@ -1,5 +1,6 @@
 package com.menta.auth.infrastructure.demo;
 
+import com.menta.auth.application.port.out.Clock;
 import com.menta.auth.application.port.out.PasswordEncoderPort;
 import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.User;
@@ -10,7 +11,7 @@ import com.menta.auth.domain.repository.UserRepository;
 import com.menta.shared.demo.DemoIds;
 import com.menta.shared.demo.DemoSeedOrder;
 import com.menta.shared.domain.vo.Email;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -63,6 +64,7 @@ public final class DemoUserFixture implements ApplicationRunner, Ordered {
     private final UserRepository userRepository;
     private final PasswordEncoderPort passwordEncoder;
     private final Environment environment;
+    private final Clock clock;
 
     @Override
     public void run(ApplicationArguments arguments) {
@@ -86,7 +88,7 @@ public final class DemoUserFixture implements ApplicationRunner, Ordered {
             return;
         }
         String password = environment.getRequiredProperty(demoUser.passwordProperty());
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = clock.now();
         userRepository.save(User.rehydrate(
             UserId.of(demoUser.id()),
             email,
@@ -115,7 +117,7 @@ public final class DemoUserFixture implements ApplicationRunner, Ordered {
             user.getRole(),
             user.getStatus(),
             user.getCreatedAt(),
-            LocalDateTime.now(),
+            clock.now(),
             user.getTokenVersion(),
             profile,
             user.isDemo(),

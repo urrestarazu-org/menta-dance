@@ -10,7 +10,7 @@ import com.menta.auth.application.port.in.CreateUserUseCase;
 import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.UserStatus;
 import java.lang.reflect.Method;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,7 +28,7 @@ class TransactionalCreateUserUseCaseTest {
         CreateUserCommand command = new CreateUserCommand(UUID.randomUUID(), "a@example.com", "Ada", "L", Role.ADMIN);
         UserSummary expected = new UserSummary(
             "id", "a@example.com", "Ada", "L", Role.ADMIN, UserStatus.PENDING_ACTIVATION, false,
-            LocalDateTime.now()
+            Instant.now()
         );
         when(delegate.create(command)).thenReturn(expected);
 

@@ -21,7 +21,7 @@ import com.menta.bff.application.dto.UserSummary;
 import com.menta.bff.application.port.out.AdminUsersApiClient;
 import com.menta.bff.infrastructure.config.AuthProperties;
 import java.time.Duration;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -43,7 +43,7 @@ class AdminUsersApiAdapterChangeRoleTest {
             """
             {"id": "5b6f7c8e-1d2a-4e3b-9c4d-0a1b2c3d4e5f", "email": "ada@example.com", "firstName": "Ada",
              "lastName": "Lovelace", "role": "INSTRUCTOR", "status": "ACTIVE", "demo": false,
-             "createdAt": "2026-11-10T09:30:00"}
+             "createdAt": "2026-11-10T09:30:00Z"}
             """;
 
     private AdminUsersApiAdapter adapter;
@@ -83,7 +83,7 @@ class AdminUsersApiAdapterChangeRoleTest {
         UserSummary updated = adapter.changeRole(TOKEN, USER_ID, UserRole.INSTRUCTOR);
 
         assertThat(updated).isEqualTo(new UserSummary(USER_ID, "ada@example.com", "Ada", "Lovelace",
-                UserRole.INSTRUCTOR, UserStatus.ACTIVE, LocalDateTime.parse("2026-11-10T09:30:00")));
+                UserRole.INSTRUCTOR, UserStatus.ACTIVE, Instant.parse("2026-11-10T09:30:00Z")));
         verify(patchRequestedFor(urlEqualTo(ROLE_PATH))
                 .withHeader("Authorization", equalTo("Bearer " + TOKEN))
                 .withHeader("Content-Type", equalTo("application/json"))
@@ -170,7 +170,7 @@ class AdminUsersApiAdapterChangeRoleTest {
         "",
         "{\"id\": \"x\", \"email\": \"ada@example.com\"}",
         "{\"id\": \"x\", \"email\": \"a@example.com\", \"role\": \"WIZARD\", \"status\": \"ACTIVE\","
-                + " \"createdAt\": \"2026-11-10T09:30:00\"}"})
+                + " \"createdAt\": \"2026-11-10T09:30:00Z\"}"})
     @DisplayName("a 200 whose body is not a complete account is unavailable: repeating the change is harmless")
     void unusableBodyIsUnavailable(String body) {
         stubReply(200, "application/json", body);

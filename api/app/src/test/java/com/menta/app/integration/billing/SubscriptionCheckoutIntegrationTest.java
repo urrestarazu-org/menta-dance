@@ -175,7 +175,8 @@ class SubscriptionCheckoutIntegrationTest extends AbstractBillingMySqlIntegratio
 
     private UUID seedStudent() {
         User user = User.create(
-            Email.of("student-" + UUID.randomUUID() + "@example.com"), "irrelevant-hash", Role.STUDENT
+            Email.of("student-" + UUID.randomUUID() + "@example.com"), "irrelevant-hash", Role.STUDENT,
+            java.time.Instant.now()
         );
         userRepository.save(user);
         return user.getId().getValue();
@@ -184,7 +185,7 @@ class SubscriptionCheckoutIntegrationTest extends AbstractBillingMySqlIntegratio
     private HttpHeaders headersFor(UUID userId) {
         User user = new User(
             UserId.of(userId), Email.of("token@example.com"), "hash", Role.STUDENT, UserStatus.ACTIVE,
-            java.time.LocalDateTime.now(), java.time.LocalDateTime.now()
+            java.time.Instant.now(), java.time.Instant.now()
         );
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);

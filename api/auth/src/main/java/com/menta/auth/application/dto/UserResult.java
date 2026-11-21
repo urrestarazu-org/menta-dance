@@ -2,7 +2,7 @@ package com.menta.auth.application.dto;
 
 import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.UserStatus;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * Result DTO representing a user.
@@ -13,6 +13,6 @@ public record UserResult(
     String email,
     Role role,
     UserStatus status,
-    LocalDateTime createdAt
+    Instant createdAt
 ) {
 }

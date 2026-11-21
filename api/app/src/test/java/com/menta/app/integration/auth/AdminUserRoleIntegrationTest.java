@@ -18,7 +18,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -200,7 +200,7 @@ class AdminUserRoleIntegrationTest extends AbstractAdminUserIntegrationTest {
         User activeAdmin = newUser(Role.ADMIN);
         User inactiveAdmin = userRepository.save(User.rehydrate(
             UserId.generate(), Email.of("inactive-" + System.nanoTime() + "@example.com"),
-            "hash", Role.ADMIN, UserStatus.INACTIVE, LocalDateTime.now(), LocalDateTime.now(), 1L
+            "hash", Role.ADMIN, UserStatus.INACTIVE, Instant.now(), Instant.now(), 1L
         ));
 
         HttpResponse<String> response = patchRole(

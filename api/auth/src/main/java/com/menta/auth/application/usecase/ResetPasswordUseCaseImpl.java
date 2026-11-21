@@ -114,7 +114,7 @@ public class ResetPasswordUseCaseImpl implements ResetPasswordUseCase {
         // resetPassword() bumps tokenVersion in the same call — password
         // change and session invalidation are one business event, not two
         // calls a caller might forget to pair.
-        user.resetPassword(newPasswordHash);
+        user.resetPassword(newPasswordHash, now);
         userRepository.save(user);
 
         // #88 follow-up: resetPassword() bumps tokenVersion in memory, but

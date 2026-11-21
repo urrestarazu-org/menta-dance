@@ -9,16 +9,16 @@ import com.menta.auth.domain.model.UserProfile;
 import com.menta.auth.domain.model.UserStatus;
 import com.menta.auth.infrastructure.persistence.entity.UserJpaEntity;
 import com.menta.shared.domain.vo.Email;
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class UserMapperTest {
 
     private static final UUID USER_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
-    private static final LocalDateTime CREATED_AT = LocalDateTime.of(2026, 8, 3, 10, 0);
-    private static final LocalDateTime UPDATED_AT = LocalDateTime.of(2026, 8, 3, 11, 0);
+    private static final Instant CREATED_AT = Instant.parse("2026-08-03T10:00:00Z");
+    private static final Instant UPDATED_AT = Instant.parse("2026-08-03T11:00:00Z");
 
     @Test
     void reloads_persisted_token_version_for_stale_refresh_detection() {

@@ -14,6 +14,8 @@ import com.menta.auth.infrastructure.persistence.entity.UserAuditJpaEntity;
 import com.menta.auth.infrastructure.persistence.repository.ActivationTokenJpaRepository;
 import com.menta.auth.infrastructure.persistence.repository.UserAuditJpaRepository;
 import com.menta.shared.domain.vo.Email;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -101,6 +103,24 @@ class AdminUserCreateIntegrationTest extends AbstractAdminUserIntegrationTest {
     private List<OutboxRowJpaEntity> activationEvents() {
         return outboxRowJpaRepository.findAll().stream()
             .filter(row -> "auth.AccountActivationRequested".equals(row.getEventType())).toList();
+    }
+
+    @Test
+    void reports_the_creation_instant_in_utc_with_z_and_stores_the_same_instant_whatever_the_jvm_zone() {
+        final String adminToken = adminAccessToken();
+        final Instant before = Instant.now();
+
+        final ResponseEntity<Map> response = createUser(adminToken, staffBody(STAFF_EMAIL, Role.RECEPTIONIST));
+
+        final Instant after = Instant.now();
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        final String createdAt = (String) response.getBody().get("createdAt");
+        assertThat(createdAt).endsWith("Z");
+        assertThat(Instant.parse(createdAt)).isBetween(before, after);
+        // The column is a DATETIME read back through hibernate.jdbc.time_zone=UTC: a shifted value would
+        // differ by the JVM's offset, not by the sub-second precision the column drops.
+        assertThat(Duration.between(stored(STAFF_EMAIL).getCreatedAt(), Instant.parse(createdAt)).abs())
+            .isLessThan(Duration.ofSeconds(1));
     }
 
     @Test

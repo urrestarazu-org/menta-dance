@@ -22,7 +22,6 @@ import com.menta.auth.domain.repository.UserRepository;
 import com.menta.shared.domain.vo.Email;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -61,7 +60,7 @@ class ValidateActivationTokenUseCaseImplTest {
         );
         User user = new User(
             userId, Email.of("student@example.com"), "hash", Role.STUDENT,
-            UserStatus.PENDING_ACTIVATION, LocalDateTime.now(), LocalDateTime.now()
+            UserStatus.PENDING_ACTIVATION, Instant.now(), Instant.now()
         );
         when(activationTokenRepository.findByHash(TOKEN_HASH)).thenReturn(Optional.of(token));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -82,7 +81,7 @@ class ValidateActivationTokenUseCaseImplTest {
         );
         User user = User.invite(
             Email.of("staff@example.com"), "unusable-hash", Role.INSTRUCTOR,
-            new UserProfile("Ada", "Lovelace", null, null)
+            new UserProfile("Ada", "Lovelace", null, null), Instant.now()
         );
         when(activationTokenRepository.findByHash(TOKEN_HASH)).thenReturn(Optional.of(token));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -116,7 +115,7 @@ class ValidateActivationTokenUseCaseImplTest {
         );
         User user = new User(
             userId, Email.of("student@example.com"), "hash", Role.STUDENT,
-            UserStatus.ACTIVE, LocalDateTime.now(), LocalDateTime.now()
+            UserStatus.ACTIVE, Instant.now(), Instant.now()
         );
         when(activationTokenRepository.findByHash(TOKEN_HASH)).thenReturn(Optional.of(token));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));

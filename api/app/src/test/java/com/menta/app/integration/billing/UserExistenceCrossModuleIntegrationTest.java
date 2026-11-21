@@ -59,7 +59,8 @@ class UserExistenceCrossModuleIntegrationTest extends AbstractBillingMySqlIntegr
             .thenReturn(RateLimitDecision.allowed());
 
         seededUser = User.create(
-            Email.of("trial-existence-" + UUID.randomUUID() + "@example.com"), "irrelevant-hash", Role.STUDENT
+            Email.of("trial-existence-" + UUID.randomUUID() + "@example.com"), "irrelevant-hash", Role.STUDENT,
+            java.time.Instant.now()
         );
         userRepository.save(seededUser);
     }

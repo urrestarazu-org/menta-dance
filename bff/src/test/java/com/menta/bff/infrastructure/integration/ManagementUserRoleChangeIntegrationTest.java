@@ -55,7 +55,7 @@ class ManagementUserRoleChangeIntegrationTest extends BaseIntegrationTest {
     private static String account(String id, String email, String first, String last, String role) {
         return "{\"id\":\"%s\",\"email\":\"%s\",\"firstName\":\"%s\",\"lastName\":\"%s\",\"role\":\"%s\","
                 .formatted(id, email, first, last, role)
-                + "\"status\":\"ACTIVE\",\"demo\":false,\"createdAt\":\"2026-10-01T09:30:00\"}";
+                + "\"status\":\"ACTIVE\",\"demo\":false,\"createdAt\":\"2026-10-01T09:30:00Z\"}";
     }
 
     private static final String ADA_AS_RECEPTIONIST = account(ADA_ID, "ada@example.com", "Ada", "Lovelace",
@@ -268,7 +268,7 @@ class ManagementUserRoleChangeIntegrationTest extends BaseIntegrationTest {
     void confirmationFallsBackToTheEmail() throws Exception {
         stubChange(200, "application/json", "{\"id\":\"%s\",\"email\":\"ada@example.com\",\"firstName\":null,"
                 .formatted(ADA_ID) + "\"lastName\":null,\"role\":\"STUDENT\",\"status\":\"ACTIVE\","
-                + "\"createdAt\":\"2026-10-01T09:30:00\"}");
+                + "\"createdAt\":\"2026-10-01T09:30:00Z\"}");
         stubList(ADA_AS_RECEPTIONIST);
         Cookie session = logIn("ADMIN");
         mockMvc.perform(change(session, ROLE_URL, "STUDENT"));

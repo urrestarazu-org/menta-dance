@@ -208,6 +208,9 @@ class RegisterUserUseCaseImplTest {
         assertThat(result.status()).isEqualTo(UserStatus.PENDING_ACTIVATION);
         assertThat(savedUser.getValue().getStatus()).isEqualTo(UserStatus.PENDING_ACTIVATION);
         assertThat(savedUser.getValue().getTokenVersion()).isEqualTo(1L);
+        assertThat(savedUser.getValue().getCreatedAt()).isEqualTo(FIXED_NOW);
+        assertThat(savedUser.getValue().getUpdatedAt()).isEqualTo(FIXED_NOW);
+        assertThat(result.createdAt()).isEqualTo(FIXED_NOW);
     }
 
     @Test

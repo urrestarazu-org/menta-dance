@@ -32,7 +32,6 @@ import com.menta.shared.domain.vo.Email;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -89,7 +88,7 @@ class ResendActivationUseCaseImplTest {
     private User userWithStatus(UserStatus status) {
         return new User(
             UserId.generate(), Email.of(EMAIL), "hash", Role.STUDENT,
-            status, LocalDateTime.now(), LocalDateTime.now()
+            status, Instant.now(), Instant.now()
         );
     }
 
@@ -147,7 +146,8 @@ class ResendActivationUseCaseImplTest {
     void reissues_a_fresh_token_for_a_pending_account_created_by_an_administrator() {
         allowRateLimit();
         User invited = User.invite(
-            Email.of(EMAIL), "unusable-hash", Role.RECEPTIONIST, new UserProfile("Ada", "Lovelace", null, null)
+            Email.of(EMAIL), "unusable-hash", Role.RECEPTIONIST, new UserProfile("Ada", "Lovelace", null, null),
+            Instant.now()
         );
         when(userRepository.findByEmail(any())).thenReturn(Optional.of(invited));
         stubTokenIssuance();
@@ -208,7 +208,7 @@ class ResendActivationUseCaseImplTest {
         allowRateLimit();
         User demo = User.rehydrate(
             UserId.generate(), Email.of(EMAIL), "hash", Role.STUDENT, UserStatus.PENDING_ACTIVATION,
-            LocalDateTime.now(), LocalDateTime.now(), 1L, null, true
+            Instant.now(), Instant.now(), 1L, null, true
         );
         when(userRepository.findByEmail(any())).thenReturn(Optional.of(demo));
 
