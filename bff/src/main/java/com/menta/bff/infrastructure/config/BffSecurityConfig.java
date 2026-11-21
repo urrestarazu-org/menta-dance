@@ -152,6 +152,9 @@ public class BffSecurityConfig {
                         .requestMatchers("/gestion/recepcion/**").hasAnyRole("RECEPTIONIST", "ADMIN")
                         .requestMatchers("/gestion/billing/**", "/gestion/dispositivos/**", "/gestion/usuarios/**")
                         .hasRole("ADMIN")
+                        // Manual payment verification (#370): the proof of a payment, administrator only. The
+                        // fail-closed rule below would cover it; the explicit one documents the intent.
+                        .requestMatchers("/gestion/pagos/**").hasRole("ADMIN")
                         // Fail closed: a prefix nobody planned (or any other verb on the exact
                         // /gestion path) is administrator-only, never open to the rest of the staff.
                         .requestMatchers("/gestion/**").hasRole("ADMIN")

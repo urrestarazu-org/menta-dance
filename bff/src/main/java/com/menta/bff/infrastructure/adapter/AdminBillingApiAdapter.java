@@ -3,6 +3,7 @@ package com.menta.bff.infrastructure.adapter;
 import com.menta.bff.application.dto.CorrectionDecision;
 import com.menta.bff.application.dto.PaymentDetail;
 import com.menta.bff.application.dto.PaymentModality;
+import com.menta.bff.application.dto.PaymentProof;
 import com.menta.bff.application.dto.PaymentStatusType;
 import com.menta.bff.application.dto.PendingPayment;
 import com.menta.bff.application.dto.PendingPaymentPage;
@@ -12,9 +13,11 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -52,6 +55,10 @@ public class AdminBillingApiAdapter implements AdminBillingApiClient {
     private static final String REJECT_ENDPOINT = PAYMENT_ENDPOINT + "/reject";
     private static final String CORRECTIONS_ENDPOINT = PAYMENT_ENDPOINT + "/corrections";
     private static final Set<Integer> REFUSAL_STATUSES = Set.of(400, 404, 409);
+    /** The proof types the API accepts on upload: the only ones the BFF hands to a browser. */
+    private static final Set<String> PROOF_CONTENT_TYPES = Set.of("image/png", "image/jpeg", "application/pdf");
+    /** A signed token is two base64url halves joined by a dot: nothing in it needs escaping in a URI. */
+    private static final String PROOF_TOKEN = "[A-Za-z0-9_.-]+";
 
     private final WebClient webClient;
     private final BillingApiProperties properties;
@@ -76,8 +83,32 @@ public class AdminBillingApiAdapter implements AdminBillingApiClient {
 
     @Override
     public PaymentDetail getPaymentDetail(String accessToken, String paymentId) {
-        return toDomain(call("get payment detail", webClient.get().uri(PAYMENT_ENDPOINT, paymentId), accessToken,
-                DetailWire.class));
+        return toDomain(readDetail(accessToken, paymentId));
+    }
+
+    private DetailWire readDetail(String accessToken, String paymentId) {
+        return call("get payment detail", webClient.get().uri(PAYMENT_ENDPOINT, paymentId), accessToken,
+                DetailWire.class);
+    }
+
+    @Override
+    public PaymentProof fetchPaymentProof(String accessToken, String paymentId) {
+        String proofUrl = readDetail(accessToken, paymentId).proofUrl();
+        if (proofUrl == null) {
+            throw new PaymentRefusalException(PaymentRefusalException.Code.PROOF_NOT_FOUND);
+        }
+        // Anti-SSRF: the link is only ever followed when it is exactly the relative one the API issues for this
+        // payment. It is a literal path made of unreserved characters, so it reaches the URI builder unescaped.
+        if (!Pattern.matches(Pattern.quote(proofPath(paymentId)) + "\\?token=" + PROOF_TOKEN, proofUrl)) {
+            throw unavailable("payment proof link is not the expected one");
+        }
+        // No Authorization header on purpose: the signed token in the query is this endpoint's credential.
+        PaymentProof proof = await("get payment proof",
+                webClient.get().uri(proofUrl).exchangeToMono(AdminBillingApiAdapter::readProof));
+        if (proof == null) {
+            throw unavailable("get payment proof answered without a body");
+        }
+        return proof;
     }
 
     @Override
@@ -106,16 +137,19 @@ public class AdminBillingApiAdapter implements AdminBillingApiClient {
      */
     private <W> W call(String operation, WebClient.RequestHeadersSpec<?> request, String accessToken,
             Class<W> wireType) {
+        W wire = await(operation, request
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                .exchangeToMono(response -> read(response, wireType)));
+        if (wire == null && wireType != Void.class) {
+            throw unavailable(operation + " answered without a body");
+        }
+        return wire;
+    }
+
+    /** Waits for the answer within the configured timeout; anything unexpected becomes unavailable. */
+    private <T> T await(String operation, Mono<T> answer) {
         try {
-            W wire = request
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
-                    .exchangeToMono(response -> read(response, wireType))
-                    .timeout(properties.getTimeout())
-                    .block();
-            if (wire == null && wireType != Void.class) {
-                throw unavailable(operation + " answered without a body");
-            }
-            return wire;
+            return answer.timeout(properties.getTimeout()).block();
         } catch (PaymentRefusalException | ServiceUnavailableException e) {
             throw e;
         } catch (RuntimeException e) {
@@ -139,9 +173,28 @@ public class AdminBillingApiAdapter implements AdminBillingApiClient {
         return response.releaseBody().then(Mono.error(unavailable("answered " + status)));
     }
 
+    /** Only a 200 whose declared type is an allowed one is a proof; anything else is released unread. */
+    private static Mono<PaymentProof> readProof(ClientResponse response) {
+        if (response.statusCode().value() != 200) {
+            int status = response.statusCode().value();
+            return response.releaseBody().then(Mono.error(unavailable("proof answered " + status)));
+        }
+        String type = response.headers().contentType()
+                .map(mediaType -> mediaType.getType() + "/" + mediaType.getSubtype()).orElse("");
+        if (!PROOF_CONTENT_TYPES.contains(type)) {
+            return response.releaseBody().then(Mono.error(unavailable("proof has an unexpected content type")));
+        }
+        return response.bodyToMono(byte[].class).map(content -> new PaymentProof(content, type));
+    }
+
+    private static String proofPath(String paymentId) {
+        return "/api/v1/billing/payments/" + paymentId + "/proof";
+    }
+
     private static RuntimeException refusal(int status, ProblemWire problem) {
         for (PaymentRefusalException.Code code : PaymentRefusalException.Code.values()) {
-            if (code.name().equals(problem.code())) {
+            // PROOF_NOT_FOUND is the BFF's own code, from a detail without proofUrl: the API never answers it.
+            if (code != PaymentRefusalException.Code.PROOF_NOT_FOUND && code.name().equals(problem.code())) {
                 return new PaymentRefusalException(code);
             }
         }
@@ -197,7 +250,7 @@ public class AdminBillingApiAdapter implements AdminBillingApiClient {
             String currency, String statusType, Boolean hasProof, Instant createdAt) {
     }
 
-    /** {@code PaymentDetailResponse}; {@code proofUrl} is only checked for presence. */
+    /** {@code PaymentDetailResponse}; {@code proofUrl} is checked for presence or, for the proof, followed. */
     private record DetailWire(
             String paymentId, String userId, String targetModality, String targetReference, BigDecimal amount,
             String currency, String statusType, Instant createdAt, String proofUrl) {

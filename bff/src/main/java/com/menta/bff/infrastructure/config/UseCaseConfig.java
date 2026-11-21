@@ -63,6 +63,8 @@ import com.menta.bff.application.usecase.GetPaymentHistoryUseCase;
 import com.menta.bff.application.usecase.GetPaymentHistoryUseCaseImpl;
 import com.menta.bff.application.usecase.GetPaymentProgressUseCase;
 import com.menta.bff.application.usecase.GetPaymentProgressUseCaseImpl;
+import com.menta.bff.application.usecase.GetPaymentProofUseCase;
+import com.menta.bff.application.usecase.GetPaymentProofUseCaseImpl;
 import com.menta.bff.application.usecase.GetPlansViewUseCase;
 import com.menta.bff.application.usecase.GetPlansViewUseCaseImpl;
 import com.menta.bff.application.usecase.GetSessionRosterUseCase;
@@ -448,6 +450,11 @@ public class UseCaseConfig {
     @Bean
     public GetPaymentDetailUseCase getPaymentDetailUseCase(AdminBillingApiClient adminBillingApiClient) {
         return new GetPaymentDetailUseCaseImpl(adminBillingApiClient);
+    }
+
+    @Bean
+    public GetPaymentProofUseCase getPaymentProofUseCase(AdminBillingApiClient adminBillingApiClient) {
+        return new GetPaymentProofUseCaseImpl(adminBillingApiClient);
     }
 
     @Bean

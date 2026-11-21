@@ -123,8 +123,9 @@ class AdminBillingApiAdapterTest {
     }
 
     static Stream<Arguments> everyOperationAndCode() {
+        // PROOF_NOT_FOUND is the BFF's own code: the API never answers it.
         return operations().stream().flatMap(operation -> Stream.of(Code.values())
-                .map(code -> Arguments.of(operation, code)));
+                .filter(code -> code != Code.PROOF_NOT_FOUND).map(code -> Arguments.of(operation, code)));
     }
 
     @ParameterizedTest(name = "{0}")
@@ -147,6 +148,7 @@ class AdminBillingApiAdapterTest {
             case INVALID_REQUEST -> 400;
             case PAYMENT_NOT_FOUND -> 404;
             case ILLEGAL_PAYMENT_STATE_TRANSITION -> 409;
+            case PROOF_NOT_FOUND -> throw new IllegalArgumentException("not an API code");
         };
         stub(operation.method(), operation.path(), status, problem(code.name()));
 
@@ -168,6 +170,7 @@ class AdminBillingApiAdapterTest {
                 Arguments.of(operation, 503, "<html>down</html>"),
                 // a refusal whose code is not one of the expected ones, or that has none, or no readable body
                 Arguments.of(operation, 400, problem("SOMETHING_NEW")),
+                Arguments.of(operation, 404, problem("PROOF_NOT_FOUND")),
                 Arguments.of(operation, 404, "{\"detail\":\"secret detail\"}"),
                 Arguments.of(operation, 409, problem("")),
                 Arguments.of(operation, 409, "<html>conflict</html>"),

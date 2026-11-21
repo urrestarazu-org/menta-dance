@@ -12,6 +12,13 @@ import org.springframework.web.reactive.function.client.WebClient;
 @RequiredArgsConstructor
 public class WebClientConfig {
 
+    /**
+     * In-memory buffer limit of the Billing client: the API accepts transfer proofs of up to 5 MB, and Spring's
+     * default of 256 KB would make reading one fail. The 1 MB of margin covers nothing but headroom; the limit
+     * is deliberately not raised on the other clients.
+     */
+    public static final int BILLING_MAX_IN_MEMORY_BYTES = 6 * 1024 * 1024;
+
     private final AuthProperties authProperties;
     private final VirtualApiProperties virtualApiProperties;
     private final BillingApiProperties billingApiProperties;
@@ -51,6 +58,7 @@ public class WebClientConfig {
     public WebClient billingApiWebClient() {
         return WebClient.builder()
                 .baseUrl(billingApiProperties.getBaseUrl())
+                .codecs(codecs -> codecs.defaultCodecs().maxInMemorySize(BILLING_MAX_IN_MEMORY_BYTES))
                 .build();
     }
 }
