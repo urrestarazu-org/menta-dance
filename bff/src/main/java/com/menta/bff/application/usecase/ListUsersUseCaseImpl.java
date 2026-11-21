@@ -5,6 +5,8 @@ import com.menta.bff.application.dto.UserPage;
 import com.menta.bff.application.dto.UserRole;
 import com.menta.bff.application.dto.UserSummary;
 import com.menta.bff.application.port.out.AdminUsersApiClient;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
@@ -33,6 +35,7 @@ public class ListUsersUseCaseImpl implements ListUsersUseCase {
             DateTimeFormatter.ofPattern("d 'de' MMMM 'de' yyyy", Locale.forLanguageTag("es-AR"));
 
     private final AdminUsersApiClient adminUsersApiClient;
+    private final ZoneId displayZone;
 
     @Override
     public UsersListView execute(String accessToken, String role, String text, Integer page) {
@@ -81,14 +84,15 @@ public class ListUsersUseCaseImpl implements ListUsersUseCase {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
-    private static UsersListView toView(UserRole role, String text, UserPage result) {
-        List<UserRow> rows = result.items().stream().map(ListUsersUseCaseImpl::toRow).toList();
+    private UsersListView toView(UserRole role, String text, UserPage result) {
+        List<UserRow> rows = result.items().stream().map(this::toRow).toList();
         return new UsersListView(role, text, rows, result.page(), result.totalPages(), result.totalElements(), false);
     }
 
-    private static UserRow toRow(UserSummary user) {
+    private UserRow toRow(UserSummary user) {
+        ZonedDateTime createdAt = user.createdAt().atZone(displayZone);
         return new UserRow(user.id(), user.email(), displayName(user), user.role(), user.status(),
-                user.createdAt().toLocalDate(), DAY_FORMAT.format(user.createdAt()));
+                createdAt.toLocalDate(), DAY_FORMAT.format(createdAt));
     }
 
     private static String displayName(UserSummary user) {

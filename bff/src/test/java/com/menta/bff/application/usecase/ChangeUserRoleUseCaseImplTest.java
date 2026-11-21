@@ -14,7 +14,7 @@ import com.menta.bff.application.dto.UserSummary;
 import com.menta.bff.application.port.out.AccessTokenClaimsReader;
 import com.menta.bff.application.port.out.AdminUsersApiClient;
 import com.menta.bff.application.usecase.ChangeUserRoleResult.Outcome;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -51,7 +51,7 @@ class ChangeUserRoleUseCaseImplTest {
 
     private static UserSummary account(String id, String first, String last, UserRole role) {
         return new UserSummary(id, "ada@example.com", first, last, role, UserStatus.ACTIVE,
-                LocalDateTime.parse("2026-11-10T09:30:00"));
+                Instant.parse("2026-11-10T09:30:00Z"));
     }
 
     private void apiAnswers(UserSummary summary, UserRole role) {

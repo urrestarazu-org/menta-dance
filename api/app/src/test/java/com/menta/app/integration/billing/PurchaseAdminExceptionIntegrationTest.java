@@ -39,7 +39,6 @@ import com.menta.physical.application.port.out.CheckInRateLimitPort;
 import com.menta.shared.domain.vo.Email;
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -116,7 +115,8 @@ class PurchaseAdminExceptionIntegrationTest extends AbstractBillingMySqlIntegrat
 
     private UUID seedAdmin() {
         User user = User.create(
-            Email.of("admin-" + UUID.randomUUID() + "@example.com"), "irrelevant-hash", Role.ADMIN
+            Email.of("admin-" + UUID.randomUUID() + "@example.com"), "irrelevant-hash", Role.ADMIN,
+            java.time.Instant.now()
         );
         userRepository.save(user);
         return user.getId().getValue();
@@ -125,7 +125,7 @@ class PurchaseAdminExceptionIntegrationTest extends AbstractBillingMySqlIntegrat
     private HttpHeaders headersFor(UUID userId, Role role) {
         User user = new User(
             UserId.of(userId), Email.of("token-" + UUID.randomUUID() + "@example.com"), "hash", role,
-            UserStatus.ACTIVE, LocalDateTime.now(), LocalDateTime.now()
+            UserStatus.ACTIVE, Instant.now(), Instant.now()
         );
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);

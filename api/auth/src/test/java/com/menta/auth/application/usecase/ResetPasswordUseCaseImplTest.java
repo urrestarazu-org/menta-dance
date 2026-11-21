@@ -35,7 +35,6 @@ import com.menta.auth.domain.repository.UserRepository;
 import com.menta.shared.domain.vo.Email;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -100,7 +99,7 @@ class ResetPasswordUseCaseImplTest {
     private static User activeUser() {
         return new User(
             USER_ID, Email.of("student@example.com"), CURRENT_HASH, Role.STUDENT,
-            UserStatus.ACTIVE, LocalDateTime.now(), LocalDateTime.now()
+            UserStatus.ACTIVE, Instant.now(), Instant.now()
         );
     }
 
@@ -258,7 +257,8 @@ class ResetPasswordUseCaseImplTest {
         void updates_the_password_hash() {
             useCase.reset(command());
 
-            verify(userRepository).save(argThat(user -> user.getPasswordHash().equals(NEW_ENCODED_PASSWORD)));
+            verify(userRepository).save(argThat(user ->
+                user.getPasswordHash().equals(NEW_ENCODED_PASSWORD) && NOW.equals(user.getUpdatedAt())));
         }
 
         @Test

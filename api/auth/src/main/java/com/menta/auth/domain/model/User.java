@@ -1,7 +1,7 @@
 package com.menta.auth.domain.model;
 
 import com.menta.shared.domain.vo.Email;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -16,8 +16,8 @@ public class User {
     private String passwordHash;
     private Role role;
     private UserStatus status;
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
+    private Instant createdAt;
+    private Instant updatedAt;
     private long tokenVersion;
     /** Personal data; absent for accounts that predate the profile (demo, admin, E2E and legacy rows). */
     private UserProfile profile;
@@ -35,8 +35,8 @@ public class User {
         String passwordHash,
         Role role,
         UserStatus status,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        Instant createdAt,
+        Instant updatedAt
     ) {
         this(id, email, passwordHash, role, status, createdAt, updatedAt, DEFAULT_TOKEN_VERSION, null, false, false);
     }
@@ -47,8 +47,8 @@ public class User {
         String passwordHash,
         Role role,
         UserStatus status,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt,
+        Instant createdAt,
+        Instant updatedAt,
         long tokenVersion,
         UserProfile profile,
         boolean demo,
@@ -74,10 +74,10 @@ public class User {
      * Registers a public user that must prove email ownership before login.
      *
      * @param profile the personal data given at registration, never null
+     * @param now the creation instant, taken from the application clock (the domain has no clock of its own)
      */
-    public static User register(Email email, String passwordHash, Role role, UserProfile profile) {
+    public static User register(Email email, String passwordHash, Role role, UserProfile profile, Instant now) {
         Objects.requireNonNull(profile, "profile cannot be null");
-        LocalDateTime now = LocalDateTime.now();
         return new User(
             UserId.generate(),
             email,
@@ -99,11 +99,13 @@ public class User {
      *
      * @param unusablePasswordHash a hash of a random secret that is never disclosed, never null
      * @param profile the personal data the administrator entered, never null
+     * @param now the creation instant, taken from the application clock
      */
-    public static User invite(Email email, String unusablePasswordHash, Role role, UserProfile profile) {
+    public static User invite(
+        Email email, String unusablePasswordHash, Role role, UserProfile profile, Instant now
+    ) {
         Objects.requireNonNull(unusablePasswordHash, "unusablePasswordHash cannot be null");
         Objects.requireNonNull(profile, "profile cannot be null");
-        LocalDateTime now = LocalDateTime.now();
         return new User(
             UserId.generate(),
             email,
@@ -121,9 +123,10 @@ public class User {
 
     /**
      * Creates an already-active user for trusted provisioning flows.
+     *
+     * @param now the creation instant, taken from the application clock
      */
-    public static User create(Email email, String passwordHash, Role role) {
-        LocalDateTime now = LocalDateTime.now();
+    public static User create(Email email, String passwordHash, Role role, Instant now) {
         return new User(
             UserId.generate(),
             email,
@@ -153,8 +156,8 @@ public class User {
         String passwordHash,
         Role role,
         UserStatus status,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt,
+        Instant createdAt,
+        Instant updatedAt,
         long tokenVersion
     ) {
         return new User(id, email, passwordHash, role, status, createdAt, updatedAt, tokenVersion, null, false, false);
@@ -172,8 +175,8 @@ public class User {
         String passwordHash,
         Role role,
         UserStatus status,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt,
+        Instant createdAt,
+        Instant updatedAt,
         long tokenVersion,
         UserProfile profile
     ) {
@@ -195,8 +198,8 @@ public class User {
         String passwordHash,
         Role role,
         UserStatus status,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt,
+        Instant createdAt,
+        Instant updatedAt,
         long tokenVersion,
         UserProfile profile,
         boolean demo
@@ -220,8 +223,8 @@ public class User {
         String passwordHash,
         Role role,
         UserStatus status,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt,
+        Instant createdAt,
+        Instant updatedAt,
         long tokenVersion,
         UserProfile profile,
         boolean demo,
@@ -236,10 +239,11 @@ public class User {
     /**
      * Moves a pending account to {@code ACTIVE}.
      *
+     * @param now the instant of the change, taken from the application clock
      * @throws IllegalStateException when the account is not pending activation, or when its holder still has to
      *     choose a password (use {@link #activateWithPassword})
      */
-    public void activate() {
+    public void activate(Instant now) {
         if (this.status != UserStatus.PENDING_ACTIVATION) {
             throw new IllegalStateException("Only a user pending activation can be activated");
         }
@@ -247,7 +251,7 @@ public class User {
             throw new IllegalStateException("A user that must choose a password cannot be activated without one");
         }
         this.status = UserStatus.ACTIVE;
-        this.updatedAt = LocalDateTime.now();
+        this.updatedAt = now;
     }
 
     /**
@@ -255,9 +259,10 @@ public class User {
      * holder chose. Storing the password, clearing the marker and activating are one business event.
      *
      * @param chosenPasswordHash the hash of the password the holder chose, never null
+     * @param now the instant of the change, taken from the application clock
      * @throws IllegalStateException when the account is not pending activation or did not need a password
      */
-    public void activateWithPassword(String chosenPasswordHash) {
+    public void activateWithPassword(String chosenPasswordHash, Instant now) {
         Objects.requireNonNull(chosenPasswordHash, "chosenPasswordHash cannot be null");
         if (this.status != UserStatus.PENDING_ACTIVATION || !this.mustSetPassword) {
             throw new IllegalStateException("Only a pending user that must choose a password takes one on activation");
@@ -265,18 +270,20 @@ public class User {
         this.passwordHash = chosenPasswordHash;
         this.mustSetPassword = false;
         this.status = UserStatus.ACTIVE;
-        this.updatedAt = LocalDateTime.now();
+        this.updatedAt = now;
     }
 
     /**
      * Marks the account as {@code INACTIVE}.
      *
-     * <p>Unlike {@link #activate()}, this transition has no precondition on the current status. The change is
+     * <p>Unlike {@link #activate(Instant)}, this transition has no precondition on the current status. The change is
      * persisted by the caller through the repository.
+     *
+     * @param now the instant of the change, taken from the application clock
      */
-    public void deactivate() {
+    public void deactivate(Instant now) {
         this.status = UserStatus.INACTIVE;
-        this.updatedAt = LocalDateTime.now();
+        this.updatedAt = now;
     }
 
     /**
@@ -284,10 +291,12 @@ public class User {
      * refresh tokens carrying the OLD token_version will fail their family
      * check on next presentation (auth-refresh spec: tokenVersion viejo).
      * Persisted by the caller via UserRepository#save.
+     *
+     * @param now the instant of the change, taken from the application clock
      */
-    public void bumpTokenVersion() {
+    public void bumpTokenVersion(Instant now) {
         this.tokenVersion += 1;
-        this.updatedAt = LocalDateTime.now();
+        this.updatedAt = now;
     }
 
     /**
@@ -296,11 +305,13 @@ public class User {
      * changed password without also invalidating existing refresh tokens —
      * changing the credential and closing prior sessions are one business
      * event, not two independent calls a caller might forget to pair.
+     *
+     * @param now the instant of the change, taken from the application clock
      */
-    public void resetPassword(String newPasswordHash) {
+    public void resetPassword(String newPasswordHash, Instant now) {
         this.passwordHash = Objects.requireNonNull(newPasswordHash, "newPasswordHash cannot be null");
         this.tokenVersion += 1;
-        this.updatedAt = LocalDateTime.now();
+        this.updatedAt = now;
     }
 
     /**
@@ -311,15 +322,16 @@ public class User {
      * Persisted by the caller via UserRepository#save.
      *
      * @param newRole the role to assign, never null
+     * @param now the instant of the change, taken from the application clock
      */
-    public void changeRole(Role newRole) {
+    public void changeRole(Role newRole, Instant now) {
         Objects.requireNonNull(newRole, "newRole cannot be null");
         if (this.role == newRole) {
             return;
         }
         this.role = newRole;
         this.tokenVersion += 1;
-        this.updatedAt = LocalDateTime.now();
+        this.updatedAt = now;
     }
 
     /**
@@ -355,11 +367,11 @@ public class User {
         return status;
     }
 
-    public LocalDateTime getCreatedAt() {
+    public Instant getCreatedAt() {
         return createdAt;
     }
 
-    public LocalDateTime getUpdatedAt() {
+    public Instant getUpdatedAt() {
         return updatedAt;
     }
 

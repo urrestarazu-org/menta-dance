@@ -39,8 +39,8 @@ class ManagementUsersIntegrationTest extends BaseIntegrationTest {
     private static final String USERS_API = "/api/v1/admin/users";
 
     private static final String ONE_PAGE = page(0, 1, 2,
-            user("ada@example.com", "Ada", "Lovelace", "RECEPTIONIST", "ACTIVE", "2026-10-01T09:30:00"),
-            user("root@example.com", null, null, "ADMIN", "PENDING_ACTIVATION", "2026-10-02T10:15:30"));
+            user("ada@example.com", "Ada", "Lovelace", "RECEPTIONIST", "ACTIVE", "2026-10-01T09:30:00Z"),
+            user("root@example.com", null, null, "ADMIN", "PENDING_ACTIVATION", "2026-10-02T10:15:30Z"));
 
     private static String user(
             String email, String first, String last, String role, String status, String createdAt) {
@@ -196,7 +196,7 @@ class ManagementUsersIntegrationTest extends BaseIntegrationTest {
     @DisplayName("names and emails are escaped: markup typed by a user never reaches the page as markup")
     void escapesUserData() throws Exception {
         stubUsers(200, page(0, 1, 1, user("x@example.com", "<script>alert(1)</script>", "O'Brien & \\\"Co\\\"",
-                "INSTRUCTOR", "ACTIVE", "2026-10-01T09:30:00")));
+                "INSTRUCTOR", "ACTIVE", "2026-10-01T09:30:00Z")));
 
         String main = mainOfAdminRequest();
 
@@ -391,7 +391,7 @@ class ManagementUsersIntegrationTest extends BaseIntegrationTest {
     @Test
     @DisplayName("the first page has Siguiente as a link and Anterior as a disabled one")
     void firstPage() throws Exception {
-        stubUsers(200, page(0, 3, 55, user("a@example.com", "A", "A", "STUDENT", "ACTIVE", "2026-10-01T09:30:00")));
+        stubUsers(200, page(0, 3, 55, user("a@example.com", "A", "A", "STUDENT", "ACTIVE", "2026-10-01T09:30:00Z")));
 
         String main = mainOfAdminRequest();
 
@@ -406,7 +406,7 @@ class ManagementUsersIntegrationTest extends BaseIntegrationTest {
     @Test
     @DisplayName("a middle page links both ways and keeps the filters in both links")
     void middlePageKeepsTheFilters() throws Exception {
-        stubUsers(200, page(1, 3, 55, user("a@example.com", "A", "A", "STUDENT", "ACTIVE", "2026-10-01T09:30:00")));
+        stubUsers(200, page(1, 3, 55, user("a@example.com", "A", "A", "STUDENT", "ACTIVE", "2026-10-01T09:30:00Z")));
 
         String main = mainOfAdminRequest("role", "STUDENT", "q", "ada", "page", "1");
 
@@ -421,7 +421,7 @@ class ManagementUsersIntegrationTest extends BaseIntegrationTest {
     @Test
     @DisplayName("the last page has Anterior as a link and Siguiente as a disabled one")
     void lastPage() throws Exception {
-        stubUsers(200, page(2, 3, 55, user("a@example.com", "A", "A", "STUDENT", "ACTIVE", "2026-10-01T09:30:00")));
+        stubUsers(200, page(2, 3, 55, user("a@example.com", "A", "A", "STUDENT", "ACTIVE", "2026-10-01T09:30:00Z")));
 
         String main = mainOfAdminRequest("page", "2");
 
@@ -435,7 +435,7 @@ class ManagementUsersIntegrationTest extends BaseIntegrationTest {
     @Test
     @DisplayName("pagination links re-encode the search text: it cannot add parameters or break the attribute")
     void paginationLinksEncodeTheText() throws Exception {
-        stubUsers(200, page(0, 2, 30, user("a@example.com", "A", "A", "STUDENT", "ACTIVE", "2026-10-01T09:30:00")));
+        stubUsers(200, page(0, 2, 30, user("a@example.com", "A", "A", "STUDENT", "ACTIVE", "2026-10-01T09:30:00Z")));
 
         String main = mainOfAdminRequest("q", "a&role=ADMIN&page=9\"><b> x");
 

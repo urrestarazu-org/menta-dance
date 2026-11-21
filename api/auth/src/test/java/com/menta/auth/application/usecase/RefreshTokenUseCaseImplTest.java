@@ -17,6 +17,7 @@ import com.menta.auth.application.dto.RefreshCommand;
 import com.menta.auth.application.dto.TokenPair;
 import com.menta.auth.application.port.out.AccessTokenIssuer;
 import com.menta.auth.application.port.out.AuthDegradedGuard;
+import com.menta.auth.application.port.out.Clock;
 import com.menta.auth.application.port.out.IssuedAccessToken;
 import com.menta.auth.application.port.out.OutboxAppender;
 import com.menta.auth.application.port.out.RefreshTokenRepository;
@@ -33,7 +34,6 @@ import com.menta.auth.domain.repository.UserRepository;
 import com.menta.shared.domain.vo.Email;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -70,6 +70,8 @@ class RefreshTokenUseCaseImplTest {
     private static final UUID JTI = UUID.fromString("55555555-5555-5555-5555-555555555555");
     private static final long TOKEN_VERSION = 1L;
     private static final Email EMAIL = Email.of("alice@example.com");
+    private static final Instant SEEDED_AT = Instant.parse("2030-01-01T00:00:00Z");
+    private static final Instant FIXED_NOW = Instant.parse("2030-03-15T12:00:00Z");
 
     @Mock private UserRepository userRepository;
     @Mock private RefreshTokenRepository refreshTokenRepository;
@@ -77,6 +79,7 @@ class RefreshTokenUseCaseImplTest {
     @Mock private TokenHasher tokenHasher;
     @Mock private OutboxAppender outboxAppender;
     @Mock private AuthDegradedGuard authDegradedGuard;
+    @Mock private Clock clock;
 
     private RefreshTokenUseCaseImpl useCase;
 
@@ -88,7 +91,8 @@ class RefreshTokenUseCaseImplTest {
             accessTokenIssuer,
             tokenHasher,
             outboxAppender,
-            authDegradedGuard
+            authDegradedGuard,
+            clock
         );
     }
 
@@ -164,12 +168,14 @@ class RefreshTokenUseCaseImplTest {
             when(refreshTokenRepository.findByHash(anyString())).thenReturn(Optional.of(presented));
             when(userRepository.findById(any())).thenReturn(Optional.of(user));
             when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            when(clock.now()).thenReturn(FIXED_NOW);
 
             assertThatThrownBy(() -> useCase.execute(new RefreshCommand(raw)))
                 .isInstanceOf(RefreshTokenCompromisedException.class);
 
             // User.bumpTokenVersion() invoked (use case persists the bumped user).
             assertThat(user.getTokenVersion()).isGreaterThan(TOKEN_VERSION);
+            assertThat(user.getUpdatedAt()).isEqualTo(FIXED_NOW);
             verify(userRepository).save(any(User.class));
             // Family revoked atomically.
             verify(refreshTokenRepository).revokeFamily(FAMILY_ID);
@@ -333,13 +339,13 @@ class RefreshTokenUseCaseImplTest {
             "bcrypt$2a$10$hash",
             role,
             UserStatus.ACTIVE,
-            LocalDateTime.now(),
-            LocalDateTime.now()
+            SEEDED_AT,
+            SEEDED_AT
         );
         // The 7-arg constructor defaults tokenVersion to 1; bump to the
         // version the test wants before returning.
         for (long i = 1; i < tokenVersion; i++) {
-            user.bumpTokenVersion();
+            user.bumpTokenVersion(SEEDED_AT);
         }
         return user;
     }

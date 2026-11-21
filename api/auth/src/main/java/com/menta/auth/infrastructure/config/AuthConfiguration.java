@@ -480,7 +480,8 @@ public class AuthConfiguration {
         AccessTokenIssuer accessTokenIssuer,
         TokenHasher tokenHasher,
         OutboxAppender outboxAppender,
-        AuthDegradedGuard authDegradedGuard
+        AuthDegradedGuard authDegradedGuard,
+        Clock clock
     ) {
         RefreshTokenUseCaseImpl implementation = new RefreshTokenUseCaseImpl(
             userRepository,
@@ -488,7 +489,8 @@ public class AuthConfiguration {
             accessTokenIssuer,
             tokenHasher,
             outboxAppender,
-            authDegradedGuard
+            authDegradedGuard,
+            clock
         );
         return new TransactionalRefreshTokenUseCase(implementation);
     }
@@ -499,14 +501,16 @@ public class AuthConfiguration {
         RefreshTokenRepository refreshTokenRepository,
         TokenHasher tokenHasher,
         OutboxAppender outboxAppender,
-        AuthDegradedGuard authDegradedGuard
+        AuthDegradedGuard authDegradedGuard,
+        Clock clock
     ) {
         LogoutUseCaseImpl implementation = new LogoutUseCaseImpl(
             userRepository,
             refreshTokenRepository,
             tokenHasher,
             outboxAppender,
-            authDegradedGuard
+            authDegradedGuard,
+            clock
         );
         return new TransactionalLogoutUseCase(implementation);
     }

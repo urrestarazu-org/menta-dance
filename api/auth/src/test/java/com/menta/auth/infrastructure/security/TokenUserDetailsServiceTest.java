@@ -10,7 +10,7 @@ import com.menta.auth.domain.model.UserId;
 import com.menta.auth.domain.model.UserStatus;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.shared.domain.vo.Email;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -86,7 +86,7 @@ class TokenUserDetailsServiceTest {
         service = newService();
         User locked = new User(
             UserId.of(USER_ID), Email.of("student@example.com"), "hashed-password",
-            Role.STUDENT, UserStatus.LOCKED, LocalDateTime.now(), LocalDateTime.now()
+            Role.STUDENT, UserStatus.LOCKED, Instant.now(), Instant.now()
         );
         when(userRepository.findByEmail(Email.of("student@example.com"))).thenReturn(Optional.of(locked));
 
@@ -103,7 +103,7 @@ class TokenUserDetailsServiceTest {
     private static User activeUser(Role role) {
         return new User(
             UserId.of(USER_ID), Email.of("student@example.com"), "hashed-password",
-            role, UserStatus.ACTIVE, LocalDateTime.now(), LocalDateTime.now()
+            role, UserStatus.ACTIVE, Instant.now(), Instant.now()
         );
     }
 }

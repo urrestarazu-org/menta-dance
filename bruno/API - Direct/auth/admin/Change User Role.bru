@@ -35,6 +35,7 @@ docs {
   administrador activo (incluido uno mismo) devuelve 409.
 
   Contrato de éxito (200): { id, email, firstName, lastName, role, status, demo, createdAt }
+  createdAt es un instante en UTC, ISO-8601 con Z (ADR-0048).
 
   Contrato de error:
     400 INVALID_REQUEST              → body sin role, role desconocido o userId que no es UUID

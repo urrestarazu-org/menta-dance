@@ -55,9 +55,9 @@ info:
 
     ## Fechas
 
-    `UserSummary.createdAt` es la única fecha de este contrato y sale **sin
-    zona** (`YYYY-MM-DDTHH:mm:ss`): es deuda frente al ADR-0048, que pide UTC con
-    `Z`, y cambiarla es un cambio de contrato.
+    `UserSummary.createdAt` es la única fecha de este contrato. Es un instante
+    en **UTC**, en ISO-8601 con `Z` (RFC 3339 `date-time`), como pide el
+    ADR-0048; el cliente lo convierte a la zona de quien lo mira.
 
     ## No enumeración de cuentas
 
@@ -817,7 +817,7 @@ paths:
                 role: RECEPTIONIST
                 status: PENDING_ACTIVATION
                 demo: false
-                createdAt: '2026-11-10T09:30:00'
+                createdAt: '2026-11-10T09:30:00Z'
         '400':
           description: Cuerpo inválido, ilegible (JSON mal formado) o vacío, email mal formado, nombre vacío o demasiado largo, rol desconocido o `STUDENT`.
           content:
@@ -1189,11 +1189,9 @@ components:
           description: Cuenta de prueba o demo; no recibe correos salientes.
         createdAt:
           type: string
-          description: |
-            Fecha de alta, sin zona horaria (`YYYY-MM-DDTHH:mm:ss`). No es un
-            `date-time` RFC 3339 porque no lleva offset.
-          pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$'
-          example: '2026-10-01T09:30:00'
+          format: date-time
+          description: Fecha de alta, en UTC (ISO-8601 con `Z`).
+          example: '2026-10-01T09:30:00Z'
 
     CurrentUser:
       type: object

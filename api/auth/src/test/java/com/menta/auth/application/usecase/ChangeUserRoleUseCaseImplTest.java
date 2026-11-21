@@ -29,7 +29,6 @@ import com.menta.auth.domain.model.UserStatus;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.shared.domain.vo.Email;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -64,7 +63,7 @@ class ChangeUserRoleUseCaseImplTest {
     }
 
     private static User user(Role role, UserStatus status, long tokenVersion) {
-        LocalDateTime created = LocalDateTime.of(2026, 1, 1, 0, 0);
+        Instant created = Instant.parse("2026-01-01T00:00:00Z");
         return User.rehydrate(
             UserId.generate(), Email.of(UUID.randomUUID() + "@example.com"), "hash", role, status,
             created, created, tokenVersion
@@ -173,6 +172,7 @@ class ChangeUserRoleUseCaseImplTest {
         verify(userAuditRepository).append(
             target.getId(), ACTOR_ID, "ROLE_CHANGED", "STUDENT", "INSTRUCTOR", FIXED_NOW
         );
+        assertThat(target.getUpdatedAt()).isEqualTo(FIXED_NOW);
     }
 
     @Test

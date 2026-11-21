@@ -6,6 +6,7 @@ import com.menta.auth.application.dto.TokenPair;
 import com.menta.auth.application.port.in.RefreshTokenUseCase;
 import com.menta.auth.application.port.out.AccessTokenIssuer;
 import com.menta.auth.application.port.out.AuthDegradedGuard;
+import com.menta.auth.application.port.out.Clock;
 import com.menta.auth.application.port.out.IssuedAccessToken;
 import com.menta.auth.application.port.out.OutboxAppender;
 import com.menta.auth.application.port.out.RefreshTokenRepository;
@@ -19,6 +20,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 
 /**
  * Implementation of the refresh-rotation use case.
@@ -35,6 +37,7 @@ import java.util.UUID;
  *      access token. No outbox event: the former REFRESH_ROTATED had no
  *      consumer (#672).
  */
+@RequiredArgsConstructor
 public class RefreshTokenUseCaseImpl implements RefreshTokenUseCase {
 
     /**
@@ -48,22 +51,7 @@ public class RefreshTokenUseCaseImpl implements RefreshTokenUseCase {
     private final TokenHasher tokenHasher;
     private final OutboxAppender outboxAppender;
     private final AuthDegradedGuard authDegradedGuard;
-
-    public RefreshTokenUseCaseImpl(
-        UserRepository userRepository,
-        RefreshTokenRepository refreshTokenRepository,
-        AccessTokenIssuer accessTokenIssuer,
-        TokenHasher tokenHasher,
-        OutboxAppender outboxAppender,
-        AuthDegradedGuard authDegradedGuard
-    ) {
-        this.userRepository = userRepository;
-        this.refreshTokenRepository = refreshTokenRepository;
-        this.accessTokenIssuer = accessTokenIssuer;
-        this.tokenHasher = tokenHasher;
-        this.outboxAppender = outboxAppender;
-        this.authDegradedGuard = authDegradedGuard;
-    }
+    private final Clock clock;
 
     @Override
     public TokenPair execute(RefreshCommand command) {
@@ -142,7 +130,7 @@ public class RefreshTokenUseCaseImpl implements RefreshTokenUseCase {
     }
 
     private void revokeFamilyAndBump(UUID familyId, User user, String reason) {
-        user.bumpTokenVersion();
+        user.bumpTokenVersion(clock.now());
         userRepository.save(user);
         refreshTokenRepository.revokeFamily(familyId);
         outboxAppender.append(

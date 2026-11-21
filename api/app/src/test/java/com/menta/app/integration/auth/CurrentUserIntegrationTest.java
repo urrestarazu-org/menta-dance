@@ -9,8 +9,8 @@ import com.menta.auth.domain.model.UserId;
 import com.menta.auth.domain.model.UserProfile;
 import com.menta.auth.domain.model.UserStatus;
 import com.menta.shared.domain.vo.Email;
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,7 +30,7 @@ import org.springframework.http.ResponseEntity;
 class CurrentUserIntegrationTest extends AbstractAdminUserIntegrationTest {
 
     private static final String ME_URL = "/api/v1/users/me";
-    private static final LocalDateTime CREATED = LocalDateTime.of(2026, 1, 1, 0, 0);
+    private static final Instant CREATED = Instant.parse("2026-01-01T00:00:00Z");
 
     @Autowired private TestRestTemplate http;
     @Autowired private AccessTokenIssuer accessTokenIssuer;

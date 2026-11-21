@@ -11,7 +11,7 @@ import com.menta.auth.domain.model.UserStatus;
 import com.menta.auth.infrastructure.persistence.entity.UserJpaEntity;
 import com.menta.auth.infrastructure.persistence.repository.UserJpaRepository;
 import com.menta.shared.domain.vo.Email;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,7 +24,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class UserRepositoryAdapterTest {
 
     private static final UUID USER_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
-    private static final LocalDateTime NOW = LocalDateTime.of(2026, 8, 16, 12, 0);
+    private static final Instant NOW = Instant.parse("2026-08-16T12:00:00Z");
 
     @Mock private UserJpaRepository jpaRepository;
 

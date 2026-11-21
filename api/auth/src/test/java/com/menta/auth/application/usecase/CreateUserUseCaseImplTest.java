@@ -122,6 +122,9 @@ class CreateUserUseCaseImplTest {
         assertThat(result.role()).isEqualTo(role);
         assertThat(result.status()).isEqualTo(UserStatus.PENDING_ACTIVATION);
         assertThat(result.demo()).isFalse();
+        assertThat(user.getCreatedAt()).isEqualTo(FIXED_NOW);
+        assertThat(user.getUpdatedAt()).isEqualTo(FIXED_NOW);
+        assertThat(result.createdAt()).isEqualTo(FIXED_NOW);
     }
 
     @Test

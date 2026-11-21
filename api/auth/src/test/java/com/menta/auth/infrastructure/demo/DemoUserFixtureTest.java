@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.menta.auth.application.port.out.Clock;
 import com.menta.auth.application.port.out.PasswordEncoderPort;
 import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.User;
@@ -20,7 +21,7 @@ import com.menta.auth.domain.repository.UserRepository;
 import com.menta.shared.demo.DemoIds;
 import com.menta.shared.demo.DemoSeedOrder;
 import com.menta.shared.domain.vo.Email;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,8 +32,11 @@ import org.springframework.mock.env.MockEnvironment;
 
 class DemoUserFixtureTest {
 
+    private static final Instant FIXED_NOW = Instant.parse("2030-03-15T12:00:00Z");
+
     private final UserRepository users = mock(UserRepository.class);
     private final PasswordEncoderPort passwords = mock(PasswordEncoderPort.class);
+    private final Clock clock = mock(Clock.class);
     private final MockEnvironment environment = new MockEnvironment();
     private DemoUserFixture fixture;
 
@@ -44,7 +48,8 @@ class DemoUserFixtureTest {
         environment.setProperty("demo.users.receptionist-password", "pw-receptionist");
         when(passwords.encode(anyString())).thenAnswer(call -> "hash:" + call.getArgument(0));
         when(users.findByEmail(any())).thenReturn(Optional.empty());
-        fixture = new DemoUserFixture(users, passwords, environment);
+        when(clock.now()).thenReturn(FIXED_NOW);
+        fixture = new DemoUserFixture(users, passwords, environment, clock);
     }
 
     @Test
@@ -64,6 +69,16 @@ class DemoUserFixtureTest {
         assertThat(created).extracting(User::getStatus).containsOnly(UserStatus.ACTIVE);
         assertThat(created).extracting(User::getPasswordHash).containsExactly(
             "hash:pw-admin", "hash:pw-instructor", "hash:pw-student", "hash:pw-receptionist");
+    }
+
+    @Test
+    void the_users_it_creates_are_stamped_with_the_clock_instant() throws Exception {
+        fixture.run(new DefaultApplicationArguments());
+
+        ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+        verify(users, org.mockito.Mockito.times(4)).save(saved.capture());
+        assertThat(saved.getAllValues()).extracting(User::getCreatedAt).containsOnly(FIXED_NOW);
+        assertThat(saved.getAllValues()).extracting(User::getUpdatedAt).containsOnly(FIXED_NOW);
     }
 
     @Test
@@ -87,7 +102,7 @@ class DemoUserFixtureTest {
 
     @Test
     void an_existing_instructor_without_profile_gets_the_demo_profile_and_keeps_everything_else() throws Exception {
-        LocalDateTime created = LocalDateTime.of(2026, 1, 1, 10, 0);
+        Instant created = Instant.parse("2026-01-01T10:00:00Z");
         User instructor = User.rehydrate(
             UserId.of(DemoIds.INSTRUCTOR_USER_ID), Email.of("profesor@menta.dance"), "old-hash", Role.INSTRUCTOR,
             UserStatus.ACTIVE, created, created, 7L, null, false, false);
@@ -106,6 +121,7 @@ class DemoUserFixtureTest {
         assertThat(completed.getRole()).isEqualTo(Role.INSTRUCTOR);
         assertThat(completed.getStatus()).isEqualTo(UserStatus.ACTIVE);
         assertThat(completed.getCreatedAt()).isEqualTo(created);
+        assertThat(completed.getUpdatedAt()).isEqualTo(FIXED_NOW);
         assertThat(completed.getTokenVersion()).isEqualTo(7L);
         assertThat(completed.isDemo()).isFalse();
         assertThat(completed.isMustSetPassword()).isFalse();
@@ -184,7 +200,7 @@ class DemoUserFixtureTest {
     @Test
     void a_missing_password_property_aborts_startup() {
         MockEnvironment empty = new MockEnvironment();
-        DemoUserFixture withoutPasswords = new DemoUserFixture(users, passwords, empty);
+        DemoUserFixture withoutPasswords = new DemoUserFixture(users, passwords, empty, clock);
 
         assertThatThrownBy(() -> withoutPasswords.run(new DefaultApplicationArguments()))
             .isInstanceOf(IllegalStateException.class);
@@ -202,7 +218,7 @@ class DemoUserFixtureTest {
     }
 
     private static User existing(java.util.UUID id, String email, Role role, UserProfile profile) {
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         return User.rehydrate(
             UserId.of(id), Email.of(email), "old-hash", role, UserStatus.ACTIVE, now, now, 1L, profile);
     }

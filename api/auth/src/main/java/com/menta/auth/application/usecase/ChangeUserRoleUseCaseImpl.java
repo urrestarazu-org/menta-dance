@@ -15,6 +15,7 @@ import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.model.UserId;
 import com.menta.auth.domain.repository.UserRepository;
+import java.time.Instant;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 
@@ -59,7 +60,8 @@ public class ChangeUserRoleUseCaseImpl implements ChangeUserRoleUseCase {
             throw new LastAdminCannotBeDemotedException();
         }
 
-        user.changeRole(command.newRole());
+        Instant now = clock.now();
+        user.changeRole(command.newRole(), now);
         User saved = userRepository.save(user);
 
         refreshTokenRepository.revokeAllByUserId(saved.getId());
@@ -73,7 +75,7 @@ public class ChangeUserRoleUseCaseImpl implements ChangeUserRoleUseCase {
         );
         userAuditRepository.append(
             saved.getId(), command.actorId(), UserAuditRepository.ROLE_CHANGED,
-            previousRole.name(), command.newRole().name(), clock.now()
+            previousRole.name(), command.newRole().name(), now
         );
         return UserSummary.from(saved);
     }

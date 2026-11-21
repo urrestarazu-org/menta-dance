@@ -77,9 +77,9 @@ public class ActivateAccountUseCaseImpl implements ActivateAccountUseCase {
         try {
             token.consume(now);
             if (chosenPasswordHash == null) {
-                user.activate();
+                user.activate(now);
             } else {
-                user.activateWithPassword(chosenPasswordHash);
+                user.activateWithPassword(chosenPasswordHash, now);
             }
         } catch (IllegalStateException e) {
             // A racing activation (or any other inconsistent state) collapses

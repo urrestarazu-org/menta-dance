@@ -2,7 +2,7 @@
 
 **Estado:** Aceptado
 **Fecha:** 2026-11-12
-**Actualizado:** 2026-11-20 (#794): `physical` toma el "ahora" siempre del puerto `Clock`. Antes, 2026-11-13 (#729): decisión sobre la recurrencia de los cursos y lecturas de `physical` en UTC
+**Actualizado:** 2026-11-21 (#795): `auth` guarda y expone `createdAt`/`updatedAt` de los usuarios como `Instant` (ISO-8601 con `Z`) y el "ahora" de `User` y `DemoUserFixture` sale del puerto `Clock`. Antes, 2026-11-20 (#794): `physical` toma el "ahora" siempre del puerto `Clock`. Antes, 2026-11-13 (#729): decisión sobre la recurrencia de los cursos y lecturas de `physical` en UTC
 **Decisores:** Dueño del proyecto / Arquitectura
 
 ## Contexto y Problema
@@ -187,10 +187,13 @@ corrige de forma gradual y cada punto necesita su propio cambio:
 * Las sesiones ya creadas con la convención anterior (hora local guardada como UTC) y las bases
   demo sembradas antes de #729 conservan sus horarios viejos: el sembrado de la demo no migra
   filas existentes, hay que recrear la base demo. La aplicación todavía no está en producción.
-* `User` (9 usos) y `DemoUserFixture` (1) toman la hora con `LocalDateTime.now()`, que usa la
-  zona de la JVM. En los contenedores da UTC porque es el valor por defecto de la imagen, pero
-  ningún `docker-compose` lo fija; en una máquina de desarrollo en otra zona guardaría hora local.
-* `UserProfile` valida la fecha de nacimiento con `LocalDate.now()`.
+* `UserProfile` valida la fecha de nacimiento con `LocalDate.now()`. Es lo único de `auth` que usa
+  `LocalDate.now()` o `LocalDateTime.now()` (la regla 5 pide usar el día UTC del `Clock`); se
+  resuelve en un cambio aparte.
+* En `auth`, el "ahora" de los refresh tokens y del JWT todavía sale de `Instant.now()` y no del
+  `Clock` (`LoginUseCaseImpl`, `RefreshTokenUseCaseImpl`, `RefreshToken`, `JwtService`,
+  `RefreshTokenRepositoryAdapter`, `RandomUlidGenerator`, `SystemOutboxClock`). No depende de la
+  zona de la JVM, pero impide fijar la hora en los tests; se resuelve en un cambio aparte.
 * El módulo `billing` no se auditó para este ADR.
 
 En `physical`, el "ahora" de `main` sale siempre del puerto `Clock` (#794): ya no queda ningún
@@ -202,9 +205,20 @@ cambio era chico (siete usos, cinco construcciones en tests) y porque así los t
 hora y verificar que el repositorio JPA recibe el `now` del reloj, en vez de depender del reloj
 de pared.
 
+En `auth`, `User` y `DemoUserFixture` ya no toman la hora con `LocalDateTime.now()` (#795): `User`
+recibe el `Instant now` en cada fábrica y mutador, y los casos de uso y el fixture lo obtienen del
+`Clock`. `createdAt`/`updatedAt` son `Instant` en la entidad, los DTO y el contrato
+(`UserSummary.createdAt` sale como `2026-10-01T09:30:00Z`), y el BFF lo convierte a la zona de la
+academia para mostrar el día de alta. No hizo falta migrar datos: la columna sigue siendo `DATETIME`
+y, con `hibernate.jdbc.time_zone: UTC`, Hibernate ya escribía el `LocalDateTime` convertido a UTC
+desde la zona de la JVM (se comprobó el binder con una JVM en Buenos Aires: el valor sale como
+`Timestamp` con calendario UTC), así que las filas existentes ya están en UTC y el `Instant` las lee
+igual. Lo que dependía de la zona de la JVM era el valor que el dominio estampaba, no lo guardado.
+
 La regla **todavía no se verifica de forma automática**. Una regla de ArchUnit que prohíba
 `ZoneId`, `LocalDateTime.now()` y `LocalDate.now()` en `main` es el paso siguiente, pero solo
-puede activarse cuando la deuda anterior esté saldada, para no dejar CI en rojo.
+puede activarse cuando la deuda anterior esté saldada (hoy queda `UserProfile`), para no dejar CI en
+rojo.
 
 ### Implicaciones de Costos
 

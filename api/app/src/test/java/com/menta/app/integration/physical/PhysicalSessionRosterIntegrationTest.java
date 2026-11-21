@@ -40,7 +40,6 @@ import com.menta.shared.auth.UserDisplayNamePort;
 import com.menta.shared.domain.vo.Email;
 import com.menta.shared.physical.AssignmentType;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Collection;
@@ -129,7 +128,7 @@ class PhysicalSessionRosterIntegrationTest extends AbstractPhysicalMySqlIntegrat
     private UUID issueUser(Role role) {
         User user = User.create(
             Email.of(role.name().toLowerCase() + "-" + UUID.randomUUID() + "@example.com"),
-            "irrelevant-hash", role
+            "irrelevant-hash", role, java.time.Instant.now()
         );
         userRepository.save(user);
         when(tokenBlacklistPort.isBlacklisted(anyString())).thenReturn(false);
@@ -140,7 +139,7 @@ class PhysicalSessionRosterIntegrationTest extends AbstractPhysicalMySqlIntegrat
     private String tokenFor(UUID userId, Role role) {
         User user = new User(
             UserId.of(userId), Email.of("token@example.com"), "hash", role, UserStatus.ACTIVE,
-            LocalDateTime.now(), LocalDateTime.now()
+            Instant.now(), Instant.now()
         );
         return accessTokenIssuer.issue(user).token();
     }
@@ -149,7 +148,7 @@ class PhysicalSessionRosterIntegrationTest extends AbstractPhysicalMySqlIntegrat
     private UUID seedStudent(String firstName, String lastName) {
         User student = User.register(
             Email.of(firstName.toLowerCase() + "." + UUID.randomUUID() + "@example.com"), "irrelevant-hash",
-            Role.STUDENT, new UserProfile(firstName, lastName, PHONE, null)
+            Role.STUDENT, new UserProfile(firstName, lastName, PHONE, null), java.time.Instant.now()
         );
         userRepository.save(student);
         return student.getId().getValue();
@@ -157,7 +156,7 @@ class PhysicalSessionRosterIntegrationTest extends AbstractPhysicalMySqlIntegrat
 
     /** A student account without a profile (like the ones created before profiles existed). */
     private UUID seedStudentWithoutProfile(String email) {
-        User student = User.create(Email.of(email), "irrelevant-hash", Role.STUDENT);
+        User student = User.create(Email.of(email), "irrelevant-hash", Role.STUDENT, java.time.Instant.now());
         userRepository.save(student);
         return student.getId().getValue();
     }

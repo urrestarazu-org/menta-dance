@@ -71,10 +71,11 @@ public class RegisterUserUseCaseImpl implements RegisterUserUseCase {
         }
 
         String passwordHash = passwordEncoder.encode(command.password());
-        User user = User.register(email, passwordHash, role, profile);
+        Instant now = clock.now();
+        User user = User.register(email, passwordHash, role, profile, now);
         User savedUser = userRepository.save(user);
 
-        activationTokenIssuer.issueFor(savedUser, clock.now());
+        activationTokenIssuer.issueFor(savedUser, now);
 
         return new UserResult(
             savedUser.getId().toString(),

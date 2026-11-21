@@ -26,7 +26,6 @@ import com.menta.auth.domain.repository.UserRepository;
 import com.menta.shared.domain.vo.Email;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -78,7 +77,7 @@ class ActivateAccountUseCaseImplTest {
     private User pendingUser(UserId id) {
         return new User(
             id, Email.of("student@example.com"), "hash", Role.STUDENT,
-            UserStatus.PENDING_ACTIVATION, LocalDateTime.now(), LocalDateTime.now()
+            UserStatus.PENDING_ACTIVATION, Instant.now(), Instant.now()
         );
     }
 
@@ -107,6 +106,7 @@ class ActivateAccountUseCaseImplTest {
         ArgumentCaptor<User> savedUser = ArgumentCaptor.forClass(User.class);
         verify(userRepository).save(savedUser.capture());
         assertThat(savedUser.getValue().getStatus()).isEqualTo(UserStatus.ACTIVE);
+        assertThat(savedUser.getValue().getUpdatedAt()).isEqualTo(NOW);
     }
 
     @Test
@@ -205,7 +205,7 @@ class ActivateAccountUseCaseImplTest {
         ActivationToken token = ActivationToken.issue(userId, TOKEN_HASH, NOW.plus(Duration.ofHours(24)), NOW);
         User alreadyActiveUser = new User(
             userId, Email.of("student@example.com"), "hash", Role.STUDENT,
-            UserStatus.ACTIVE, LocalDateTime.now(), LocalDateTime.now()
+            UserStatus.ACTIVE, Instant.now(), Instant.now()
         );
 
         stubClock();
@@ -222,7 +222,7 @@ class ActivateAccountUseCaseImplTest {
     private static User invitedUser(UserId id) {
         return User.rehydrate(
             id, Email.of("staff@example.com"), "unusable-hash", Role.RECEPTIONIST,
-            UserStatus.PENDING_ACTIVATION, LocalDateTime.now(), LocalDateTime.now(), 1L,
+            UserStatus.PENDING_ACTIVATION, Instant.now(), Instant.now(), 1L,
             new UserProfile("Ada", "Lovelace", null, null), false, true
         );
     }

@@ -8,8 +8,8 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.Getter;
 import lombok.Setter;
@@ -41,10 +41,10 @@ public class UserJpaEntity {
     private UserStatus status;
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
     @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
+    private Instant updatedAt;
 
     @Column(name = "token_version", nullable = false)
     private long tokenVersion;
@@ -93,8 +93,8 @@ public class UserJpaEntity {
         String passwordHash,
         Role role,
         UserStatus status,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt,
+        Instant createdAt,
+        Instant updatedAt,
         long tokenVersion,
         String firstName,
         String lastName,
@@ -111,8 +111,8 @@ public class UserJpaEntity {
         String passwordHash,
         Role role,
         UserStatus status,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt,
+        Instant createdAt,
+        Instant updatedAt,
         long tokenVersion,
         String firstName,
         String lastName,
@@ -130,8 +130,8 @@ public class UserJpaEntity {
         String passwordHash,
         Role role,
         UserStatus status,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt,
+        Instant createdAt,
+        Instant updatedAt,
         long tokenVersion,
         String firstName,
         String lastName,
@@ -197,19 +197,19 @@ public class UserJpaEntity {
         this.status = status;
     }
 
-    public LocalDateTime getCreatedAt() {
+    public Instant getCreatedAt() {
         return createdAt;
     }
 
-    public void setCreatedAt(LocalDateTime createdAt) {
+    public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
     }
 
-    public LocalDateTime getUpdatedAt() {
+    public Instant getUpdatedAt() {
         return updatedAt;
     }
 
-    public void setUpdatedAt(LocalDateTime updatedAt) {
+    public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
     }
 

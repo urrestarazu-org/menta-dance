@@ -30,7 +30,6 @@ import com.menta.shared.domain.vo.Email;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -86,7 +85,7 @@ class RequestPasswordResetUseCaseImplTest {
     private User userWithStatus(UserStatus status) {
         return new User(
             UserId.generate(), Email.of(EMAIL), "hash", Role.STUDENT,
-            status, LocalDateTime.now(), LocalDateTime.now()
+            status, Instant.now(), Instant.now()
         );
     }
 
@@ -235,7 +234,7 @@ class RequestPasswordResetUseCaseImplTest {
             allowRateLimit();
             User demo = User.rehydrate(
                 UserId.generate(), Email.of(EMAIL), "hash", Role.STUDENT, UserStatus.ACTIVE,
-                LocalDateTime.now(), LocalDateTime.now(), 1L, null, true
+                Instant.now(), Instant.now(), 1L, null, true
             );
             when(userRepository.findByEmail(any())).thenReturn(Optional.of(demo));
 

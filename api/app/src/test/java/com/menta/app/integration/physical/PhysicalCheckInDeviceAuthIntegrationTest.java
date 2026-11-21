@@ -48,7 +48,6 @@ import com.menta.shared.domain.vo.Email;
 import com.menta.shared.physical.AssignmentType;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
@@ -535,11 +534,11 @@ class PhysicalCheckInDeviceAuthIntegrationTest extends AbstractPhysicalMySqlInte
     void a_manual_check_in_runs_no_device_authentication() {
         User receptionist = User.create(
             Email.of("receptionist-" + UUID.randomUUID() + "@example.com"), "hash",
-            Role.RECEPTIONIST
+            Role.RECEPTIONIST, java.time.Instant.now()
         );
         userRepository.save(receptionist);
         User student = User.create(
-            Email.of("student-" + UUID.randomUUID() + "@example.com"), "hash", Role.STUDENT
+            Email.of("student-" + UUID.randomUUID() + "@example.com"), "hash", Role.STUDENT, java.time.Instant.now()
         );
         userRepository.save(student);
         when(tokenBlacklistPort.isBlacklisted(any())).thenReturn(false);
@@ -555,7 +554,7 @@ class PhysicalCheckInDeviceAuthIntegrationTest extends AbstractPhysicalMySqlInte
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(accessTokenIssuer.issue(new User(
             UserId.of(receptionistId), Email.of("token@example.com"), "hash", Role.RECEPTIONIST,
-            UserStatus.ACTIVE, LocalDateTime.now(), LocalDateTime.now()
+            UserStatus.ACTIVE, Instant.now(), Instant.now()
         )).token());
 
         ResponseEntity<Map> response = http.exchange(

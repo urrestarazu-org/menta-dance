@@ -1,5 +1,6 @@
 package com.menta.auth.infrastructure.e2e;
 
+import com.menta.auth.application.port.out.Clock;
 import com.menta.auth.application.port.out.PasswordEncoderPort;
 import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.User;
@@ -7,6 +8,7 @@ import com.menta.auth.domain.repository.UserRepository;
 import com.menta.shared.domain.vo.Email;
 import java.util.Arrays;
 import java.util.Set;
+import lombok.RequiredArgsConstructor;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Profile;
@@ -21,6 +23,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @Profile("e2e-catalog-content")
+@RequiredArgsConstructor
 public final class E2eCatalogContentAuthFixture implements ApplicationRunner, Ordered {
 
     public static final String ADMIN_EMAIL = "catalog.e2e.admin@menta.local";
@@ -30,21 +33,14 @@ public final class E2eCatalogContentAuthFixture implements ApplicationRunner, Or
     private final Environment environment;
     private final UserRepository userRepository;
     private final PasswordEncoderPort passwordEncoder;
-
-    public E2eCatalogContentAuthFixture(
-        Environment environment, UserRepository userRepository, PasswordEncoderPort passwordEncoder
-    ) {
-        this.environment = environment;
-        this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
-    }
+    private final Clock clock;
 
     @Override
     public void run(ApplicationArguments arguments) {
         rejectProductionProfiles();
         Email email = Email.of(ADMIN_EMAIL);
         if (userRepository.findByEmail(email).isEmpty()) {
-            userRepository.save(User.create(email, passwordEncoder.encode(ADMIN_PASSWORD), Role.ADMIN));
+            userRepository.save(User.create(email, passwordEncoder.encode(ADMIN_PASSWORD), Role.ADMIN, clock.now()));
         }
     }
 

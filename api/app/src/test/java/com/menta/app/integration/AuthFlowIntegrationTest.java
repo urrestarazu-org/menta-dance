@@ -118,7 +118,8 @@ class AuthFlowIntegrationTest {
         // context is reused.
         userRepository.findByEmail(Email.of(EMAIL))
             .ifPresent(existing -> userRepository.deleteById(existing.getId()));
-        User user = User.create(Email.of(EMAIL), passwordEncoder.encode(RAW_PASSWORD), Role.STUDENT);
+        User user = User.create(Email.of(EMAIL), passwordEncoder.encode(RAW_PASSWORD), Role.STUDENT,
+            java.time.Instant.now());
         userRepository.save(user);
 
         // 1. POST /api/v1/auth/login -> 200 with token_pair
@@ -192,7 +193,7 @@ class AuthFlowIntegrationTest {
         userRepository.save(User.create(
             Email.of(EMAIL),
             passwordEncoder.encode(RAW_PASSWORD),
-            Role.STUDENT
+            Role.STUDENT, java.time.Instant.now()
         ));
 
         ResponseEntity<Map> response = http.exchange(
@@ -221,7 +222,7 @@ class AuthFlowIntegrationTest {
             Email.of(EMAIL),
             passwordEncoder.encode(RAW_PASSWORD),
             Role.STUDENT,
-            new UserProfile("Ada", "Lovelace", "+5491100000000", null)
+            new UserProfile("Ada", "Lovelace", "+5491100000000", null), java.time.Instant.now()
         ));
 
         ResponseEntity<Map> wrongPassword = http.exchange(
@@ -329,7 +330,7 @@ class AuthFlowIntegrationTest {
         userRepository.save(User.create(
             Email.of(EMAIL),
             passwordEncoder.encode(RAW_PASSWORD),
-            Role.STUDENT
+            Role.STUDENT, java.time.Instant.now()
         ));
 
         ResponseEntity<Map> loginResponse = http.exchange(

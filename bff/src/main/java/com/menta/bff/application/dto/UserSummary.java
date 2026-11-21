@@ -1,6 +1,6 @@
 package com.menta.bff.application.dto;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * What an administrator sees of an account, trimmed from the upstream {@code UserSummary} to what the
@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
  * @param lastName  last name, {@code null} for accounts without a profile
  * @param role      account role
  * @param status    account status
- * @param createdAt sign-up moment as the upstream reports it, without a zone
+ * @param createdAt sign-up moment, an instant (the upstream reports it in UTC)
  */
 public record UserSummary(
         String id,
@@ -21,5 +21,5 @@ public record UserSummary(
         String lastName,
         UserRole role,
         UserStatus status,
-        LocalDateTime createdAt) {
+        Instant createdAt) {
 }

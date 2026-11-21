@@ -161,7 +161,8 @@ class SubscriptionTrialIntegrationTest extends AbstractBillingMySqlIntegrationTe
     }
 
     private UUID seedUser(Role role) {
-        User user = User.create(Email.of("trial-" + UUID.randomUUID() + "@example.com"), "irrelevant-hash", role);
+        User user = User.create(Email.of("trial-" + UUID.randomUUID() + "@example.com"), "irrelevant-hash", role,
+            java.time.Instant.now());
         userRepository.save(user);
         return user.getId().getValue();
     }
@@ -169,7 +170,7 @@ class SubscriptionTrialIntegrationTest extends AbstractBillingMySqlIntegrationTe
     private HttpHeaders headersFor(UUID userId, Role role) {
         User user = new User(
             UserId.of(userId), Email.of("token-" + UUID.randomUUID() + "@example.com"), "hash", role,
-            UserStatus.ACTIVE, java.time.LocalDateTime.now(), java.time.LocalDateTime.now()
+            UserStatus.ACTIVE, java.time.Instant.now(), java.time.Instant.now()
         );
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);

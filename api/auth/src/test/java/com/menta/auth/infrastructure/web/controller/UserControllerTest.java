@@ -169,7 +169,7 @@ class UserControllerTest {
         String body = validBody();
 
         when(registerUserUseCase.register(any())).thenReturn(new UserResult(
-            "id", "user@example.com", Role.STUDENT, UserStatus.PENDING_ACTIVATION, java.time.LocalDateTime.MIN
+            "id", "user@example.com", Role.STUDENT, UserStatus.PENDING_ACTIVATION, java.time.Instant.EPOCH
         ));
 
         for (String url : new String[] {CANONICAL_REGISTER_URL, LEGACY_REGISTER_URL}) {

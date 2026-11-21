@@ -12,7 +12,7 @@ import com.menta.auth.domain.model.UserStatus;
 import com.menta.auth.infrastructure.persistence.entity.UserJpaEntity;
 import com.menta.auth.infrastructure.persistence.repository.UserJpaRepository;
 import com.menta.testsupport.MySqlTestImage;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -42,7 +42,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Testcontainers
 class UserAdminRepositoryAdapterTest {
 
-    private static final LocalDateTime NOW = LocalDateTime.of(2026, 11, 1, 10, 0);
+    private static final Instant NOW = Instant.parse("2026-11-01T10:00:00Z");
     private static final String PHONE = "+5491100000000";
 
     @Container

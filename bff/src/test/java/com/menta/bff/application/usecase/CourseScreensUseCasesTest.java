@@ -21,7 +21,7 @@ import com.menta.bff.application.port.out.PhysicalCourseManagementApiClient;
 import com.menta.bff.application.port.out.PhysicalCourseManagementApiClient.CourseManagementException;
 import com.menta.bff.application.port.out.PhysicalCourseManagementApiClient.CourseManagementException.Code;
 import java.time.DayOfWeek;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.List;
@@ -59,7 +59,7 @@ class CourseScreensUseCasesTest {
 
     private static UserSummary instructor(String id, String email, String first, String last) {
         return new UserSummary(id, email, first, last, UserRole.INSTRUCTOR, UserStatus.ACTIVE,
-                LocalDateTime.of(2026, 10, 1, 9, 30));
+                Instant.parse("2026-10-01T09:30:00Z"));
     }
 
     // ---- GetManagedCourse ----

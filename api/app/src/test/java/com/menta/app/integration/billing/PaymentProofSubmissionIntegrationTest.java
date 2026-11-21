@@ -45,7 +45,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -145,7 +144,8 @@ class PaymentProofSubmissionIntegrationTest extends AbstractBillingMySqlIntegrat
 
     private UUID seedStudent() {
         User user = User.create(
-            Email.of("student-" + UUID.randomUUID() + "@example.com"), "irrelevant-hash", Role.STUDENT
+            Email.of("student-" + UUID.randomUUID() + "@example.com"), "irrelevant-hash", Role.STUDENT,
+            java.time.Instant.now()
         );
         userRepository.save(user);
         return user.getId().getValue();
@@ -165,7 +165,7 @@ class PaymentProofSubmissionIntegrationTest extends AbstractBillingMySqlIntegrat
     private static User principal(UUID userId) {
         return new User(
             UserId.of(userId), Email.of("token@example.com"), "hash", Role.STUDENT, UserStatus.ACTIVE,
-            LocalDateTime.now(), LocalDateTime.now()
+            Instant.now(), Instant.now()
         );
     }
 

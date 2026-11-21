@@ -133,7 +133,8 @@ class InProgressCoursesIntegrationTest extends CatalogAccessMocksIntegrationTest
 
     private UUID seedStudent() {
         User user = User.create(
-            Email.of("student-" + UUID.randomUUID() + "@example.com"), "irrelevant-hash", Role.STUDENT
+            Email.of("student-" + UUID.randomUUID() + "@example.com"), "irrelevant-hash", Role.STUDENT,
+            java.time.Instant.now()
         );
         userRepository.save(user);
         return user.getId().getValue();
@@ -161,7 +162,7 @@ class InProgressCoursesIntegrationTest extends CatalogAccessMocksIntegrationTest
     private HttpHeaders authHeadersFor(UUID userId) {
         User user = new User(
             UserId.of(userId), Email.of("token@example.com"), "hash", Role.STUDENT, UserStatus.ACTIVE,
-            java.time.LocalDateTime.now(), java.time.LocalDateTime.now()
+            java.time.Instant.now(), java.time.Instant.now()
         );
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(accessTokenIssuer.issue(user).token());

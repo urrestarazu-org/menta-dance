@@ -87,7 +87,8 @@ class PlanAdminIntegrationTest extends CatalogAccessMocksIntegrationTestBase {
     /** Persists an active user of the role and logs them in through the real login endpoint. */
     private String accessTokenOf(Role role) {
         String email = "plans-" + role.name().toLowerCase() + "-" + UUID.randomUUID() + "@example.com";
-        userRepository.save(User.create(Email.of(email), passwordEncoder.encode(PASSWORD), role));
+        userRepository.save(User.create(Email.of(email), passwordEncoder.encode(PASSWORD), role,
+            java.time.Instant.now()));
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         ResponseEntity<Map> response = http.exchange("/api/v1/auth/login", HttpMethod.POST,

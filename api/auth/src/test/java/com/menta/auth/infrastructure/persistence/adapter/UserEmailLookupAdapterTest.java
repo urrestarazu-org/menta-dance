@@ -9,7 +9,7 @@ import com.menta.auth.domain.model.UserId;
 import com.menta.auth.domain.model.UserStatus;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.shared.domain.vo.Email;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,7 +43,7 @@ class UserEmailLookupAdapterTest {
     void findEmailById_maps_the_uuid_to_a_userId_and_returns_the_resolved_email() {
         User user = User.rehydrate(
             UserId.of(USER_ID), Email.of("student@menta.dance"), "hash", Role.STUDENT,
-            UserStatus.ACTIVE, LocalDateTime.now(), LocalDateTime.now(), 1L
+            UserStatus.ACTIVE, Instant.now(), Instant.now(), 1L
         );
         when(userRepository.findById(UserId.of(USER_ID))).thenReturn(Optional.of(user));
 
@@ -65,7 +65,7 @@ class UserEmailLookupAdapterTest {
     void findEmailById_returns_empty_for_a_demo_user_because_it_has_no_deliverable_email() {
         User demo = User.rehydrate(
             UserId.of(USER_ID), Email.of("admin@menta.dance"), "hash", Role.ADMIN,
-            UserStatus.ACTIVE, LocalDateTime.now(), LocalDateTime.now(), 1L, null, true
+            UserStatus.ACTIVE, Instant.now(), Instant.now(), 1L, null, true
         );
         when(userRepository.findById(UserId.of(USER_ID))).thenReturn(Optional.of(demo));
 

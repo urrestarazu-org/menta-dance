@@ -8,12 +8,12 @@ import com.menta.auth.domain.model.UserId;
 import com.menta.auth.domain.model.UserProfile;
 import com.menta.auth.domain.model.UserStatus;
 import com.menta.shared.domain.vo.Email;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import org.junit.jupiter.api.Test;
 
 class UserSummaryTest {
 
-    private static final LocalDateTime CREATED_AT = LocalDateTime.of(2026, 10, 1, 9, 30);
+    private static final Instant CREATED_AT = Instant.parse("2026-10-01T09:30:00Z");
 
     @Test
     void maps_a_user_with_profile() {

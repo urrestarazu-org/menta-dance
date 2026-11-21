@@ -4,8 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.menta.shared.domain.vo.Email;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
@@ -15,8 +16,11 @@ import org.junit.jupiter.api.Test;
  */
 class UserTest {
 
+    private static final Instant NOW = Instant.parse("2030-03-15T12:00:00Z");
+    private static final Instant LATER = Instant.parse("2030-03-15T13:30:00Z");
+
     private static User activeUser() {
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = NOW;
         return new User(
             UserId.generate(), Email.of("student@example.com"), "old-hash",
             Role.STUDENT, UserStatus.ACTIVE, now, now
@@ -27,7 +31,7 @@ class UserTest {
     void replaces_the_password_hash() {
         User user = activeUser();
 
-        user.resetPassword("new-hash");
+        user.resetPassword("new-hash", LATER);
 
         assertThat(user.getPasswordHash()).isEqualTo("new-hash");
     }
@@ -40,20 +44,20 @@ class UserTest {
         User user = activeUser();
         long before = user.getTokenVersion();
 
-        user.resetPassword("new-hash");
+        user.resetPassword("new-hash", LATER);
 
         assertThat(user.getTokenVersion()).isEqualTo(before + 1);
     }
 
     @Test
     void rejects_a_null_hash() {
-        assertThatThrownBy(() -> activeUser().resetPassword(null))
+        assertThatThrownBy(() -> activeUser().resetPassword(null, LATER))
             .isInstanceOf(NullPointerException.class);
     }
 
     @Test
     void create_returns_an_already_active_user() {
-        User user = User.create(Email.of("student@example.com"), "hash", Role.STUDENT);
+        User user = User.create(Email.of("student@example.com"), "hash", Role.STUDENT, NOW);
 
         assertThat(user.isActive()).isTrue();
         assertThat(user.getStatus()).isEqualTo(UserStatus.ACTIVE);
@@ -64,7 +68,7 @@ class UserTest {
     void deactivate_moves_an_active_user_to_inactive() {
         User user = activeUser();
 
-        user.deactivate();
+        user.deactivate(LATER);
 
         assertThat(user.getStatus()).isEqualTo(UserStatus.INACTIVE);
         assertThat(user.isActive()).isFalse();
@@ -73,7 +77,7 @@ class UserTest {
     @Test
     void equal_when_ids_match() {
         UserId id = UserId.generate();
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = NOW;
         User a = new User(id, Email.of("a@example.com"), "hash-a", Role.STUDENT, UserStatus.ACTIVE, now, now);
         User b = new User(id, Email.of("b@example.com"), "hash-b", Role.ADMIN, UserStatus.INACTIVE, now, now);
 
@@ -107,7 +111,7 @@ class UserTest {
     void register_keeps_the_profile_and_waits_for_activation() {
         UserProfile profile = new UserProfile("Ada", "Lovelace", "+5491100000000", LocalDate.of(1990, 5, 17));
 
-        User user = User.register(Email.of("student@example.com"), "hash", Role.STUDENT, profile);
+        User user = User.register(Email.of("student@example.com"), "hash", Role.STUDENT, profile, NOW);
 
         assertThat(user.getStatus()).isEqualTo(UserStatus.PENDING_ACTIVATION);
         assertThat(user.getProfile()).contains(profile);
@@ -117,20 +121,20 @@ class UserTest {
     void register_requires_a_profile() {
         Email email = Email.of("student@example.com");
 
-        assertThatThrownBy(() -> User.register(email, "hash", Role.STUDENT, null))
+        assertThatThrownBy(() -> User.register(email, "hash", Role.STUDENT, null, NOW))
             .isInstanceOf(NullPointerException.class);
     }
 
     @Test
     void users_created_without_a_profile_report_it_as_absent() {
         assertThat(activeUser().getProfile()).isEqualTo(Optional.empty());
-        assertThat(User.create(Email.of("student@example.com"), "hash", Role.STUDENT).getProfile()).isEmpty();
+        assertThat(User.create(Email.of("student@example.com"), "hash", Role.STUDENT, NOW).getProfile()).isEmpty();
     }
 
     @Test
     void rehydrate_with_a_profile_restores_it_and_without_one_leaves_it_absent() {
         UserProfile profile = new UserProfile("Ada", "Lovelace", "+5491100000000", null);
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = NOW;
         UserId id = UserId.generate();
         Email email = Email.of("student@example.com");
 
@@ -145,7 +149,7 @@ class UserTest {
     @Test
     void to_string_never_includes_the_profile() {
         UserProfile profile = new UserProfile("Ada", "Lovelace", "+5491100000000", null);
-        User user = User.register(Email.of("student@example.com"), "hash", Role.STUDENT, profile);
+        User user = User.register(Email.of("student@example.com"), "hash", Role.STUDENT, profile, NOW);
 
         assertThat(user.toString()).doesNotContain("Ada").doesNotContain("Lovelace").doesNotContain("+5491100000000");
     }
@@ -154,14 +158,15 @@ class UserTest {
     void registered_and_created_users_are_never_demo() {
         UserProfile profile = new UserProfile("Ada", "Lovelace", "+5491100000000", null);
 
-        assertThat(User.register(Email.of("student@example.com"), "hash", Role.STUDENT, profile).isDemo()).isFalse();
-        assertThat(User.create(Email.of("student@example.com"), "hash", Role.STUDENT).isDemo()).isFalse();
+        assertThat(User.register(Email.of("student@example.com"), "hash", Role.STUDENT, profile, NOW).isDemo())
+            .isFalse();
+        assertThat(User.create(Email.of("student@example.com"), "hash", Role.STUDENT, NOW).isDemo()).isFalse();
         assertThat(activeUser().isDemo()).isFalse();
     }
 
     @Test
     void rehydrate_without_the_flag_yields_a_non_demo_user_and_with_it_restores_it() {
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = NOW;
         UserId id = UserId.generate();
         Email email = Email.of("student@example.com");
 
@@ -180,34 +185,34 @@ class UserTest {
     void change_role_replaces_the_role_and_bumps_the_token_version_in_the_same_call() {
         // The role travels in the access token: changing it without bumping tokenVersion would let a
         // token carrying the old role keep authorizing until it expires.
-        LocalDateTime past = LocalDateTime.now().minusDays(1);
+        Instant past = NOW.minus(Duration.ofDays(1));
         User user = User.rehydrate(
             UserId.generate(), Email.of("student@example.com"), "hash", Role.STUDENT, UserStatus.ACTIVE,
             past, past, 4L
         );
 
-        user.changeRole(Role.INSTRUCTOR);
+        user.changeRole(Role.INSTRUCTOR, LATER);
 
         assertThat(user.getRole()).isEqualTo(Role.INSTRUCTOR);
         assertThat(user.getTokenVersion()).isEqualTo(5L);
-        assertThat(user.getUpdatedAt()).isAfter(past);
+        assertThat(user.getUpdatedAt()).isEqualTo(LATER);
         assertThat(user.getCreatedAt()).isEqualTo(past);
     }
 
     @Test
     void change_role_rejects_a_null_role() {
-        assertThatThrownBy(() -> activeUser().changeRole(null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> activeUser().changeRole(null, LATER)).isInstanceOf(NullPointerException.class);
     }
 
     @Test
     void change_role_to_the_current_role_changes_nothing() {
-        LocalDateTime past = LocalDateTime.now().minusDays(1);
+        Instant past = NOW.minus(Duration.ofDays(1));
         User user = User.rehydrate(
             UserId.generate(), Email.of("student@example.com"), "hash", Role.STUDENT, UserStatus.ACTIVE,
             past, past, 4L
         );
 
-        user.changeRole(Role.STUDENT);
+        user.changeRole(Role.STUDENT, LATER);
 
         assertThat(user.getTokenVersion()).isEqualTo(4L);
         assertThat(user.getUpdatedAt()).isEqualTo(past);
@@ -216,7 +221,7 @@ class UserTest {
     private static User invitedUser() {
         return User.invite(
             Email.of("staff@example.com"), "unusable-hash", Role.RECEPTIONIST,
-            new UserProfile("Ada", "Lovelace", null, null)
+            new UserProfile("Ada", "Lovelace", null, null), NOW
         );
     }
 
@@ -238,28 +243,28 @@ class UserTest {
         Email email = Email.of("staff@example.com");
         UserProfile profile = new UserProfile("Ada", "Lovelace", null, null);
 
-        assertThatThrownBy(() -> User.invite(email, "hash", Role.INSTRUCTOR, null))
+        assertThatThrownBy(() -> User.invite(email, "hash", Role.INSTRUCTOR, null, NOW))
             .isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> User.invite(email, null, Role.INSTRUCTOR, profile))
+        assertThatThrownBy(() -> User.invite(email, null, Role.INSTRUCTOR, profile, NOW))
             .isInstanceOf(NullPointerException.class);
     }
 
     @Test
     void other_ways_of_building_a_user_never_require_choosing_a_password() {
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = NOW;
         UserProfile profile = new UserProfile("Ada", "Lovelace", "+5491100000000", null);
         UserId id = UserId.generate();
         Email email = Email.of("student@example.com");
 
-        assertThat(User.register(email, "hash", Role.STUDENT, profile).isMustSetPassword()).isFalse();
-        assertThat(User.create(email, "hash", Role.STUDENT).isMustSetPassword()).isFalse();
+        assertThat(User.register(email, "hash", Role.STUDENT, profile, NOW).isMustSetPassword()).isFalse();
+        assertThat(User.create(email, "hash", Role.STUDENT, NOW).isMustSetPassword()).isFalse();
         assertThat(User.rehydrate(id, email, "h", Role.STUDENT, UserStatus.ACTIVE, now, now, 1L, null, true)
             .isMustSetPassword()).isFalse();
     }
 
     @Test
     void rehydrate_restores_the_must_set_password_marker() {
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = NOW;
         UserId id = UserId.generate();
         Email email = Email.of("staff@example.com");
 
@@ -278,7 +283,7 @@ class UserTest {
     void activate_refuses_an_account_that_must_choose_its_password() {
         User user = invitedUser();
 
-        assertThatThrownBy(user::activate).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> user.activate(LATER)).isInstanceOf(IllegalStateException.class);
 
         assertThat(user.getStatus()).isEqualTo(UserStatus.PENDING_ACTIVATION);
     }
@@ -287,7 +292,7 @@ class UserTest {
     void activate_with_password_stores_the_chosen_hash_clears_the_marker_and_activates() {
         User user = invitedUser();
 
-        user.activateWithPassword("chosen-hash");
+        user.activateWithPassword("chosen-hash", LATER);
 
         assertThat(user.getPasswordHash()).isEqualTo("chosen-hash");
         assertThat(user.isMustSetPassword()).isFalse();
@@ -296,17 +301,17 @@ class UserTest {
 
     @Test
     void activate_with_password_is_only_for_pending_accounts_that_must_choose_one() {
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = NOW;
         User ordinaryPending = new User(
             UserId.generate(), Email.of("student@example.com"), "hash", Role.STUDENT,
             UserStatus.PENDING_ACTIVATION, now, now
         );
         User alreadyActive = invitedUser();
-        alreadyActive.activateWithPassword("first-hash");
+        alreadyActive.activateWithPassword("first-hash", LATER);
 
-        assertThatThrownBy(() -> ordinaryPending.activateWithPassword("h"))
+        assertThatThrownBy(() -> ordinaryPending.activateWithPassword("h", LATER))
             .isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> alreadyActive.activateWithPassword("second-hash"))
+        assertThatThrownBy(() -> alreadyActive.activateWithPassword("second-hash", LATER))
             .isInstanceOf(IllegalStateException.class);
         assertThat(alreadyActive.getPasswordHash()).isEqualTo("first-hash");
     }
@@ -315,7 +320,45 @@ class UserTest {
     void activate_with_password_rejects_a_null_hash() {
         User user = invitedUser();
 
-        assertThatThrownBy(() -> user.activateWithPassword(null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> user.activateWithPassword(null, LATER)).isInstanceOf(NullPointerException.class);
         assertThat(user.getStatus()).isEqualTo(UserStatus.PENDING_ACTIVATION);
+    }
+
+    @Test
+    void the_factories_stamp_both_timestamps_with_the_instant_they_receive() {
+        UserProfile profile = new UserProfile("Ada", "Lovelace", null, null);
+        Email email = Email.of("student@example.com");
+
+        for (User user : new User[] {
+            User.register(email, "hash", Role.STUDENT, profile, NOW),
+            User.invite(email, "hash", Role.STUDENT, profile, NOW),
+            User.create(email, "hash", Role.STUDENT, NOW)
+        }) {
+            assertThat(user.getCreatedAt()).isEqualTo(NOW);
+            assertThat(user.getUpdatedAt()).isEqualTo(NOW);
+        }
+    }
+
+    @Test
+    void every_mutator_stamps_updated_at_with_the_instant_it_receives_and_keeps_created_at() {
+        User activated = invitedUser();
+        activated.activateWithPassword("chosen-hash", LATER);
+        User plainActivated = User.register(
+            Email.of("student@example.com"), "hash", Role.STUDENT, new UserProfile("Ada", "Lovelace", null, null), NOW
+        );
+        plainActivated.activate(LATER);
+        User deactivated = activeUser();
+        deactivated.deactivate(LATER);
+        User bumped = activeUser();
+        bumped.bumpTokenVersion(LATER);
+        User reset = activeUser();
+        reset.resetPassword("new-hash", LATER);
+        User promoted = activeUser();
+        promoted.changeRole(Role.ADMIN, LATER);
+
+        for (User user : new User[] {activated, plainActivated, deactivated, bumped, reset, promoted}) {
+            assertThat(user.getUpdatedAt()).isEqualTo(LATER);
+            assertThat(user.getCreatedAt()).isEqualTo(NOW);
+        }
     }
 }

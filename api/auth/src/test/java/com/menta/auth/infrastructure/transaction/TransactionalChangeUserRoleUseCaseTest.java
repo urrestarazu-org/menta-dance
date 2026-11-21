@@ -10,7 +10,7 @@ import com.menta.auth.application.port.in.ChangeUserRoleUseCase;
 import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.UserStatus;
 import java.lang.reflect.Method;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,7 +27,7 @@ class TransactionalChangeUserRoleUseCaseTest {
     void delegates_the_call_and_returns_its_result() {
         ChangeUserRoleCommand command = new ChangeUserRoleCommand(UUID.randomUUID(), UUID.randomUUID(), Role.STUDENT);
         UserSummary expected = new UserSummary(
-            "id", "a@example.com", null, null, Role.STUDENT, UserStatus.ACTIVE, false, LocalDateTime.now()
+            "id", "a@example.com", null, null, Role.STUDENT, UserStatus.ACTIVE, false, Instant.now()
         );
         when(delegate.changeRole(command)).thenReturn(expected);
 

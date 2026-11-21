@@ -13,8 +13,8 @@ import com.menta.auth.domain.model.UserProfile;
 import com.menta.auth.domain.model.UserStatus;
 import com.menta.auth.domain.repository.UserRepository;
 import com.menta.shared.domain.vo.Email;
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,7 +38,7 @@ class GetCurrentUserUseCaseImplTest {
     }
 
     private static User user(Role role, UserProfile profile) {
-        LocalDateTime created = LocalDateTime.of(2026, 1, 1, 0, 0);
+        Instant created = Instant.parse("2026-01-01T00:00:00Z");
         return User.rehydrate(
             UserId.of(USER_ID), Email.of("ada@example.com"), "hash", role, UserStatus.ACTIVE,
             created, created, 0L, profile

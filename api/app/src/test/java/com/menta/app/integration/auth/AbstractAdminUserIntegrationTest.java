@@ -100,6 +100,7 @@ abstract class AbstractAdminUserIntegrationTest extends AbstractAuthMySqlIntegra
     /** Persists an already-active user with the shared test password. */
     protected User newUser(Role role) {
         String email = role.name().toLowerCase() + "-" + System.nanoTime() + "@example.com";
-        return userRepository.save(User.create(Email.of(email), passwordEncoder.encode(RAW_PASSWORD), role));
+        return userRepository.save(User.create(Email.of(email), passwordEncoder.encode(RAW_PASSWORD), role,
+            java.time.Instant.now()));
     }
 }

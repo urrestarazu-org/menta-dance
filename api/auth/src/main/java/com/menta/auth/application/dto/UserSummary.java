@@ -4,7 +4,7 @@ import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.model.UserProfile;
 import com.menta.auth.domain.model.UserStatus;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * What an admin sees of a user: identity, role and state. Credentials and the token version are deliberately
@@ -21,7 +21,7 @@ public record UserSummary(
     Role role,
     UserStatus status,
     boolean demo,
-    LocalDateTime createdAt
+    Instant createdAt
 ) {
 
     /** Projects the user, taking the names from its profile when it has one. */

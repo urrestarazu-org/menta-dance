@@ -22,7 +22,7 @@ import com.menta.bff.application.dto.UserSummary;
 import com.menta.bff.application.port.out.AdminUsersApiClient;
 import com.menta.bff.infrastructure.config.AuthProperties;
 import java.time.Duration;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -45,25 +45,25 @@ class AdminUsersApiAdapterTest {
             {"items": [
               {"id": "5b6f7c8e-1d2a-4e3b-9c4d-0a1b2c3d4e5f", "email": "ada@example.com", "firstName": "Ada",
                "lastName": "Lovelace", "role": "RECEPTIONIST", "status": "ACTIVE", "demo": false,
-               "createdAt": "2026-10-01T09:30:00"},
+               "createdAt": "2026-10-01T09:30:00Z"},
               {"id": "6c7a8d9f-2e3b-4f4c-8d5e-1b2c3d4e5f60", "email": "admin@example.com", "firstName": null,
                "lastName": null, "role": "ADMIN", "status": "PENDING_ACTIVATION", "demo": true,
-               "createdAt": "2026-10-02T10:15:30.123"}],
+               "createdAt": "2026-10-02T10:15:30.123Z"}],
              "page": 1, "size": 20, "totalElements": 22, "totalPages": 2}
             """;
 
     private static final String ITEM_WITHOUT_ID = oneItem("\"email\": \"a@example.com\", \"role\": \"ADMIN\","
-            + " \"status\": \"ACTIVE\", \"createdAt\": \"2026-10-01T09:30:00\"");
+            + " \"status\": \"ACTIVE\", \"createdAt\": \"2026-10-01T09:30:00Z\"");
     private static final String ITEM_WITHOUT_EMAIL = oneItem("\"id\": \"u-1\", \"role\": \"ADMIN\","
-            + " \"status\": \"ACTIVE\", \"createdAt\": \"2026-10-01T09:30:00\"");
+            + " \"status\": \"ACTIVE\", \"createdAt\": \"2026-10-01T09:30:00Z\"");
     private static final String ITEM_WITHOUT_ROLE = oneItem("\"id\": \"u-1\", \"email\": \"a@example.com\","
-            + " \"status\": \"ACTIVE\", \"createdAt\": \"2026-10-01T09:30:00\"");
+            + " \"status\": \"ACTIVE\", \"createdAt\": \"2026-10-01T09:30:00Z\"");
     private static final String ITEM_WITHOUT_STATUS = oneItem("\"id\": \"u-1\", \"email\": \"a@example.com\","
-            + " \"role\": \"ADMIN\", \"createdAt\": \"2026-10-01T09:30:00\"");
+            + " \"role\": \"ADMIN\", \"createdAt\": \"2026-10-01T09:30:00Z\"");
     private static final String ITEM_WITHOUT_DATE = oneItem("\"id\": \"u-1\", \"email\": \"a@example.com\","
             + " \"role\": \"ADMIN\", \"status\": \"ACTIVE\"");
     private static final String ITEM_WITH_UNKNOWN_ROLE = oneItem("\"id\": \"u-1\", \"email\": \"a@example.com\","
-            + " \"role\": \"WIZARD\", \"status\": \"ACTIVE\", \"createdAt\": \"2026-10-01T09:30:00\"");
+            + " \"role\": \"WIZARD\", \"status\": \"ACTIVE\", \"createdAt\": \"2026-10-01T09:30:00Z\"");
     private static final String ITEM_WITH_BAD_DATE = oneItem("\"id\": \"u-1\", \"email\": \"a@example.com\","
             + " \"role\": \"ADMIN\", \"status\": \"ACTIVE\", \"createdAt\": \"yesterday\"");
 
@@ -107,10 +107,10 @@ class AdminUsersApiAdapterTest {
         assertThat(page.totalPages()).isEqualTo(2);
         assertThat(page.items()).containsExactly(
                 new UserSummary("5b6f7c8e-1d2a-4e3b-9c4d-0a1b2c3d4e5f", "ada@example.com", "Ada", "Lovelace",
-                        UserRole.RECEPTIONIST, UserStatus.ACTIVE, LocalDateTime.of(2026, 10, 1, 9, 30)),
+                        UserRole.RECEPTIONIST, UserStatus.ACTIVE, Instant.parse("2026-10-01T09:30:00Z")),
                 new UserSummary("6c7a8d9f-2e3b-4f4c-8d5e-1b2c3d4e5f60", "admin@example.com", null, null,
                         UserRole.ADMIN, UserStatus.PENDING_ACTIVATION,
-                        LocalDateTime.of(2026, 10, 2, 10, 15, 30, 123_000_000)));
+                        Instant.parse("2026-10-02T10:15:30.123Z")));
         verify(getRequestedFor(urlPathEqualTo(USERS)).withHeader("Authorization", equalTo("Bearer " + TOKEN)));
     }
 

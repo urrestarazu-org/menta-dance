@@ -336,7 +336,7 @@ class AuthConfigurationTest {
     void wires_the_refresh_token_use_case_bean() {
         RefreshTokenUseCase useCase = configuration.refreshTokenUseCase(
             mock(UserRepository.class), mock(RefreshTokenRepository.class), mock(AccessTokenIssuer.class),
-            mock(TokenHasher.class), mock(OutboxAppender.class), mock(AuthDegradedGuard.class)
+            mock(TokenHasher.class), mock(OutboxAppender.class), mock(AuthDegradedGuard.class), mock(Clock.class)
         );
 
         assertThat(useCase).isInstanceOf(TransactionalRefreshTokenUseCase.class);
@@ -346,7 +346,7 @@ class AuthConfigurationTest {
     void wires_the_logout_use_case_bean() {
         LogoutUseCase useCase = configuration.logoutUseCase(
             mock(UserRepository.class), mock(RefreshTokenRepository.class), mock(TokenHasher.class),
-            mock(OutboxAppender.class), mock(AuthDegradedGuard.class)
+            mock(OutboxAppender.class), mock(AuthDegradedGuard.class), mock(Clock.class)
         );
 
         assertThat(useCase).isInstanceOf(TransactionalLogoutUseCase.class);

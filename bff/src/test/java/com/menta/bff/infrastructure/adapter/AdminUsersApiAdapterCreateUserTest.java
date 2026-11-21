@@ -40,7 +40,7 @@ class AdminUsersApiAdapterCreateUserTest {
             """
             {"id": "5b6f7c8e-1d2a-4e3b-9c4d-0a1b2c3d4e5f", "email": "recepcion@example.com", "firstName": "Ada",
              "lastName": "Lovelace", "role": "RECEPTIONIST", "status": "PENDING_ACTIVATION", "demo": false,
-             "createdAt": "2026-11-10T09:30:00"}
+             "createdAt": "2026-11-10T09:30:00Z"}
             """;
 
     private AdminUsersApiAdapter adapter;

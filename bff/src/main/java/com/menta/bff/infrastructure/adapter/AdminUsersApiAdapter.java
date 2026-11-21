@@ -9,7 +9,7 @@ import com.menta.bff.application.dto.UserSummary;
 import com.menta.bff.application.port.out.AdminUsersApiClient;
 import com.menta.bff.infrastructure.config.AuthProperties;
 import java.net.URI;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -252,6 +252,6 @@ public class AdminUsersApiAdapter implements AdminUsersApiClient {
             String lastName,
             UserRole role,
             UserStatus status,
-            LocalDateTime createdAt) {
+            Instant createdAt) {
     }
 }

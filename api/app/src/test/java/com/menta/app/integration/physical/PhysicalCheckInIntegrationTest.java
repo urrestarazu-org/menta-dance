@@ -148,7 +148,7 @@ class PhysicalCheckInIntegrationTest extends AbstractPhysicalMySqlIntegrationTes
     private UUID issueUser(Role role) {
         User user = User.create(
             Email.of(role.name().toLowerCase() + "-" + UUID.randomUUID() + "@example.com"),
-            "irrelevant-hash", role
+            "irrelevant-hash", role, java.time.Instant.now()
         );
         userRepository.save(user);
         when(tokenBlacklistPort.isBlacklisted(anyString())).thenReturn(false);
@@ -160,7 +160,7 @@ class PhysicalCheckInIntegrationTest extends AbstractPhysicalMySqlIntegrationTes
     private String tokenFor(UUID userId, Role role) {
         User user = new User(
             UserId.of(userId), Email.of("token@example.com"), "hash", role, UserStatus.ACTIVE,
-            java.time.LocalDateTime.now(), java.time.LocalDateTime.now()
+            java.time.Instant.now(), java.time.Instant.now()
         );
         return accessTokenIssuer.issue(user).token();
     }

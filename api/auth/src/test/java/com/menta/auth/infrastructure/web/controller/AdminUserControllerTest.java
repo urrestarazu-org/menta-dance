@@ -16,6 +16,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.menta.auth.application.dto.ChangeUserRoleCommand;
 import com.menta.auth.application.dto.CreateUserCommand;
 import com.menta.auth.application.dto.ListUsersQuery;
@@ -30,7 +32,7 @@ import com.menta.auth.domain.exception.UserNotFoundException;
 import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.UserId;
 import com.menta.auth.domain.model.UserStatus;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,6 +41,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.MediaType;
+import org.springframework.http.ProblemDetail;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.http.converter.json.ProblemDetailJacksonMixin;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -65,9 +70,15 @@ class AdminUserControllerTest {
         listUsersUseCase = mock(ListUsersUseCase.class);
         changeUserRoleUseCase = mock(ChangeUserRoleUseCase.class);
         createUserUseCase = mock(CreateUserUseCase.class);
+        // Boot writes instants as ISO-8601 strings; the standalone setup needs that spelled out.
+        // The mixin is what Boot registers so a ProblemDetail's extra properties (code) are top-level.
+        JsonMapper mapper = JsonMapper.builder().findAndAddModules()
+            .addMixIn(ProblemDetail.class, ProblemDetailJacksonMixin.class)
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS).build();
         mockMvc = MockMvcBuilders.standaloneSetup(
                 new AdminUserController(listUsersUseCase, changeUserRoleUseCase, createUserUseCase))
             .setControllerAdvice(new AdminUserExceptionHandler())
+            .setMessageConverters(new MappingJackson2HttpMessageConverter(mapper))
             .build();
     }
 
@@ -80,7 +91,7 @@ class AdminUserControllerTest {
     private static UserSummary summary(Role role) {
         return new UserSummary(
             USER_ID.toString(), "ada@example.com", "Ada", "Lovelace", role, UserStatus.ACTIVE, false,
-            LocalDateTime.of(2026, 10, 1, 9, 30)
+            Instant.parse("2026-10-01T09:30:00Z")
         );
     }
 
@@ -136,7 +147,7 @@ class AdminUserControllerTest {
             .andExpect(jsonPath("$.items[0].role", is("INSTRUCTOR")))
             .andExpect(jsonPath("$.items[0].status", is("ACTIVE")))
             .andExpect(jsonPath("$.items[0].demo", is(false)))
-            .andExpect(jsonPath("$.items[0].createdAt", is("2026-10-01T09:30:00")))
+            .andExpect(jsonPath("$.items[0].createdAt", is("2026-10-01T09:30:00Z")))
             .andExpect(jsonPath("$.items[0].passwordHash").doesNotExist())
             .andExpect(jsonPath("$.items[0].tokenVersion").doesNotExist());
     }
@@ -239,7 +250,7 @@ class AdminUserControllerTest {
         throws Exception {
         when(createUserUseCase.create(any())).thenReturn(new UserSummary(
             USER_ID.toString(), "staff@example.com", "Ada", "Lovelace", Role.RECEPTIONIST,
-            UserStatus.PENDING_ACTIVATION, false, LocalDateTime.of(2026, 11, 10, 9, 30)
+            UserStatus.PENDING_ACTIVATION, false, Instant.parse("2026-11-10T09:30:00Z")
         ));
 
         mockMvc.perform(post(BASE_URL)
