@@ -202,7 +202,7 @@ Los tests que recorren enlaces ignoran los anchors internos (`#main`) del skip l
 Base del área web para el personal (issue #354). Pantallas hoy: el inicio `GET /gestion` y el listado de
 usuarios `GET /gestion/usuarios` con su alta `GET /gestion/usuarios/nuevo` y `POST /gestion/usuarios` y el cambio de
 rol `POST /gestion/usuarios/{id}/rol` (#378), y la recepción `GET /gestion/recepcion` con el roster de cada sesión y
-el check-in manual (#373), y los cursos presenciales `GET /gestion/cursos-presenciales` con sus sesiones y los alumnos de cada una (#368), y los pagos por transferencia `GET /gestion/pagos` (#370); el resto de las secciones se habilita a medida que llega cada pantalla. La autorización
+el check-in manual (#373), y los cursos presenciales `GET /gestion/cursos-presenciales` con sus sesiones y los alumnos de cada una (#368), y los pagos por transferencia `GET /gestion/pagos` y las compras con excepción `GET /gestion/compras-con-excepcion` (#370); el resto de las secciones se habilita a medida que llega cada pantalla. La autorización
 real la decide la API; el BFF solo evita mostrar pantallas que un rol no puede usar.
 
 ### Prefijos y roles
@@ -250,7 +250,7 @@ coinciden con los del usuario, en el orden declarado. Los roles se declaran sin 
 
 1. Agregar el controller de la pantalla bajo su prefijo (por ejemplo `/gestion/contenido`) y su vista con
    `fragments/management :: page(..., '<clave>', ...)`. La clave es la que declara la sección en
-   `ManagementNavigationConfig` (en inglés: `content`, `sessions`, `reception`, `payments`, `devices`, `users`).
+   `ManagementNavigationConfig` (en inglés: `content`, `sessions`, `reception`, `payments`, `exception-purchases`, `devices`, `users`).
 2. En `ManagementNavigationConfig`, pasar `enabled` de esa sección a `true` (así nunca hay un enlace sin pantalla).
 3. Si el prefijo es nuevo, agregarlo en `BffSecurityConfig` antes de `/gestion/**` y sumar sus casos de rol
    rechazado a `ManagementAccessIntegrationTest`. La matriz de ese test mide "permitido" como 404 (nada atiende
@@ -572,6 +572,27 @@ y el token de la sesión. Todas las respuestas llevan `Cache-Control: no-store`.
   son obligatorios y de hasta 500 caracteres: si no validan se muestra el detalle con los errores y no se llama a la API.
   Cada refusal se redacta por su `code` (`ILLEGAL_PAYMENT_STATE_TRANSITION` = "ya fue resuelto", por ejemplo ante una
   doble aprobación); el `detail` y el cuerpo de la API nunca se muestran. CSRF activo.
+
+### Compras con excepción (`/gestion/compras-con-excepcion`) (#370)
+
+Solo `ADMIN` (`/gestion/compras-con-excepcion/**`, sección `exception-purchases`); lista las compras presenciales que
+quedaron en `EXCEPTION` (la capacidad se agotó tras el pago) y permite cerrarlas, con `AdminBillingApiClient` y el
+token de la sesión. Un solo controller, `ManagementExceptionPurchasesController`. Todas las respuestas llevan
+`Cache-Control: no-store`.
+
+- **`GET /gestion/compras-con-excepcion`**: tabla con `<caption>` (alumno, modalidad, monto, fecha, sesiones afectadas y
+  estado "En excepción"), paginación Anterior/Siguiente con `page` y `size` y estado vacío. El alumno es el `userId`
+  abreviado a 8 caracteres; fecha en la zona de la academia, monto en es-AR. El formateo vive en
+  `ListExceptionPurchasesUseCase`. Si la API cae: aviso y `503`, sin nada de su cuerpo.
+- **Resolución en la lista**: la API no tiene detalle de una compra, así que cada fila lleva un
+  `<details><summary>Resolver</summary>` con un formulario POST sin JavaScript: `resolution` ("Reembolsada" =
+  `REFUNDED`, "Compensada" = `COMPENSATED`) y `note` obligatoria de hasta 500 caracteres. Los ids de los campos llevan el
+  índice de la fila para que etiqueta, ayuda y error apunten al control correcto.
+- **`POST /gestion/compras-con-excepcion/{purchaseId}/resolver`**: Post/Redirect/Get a la lista con el resultado en un
+  flash (éxito y error en atributos distintos). Si el formulario no valida se vuelve a mostrar la lista con el error
+  junto a los campos de esa fila (su `details` abierto) y no se llama a la API. Cada refusal se redacta por su `code`
+  (`PURCHASE_ALREADY_RESOLVED`, `ILLEGAL_PURCHASE_STATE_TRANSITION`, `PURCHASE_NOT_FOUND`, `INVALID_REQUEST`); el `detail`,
+  el cuerpo de la API y la nota nunca se muestran ni van a un log. CSRF activo.
 
 ## Accesibilidad base
 

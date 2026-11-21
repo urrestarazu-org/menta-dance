@@ -155,6 +155,8 @@ public class BffSecurityConfig {
                         // Manual payment verification (#370): the proof of a payment, administrator only. The
                         // fail-closed rule below would cover it; the explicit one documents the intent.
                         .requestMatchers("/gestion/pagos/**").hasRole("ADMIN")
+                        // Purchases in exception and their resolution (#370): administrator only, like payments.
+                        .requestMatchers("/gestion/compras-con-excepcion/**").hasRole("ADMIN")
                         // Fail closed: a prefix nobody planned (or any other verb on the exact
                         // /gestion path) is administrator-only, never open to the rest of the staff.
                         .requestMatchers("/gestion/**").hasRole("ADMIN")

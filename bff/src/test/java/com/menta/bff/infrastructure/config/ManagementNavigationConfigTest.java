@@ -25,9 +25,10 @@ class ManagementNavigationConfigTest {
 
     @Test
     @DisplayName("only sections with a screen are offered (courses to admin and instructor, Recepción to reception "
-            + "and admin, Pagos and Usuarios to admin)")
+            + "and admin, Pagos, Compras con excepción and Usuarios to admin)")
     void onlySectionsWithAScreenAreOffered() {
-        assertThat(keysFor("ADMIN")).containsExactly("cursos-presenciales", "reception", "payments", "users");
+        assertThat(keysFor("ADMIN")).containsExactlyInAnyOrder("cursos-presenciales", "reception", "payments",
+                "exception-purchases", "users");
         assertThat(keysFor("INSTRUCTOR")).containsExactly("cursos-presenciales");
         assertThat(keysFor("RECEPTIONIST")).containsExactly("reception");
         assertThat(keysFor("STUDENT")).isEmpty();
@@ -65,6 +66,17 @@ class ManagementNavigationConfigTest {
         assertThat(payments.path()).isEqualTo("/gestion/pagos");
         assertThat(payments.roles()).containsExactly("ADMIN");
         assertThat(keysFor("ADMIN")).doesNotContain("billing");
+    }
+
+    @Test
+    @DisplayName("the Compras con excepción section points at the screen the controller serves, for admin only")
+    void exceptionPurchasesSectionPoints() {
+        ManagementSection purchases = sectionFor("ADMIN", "exception-purchases");
+
+        assertThat(purchases.label()).isEqualTo("Compras con excepción");
+        assertThat(purchases.path()).isEqualTo("/gestion/compras-con-excepcion");
+        assertThat(purchases.roles()).containsExactly("ADMIN");
+        assertThat(keysFor("INSTRUCTOR")).doesNotContain("exception-purchases");
     }
 
     @Test
