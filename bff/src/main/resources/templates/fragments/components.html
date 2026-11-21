@@ -83,6 +83,16 @@
     <div th:replace="~{fragments/components :: fieldHelp(${id}, ${hint}, ${errors})}"></div>
 </div>
 
+<!-- Same as textareaField, with the browser-side limit (maxlength) for texts the server also caps. -->
+<div class="field" th:fragment="limitedTextareaField(id, label, name, value, rows, maxlength, hint, errors)">
+    <label class="field-label" th:for="${id}" th:text="${label}">Label</label>
+    <textarea class="field-input" th:id="${id}" th:name="${name}" th:rows="${rows}" th:maxlength="${maxlength}" required
+              th:attr="aria-invalid=${!#lists.isEmpty(errors)} ? 'true' : null,
+                       aria-describedby=${!#lists.isEmpty(errors) or hint != null} ? ${id} + '-help' : null"
+              th:text="${value}"></textarea>
+    <div th:replace="~{fragments/components :: fieldHelp(${id}, ${hint}, ${errors})}"></div>
+</div>
+
 <div th:fragment="fieldHelp(id, hint, errors)" th:id="${id} + '-help'"
      th:if="${!#lists.isEmpty(errors) or hint != null}">
     <p class="text-sm" th:if="${hint != null}" th:text="${hint}">Hint</p>

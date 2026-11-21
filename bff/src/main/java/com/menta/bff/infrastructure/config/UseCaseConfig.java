@@ -443,13 +443,15 @@ public class UseCaseConfig {
      * API decides whether a payment admits each action (ADR-0038).
      */
     @Bean
-    public ListPendingPaymentsUseCase listPendingPaymentsUseCase(AdminBillingApiClient adminBillingApiClient) {
-        return new ListPendingPaymentsUseCaseImpl(adminBillingApiClient);
+    public ListPendingPaymentsUseCase listPendingPaymentsUseCase(
+            AdminBillingApiClient adminBillingApiClient, ClassesProperties classesProperties) {
+        return new ListPendingPaymentsUseCaseImpl(adminBillingApiClient, classesProperties.getDisplayZone());
     }
 
     @Bean
-    public GetPaymentDetailUseCase getPaymentDetailUseCase(AdminBillingApiClient adminBillingApiClient) {
-        return new GetPaymentDetailUseCaseImpl(adminBillingApiClient);
+    public GetPaymentDetailUseCase getPaymentDetailUseCase(
+            AdminBillingApiClient adminBillingApiClient, ClassesProperties classesProperties) {
+        return new GetPaymentDetailUseCaseImpl(adminBillingApiClient, classesProperties.getDisplayZone());
     }
 
     @Bean

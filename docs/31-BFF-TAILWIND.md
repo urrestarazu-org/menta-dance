@@ -187,6 +187,7 @@ Tokens de feedback (contraste AA sobre su superficie): `feedback-error`,
 | `field` | `id, label, type, name, autocomplete, value, hint, autofocus, errors` | `value`, `hint` y `errors` pueden ser `null`; `errors` es una lista (`${#fields.errors('email')}`). Enlaza hint/errores con `aria-describedby`. |
 | `alert` | `kind, message` | `kind`: `error`, `success` o `info`. |
 | `errorSummary` | `fields` | Resumen de errores (WCAG 3.3.1, 3.3.3). Se llama dentro del `<form th:object>`, después del `<h1>`. `fields` es un mapa ordenado `campo con error → id del input`, en el orden de los inputs: `${ {'email':'email', 'passwordConfirmed':'passwordConfirmation'} }`. No muestra nada sin errores. No es una región viva. Carga `/js/error-summary.js` (con hash de contenido), que mueve el foco al resumen. Con errores, el primer campo pasa `${!#fields.hasErrors('*')}` como `autofocus`. |
+| `limitedTextareaField` | `id, label, name, value, rows, maxlength, hint, errors` | Como `textareaField`, con `maxlength` en el navegador para textos que el servidor también acota (#370). |
 | `notice` | `heading, message` | Página informativa: `<h1>` más una `.card` con un párrafo ("revisá tu correo", "cuenta activada"). Los enlaces de salida van después, fuera del fragmento. |
 
 ```html
@@ -201,7 +202,7 @@ Los tests que recorren enlaces ignoran los anchors internos (`#main`) del skip l
 Base del área web para el personal (issue #354). Pantallas hoy: el inicio `GET /gestion` y el listado de
 usuarios `GET /gestion/usuarios` con su alta `GET /gestion/usuarios/nuevo` y `POST /gestion/usuarios` y el cambio de
 rol `POST /gestion/usuarios/{id}/rol` (#378), y la recepción `GET /gestion/recepcion` con el roster de cada sesión y
-el check-in manual (#373), y los cursos presenciales `GET /gestion/cursos-presenciales` con sus sesiones y los alumnos de cada una (#368); el resto de las secciones se habilita a medida que llega cada pantalla. La autorización
+el check-in manual (#373), y los cursos presenciales `GET /gestion/cursos-presenciales` con sus sesiones y los alumnos de cada una (#368), y los pagos por transferencia `GET /gestion/pagos` (#370); el resto de las secciones se habilita a medida que llega cada pantalla. La autorización
 real la decide la API; el BFF solo evita mostrar pantallas que un rol no puede usar.
 
 ### Prefijos y roles
@@ -249,7 +250,7 @@ coinciden con los del usuario, en el orden declarado. Los roles se declaran sin 
 
 1. Agregar el controller de la pantalla bajo su prefijo (por ejemplo `/gestion/contenido`) y su vista con
    `fragments/management :: page(..., '<clave>', ...)`. La clave es la que declara la sección en
-   `ManagementNavigationConfig` (en inglés: `content`, `sessions`, `reception`, `billing`, `devices`, `users`).
+   `ManagementNavigationConfig` (en inglés: `content`, `sessions`, `reception`, `payments`, `devices`, `users`).
 2. En `ManagementNavigationConfig`, pasar `enabled` de esa sección a `true` (así nunca hay un enlace sin pantalla).
 3. Si el prefijo es nuevo, agregarlo en `BffSecurityConfig` antes de `/gestion/**` y sumar sus casos de rol
    rechazado a `ManagementAccessIntegrationTest`. La matriz de ese test mide "permitido" como 404 (nada atiende
@@ -550,6 +551,27 @@ Base de la issue (ya mergeada antes de las pantallas):
   pre-chequeo de conflictos; capacidad, fechas, duplicados y propiedad las decide la API. `CreateManagedCourse`
   envía siempre un `professorId` explícito (el administrador elige uno; el instructor manda el propio) y sin uno
   utilizable responde `PROFESSOR_REQUIRED` sin llamar a la API. Los ids que no son UUID nunca llegan a un path.
+
+### Pagos por transferencia (`/gestion/pagos`) (#370)
+
+Solo `ADMIN` (`/gestion/pagos/**`); verifica los pagos que esperan verificación manual con `AdminBillingApiClient`
+y el token de la sesión. Todas las respuestas llevan `Cache-Control: no-store`.
+
+- **`GET /gestion/pagos`**: tabla con `<caption>` (alumno, monto, fecha, medio, modalidad y "Ver"), paginación
+  Anterior/Siguiente con `page` y `size` en la query (20 por defecto, 50 como máximo) y estado vacío. El alumno es el
+  `userId` abreviado a 8 caracteres (la API no da nombre); la fecha va en la zona de la academia y el monto en es-AR.
+  El formateo vive en los casos de uso (`ListPendingPayments`, `GetPaymentDetail` devuelven vistas ya redactadas).
+  Si la API cae: aviso y `503`.
+- **`GET /gestion/pagos/{paymentId}`**: datos del pago y, solo con comprobante, "Ver comprobante" (pestaña nueva, lo
+  sirve el BFF en `/gestion/pagos/{id}/comprobante`: la URL firmada de la API nunca llega al navegador). Según el estado:
+  `AWAITING_MANUAL_VERIFICATION` ofrece aprobar y rechazar (motivo obligatorio), `RECONCILIATION_REQUIRED` el formulario
+  de corrección (decisión, motivo y evidencia) y cualquier otro es solo lectura. Un id inválido o inexistente es una
+  página `404` con vuelta a la lista.
+- **`POST .../aprobar`, `.../rechazar`, `.../corregir`**: Post/Redirect/Get con el resultado en un flash (éxito y error
+  en atributos distintos). Aprobar y rechazar vuelven a la lista; corregir y los errores, al detalle. Motivo y evidencia
+  son obligatorios y de hasta 500 caracteres: si no validan se muestra el detalle con los errores y no se llama a la API.
+  Cada refusal se redacta por su `code` (`ILLEGAL_PAYMENT_STATE_TRANSITION` = "ya fue resuelto", por ejemplo ante una
+  doble aprobación); el `detail` y el cuerpo de la API nunca se muestran. CSRF activo.
 
 ## Accesibilidad base
 

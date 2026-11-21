@@ -18,11 +18,16 @@ class ManagementNavigationConfigTest {
         return navigation.sectionsFor(List.of("ROLE_" + role)).stream().map(ManagementSection::key).toList();
     }
 
+    private ManagementSection sectionFor(String role, String key) {
+        return navigation.sectionsFor(List.of("ROLE_" + role)).stream()
+                .filter(section -> section.key().equals(key)).findFirst().orElseThrow();
+    }
+
     @Test
     @DisplayName("only sections with a screen are offered (courses to admin and instructor, Recepción to reception "
-            + "and admin, Usuarios to admin)")
+            + "and admin, Pagos and Usuarios to admin)")
     void onlySectionsWithAScreenAreOffered() {
-        assertThat(keysFor("ADMIN")).containsExactly("cursos-presenciales", "reception", "users");
+        assertThat(keysFor("ADMIN")).containsExactly("cursos-presenciales", "reception", "payments", "users");
         assertThat(keysFor("INSTRUCTOR")).containsExactly("cursos-presenciales");
         assertThat(keysFor("RECEPTIONIST")).containsExactly("reception");
         assertThat(keysFor("STUDENT")).isEmpty();
@@ -43,11 +48,23 @@ class ManagementNavigationConfigTest {
     @Test
     @DisplayName("the Usuarios section points at the screen the controller serves")
     void usersSectionPoints() {
-        ManagementSection users = navigation.sectionsFor(List.of("ROLE_ADMIN")).get(2);
+        ManagementSection users = sectionFor("ADMIN", "users");
 
         assertThat(users.label()).isEqualTo("Usuarios");
         assertThat(users.path()).isEqualTo("/gestion/usuarios");
         assertThat(users.roles()).containsExactly("ADMIN");
+    }
+
+    @Test
+    @DisplayName("the Pagos section points at the screen the controller serves, for admin only, and replaces the "
+            + "old disabled Facturación one")
+    void paymentsSectionPoints() {
+        ManagementSection payments = sectionFor("ADMIN", "payments");
+
+        assertThat(payments.label()).isEqualTo("Pagos");
+        assertThat(payments.path()).isEqualTo("/gestion/pagos");
+        assertThat(payments.roles()).containsExactly("ADMIN");
+        assertThat(keysFor("ADMIN")).doesNotContain("billing");
     }
 
     @Test

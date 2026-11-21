@@ -1,7 +1,5 @@
 package com.menta.bff.application.usecase;
 
-import com.menta.bff.application.dto.PaymentDetail;
-
 /**
  * Use case that reads one payment for the administrator's verification screen (#370).
  *
@@ -17,9 +15,9 @@ public interface GetPaymentDetailUseCase {
      *
      * @param accessToken caller's access token
      * @param paymentId   identifier of the payment as it came in the URL
-     * @return the payment
+     * @return the payment, already worded for the screen
      * @throws com.menta.bff.application.port.out.AdminBillingApiClient.PaymentRefusalException with
      *         {@code PAYMENT_NOT_FOUND} when the id is not a UUID, without calling the API
      */
-    PaymentDetail execute(String accessToken, String paymentId);
+    PaymentVerificationView execute(String accessToken, String paymentId);
 }
