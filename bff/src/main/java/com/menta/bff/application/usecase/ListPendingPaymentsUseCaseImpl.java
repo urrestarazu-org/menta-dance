@@ -19,9 +19,8 @@ public class ListPendingPaymentsUseCaseImpl implements ListPendingPaymentsUseCas
     @Override
     public PendingPaymentsView execute(String accessToken, Integer page, Integer size) {
         String token = ManualPaymentSupport.token(accessToken);
-        int pageIndex = page == null ? 0 : Math.max(page, 0);
-        int pageSize = size == null || size < 1 ? DEFAULT_SIZE : Math.min(size, MAX_SIZE);
-        PendingPaymentPage result = adminBillingApiClient.listPendingPayments(token, pageIndex, pageSize);
+        PendingPaymentPage result = adminBillingApiClient.listPendingPayments(
+                token, ManualPaymentSupport.pageIndex(page), ManualPaymentSupport.pageSize(size));
         PaymentViewFactory factory = new PaymentViewFactory(displayZone);
         List<PaymentVerificationView> rows = result.items().stream()
                 .map(p -> factory.of(p.paymentId(), p.userId(), p.targetModality(), p.amount(), p.currency(),

@@ -1,12 +1,15 @@
 package com.menta.bff.infrastructure.adapter;
 
 import com.menta.bff.application.dto.CorrectionDecision;
+import com.menta.bff.application.dto.ExceptionPurchase;
+import com.menta.bff.application.dto.ExceptionPurchasePage;
 import com.menta.bff.application.dto.PaymentDetail;
 import com.menta.bff.application.dto.PaymentModality;
 import com.menta.bff.application.dto.PaymentProof;
 import com.menta.bff.application.dto.PaymentStatusType;
 import com.menta.bff.application.dto.PendingPayment;
 import com.menta.bff.application.dto.PendingPaymentPage;
+import com.menta.bff.application.dto.PurchaseResolution;
 import com.menta.bff.application.port.out.AdminBillingApiClient;
 import com.menta.bff.infrastructure.config.BillingApiProperties;
 import java.math.BigDecimal;
@@ -25,7 +28,8 @@ import reactor.core.publisher.Mono;
 
 /**
  * WebClient adapter for the administrator's manual payment verification (#370): the calls of the Billing API
- * under {@code /api/v1/admin/billing/payments}, as {@code billing-v1.yaml} describes them.
+ * under {@code /api/v1/admin/billing/payments} and, for the purchases in exception, {@code .../purchases}, as
+ * {@code billing-v1.yaml} describes them.
  *
  * <p>The calls send {@code Authorization: Bearer <token>}. The token only ever travels in that header: it is
  * never put in a log line or an exception message, and neither are identifiers, reasons, evidence or any
@@ -54,6 +58,8 @@ public class AdminBillingApiAdapter implements AdminBillingApiClient {
     private static final String APPROVE_ENDPOINT = PAYMENT_ENDPOINT + "/approve";
     private static final String REJECT_ENDPOINT = PAYMENT_ENDPOINT + "/reject";
     private static final String CORRECTIONS_ENDPOINT = PAYMENT_ENDPOINT + "/corrections";
+    private static final String PURCHASES_ENDPOINT = "/api/v1/admin/billing/purchases";
+    private static final String RESOLUTION_ENDPOINT = PURCHASES_ENDPOINT + "/{purchaseId}/resolution";
     private static final Set<Integer> REFUSAL_STATUSES = Set.of(400, 404, 409);
     /** The proof types the API accepts on upload: the only ones the BFF hands to a browser. */
     private static final Set<String> PROOF_CONTENT_TYPES = Set.of("image/png", "image/jpeg", "application/pdf");
@@ -128,6 +134,23 @@ public class AdminBillingApiAdapter implements AdminBillingApiClient {
         CorrectionWire body = new CorrectionWire(decision.name(), reason, evidence);
         call("correct payment", webClient.post().uri(CORRECTIONS_ENDPOINT, paymentId).bodyValue(body), accessToken,
                 Void.class);
+    }
+
+    @Override
+    public ExceptionPurchasePage listPurchasesInException(String accessToken, int page, int size) {
+        WebClient.RequestHeadersSpec<?> request = webClient.get().uri(uriBuilder -> uriBuilder
+                .path(PURCHASES_ENDPOINT)
+                .queryParam("status", "EXCEPTION")
+                .queryParam("page", "{page}")
+                .queryParam("size", "{size}")
+                .build(page, size));
+        return toDomain(call("list purchases in exception", request, accessToken, PurchasePageWire.class));
+    }
+
+    @Override
+    public void resolvePurchase(String accessToken, String purchaseId, PurchaseResolution resolution, String note) {
+        call("resolve purchase", webClient.post().uri(RESOLUTION_ENDPOINT, purchaseId)
+                .bodyValue(new ResolutionWire(resolution.name(), note)), accessToken, Void.class);
     }
 
     /**
@@ -222,6 +245,26 @@ public class AdminBillingApiAdapter implements AdminBillingApiClient {
                 item.createdAt());
     }
 
+    private static ExceptionPurchasePage toDomain(PurchasePageWire wire) {
+        if (wire.items() == null || wire.page() == null || wire.size() == null || wire.totalElements() == null
+                || wire.totalPages() == null) {
+            throw unavailable("purchases page is incomplete");
+        }
+        List<ExceptionPurchase> items = wire.items().stream().map(AdminBillingApiAdapter::toDomain).toList();
+        return new ExceptionPurchasePage(items, wire.page(), wire.size(), wire.totalElements(), wire.totalPages());
+    }
+
+    private static ExceptionPurchase toDomain(PurchaseItemWire item) {
+        if (item == null || item.purchaseId() == null || item.userId() == null || item.targetModality() == null
+                || item.amount() == null || item.currency() == null || item.createdAt() == null
+                || item.physicalSessionIds() == null) {
+            throw unavailable("purchase in exception is incomplete");
+        }
+        return new ExceptionPurchase(item.purchaseId(), item.userId(),
+                ApiEnums.parse(PaymentModality.class, item.targetModality()), item.amount(), item.currency(),
+                item.createdAt(), item.physicalSessionIds());
+    }
+
     private static PaymentDetail toDomain(DetailWire wire) {
         if (wire.paymentId() == null || wire.userId() == null || wire.targetModality() == null
                 || wire.targetReference() == null || wire.amount() == null || wire.currency() == null
@@ -262,6 +305,21 @@ public class AdminBillingApiAdapter implements AdminBillingApiClient {
 
     /** {@code CorrectPaymentRequest}. */
     private record CorrectionWire(String decision, String reason, String evidence) {
+    }
+
+    /** {@code ExceptionPurchasePageResponse}. */
+    private record PurchasePageWire(
+            List<PurchaseItemWire> items, Integer page, Integer size, Long totalElements, Integer totalPages) {
+    }
+
+    /** {@code ExceptionPurchaseItemResponse}; only the fields the screen needs. */
+    private record PurchaseItemWire(
+            String purchaseId, String userId, String targetModality, BigDecimal amount, String currency,
+            Instant createdAt, List<String> physicalSessionIds) {
+    }
+
+    /** {@code ResolveExceptionPurchaseRequest}. */
+    private record ResolutionWire(String resolution, String note) {
     }
 
     /** The only field read from an error body. */

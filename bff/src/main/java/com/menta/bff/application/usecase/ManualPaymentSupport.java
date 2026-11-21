@@ -10,6 +10,12 @@ final class ManualPaymentSupport {
     /** The BFF's own limit for a reason or an evidence; the API sets none. */
     static final int MAX_TEXT_LENGTH = 500;
 
+    /** Page size when the caller names none. */
+    static final int DEFAULT_SIZE = 20;
+
+    /** Largest page the API accepts: a bigger request is cut here, because the API would answer 400. */
+    static final int MAX_SIZE = 50;
+
     private ManualPaymentSupport() {
     }
 
@@ -23,11 +29,26 @@ final class ManualPaymentSupport {
 
     /** Only a canonical UUID reaches a path; anything else cannot be a payment. */
     static String paymentId(String paymentId) {
-        String id = UuidFormat.normalize(paymentId);
-        if (id == null) {
-            throw new PaymentRefusalException(Code.PAYMENT_NOT_FOUND);
+        return uuid(paymentId, Code.PAYMENT_NOT_FOUND);
+    }
+
+    /** Same for any other resource: the refusal is the "not found" code of that resource. */
+    static String uuid(String id, Code notFound) {
+        String normalized = UuidFormat.normalize(id);
+        if (normalized == null) {
+            throw new PaymentRefusalException(notFound);
         }
-        return id;
+        return normalized;
+    }
+
+    /** Zero-based page index: {@code null} or negative reads the first page. */
+    static int pageIndex(Integer page) {
+        return page == null ? 0 : Math.max(page, 0);
+    }
+
+    /** Page size: {@code null} or below 1 reads {@link #DEFAULT_SIZE}, above {@link #MAX_SIZE} reads that. */
+    static int pageSize(Integer size) {
+        return size == null || size < 1 ? DEFAULT_SIZE : Math.min(size, MAX_SIZE);
     }
 
     /** A reason or an evidence is required: trimmed, it must not be blank nor exceed {@link #MAX_TEXT_LENGTH}. */

@@ -202,6 +202,8 @@ public class ManagementPaymentsController {
             case ILLEGAL_PAYMENT_STATE_TRANSITION -> ILLEGAL_TRANSITION;
             case PAYMENT_NOT_FOUND, PROOF_NOT_FOUND -> NOT_FOUND;
             case INVALID_REQUEST -> INVALID;
+            // The payment endpoints never answer the purchase codes: if one did, it is not one this screen words.
+            case PURCHASE_NOT_FOUND, ILLEGAL_PURCHASE_STATE_TRANSITION, PURCHASE_ALREADY_RESOLVED -> UNAVAILABLE;
         };
     }
 

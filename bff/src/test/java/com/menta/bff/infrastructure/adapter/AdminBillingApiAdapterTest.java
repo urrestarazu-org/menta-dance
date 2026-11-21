@@ -18,11 +18,14 @@ import com.github.tomakehurst.wiremock.http.Fault;
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import com.menta.bff.application.dto.CorrectionDecision;
+import com.menta.bff.application.dto.ExceptionPurchase;
+import com.menta.bff.application.dto.ExceptionPurchasePage;
 import com.menta.bff.application.dto.PaymentDetail;
 import com.menta.bff.application.dto.PaymentModality;
 import com.menta.bff.application.dto.PaymentStatusType;
 import com.menta.bff.application.dto.PendingPayment;
 import com.menta.bff.application.dto.PendingPaymentPage;
+import com.menta.bff.application.dto.PurchaseResolution;
 import com.menta.bff.application.port.out.AdminBillingApiClient.PaymentRefusalException;
 import com.menta.bff.application.port.out.AdminBillingApiClient.PaymentRefusalException.Code;
 import com.menta.bff.application.port.out.AdminBillingApiClient.ServiceUnavailableException;
@@ -31,8 +34,11 @@ import java.lang.reflect.RecordComponent;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -50,6 +56,9 @@ class AdminBillingApiAdapterTest {
     private static final String USER_ID = "0a1b2c3d-1d2a-4e3b-9c4d-5b6f7c8e9f00";
     private static final String BASE = "/api/v1/admin/billing/payments";
     private static final String PAYMENT_PATH = BASE + "/" + PAYMENT_ID;
+    private static final String PURCHASE_ID = "7a1b2c3d-1d2a-4e3b-9c4d-0a1b2c3d4e5f";
+    private static final String PURCHASES = "/api/v1/admin/billing/purchases";
+    private static final String RESOLUTION_PATH = PURCHASES + "/" + PURCHASE_ID + "/resolution";
     private static final String TOKEN = "access-token-abc";
     private static final Duration GENEROUS_TIMEOUT = Duration.ofSeconds(10);
     private static final Duration SHORT_TIMEOUT = Duration.ofMillis(300);
@@ -69,6 +78,32 @@ class AdminBillingApiAdapterTest {
              "statusType": "RECONCILIATION_REQUIRED", "createdAt": "2026-11-20T15:30:00Z",
              "proofUrl": "/api/v1/billing/payments/5b6f7c8e/proof?token=SIGNED-SECRET"}
             """;
+
+    /** One purchase of the API's list; {@code value} replaces the field, or removes it when it is null. */
+    private static String purchaseJson(String field, String value) {
+        Map<String, String> fields = new LinkedHashMap<>();
+        fields.put("purchaseId", "\"" + PURCHASE_ID + "\"");
+        fields.put("paymentId", "\"" + PAYMENT_ID + "\"");
+        fields.put("userId", "\"" + USER_ID + "\"");
+        fields.put("targetModality", "\"PHYSICAL\"");
+        fields.put("targetReference", "\"course-1\"");
+        fields.put("amount", "25000.50");
+        fields.put("currency", "\"ARS\"");
+        fields.put("createdAt", "\"2026-11-20T15:30:00Z\"");
+        fields.put("physicalSessionIds", "[\"s-1\", \"s-2\"]");
+        if (value == null) {
+            fields.remove(field);
+        } else {
+            fields.put(field, value);
+        }
+        return fields.entrySet().stream().map(e -> "\"" + e.getKey() + "\": " + e.getValue())
+                .collect(Collectors.joining(",", "{", "}"));
+    }
+
+    private static String purchasesPage(String... items) {
+        return "{\"items\": [" + String.join(",", items)
+                + "], \"page\": 1, \"size\": 50, \"totalElements\": 51, \"totalPages\": 2}";
+    }
 
     private AdminBillingApiAdapter adapter;
 
@@ -115,7 +150,11 @@ class AdminBillingApiAdapterTest {
                 new Operation("rejectPayment", "POST", PAYMENT_PATH + "/reject", "", false,
                         a -> a.rejectPayment(TOKEN, PAYMENT_ID, "Monto incorrecto")),
                 new Operation("correctPayment", "POST", PAYMENT_PATH + "/corrections", "", false,
-                        a -> a.correctPayment(TOKEN, PAYMENT_ID, CorrectionDecision.APPROVED, "Motivo", "Evidencia")));
+                        a -> a.correctPayment(TOKEN, PAYMENT_ID, CorrectionDecision.APPROVED, "Motivo", "Evidencia")),
+                new Operation("listPurchasesInException", "GET", PURCHASES, purchasesPage(purchaseJson(null, null)),
+                        true, a -> a.listPurchasesInException(TOKEN, 1, 50)),
+                new Operation("resolvePurchase", "POST", RESOLUTION_PATH, "{\"status\": \"RESOLVED\"}", false,
+                        a -> a.resolvePurchase(TOKEN, PURCHASE_ID, PurchaseResolution.REFUNDED, "Reembolso")));
     }
 
     static Stream<Arguments> everyOperation() {
@@ -146,8 +185,8 @@ class AdminBillingApiAdapterTest {
     void typedRefusals(Operation operation, Code code) {
         int status = switch (code) {
             case INVALID_REQUEST -> 400;
-            case PAYMENT_NOT_FOUND -> 404;
-            case ILLEGAL_PAYMENT_STATE_TRANSITION -> 409;
+            case PAYMENT_NOT_FOUND, PURCHASE_NOT_FOUND -> 404;
+            case ILLEGAL_PAYMENT_STATE_TRANSITION, ILLEGAL_PURCHASE_STATE_TRANSITION, PURCHASE_ALREADY_RESOLVED -> 409;
             case PROOF_NOT_FOUND -> throw new IllegalArgumentException("not an API code");
         };
         stub(operation.method(), operation.path(), status, problem(code.name()));
@@ -329,5 +368,76 @@ class AdminBillingApiAdapterTest {
                 .withRequestBody(equalToJson(
                         "{\"decision\": \"REJECTED\", \"reason\": \"Motivo\", \"evidence\": \"Evidencia\"}",
                         false, false)));
+    }
+
+    // ---- the purchases in exception (#370) ----
+
+    @Test
+    @DisplayName("listPurchasesInException sends status=EXCEPTION and the paging, and maps every field")
+    void listPurchasesInException() {
+        stub("GET", PURCHASES, 200, purchasesPage(purchaseJson(null, null), purchaseJson("targetModality", "\"HOLO\""),
+                purchaseJson("physicalSessionIds", "[]")));
+
+        ExceptionPurchasePage page = adapter.listPurchasesInException(TOKEN, 1, 50);
+
+        assertThat(page.items().get(0)).isEqualTo(new ExceptionPurchase(PURCHASE_ID, USER_ID,
+                PaymentModality.PHYSICAL, new BigDecimal("25000.50"), "ARS", Instant.parse("2026-11-20T15:30:00Z"),
+                List.of("s-1", "s-2")));
+        assertThat(page.items().get(1).targetModality()).isEqualTo(PaymentModality.UNKNOWN);
+        assertThat(page.items().get(2).physicalSessionIds()).isEmpty();
+        assertThat(page).extracting(ExceptionPurchasePage::page, ExceptionPurchasePage::size,
+                ExceptionPurchasePage::totalElements, ExceptionPurchasePage::totalPages)
+                .containsExactly(1, 50, 51L, 2);
+        verify(getRequestedFor(urlPathEqualTo(PURCHASES))
+                .withQueryParam("status", equalTo("EXCEPTION"))
+                .withQueryParam("page", equalTo("1"))
+                .withQueryParam("size", equalTo("50")));
+    }
+
+    static Stream<Arguments> incompletePurchases() {
+        // physicalSessionIds is required by the contract (never null): absent or null is not guessed as "none".
+        return Stream.of("purchaseId", "userId", "targetModality", "amount", "currency", "createdAt",
+                "physicalSessionIds").map(Arguments::of);
+    }
+
+    @ParameterizedTest(name = "without {0}")
+    @MethodSource("incompletePurchases")
+    @DisplayName("a purchase without a required field makes the whole page unavailable")
+    void incompletePurchase(String field) {
+        stub("GET", PURCHASES, 200, purchasesPage(purchaseJson(field, null)));
+        assertThatThrownBy(() -> adapter.listPurchasesInException(TOKEN, 0, 20))
+                .isInstanceOf(ServiceUnavailableException.class);
+
+        stub("GET", PURCHASES, 200, purchasesPage(purchaseJson(field, "null")));
+        assertThatThrownBy(() -> adapter.listPurchasesInException(TOKEN, 0, 20))
+                .isInstanceOf(ServiceUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("an empty or unusable page of purchases keeps its totals or is unavailable")
+    void purchasesPageShapes() {
+        stub("GET", PURCHASES, 200, "{\"items\": [], \"page\": 3, \"size\": 20, \"totalElements\": 2, "
+                + "\"totalPages\": 1}");
+        assertThat(adapter.listPurchasesInException(TOKEN, 3, 20))
+                .isEqualTo(new ExceptionPurchasePage(List.of(), 3, 20, 2, 1));
+
+        for (String body : List.of("{}", "", "<html>no</html>", "{\"items\": [], \"page\": 0}")) {
+            stub("GET", PURCHASES, 200, body);
+            assertThatThrownBy(() -> adapter.listPurchasesInException(TOKEN, 0, 20)).as(body)
+                    .isInstanceOf(ServiceUnavailableException.class);
+        }
+    }
+
+    @Test
+    @DisplayName("resolvePurchase sends the resolution and the note as JSON")
+    void resolvePurchase() {
+        stub("POST", RESOLUTION_PATH, 200, "{\"status\": \"RESOLVED\"}");
+
+        adapter.resolvePurchase(TOKEN, PURCHASE_ID, PurchaseResolution.COMPENSATED, "Se compensó con una clase");
+
+        verify(postRequestedFor(urlPathEqualTo(RESOLUTION_PATH))
+                .withHeader("Content-Type", equalTo("application/json"))
+                .withRequestBody(equalToJson(
+                        "{\"resolution\": \"COMPENSATED\", \"note\": \"Se compensó con una clase\"}", false, false)));
     }
 }
