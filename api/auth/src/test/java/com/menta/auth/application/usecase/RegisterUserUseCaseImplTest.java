@@ -22,7 +22,9 @@ import com.menta.auth.application.port.out.OutboxAppender;
 import com.menta.auth.application.port.out.PasswordEncoderPort;
 import com.menta.auth.application.port.out.RateLimitDecision;
 import com.menta.auth.domain.exception.ActivationRateLimitedException;
+import com.menta.auth.domain.exception.WeakPasswordException;
 import com.menta.auth.domain.model.ActivationToken;
+import com.menta.auth.domain.model.PasswordPolicyViolation;
 import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.model.UserProfile;
@@ -36,6 +38,9 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -148,6 +153,68 @@ class RegisterUserUseCaseImplTest {
             activationTokenGenerator, activationTokenHasher, activationDeliveryCipher,
             activationRateLimitPort, outboxAppender, clock
         );
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"short1A", "alllowercase1", "NoDigitsHere", "weakpass"})
+    void rejects_a_weak_password_before_any_lookup_write_or_rate_limit_spend(String password) {
+        RegisterUserCommand command = new RegisterUserCommand(
+            "student@example.com", password, Role.STUDENT, FIRST_NAME, LAST_NAME, PHONE, BIRTH_DATE, "client-fp"
+        );
+
+        assertThatThrownBy(() -> useCase.register(command)).isInstanceOf(WeakPasswordException.class);
+
+        verifyNoInteractions(
+            userRepository, passwordEncoder, activationTokenRepository,
+            activationTokenGenerator, activationTokenHasher, activationDeliveryCipher,
+            activationRateLimitPort, outboxAppender, clock
+        );
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"   "})
+    void treats_a_missing_or_blank_password_as_failing_every_rule(String password) {
+        RegisterUserCommand command = new RegisterUserCommand(
+            "student@example.com", password, Role.STUDENT, FIRST_NAME, LAST_NAME, PHONE, BIRTH_DATE, "client-fp"
+        );
+
+        assertThatThrownBy(() -> useCase.register(command))
+            .isInstanceOfSatisfying(WeakPasswordException.class, ex ->
+                assertThat(ex.getViolations()).containsExactlyInAnyOrder(PasswordPolicyViolation.values())
+            );
+
+        verifyNoInteractions(userRepository, passwordEncoder, activationRateLimitPort);
+    }
+
+    @Test
+    void reports_a_weak_password_the_same_whether_or_not_the_email_is_registered() {
+        RegisterUserCommand command = new RegisterUserCommand(
+            "student@example.com", "weakpass", Role.STUDENT, FIRST_NAME, LAST_NAME, PHONE, BIRTH_DATE, "client-fp"
+        );
+
+        // existsByEmail is never reached, so a registered email cannot change the outcome (no enumeration).
+        assertThatThrownBy(() -> useCase.register(command))
+            .isInstanceOfSatisfying(WeakPasswordException.class, ex ->
+                assertThat(ex.getViolations())
+                    .containsExactlyInAnyOrder(
+                        PasswordPolicyViolation.MISSING_UPPERCASE, PasswordPolicyViolation.MISSING_DIGIT
+                    )
+            );
+
+        verify(userRepository, never()).existsByEmail(any());
+    }
+
+    @Test
+    void hashes_the_validated_password_value() {
+        allowRateLimit();
+        stubHappyPathCollaborators();
+
+        useCase.register(new RegisterUserCommand(
+            "student@example.com", "Sup3rSecret!", Role.STUDENT, FIRST_NAME, LAST_NAME, PHONE, BIRTH_DATE, "client-fp"
+        ));
+
+        verify(passwordEncoder).encode("Sup3rSecret!");
     }
 
     @Test

@@ -22,7 +22,8 @@ import lombok.Setter;
  * field errors without a round trip: the email rules of {@code RegisterUserRequest}
  * ({@code @NotBlank}, {@code @Email}) and the password policy of the API's
  * {@code Password} type (US-AUTH-006), stated once in {@link PasswordPolicy}.
- * The API stays authoritative; its 400 is mapped to a generic form error.
+ * The API stays authoritative: its 400 {@code WEAK_PASSWORD} (the policy diverged) becomes a password field
+ * error and any other 400 a generic form error.
  * </p>
  *
  * <p>The personal data follows the API's {@code UserProfile}: first and last name are

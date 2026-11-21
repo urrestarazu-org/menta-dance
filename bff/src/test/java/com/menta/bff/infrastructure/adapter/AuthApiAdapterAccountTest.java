@@ -122,6 +122,26 @@ class AuthApiAdapterAccountTest {
     }
 
     @Test
+    @DisplayName("register maps 400 WEAK_PASSWORD to a WEAK PasswordRejectedException without echoing the password")
+    void registerMapsWeakPassword() {
+        stubProblem(REGISTER, "WEAK_PASSWORD");
+
+        assertThatThrownBy(() -> adapter.register(registration()))
+                .isInstanceOfSatisfying(AuthApiClient.PasswordRejectedException.class,
+                        e -> assertThat(e.reason()).isEqualTo(AuthApiClient.PasswordRejectedException.Reason.WEAK))
+                .hasMessageNotContaining(PASSWORD);
+    }
+
+    @Test
+    @DisplayName("register keeps any other 400 problem code as an InvalidRequestException")
+    void registerMapsOtherProblemsToInvalidRequest() {
+        stubProblem(REGISTER, "INVALID_REQUEST");
+
+        assertThatThrownBy(() -> adapter.register(registration()))
+                .isInstanceOf(AuthApiClient.InvalidRequestException.class);
+    }
+
+    @Test
     @DisplayName("register maps 429 to RateLimitedException carrying Retry-After")
     void registerMaps429() {
         stubFor(post(urlEqualTo(REGISTER)).willReturn(aResponse().withStatus(429).withHeader("Retry-After", "30")));

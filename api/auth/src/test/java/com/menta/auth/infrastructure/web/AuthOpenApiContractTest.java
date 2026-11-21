@@ -298,9 +298,12 @@ class AuthOpenApiContractTest {
         // Logout is authenticated: the 401 is the security filter's or the refresh token's.
         expect(expected, LOGOUT, "204,400,401,503",
             "INVALID_AUTH_REQUEST,AUTHENTICATION_REQUIRED,REFRESH_TOKEN_COMPROMISED,AUTH_DEGRADED");
-        // Registration: ActivationExceptionHandler. A role other than STUDENT is a 202, not an error.
-        expect(expected, REGISTER, "202,400,429,503", "INVALID_REQUEST,ACTIVATION_RATE_LIMITED,AUTH_DEGRADED");
-        expect(expected, REGISTER_ALIAS, "202,400,429,503", "INVALID_REQUEST,ACTIVATION_RATE_LIMITED,AUTH_DEGRADED");
+        // Registration: ActivationExceptionHandler. A role other than STUDENT is a 202, not an error; a weak password
+        // is a 400 WEAK_PASSWORD checked before the duplicate lookup, so it never reveals an existing email (#718).
+        expect(expected, REGISTER, "202,400,429,503",
+            "WEAK_PASSWORD,INVALID_REQUEST,ACTIVATION_RATE_LIMITED,AUTH_DEGRADED");
+        expect(expected, REGISTER_ALIAS, "202,400,429,503",
+            "WEAK_PASSWORD,INVALID_REQUEST,ACTIVATION_RATE_LIMITED,AUTH_DEGRADED");
         expect(expected, ME, "200,401", "AUTHENTICATION_REQUIRED");
         // The 503 of both activation routes is documented although no use case behind them raises it today.
         expect(expected, VALIDATE_ACTIVATION, "200,204,400,503",

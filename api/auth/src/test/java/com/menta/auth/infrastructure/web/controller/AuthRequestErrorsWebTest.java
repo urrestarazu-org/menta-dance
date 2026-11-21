@@ -12,9 +12,12 @@ import com.menta.auth.application.port.in.RegisterUserUseCase;
 import com.menta.auth.application.port.in.RequestPasswordResetUseCase;
 import com.menta.auth.application.port.in.ResendActivationUseCase;
 import com.menta.auth.application.port.in.ResetPasswordUseCase;
+import com.menta.auth.domain.exception.WeakPasswordException;
+import com.menta.auth.domain.model.PasswordPolicyViolation;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -27,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.annotation.AnnotationConfigUtils;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
@@ -316,6 +320,23 @@ class AuthRequestErrorsWebTest {
 
         assertThat(register.getStatus()).isEqualTo(202);
         assertProblem(resend, "INVALID_ACTIVATION_REQUEST");
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {REGISTER, REGISTER_ALIAS})
+    void a_weak_password_from_the_use_case_answers_400_weak_password_not_the_local_202(String url) throws Exception {
+        // The controller-local IllegalArgumentException handler answers the anti-enumeration 202. A
+        // WeakPasswordException is a BusinessException, not an IllegalArgumentException, so it must reach the
+        // advice (#718) and keep the wording every endpoint with a new password shares.
+        doThrow(new WeakPasswordException(EnumSet.of(PasswordPolicyViolation.TOO_SHORT)))
+            .when(context.getBean(RegisterUserUseCase.class)).register(any());
+
+        MockHttpServletResponse response = mockMvc.perform(json(HttpMethod.POST, url, publicBody(REGISTER)))
+            .andReturn().getResponse();
+
+        assertProblem(response, "WEAK_PASSWORD");
+        assertThat(response.getContentAsString())
+            .contains("\"detail\":\"La contraseña no cumple los requisitos: al menos 8 caracteres.\"");
     }
 
     private static String publicBody(String url) {

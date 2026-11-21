@@ -56,6 +56,12 @@ public class RegistrationController {
             registerAccountUseCase.execute(RegisterCommand.student(
                     form.getEmail(), form.getPassword(), form.getFirstName(), form.getLastName(),
                     form.normalizedPhone(), form.parsedBirthDate(), clientOriginResolver.resolve(request)));
+        } catch (AuthApiClient.PasswordRejectedException e) {
+            // The form checks the policy first: this only happens when the API policy diverges from it.
+            form.setPassword(null);
+            form.setPasswordConfirmation(null);
+            bindingResult.rejectValue("password", "api.rejected", AuthFlowErrors.WEAK_PASSWORD);
+            return "register";
         } catch (AuthApiClient.RateLimitedException
                  | AuthApiClient.InvalidRequestException
                  | AuthApiClient.ServiceUnavailableException e) {

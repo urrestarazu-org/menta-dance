@@ -47,7 +47,7 @@ existe).
 | `POST /login` | JSON `{ "email", "password" }` | `200` con el par de tokens para el cliente de confianza (BFF o Android). El estado de la cuenta se revela sólo con la contraseña correcta: `403 ACCOUNT_NOT_ACTIVATED` (pendiente), `423 USER_LOCKED` (bloqueada); `INACTIVE`/`SUSPENDED` y toda contraseña incorrecta responden `401 INVALID_CREDENTIALS` |
 | `POST /refresh` | `X-Refresh-Token` obligatorio; nunca body JSON | `200` con el par rotado |
 | `POST /logout` | `Authorization: Bearer <access>` y `X-Refresh-Token` obligatorios | `204 No Content` |
-| `POST /register` | JSON `{ "email", "password", "role": "STUDENT", "firstName", "lastName", "phone", "birthDate"? }` (`birthDate` es opcional) | `202 Accepted`, sin cuerpo y siempre genérico; un cuerpo inválido responde `400 INVALID_REQUEST` |
+| `POST /register` | JSON `{ "email", "password", "role": "STUDENT", "firstName", "lastName", "phone", "birthDate"? }` (`birthDate` es opcional) | `202 Accepted`, sin cuerpo y siempre genérico; un cuerpo inválido responde `400 INVALID_REQUEST` y una contraseña que no cumple la política `400 WEAK_PASSWORD` (ver abajo) |
 | `GET /activate/{token}` | token opaco en el path; sólo valida sin consumir | `204 No Content`; `200` con `{ "passwordRequired": true }` si la cuenta la creó un administrador y el titular aún debe elegir contraseña |
 | `POST /activate` | JSON `{ "token", "password"? }` (`password` sólo se exige si la validación respondió `passwordRequired`) | `204 No Content`; consume el token y activa la cuenta. Cuenta creada por un administrador: sin `password` `400 PASSWORD_REQUIRED`, con una débil `400 WEAK_PASSWORD`; en ambos casos el token no se consume |
 | `POST /resend-activation` | JSON `{ "email" }` | `202 Accepted`, sin cuerpo y siempre genérico |
@@ -83,6 +83,18 @@ de `POST /restablecer-contrasena` y, si todo sale bien, el BFF redirige a
 que la pantalla no lo comprueba antes de mostrar el formulario.
 Registro duplicado conserva
 el mismo `202` vacío; nunca se devuelve el email, ID o estado de la cuenta.
+El registro aplica la política de contraseñas del dominio (mínimo 8 caracteres,
+una mayúscula y un número): una contraseña débil responde `400 WEAK_PASSWORD` con
+el detalle de las reglas incumplidas, el mismo que el reseteo y la activación, y
+nunca repite la contraseña. Decisión anti-enumeración (#718): la política se
+valida **antes** de consultar si el email ya existe y de consumir el presupuesto
+de activación, así que ese `400` depende sólo de la contraseña enviada y es
+idéntico para un email nuevo y para uno ya registrado (nada se crea, no se gasta
+cupo ni se emite token ni evento). Con una contraseña válida el `202` sigue siendo
+el mismo para alta nueva y duplicada. El BFF ya valida la política en su
+formulario, de modo que este `400` sólo aparece si se llama a la API
+directamente o si las políticas divergen; en ese caso el BFF lo muestra como
+error del campo contraseña.
 `resend-activation` también responde idénticamente para email inexistente,
 activo o pendiente. Registro y reenvío limitados devuelven `429` con
 `Retry-After`; si Redis no está disponible devuelven `503` con `Retry-After`.
