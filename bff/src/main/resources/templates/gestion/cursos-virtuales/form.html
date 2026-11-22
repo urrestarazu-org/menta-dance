@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/management :: page(${editing} ? 'Editar curso virtual' : 'Nuevo curso virtual', 'cursos-virtuales', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<div class="max-w-xl">
+    <h1 class="mb-6" th:text="${editing} ? 'Editar curso virtual' : 'Nuevo curso virtual'">Nuevo curso virtual</h1>
+
+    <p class="mb-6" th:unless="${editing}">El curso se crea como borrador: después podés completarlo y publicarlo.</p>
+
+    <div th:if="${formError}" class="mb-4">
+        <div th:replace="~{fragments/components :: alert('error', ${formError})}"></div>
+    </div>
+
+    <form th:action="${editing} ? @{/gestion/cursos-virtuales/{id}/editar(id=${courseId})} : @{/gestion/cursos-virtuales}"
+          th:object="${form}" method="post" novalidate class="card space-y-4">
+        <div th:replace="~{fragments/components :: errorSummary(${ {'title':'title', 'shortDescription':'shortDescription', 'description':'description', 'imageUrl':'imageUrl', 'category':'category', 'level':'level', 'professorId':'professorId'} })}"></div>
+
+        <div th:replace="~{fragments/components :: field('title', 'Título', 'text', 'title', 'off', *{title}, null, ${!#fields.hasErrors('*')}, ${#fields.errors('title')})}"></div>
+        <div th:replace="~{fragments/components :: limitedTextareaField('shortDescription', 'Descripción corta', 'shortDescription', *{shortDescription}, 3, 500, 'Hasta 500 caracteres.', ${#fields.errors('shortDescription')})}"></div>
+        <div th:replace="~{fragments/components :: limitedTextareaField('description', 'Descripción', 'description', *{description}, 8, 5000, 'Hasta 5000 caracteres.', ${#fields.errors('description')})}"></div>
+        <div th:replace="~{fragments/components :: field('imageUrl', 'URL de la imagen', 'url', 'imageUrl', 'off', *{imageUrl}, 'Tiene que empezar con http:// o https://.', false, ${#fields.errors('imageUrl')})}"></div>
+        <div th:replace="~{fragments/components :: field('category', 'Categoría', 'text', 'category', 'off', *{category}, null, false, ${#fields.errors('category')})}"></div>
+        <div th:replace="~{fragments/components :: selectField('level', 'Nivel', 'level', ${levels}, *{level}, 'Elegí un nivel', null, ${#fields.errors('level')})}"></div>
+
+        <th:block th:if="${editing}">
+            <div th:replace="~{fragments/components :: checkboxField('premium', 'Curso premium', 'premium', *{premium}, 'Un curso premium requiere una suscripción.', null)}"></div>
+        </th:block>
+        <th:block th:if="${!editing and isAdmin}">
+            <div th:replace="~{fragments/components :: optionalSelectField('professorId', 'Profesor/a', 'professorId', ${instructorChoices}, *{professorId}, 'Yo (administrador)', ${instructorsTruncated} ? 'Se muestran los primeros 50 profesores.' : 'Si no elegís a nadie, el curso queda a tu nombre.', ${#fields.errors('professorId')})}"></div>
+        </th:block>
+
+        <div class="flex items-center gap-4">
+            <button type="submit" class="btn btn-primary" th:text="${editing} ? 'Guardar cambios' : 'Crear curso'">Crear curso</button>
+            <a th:href="@{/gestion/cursos-virtuales}">Cancelar</a>
+        </div>
+    </form>
+</div>
+</th:block>
+</body>
+</html>

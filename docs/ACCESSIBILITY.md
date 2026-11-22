@@ -202,6 +202,12 @@ tecnología asistiva), **Media**, **Baja**.
   `passwordConfirmed` → `passwordConfirmation`). Con errores, el primer campo no
   pide `autofocus`, para que el navegador no le quite el foco al resumen. El
   login no lo usa: su único error es el de credenciales, en un `role="alert"`.
+- **Formularios de cursos virtuales** (`/gestion/cursos-virtuales/nuevo` y `/{id}/editar`, #367): usan
+  `errorSummary` y los fragmentos de campo (`<label for>`, ayuda y error enlazados con `aria-describedby`,
+  `aria-invalid`). `checkboxField` (casilla "Curso premium") pone el `<label for>` junto a la casilla y su ayuda en
+  `aria-describedby`; `optionalSelectField` deja el `<select>` sin `required` para que "Yo (administrador)" sea una
+  opción válida. En la lista, cada "Editar" lleva el título del curso en un texto `sr-only`. Cubierto por
+  `ManagementVirtualCourseFormIntegrationTest`; sin probar con lector de pantalla ni en navegador.
 - **Imágenes/SVG**: hay fotos (`<img>` con `alt`, tamaño y `srcset`), un logo
   decorativo (`alt=""` junto al nombre visible), íconos SVG con `aria-hidden="true"`
   y un `<video>` decorativo (ver hallazgos 19 y 22).

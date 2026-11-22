@@ -160,15 +160,16 @@ class ManagementVirtualCoursesIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("the page is read-only: no API paths, no forms and no links to screens that do not exist yet")
-    void readOnlyAndWithoutDeadLinks() throws Exception {
+    @DisplayName("links only to the create form and to each course's edit form, with the title in the link name")
+    void linksToTheForms() throws Exception {
         stubList(course("c-1", "Tango base", "BEGINNER", true, "DRAFT"));
 
         String html = page("ADMIN").getContentAsString();
 
-        assertThat(mainOf(html)).doesNotContain("<form").doesNotContain("Nuevo curso").doesNotContain("Editar")
-                .doesNotContain("Publicar").doesNotContain("Borrar")
-                .doesNotContain("href=\"/gestion/cursos-virtuales/");
+        assertThat(mainOf(html)).containsPattern("<a[^>]*href=\"/gestion/cursos-virtuales/nuevo\"[^>]*>Nuevo curso</a>")
+                .containsPattern("<a[^>]*href=\"/gestion/cursos-virtuales/c-1/editar\">Editar"
+                        + "<span class=\"sr-only\">\\s*el curso Tango base</span></a>")
+                .doesNotContain("<form").doesNotContain("Publicar").doesNotContain("Borrar");
         assertThat(html).doesNotContain("/api/v1");
     }
 }

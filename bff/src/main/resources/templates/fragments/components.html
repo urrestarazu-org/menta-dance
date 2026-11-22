@@ -57,14 +57,29 @@
     `placeholder` is the text of an empty first option or null for none; `hint` and
     `errors` may be null.
 
+  optionalSelectField(...same parameters...)
+    Same as selectField but the <select> is NOT required: its empty placeholder option is a valid
+    choice (e.g. "Yo"). Put "(opcional)" in the label when it is not obvious.
+
+  checkboxField(id, label, name, checked, hint, errors)
+    A single checkbox with its <label for> on the right of the box. `checked` is a boolean;
+    `hint` and `errors` may be null. The input points to its hint/errors through aria-describedby
+    and is flagged aria-invalid when there are errors. Not required: unchecked is a valid answer.
+
   textareaField(id, label, name, value, rows, hint, errors)
     Same for a required multi-line <textarea>.
 
   Numbers and times need no new fragment: call field with type 'number' or 'time'.
 -->
-<div class="field" th:fragment="selectField(id, label, name, options, selected, placeholder, hint, errors)">
+<div th:fragment="selectField(id, label, name, options, selected, placeholder, hint, errors)"
+     th:replace="~{fragments/components :: selectFieldBase(${id}, ${label}, ${name}, ${options}, ${selected}, ${placeholder}, ${hint}, ${errors}, true)}"></div>
+
+<div th:fragment="optionalSelectField(id, label, name, options, selected, placeholder, hint, errors)"
+     th:replace="~{fragments/components :: selectFieldBase(${id}, ${label}, ${name}, ${options}, ${selected}, ${placeholder}, ${hint}, ${errors}, false)}"></div>
+
+<div class="field" th:fragment="selectFieldBase(id, label, name, options, selected, placeholder, hint, errors, required)">
     <label class="field-label" th:for="${id}" th:text="${label}">Label</label>
-    <select class="field-input" th:id="${id}" th:name="${name}" required
+    <select class="field-input" th:id="${id}" th:name="${name}" th:required="${required}"
             th:attr="aria-invalid=${!#lists.isEmpty(errors)} ? 'true' : null,
                      aria-describedby=${!#lists.isEmpty(errors) or hint != null} ? ${id} + '-help' : null">
         <option value="" th:if="${placeholder != null}" th:text="${placeholder}">Elegí una opción</option>
@@ -90,6 +105,17 @@
               th:attr="aria-invalid=${!#lists.isEmpty(errors)} ? 'true' : null,
                        aria-describedby=${!#lists.isEmpty(errors) or hint != null} ? ${id} + '-help' : null"
               th:text="${value}"></textarea>
+    <div th:replace="~{fragments/components :: fieldHelp(${id}, ${hint}, ${errors})}"></div>
+</div>
+
+<div class="field" th:fragment="checkboxField(id, label, name, checked, hint, errors)">
+    <div class="flex items-center gap-2">
+        <input type="checkbox" class="h-5 w-5 rounded border-brand-deep text-brand-action"
+               th:id="${id}" th:name="${name}" th:checked="${checked}"
+               th:attr="aria-invalid=${!#lists.isEmpty(errors)} ? 'true' : null,
+                        aria-describedby=${!#lists.isEmpty(errors) or hint != null} ? ${id} + '-help' : null"/>
+        <label class="field-label" th:for="${id}" th:text="${label}">Label</label>
+    </div>
     <div th:replace="~{fragments/components :: fieldHelp(${id}, ${hint}, ${errors})}"></div>
 </div>
 
