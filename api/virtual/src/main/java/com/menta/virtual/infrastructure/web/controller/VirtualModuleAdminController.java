@@ -47,7 +47,7 @@ public class VirtualModuleAdminController {
 
     @PutMapping("/{moduleId}")
     public ResponseEntity<VirtualModuleManagementResponse> update(
-        @PathVariable String moduleId, @RequestBody UpdateVirtualModuleRequest request,
+        @PathVariable String moduleId, @Valid @RequestBody UpdateVirtualModuleRequest request,
         Authentication authentication
     ) {
         UpdateVirtualModuleCommand command =

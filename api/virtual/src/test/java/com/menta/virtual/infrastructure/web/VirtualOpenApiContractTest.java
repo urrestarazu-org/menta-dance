@@ -32,6 +32,7 @@ import com.menta.virtual.infrastructure.web.dto.VirtualCourseManagementResponse;
 import com.menta.virtual.infrastructure.web.dto.VirtualLessonManagementResponse;
 import com.menta.virtual.infrastructure.web.dto.VirtualModuleManagementListResponse;
 import com.menta.virtual.infrastructure.web.dto.VirtualModuleManagementResponse;
+import jakarta.validation.constraints.PositiveOrZero;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Method;
@@ -429,6 +430,31 @@ class VirtualOpenApiContractTest {
                 drift.add(name + " required");
             }
         });
+        assertThat(drift).isEmpty();
+    }
+
+    @Test
+    void every_positive_or_zero_request_field_declares_minimum_zero_in_its_schema() {
+        // The edits (#807) validate these fields like the creates do: a negative value answers 400.
+        List<Class<? extends Record>> requests = List.of(
+            CreateVirtualModuleRequest.class, UpdateVirtualModuleRequest.class,
+            CreateVirtualLessonRequest.class, UpdateVirtualLessonRequest.class
+        );
+
+        List<String> drift = new ArrayList<>();
+        int constrained = 0;
+        for (Class<? extends Record> type : requests) {
+            for (RecordComponent component : type.getRecordComponents()) {
+                if (component.getAccessor().isAnnotationPresent(PositiveOrZero.class)) {
+                    constrained++;
+                    Object minimum = at(type.getSimpleName() + "/" + component.getName()).get("minimum");
+                    if (!Integer.valueOf(0).equals(minimum)) {
+                        drift.add(type.getSimpleName() + "." + component.getName() + " minimum " + minimum);
+                    }
+                }
+            }
+        }
+        assertThat(constrained).isEqualTo(6);
         assertThat(drift).isEmpty();
     }
 

@@ -2,22 +2,31 @@ package com.menta.virtual.infrastructure.web.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
 
 import com.menta.virtual.application.dto.LessonProgressView;
+import com.menta.virtual.application.dto.UpdateVirtualLessonCommand;
+import com.menta.virtual.application.dto.UpdateVirtualModuleCommand;
+import com.menta.virtual.application.dto.VirtualLessonManagementResult;
+import com.menta.virtual.application.dto.VirtualModuleManagementResult;
 import com.menta.virtual.application.port.in.SaveLessonProgressUseCase;
+import com.menta.virtual.application.port.in.UpdateVirtualLessonUseCase;
+import com.menta.virtual.application.port.in.UpdateVirtualModuleUseCase;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -28,6 +37,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.annotation.AnnotationConfigUtils;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
@@ -95,7 +105,11 @@ class VirtualRequestErrorsWebTest {
 
     @AfterEach
     void resetMocks() {
-        reset(context.getBean(SaveLessonProgressUseCase.class));
+        reset(
+            context.getBean(SaveLessonProgressUseCase.class),
+            context.getBean(UpdateVirtualModuleUseCase.class),
+            context.getBean(UpdateVirtualLessonUseCase.class)
+        );
     }
 
     @EnableWebMvc
@@ -218,6 +232,76 @@ class VirtualRequestErrorsWebTest {
         MockHttpServletResponse response = mockMvc.perform(json(method, url, EMPTY_JSON)).andReturn().getResponse();
 
         assertInvalidRequestProblem(response);
+    }
+
+    private static final String MODULE_EDIT = "/api/v1/admin/virtual/modules/" + ID;
+    private static final String LESSON_EDIT = "/api/v1/admin/virtual/lessons/" + ID;
+
+    /** Edit bodies whose constrained field is negative: the domain rejects them too, but later. */
+    private static Stream<Arguments> negativeEdits() {
+        return Stream.of(
+            Arguments.of(MODULE_EDIT, "{\"order\": -1}"),
+            Arguments.of(MODULE_EDIT, "{\"title\": \"M1\", \"order\": -5}"),
+            Arguments.of(LESSON_EDIT, "{\"durationMinutes\": -1}"),
+            Arguments.of(LESSON_EDIT, "{\"order\": -1}"),
+            Arguments.of(LESSON_EDIT, "{\"free\": true, \"durationMinutes\": 10, \"order\": -3}")
+        );
+    }
+
+    @ParameterizedTest(name = "{0} {1}")
+    @MethodSource("negativeEdits")
+    void a_negative_order_or_duration_on_an_edit_answers_400_invalid_request_and_never_reaches_the_use_case(
+        String url, String body
+    ) throws Exception {
+        MockHttpServletResponse response = mockMvc.perform(json(HttpMethod.PUT, url, body)).andReturn().getResponse();
+
+        assertInvalidRequestProblem(response);
+        verify(context.getBean(UpdateVirtualModuleUseCase.class), never())
+            .update(anyString(), any(), any(), anyBoolean());
+        verify(context.getBean(UpdateVirtualLessonUseCase.class), never())
+            .update(anyString(), any(), any(), anyBoolean());
+    }
+
+    @Test
+    void editing_a_module_with_a_zero_order_or_without_the_constrained_field_still_answers_200() throws Exception {
+        UpdateVirtualModuleUseCase useCase = context.getBean(UpdateVirtualModuleUseCase.class);
+        when(useCase.update(anyString(), any(), any(), anyBoolean()))
+            .thenReturn(new VirtualModuleManagementResult(ID, ID, "M1", 0));
+
+        MockHttpServletResponse zero = mockMvc.perform(json(HttpMethod.PUT, MODULE_EDIT, "{\"order\": 0}"))
+            .andReturn().getResponse();
+        MockHttpServletResponse omitted = mockMvc.perform(json(HttpMethod.PUT, MODULE_EDIT, "{\"title\": \"M1\"}"))
+            .andReturn().getResponse();
+
+        assertThat(zero.getStatus()).isEqualTo(200);
+        assertThat(omitted.getStatus()).isEqualTo(200);
+        ArgumentCaptor<UpdateVirtualModuleCommand> commands = ArgumentCaptor.forClass(UpdateVirtualModuleCommand.class);
+        verify(useCase, times(2)).update(anyString(), commands.capture(), any(), anyBoolean());
+        assertThat(commands.getAllValues().get(0).order()).contains(0);
+        assertThat(commands.getAllValues().get(1).order()).isEmpty();
+    }
+
+    @Test
+    void editing_a_lesson_with_zero_values_or_without_the_constrained_fields_still_answers_200() throws Exception {
+        UpdateVirtualLessonUseCase useCase = context.getBean(UpdateVirtualLessonUseCase.class);
+        when(useCase.update(anyString(), any(), any(), anyBoolean()))
+            .thenReturn(new VirtualLessonManagementResult(ID, ID, ID, "L1", "d", "v", 0, false, 0));
+
+        MockHttpServletResponse zero = mockMvc
+            .perform(json(HttpMethod.PUT, LESSON_EDIT, "{\"durationMinutes\": 0, \"order\": 0}"))
+            .andReturn().getResponse();
+        MockHttpServletResponse omitted = mockMvc.perform(json(HttpMethod.PUT, LESSON_EDIT, "{\"free\": true}"))
+            .andReturn().getResponse();
+
+        assertThat(zero.getStatus()).isEqualTo(200);
+        assertThat(omitted.getStatus()).isEqualTo(200);
+        ArgumentCaptor<UpdateVirtualLessonCommand> commands = ArgumentCaptor.forClass(UpdateVirtualLessonCommand.class);
+        verify(useCase, times(2)).update(anyString(), commands.capture(), any(), anyBoolean());
+        assertThat(commands.getAllValues().get(0).durationMinutes()).contains(0);
+        assertThat(commands.getAllValues().get(0).order()).contains(0);
+        assertThat(commands.getAllValues().get(1).durationMinutes()).isEmpty();
+        assertThat(commands.getAllValues().get(1).order()).isEmpty();
+        assertThat(commands.getAllValues().get(1).free()).isEqualTo(Optional.of(true));
     }
 
     @ParameterizedTest

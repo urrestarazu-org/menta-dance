@@ -5,6 +5,7 @@ import com.menta.virtual.application.dto.VirtualLessonManagementResult;
 import com.menta.virtual.application.port.in.UpdateVirtualLessonUseCase;
 import com.menta.virtual.infrastructure.web.dto.UpdateVirtualLessonRequest;
 import com.menta.virtual.infrastructure.web.dto.VirtualLessonManagementResponse;
+import jakarta.validation.Valid;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
@@ -35,7 +36,7 @@ public class VirtualLessonAdminController {
 
     @PutMapping("/{lessonId}")
     public ResponseEntity<VirtualLessonManagementResponse> update(
-        @PathVariable String lessonId, @RequestBody UpdateVirtualLessonRequest request,
+        @PathVariable String lessonId, @Valid @RequestBody UpdateVirtualLessonRequest request,
         Authentication authentication
     ) {
         UpdateVirtualLessonCommand command = new UpdateVirtualLessonCommand(
