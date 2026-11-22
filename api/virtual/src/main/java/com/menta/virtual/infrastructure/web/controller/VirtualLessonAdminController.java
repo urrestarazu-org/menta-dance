@@ -2,6 +2,7 @@ package com.menta.virtual.infrastructure.web.controller;
 
 import com.menta.virtual.application.dto.UpdateVirtualLessonCommand;
 import com.menta.virtual.application.dto.VirtualLessonManagementResult;
+import com.menta.virtual.application.port.in.DeleteVirtualLessonUseCase;
 import com.menta.virtual.application.port.in.UpdateVirtualLessonUseCase;
 import com.menta.virtual.infrastructure.web.dto.UpdateVirtualLessonRequest;
 import com.menta.virtual.infrastructure.web.dto.VirtualLessonManagementResponse;
@@ -11,6 +12,7 @@ import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -29,9 +31,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class VirtualLessonAdminController {
 
     private final UpdateVirtualLessonUseCase updateVirtualLessonUseCase;
+    private final DeleteVirtualLessonUseCase deleteVirtualLessonUseCase;
 
-    public VirtualLessonAdminController(UpdateVirtualLessonUseCase updateVirtualLessonUseCase) {
+    public VirtualLessonAdminController(
+        UpdateVirtualLessonUseCase updateVirtualLessonUseCase, DeleteVirtualLessonUseCase deleteVirtualLessonUseCase
+    ) {
         this.updateVirtualLessonUseCase = updateVirtualLessonUseCase;
+        this.deleteVirtualLessonUseCase = deleteVirtualLessonUseCase;
     }
 
     @PutMapping("/{lessonId}")
@@ -51,6 +57,12 @@ public class VirtualLessonAdminController {
             lessonId, command, actingUserId(authentication), isAdmin(authentication)
         );
         return ResponseEntity.ok(VirtualLessonManagementResponse.from(result));
+    }
+
+    @DeleteMapping("/{lessonId}")
+    public ResponseEntity<Void> delete(@PathVariable String lessonId, Authentication authentication) {
+        deleteVirtualLessonUseCase.delete(lessonId, actingUserId(authentication), isAdmin(authentication));
+        return ResponseEntity.noContent().build();
     }
 
     private static UUID actingUserId(Authentication authentication) {

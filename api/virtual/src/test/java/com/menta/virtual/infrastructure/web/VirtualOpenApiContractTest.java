@@ -274,6 +274,7 @@ class VirtualOpenApiContractTest {
         expected.put("PUT " + MODULE, new TreeSet<>(Set.of("200", "400", "401", "403", "404")));
         expected.put("POST " + MODULE + "/lessons", new TreeSet<>(Set.of("201", "400", "401", "403", "404")));
         expected.put("PUT " + ADMIN_LESSON, new TreeSet<>(Set.of("200", "400", "401", "403", "404")));
+        expected.put("DELETE " + ADMIN_LESSON, new TreeSet<>(Set.of("204", "400", "401", "403", "404")));
         // Public reads: the token is optional, so there is no 401; a malformed id collapses into the 404.
         expected.put("GET " + LESSON, new TreeSet<>(Set.of("200", "403", "404")));
         expected.put("GET " + LESSON + "/stream", new TreeSet<>(Set.of("200", "403", "404")));
@@ -326,6 +327,17 @@ class VirtualOpenApiContractTest {
             return map(map(map(spec, "components"), "responses"), ref.substring(ref.lastIndexOf('/') + 1));
         }
         return response;
+    }
+
+    @Test
+    void the_lesson_delete_answers_204_without_content_and_documents_the_lesson_not_found_problem() {
+        Map<String, Object> responses = map(operation("DELETE " + ADMIN_LESSON), "responses");
+
+        assertThat(map(responses, "204")).doesNotContainKey("content");
+        Map<String, Object> notFound = resolveResponse(map(responses, "404"));
+        Map<String, Object> examples = map(map(map(notFound, "content"), "application/problem+json"), "examples");
+        assertThat(examples.values()).extracting(example -> map(example, "value").get("code"))
+            .containsExactly("LESSON_NOT_FOUND");
     }
 
     @Test

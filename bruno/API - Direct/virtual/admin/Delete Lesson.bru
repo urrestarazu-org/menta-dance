@@ -1,0 +1,36 @@
+meta {
+  name: Delete Virtual Lesson
+  type: http
+  seq: 13
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/admin/virtual/lessons/{{virtualLessonId}}
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  #830. Same access and ownership rule as Update Lesson: ADMIN deletes any
+  lesson, INSTRUCTOR only the lessons of their own courses (resolved through
+  the lesson's course_id). Allowed on a PUBLISHED course too — deleting one
+  lesson is an ordinary content edit; only deleting a whole course requires
+  DRAFT.
+
+  In the same transaction it deletes every student's progress in the lesson
+  (cascade), renumbers the module's remaining lessons to order 0..n-1 and
+  appends a DELETE_LESSON audit row.
+
+  Success contract: 204 No Content.
+  Error contract:
+    400 INVALID_REQUEST  → lessonId is not a UUID
+    403 COURSE_NOT_OWNED → INSTRUCTOR is not the parent course's professor
+    404 LESSON_NOT_FOUND → lessonId does not exist
+}
+
+assert {
+  res.status: eq 204
+}

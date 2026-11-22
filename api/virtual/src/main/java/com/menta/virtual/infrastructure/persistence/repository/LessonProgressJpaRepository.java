@@ -70,4 +70,7 @@ public interface LessonProgressJpaRepository extends JpaRepository<LessonProgres
     List<InProgressCourseRowProjection> findRowsForUserInCoursesWithStatus(
         @Param("userId") UUID userId, @Param("status") CourseStatus status
     );
+
+    /** Deletes the rows of every user in the lesson and returns how many it removed. */
+    long deleteByLessonId(UUID lessonId);
 }

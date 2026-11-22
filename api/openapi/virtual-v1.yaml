@@ -6,7 +6,7 @@ openapi: 3.1.0
 # physical-v1.yaml: el diff se revisa en el PR igual que la colección Bruno.
 #
 # Sólo describe endpoints IMPLEMENTADOS. Cubre todas las rutas de producción
-# de los controllers de virtual (19): gestión de cursos, módulos y lecciones
+# de los controllers de virtual (20): gestión de cursos, módulos y lecciones
 # (ADMIN/INSTRUCTOR), detalle y streaming público de lecciones con autorización
 # resuelta del lado del servidor (US-VIRTUAL-003/004/007) y progreso del alumno
 # (guardar, leer y completar una lección; progreso y cursos en progreso por
@@ -766,6 +766,57 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VirtualLessonManagementResponse'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/NotOwned'
+        '404':
+          description: Lección inexistente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                no_encontrada:
+                  value:
+                    type: https://menta.dance/problems/lesson_not_found
+                    title: Not Found
+                    status: 404
+                    detail: Lesson not found.
+                    code: LESSON_NOT_FOUND
+
+    delete:
+      tags: [Gestión de lecciones]
+      summary: Eliminar una lección
+      description: |
+        Mismo acceso y misma regla de propiedad que la edición de la lección:
+        un ADMIN borra cualquier lección; un PROFESOR sólo las de sus cursos
+        (`403 COURSE_NOT_OWNED` en otro caso).
+
+        - **Progreso de los alumnos**: se borra en cascada, en la misma
+          transacción, todo el progreso guardado de la lección (posición y
+          completado de cada alumno). Es la única tabla que referencia a una
+          lección y no guarda datos de pago ni de auditoría; el porcentaje de
+          un curso usa como denominador las lecciones que existen, así que
+          sigue siendo coherente. El borrado no se rechaza por tener progreso.
+        - **Orden**: las lecciones que quedan en el módulo se renumeran de
+          forma contigua (`order` 0..n-1) conservando su orden relativo, en la
+          misma transacción.
+        - **Curso publicado**: se permite. Borrar un curso entero exige
+          `DRAFT`, pero quitar una lección de un curso publicado es una
+          edición normal del contenido, igual que el `PUT` de la lección. El
+          curso sigue `PUBLISHED` aunque se quede sin lecciones completas: la
+          validación de publicación sólo se aplica al publicar.
+        - Queda una fila de auditoría `DELETE_LESSON` con los datos de la
+          lección y la cantidad de filas de progreso borradas.
+      operationId: deleteVirtualLesson
+      parameters:
+        - $ref: '#/components/parameters/LessonId'
+      responses:
+        '204':
+          description: Lección eliminada, junto con su progreso; sin cuerpo.
         '400':
           $ref: '#/components/responses/InvalidRequest'
         '401':

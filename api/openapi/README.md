@@ -8,7 +8,7 @@ Contratos HTTP versionados de la API, escritos a mano.
 | `billing-v1.yaml` | Billing v1 (25 rutas): planes, suscripciones, compras presenciales, precios y cotizaciones, pagos, webhooks y verificación manual de pagos | `BillingOpenApiContractTest` (`api/billing`) |
 | `catalog-v1.yaml` | Catalog v1 (2 rutas): catálogo público compuesto de cursos presenciales y virtuales, que vive en `api:app` | `CatalogOpenApiContractTest` (`api/app`) |
 | `physical-v1.yaml` | Physical v1 (19 rutas): cursos y sesiones presenciales, agenda y roster, QR, asistencia, check-in y dispositivos de lectura | `PhysicalOpenApiContractTest` (`api/physical`) |
-| `virtual-v1.yaml` | Virtual v1 (19 rutas): gestión de cursos, módulos y lecciones, lecciones públicas y progreso del alumno | `VirtualOpenApiContractTest` (`api/virtual`) |
+| `virtual-v1.yaml` | Virtual v1 (20 rutas): gestión de cursos, módulos y lecciones, lecciones públicas y progreso del alumno | `VirtualOpenApiContractTest` (`api/virtual`) |
 
 ## Por qué a mano y no generado
 
