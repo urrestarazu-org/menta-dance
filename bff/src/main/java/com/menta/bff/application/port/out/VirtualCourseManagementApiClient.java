@@ -68,6 +68,9 @@ public interface VirtualCourseManagementApiClient {
     /** Changes a lesson; the {@code null} fields of {@code changes} stay as they are. */
     ManagedVirtualLesson updateLesson(String accessToken, String lessonId, VirtualLessonChanges changes);
 
+    /** Deletes a lesson, together with the students' progress on it; the API renumbers the lessons left. */
+    void deleteLesson(String accessToken, String lessonId);
+
     /**
      * The API refused the request with a code the screens word: 400, 403, 404 or 409 with one of the
      * {@link Code}s. Its message is for logs only.

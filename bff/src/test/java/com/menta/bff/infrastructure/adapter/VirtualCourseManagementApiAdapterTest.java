@@ -186,7 +186,9 @@ class VirtualCourseManagementApiAdapterTest {
                                 new CreateVirtualLessonCommand("Abrazo", "El abrazo", null, null, null, null))),
                 new Operation("updateLesson", "PUT", LESSON_PATH, 200, LESSON_JSON,
                         a -> a.updateLesson(TOKEN, LESSON_ID,
-                                new VirtualLessonChanges("Abrazo", null, null, null, null, null))));
+                                new VirtualLessonChanges("Abrazo", null, null, null, null, null))),
+                new Operation("deleteLesson", "DELETE", LESSON_PATH, 204, "",
+                        a -> a.deleteLesson(TOKEN, LESSON_ID)));
     }
 
     static Stream<Arguments> everyOperation() {
@@ -438,6 +440,18 @@ class VirtualCourseManagementApiAdapterTest {
         adapter.deleteCourse(TOKEN, COURSE_ID);
 
         verify(deleteRequestedFor(urlPathEqualTo(COURSE_PATH)));
+    }
+
+    @Test
+    @DisplayName("deleteLesson sends DELETE to the lesson, answers 204 without a body and needs exactly that status")
+    void deleteLesson() {
+        stub("DELETE", LESSON_PATH, 204, "");
+        adapter.deleteLesson(TOKEN, LESSON_ID);
+        verify(deleteRequestedFor(urlPathEqualTo(LESSON_PATH)));
+
+        stub("DELETE", LESSON_PATH, 200, "");
+        assertThatThrownBy(() -> adapter.deleteLesson(TOKEN, LESSON_ID))
+                .isInstanceOf(ServiceUnavailableException.class);
     }
 
     // ---- the structure: modules and lessons ----

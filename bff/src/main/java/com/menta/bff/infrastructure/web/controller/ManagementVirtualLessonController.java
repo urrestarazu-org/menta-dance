@@ -184,7 +184,7 @@ public class ManagementVirtualLessonController {
     }
 
     /** The module controller's refusals plus the lesson that is gone; any other code goes to {@code otherwise}. */
-    private static String refused(Code code, Model model, HttpServletResponse response, Supplier<String> otherwise) {
+    static String refused(Code code, Model model, HttpServletResponse response, Supplier<String> otherwise) {
         if (code == Code.LESSON_NOT_FOUND) {
             return notFound(model, response, "Lección no encontrada", LESSON_NOT_FOUND);
         }

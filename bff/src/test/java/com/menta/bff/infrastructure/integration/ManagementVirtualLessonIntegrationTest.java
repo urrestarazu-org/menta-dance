@@ -159,7 +159,7 @@ class ManagementVirtualLessonIntegrationTest extends BaseIntegrationTest {
                         + "</span></a>")
                 .containsPattern("<a[^>]*href=\"" + CREATE + "/" + L2 + "/editar\">Editar<span class=\"sr-only\">"
                         + "\\s*lección Segundo paso</span></a>")
-                .doesNotContain(VIDEO).doesNotContain("Borrar");
+                .doesNotContain(VIDEO).doesNotContain("Borrar curso");
     }
 
     // ---- create ----

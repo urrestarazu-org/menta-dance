@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/management :: page('Borrar lección', 'cursos-virtuales', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<div class="max-w-xl">
+    <h1 class="mb-6">Borrar lección</h1>
+
+    <div th:if="${actionError}" class="mb-4">
+        <div th:replace="~{fragments/components :: alert('error', ${actionError})}"></div>
+    </div>
+
+    <form th:action="@{/gestion/cursos-virtuales/{id}/modulos/{module}/lecciones/{lesson}/borrar(id=${courseId},module=${moduleId},lesson=${lessonId})}"
+          method="post" class="card space-y-4">
+        <p>
+            ¿Borrar la lección «<strong th:text="${lessonTitle}">Primer paso</strong>» del módulo
+            «<strong th:text="${moduleTitle}">Pasos básicos</strong>»?
+            Se borra también el progreso de los alumnos en esta lección. Esta acción no se puede deshacer.
+        </p>
+        <div class="flex items-center gap-4">
+            <button type="submit" class="btn btn-danger">Sí, borrar la lección</button>
+            <a th:href="@{/gestion/cursos-virtuales/{id}/estructura(id=${courseId})}">Volver a la estructura</a>
+        </div>
+    </form>
+</div>
+</th:block>
+</body>
+</html>

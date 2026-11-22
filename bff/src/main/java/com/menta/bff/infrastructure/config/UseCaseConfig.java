@@ -42,6 +42,8 @@ import com.menta.bff.application.usecase.CreateVirtualModuleUseCase;
 import com.menta.bff.application.usecase.CreateVirtualModuleUseCaseImpl;
 import com.menta.bff.application.usecase.DeleteVirtualCourseUseCase;
 import com.menta.bff.application.usecase.DeleteVirtualCourseUseCaseImpl;
+import com.menta.bff.application.usecase.DeleteVirtualLessonUseCase;
+import com.menta.bff.application.usecase.DeleteVirtualLessonUseCaseImpl;
 import com.menta.bff.application.usecase.DescribeSessionConflictsUseCase;
 import com.menta.bff.application.usecase.DescribeSessionConflictsUseCaseImpl;
 import com.menta.bff.application.usecase.GetAssignedSessionsUseCase;
@@ -68,6 +70,8 @@ import com.menta.bff.application.usecase.GetManagedCourseUseCase;
 import com.menta.bff.application.usecase.GetManagedCourseUseCaseImpl;
 import com.menta.bff.application.usecase.GetManagedVirtualCourseUseCase;
 import com.menta.bff.application.usecase.GetManagedVirtualCourseUseCaseImpl;
+import com.menta.bff.application.usecase.GetManagedVirtualLessonUseCase;
+import com.menta.bff.application.usecase.GetManagedVirtualLessonUseCaseImpl;
 import com.menta.bff.application.usecase.GetPaymentDetailUseCase;
 import com.menta.bff.application.usecase.GetPaymentDetailUseCaseImpl;
 import com.menta.bff.application.usecase.GetPaymentHistoryUseCase;
@@ -134,6 +138,8 @@ import com.menta.bff.application.usecase.ResolveSessionWindowUseCase;
 import com.menta.bff.application.usecase.ResolveSessionWindowUseCaseImpl;
 import com.menta.bff.application.usecase.SubscribeToPlanUseCase;
 import com.menta.bff.application.usecase.SubscribeToPlanUseCaseImpl;
+import com.menta.bff.application.usecase.SwapVirtualLessonsUseCase;
+import com.menta.bff.application.usecase.SwapVirtualLessonsUseCaseImpl;
 import com.menta.bff.application.usecase.UnpublishVirtualCourseUseCase;
 import com.menta.bff.application.usecase.UnpublishVirtualCourseUseCaseImpl;
 import com.menta.bff.application.usecase.UpdateCourseSessionUseCase;
@@ -583,5 +589,21 @@ public class UseCaseConfig {
     @Bean
     public UpdateVirtualLessonUseCase updateVirtualLessonUseCase(VirtualCourseManagementApiClient courseApiClient) {
         return new UpdateVirtualLessonUseCaseImpl(courseApiClient);
+    }
+
+    @Bean
+    public SwapVirtualLessonsUseCase swapVirtualLessonsUseCase(VirtualCourseManagementApiClient courseApiClient) {
+        return new SwapVirtualLessonsUseCaseImpl(courseApiClient);
+    }
+
+    @Bean
+    public DeleteVirtualLessonUseCase deleteVirtualLessonUseCase(VirtualCourseManagementApiClient courseApiClient) {
+        return new DeleteVirtualLessonUseCaseImpl(courseApiClient);
+    }
+
+    @Bean
+    public GetManagedVirtualLessonUseCase getManagedVirtualLessonUseCase(
+            VirtualCourseManagementApiClient courseApiClient) {
+        return new GetManagedVirtualLessonUseCaseImpl(courseApiClient);
     }
 }
