@@ -33,6 +33,8 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
@@ -444,6 +446,49 @@ class VirtualCourseManagementIntegrationTest {
         );
         assertThat(updateResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(updateResponse.getBody().get("free")).isEqualTo(true);
+    }
+
+    @Test
+    void update_module_with_a_negative_order_is_400_invalid_request_and_leaves_the_module_unchanged() {
+        UUID adminId = issueUser(Role.ADMIN);
+        UUID courseId = seedCourse(adminId, CourseStatus.DRAFT);
+        UUID moduleId = seedModule(courseId, 2);
+
+        ResponseEntity<Map> response = http.exchange(
+            "/api/v1/admin/virtual/modules/" + moduleId, HttpMethod.PUT,
+            new HttpEntity<>(Map.of("order", -1), headersFor(adminId, Role.ADMIN)), Map.class
+        );
+
+        assertGenericInvalidRequest(response);
+        assertThat(moduleRepository.findById(moduleId).orElseThrow().getDisplayOrder()).isEqualTo(2);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"durationMinutes", "order"})
+    void update_lesson_with_a_negative_value_is_400_invalid_request_and_leaves_the_lesson_unchanged(String field) {
+        UUID adminId = issueUser(Role.ADMIN);
+        UUID courseId = seedCourse(adminId, CourseStatus.DRAFT);
+        UUID moduleId = seedModule(courseId, 0);
+        UUID lessonId = UUID.randomUUID();
+        lessonRepository.save(new VirtualLessonJpaEntity(
+            lessonId, moduleId, courseId, "L1", "d", "bunny-123", 10, false, 3
+        ));
+
+        ResponseEntity<Map> response = http.exchange(
+            "/api/v1/admin/virtual/lessons/" + lessonId, HttpMethod.PUT,
+            new HttpEntity<>(Map.of(field, -1), headersFor(adminId, Role.ADMIN)), Map.class
+        );
+
+        assertGenericInvalidRequest(response);
+        VirtualLessonJpaEntity stored = lessonRepository.findById(lessonId).orElseThrow();
+        assertThat(stored.getDurationMinutes()).isEqualTo(10);
+        assertThat(stored.getDisplayOrder()).isEqualTo(3);
+    }
+
+    private static void assertGenericInvalidRequest(ResponseEntity<Map> response) {
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody().get("code")).isEqualTo("INVALID_REQUEST");
+        assertThat(response.getBody().get("detail")).isEqualTo("La solicitud contiene datos inválidos.");
     }
 
     @Test
