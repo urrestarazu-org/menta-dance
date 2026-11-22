@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 
 # Local development lifecycle for Bruno testing.
-# Starts Docker infrastructure plus the API and BFF from the Gradle workspace.
+# Starts Docker infrastructure plus the API and BFF. Each service runs from a
+# copy of its boot jar under .dev-run/, never from build/, so a later Gradle
+# recompile (clean, --rerun-tasks, a branch switch) cannot break a running JVM.
+# After changing code, run `restart` to rebuild and relaunch the jars.
 
 set -euo pipefail
 
@@ -11,23 +14,36 @@ readonly SCRIPT_PATH="${SCRIPT_DIR}/$(basename "${BASH_SOURCE[0]}")"
 readonly ENV_FILE="${DEV_ENV_FILE:-${PROJECT_ROOT}/.env}"
 readonly INFRA_COMPOSE_FILE="${PROJECT_ROOT}/infra/docker/database/docker-compose.yml"
 readonly INFRA_COMPOSE_PROJECT="menta-dance"
-readonly GRADLEW="${PROJECT_ROOT}/gradlew"
+readonly GRADLEW="${DEV_GRADLEW:-${PROJECT_ROOT}/gradlew}"
 readonly SDKMAN_ENV_FILE="${PROJECT_ROOT}/.sdkmanrc"
 readonly SDKMAN_INIT_SCRIPT="${SDKMAN_DIR:-${HOME}/.sdkman}/bin/sdkman-init.sh"
 
 readonly STATE_DIR="${PROJECT_ROOT}/.dev-pids"
+readonly RUN_DIR="${DEV_RUN_DIR:-${PROJECT_ROOT}/.dev-run}"
 readonly LOG_DIR="${PROJECT_ROOT}/.dev-logs"
 readonly API_PID_FILE="${STATE_DIR}/api.pid"
 readonly BFF_PID_FILE="${STATE_DIR}/bff.pid"
 readonly API_LOG="${LOG_DIR}/api.log"
 readonly BFF_LOG="${LOG_DIR}/bff.log"
 
-readonly API_TASK=":api:app:bootRun"
-readonly BFF_TASK=":bff:bootRun"
+# Boot jars: built by Gradle, then copied to .dev-run/ and run from there. The
+# jar path under .dev-run/ is also the process-ownership marker: it appears in
+# the java command line of the launched service.
+readonly API_BUILD_TASK=":api:app:bootJar"
+readonly BFF_BUILD_TASK=":bff:bootJar"
+readonly API_BUILT_JAR="${PROJECT_ROOT}/api/app/build/libs/menta-dance-api.jar"
+readonly BFF_BUILT_JAR="${PROJECT_ROOT}/bff/build/libs/menta-dance-bff.jar"
+readonly API_RUN_JAR="${RUN_DIR}/menta-dance-api.jar"
+readonly BFF_RUN_JAR="${RUN_DIR}/menta-dance-bff.jar"
+# Gradle's bootRun ran each service from its module directory; keep that.
+readonly API_WORKDIR="${PROJECT_ROOT}/api/app"
+readonly BFF_WORKDIR="${PROJECT_ROOT}/bff"
+readonly OTEL_AGENT="${DEV_OTEL_AGENT:-${PROJECT_ROOT}/observability/opentelemetry-javaagent.jar}"
 readonly API_HEALTH_URL="http://localhost:8081/actuator/health"
 readonly BFF_HEALTH_URL="http://localhost:8080/actuator/health"
-# Seconds to wait for each service to report healthy. A cold CI runner compiles
-# before booting, so the workflow raises it; local runs keep the default.
+# Seconds to wait for each service to report healthy, counted from the java
+# launch: the jar build runs (and is reported) before that wait starts. A cold CI
+# runner boots slowly, so the workflow raises it; local runs keep the default.
 HEALTH_TIMEOUT_SECONDS="${DEV_HEALTH_TIMEOUT:-120}"
 [[ "$HEALTH_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]] || HEALTH_TIMEOUT_SECONDS=120
 readonly HEALTH_TIMEOUT_SECONDS
@@ -58,9 +74,9 @@ usage() {
 Usage: ${SCRIPT_PATH} {start|stop|restart|status|logs|help} [service]
 
 Commands:
-  start             Start infrastructure, API, and BFF for Bruno
+  start             Build the boot jars, then start infrastructure, API, and BFF for Bruno
   stop              Stop API, BFF, and local infrastructure
-  restart           Stop and start all services
+  restart           Stop and start all services (run it after changing code)
   status            Show process and health status
   logs <service>    Follow logs for api, bff, mysql, redis, otel, loki, or grafana
   help              Show this help
@@ -69,7 +85,9 @@ Bruno endpoints:
   API: http://localhost:8081
   BFF: http://localhost:8080
 
-API/BFF output remains visible during startup and is also saved under .dev-logs/.
+API and BFF run from copies of their boot jars in .dev-run/, so recompiling with
+Gradle does not affect running services. To pick up code changes run: restart.
+API/BFF output (including the jar build) is saved under .dev-logs/.
 EOF
 }
 
@@ -358,21 +376,119 @@ clear_process_state() {
     return 0
 }
 
+trim_whitespace() {
+    local text=$1
+    text=${text#"${text%%[![:space:]]*}"}
+    text=${text%"${text##*[![:space:]]}"}
+    printf '%s' "$text"
+}
+
+# Exports the pairs of a .env file into the current shell, parsed like the
+# bootRun blocks of the Gradle build did: blank lines and lines starting with '#'
+# are skipped, the split is on the first '=', and key and value are trimmed. The
+# file is never sourced or evaluated, so '$', backticks and quotes stay literal.
+# Two deliberate differences: a variable already set (non-empty) in the shell is
+# kept, matching env_setting, and keys that are not valid variable names are
+# skipped. Call it only inside the subshell that launches the service, and never
+# print the values.
+export_env_file() {
+    local env_file=$1
+    local line
+    local key
+    local value
+
+    [[ -r "$env_file" ]] || return 0
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        line=${line%$'\r'}
+        if [[ -z "$(trim_whitespace "$line")" || "$line" == \#* || "$line" != *=* ]]; then
+            continue
+        fi
+        key=$(trim_whitespace "${line%%=*}")
+        value=$(trim_whitespace "${line#*=}")
+        if [[ ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ || -n "${!key:-}" ]]; then
+            continue
+        fi
+        export "${key}=${value}"
+    done < "$env_file"
+    return 0
+}
+
+# Fills JAVA_COMMAND with the command that runs a service from its jar. The API
+# also gets the OpenTelemetry agent flags bootRun used, when the agent file exists.
+build_java_command() {
+    local display_name=$1
+    local run_jar=$2
+
+    JAVA_COMMAND=(java)
+    if [[ "$display_name" == "API" && -f "$OTEL_AGENT" ]]; then
+        JAVA_COMMAND+=(
+            "-javaagent:${OTEL_AGENT}"
+            "-Dotel.service.name=menta-dance-api"
+            "-Dotel.exporter.otlp.endpoint=http://localhost:4318"
+            "-Dotel.exporter.otlp.protocol=http/protobuf"
+            "-Dotel.logs.exporter=otlp"
+            "-Dotel.metrics.exporter=none"
+            "-Dotel.traces.exporter=none"
+        )
+    fi
+    JAVA_COMMAND+=(-jar "$run_jar")
+}
+
+# Copies the built jar to its run location through a temp file and a rename, so
+# a JVM still holding the previous jar open keeps a consistent file.
+stage_jar() {
+    local built_jar=$1
+    local run_jar=$2
+    local temp_jar="${run_jar}.tmp.$$"
+
+    if [[ ! -f "$built_jar" ]]; then
+        log_error "Built jar not found: ${built_jar}"
+        return 1
+    fi
+    if ! mkdir -p "$(dirname "$run_jar")" || ! cp "$built_jar" "$temp_jar" || ! mv -f "$temp_jar" "$run_jar"; then
+        rm -f "$temp_jar"
+        log_error "Unable to copy ${built_jar} to ${run_jar}."
+        return 1
+    fi
+}
+
+# Builds the boot jar. Its output goes to the service log, so a failed build is
+# reported as that service's startup failure.
+build_service_jar() {
+    local display_name=$1
+    local build_task=$2
+    local built_jar=$3
+    local log_file=$4
+
+    log_step "Building ${display_name} jar (gradlew --no-daemon ${build_task}); this can take a while..."
+    if ! (cd "$PROJECT_ROOT" && "$GRADLEW" --no-daemon "$build_task" >> "$log_file" 2>&1); then
+        report_startup_failure "$display_name" "$log_file"
+        return 1
+    fi
+    if [[ ! -f "$built_jar" ]]; then
+        log_error "${display_name} build succeeded but ${built_jar} was not produced. Full log: ${log_file}"
+        return 1
+    fi
+}
+
 launch_service() {
     local display_name=$1
-    local task=$2
-    local health_url=$3
-    local pid_file=$4
-    local log_file=$5
-    local max_attempts=$6
+    local build_task=$2
+    local built_jar=$3
+    local run_jar=$4
+    local workdir=$5
+    local health_url=$6
+    local pid_file=$7
+    local log_file=$8
+    local max_attempts=$9
     local job_pid
     local pgid
 
     LAST_SERVICE_STARTED=false
 
-    if owned_process_is_running "$pid_file" "$task"; then
+    if owned_process_is_running "$pid_file" "$run_jar"; then
         log_warning "${display_name} is already managed by this script. Waiting for health."
-        wait_for_http_service "$display_name" "$task" "$health_url" "$pid_file" "$log_file" "$max_attempts"
+        wait_for_http_service "$display_name" "$run_jar" "$health_url" "$pid_file" "$log_file" "$max_attempts"
         return
     fi
 
@@ -385,18 +501,24 @@ launch_service() {
         return 0
     fi
 
-    log_step "Starting ${display_name} (${task})..."
     : > "$log_file"
+    # Build before launching: a build failure is a startup failure with nothing
+    # to roll back, and the health wait below only has to cover the JVM boot.
+    build_service_jar "$display_name" "$build_task" "$built_jar" "$log_file" || return 1
+    stage_jar "$built_jar" "$run_jar" || return 1
+    build_java_command "$display_name" "$run_jar"
 
-    # Job control gives the Gradle supervisor a dedicated process group. Keep
-    # its output in the service log so the startup terminal remains concise;
-    # failures still print the final log lines below.
+    log_step "Starting ${display_name} (${run_jar})..."
+    # Job control gives the JVM a dedicated process group. Keep its output in
+    # the service log so the startup terminal remains concise; failures still
+    # print the final log lines below. The .env pairs are exported inside this
+    # subshell only, and exec makes the JVM itself the group leader.
     set -m
     (
         set +m
-        set -o pipefail
-        cd "$PROJECT_ROOT"
-        "$GRADLEW" --no-daemon "$task" >> "$log_file" 2>&1
+        cd "$workdir" || exit 1
+        export_env_file "$ENV_FILE"
+        exec "${JAVA_COMMAND[@]}" >> "$log_file" 2>&1
     ) &
     job_pid=$!
     set +m
@@ -410,12 +532,12 @@ launch_service() {
     printf '%s %s\n' "$job_pid" "$pgid" > "$pid_file"
     LAST_SERVICE_STARTED=true
 
-    wait_for_http_service "$display_name" "$task" "$health_url" "$pid_file" "$log_file" "$max_attempts"
+    wait_for_http_service "$display_name" "$run_jar" "$health_url" "$pid_file" "$log_file" "$max_attempts"
 }
 
 wait_for_http_service() {
     local display_name=$1
-    local task=$2
+    local marker=$2
     local health_url=$3
     local pid_file=$4
     local log_file=$5
@@ -436,7 +558,7 @@ wait_for_http_service() {
             report_startup_failure "$display_name" "$log_file"
             return 1
         fi
-        if ! owned_process_is_running "$pid_file" "$task"; then
+        if ! owned_process_is_running "$pid_file" "$marker"; then
             clear_process_state "$pid_file"
             log_error "${display_name} exited before becoming healthy. Last log lines:"
             tail -n 30 "$log_file" >&2 || true
@@ -457,7 +579,7 @@ wait_for_http_service() {
 
 stop_service() {
     local display_name=$1
-    local task=$2
+    local marker=$2
     local pid_file=$3
     local state
     local pid
@@ -471,8 +593,8 @@ stop_service() {
     }
     read -r pid pgid <<< "$state"
 
-    if ! owned_process_is_running "$pid_file" "$task"; then
-        log_warning "Ignoring stale ${display_name} state; it does not match the expected Gradle task."
+    if ! owned_process_is_running "$pid_file" "$marker"; then
+        log_warning "Ignoring stale ${display_name} state; it does not match the expected jar."
         clear_process_state "$pid_file"
         return 0
     fi
@@ -539,10 +661,10 @@ rollback_start() {
 
     log_warning "Startup failed; rolling back services started by this invocation."
     if [[ "$bff_started" == true ]]; then
-        stop_service "BFF" "$BFF_TASK" "$BFF_PID_FILE" || log_warning "Could not fully roll back BFF."
+        stop_service "BFF" "$BFF_RUN_JAR" "$BFF_PID_FILE" || log_warning "Could not fully roll back BFF."
     fi
     if [[ "$api_started" == true ]]; then
-        stop_service "API" "$API_TASK" "$API_PID_FILE" || log_warning "Could not fully roll back API."
+        stop_service "API" "$API_RUN_JAR" "$API_PID_FILE" || log_warning "Could not fully roll back API."
     fi
     if [[ "$infrastructure_started" == true ]]; then
         stop_infrastructure || log_warning "Could not fully roll back infrastructure."
@@ -618,7 +740,7 @@ print_container_status() {
 
 print_application_status() {
     local display_name=$1
-    local task=$2
+    local marker=$2
     local health_url=$3
     local pid_file=$4
     local state=""
@@ -630,7 +752,7 @@ print_application_status() {
         read -r pid pgid <<< "$state"
     fi
 
-    if owned_process_is_running "$pid_file" "$task"; then
+    if owned_process_is_running "$pid_file" "$marker"; then
         if health_is_up "$health_url"; then
             printf '  %-18s %bUP%b (PID %s, PGID %s)\n' "$display_name" "$GREEN" "$NC" "$pid" "$pgid"
         else
@@ -674,7 +796,7 @@ cmd_start() {
     fi
 
     start_phase="api"
-    if ! launch_service "API" "$API_TASK" "$API_HEALTH_URL" "$API_PID_FILE" "$API_LOG" "$HEALTH_TIMEOUT_SECONDS"; then
+    if ! launch_service "API" "$API_BUILD_TASK" "$API_BUILT_JAR" "$API_RUN_JAR" "$API_WORKDIR" "$API_HEALTH_URL" "$API_PID_FILE" "$API_LOG" "$HEALTH_TIMEOUT_SECONDS"; then
         api_started=$LAST_SERVICE_STARTED
         trap - INT TERM
         rollback_start false "$api_started" "$infrastructure_started"
@@ -683,7 +805,7 @@ cmd_start() {
     api_started=$LAST_SERVICE_STARTED
 
     start_phase="bff"
-    if ! launch_service "BFF" "$BFF_TASK" "$BFF_HEALTH_URL" "$BFF_PID_FILE" "$BFF_LOG" "$HEALTH_TIMEOUT_SECONDS"; then
+    if ! launch_service "BFF" "$BFF_BUILD_TASK" "$BFF_BUILT_JAR" "$BFF_RUN_JAR" "$BFF_WORKDIR" "$BFF_HEALTH_URL" "$BFF_PID_FILE" "$BFF_LOG" "$HEALTH_TIMEOUT_SECONDS"; then
         bff_started=$LAST_SERVICE_STARTED
         trap - INT TERM
         rollback_start "$bff_started" "$api_started" "$infrastructure_started"
@@ -703,8 +825,8 @@ cmd_start() {
 
 cmd_stop() {
     ensure_state_dirs
-    stop_service "BFF" "$BFF_TASK" "$BFF_PID_FILE"
-    stop_service "API" "$API_TASK" "$API_PID_FILE"
+    stop_service "BFF" "$BFF_RUN_JAR" "$BFF_PID_FILE"
+    stop_service "API" "$API_RUN_JAR" "$API_PID_FILE"
     stop_infrastructure
 }
 
@@ -721,8 +843,8 @@ cmd_status() {
     else
         printf '  %-18s %bUNAVAILABLE%b (Docker daemon)\n' "Infrastructure" "$YELLOW" "$NC"
     fi
-    print_application_status API "$API_TASK" "$API_HEALTH_URL" "$API_PID_FILE"
-    print_application_status BFF "$BFF_TASK" "$BFF_HEALTH_URL" "$BFF_PID_FILE"
+    print_application_status API "$API_RUN_JAR" "$API_HEALTH_URL" "$API_PID_FILE"
+    print_application_status BFF "$BFF_RUN_JAR" "$BFF_HEALTH_URL" "$BFF_PID_FILE"
     printf '\n'
 }
 

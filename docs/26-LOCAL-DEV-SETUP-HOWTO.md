@@ -36,6 +36,14 @@ entorno), salvo que el perfil `demo` esté activo. Si el API falla durante el ar
 inmediato y muestra la causa raíz y las últimas líneas del log, en lugar de esperar los 120 segundos.
 `./scripts/dev-test.sh` prueba esas validaciones sin levantar ningún servicio.
 
+**Cómo corren los servicios:** `dev.sh start` construye los jars de la API y del BFF
+(`gradlew --no-daemon :api:app:bootJar` y `:bff:bootJar`), los copia a `.dev-run/` (ignorado por Git) y
+arranca cada servicio con `java -jar .dev-run/<jar>`. Como la JVM no lee `build/`, recompilar con Gradle
+(`clean`, `--rerun-tasks`, cambiar de rama, correr los gates de otro cambio) ya no rompe los servicios que
+están corriendo. A cambio, los cambios de código no se ven solos: después de modificar código ejecutá
+`./scripts/dev.sh restart` para reconstruir y relanzar los jars. La salida del build y de la JVM queda en
+`.dev-logs/`; si el build falla, el script lo informa como falla de arranque de ese servicio.
+
 **URLs:**
 - API: http://localhost:8081
 - BFF: http://localhost:8080
@@ -46,7 +54,7 @@ inmediato y muestra la causa raíz y las últimas líneas del log, en lugar de e
 ```bash
 ./scripts/dev.sh start     # Levantar todo
 ./scripts/dev.sh stop      # Detener todo
-./scripts/dev.sh restart   # Reiniciar todo
+./scripts/dev.sh restart   # Reiniciar todo (reconstruye los jars; usalo tras cambiar código)
 ./scripts/dev.sh status    # Ver estado
 ./scripts/dev.sh logs api  # Ver logs de API
 ./scripts/dev.sh logs bff  # Ver logs de BFF

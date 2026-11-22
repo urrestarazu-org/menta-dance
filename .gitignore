@@ -81,6 +81,7 @@ tmp/
 
 # dev.sh outputs
 .dev-pids/
+.dev-run/
 .dev-logs/
 
 # BFF frontend (Tailwind pipeline): dependencies are restored with `npm ci`,
