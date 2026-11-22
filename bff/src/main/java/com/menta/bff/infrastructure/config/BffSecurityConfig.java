@@ -149,6 +149,9 @@ public class BffSecurityConfig {
                         // In-person courses and their sessions (#368): the administrator manages all of them,
                         // an instructor the own ones (the API tells them apart).
                         .requestMatchers("/gestion/cursos-presenciales/**").hasAnyRole("ADMIN", "INSTRUCTOR")
+                        // Virtual courses (#367): the administrator sees all of them, an instructor the own ones
+                        // (the API tells them apart). Without this rule the fail-closed one would refuse them.
+                        .requestMatchers("/gestion/cursos-virtuales/**").hasAnyRole("ADMIN", "INSTRUCTOR")
                         .requestMatchers("/gestion/recepcion/**").hasAnyRole("RECEPTIONIST", "ADMIN")
                         .requestMatchers("/gestion/billing/**", "/gestion/dispositivos/**", "/gestion/usuarios/**")
                         .hasRole("ADMIN")

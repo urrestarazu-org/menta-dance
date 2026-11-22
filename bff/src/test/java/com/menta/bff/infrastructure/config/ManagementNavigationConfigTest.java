@@ -27,9 +27,9 @@ class ManagementNavigationConfigTest {
     @DisplayName("only sections with a screen are offered (courses to admin and instructor, Recepción to reception "
             + "and admin, Pagos, Compras con excepción and Usuarios to admin)")
     void onlySectionsWithAScreenAreOffered() {
-        assertThat(keysFor("ADMIN")).containsExactlyInAnyOrder("cursos-presenciales", "reception", "payments",
-                "exception-purchases", "users");
-        assertThat(keysFor("INSTRUCTOR")).containsExactly("cursos-presenciales");
+        assertThat(keysFor("ADMIN")).containsExactlyInAnyOrder("cursos-presenciales", "cursos-virtuales", "reception",
+                "payments", "exception-purchases", "users");
+        assertThat(keysFor("INSTRUCTOR")).containsExactlyInAnyOrder("cursos-presenciales", "cursos-virtuales");
         assertThat(keysFor("RECEPTIONIST")).containsExactly("reception");
         assertThat(keysFor("STUDENT")).isEmpty();
     }
@@ -38,12 +38,24 @@ class ManagementNavigationConfigTest {
     @DisplayName("the Cursos presenciales section points at the screen the controller serves, and the disabled "
             + "Sesiones entry is a different one")
     void coursesSectionPoints() {
-        ManagementSection courses = navigation.sectionsFor(List.of("ROLE_INSTRUCTOR")).get(0);
+        ManagementSection courses = sectionFor("INSTRUCTOR", "cursos-presenciales");
 
         assertThat(courses.label()).isEqualTo("Cursos presenciales");
         assertThat(courses.path()).isEqualTo("/gestion/cursos-presenciales");
         assertThat(courses.roles()).containsExactlyInAnyOrder("ADMIN", "INSTRUCTOR");
         assertThat(keysFor("ADMIN")).doesNotContain("sessions");
+    }
+
+    @Test
+    @DisplayName("the Cursos virtuales section points at the screen the controller serves, for admin and instructor, "
+            + "and the disabled Contenido entry is a different one")
+    void virtualCoursesSectionPoints() {
+        ManagementSection courses = sectionFor("INSTRUCTOR", "cursos-virtuales");
+
+        assertThat(courses.label()).isEqualTo("Cursos virtuales");
+        assertThat(courses.path()).isEqualTo("/gestion/cursos-virtuales");
+        assertThat(courses.roles()).containsExactlyInAnyOrder("ADMIN", "INSTRUCTOR");
+        assertThat(keysFor("ADMIN")).doesNotContain("content");
     }
 
     @Test

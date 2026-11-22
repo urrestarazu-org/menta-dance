@@ -92,7 +92,7 @@ class ManagementLayoutIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("an instructor gets Inicio and the one section they can open: the navigation never shows dead links")
+    @DisplayName("an instructor gets Inicio and the sections they can open: the navigation never shows dead links")
     void noDeadLinksForAnInstructor() throws Exception {
         Cookie session = logIn("INSTRUCTOR");
 
@@ -100,6 +100,7 @@ class ManagementLayoutIntegrationTest extends BaseIntegrationTest {
                 .andReturn().getResponse().getContentAsString());
 
         assertThat(main).containsPattern("<a href=\"/gestion/cursos-presenciales\"[^>]*>Cursos presenciales</a>")
+                .containsPattern("<a href=\"/gestion/cursos-virtuales\"[^>]*>Cursos virtuales</a>")
                 .doesNotContain("/gestion/recepcion").doesNotContain("/gestion/usuarios")
                 .doesNotContain("/gestion/sesiones").doesNotContain("/gestion/contenido")
                 .contains("Las secciones de gestión se irán habilitando");

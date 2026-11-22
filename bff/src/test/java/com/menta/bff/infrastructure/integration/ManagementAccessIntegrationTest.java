@@ -84,6 +84,9 @@ class ManagementAccessIntegrationTest extends BaseIntegrationTest {
         mockMvc.perform(post("/gestion/cursos-presenciales/nuevo").with(csrf()))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrlPattern("**/login"));
+        mockMvc.perform(get("/gestion/cursos-virtuales"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrlPattern("**/login"));
     }
 
     static Stream<Arguments> prefixMatrix() {
@@ -109,6 +112,14 @@ class ManagementAccessIntegrationTest extends BaseIntegrationTest {
                 Arguments.of("/gestion/cursos-presenciales/1/sin-pantalla", INSTRUCTOR, true),
                 Arguments.of("/gestion/cursos-presenciales/1/sin-pantalla", RECEPTIONIST, false),
                 Arguments.of("/gestion/cursos-presenciales/1/sin-pantalla", STUDENT, false),
+                // virtual courses (#367): administrator and instructor, at any depth. The list itself is served
+                // (not a 404), so its allowed case is covered by ManagementVirtualCoursesIntegrationTest.
+                Arguments.of("/gestion/cursos-virtuales", RECEPTIONIST, false),
+                Arguments.of("/gestion/cursos-virtuales", STUDENT, false),
+                Arguments.of("/gestion/cursos-virtuales/1/sin-pantalla", ADMIN, true),
+                Arguments.of("/gestion/cursos-virtuales/1/sin-pantalla", INSTRUCTOR, true),
+                Arguments.of("/gestion/cursos-virtuales/1/sin-pantalla", RECEPTIONIST, false),
+                Arguments.of("/gestion/cursos-virtuales/1/sin-pantalla", STUDENT, false),
                 // reception: receptionist and administrator. Their own access to the screens that exist is not
                 // a 404 (they are served), so it is covered by ManagementReceptionIntegrationTest.
                 Arguments.of("/gestion/recepcion", INSTRUCTOR, false),
@@ -165,13 +176,22 @@ class ManagementAccessIntegrationTest extends BaseIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
-    @ParameterizedTest(name = "{0} as POST /gestion/cursos-presenciales/...: allowed={1}")
-    @CsvSource({"ADMIN, true", "INSTRUCTOR, true", "RECEPTIONIST, false", "STUDENT, false"})
-    @DisplayName("the in-person courses rule applies to every verb: staff who manage them pass, the rest get a 403")
-    void courseManagementRuleCoversEveryVerb(String role, boolean allowed) throws Exception {
+    @ParameterizedTest(name = "{1} as POST {0}: allowed={2}")
+    @CsvSource({
+        "/gestion/cursos-presenciales/1/sin-pantalla, ADMIN, true",
+        "/gestion/cursos-presenciales/1/sin-pantalla, INSTRUCTOR, true",
+        "/gestion/cursos-presenciales/1/sin-pantalla, RECEPTIONIST, false",
+        "/gestion/cursos-presenciales/1/sin-pantalla, STUDENT, false",
+        "/gestion/cursos-virtuales/1/sin-pantalla, ADMIN, true",
+        "/gestion/cursos-virtuales/1/sin-pantalla, INSTRUCTOR, true",
+        "/gestion/cursos-virtuales/1/sin-pantalla, RECEPTIONIST, false",
+        "/gestion/cursos-virtuales/1/sin-pantalla, STUDENT, false"
+    })
+    @DisplayName("the courses rules apply to every verb: staff who manage them pass, the rest get a 403")
+    void courseManagementRuleCoversEveryVerb(String path, String role, boolean allowed) throws Exception {
         Cookie session = logIn(role);
 
-        mockMvc.perform(post("/gestion/cursos-presenciales/1/sin-pantalla").cookie(session).with(csrf()))
+        mockMvc.perform(post(path).cookie(session).with(csrf()))
                 .andExpect(allowed ? status().isNotFound() : status().isForbidden());
     }
 }
