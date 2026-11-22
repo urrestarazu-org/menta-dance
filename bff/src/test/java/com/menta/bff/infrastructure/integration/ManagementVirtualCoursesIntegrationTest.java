@@ -160,7 +160,7 @@ class ManagementVirtualCoursesIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("links only to the create form and to each course's edit form, with the title in the link name")
+    @DisplayName("links only to the create form and to each course's edit and structure, with the title in each name")
     void linksToTheForms() throws Exception {
         stubList(course("c-1", "Tango base", "BEGINNER", true, "DRAFT"));
 
@@ -169,6 +169,8 @@ class ManagementVirtualCoursesIntegrationTest extends BaseIntegrationTest {
         assertThat(mainOf(html)).containsPattern("<a[^>]*href=\"/gestion/cursos-virtuales/nuevo\"[^>]*>Nuevo curso</a>")
                 .containsPattern("<a[^>]*href=\"/gestion/cursos-virtuales/c-1/editar\">Editar"
                         + "<span class=\"sr-only\">\\s*el curso Tango base</span></a>")
+                .containsPattern("<a[^>]*href=\"/gestion/cursos-virtuales/c-1/estructura\">Estructura"
+                        + "<span class=\"sr-only\">\\s*del curso Tango base</span></a>")
                 .doesNotContain("<form").doesNotContain("Publicar").doesNotContain("Borrar");
         assertThat(html).doesNotContain("/api/v1");
     }
