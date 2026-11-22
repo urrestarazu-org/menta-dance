@@ -36,6 +36,10 @@ import com.menta.bff.application.usecase.CreateUserUseCase;
 import com.menta.bff.application.usecase.CreateUserUseCaseImpl;
 import com.menta.bff.application.usecase.CreateVirtualCourseUseCase;
 import com.menta.bff.application.usecase.CreateVirtualCourseUseCaseImpl;
+import com.menta.bff.application.usecase.CreateVirtualLessonUseCase;
+import com.menta.bff.application.usecase.CreateVirtualLessonUseCaseImpl;
+import com.menta.bff.application.usecase.CreateVirtualModuleUseCase;
+import com.menta.bff.application.usecase.CreateVirtualModuleUseCaseImpl;
 import com.menta.bff.application.usecase.DeleteVirtualCourseUseCase;
 import com.menta.bff.application.usecase.DeleteVirtualCourseUseCaseImpl;
 import com.menta.bff.application.usecase.DescribeSessionConflictsUseCase;
@@ -114,6 +118,8 @@ import com.menta.bff.application.usecase.RegisterManualCheckInUseCase;
 import com.menta.bff.application.usecase.RegisterManualCheckInUseCaseImpl;
 import com.menta.bff.application.usecase.RejectPaymentUseCase;
 import com.menta.bff.application.usecase.RejectPaymentUseCaseImpl;
+import com.menta.bff.application.usecase.ReorderVirtualModulesUseCase;
+import com.menta.bff.application.usecase.ReorderVirtualModulesUseCaseImpl;
 import com.menta.bff.application.usecase.RequestPasswordResetUseCase;
 import com.menta.bff.application.usecase.RequestPasswordResetUseCaseImpl;
 import com.menta.bff.application.usecase.ResendActivationUseCase;
@@ -136,6 +142,10 @@ import com.menta.bff.application.usecase.UpdateManagedCourseUseCase;
 import com.menta.bff.application.usecase.UpdateManagedCourseUseCaseImpl;
 import com.menta.bff.application.usecase.UpdateVirtualCourseUseCase;
 import com.menta.bff.application.usecase.UpdateVirtualCourseUseCaseImpl;
+import com.menta.bff.application.usecase.UpdateVirtualLessonUseCase;
+import com.menta.bff.application.usecase.UpdateVirtualLessonUseCaseImpl;
+import com.menta.bff.application.usecase.UpdateVirtualModuleUseCase;
+import com.menta.bff.application.usecase.UpdateVirtualModuleUseCaseImpl;
 import com.menta.bff.infrastructure.web.filter.TokenRefreshFilter;
 import java.time.Clock;
 import java.util.UUID;
@@ -546,5 +556,32 @@ public class UseCaseConfig {
     @Bean
     public DeleteVirtualCourseUseCase deleteVirtualCourseUseCase(VirtualCourseManagementApiClient courseApiClient) {
         return new DeleteVirtualCourseUseCaseImpl(courseApiClient);
+    }
+
+    /** The structure of a virtual course (#367): the modules and the lessons. */
+    @Bean
+    public CreateVirtualModuleUseCase createVirtualModuleUseCase(VirtualCourseManagementApiClient courseApiClient) {
+        return new CreateVirtualModuleUseCaseImpl(courseApiClient);
+    }
+
+    @Bean
+    public UpdateVirtualModuleUseCase updateVirtualModuleUseCase(VirtualCourseManagementApiClient courseApiClient) {
+        return new UpdateVirtualModuleUseCaseImpl(courseApiClient);
+    }
+
+    @Bean
+    public ReorderVirtualModulesUseCase reorderVirtualModulesUseCase(
+            VirtualCourseManagementApiClient courseApiClient) {
+        return new ReorderVirtualModulesUseCaseImpl(courseApiClient);
+    }
+
+    @Bean
+    public CreateVirtualLessonUseCase createVirtualLessonUseCase(VirtualCourseManagementApiClient courseApiClient) {
+        return new CreateVirtualLessonUseCaseImpl(courseApiClient);
+    }
+
+    @Bean
+    public UpdateVirtualLessonUseCase updateVirtualLessonUseCase(VirtualCourseManagementApiClient courseApiClient) {
+        return new UpdateVirtualLessonUseCaseImpl(courseApiClient);
     }
 }

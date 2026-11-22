@@ -8,6 +8,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.equalToJson;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.putRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.request;
+import static com.github.tomakehurst.wiremock.client.WireMock.requestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.verify;
@@ -20,7 +21,11 @@ import com.github.tomakehurst.wiremock.http.Fault;
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import com.menta.bff.application.dto.CreateVirtualCourseCommand;
+import com.menta.bff.application.dto.CreateVirtualLessonCommand;
+import com.menta.bff.application.dto.CreateVirtualModuleCommand;
 import com.menta.bff.application.dto.ManagedVirtualCourse;
+import com.menta.bff.application.dto.ManagedVirtualLesson;
+import com.menta.bff.application.dto.ManagedVirtualModule;
 import com.menta.bff.application.dto.VirtualCourseChanges;
 import com.menta.bff.application.dto.VirtualCourseDetail;
 import com.menta.bff.application.dto.VirtualCourseDetail.VirtualCourseStats;
@@ -28,6 +33,8 @@ import com.menta.bff.application.dto.VirtualCourseDetail.VirtualLessonDetail;
 import com.menta.bff.application.dto.VirtualCourseDetail.VirtualModuleDetail;
 import com.menta.bff.application.dto.VirtualCourseLevel;
 import com.menta.bff.application.dto.VirtualCourseStatus;
+import com.menta.bff.application.dto.VirtualLessonChanges;
+import com.menta.bff.application.dto.VirtualModuleChanges;
 import com.menta.bff.application.port.out.VirtualCourseManagementApiClient.ServiceUnavailableException;
 import com.menta.bff.application.port.out.VirtualCourseManagementApiClient.VirtualCourseManagementException;
 import com.menta.bff.application.port.out.VirtualCourseManagementApiClient.VirtualCourseManagementException.Code;
@@ -53,6 +60,14 @@ class VirtualCourseManagementApiAdapterTest {
     private static final String PROFESSOR_ID = "0a1b2c3d-1d2a-4e3b-9c4d-5b6f7c8e9f00";
     private static final String COURSES_PATH = "/api/v1/admin/virtual/courses";
     private static final String COURSE_PATH = COURSES_PATH + "/" + COURSE_ID;
+    private static final String MODULE_ID = "7c8e9f00-1d2a-4e3b-9c4d-5b6f0a1b2c3d";
+    private static final String MODULE_2_ID = "8e9f0011-1d2a-4e3b-9c4d-5b6f0a1b2c3d";
+    private static final String LESSON_ID = "9f001122-1d2a-4e3b-9c4d-5b6f0a1b2c3d";
+    private static final String MODULES_PATH = COURSE_PATH + "/modules";
+    private static final String REORDER_PATH = MODULES_PATH + "/reorder";
+    private static final String MODULE_PATH = "/api/v1/admin/virtual/modules/" + MODULE_ID;
+    private static final String LESSONS_PATH = MODULE_PATH + "/lessons";
+    private static final String LESSON_PATH = "/api/v1/admin/virtual/lessons/" + LESSON_ID;
     private static final String TOKEN = "access-token-abc";
     private static final String DETAIL_TEXT = "Detalle del API";
     private static final ObjectMapper JSON = new ObjectMapper();
@@ -77,6 +92,17 @@ class VirtualCourseManagementApiAdapterTest {
                 "isFree": false, "order": 2, "videoId": null}]}],
              "stats": {"moduleCount": 1, "lessonCount": 2, "totalDuration": "20m"}}
             """;
+    private static final String MODULE_JSON =
+            "{\"moduleId\": \"" + MODULE_ID + "\", \"courseId\": \"" + COURSE_ID
+                    + "\", \"title\": \"Base\", \"preview\": true, \"order\": 2}";
+    private static final String MODULE_2_JSON = MODULE_JSON.replace(MODULE_ID, MODULE_2_ID).replace("2}", "3}");
+    private static final String LESSON_JSON =
+            "{\"lessonId\": \"" + LESSON_ID + "\", \"moduleId\": \"" + MODULE_ID + "\", \"courseId\": \""
+                    + COURSE_ID + "\", \"title\": \"Abrazo\", \"description\": \"El abrazo\", "
+                    + "\"videoId\": \"v-1\", \"durationMinutes\": 12, \"free\": true, \"order\": 1}";
+    private static final ManagedVirtualModule MODULE = new ManagedVirtualModule(MODULE_ID, COURSE_ID, "Base", true, 2);
+    private static final ManagedVirtualLesson LESSON =
+            new ManagedVirtualLesson(LESSON_ID, MODULE_ID, COURSE_ID, "Abrazo", "El abrazo", "v-1", 12, true, 1);
     private static final ManagedVirtualCourse COURSE = new ManagedVirtualCourse(COURSE_ID, "Tango", "Pasos base",
             "Curso completo", PROFESSOR_ID, "https://img.example/t.png", "Tango", VirtualCourseLevel.BEGINNER, true,
             VirtualCourseStatus.DRAFT);
@@ -147,7 +173,20 @@ class VirtualCourseManagementApiAdapterTest {
                 new Operation("unpublishCourse", "PUT", COURSE_PATH + "/unpublish", 200, COURSE_JSON,
                         a -> a.unpublishCourse(TOKEN, COURSE_ID)),
                 new Operation("deleteCourse", "DELETE", COURSE_PATH, 204, "",
-                        a -> a.deleteCourse(TOKEN, COURSE_ID)));
+                        a -> a.deleteCourse(TOKEN, COURSE_ID)),
+                new Operation("createModule", "POST", MODULES_PATH, 201, MODULE_JSON,
+                        a -> a.createModule(TOKEN, COURSE_ID, new CreateVirtualModuleCommand("Base", null, null))),
+                new Operation("updateModule", "PUT", MODULE_PATH, 200, MODULE_JSON,
+                        a -> a.updateModule(TOKEN, MODULE_ID, new VirtualModuleChanges("Base", null, null))),
+                new Operation("reorderModules", "PUT", REORDER_PATH, 200,
+                        "{\"modules\": [" + MODULE_2_JSON + ", " + MODULE_JSON + "]}",
+                        a -> a.reorderModules(TOKEN, COURSE_ID, List.of(MODULE_2_ID, MODULE_ID))),
+                new Operation("createLesson", "POST", LESSONS_PATH, 201, LESSON_JSON,
+                        a -> a.createLesson(TOKEN, MODULE_ID,
+                                new CreateVirtualLessonCommand("Abrazo", "El abrazo", null, null, null, null))),
+                new Operation("updateLesson", "PUT", LESSON_PATH, 200, LESSON_JSON,
+                        a -> a.updateLesson(TOKEN, LESSON_ID,
+                                new VirtualLessonChanges("Abrazo", null, null, null, null, null))));
     }
 
     static Stream<Arguments> everyOperation() {
@@ -180,9 +219,9 @@ class VirtualCourseManagementApiAdapterTest {
     @DisplayName("an expected code in a 400, 403, 404 or 409 is a typed failure, with nothing of the reply in it")
     void typedRefusals(Operation operation, Code code) {
         int status = switch (code) {
-            case INVALID_REQUEST, PROFESSOR_MISMATCH, COURSE_NOT_PUBLISHABLE -> 400;
+            case INVALID_REQUEST, PROFESSOR_MISMATCH, COURSE_NOT_PUBLISHABLE, MODULE_REORDER_MISMATCH -> 400;
             case COURSE_NOT_OWNED -> 403;
-            case COURSE_NOT_FOUND -> 404;
+            case COURSE_NOT_FOUND, MODULE_NOT_FOUND, LESSON_NOT_FOUND -> 404;
             case COURSE_NOT_DRAFT -> 409;
         };
         stub(operation.method(), operation.path(), status, problem(code.name(), DETAIL_TEXT));
@@ -399,5 +438,120 @@ class VirtualCourseManagementApiAdapterTest {
         adapter.deleteCourse(TOKEN, COURSE_ID);
 
         verify(deleteRequestedFor(urlPathEqualTo(COURSE_PATH)));
+    }
+
+    // ---- the structure: modules and lessons ----
+
+    private static void verifyBody(String method, String path, String json) {
+        verify(requestedFor(method, urlPathEqualTo(path)).withRequestBody(equalToJson(json, false, false)));
+    }
+
+    @Test
+    @DisplayName("createModule sends only the fields it has, so the API's defaults apply, and maps the 201")
+    void createModule() {
+        stub("POST", MODULES_PATH, 201, MODULE_JSON);
+
+        assertThat(adapter.createModule(TOKEN, COURSE_ID, new CreateVirtualModuleCommand("Base", true, 0)))
+                .isEqualTo(MODULE);
+        adapter.createModule(TOKEN, COURSE_ID, new CreateVirtualModuleCommand("Base", null, null));
+
+        verifyBody("POST", MODULES_PATH, "{\"title\": \"Base\", \"preview\": true, \"order\": 0}");
+        verifyBody("POST", MODULES_PATH, "{\"title\": \"Base\"}");
+    }
+
+    @Test
+    @DisplayName("updateModule is a partial PUT that sends only what changes, and maps the 200")
+    void updateModule() {
+        stub("PUT", MODULE_PATH, 200, MODULE_JSON);
+
+        assertThat(adapter.updateModule(TOKEN, MODULE_ID, new VirtualModuleChanges(null, false, 4)))
+                .isEqualTo(MODULE);
+        adapter.updateModule(TOKEN, MODULE_ID, new VirtualModuleChanges("Nuevo", null, null));
+
+        verifyBody("PUT", MODULE_PATH, "{\"preview\": false, \"order\": 4}");
+        verifyBody("PUT", MODULE_PATH, "{\"title\": \"Nuevo\"}");
+    }
+
+    @Test
+    @DisplayName("reorderModules sends the ids in order and returns the modules as the API answers them")
+    void reorderModules() {
+        stub("PUT", REORDER_PATH, 200, "{\"modules\": [" + MODULE_2_JSON + ", " + MODULE_JSON + "]}");
+
+        assertThat(adapter.reorderModules(TOKEN, COURSE_ID, List.of(MODULE_2_ID, MODULE_ID)))
+                .containsExactly(new ManagedVirtualModule(MODULE_2_ID, COURSE_ID, "Base", true, 3), MODULE);
+
+        verifyBody("PUT", REORDER_PATH, "{\"moduleIds\": [\"" + MODULE_2_ID + "\", \"" + MODULE_ID + "\"]}");
+    }
+
+    @Test
+    @DisplayName("createLesson sends only the fields it has, so the API's defaults apply, and maps the 201")
+    void createLesson() {
+        stub("POST", LESSONS_PATH, 201, LESSON_JSON);
+
+        assertThat(adapter.createLesson(TOKEN, MODULE_ID,
+                new CreateVirtualLessonCommand("Abrazo", "El abrazo", "v-1", 12, true, 1))).isEqualTo(LESSON);
+        adapter.createLesson(TOKEN, MODULE_ID,
+                new CreateVirtualLessonCommand("Abrazo", "El abrazo", null, null, null, null));
+
+        verifyBody("POST", LESSONS_PATH,
+                "{\"title\": \"Abrazo\", \"description\": \"El abrazo\", \"videoId\": \"v-1\", "
+                        + "\"durationMinutes\": 12, \"free\": true, \"order\": 1}");
+        verifyBody("POST", LESSONS_PATH, "{\"title\": \"Abrazo\", \"description\": \"El abrazo\"}");
+    }
+
+    @Test
+    @DisplayName("updateLesson is a partial PUT that sends only what changes, and maps the 200")
+    void updateLesson() {
+        stub("PUT", LESSON_PATH, 200, LESSON_JSON);
+
+        assertThat(adapter.updateLesson(TOKEN, LESSON_ID,
+                new VirtualLessonChanges(null, "Nueva", "v-2", 0, false, null))).isEqualTo(LESSON);
+        adapter.updateLesson(TOKEN, LESSON_ID, new VirtualLessonChanges(null, null, null, null, null, 3));
+
+        verifyBody("PUT", LESSON_PATH,
+                "{\"description\": \"Nueva\", \"videoId\": \"v-2\", \"durationMinutes\": 0, \"free\": false}");
+        verifyBody("PUT", LESSON_PATH, "{\"order\": 3}");
+    }
+
+    @Test
+    @DisplayName("a lesson without videoId, absent or null, has no video; the list of modules may be empty")
+    void absentVideoAndEmptyModules() throws Exception {
+        stub("POST", LESSONS_PATH, 201, without(LESSON_JSON, "", "videoId"));
+        stub("PUT", LESSON_PATH, 200, LESSON_JSON.replace("\"v-1\"", "null"));
+        stub("PUT", REORDER_PATH, 200, "{\"modules\": []}");
+
+        assertThat(adapter.createLesson(TOKEN, MODULE_ID,
+                new CreateVirtualLessonCommand("Abrazo", "El abrazo", null, null, null, null)).videoId()).isNull();
+        assertThat(adapter.updateLesson(TOKEN, LESSON_ID,
+                new VirtualLessonChanges("Abrazo", null, null, null, null, null)).videoId()).isNull();
+        assertThat(adapter.reorderModules(TOKEN, COURSE_ID, List.of(MODULE_ID))).isEmpty();
+    }
+
+    static Stream<Arguments> missingStructureFields() {
+        return Stream.of(
+                Arguments.of("POST", MODULES_PATH, 201, MODULE_JSON, "preview"),
+                Arguments.of("PUT", MODULE_PATH, 200, MODULE_JSON, "order"),
+                Arguments.of("POST", LESSONS_PATH, 201, LESSON_JSON, "description"),
+                Arguments.of("PUT", LESSON_PATH, 200, LESSON_JSON, "free"));
+    }
+
+    @ParameterizedTest(name = "{0} {1} without {4}")
+    @MethodSource("missingStructureFields")
+    @DisplayName("a module or a lesson that lacks a required field is unavailable")
+    void missingStructureFieldIsUnavailable(String method, String path, int status, String json, String field)
+            throws Exception {
+        stub(method, path, status, without(json, "", field));
+
+        assertThatThrownBy(() -> operations().stream().filter(o -> o.path().equals(path) && o.method().equals(method))
+                .findFirst().orElseThrow().call().accept(adapter)).isInstanceOf(ServiceUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("a reordered module that lacks a required field is unavailable")
+    void reorderedModuleMissingFieldIsUnavailable() throws Exception {
+        stub("PUT", REORDER_PATH, 200, "{\"modules\": [" + without(MODULE_JSON, "", "title") + "]}");
+
+        assertThatThrownBy(() -> adapter.reorderModules(TOKEN, COURSE_ID, List.of(MODULE_ID)))
+                .isInstanceOf(ServiceUnavailableException.class);
     }
 }
