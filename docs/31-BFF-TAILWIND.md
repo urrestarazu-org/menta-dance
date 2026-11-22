@@ -188,6 +188,8 @@ Tokens de feedback (contraste AA sobre su superficie): `feedback-error`,
 | `alert` | `kind, message` | `kind`: `error`, `success` o `info`. |
 | `errorSummary` | `fields` | Resumen de errores (WCAG 3.3.1, 3.3.3). Se llama dentro del `<form th:object>`, después del `<h1>`. `fields` es un mapa ordenado `campo con error → id del input`, en el orden de los inputs: `${ {'email':'email', 'passwordConfirmed':'passwordConfirmation'} }`. No muestra nada sin errores. No es una región viva. Carga `/js/error-summary.js` (con hash de contenido), que mueve el foco al resumen. Con errores, el primer campo pasa `${!#fields.hasErrors('*')}` como `autofocus`. |
 | `limitedTextareaField` | `id, label, name, value, rows, maxlength, hint, errors` | Como `textareaField`, con `maxlength` en el navegador para textos que el servidor también acota (#370). |
+| `optionalSelectField` | `id, label, name, options, selected, placeholder, hint, errors` | Como `selectField`, pero el `<select>` no es `required`: la opción vacía (`placeholder`) es una respuesta válida (#367, "Yo (administrador)"). `selectField` y esta comparten `selectFieldBase(..., required)`. |
+| `checkboxField` | `id, label, name, checked, hint, errors` | Una casilla con su `<label for>`; `checked` es un booleano, `hint` y `errors` pueden ser `null` y se enlazan con `aria-describedby` (#367, "Curso premium"). |
 | `notice` | `heading, message` | Página informativa: `<h1>` más una `.card` con un párrafo ("revisá tu correo", "cuenta activada"). Los enlaces de salida van después, fuera del fragmento. |
 
 ```html
@@ -598,15 +600,31 @@ token de la sesión. Un solo controller, `ManagementExceptionPurchasesController
 ### Cursos virtuales (`/gestion/cursos-virtuales`) (#367)
 
 `ADMIN` e `INSTRUCTOR` (`/gestion/cursos-virtuales/**`, sección `cursos-virtuales`; la sección `content` de
-`/gestion/contenido` sigue deshabilitada y es otra cosa). Un controller, `ManagementVirtualCoursesController`, con
-`VirtualCourseManagementApiClient` y el token de la sesión. Por ahora es solo lectura: alta, edición y acciones llegan
-en los PRs siguientes del issue.
+`/gestion/contenido` sigue deshabilitada y es otra cosa). `ManagementVirtualCoursesController` lista y
+`ManagementVirtualCourseFormController` atiende el alta y la edición, ambos con `VirtualCourseManagementApiClient` y el
+token de la sesión. Publicar, despublicar, borrar y la estructura llegan en los PRs siguientes del issue.
 
 - **`GET /gestion/cursos-virtuales`**: tabla con `<caption>` (curso, categoría, nivel, estado y "Premium"/"Gratuito"),
   sin paginación (la API no pagina) y estado vacío "Todavía no hay cursos virtuales." El estado es texto
   ("Borrador", "Publicado", "Archivado"; "Sin dato" si el BFF no lo conoce), nunca solo color. El BFF muestra lo que la
   API devuelve (el administrador todos, el instructor los suyos) y no filtra.
 - Si la API cae o rechaza el pedido: aviso, `503` y la lista sin filas, sin nada de su cuerpo. `Cache-Control: no-store`.
+- **Alta y edición**: `GET /nuevo`, `POST /gestion/cursos-virtuales`, `GET`/`POST /{courseId}/editar`; todo POST lleva
+  CSRF, toda respuesta `no-store`, y el éxito es Post/Redirect/Get a la lista con un aviso `success` ("Curso creado como
+  borrador.", "Curso actualizado."). `VirtualCourseForm` valida en español junto al campo (la API no dice qué campo falla
+  ni limita longitudes): título 255, descripción corta 500, URL de la imagen 500 (debe empezar con `http://` o
+  `https://`), categoría 100, nivel uno de los tres y descripción hasta 5000 (tope del BFF; la columna es TEXT). Los
+  textos se recortan con un `@InitBinder`. El curso se crea siempre como borrador; la casilla "Curso premium" solo
+  existe al editar, y la edición envía todos los campos del formulario.
+- **Profesor al crear**: el administrador ve un select con los instructores (`ListInstructorsUseCase`; avisa si hay más
+  de 50 o si no se pudieron cargar, con `503`) cuya primera opción, "Yo (administrador)", no manda `professorId` y deja
+  al admin como dueño; el instructor no ve el campo y el BFF nunca manda `professorId` (aunque lo posteen). Al editar
+  no hay campo de profesor.
+- **Errores de la API, por `code`** (nunca el `detail` ni el cuerpo): `INVALID_REQUEST` → "Revisá los datos
+  ingresados." (400); `PROFESSOR_MISMATCH` → error general (400); `COURSE_NOT_OWNED` → página de aviso "No podés
+  gestionar este curso." (403); `COURSE_NOT_FOUND` o un id que no es UUID → "No encontramos el curso." (404, sin llamar
+  a la API si no es UUID); `COURSE_NOT_DRAFT`, `COURSE_NOT_PUBLISHABLE` y caídas → "No pudimos guardar el curso." (503).
+  Al abrir la edición, si la API no responde, es un aviso `503`.
 
 ## Accesibilidad base
 

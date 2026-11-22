@@ -3,7 +3,14 @@
       th:replace="~{fragments/management :: page('Cursos virtuales', 'cursos-virtuales', ~{::main-content})}">
 <body>
 <th:block th:fragment="main-content">
-<h1 class="mb-6">Cursos virtuales</h1>
+<div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+    <h1>Cursos virtuales</h1>
+    <a class="btn btn-primary" th:href="@{/gestion/cursos-virtuales/nuevo}">Nuevo curso</a>
+</div>
+
+<div th:if="${virtualCourseSaved}" class="mb-4">
+    <div th:replace="~{fragments/components :: alert('success', ${virtualCourseSaved})}"></div>
+</div>
 
 <div th:if="${courses.unavailable()}" class="mb-4">
     <div th:replace="~{fragments/components :: alert('error', ${unavailableMessage})}"></div>
@@ -24,6 +31,7 @@
             <th scope="col" class="p-3 font-semibold">Nivel</th>
             <th scope="col" class="p-3 font-semibold">Estado</th>
             <th scope="col" class="p-3 font-semibold">Acceso</th>
+            <th scope="col" class="p-3 font-semibold">Acciones</th>
         </tr>
         </thead>
         <tbody class="divide-y divide-brand-deep/15">
@@ -35,6 +43,9 @@
                 <span class="badge badge-neutral" th:text="${row.statusLabel()}">Borrador</span>
             </td>
             <td class="p-3" th:text="${row.premium()} ? 'Premium' : 'Gratuito'">Gratuito</td>
+            <td class="p-3">
+                <a th:href="@{/gestion/cursos-virtuales/{id}/editar(id=${row.courseId()})}">Editar<span class="sr-only" th:text="| el curso ${row.title()}|"> el curso Tango base</span></a>
+            </td>
         </tr>
         </tbody>
     </table>
