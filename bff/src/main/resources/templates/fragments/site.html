@@ -9,6 +9,7 @@
 -->
 
 <th:block th:fragment="account-links(linkClass)">
+    <a th:class="${linkClass}" sec:authorize="hasAnyRole('ADMIN', 'INSTRUCTOR', 'RECEPTIONIST')" th:href="@{/gestion}">Gestión</a>
     <a th:class="${linkClass}" sec:authorize="isAuthenticated()" th:href="@{/dashboard}">Ir a mi panel</a>
     <form class="m-0" sec:authorize="isAuthenticated()" th:action="@{/logout}" method="post">
         <button type="submit" th:class="${linkClass}">Cerrar sesión</button>
@@ -69,6 +70,7 @@
                     <h2 class="site-footer-title">Tu cuenta</h2>
                     <ul class="space-y-2">
                         <li sec:authorize="isAuthenticated()"><a th:href="@{/dashboard}">Mi panel</a></li>
+                        <li sec:authorize="hasAnyRole('ADMIN', 'INSTRUCTOR', 'RECEPTIONIST')"><a th:href="@{/gestion}">Gestión</a></li>
                         <li sec:authorize="!isAuthenticated()"><a th:href="@{/login}">Iniciar sesión</a></li>
                         <li sec:authorize="!isAuthenticated()"><a th:href="@{/registro}">Crear cuenta</a></li>
                     </ul>
