@@ -15,6 +15,7 @@ PUT  /api/v1/admin/virtual/courses/{courseId}/modules/reorder
 POST /api/v1/admin/virtual/modules/{moduleId}/lessons
 PUT  /api/v1/admin/virtual/modules/{moduleId}
 PUT  /api/v1/admin/virtual/lessons/{lessonId}
+DELETE /api/v1/admin/virtual/lessons/{lessonId}
 GET  /api/v1/virtual/lessons/{lessonId}
 GET  /api/v1/virtual/lessons/{lessonId}/stream
 GET  /api/v1/virtual/materials/{materialId}
@@ -92,3 +93,9 @@ de ownership se aplica también al resolver `moduleId` y `lessonId`. Las consult
 limitan a sus cursos y progreso propios. Crear, editar, publicar, despublicar,
 reordenar y borrar son contratos administrativos canónicos; publicar invalida la
 proyección de catálogo.
+
+`DELETE /api/v1/admin/virtual/lessons/{lessonId}` responde `204` y se permite también
+en un curso publicado (sólo borrar un curso entero exige `DRAFT`). En la misma
+transacción borra el progreso de todos los alumnos en esa lección, renumera las
+lecciones restantes del módulo de forma contigua (`order` 0..n-1) y deja una fila de
+auditoría `DELETE_LESSON`.

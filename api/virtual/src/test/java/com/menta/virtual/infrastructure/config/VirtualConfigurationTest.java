@@ -11,6 +11,7 @@ import com.menta.virtual.application.port.in.CreateVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.CreateVirtualLessonUseCase;
 import com.menta.virtual.application.port.in.CreateVirtualModuleUseCase;
 import com.menta.virtual.application.port.in.DeleteVirtualCourseUseCase;
+import com.menta.virtual.application.port.in.DeleteVirtualLessonUseCase;
 import com.menta.virtual.application.port.in.GetCourseProgressUseCase;
 import com.menta.virtual.application.port.in.GetLessonProgressUseCase;
 import com.menta.virtual.application.port.in.GetPublicLessonStreamUseCase;
@@ -51,6 +52,7 @@ import com.menta.virtual.infrastructure.transaction.TransactionalCreateVirtualCo
 import com.menta.virtual.infrastructure.transaction.TransactionalCreateVirtualLessonUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalCreateVirtualModuleUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalDeleteVirtualCourseUseCase;
+import com.menta.virtual.infrastructure.transaction.TransactionalDeleteVirtualLessonUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalPublishVirtualCourseUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalReorderVirtualModulesUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalUnpublishVirtualCourseUseCase;
@@ -171,6 +173,15 @@ class VirtualConfigurationTest {
             configuration.updateVirtualLessonUseCase(lessonRepository, courseRepository, auditRepository);
 
         assertThat(useCase).isInstanceOf(TransactionalUpdateVirtualLessonUseCase.class);
+    }
+
+    @Test
+    void wires_the_delete_lesson_use_case_bean_transactionally() {
+        DeleteVirtualLessonUseCase useCase = configuration.deleteVirtualLessonUseCase(
+            lessonRepository, courseRepository, mock(LessonProgressRepository.class), auditRepository
+        );
+
+        assertThat(useCase).isInstanceOf(TransactionalDeleteVirtualLessonUseCase.class);
     }
 
     @Test

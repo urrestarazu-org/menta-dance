@@ -3,6 +3,7 @@ package com.menta.virtual.infrastructure.persistence.adapter;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.menta.virtual.domain.model.CourseId;
@@ -77,5 +78,14 @@ class VirtualLessonRepositoryAdapterTest {
         when(jpaRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         assertThat(adapter.save(lesson).getTitle()).isEqualTo("L1");
+    }
+
+    @Test
+    void delete_removes_the_lesson_by_id() {
+        UUID id = UUID.randomUUID();
+
+        adapter.delete(LessonId.of(id));
+
+        verify(jpaRepository).deleteById(id);
     }
 }

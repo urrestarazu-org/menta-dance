@@ -31,4 +31,10 @@ public interface VirtualLessonRepository {
      * first since they also FK-reference {@code virtual_modules}.
      */
     void deleteByCourseId(CourseId courseId);
+
+    /**
+     * Deletes one lesson. Its progress rows must be deleted first: {@code virtual_lesson_progress.lesson_id}
+     * FK-references {@code virtual_lessons} with no {@code ON DELETE CASCADE} (V19).
+     */
+    void delete(LessonId lessonId);
 }

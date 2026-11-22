@@ -62,4 +62,10 @@ public class VirtualLessonRepositoryAdapter implements VirtualLessonRepository {
     public void deleteByCourseId(CourseId courseId) {
         lessonRepository.deleteByCourseId(courseId.getValue());
     }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED)
+    public void delete(LessonId lessonId) {
+        lessonRepository.deleteById(lessonId.getValue());
+    }
 }

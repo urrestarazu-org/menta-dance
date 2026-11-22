@@ -6,6 +6,7 @@ import com.menta.virtual.application.port.in.CreateVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.CreateVirtualLessonUseCase;
 import com.menta.virtual.application.port.in.CreateVirtualModuleUseCase;
 import com.menta.virtual.application.port.in.DeleteVirtualCourseUseCase;
+import com.menta.virtual.application.port.in.DeleteVirtualLessonUseCase;
 import com.menta.virtual.application.port.in.GetCourseProgressUseCase;
 import com.menta.virtual.application.port.in.GetLessonProgressUseCase;
 import com.menta.virtual.application.port.in.GetPublicLessonStreamUseCase;
@@ -34,6 +35,7 @@ import com.menta.virtual.application.usecase.CreateVirtualCourseUseCaseImpl;
 import com.menta.virtual.application.usecase.CreateVirtualLessonUseCaseImpl;
 import com.menta.virtual.application.usecase.CreateVirtualModuleUseCaseImpl;
 import com.menta.virtual.application.usecase.DeleteVirtualCourseUseCaseImpl;
+import com.menta.virtual.application.usecase.DeleteVirtualLessonUseCaseImpl;
 import com.menta.virtual.application.usecase.GetCourseProgressUseCaseImpl;
 import com.menta.virtual.application.usecase.GetLessonProgressUseCaseImpl;
 import com.menta.virtual.application.usecase.GetPublicLessonStreamUseCaseImpl;
@@ -61,6 +63,7 @@ import com.menta.virtual.infrastructure.transaction.TransactionalCreateVirtualCo
 import com.menta.virtual.infrastructure.transaction.TransactionalCreateVirtualLessonUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalCreateVirtualModuleUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalDeleteVirtualCourseUseCase;
+import com.menta.virtual.infrastructure.transaction.TransactionalDeleteVirtualLessonUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalPublishVirtualCourseUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalReorderVirtualModulesUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalSaveLessonProgressUseCase;
@@ -349,6 +352,16 @@ public class VirtualConfiguration {
         return new TransactionalUpdateVirtualLessonUseCase(
             new UpdateVirtualLessonUseCaseImpl(lessonRepository, courseRepository, auditRepository)
         );
+    }
+
+    @Bean
+    public DeleteVirtualLessonUseCase deleteVirtualLessonUseCase(
+        VirtualLessonRepository lessonRepository, VirtualCourseRepository courseRepository,
+        LessonProgressRepository progressRepository, VirtualCourseAuditRepository auditRepository
+    ) {
+        return new TransactionalDeleteVirtualLessonUseCase(new DeleteVirtualLessonUseCaseImpl(
+            lessonRepository, courseRepository, progressRepository, auditRepository
+        ));
     }
 
     @Bean

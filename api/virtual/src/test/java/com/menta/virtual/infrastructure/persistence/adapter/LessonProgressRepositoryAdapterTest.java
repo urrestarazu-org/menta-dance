@@ -132,6 +132,14 @@ class LessonProgressRepositoryAdapterTest {
     }
 
     @Test
+    void delete_by_lesson_id_removes_every_row_of_the_lesson_and_returns_how_many() {
+        UUID lessonUuid = UUID.randomUUID();
+        when(jpaRepository.deleteByLessonId(lessonUuid)).thenReturn(2L);
+
+        assertThat(adapter.deleteByLessonId(LessonId.of(lessonUuid))).isEqualTo(2L);
+    }
+
+    @Test
     void count_lessons_by_course_ids_skips_the_query_for_no_course() {
         assertThat(adapter.countLessonsByCourseIds(Set.of())).isEmpty();
         verifyNoInteractions(lessonJpaRepository);

@@ -85,4 +85,10 @@ public class LessonProgressRepositoryAdapter implements LessonProgressRepository
                 LessonAggregateProjection::getCourseId, LessonAggregateProjection::getLessonCount
             ));
     }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED)
+    public long deleteByLessonId(LessonId lessonId) {
+        return jpaRepository.deleteByLessonId(lessonId.getValue());
+    }
 }

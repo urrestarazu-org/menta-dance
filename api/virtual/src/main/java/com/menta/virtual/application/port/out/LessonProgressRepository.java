@@ -39,4 +39,10 @@ public interface LessonProgressRepository {
      * query (#765); a course without lessons is absent from the map.
      */
     java.util.Map<UUID, Long> countLessonsByCourseIds(java.util.Collection<UUID> courseIds);
+
+    /**
+     * Deletes the progress of every user in the lesson and returns how many rows it removed; used when
+     * the lesson itself is deleted (#830).
+     */
+    long deleteByLessonId(LessonId lessonId);
 }
