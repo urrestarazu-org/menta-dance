@@ -1,6 +1,8 @@
 package com.menta.auth.domain.model;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.regex.Pattern;
 
 /**
@@ -8,8 +10,11 @@ import java.util.regex.Pattern;
  *
  * <p>The names are trimmed and required, the phone, when present, must already be normalized to E.164 (callers
  * strip spaces, dashes and parentheses before it gets here) and the birth date is optional but, when present, must
- * be in the past. The phone is absent for accounts an administrator creates; public registration still requires
- * it. This is personal data: {@link #toString()} never prints it.
+ * be in the past. The domain has no clock, so "in the past" is only checked by {@link #of}, which receives the
+ * current instant; the canonical constructor also rehydrates persisted data and never compares the birth date with
+ * the current day. New profiles must be built with {@link #of}. The phone is absent for accounts an
+ * administrator creates; public registration still requires it. This is personal data: {@link #toString()} never
+ * prints it.
  *
  * @param firstName given name, trimmed, 1 to {@value #NAME_MAX_LENGTH} characters
  * @param lastName family name, trimmed, 1 to {@value #NAME_MAX_LENGTH} characters
@@ -27,10 +32,10 @@ public record UserProfile(String firstName, String lastName, String phone, Local
     private static final Pattern PHONE_PATTERN = Pattern.compile(PHONE_REGEX);
 
     /**
-     * Validates and normalizes the profile.
+     * Validates and normalizes the profile, without comparing the birth date with the current day: it is also used
+     * to hydrate persisted data and for fixtures. Use {@link #of} to build a profile from new input.
      *
-     * @throws IllegalArgumentException when a name is blank or too long, a given phone is not E.164 or the birth
-     *     date is not in the past
+     * @throws IllegalArgumentException when a name is blank or too long or a given phone is not E.164
      */
     public UserProfile {
         firstName = requireName(firstName, "First name");
@@ -38,9 +43,23 @@ public record UserProfile(String firstName, String lastName, String phone, Local
         if (phone != null && !PHONE_PATTERN.matcher(phone).matches()) {
             throw new IllegalArgumentException("Phone must be in E.164 format");
         }
-        if (birthDate != null && !birthDate.isBefore(LocalDate.now())) {
+    }
+
+    /**
+     * Builds a profile from new input: the same validation as the canonical constructor plus the requirement that
+     * the birth date, when present, is strictly before the UTC day of {@code now} (ADR-0048).
+     *
+     * @param now the current instant, taken from the application {@code Clock} port
+     * @throws IllegalArgumentException when a name is blank or too long, a given phone is not E.164 or the birth
+     *     date is not in the past
+     */
+    public static UserProfile of(String firstName, String lastName, String phone, LocalDate birthDate, Instant now) {
+        // Built first so the name and phone errors keep taking precedence over the birth-date one.
+        UserProfile profile = new UserProfile(firstName, lastName, phone, birthDate);
+        if (birthDate != null && !birthDate.isBefore(LocalDate.ofInstant(now, ZoneOffset.UTC))) {
             throw new IllegalArgumentException("Birth date must be in the past");
         }
+        return profile;
     }
 
     private static String requireName(String value, String label) {

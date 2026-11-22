@@ -1,6 +1,7 @@
 package com.menta.auth.infrastructure.security;
 
 import com.menta.auth.application.port.out.AccessTokenIssuer;
+import com.menta.auth.application.port.out.Clock;
 import com.menta.auth.application.port.out.IssuedAccessToken;
 import com.menta.auth.domain.model.Role;
 import com.menta.auth.domain.model.User;
@@ -43,8 +44,16 @@ public class JwtService implements AccessTokenIssuer {
 
     private final SecretKey signingKey;
     private final Duration ttl;
+    private final Clock clock;
 
-    public JwtService(String base64Secret, Duration ttl) {
+    /**
+     * Creates the issuer and parser, validating the secret and the ttl.
+     *
+     * @param base64Secret Base64-encoded HS256 secret of at least 32 bytes
+     * @param ttl access-token lifetime, positive
+     * @param clock source of "now" for {@code iat}/{@code exp} when issuing and for the expiry check when parsing
+     */
+    public JwtService(String base64Secret, Duration ttl, Clock clock) {
         if (base64Secret == null || base64Secret.isBlank()) {
             throw new IllegalArgumentException("base64Secret must not be null or blank");
         }
@@ -60,6 +69,9 @@ public class JwtService implements AccessTokenIssuer {
             // misconfigured secrets surface as a single, predictable error type.
             throw new IllegalArgumentException("base64Secret is not valid Base64", e);
         }
+        if (clock == null) {
+            throw new IllegalArgumentException("clock must not be null");
+        }
         if (decoded.length < MIN_SECRET_BYTES) {
             throw new IllegalArgumentException(
                 "HS256 secret must be at least " + MIN_SECRET_BYTES
@@ -67,6 +79,7 @@ public class JwtService implements AccessTokenIssuer {
         }
         this.signingKey = Keys.hmacShaKeyFor(decoded);
         this.ttl = ttl;
+        this.clock = clock;
     }
 
     @Override
@@ -74,7 +87,7 @@ public class JwtService implements AccessTokenIssuer {
         if (user == null) {
             throw new IllegalArgumentException("user must not be null");
         }
-        Instant now = Instant.now();
+        Instant now = clock.now();
         Instant exp = now.plus(ttl);
         String jti = UUID.randomUUID().toString();
 
@@ -104,6 +117,8 @@ public class JwtService implements AccessTokenIssuer {
         try {
             Claims claims = Jwts.parser()
                 .verifyWith(signingKey)
+                // The expiry check reads the same clock that stamped iat/exp, not the wall clock.
+                .clock(() -> Date.from(clock.now()))
                 .build()
                 .parseSignedClaims(compact)
                 .getPayload();

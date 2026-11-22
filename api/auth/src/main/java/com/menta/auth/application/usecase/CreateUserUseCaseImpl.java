@@ -37,13 +37,13 @@ public class CreateUserUseCaseImpl implements CreateUserUseCase {
     public UserSummary create(CreateUserCommand command) {
         Role role = staffRole(command.role());
         Email email = Email.of(command.email());
-        UserProfile profile = new UserProfile(command.firstName(), command.lastName(), null, null);
+        Instant now = clock.now();
+        UserProfile profile = UserProfile.of(command.firstName(), command.lastName(), null, null, now);
 
         if (userRepository.existsByEmail(email)) {
             throw new EmailAlreadyRegisteredException();
         }
 
-        Instant now = clock.now();
         User saved = userRepository.save(User.invite(email, passwordEncoder.encodeUnusable(), role, profile, now));
 
         activationTokenIssuer.issueFor(saved, now);

@@ -112,7 +112,7 @@ class AuthConfigurationTest {
         ReflectionTestUtils.setField(configuration, "jwtBase64Secret", VALID_JWT_SECRET);
         ReflectionTestUtils.setField(configuration, "accessTokenTtlSeconds", 900L);
 
-        AccessTokenIssuer issuer = configuration.accessTokenIssuer();
+        AccessTokenIssuer issuer = configuration.accessTokenIssuer(mock(Clock.class));
 
         assertThat(issuer).isInstanceOf(JwtService.class);
     }
@@ -326,7 +326,8 @@ class AuthConfigurationTest {
         LoginUseCase useCase = configuration.loginUseCase(
             mock(UserRepository.class), mock(PasswordEncoderPort.class), mock(AccessTokenIssuer.class),
             mock(TokenHasher.class), mock(RefreshTokenRepository.class),
-            mock(AuthDegradedGuard.class), mock(LoginRateLimitPort.class), mock(LoginAttemptAuditPort.class)
+            mock(AuthDegradedGuard.class), mock(LoginRateLimitPort.class), mock(LoginAttemptAuditPort.class),
+            mock(Clock.class)
         );
 
         assertThat(useCase).isInstanceOf(TransactionalLoginUseCase.class);

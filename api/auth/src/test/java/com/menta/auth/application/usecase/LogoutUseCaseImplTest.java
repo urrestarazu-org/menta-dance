@@ -91,7 +91,7 @@ class LogoutUseCaseImplTest {
             RefreshToken presented = activeRefresh(
                 presentedHash,
                 TOKEN_VERSION,
-                Instant.now().plus(REFRESH_TTL)
+                FIXED_NOW.plus(REFRESH_TTL)
             );
             User user = activeUser(USER_ID, Role.STUDENT, TOKEN_VERSION + 1);
 
@@ -105,7 +105,10 @@ class LogoutUseCaseImplTest {
             useCase.execute(new LogoutCommand(raw));
 
             assertThat(presented.getStatus()).isEqualTo(RefreshTokenStatus.REVOKED);
-            assertThat(presented.getRevokedAt()).isNotNull();
+            assertThat(presented.getRevokedAt()).isEqualTo(FIXED_NOW);
+            assertThat(user.getUpdatedAt()).isEqualTo(presented.getRevokedAt());
+            // One reading of the clock per execution.
+            verify(clock, times(1)).now();
 
             // PR3 fix: persist the status transition. Without this, the
             // row stays ACTIVE in MySQL and the next presentation re-detects
@@ -163,8 +166,8 @@ class LogoutUseCaseImplTest {
         void used_refresh_triggers_family_revoke_on_logout() {
             String presentedHash = paddedHash("already-rotated");
             RefreshToken presented = activeRefresh(presentedHash, TOKEN_VERSION,
-                Instant.now().plus(REFRESH_TTL));
-            presented.markUsed();  // presented is now USED.
+                FIXED_NOW.plus(REFRESH_TTL));
+            presented.markUsed(SEEDED_AT);  // presented is now USED.
 
             User user = activeUser(USER_ID, Role.STUDENT, TOKEN_VERSION + 1);
 
@@ -253,7 +256,8 @@ class LogoutUseCaseImplTest {
             FAMILY_ID,
             paddedHash(tokenHash),
             tokenVersion,
-            expiresAt
+            expiresAt,
+            SEEDED_AT
         );
     }
 
@@ -263,9 +267,10 @@ class LogoutUseCaseImplTest {
             FAMILY_ID,
             paddedHash(tokenHash),
             tokenVersion,
-            Instant.now().plus(REFRESH_TTL)
+            FIXED_NOW.plus(REFRESH_TTL),
+            SEEDED_AT
         );
-        token.markRevoked();
+        token.markRevoked(SEEDED_AT);
         return token;
     }
 }

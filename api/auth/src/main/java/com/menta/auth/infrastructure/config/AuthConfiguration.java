@@ -212,8 +212,8 @@ public class AuthConfiguration {
     }
 
     @Bean
-    public AccessTokenIssuer accessTokenIssuer() {
-        return new JwtService(jwtBase64Secret, Duration.ofSeconds(accessTokenTtlSeconds));
+    public AccessTokenIssuer accessTokenIssuer(Clock clock) {
+        return new JwtService(jwtBase64Secret, Duration.ofSeconds(accessTokenTtlSeconds), clock);
     }
 
     /**
@@ -458,7 +458,8 @@ public class AuthConfiguration {
         RefreshTokenRepository refreshTokenRepository,
         AuthDegradedGuard authDegradedGuard,
         LoginRateLimitPort loginRateLimitPort,
-        LoginAttemptAuditPort loginAttemptAuditPort
+        LoginAttemptAuditPort loginAttemptAuditPort,
+        Clock clock
     ) {
         LoginUseCaseImpl implementation = new LoginUseCaseImpl(
             userRepository,
@@ -468,7 +469,8 @@ public class AuthConfiguration {
             refreshTokenRepository,
             authDegradedGuard,
             loginRateLimitPort,
-            loginAttemptAuditPort
+            loginAttemptAuditPort,
+            clock
         );
         return new TransactionalLoginUseCase(implementation);
     }

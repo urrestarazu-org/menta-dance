@@ -41,6 +41,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -111,7 +112,7 @@ class RefreshTokenUseCaseImplTest {
                 UUID.fromString("66666666-6666-6666-6666-666666666666"),
                 presentedHash,
                 TOKEN_VERSION,
-                Instant.now().plus(REFRESH_TTL)
+                FIXED_NOW.plus(REFRESH_TTL)
             );
             User user = activeUser(USER_ID, Role.STUDENT, TOKEN_VERSION);
             IssuedAccessToken access = new IssuedAccessToken("jwt.compact", JTI.toString(), ACCESS_TTL);
@@ -120,6 +121,7 @@ class RefreshTokenUseCaseImplTest {
             when(refreshTokenRepository.findByHash(anyString())).thenReturn(Optional.of(presented));
             when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
             when(accessTokenIssuer.issue(user)).thenReturn(access);
+            when(clock.now()).thenReturn(FIXED_NOW);
             when(refreshTokenRepository.save(any(RefreshToken.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -134,7 +136,7 @@ class RefreshTokenUseCaseImplTest {
 
             // Old refresh marked USED in the same transaction.
             assertThat(presented.getStatus()).isEqualTo(RefreshTokenStatus.USED);
-            assertThat(presented.getRotatedAt()).isNotNull();
+            assertThat(presented.getRotatedAt()).isEqualTo(FIXED_NOW);
 
             // PR3 fix: persist the USED transition on the rotated parent
             // refresh token. Without this, the row stays ACTIVE and the
@@ -143,7 +145,15 @@ class RefreshTokenUseCaseImplTest {
             verify(refreshTokenRepository).save(presented);
 
             // New refresh persisted, same family, status=ACTIVE.
-            verify(refreshTokenRepository, times(2)).save(any(RefreshToken.class));
+            ArgumentCaptor<RefreshToken> saved = ArgumentCaptor.forClass(RefreshToken.class);
+            verify(refreshTokenRepository, times(2)).save(saved.capture());
+            RefreshToken next = saved.getAllValues().get(1);
+            assertThat(next.getFamilyId()).isEqualTo(FAMILY_ID);
+            assertThat(next.getStatus()).isEqualTo(RefreshTokenStatus.ACTIVE);
+            assertThat(next.getCreatedAt()).isEqualTo(FIXED_NOW);
+            assertThat(next.getExpiresAt()).isEqualTo(FIXED_NOW.plus(REFRESH_TTL));
+            // One reading of the clock per execution: every stamp shares the same instant.
+            verify(clock, times(1)).now();
             // #672: a plain rotation has no consumer; it must not write any outbox row.
             verifyNoInteractions(outboxAppender);
         }
@@ -173,6 +183,8 @@ class RefreshTokenUseCaseImplTest {
             assertThatThrownBy(() -> useCase.execute(new RefreshCommand(raw)))
                 .isInstanceOf(RefreshTokenCompromisedException.class);
 
+            // One reading of the clock per execution, shared by the expiry check and the bump.
+            verify(clock, times(1)).now();
             // User.bumpTokenVersion() invoked (use case persists the bumped user).
             assertThat(user.getTokenVersion()).isGreaterThan(TOKEN_VERSION);
             assertThat(user.getUpdatedAt()).isEqualTo(FIXED_NOW);
@@ -183,8 +195,7 @@ class RefreshTokenUseCaseImplTest {
             // newTokenVersion: the reconciler projects tokenVersion to Redis
             // from this row alone (#88), and there is no jti available here —
             // no access-token identifier is persisted anywhere.
-            org.mockito.ArgumentCaptor<String> payload =
-                org.mockito.ArgumentCaptor.forClass(String.class);
+            ArgumentCaptor<String> payload = ArgumentCaptor.forClass(String.class);
             verify(outboxAppender).append(
                 eq(AuthOutboxEventTypes.REFRESH_REVOKED),
                 eq(FAMILY_ID.toString()),
@@ -211,11 +222,12 @@ class RefreshTokenUseCaseImplTest {
                 UUID.fromString("69696969-6969-6969-6969-696969696969"),
                 presentedHash,
                 TOKEN_VERSION,
-                Instant.now().minus(Duration.ofDays(8))
+                FIXED_NOW.minus(Duration.ofDays(1))
             );
 
             when(tokenHasher.hash(anyString())).thenReturn(presentedHash);
             when(refreshTokenRepository.findByHash(anyString())).thenReturn(Optional.of(presented));
+            when(clock.now()).thenReturn(FIXED_NOW);
 
             assertThatThrownBy(() -> useCase.execute(new RefreshCommand(raw)))
                 .isInstanceOf(RefreshTokenCompromisedException.class);
@@ -226,6 +238,53 @@ class RefreshTokenUseCaseImplTest {
             verify(refreshTokenRepository, never()).save(any(RefreshToken.class));
             verify(refreshTokenRepository, never()).revokeFamily(any());
             verify(outboxAppender, never()).append(anyString(), anyString(), anyString());
+        }
+
+        @Test
+        void a_refresh_expiring_exactly_at_the_clock_instant_is_rejected() {
+            String raw = UUID.randomUUID().toString();
+            String presentedHash = paddedHash("boundary-hash");
+            RefreshToken presented = activeRefresh(
+                UUID.fromString("69696969-6969-6969-6969-696969696969"),
+                presentedHash,
+                TOKEN_VERSION,
+                FIXED_NOW
+            );
+
+            when(tokenHasher.hash(anyString())).thenReturn(presentedHash);
+            when(refreshTokenRepository.findByHash(anyString())).thenReturn(Optional.of(presented));
+            when(clock.now()).thenReturn(FIXED_NOW);
+
+            assertThatThrownBy(() -> useCase.execute(new RefreshCommand(raw)))
+                .isInstanceOf(RefreshTokenCompromisedException.class);
+
+            assertThat(presented.getStatus()).isEqualTo(RefreshTokenStatus.ACTIVE);
+            verify(refreshTokenRepository, never()).save(any(RefreshToken.class));
+        }
+
+        @Test
+        void a_refresh_expiring_one_millisecond_after_the_clock_instant_is_still_valid() {
+            String raw = UUID.randomUUID().toString();
+            String presentedHash = paddedHash("last-valid-hash");
+            RefreshToken presented = activeRefresh(
+                UUID.fromString("69696969-6969-6969-6969-696969696969"),
+                presentedHash,
+                TOKEN_VERSION,
+                FIXED_NOW.plusMillis(1)
+            );
+            User user = activeUser(USER_ID, Role.STUDENT, TOKEN_VERSION);
+
+            when(tokenHasher.hash(anyString())).thenReturn(presentedHash).thenReturn(paddedHash("next-hash"));
+            when(refreshTokenRepository.findByHash(anyString())).thenReturn(Optional.of(presented));
+            when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
+            when(accessTokenIssuer.issue(user))
+                .thenReturn(new IssuedAccessToken("jwt.compact", JTI.toString(), ACCESS_TTL));
+            when(clock.now()).thenReturn(FIXED_NOW);
+
+            TokenPair pair = useCase.execute(new RefreshCommand(raw));
+
+            assertThat(pair.accessToken()).isEqualTo("jwt.compact");
+            assertThat(presented.getStatus()).isEqualTo(RefreshTokenStatus.USED);
         }
     }
 
@@ -241,13 +300,14 @@ class RefreshTokenUseCaseImplTest {
                 UUID.fromString("71717171-7171-7171-7171-717171717171"),
                 presentedHash,
                 /* presented.tokenVersion = */ 1L,
-                Instant.now().plus(REFRESH_TTL)
+                FIXED_NOW.plus(REFRESH_TTL)
             );
             User user = activeUser(USER_ID, Role.STUDENT, /* users.tokenVersion */ 2L);
 
             when(tokenHasher.hash(anyString())).thenReturn(presentedHash);
             when(refreshTokenRepository.findByHash(anyString())).thenReturn(Optional.of(presented));
             when(userRepository.findById(presented.getUserId())).thenReturn(Optional.of(user));
+            when(clock.now()).thenReturn(FIXED_NOW);
 
             assertThatThrownBy(() -> useCase.execute(new RefreshCommand(raw)))
                 .isInstanceOf(RefreshTokenCompromisedException.class);
@@ -366,7 +426,8 @@ class RefreshTokenUseCaseImplTest {
             FAMILY_ID,
             paddedHash(tokenHash),
             tokenVersion,
-            expiresAt
+            expiresAt,
+            SEEDED_AT
         );
     }
 
@@ -376,9 +437,10 @@ class RefreshTokenUseCaseImplTest {
             FAMILY_ID,
             paddedHash(tokenHash),
             tokenVersion,
-            Instant.now().plus(REFRESH_TTL)
+            FIXED_NOW.plus(REFRESH_TTL),
+            SEEDED_AT
         );
-        token.markUsed();
+        token.markUsed(SEEDED_AT);
         return token;
     }
 
@@ -388,9 +450,10 @@ class RefreshTokenUseCaseImplTest {
             FAMILY_ID,
             paddedHash(tokenHash),
             tokenVersion,
-            Instant.now().plus(REFRESH_TTL)
+            FIXED_NOW.plus(REFRESH_TTL),
+            SEEDED_AT
         );
-        token.markRevoked();
+        token.markRevoked(SEEDED_AT);
         return token;
     }
 }

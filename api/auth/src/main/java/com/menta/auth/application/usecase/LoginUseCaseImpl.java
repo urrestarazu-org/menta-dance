@@ -5,6 +5,7 @@ import com.menta.auth.application.dto.TokenPair;
 import com.menta.auth.application.port.in.LoginUseCase;
 import com.menta.auth.application.port.out.AccessTokenIssuer;
 import com.menta.auth.application.port.out.AuthDegradedGuard;
+import com.menta.auth.application.port.out.Clock;
 import com.menta.auth.application.port.out.IssuedAccessToken;
 import com.menta.auth.application.port.out.LoginAttemptAuditPort;
 import com.menta.auth.application.port.out.LoginAttemptOutcome;
@@ -28,6 +29,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 
 /**
  * Implementation of the login use case.
@@ -61,6 +63,7 @@ import java.util.UUID;
  * outside transactional control — a failed login rolls the transaction back,
  * so a transactional write could not carry that trail.
  */
+@RequiredArgsConstructor
 public class LoginUseCaseImpl implements LoginUseCase {
 
     /**
@@ -77,26 +80,7 @@ public class LoginUseCaseImpl implements LoginUseCase {
     private final AuthDegradedGuard authDegradedGuard;
     private final LoginRateLimitPort loginRateLimitPort;
     private final LoginAttemptAuditPort loginAttemptAuditPort;
-
-    public LoginUseCaseImpl(
-        UserRepository userRepository,
-        PasswordEncoderPort passwordEncoder,
-        AccessTokenIssuer accessTokenIssuer,
-        TokenHasher tokenHasher,
-        RefreshTokenRepository refreshTokenRepository,
-        AuthDegradedGuard authDegradedGuard,
-        LoginRateLimitPort loginRateLimitPort,
-        LoginAttemptAuditPort loginAttemptAuditPort
-    ) {
-        this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.accessTokenIssuer = accessTokenIssuer;
-        this.tokenHasher = tokenHasher;
-        this.refreshTokenRepository = refreshTokenRepository;
-        this.authDegradedGuard = authDegradedGuard;
-        this.loginRateLimitPort = loginRateLimitPort;
-        this.loginAttemptAuditPort = loginAttemptAuditPort;
-    }
+    private final Clock clock;
 
     @Override
     public TokenPair execute(LoginCommand command) {
@@ -137,13 +121,15 @@ public class LoginUseCaseImpl implements LoginUseCase {
 
         UUID refreshId = UUID.randomUUID();
         String refreshHash = tokenHasher.hash(refreshId.toString());
-        Instant refreshExpiresAt = Instant.now().plus(REFRESH_TTL);
+        Instant now = clock.now();
+        Instant refreshExpiresAt = now.plus(REFRESH_TTL);
 
         RefreshToken newRefresh = RefreshToken.newFamily(
             user.getId(),
             refreshHash,
             user.getTokenVersion(),
-            refreshExpiresAt
+            refreshExpiresAt,
+            now
         );
         refreshTokenRepository.save(newRefresh);
 

@@ -56,7 +56,7 @@ class RefreshTokenRepositoryAdapterTest {
 
     @BeforeEach
     void setUp() {
-        adapter = new RefreshTokenRepositoryAdapter(jpaRepository);
+        adapter = new RefreshTokenRepositoryAdapter(jpaRepository, () -> NOW);
     }
 
     @Nested
@@ -105,7 +105,7 @@ class RefreshTokenRepositoryAdapterTest {
         @Test
         void maps_domain_to_entity_persists_and_returns_mapped_domain() {
             RefreshToken domain = RefreshToken.newFamily(
-                UserId.of(USER_ID), TOKEN_HASH, TOKEN_VERSION, EXPIRES_AT
+                UserId.of(USER_ID), TOKEN_HASH, TOKEN_VERSION, EXPIRES_AT, NOW
             );
             when(jpaRepository.save(any(RefreshTokenJpaEntity.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
@@ -127,15 +127,15 @@ class RefreshTokenRepositoryAdapterTest {
     class RevokeFamily {
 
         @Test
-        void delegates_to_bulk_update_for_family_id_with_revokedAt_now() {
+        void delegates_to_bulk_update_for_family_id_with_the_clock_instant_as_revokedAt() {
             when(jpaRepository.bulkRevokeByFamily(
-                eq(RefreshTokenStatus.REVOKED), any(Instant.class), eq(FAMILY_ID)
+                RefreshTokenStatus.REVOKED, NOW, FAMILY_ID
             )).thenReturn(2);
 
             adapter.revokeFamily(FAMILY_ID);
 
             verify(jpaRepository, times(1)).bulkRevokeByFamily(
-                eq(RefreshTokenStatus.REVOKED), any(Instant.class), eq(FAMILY_ID)
+                RefreshTokenStatus.REVOKED, NOW, FAMILY_ID
             );
         }
     }
@@ -145,15 +145,15 @@ class RefreshTokenRepositoryAdapterTest {
     class RevokeAllByUserId {
 
         @Test
-        void delegates_to_bulk_update_for_user_id_with_revokedAt_now() {
+        void delegates_to_bulk_update_for_user_id_with_the_clock_instant_as_revokedAt() {
             when(jpaRepository.bulkRevokeByUser(
-                eq(RefreshTokenStatus.REVOKED), any(Instant.class), eq(USER_ID)
+                RefreshTokenStatus.REVOKED, NOW, USER_ID
             )).thenReturn(3);
 
             adapter.revokeAllByUserId(com.menta.auth.domain.model.UserId.of(USER_ID));
 
             verify(jpaRepository, times(1)).bulkRevokeByUser(
-                eq(RefreshTokenStatus.REVOKED), any(Instant.class), eq(USER_ID)
+                RefreshTokenStatus.REVOKED, NOW, USER_ID
             );
         }
     }

@@ -13,6 +13,7 @@ import com.menta.auth.domain.exception.RefreshTokenCompromisedException;
 import com.menta.auth.domain.model.RefreshToken;
 import com.menta.auth.domain.model.User;
 import com.menta.auth.domain.repository.UserRepository;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -44,6 +45,9 @@ public class LogoutUseCaseImpl implements LogoutUseCase {
             throw new AuthDegradedException();
         }
 
+        // One reading of the clock per execution: every stamp shares this instant.
+        Instant now = clock.now();
+
         String presentedHash = tokenHasher.hash(command.rawRefreshToken());
         Optional<RefreshToken> maybe = refreshTokenRepository.findByHash(presentedHash);
         if (maybe.isEmpty()) {
@@ -64,7 +68,7 @@ public class LogoutUseCaseImpl implements LogoutUseCase {
         if (presented.isCompromised()) {
             Optional<User> maybeUser = userRepository.findById(presented.getUserId());
             User user = maybeUser.orElseThrow(RefreshTokenCompromisedException::new);
-            user.bumpTokenVersion(clock.now());
+            user.bumpTokenVersion(now);
             userRepository.save(user);
             refreshTokenRepository.revokeFamily(presented.getFamilyId());
             outboxAppender.append(
@@ -77,7 +81,7 @@ public class LogoutUseCaseImpl implements LogoutUseCase {
         }
 
         // ACTIVE happy path: mark REVOKED + atomic UserLoggedOut event.
-        presented.markRevoked();
+        presented.markRevoked(now);
         // Critical: persist the status change. findByHash() returns a
         // detached domain POJO (the JPA adapter materializes a fresh entity
         // via mapper and returns the POJO). Mutating the POJO in memory has
@@ -95,7 +99,7 @@ public class LogoutUseCaseImpl implements LogoutUseCase {
         // token's jti, so there is nothing to blacklist per-token.
         Optional<User> maybeLoggedOutUser = userRepository.findById(presented.getUserId());
         User loggedOutUser = maybeLoggedOutUser.orElseThrow(RefreshTokenCompromisedException::new);
-        loggedOutUser.bumpTokenVersion(clock.now());
+        loggedOutUser.bumpTokenVersion(now);
         userRepository.save(loggedOutUser);
 
         outboxAppender.append(

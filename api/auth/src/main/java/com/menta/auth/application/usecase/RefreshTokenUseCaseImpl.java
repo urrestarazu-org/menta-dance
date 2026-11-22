@@ -59,6 +59,9 @@ public class RefreshTokenUseCaseImpl implements RefreshTokenUseCase {
             throw new AuthDegradedException();
         }
 
+        // One reading of the clock per execution: the expiry check and every stamp share this instant.
+        Instant now = clock.now();
+
         String presentedHash = tokenHasher.hash(command.rawRefreshToken());
         Optional<RefreshToken> maybe = refreshTokenRepository.findByHash(presentedHash);
         if (maybe.isEmpty()) {
@@ -73,7 +76,7 @@ public class RefreshTokenUseCaseImpl implements RefreshTokenUseCase {
         }
 
         // Expired but ACTIVE: reject without mutating storage status.
-        if (presented.isExpired(Instant.now())) {
+        if (presented.isExpired(now)) {
             throw new RefreshTokenCompromisedException();
         }
 
@@ -82,8 +85,7 @@ public class RefreshTokenUseCaseImpl implements RefreshTokenUseCase {
 
         // USED → family revoke + bump token_version + REFRESH_REVOKED.
         if (presented.isCompromised()) {
-            revokeFamilyAndBump(presented.getFamilyId(), user,
-                "compromised");
+            revokeFamilyAndBump(presented.getFamilyId(), user, "compromised", now);
             throw new RefreshTokenCompromisedException();
         }
 
@@ -99,7 +101,7 @@ public class RefreshTokenUseCaseImpl implements RefreshTokenUseCase {
         }
 
         // ACTIVE + valid → rotate.
-        presented.markUsed();
+        presented.markUsed(now);
         // Persist the USED transition. The bulk-revoke paths go through
         // refreshTokenRepository#revokeFamily (JPQL bulk update). The
         // happy-rotation path mutates only the in-memory aggregate; without
@@ -110,13 +112,14 @@ public class RefreshTokenUseCaseImpl implements RefreshTokenUseCase {
 
         UUID nextRefreshId = UUID.randomUUID();
         String nextHash = tokenHasher.hash(nextRefreshId.toString());
-        Instant nextExpiresAt = Instant.now().plus(REFRESH_TTL);
+        Instant nextExpiresAt = now.plus(REFRESH_TTL);
         RefreshToken next = RefreshToken.rotate(
             presented.getUserId(),
             presented.getFamilyId(),
             nextHash,
             user.getTokenVersion(),
-            nextExpiresAt
+            nextExpiresAt,
+            now
         );
         refreshTokenRepository.save(next);
 
@@ -129,8 +132,8 @@ public class RefreshTokenUseCaseImpl implements RefreshTokenUseCase {
         );
     }
 
-    private void revokeFamilyAndBump(UUID familyId, User user, String reason) {
-        user.bumpTokenVersion(clock.now());
+    private void revokeFamilyAndBump(UUID familyId, User user, String reason, Instant now) {
+        user.bumpTokenVersion(now);
         userRepository.save(user);
         refreshTokenRepository.revokeFamily(familyId);
         outboxAppender.append(

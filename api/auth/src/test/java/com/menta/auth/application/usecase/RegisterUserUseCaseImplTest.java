@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -71,6 +72,8 @@ class RegisterUserUseCaseImplTest {
 
     @BeforeEach
     void setUp() {
+        // Profile validation reads the clock before anything else is touched; keep it fixed everywhere.
+        lenient().when(clock.now()).thenReturn(FIXED_NOW);
         useCase = newUseCase(DEFAULT_TTL);
     }
 
@@ -167,7 +170,7 @@ class RegisterUserUseCaseImplTest {
         verifyNoInteractions(
             userRepository, passwordEncoder, activationTokenRepository,
             activationTokenGenerator, activationTokenHasher, activationDeliveryCipher,
-            activationRateLimitPort, outboxAppender, clock
+            activationRateLimitPort, outboxAppender
         );
     }
 
@@ -236,7 +239,7 @@ class RegisterUserUseCaseImplTest {
         verify(userRepository, never()).save(any());
         verifyNoInteractions(
             passwordEncoder, activationTokenRepository, activationTokenGenerator,
-            activationTokenHasher, activationDeliveryCipher, outboxAppender, clock
+            activationTokenHasher, activationDeliveryCipher, outboxAppender
         );
     }
 
@@ -255,7 +258,7 @@ class RegisterUserUseCaseImplTest {
         verify(userRepository, never()).save(any());
         verifyNoInteractions(
             passwordEncoder, activationTokenRepository, activationTokenGenerator,
-            activationTokenHasher, activationDeliveryCipher, outboxAppender, clock
+            activationTokenHasher, activationDeliveryCipher, outboxAppender
         );
     }
 
@@ -422,7 +425,25 @@ class RegisterUserUseCaseImplTest {
         verifyNoInteractions(
             userRepository, passwordEncoder, activationTokenRepository,
             activationTokenGenerator, activationTokenHasher, activationDeliveryCipher,
-            activationRateLimitPort, outboxAppender, clock
+            activationRateLimitPort, outboxAppender
+        );
+    }
+
+    @Test
+    void rejects_a_birth_date_that_is_not_before_the_utc_day_of_the_clock_before_any_write_or_lookup() {
+        RegisterUserCommand command = new RegisterUserCommand(
+            "student@example.com", "Sup3rSecret!", Role.STUDENT,
+            FIRST_NAME, LAST_NAME, PHONE, LocalDate.ofInstant(FIXED_NOW, java.time.ZoneOffset.UTC), "client-fp"
+        );
+
+        assertThatThrownBy(() -> useCase.register(command))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Birth date must be in the past");
+
+        verifyNoInteractions(
+            userRepository, passwordEncoder, activationTokenRepository,
+            activationTokenGenerator, activationTokenHasher, activationDeliveryCipher,
+            activationRateLimitPort, outboxAppender
         );
     }
 }

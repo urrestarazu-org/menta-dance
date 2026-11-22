@@ -47,8 +47,16 @@ class JwtServiceTest {
         "bWljcm9zZXJ2aWNlLXNlY3JldC1mb3ItbWVudGEtZGFuY2UtYXV0aC1qd3QtaHMyNTY="
             + "LXByaXZhdGUta2V5LWFuYWx5c2VzLW9ubHktYjY0LWVuY29kaW5n";
 
+    /** Fixed "now" of the tests: whole seconds, because JWT dates carry no sub-second precision. */
+    private static final Instant FIXED_NOW = Instant.parse("2030-01-01T00:30:00Z");
+    private static final Duration TTL = Duration.ofMinutes(15);
+
     private JwtService newJwtService() {
-        return new JwtService(SECRET_BASE64, Duration.ofMinutes(15));
+        return newJwtService(FIXED_NOW);
+    }
+
+    private JwtService newJwtService(Instant now) {
+        return new JwtService(SECRET_BASE64, TTL, () -> now);
     }
 
     /**
@@ -62,11 +70,11 @@ class JwtServiceTest {
             "$2a$10$hashplaceholder",
             role,
             UserStatus.ACTIVE,
-            Instant.now(),
-            Instant.now()
+            FIXED_NOW,
+            FIXED_NOW
         );
         for (long i = 1; i < tokenVersion; i++) {
-            base.bumpTokenVersion(Instant.now());
+            base.bumpTokenVersion(FIXED_NOW);
         }
         return base;
     }
@@ -106,6 +114,7 @@ class JwtServiceTest {
             // both signing AND claim projection work end-to-end.
             var claims = Jwts.parser()
                 .verifyWith(Keys.hmacShaKeyFor(Decoders.BASE64.decode(SECRET_BASE64)))
+                .clock(() -> Date.from(FIXED_NOW))
                 .build()
                 .parseSignedClaims(issued.token())
                 .getPayload();
@@ -117,9 +126,9 @@ class JwtServiceTest {
                 .as("jti claim MUST be set")
                 .isNotNull();
             UUID.fromString(claims.getId()); // → throws if not a valid UUID
-            // Expiration is in the future, matching ttl().
-            assertThat(claims.getExpiration().toInstant())
-                .isAfter(new Date().toInstant());
+            // Issued at the clock instant and expiring one ttl later.
+            assertThat(claims.getIssuedAt().toInstant()).isEqualTo(FIXED_NOW);
+            assertThat(claims.getExpiration().toInstant()).isEqualTo(FIXED_NOW.plus(TTL));
         }
 
         @Test
@@ -141,33 +150,25 @@ class JwtServiceTest {
         @Test
         void ttl_is_exactly_the_configured_duration() {
             JwtService issued = newJwtService();
-            assertThat(issued.ttl()).isEqualTo(Duration.ofMinutes(15));
+            assertThat(issued.ttl()).isEqualTo(TTL);
         }
 
         @Test
-        void token_expiration_is_now_plus_ttl_within_a_slack_window() {
+        void token_issued_at_and_expiration_come_from_the_injected_clock() {
             AccessTokenIssuer issuer = newJwtService();
             User user = activeUser(UUID.randomUUID(), Role.STUDENT, 1L);
 
-            long before = System.currentTimeMillis();
             IssuedAccessToken issued = issuer.issue(user);
-            long after = System.currentTimeMillis();
 
             var claims = Jwts.parser()
                 .verifyWith(Keys.hmacShaKeyFor(Decoders.BASE64.decode(SECRET_BASE64)))
+                .clock(() -> Date.from(FIXED_NOW))
                 .build()
                 .parseSignedClaims(issued.token())
                 .getPayload();
 
-            // System.currentTimeMillis() and Instant.now() can drift slightly
-            // across JVM clock sources; allow 2s slack on each side so the test
-            // asserts ordering and bound, not exact monotonic alignment.
-            long toleranceMs = 2_000;
-            long expectedMin = before + Duration.ofMinutes(15).toMillis() - toleranceMs;
-            long expectedMax = after + Duration.ofMinutes(15).toMillis() + toleranceMs;
-
-            assertThat(claims.getExpiration().toInstant().toEpochMilli())
-                .isBetween(expectedMin, expectedMax);
+            assertThat(claims.getIssuedAt().toInstant()).isEqualTo(FIXED_NOW);
+            assertThat(claims.getExpiration().toInstant()).isEqualTo(FIXED_NOW.plus(TTL));
         }
     }
 
@@ -208,7 +209,7 @@ class JwtServiceTest {
             // fail-fast at construction time, not at first issue call.
             String shortSecret = "too-short-secret";
 
-            assertThatThrownBy(() -> new JwtService(shortSecret, Duration.ofMinutes(15)))
+            assertThatThrownBy(() -> new JwtService(shortSecret, TTL, () -> FIXED_NOW))
                 .isInstanceOf(IllegalArgumentException.class);
         }
     }
@@ -240,7 +241,7 @@ class JwtServiceTest {
             String otherSecret = "cGlwZS1zZWNyZXQtbnVuay1mb3ItdGVzdGluZy1zZWNyZXRzLW"
                 + "+hYW5kLWJvbmFyZGVhZHMtbXVzdC1iZS0zMi1ieXRlcw==";
             JwtService a = newJwtService();
-            JwtService b = new JwtService(otherSecret, Duration.ofMinutes(15));
+            JwtService b = new JwtService(otherSecret, TTL, () -> FIXED_NOW);
             User user = activeUser(UUID.randomUUID(), Role.STUDENT, 1L);
 
             IssuedAccessToken issued = a.issue(user);
@@ -253,7 +254,7 @@ class JwtServiceTest {
         void rejects_expired_token() {
             // The TTL on the parser itself doesn't matter — we parse a
             // pre-crafted expired token (issued 2020, exp 2020).
-            JwtService issuer = new JwtService(SECRET_BASE64, Duration.ofMinutes(15));
+            JwtService issuer = newJwtService();
 
             Optional<ParsedAccessToken> parsed = issuer.parse(
                 Jwts.builder()
@@ -270,6 +271,16 @@ class JwtServiceTest {
             );
 
             assertThat(parsed).isEmpty();
+        }
+
+        @Test
+        void a_token_is_valid_until_the_injected_clock_reaches_its_expiration() {
+            User user = activeUser(UUID.randomUUID(), Role.STUDENT, 1L);
+            IssuedAccessToken issued = newJwtService().issue(user);
+            Instant expiration = FIXED_NOW.plus(TTL);
+
+            assertThat(newJwtService(expiration.minusSeconds(1)).parse(issued.token())).isPresent();
+            assertThat(newJwtService(expiration.plusSeconds(1)).parse(issued.token())).isEmpty();
         }
 
         @Test
