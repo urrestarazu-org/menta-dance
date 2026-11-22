@@ -19,6 +19,8 @@ cleanup() {
             kill -KILL -- "-${pgid}" 2>/dev/null || true
         fi
     done
+    # Fake services are identified by the unique temp dir in their command line.
+    pkill -TERM -f "${TMP_DIR}/fakebin/java" 2>/dev/null || true
     rm -rf "$TMP_DIR"
 }
 trap cleanup EXIT
@@ -401,6 +403,70 @@ if [[ "$(<"$TMP_DIR/launch-failed.state")" == "false 1" && ! -s "$failed_pid_fil
     pass "a failing build aborts the launch with nothing to roll back"
 else
     fail "a failing build must fail the launch without a process (state: $(<"$TMP_DIR/launch-failed.state"))"
+fi
+
+# 14b. Race: between the fork and the exec of java, the launched process still
+# carries the parent's command line (no jar path). A slow .env export widens that
+# window; the launch must wait for the marker instead of reporting "exited".
+slow_pid_file="$TMP_DIR/slow.pid"
+(
+    PATH="$fakebin:$PATH"
+    export_env_file() { sleep 1; }
+    launch_status=0
+    launch_service "API" ":api:app:bootJar" "$built_jar" "$service_jar" "$workdir" \
+        "http://127.0.0.1:9/actuator/health" "$slow_pid_file" "$TMP_DIR/slow-api.log" 2 \
+        >"$TMP_DIR/launch-slow.out" 2>&1 || launch_status=$?
+    printf '%s %s\n' "$LAST_SERVICE_STARTED" "$launch_status" > "$TMP_DIR/launch-slow.state"
+)
+if [[ "$(slurp "$TMP_DIR/launch-slow.out")" != *"exited before becoming healthy"* \
+    && "$(slurp "$TMP_DIR/launch-slow.out")" == *"did not become healthy"* ]]; then
+    pass "a slow pre-exec phase is not reported as an early exit"
+else
+    fail "a slow pre-exec phase must not be reported as 'exited' ($(slurp "$TMP_DIR/launch-slow.out"))"
+fi
+if owned_process_is_running "$slow_pid_file" "$service_jar"; then
+    pass "the slow-starting process ends up owned by its jar marker"
+else
+    fail "the slow-starting process must end up owned by its jar marker"
+fi
+stop_service "API" "$service_jar" "$slow_pid_file" >/dev/null 2>&1 || true
+
+# A process that really dies right after launch is still reported as exited,
+# with its log tail, and does not stay owned.
+deadbin="$TMP_DIR/deadbin"
+mkdir -p "$deadbin"
+cat > "$deadbin/java" <<'DEAD'
+#!/bin/bash
+echo "boom: fake JVM crash"
+exit 1
+DEAD
+chmod +x "$deadbin/java"
+dead_pid_file="$TMP_DIR/dead.pid"
+(
+    PATH="$deadbin:$PATH"
+    launch_status=0
+    launch_service "API" ":api:app:bootJar" "$built_jar" "$service_jar" "$workdir" \
+        "http://127.0.0.1:9/actuator/health" "$dead_pid_file" "$TMP_DIR/dead-api.log" 3 \
+        >"$TMP_DIR/launch-dead.out" 2>&1 || launch_status=$?
+    printf '%s %s\n' "$LAST_SERVICE_STARTED" "$launch_status" > "$TMP_DIR/launch-dead.state"
+)
+if [[ "$(slurp "$TMP_DIR/launch-dead.out")" == *"exited before becoming healthy"* \
+    && "$(slurp "$TMP_DIR/launch-dead.out")" == *"boom: fake JVM crash"* \
+    && "$(<"$TMP_DIR/launch-dead.state")" == "true 1" && ! -s "$dead_pid_file" ]]; then
+    pass "a process that dies early is reported as exited with its log tail"
+else
+    fail "an early death must be reported as exited ($(slurp "$TMP_DIR/launch-dead.out"))"
+fi
+
+# The .env loader must not fork per line (it ran for every line before exec).
+big_env="$TMP_DIR/big.env"
+for i in $(seq 1 300); do printf 'KEY_%s=value %s\n' "$i" "$i"; done > "$big_env"
+start_seconds=$SECONDS
+( export_env_file "$big_env" ) >/dev/null 2>&1
+if (( SECONDS - start_seconds <= 1 )); then
+    pass "the .env loader handles 300 lines in about a second or less"
+else
+    fail "the .env loader is too slow ($((SECONDS - start_seconds))s for 300 lines)"
 fi
 
 # 15. The help text tells developers where the services run from.

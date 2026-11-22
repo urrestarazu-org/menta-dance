@@ -376,11 +376,12 @@ clear_process_state() {
     return 0
 }
 
+# Trims leading and trailing whitespace into TRIMMED. Parameter expansion only,
+# so callers pay no subshell per call.
 trim_whitespace() {
-    local text=$1
-    text=${text#"${text%%[![:space:]]*}"}
-    text=${text%"${text##*[![:space:]]}"}
-    printf '%s' "$text"
+    TRIMMED=$1
+    TRIMMED=${TRIMMED#"${TRIMMED%%[![:space:]]*}"}
+    TRIMMED=${TRIMMED%"${TRIMMED##*[![:space:]]}"}
 }
 
 # Exports the pairs of a .env file into the current shell, parsed like the
@@ -400,17 +401,52 @@ export_env_file() {
     [[ -r "$env_file" ]] || return 0
     while IFS= read -r line || [[ -n "$line" ]]; do
         line=${line%$'\r'}
-        if [[ -z "$(trim_whitespace "$line")" || "$line" == \#* || "$line" != *=* ]]; then
+        if [[ -z "${line//[[:space:]]/}" || "$line" == \#* || "$line" != *=* ]]; then
             continue
         fi
-        key=$(trim_whitespace "${line%%=*}")
-        value=$(trim_whitespace "${line#*=}")
+        trim_whitespace "${line%%=*}"
+        key=$TRIMMED
+        trim_whitespace "${line#*=}"
+        value=$TRIMMED
         if [[ ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ || -n "${!key:-}" ]]; then
             continue
         fi
         export "${key}=${value}"
     done < "$env_file"
     return 0
+}
+
+# True while the process is alive and not a zombie (a crashed child of this
+# script stays a zombie until reaped, and kill -0 still succeeds on it).
+process_is_alive() {
+    local pid=$1
+    local state
+
+    kill -0 "$pid" 2>/dev/null || return 1
+    state=$(ps -o stat= -p "$pid" 2>/dev/null) || return 1
+    [[ -n "$state" && "$state" != Z* ]]
+}
+
+# Between the fork and the exec of java the launched process still carries the
+# parent's command line, without the jar path marker. Wait until the process
+# group shows the marker so the health wait never mistakes that window for an
+# early exit. Returns early if the process dies; gives up after ~10s and lets the
+# health wait report whatever state it finds.
+wait_for_process_marker() {
+    local pid=$1
+    local pgid=$2
+    local marker=$3
+    local attempt=0
+
+    while [[ $attempt -lt 100 ]]; do
+        if process_group_has_marker "$pgid" "$marker"; then
+            return 0
+        fi
+        process_is_alive "$pid" || return 1
+        attempt=$((attempt + 1))
+        sleep 0.1
+    done
+    return 1
 }
 
 # Fills JAVA_COMMAND with the command that runs a service from its jar. The API
@@ -532,6 +568,7 @@ launch_service() {
     printf '%s %s\n' "$job_pid" "$pgid" > "$pid_file"
     LAST_SERVICE_STARTED=true
 
+    wait_for_process_marker "$job_pid" "$pgid" "$run_jar" || true
     wait_for_http_service "$display_name" "$run_jar" "$health_url" "$pid_file" "$log_file" "$max_attempts"
 }
 
