@@ -202,7 +202,7 @@ Los tests que recorren enlaces ignoran los anchors internos (`#main`) del skip l
 Base del área web para el personal (issue #354). Pantallas hoy: el inicio `GET /gestion` y el listado de
 usuarios `GET /gestion/usuarios` con su alta `GET /gestion/usuarios/nuevo` y `POST /gestion/usuarios` y el cambio de
 rol `POST /gestion/usuarios/{id}/rol` (#378), y la recepción `GET /gestion/recepcion` con el roster de cada sesión y
-el check-in manual (#373), y los cursos presenciales `GET /gestion/cursos-presenciales` con sus sesiones y los alumnos de cada una (#368), y los pagos por transferencia `GET /gestion/pagos` y las compras con excepción `GET /gestion/compras-con-excepcion` (#370); el resto de las secciones se habilita a medida que llega cada pantalla. La autorización
+el check-in manual (#373), y los cursos presenciales `GET /gestion/cursos-presenciales` con sus sesiones y los alumnos de cada una (#368), y los pagos por transferencia `GET /gestion/pagos` las compras con excepción `GET /gestion/compras-con-excepcion` (#370) y el listado de cursos virtuales `GET /gestion/cursos-virtuales` (#367); el resto de las secciones se habilita a medida que llega cada pantalla. La autorización
 real la decide la API; el BFF solo evita mostrar pantallas que un rol no puede usar.
 
 ### Prefijos y roles
@@ -215,6 +215,7 @@ Sin sesión, el navegador va a `/login`; con sesión pero sin el rol, recibe un 
 | `GET /gestion` (inicio) | `ADMIN`, `INSTRUCTOR`, `RECEPTIONIST` |
 | `/gestion/contenido/**`, `/gestion/sesiones/**` | `ADMIN`, `INSTRUCTOR` |
 | `/gestion/cursos-presenciales/**` | `ADMIN`, `INSTRUCTOR` (#368; la API limita al instructor a sus cursos) |
+| `/gestion/cursos-virtuales/**` | `ADMIN`, `INSTRUCTOR` (#367; la API limita al instructor a sus cursos) |
 | `/gestion/recepcion/**` | `RECEPTIONIST`, `ADMIN` |
 | `/gestion/billing/**`, `/gestion/dispositivos/**`, `/gestion/usuarios/**` | `ADMIN` |
 | Cualquier otra ruta bajo `/gestion/**` | `ADMIN` (cierra por defecto: un prefijo no previsto no queda abierto al resto del personal) |
@@ -250,7 +251,7 @@ coinciden con los del usuario, en el orden declarado. Los roles se declaran sin 
 
 1. Agregar el controller de la pantalla bajo su prefijo (por ejemplo `/gestion/contenido`) y su vista con
    `fragments/management :: page(..., '<clave>', ...)`. La clave es la que declara la sección en
-   `ManagementNavigationConfig` (en inglés: `content`, `sessions`, `reception`, `payments`, `exception-purchases`, `devices`, `users`).
+   `ManagementNavigationConfig` (en inglés: `content`, `sessions`, `cursos-presenciales`, `cursos-virtuales`, `reception`, `payments`, `exception-purchases`, `devices`, `users`).
 2. En `ManagementNavigationConfig`, pasar `enabled` de esa sección a `true` (así nunca hay un enlace sin pantalla).
 3. Si el prefijo es nuevo, agregarlo en `BffSecurityConfig` antes de `/gestion/**` y sumar sus casos de rol
    rechazado a `ManagementAccessIntegrationTest`. La matriz de ese test mide "permitido" como 404 (nada atiende
@@ -593,6 +594,19 @@ token de la sesión. Un solo controller, `ManagementExceptionPurchasesController
   junto a los campos de esa fila (su `details` abierto) y no se llama a la API. Cada refusal se redacta por su `code`
   (`PURCHASE_ALREADY_RESOLVED`, `ILLEGAL_PURCHASE_STATE_TRANSITION`, `PURCHASE_NOT_FOUND`, `INVALID_REQUEST`); el `detail`,
   el cuerpo de la API y la nota nunca se muestran ni van a un log. CSRF activo.
+
+### Cursos virtuales (`/gestion/cursos-virtuales`) (#367)
+
+`ADMIN` e `INSTRUCTOR` (`/gestion/cursos-virtuales/**`, sección `cursos-virtuales`; la sección `content` de
+`/gestion/contenido` sigue deshabilitada y es otra cosa). Un controller, `ManagementVirtualCoursesController`, con
+`VirtualCourseManagementApiClient` y el token de la sesión. Por ahora es solo lectura: alta, edición y acciones llegan
+en los PRs siguientes del issue.
+
+- **`GET /gestion/cursos-virtuales`**: tabla con `<caption>` (curso, categoría, nivel, estado y "Premium"/"Gratuito"),
+  sin paginación (la API no pagina) y estado vacío "Todavía no hay cursos virtuales." El estado es texto
+  ("Borrador", "Publicado", "Archivado"; "Sin dato" si el BFF no lo conoce), nunca solo color. El BFF muestra lo que la
+  API devuelve (el administrador todos, el instructor los suyos) y no filtra.
+- Si la API cae o rechaza el pedido: aviso, `503` y la lista sin filas, sin nada de su cuerpo. `Cache-Control: no-store`.
 
 ## Accesibilidad base
 
