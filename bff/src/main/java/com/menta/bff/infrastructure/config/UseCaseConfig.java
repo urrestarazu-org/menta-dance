@@ -15,6 +15,7 @@ import com.menta.bff.application.port.out.PhysicalSessionsApiClient;
 import com.menta.bff.application.port.out.SessionTokenRepository;
 import com.menta.bff.application.port.out.SubscriptionApiClient;
 import com.menta.bff.application.port.out.VirtualApiClient;
+import com.menta.bff.application.port.out.VirtualCourseManagementApiClient;
 import com.menta.bff.application.usecase.AccountActivationUseCase;
 import com.menta.bff.application.usecase.AccountActivationUseCaseImpl;
 import com.menta.bff.application.usecase.ApprovePaymentUseCase;
@@ -33,6 +34,10 @@ import com.menta.bff.application.usecase.CreateManagedCourseUseCase;
 import com.menta.bff.application.usecase.CreateManagedCourseUseCaseImpl;
 import com.menta.bff.application.usecase.CreateUserUseCase;
 import com.menta.bff.application.usecase.CreateUserUseCaseImpl;
+import com.menta.bff.application.usecase.CreateVirtualCourseUseCase;
+import com.menta.bff.application.usecase.CreateVirtualCourseUseCaseImpl;
+import com.menta.bff.application.usecase.DeleteVirtualCourseUseCase;
+import com.menta.bff.application.usecase.DeleteVirtualCourseUseCaseImpl;
 import com.menta.bff.application.usecase.DescribeSessionConflictsUseCase;
 import com.menta.bff.application.usecase.DescribeSessionConflictsUseCaseImpl;
 import com.menta.bff.application.usecase.GetAssignedSessionsUseCase;
@@ -57,6 +62,8 @@ import com.menta.bff.application.usecase.GetLessonViewUseCase;
 import com.menta.bff.application.usecase.GetLessonViewUseCaseImpl;
 import com.menta.bff.application.usecase.GetManagedCourseUseCase;
 import com.menta.bff.application.usecase.GetManagedCourseUseCaseImpl;
+import com.menta.bff.application.usecase.GetManagedVirtualCourseUseCase;
+import com.menta.bff.application.usecase.GetManagedVirtualCourseUseCaseImpl;
 import com.menta.bff.application.usecase.GetPaymentDetailUseCase;
 import com.menta.bff.application.usecase.GetPaymentDetailUseCaseImpl;
 import com.menta.bff.application.usecase.GetPaymentHistoryUseCase;
@@ -81,6 +88,8 @@ import com.menta.bff.application.usecase.ListInstructorsUseCase;
 import com.menta.bff.application.usecase.ListInstructorsUseCaseImpl;
 import com.menta.bff.application.usecase.ListManagedCoursesUseCase;
 import com.menta.bff.application.usecase.ListManagedCoursesUseCaseImpl;
+import com.menta.bff.application.usecase.ListManagedVirtualCoursesUseCase;
+import com.menta.bff.application.usecase.ListManagedVirtualCoursesUseCaseImpl;
 import com.menta.bff.application.usecase.ListPendingPaymentsUseCase;
 import com.menta.bff.application.usecase.ListPendingPaymentsUseCaseImpl;
 import com.menta.bff.application.usecase.ListTodaySessionsUseCase;
@@ -95,6 +104,8 @@ import com.menta.bff.application.usecase.PayPhysicalPurchaseByTransferUseCase;
 import com.menta.bff.application.usecase.PayPhysicalPurchaseByTransferUseCaseImpl;
 import com.menta.bff.application.usecase.PayPhysicalPurchaseUseCase;
 import com.menta.bff.application.usecase.PayPhysicalPurchaseUseCaseImpl;
+import com.menta.bff.application.usecase.PublishVirtualCourseUseCase;
+import com.menta.bff.application.usecase.PublishVirtualCourseUseCaseImpl;
 import com.menta.bff.application.usecase.QuotePhysicalPurchaseUseCase;
 import com.menta.bff.application.usecase.QuotePhysicalPurchaseUseCaseImpl;
 import com.menta.bff.application.usecase.RegisterAccountUseCase;
@@ -117,10 +128,14 @@ import com.menta.bff.application.usecase.ResolveSessionWindowUseCase;
 import com.menta.bff.application.usecase.ResolveSessionWindowUseCaseImpl;
 import com.menta.bff.application.usecase.SubscribeToPlanUseCase;
 import com.menta.bff.application.usecase.SubscribeToPlanUseCaseImpl;
+import com.menta.bff.application.usecase.UnpublishVirtualCourseUseCase;
+import com.menta.bff.application.usecase.UnpublishVirtualCourseUseCaseImpl;
 import com.menta.bff.application.usecase.UpdateCourseSessionUseCase;
 import com.menta.bff.application.usecase.UpdateCourseSessionUseCaseImpl;
 import com.menta.bff.application.usecase.UpdateManagedCourseUseCase;
 import com.menta.bff.application.usecase.UpdateManagedCourseUseCaseImpl;
+import com.menta.bff.application.usecase.UpdateVirtualCourseUseCase;
+import com.menta.bff.application.usecase.UpdateVirtualCourseUseCaseImpl;
 import com.menta.bff.infrastructure.web.filter.TokenRefreshFilter;
 import java.time.Clock;
 import java.util.UUID;
@@ -489,5 +504,47 @@ public class UseCaseConfig {
     public ResolveExceptionPurchaseUseCase resolveExceptionPurchaseUseCase(
             AdminBillingApiClient adminBillingApiClient) {
         return new ResolveExceptionPurchaseUseCaseImpl(adminBillingApiClient);
+    }
+
+    /**
+     * The management of virtual courses (#367). The API decides ownership and the lifecycle rules, so the use
+     * cases only need the port.
+     */
+    @Bean
+    public ListManagedVirtualCoursesUseCase listManagedVirtualCoursesUseCase(
+            VirtualCourseManagementApiClient courseApiClient) {
+        return new ListManagedVirtualCoursesUseCaseImpl(courseApiClient);
+    }
+
+    @Bean
+    public GetManagedVirtualCourseUseCase getManagedVirtualCourseUseCase(
+            VirtualCourseManagementApiClient courseApiClient) {
+        return new GetManagedVirtualCourseUseCaseImpl(courseApiClient);
+    }
+
+    @Bean
+    public CreateVirtualCourseUseCase createVirtualCourseUseCase(VirtualCourseManagementApiClient courseApiClient) {
+        return new CreateVirtualCourseUseCaseImpl(courseApiClient);
+    }
+
+    @Bean
+    public UpdateVirtualCourseUseCase updateVirtualCourseUseCase(VirtualCourseManagementApiClient courseApiClient) {
+        return new UpdateVirtualCourseUseCaseImpl(courseApiClient);
+    }
+
+    @Bean
+    public PublishVirtualCourseUseCase publishVirtualCourseUseCase(VirtualCourseManagementApiClient courseApiClient) {
+        return new PublishVirtualCourseUseCaseImpl(courseApiClient);
+    }
+
+    @Bean
+    public UnpublishVirtualCourseUseCase unpublishVirtualCourseUseCase(
+            VirtualCourseManagementApiClient courseApiClient) {
+        return new UnpublishVirtualCourseUseCaseImpl(courseApiClient);
+    }
+
+    @Bean
+    public DeleteVirtualCourseUseCase deleteVirtualCourseUseCase(VirtualCourseManagementApiClient courseApiClient) {
+        return new DeleteVirtualCourseUseCaseImpl(courseApiClient);
     }
 }
