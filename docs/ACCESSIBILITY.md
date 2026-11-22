@@ -219,6 +219,13 @@ tecnología asistiva), **Media**, **Baja**.
   usa `errorSummary`, `field`/`optionalField`, `limitedTextareaField` y `checkboxField`; el identificador de video y la
   duración tienen su ayuda y su error asociados por `aria-describedby`. Cubierto por
   `ManagementVirtualLessonIntegrationTest`; **no cubierto** por axe ni probado con lector de pantalla ni en navegador.
+- **Publicar, despublicar y borrar cursos virtuales** (`/gestion/cursos-virtuales/{id}/publicar|despublicar|borrar`, #367):
+  una plantilla de confirmación (`confirmar.html`) con `h1`, el título del curso en `<strong>` (escapado), el estado como
+  texto y un botón de confirmar y el enlace "Volver". Borrar usa `.btn-danger` pero el botón dice "Sí, borrar el curso" y
+  la página aclara que no se puede deshacer: el significado no depende del color. Los errores van en un `role="alert"`
+  sobre la confirmación y las notas de estado en `role="status"`; en la lista, "Publicar", "Despublicar" y "Borrar" llevan el
+  título del curso en un texto `sr-only`. Cubierto por `ManagementVirtualCourseStatusIntegrationTest`; **no cubierto**
+  por axe ni probado con lector de pantalla ni en navegador (contraste del botón destructivo calculado, no medido).
 - **Imágenes/SVG**: hay fotos (`<img>` con `alt`, tamaño y `srcset`), un logo
   decorativo (`alt=""` junto al nombre visible), íconos SVG con `aria-hidden="true"`
   y un `<video>` decorativo (ver hallazgos 19 y 22).

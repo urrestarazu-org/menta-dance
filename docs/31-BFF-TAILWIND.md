@@ -138,6 +138,7 @@ que ninguna vista usa todavía.
 | Clase | Uso |
 |-------|-----|
 | `.btn` + `.btn-primary` / `.btn-secondary` | Botón. Estado deshabilitado con `disabled` o `aria-disabled="true"`. |
+| `.btn-danger` | Variante destructiva (borrar un curso virtual): el texto del botón nombra la acción, el color solo la refuerza. |
 | `.field`, `.field-label`, `.field-input`, `.field-error` | Campo de formulario. `aria-invalid="true"` en el input activa el borde de error. |
 | `.card` | Contenedor con borde, esquinas `rounded-xl` y sombra `shadow-lg`. |
 | `.badge` + `.badge-success` / `-warning` / `-danger` / `-neutral` | Etiqueta de estado; el texto siempre lleva el significado, no solo el color. |
@@ -602,7 +603,7 @@ token de la sesión. Un solo controller, `ManagementExceptionPurchasesController
 `ADMIN` e `INSTRUCTOR` (`/gestion/cursos-virtuales/**`, sección `cursos-virtuales`; la sección `content` de
 `/gestion/contenido` sigue deshabilitada y es otra cosa). `ManagementVirtualCoursesController` lista y
 `ManagementVirtualCourseFormController` atiende el alta y la edición, ambos con `VirtualCourseManagementApiClient` y el
-token de la sesión. `ManagementVirtualModuleController` atiende la estructura y los módulos. Publicar, despublicar, borrar y las lecciones (alta y edición) llegan en los PRs siguientes del issue.
+token de la sesión. `ManagementVirtualModuleController` atiende la estructura y los módulos, `ManagementVirtualLessonController` las lecciones y `ManagementVirtualCourseStatusController` publicar, despublicar y borrar.
 
 - **`GET /gestion/cursos-virtuales`**: tabla con `<caption>` (curso, categoría, nivel, estado y "Premium"/"Gratuito"),
   sin paginación (la API no pagina) y estado vacío "Todavía no hay cursos virtuales." El estado es texto
@@ -663,7 +664,31 @@ token de la sesión. `ManagementVirtualModuleController` atiende la estructura y
 - **Video**: la API no permite quitar un video asignado, así que en la edición un identificador vacío significa "no
   cambiar" y no se envía; en el alta vacío es "sin video". La edición se prefilla con el detalle del curso (la API no
   tiene lectura de una lección): `404` "No encontramos el módulo." o "No encontramos la lección." si no están.
-- Sin subir/bajar de lecciones, sin borrar, publicar ni despublicar (otra entrega).
+- Sin subir/bajar ni borrar lecciones.
+
+#### Publicar, despublicar y borrar (#367)
+
+- **Rutas** (`ManagementVirtualCourseStatusController`): `GET`/`POST /gestion/cursos-virtuales/{courseId}/publicar`,
+  `/despublicar` y `/borrar`. El `GET` es una página de confirmación (como "Cancelar sesión" de los cursos presenciales)
+  que lee el curso (`GetManagedVirtualCourseUseCase`) y muestra su título (siempre escapado), su estado y el efecto de
+  la acción; las tres comparten `confirmar.html`, parametrizada (título, pregunta, efecto, botón, ruta del `POST` y
+  estilo destructivo para borrar, con la aclaración "Solo se pueden borrar cursos en borrador."). Cada fila de la lista
+  ofrece "Publicar" y "Borrar" (solo borrador) o "Despublicar" (solo publicado) según las banderas de la vista; un
+  curso archivado no tiene acciones. Cada enlace lleva el título del curso en un texto `sr-only`.
+- **El BFF no repite las reglas de la API**: la página se muestra para cualquier estado, con una nota informativa si no
+  es el esperado ("Este curso ya está publicado."), y quien decide al confirmar es la API.
+- **Éxito**: Post/Redirect/Get a la lista con el aviso "Curso publicado.", "Curso despublicado." o "Curso borrado.".
+- **Errores, por `code`**: `COURSE_NOT_PUBLISHABLE` vuelve a mostrar la confirmación (`400`) con el motivo que dio la
+  API, en español y escapado (es el único `detail` que llega al navegador; si no vino, "El curso todavía no cumple las
+  condiciones para publicarse.") y el enlace "Revisar la estructura"; `COURSE_NOT_DRAFT` (`409`) dice "Solo se puede
+  borrar un curso en borrador. Despublicalo primero." (o "...publicar...") en la misma página; `COURSE_NOT_OWNED` →
+  `403`, `COURSE_NOT_FOUND` o un id que no es UUID → `404` (sin llamar a la API); `INVALID_REQUEST`, caídas y demás
+  códigos → `503` "No pudimos completar la acción. Intentá de nuevo." sobre la confirmación (o como aviso si el curso
+  tampoco se puede leer). Al abrir la página, un fallo de lectura es un aviso `503`. Todo `no-store` y con CSRF.
+- **Estado del issue**: con esto la gestión de cursos virtuales (listado, alta y edición, estructura, módulos,
+  lecciones, publicar, despublicar y borrar) está completa. El recorrido manual del issue (un profesor crea un curso
+  con un módulo y dos lecciones, lo publica y lo ve en el catálogo público) **no se pudo verificar** en este
+  desarrollo: solo hay pruebas de integración contra una API simulada.
 
 ## Accesibilidad base
 

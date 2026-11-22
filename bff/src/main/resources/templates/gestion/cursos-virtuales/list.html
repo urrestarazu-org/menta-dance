@@ -47,6 +47,18 @@
                 <a th:href="@{/gestion/cursos-virtuales/{id}/editar(id=${row.courseId()})}">Editar<span class="sr-only" th:text="| el curso ${row.title()}|"> el curso Tango base</span></a>
                 ·
                 <a th:href="@{/gestion/cursos-virtuales/{id}/estructura(id=${row.courseId()})}">Estructura<span class="sr-only" th:text="| del curso ${row.title()}|"> del curso Tango base</span></a>
+                <th:block th:if="${row.canPublish()}">
+                    ·
+                    <a th:href="@{/gestion/cursos-virtuales/{id}/publicar(id=${row.courseId()})}">Publicar<span class="sr-only" th:text="| el curso ${row.title()}|"> el curso Tango base</span></a>
+                </th:block>
+                <th:block th:if="${row.canUnpublish()}">
+                    ·
+                    <a th:href="@{/gestion/cursos-virtuales/{id}/despublicar(id=${row.courseId()})}">Despublicar<span class="sr-only" th:text="| el curso ${row.title()}|"> el curso Tango base</span></a>
+                </th:block>
+                <th:block th:if="${row.canDelete()}">
+                    ·
+                    <a class="font-medium text-feedback-error" th:href="@{/gestion/cursos-virtuales/{id}/borrar(id=${row.courseId()})}">Borrar<span class="sr-only" th:text="| el curso ${row.title()}|"> el curso Tango base</span></a>
+                </th:block>
             </td>
         </tr>
         </tbody>

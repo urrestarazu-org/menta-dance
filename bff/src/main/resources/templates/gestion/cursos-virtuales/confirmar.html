@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/management :: page(${confirmTitle}, 'cursos-virtuales', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<div class="max-w-xl">
+    <h1 class="mb-6" th:text="${confirmTitle}">Publicar curso</h1>
+
+    <div th:if="${actionError}" class="mb-4">
+        <div th:replace="~{fragments/components :: alert('error', ${actionError})}"></div>
+        <p th:if="${reviewStructure}" class="mt-2">
+            <a th:href="@{/gestion/cursos-virtuales/{id}/estructura(id=${courseId})}">Revisar la estructura</a>
+        </p>
+    </div>
+
+    <div th:if="${statusNote}" class="mb-4">
+        <div th:replace="~{fragments/components :: alert('info', ${statusNote})}"></div>
+    </div>
+
+    <form th:action="@{/gestion/cursos-virtuales/{id}/{action}(id=${courseId},action=${actionPath})}"
+          method="post" class="card space-y-4">
+        <p>
+            ¿<span th:text="${verb}">Publicar</span> el curso «<strong th:text="${courseTitle}">Tango base</strong>»?
+            <span th:text="${effect}">Va a quedar visible en el catálogo para los alumnos.</span>
+        </p>
+        <p>Estado actual: <strong th:text="${statusLabel}">Borrador</strong></p>
+        <p th:if="${hint}" th:text="${hint}">Solo se pueden borrar cursos en borrador.</p>
+        <div class="flex items-center gap-4">
+            <button type="submit" class="btn" th:classappend="${destructive} ? 'btn-danger' : 'btn-primary'"
+                    th:text="${confirmLabel}">Sí, publicar</button>
+            <a th:href="@{/gestion/cursos-virtuales}">Volver</a>
+        </div>
+    </form>
+</div>
+</th:block>
+</body>
+</html>

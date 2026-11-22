@@ -14,6 +14,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 import com.github.tomakehurst.wiremock.client.WireMock;
 import jakarta.servlet.http.Cookie;
+import java.util.List;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -171,7 +172,35 @@ class ManagementVirtualCoursesIntegrationTest extends BaseIntegrationTest {
                         + "<span class=\"sr-only\">\\s*el curso Tango base</span></a>")
                 .containsPattern("<a[^>]*href=\"/gestion/cursos-virtuales/c-1/estructura\">Estructura"
                         + "<span class=\"sr-only\">\\s*del curso Tango base</span></a>")
-                .doesNotContain("<form").doesNotContain("Publicar").doesNotContain("Borrar");
+                .doesNotContain("<form");
         assertThat(html).doesNotContain("/api/v1");
+    }
+
+    static Stream<Arguments> actionCases() {
+        return Stream.of(
+                Arguments.of("DRAFT", List.of("publicar", "borrar")),
+                Arguments.of("PUBLISHED", List.of("despublicar")),
+                Arguments.of("ARCHIVED", List.of()),
+                Arguments.of("SUSPENDED", List.of()));
+    }
+
+    @ParameterizedTest(name = "{0} offers {1}")
+    @MethodSource("actionCases")
+    @DisplayName("offers publish, unpublish and delete by state, each named with the title; delete is destructive")
+    void offersTheActionsOfTheState(String status, List<String> offered) throws Exception {
+        stubList(course("c-1", "Tango base", "BEGINNER", true, status));
+
+        String main = mainOf(page("ADMIN").getContentAsString());
+
+        for (String action : List.of("publicar", "despublicar", "borrar")) {
+            String link = "/gestion/cursos-virtuales/c-1/" + action + "\"";
+            if (offered.contains(action)) {
+                assertThat(main).containsPattern("<a[^>]*href=\"" + link + ">[A-Za-zé]+"
+                        + "<span class=\"sr-only\">\\s*el curso Tango base</span></a>");
+            } else {
+                assertThat(main).doesNotContain(link);
+            }
+        }
+        assertThat(main.contains("text-feedback-error")).isEqualTo(offered.contains("borrar"));
     }
 }
