@@ -173,7 +173,6 @@ class VirtualLessonDeletionIntegrationTest extends CatalogAccessMocksIntegration
 
     @Test
     void deleting_a_lesson_of_a_published_course_removes_its_progress_and_renumbers_the_rest() {
-        UUID adminId = seedUser(Role.ADMIN);
         UUID courseId = seedCourse(UUID.randomUUID(), CourseStatus.PUBLISHED);
         UUID moduleId = seedModule(courseId);
         List<UUID> lessons = seedLessons(moduleId, courseId, "L0", "L1", "L2", "L3");
@@ -182,6 +181,7 @@ class VirtualLessonDeletionIntegrationTest extends CatalogAccessMocksIntegration
         seedProgress(student, courseId, lessons.get(0), true);
         seedProgress(student, courseId, lessons.get(1), true);
         seedProgress(otherStudent, courseId, lessons.get(1), false);
+        UUID adminId = seedUser(Role.ADMIN);
 
         ResponseEntity<Map> response = delete(lessons.get(1).toString(), headersFor(adminId, Role.ADMIN));
 
