@@ -140,6 +140,11 @@
     @apply border border-brand-deep bg-white text-brand-deep hover:bg-brand-surface;
   }
 
+  /* Destructive action (delete): the button's text names it; the colour only reinforces it. */
+  .btn-danger {
+    @apply bg-feedback-error text-white hover:opacity-90;
+  }
+
   /* Form fields: label + input + optional hint/error, wrapped in .field. */
   .field {
     @apply space-y-1;

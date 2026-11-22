@@ -249,7 +249,7 @@ public class ManagementVirtualModuleController {
         model.addAttribute("moduleId", moduleId);
     }
 
-    private static String statusLabel(VirtualCourseStatus status) {
+    static String statusLabel(VirtualCourseStatus status) {
         return switch (status) {
             case DRAFT -> "Borrador";
             case PUBLISHED -> "Publicado";
