@@ -157,8 +157,7 @@ class ManagementVirtualModuleIntegrationTest extends BaseIntegrationTest {
                         + "/editar\">Editar módulo<span class=\"sr-only\">\\s*Giros</span></a>")
                 .containsPattern("<a[^>]*href=\"/gestion/cursos-virtuales/" + ID
                         + "/modulos/nuevo\">Agregar módulo</a>")
-                .doesNotContain("disabled").doesNotContain("Publicar").doesNotContain("Borrar")
-                .doesNotContain("lecciones/");
+                .doesNotContain("disabled").doesNotContain("Publicar").doesNotContain("Borrar");
     }
 
     static Stream<Arguments> positions() {

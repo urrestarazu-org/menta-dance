@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/management :: page(${editing} ? 'Editar lección' : 'Nueva lección', 'cursos-virtuales', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<div class="max-w-xl">
+    <h1 class="mb-6" th:text="${editing} ? 'Editar lección' : 'Nueva lección'">Nueva lección</h1>
+
+    <div th:if="${formError}" class="mb-4">
+        <div th:replace="~{fragments/components :: alert('error', ${formError})}"></div>
+    </div>
+
+    <form th:action="${editing} ? @{/gestion/cursos-virtuales/{id}/modulos/{module}/lecciones/{lesson}/editar(id=${courseId},module=${moduleId},lesson=${lessonId})} : @{/gestion/cursos-virtuales/{id}/modulos/{module}/lecciones(id=${courseId},module=${moduleId})}"
+          th:object="${form}" method="post" novalidate class="card space-y-4">
+        <div th:replace="~{fragments/components :: errorSummary(${ {'title':'title', 'description':'description', 'videoId':'videoId', 'durationMinutes':'durationMinutes'} })}"></div>
+
+        <div th:replace="~{fragments/components :: field('title', 'Título', 'text', 'title', 'off', *{title}, null, ${!#fields.hasErrors('*')}, ${#fields.errors('title')})}"></div>
+        <div th:replace="~{fragments/components :: limitedTextareaField('description', 'Descripción', 'description', *{description}, 6, 5000, 'Hasta 5000 caracteres.', ${#fields.errors('description')})}"></div>
+        <div th:replace="~{fragments/components :: optionalField('videoId', 'Identificador del video (opcional)', 'text', 'videoId', 'off', *{videoId}, ${editing} ? 'Si lo dejás vacío no se cambia el video asignado.' : 'Es el identificador de un video ya cargado; podés dejarlo para después.', false, ${#fields.errors('videoId')})}"></div>
+        <div th:replace="~{fragments/components :: optionalField('durationMinutes', 'Duración (minutos)', 'number', 'durationMinutes', 'off', *{durationMinutes}, 'Un número entero de 0 a 9999.', false, ${#fields.errors('durationMinutes')})}"></div>
+        <div th:replace="~{fragments/components :: checkboxField('free', 'Lección gratuita: se puede ver sin suscripción', 'free', *{free}, null, null)}"></div>
+
+        <div class="flex items-center gap-4">
+            <button type="submit" class="btn btn-primary" th:text="${editing} ? 'Guardar cambios' : 'Crear lección'">Crear lección</button>
+            <a th:href="@{/gestion/cursos-virtuales/{id}/estructura(id=${courseId})}">Cancelar</a>
+        </div>
+    </form>
+</div>
+</th:block>
+</body>
+</html>

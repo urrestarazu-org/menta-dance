@@ -35,11 +35,13 @@
                 <span class="font-medium" th:text="${lesson.title()}">Primer paso</span>:
                 <span th:text="|${lesson.durationMinutes()} min|">10 min</span> ·
                 <span th:text="${lesson.free()} ? 'Gratuita' : 'Con suscripción'">Gratuita</span> ·
-                <span th:text="${lesson.videoId() != null} ? 'Con video' : 'Sin video'">Con video</span>
+                <span th:text="${lesson.videoId() != null} ? 'Con video' : 'Sin video'">Con video</span> ·
+                <a th:href="@{/gestion/cursos-virtuales/{id}/modulos/{module}/lecciones/{lesson}/editar(id=${course.courseId()},module=${module.moduleId()},lesson=${lesson.lessonId()})}">Editar<span class="sr-only" th:text="| lección ${lesson.title()}|"> lección Primer paso</span></a>
             </li>
         </ul>
 
         <div class="mt-4 flex flex-wrap items-center gap-4">
+            <a th:href="@{/gestion/cursos-virtuales/{id}/modulos/{module}/lecciones/nueva(id=${course.courseId()},module=${module.moduleId()})}">Agregar lección<span class="sr-only" th:text="| al módulo ${module.title()}|"> al módulo Pasos básicos</span></a>
             <a th:href="@{/gestion/cursos-virtuales/{id}/modulos/{module}/editar(id=${course.courseId()},module=${module.moduleId()})}">Editar módulo<span class="sr-only" th:text="| ${module.title()}|"> Pasos básicos</span></a>
             <form th:unless="${position.first}" method="post"
                   th:action="@{/gestion/cursos-virtuales/{id}/modulos/{module}/subir(id=${course.courseId()},module=${module.moduleId()})}">

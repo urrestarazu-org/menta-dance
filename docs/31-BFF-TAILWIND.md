@@ -631,8 +631,8 @@ token de la sesión. `ManagementVirtualModuleController` atiende la estructura y
 - **`GET /gestion/cursos-virtuales/{courseId}/estructura`** (`estructura.html`, enlace "Estructura" en cada fila de la
   lista): título y estado del curso (texto), estadísticas (módulos, lecciones, duración total) y la lista `<ol>` de
   módulos ordenados por `order`, cada uno con sus lecciones en solo lectura (duración, "Gratuita"/"Con suscripción",
-  "Con video"/"Sin video"; el `videoId` no se muestra). Estado vacío "Este curso todavía no tiene módulos."; sin enlaces
-  de lecciones, publicar ni borrar. Un id que no es UUID es un `404` sin llamar a la API.
+  "Con video"/"Sin video"; el `videoId` no se muestra). Estado vacío "Este curso todavía no tiene módulos."; cada módulo tiene
+  "Agregar lección" y cada lección "Editar" (ver "Lecciones"); sin publicar ni borrar. Un id que no es UUID es un `404` sin llamar a la API.
 - **Alta y edición de módulo**: `GET /{courseId}/modulos/nuevo`, `POST /{courseId}/modulos`,
   `GET`/`POST /{courseId}/modulos/{moduleId}/editar`, con `ModuleForm` (título obligatorio de hasta 255 caracteres y la
   casilla "Vista previa gratuita"). No hay campo de orden: el módulo nuevo va al final (el BFF no manda `order`). La API
@@ -648,6 +648,22 @@ token de la sesión. `ManagementVirtualModuleController` atiende la estructura y
 - **Errores, por `code`** (nunca el `detail`): `COURSE_NOT_OWNED` → `403`, `COURSE_NOT_FOUND` y `MODULE_NOT_FOUND` →
   `404`, `INVALID_REQUEST` en el formulario → "Revisá los datos ingresados." (400); el resto y las caídas, `503` con
   "No pudimos guardar el módulo.", "No pudimos mover el módulo." o "No pudimos cargar el curso...".
+
+#### Lecciones (#367)
+
+- **Rutas** (`ManagementVirtualLessonController`): `GET /{courseId}/modulos/{moduleId}/lecciones/nueva`, `POST
+  .../lecciones` y `GET`/`POST .../lecciones/{lessonId}/editar`. Éxito: Post/Redirect/Get a la estructura con el aviso
+  "Lección creada." o "Lección actualizada.". Los errores son los del módulo (`COURSE_NOT_OWNED` `403`, `*_NOT_FOUND`
+  `404`, `INVALID_REQUEST` "Revisá los datos ingresados.", caídas `503` "No pudimos guardar la lección.") más
+  `LESSON_NOT_FOUND` → "No encontramos la lección."; el controller reutiliza los helpers del de módulos.
+- **`LessonForm`**: título (obligatorio, 255), descripción (obligatoria, 5000: la columna es `TEXT` y la API no la limita,
+  el tope es el del formulario de curso), identificador de video (opcional, 128, sin espacios; es el id opaco de un video ya
+  existente, la subida no entra acá), duración en minutos (texto como los demás formularios numéricos: entero de 0 a
+  9999, vacío es 0, un solo mensaje) y la casilla "Lección gratuita". No hay campo de orden: la lección nueva va al final.
+- **Video**: la API no permite quitar un video asignado, así que en la edición un identificador vacío significa "no
+  cambiar" y no se envía; en el alta vacío es "sin video". La edición se prefilla con el detalle del curso (la API no
+  tiene lectura de una lección): `404` "No encontramos el módulo." o "No encontramos la lección." si no están.
+- Sin subir/bajar de lecciones, sin borrar, publicar ni despublicar (otra entrega).
 
 ## Accesibilidad base
 

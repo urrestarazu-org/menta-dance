@@ -214,6 +214,11 @@ tecnología asistiva), **Media**, **Baja**.
   del módulo en un texto `sr-only`; "Subir" y "Bajar" son botones de formulario (sin JavaScript) y no se renderizan
   deshabilitados en el borde. El formulario del módulo usa `errorSummary`, `field` y `checkboxField`. Cubierto por
   `ManagementVirtualModuleIntegrationTest`; **no cubierto** por axe ni probado con lector de pantalla ni en navegador.
+- **Lecciones de cursos virtuales** (`/gestion/cursos-virtuales/{id}/modulos/{id}/lecciones/**`, #367): en la
+  estructura, "Agregar lección" y "Editar" llevan el módulo o el título de la lección en un texto `sr-only`. El formulario
+  usa `errorSummary`, `field`/`optionalField`, `limitedTextareaField` y `checkboxField`; el identificador de video y la
+  duración tienen su ayuda y su error asociados por `aria-describedby`. Cubierto por
+  `ManagementVirtualLessonIntegrationTest`; **no cubierto** por axe ni probado con lector de pantalla ni en navegador.
 - **Imágenes/SVG**: hay fotos (`<img>` con `alt`, tamaño y `srcset`), un logo
   decorativo (`alt=""` junto al nombre visible), íconos SVG con `aria-hidden="true"`
   y un `<video>` decorativo (ver hallazgos 19 y 22).
