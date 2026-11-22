@@ -603,7 +603,7 @@ token de la sesión. Un solo controller, `ManagementExceptionPurchasesController
 `ADMIN` e `INSTRUCTOR` (`/gestion/cursos-virtuales/**`, sección `cursos-virtuales`; la sección `content` de
 `/gestion/contenido` sigue deshabilitada y es otra cosa). `ManagementVirtualCoursesController` lista y
 `ManagementVirtualCourseFormController` atiende el alta y la edición, ambos con `VirtualCourseManagementApiClient` y el
-token de la sesión. `ManagementVirtualModuleController` atiende la estructura y los módulos, `ManagementVirtualLessonController` las lecciones y `ManagementVirtualCourseStatusController` publicar, despublicar y borrar.
+token de la sesión. `ManagementVirtualModuleController` atiende la estructura y los módulos, `ManagementVirtualLessonController` las lecciones, `ManagementVirtualLessonActionsController` subir, bajar y borrar una lección (#831) y `ManagementVirtualCourseStatusController` publicar, despublicar y borrar un curso.
 
 - **`GET /gestion/cursos-virtuales`**: tabla con `<caption>` (curso, categoría, nivel, estado y "Premium"/"Gratuito"),
   sin paginación (la API no pagina) y estado vacío "Todavía no hay cursos virtuales." El estado es texto
@@ -631,9 +631,10 @@ token de la sesión. `ManagementVirtualModuleController` atiende la estructura y
 
 - **`GET /gestion/cursos-virtuales/{courseId}/estructura`** (`estructura.html`, enlace "Estructura" en cada fila de la
   lista): título y estado del curso (texto), estadísticas (módulos, lecciones, duración total) y la lista `<ol>` de
-  módulos ordenados por `order`, cada uno con sus lecciones en solo lectura (duración, "Gratuita"/"Con suscripción",
+  módulos ordenados por `order`, cada uno con sus lecciones, también por `order` (duración, "Gratuita"/"Con suscripción",
   "Con video"/"Sin video"; el `videoId` no se muestra). Estado vacío "Este curso todavía no tiene módulos."; cada módulo tiene
-  "Agregar lección" y cada lección "Editar" (ver "Lecciones"); sin publicar ni borrar. Un id que no es UUID es un `404` sin llamar a la API.
+  "Agregar lección" y cada lección el título como enlace a su edición, "Editar", "Borrar", "Subir" y "Bajar" (ver
+  "Lecciones"); sin publicar ni borrar el curso. Un id que no es UUID es un `404` sin llamar a la API.
 - **Alta y edición de módulo**: `GET /{courseId}/modulos/nuevo`, `POST /{courseId}/modulos`,
   `GET`/`POST /{courseId}/modulos/{moduleId}/editar`, con `ModuleForm` (título obligatorio de hasta 255 caracteres y la
   casilla "Vista previa gratuita"). No hay campo de orden: el módulo nuevo va al final (el BFF no manda `order`). La API
@@ -664,7 +665,34 @@ token de la sesión. `ManagementVirtualModuleController` atiende la estructura y
 - **Video**: la API no permite quitar un video asignado, así que en la edición un identificador vacío significa "no
   cambiar" y no se envía; en el alta vacío es "sin video". La edición se prefilla con el detalle del curso (la API no
   tiene lectura de una lección): `404` "No encontramos el módulo." o "No encontramos la lección." si no están.
-- Sin subir/bajar ni borrar lecciones.
+- **Acciones sobre cada lección en la estructura** (#831, `ManagementVirtualLessonActionsController`): el título de la
+  lección es un enlace a `.../lecciones/{lessonId}/editar` (se conserva "Editar"), y cada lección tiene "Borrar" (enlace a
+  la confirmación) y los botones "Subir" y "Bajar" (formularios `POST` con CSRF, sin JavaScript; la primera lección del
+  módulo no tiene "Subir" y la última no tiene "Bajar", y no se renderizan deshabilitados). Todos llevan el título de la
+  lección en un texto `sr-only`; el enlace del título dice además "lección del módulo {módulo}".
+- **Subir y bajar** (`POST .../lecciones/{lessonId}/subir` y `/bajar`): igual que con los módulos, el controller lee el
+  detalle, ordena las lecciones por `order` y toma la vecina. A diferencia del módulo, la API no tiene un reorden de
+  lecciones: `PUT /api/v1/admin/virtual/lessons/{id}` cambia una por vez, así que el intercambio son **dos `PUT` con solo
+  `order`** (a cada lección se le manda el `order` de la otra; no se renumera ni se asume 0..n-1) y no es atómico.
+  `SwapVirtualLessonsUseCase` hace el primero y, si el segundo falla, intenta devolver la primera lección a su `order`
+  (best effort; si eso también falla se informa el fallo original) para no dejar dos lecciones con el mismo `order`. Éxito:
+  Post/Redirect/Get a la estructura con "Lección movida." (se muestra una sola vez). En el borde, o si la lección ya no
+  está, no llama a la API y avisa ("La lección ya está en esa posición." / "Esa lección ya no existe. Revisá la estructura
+  del curso."). Errores: `COURSE_NOT_OWNED` `403`, `*_NOT_FOUND` `404`, el resto y las caídas `503` "No pudimos mover la
+  lección. Intentá de nuevo." Una lectura y dos escrituras no son una transacción: otra pestaña que reordene en medio
+  puede dejar un orden inesperado (no se detecta, como el intercambio de módulos).
+- **Borrar** (`GET`/`POST .../lecciones/{lessonId}/borrar`, plantilla `leccion-borrar.html`, propia porque `confirmar.html`
+  es de cursos): el `GET` busca la lección en el detalle del curso (`GetManagedVirtualLessonUseCase`; un id que no es UUID
+  es `404` sin llamar a la API) y muestra su título y el del módulo (siempre con `th:text`), y el efecto: "Se borra también
+  el progreso de los alumnos en esta lección. Esta acción no se puede deshacer."; el botón es `.btn-danger` y dice "Sí,
+  borrar la lección". El `POST` llama a `DELETE /api/v1/admin/virtual/lessons/{lessonId}` (`204`; la API renumera las
+  que quedan) y vuelve a la estructura con "Lección borrada.". Errores, los de siempre y nunca el `detail`:
+  `COURSE_NOT_OWNED` `403`, `COURSE_NOT_FOUND`/`MODULE_NOT_FOUND`/`LESSON_NOT_FOUND` `404`, el resto y las caídas `503`
+  "No pudimos completar la acción. Intentá de nuevo." sobre la confirmación (o como aviso si no se puede leer la lección).
+  Todo `no-store` y con CSRF. RECEPTIONIST y STUDENT reciben `403` sin llamar a la API y un anónimo va a `/login`.
+- **Qué no se verificó (#831)**: solo hay pruebas de integración (MockMvc y WireMock). No se probó contra una API real
+  (en particular el comportamiento del `PUT` con `order` repetido o la renumeración del `DELETE` con datos reales), ni en
+  un navegador, ni con axe, ni con un lector de pantalla.
 
 #### Publicar, despublicar y borrar (#367)
 

@@ -30,13 +30,24 @@
         </div>
 
         <p class="mt-3" th:if="${module.lessons().isEmpty()}">Este módulo todavía no tiene lecciones.</p>
-        <ul class="mt-3 list-disc pl-6" th:unless="${module.lessons().isEmpty()}">
-            <li th:each="lesson : ${module.lessons()}">
-                <span class="font-medium" th:text="${lesson.title()}">Primer paso</span>:
+        <ul class="mt-3 list-disc space-y-3 pl-6" th:unless="${module.lessons().isEmpty()}">
+            <li th:each="lesson, lessonPosition : ${module.lessons()}">
+                <a class="font-medium" th:href="@{/gestion/cursos-virtuales/{id}/modulos/{module}/lecciones/{lesson}/editar(id=${course.courseId()},module=${module.moduleId()},lesson=${lesson.lessonId()})}"><th:block th:text="${lesson.title()}">Primer paso</th:block><span class="sr-only" th:text="|, lección del módulo ${module.title()}|">, lección del módulo Pasos básicos</span></a>:
                 <span th:text="|${lesson.durationMinutes()} min|">10 min</span> ·
                 <span th:text="${lesson.free()} ? 'Gratuita' : 'Con suscripción'">Gratuita</span> ·
                 <span th:text="${lesson.videoId() != null} ? 'Con video' : 'Sin video'">Con video</span> ·
-                <a th:href="@{/gestion/cursos-virtuales/{id}/modulos/{module}/lecciones/{lesson}/editar(id=${course.courseId()},module=${module.moduleId()},lesson=${lesson.lessonId()})}">Editar<span class="sr-only" th:text="| lección ${lesson.title()}|"> lección Primer paso</span></a>
+                <a th:href="@{/gestion/cursos-virtuales/{id}/modulos/{module}/lecciones/{lesson}/editar(id=${course.courseId()},module=${module.moduleId()},lesson=${lesson.lessonId()})}">Editar<span class="sr-only" th:text="| lección ${lesson.title()}|"> lección Primer paso</span></a> ·
+                <a th:href="@{/gestion/cursos-virtuales/{id}/modulos/{module}/lecciones/{lesson}/borrar(id=${course.courseId()},module=${module.moduleId()},lesson=${lesson.lessonId()})}">Borrar<span class="sr-only" th:text="| lección ${lesson.title()}|"> lección Primer paso</span></a>
+                <div class="mt-2 flex flex-wrap items-center gap-2">
+                    <form th:unless="${lessonPosition.first}" method="post"
+                          th:action="@{/gestion/cursos-virtuales/{id}/modulos/{module}/lecciones/{lesson}/subir(id=${course.courseId()},module=${module.moduleId()},lesson=${lesson.lessonId()})}">
+                        <button type="submit" class="btn btn-secondary">Subir<span class="sr-only" th:text="| la lección ${lesson.title()}|"> la lección Primer paso</span></button>
+                    </form>
+                    <form th:unless="${lessonPosition.last}" method="post"
+                          th:action="@{/gestion/cursos-virtuales/{id}/modulos/{module}/lecciones/{lesson}/bajar(id=${course.courseId()},module=${module.moduleId()},lesson=${lesson.lessonId()})}">
+                        <button type="submit" class="btn btn-secondary">Bajar<span class="sr-only" th:text="| la lección ${lesson.title()}|"> la lección Primer paso</span></button>
+                    </form>
+                </div>
             </li>
         </ul>
 

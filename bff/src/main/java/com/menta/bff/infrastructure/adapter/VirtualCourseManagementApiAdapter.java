@@ -158,6 +158,11 @@ public class VirtualCourseManagementApiAdapter implements VirtualCourseManagemen
                 accessToken, 200, ManagedLessonWire.class));
     }
 
+    @Override
+    public void deleteLesson(String accessToken, String lessonId) {
+        call("delete lesson", webClient.delete().uri(LESSON_ENDPOINT, lessonId), accessToken, 204, Void.class);
+    }
+
     /**
      * Sends the request with the bearer token and reads the answer: {@code okStatus} is the success, the expected
      * refusals are typed, everything else is unavailable. With {@code Void} as wire type the body is not read and

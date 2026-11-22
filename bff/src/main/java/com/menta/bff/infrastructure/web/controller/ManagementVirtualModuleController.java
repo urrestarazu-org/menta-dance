@@ -1,6 +1,7 @@
 package com.menta.bff.infrastructure.web.controller;
 
 import com.menta.bff.application.dto.VirtualCourseDetail;
+import com.menta.bff.application.dto.VirtualCourseDetail.VirtualLessonDetail;
 import com.menta.bff.application.dto.VirtualCourseDetail.VirtualModuleDetail;
 import com.menta.bff.application.dto.VirtualCourseStatus;
 import com.menta.bff.application.port.out.VirtualCourseManagementApiClient.ServiceUnavailableException;
@@ -239,8 +240,13 @@ public class ManagementVirtualModuleController {
         return (String) request.getAttribute(TokenRefreshFilter.ACCESS_TOKEN_ATTRIBUTE);
     }
 
+    /** The modules by their {@code order}, and the lessons of each by theirs. */
     static List<VirtualModuleDetail> inOrder(VirtualCourseDetail course) {
-        return course.modules().stream().sorted(Comparator.comparingInt(VirtualModuleDetail::order)).toList();
+        return course.modules().stream().sorted(Comparator.comparingInt(VirtualModuleDetail::order))
+                .map(module -> new VirtualModuleDetail(module.moduleId(), module.title(), module.preview(),
+                        module.order(), module.lessons().stream()
+                                .sorted(Comparator.comparingInt(VirtualLessonDetail::order)).toList()))
+                .toList();
     }
 
     private static void prepare(String courseId, String moduleId, Model model) {

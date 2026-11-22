@@ -222,6 +222,19 @@ tecnología asistiva), **Media**, **Baja**.
   usa `errorSummary`, `field`/`optionalField`, `limitedTextareaField` y `checkboxField`; el identificador de video y la
   duración tienen su ayuda y su error asociados por `aria-describedby`. Cubierto por
   `ManagementVirtualLessonIntegrationTest`; **no cubierto** por axe ni probado con lector de pantalla ni en navegador.
+- **Acciones sobre las lecciones en la estructura** (#831): cada lección es un `<li>` con el título como enlace a su
+  edición (nombre accesible "{título}, lección del módulo {módulo}" por un texto `sr-only`), "Editar" y "Borrar" (enlaces,
+  con "lección {título}" en `sr-only`) y "Subir" y "Bajar" (botones de formulario, "la lección {título}" en `sr-only`);
+  el primero no tiene "Subir" y el último no tiene "Bajar", sin botones deshabilitados. El resultado de mover o borrar
+  llega como aviso en `role="status"` tras la redirección, que se anuncia una sola vez. La confirmación de borrado
+  (`leccion-borrar.html`) tiene `h1`, el título de la lección en `<strong>` escapado, el efecto escrito ("Se borra también
+  el progreso de los alumnos en esta lección. Esta acción no se puede deshacer."), `.btn-danger` con el texto "Sí, borrar
+  la lección" (el significado no depende del color) y el enlace "Volver a la estructura"; los errores van en `role="alert"`.
+  Cubierto por `ManagementVirtualLessonActionsIntegrationTest`. **No verificado**: axe; lector de pantalla (cómo se lee el
+  nombre del enlace del título con el texto `sr-only`, el orden de lectura de la lista con botones dentro de cada
+  `<li>` y que el aviso `role="status"` se anuncie tras la redirección, ni hacia dónde queda el foco después de mover o
+  borrar); navegador real (con teclado, foco visible, reflujo a 320 px y el contraste de `.btn-danger`, calculado y no
+  medido); el efecto de muchas lecciones en la longitud de la página.
 - **Publicar, despublicar y borrar cursos virtuales** (`/gestion/cursos-virtuales/{id}/publicar|despublicar|borrar`, #367):
   una plantilla de confirmación (`confirmar.html`) con `h1`, el título del curso en `<strong>` (escapado), el estado como
   texto y un botón de confirmar y el enlace "Volver". Borrar usa `.btn-danger` pero el botón dice "Sí, borrar el curso" y
