@@ -602,7 +602,7 @@ token de la sesión. Un solo controller, `ManagementExceptionPurchasesController
 `ADMIN` e `INSTRUCTOR` (`/gestion/cursos-virtuales/**`, sección `cursos-virtuales`; la sección `content` de
 `/gestion/contenido` sigue deshabilitada y es otra cosa). `ManagementVirtualCoursesController` lista y
 `ManagementVirtualCourseFormController` atiende el alta y la edición, ambos con `VirtualCourseManagementApiClient` y el
-token de la sesión. Publicar, despublicar, borrar y la estructura llegan en los PRs siguientes del issue.
+token de la sesión. `ManagementVirtualModuleController` atiende la estructura y los módulos. Publicar, despublicar, borrar y las lecciones (alta y edición) llegan en los PRs siguientes del issue.
 
 - **`GET /gestion/cursos-virtuales`**: tabla con `<caption>` (curso, categoría, nivel, estado y "Premium"/"Gratuito"),
   sin paginación (la API no pagina) y estado vacío "Todavía no hay cursos virtuales." El estado es texto
@@ -625,6 +625,29 @@ token de la sesión. Publicar, despublicar, borrar y la estructura llegan en los
   gestionar este curso." (403); `COURSE_NOT_FOUND` o un id que no es UUID → "No encontramos el curso." (404, sin llamar
   a la API si no es UUID); `COURSE_NOT_DRAFT`, `COURSE_NOT_PUBLISHABLE` y caídas → "No pudimos guardar el curso." (503).
   Al abrir la edición, si la API no responde, es un aviso `503`.
+
+#### Estructura y módulos (#367)
+
+- **`GET /gestion/cursos-virtuales/{courseId}/estructura`** (`estructura.html`, enlace "Estructura" en cada fila de la
+  lista): título y estado del curso (texto), estadísticas (módulos, lecciones, duración total) y la lista `<ol>` de
+  módulos ordenados por `order`, cada uno con sus lecciones en solo lectura (duración, "Gratuita"/"Con suscripción",
+  "Con video"/"Sin video"; el `videoId` no se muestra). Estado vacío "Este curso todavía no tiene módulos."; sin enlaces
+  de lecciones, publicar ni borrar. Un id que no es UUID es un `404` sin llamar a la API.
+- **Alta y edición de módulo**: `GET /{courseId}/modulos/nuevo`, `POST /{courseId}/modulos`,
+  `GET`/`POST /{courseId}/modulos/{moduleId}/editar`, con `ModuleForm` (título obligatorio de hasta 255 caracteres y la
+  casilla "Vista previa gratuita"). No hay campo de orden: el módulo nuevo va al final (el BFF no manda `order`). La API
+  no tiene lectura de un módulo, así que la edición se prefilla con el detalle del curso (`404` "No encontramos el
+  módulo." si no está) y envía `title` y `preview`. El éxito es Post/Redirect/Get a la estructura con un aviso
+  ("Módulo creado.", "Módulo actualizado.").
+- **Subir y bajar** (`POST .../modulos/{moduleId}/subir` y `/bajar`, formularios sin JavaScript; el primero no tiene
+  "Subir" y el último no tiene "Bajar"): el controller lee el detalle, intercambia el módulo con su vecino y manda a
+  `ReorderVirtualModulesUseCase` la lista completa de ids. En el borde, o si el módulo ya no existe, no llama a la API y
+  avisa. Si otra pestaña cambió el conjunto de módulos, la API responde `MODULE_REORDER_MISMATCH` y el aviso es "La
+  estructura del curso cambió. Revisá el orden e intentá de nuevo."; un intercambio de dos módulos reordenados entre la
+  lectura y la escritura no se detecta.
+- **Errores, por `code`** (nunca el `detail`): `COURSE_NOT_OWNED` → `403`, `COURSE_NOT_FOUND` y `MODULE_NOT_FOUND` →
+  `404`, `INVALID_REQUEST` en el formulario → "Revisá los datos ingresados." (400); el resto y las caídas, `503` con
+  "No pudimos guardar el módulo.", "No pudimos mover el módulo." o "No pudimos cargar el curso...".
 
 ## Accesibilidad base
 

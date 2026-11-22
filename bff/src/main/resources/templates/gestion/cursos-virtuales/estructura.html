@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/management :: page('Estructura del curso', 'cursos-virtuales', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<p class="mb-4"><a th:href="@{/gestion/cursos-virtuales}">Volver a los cursos virtuales</a></p>
+
+<h1 class="mb-2" th:text="${course.title()}">Tango base</h1>
+<p class="mb-2">Estado: <span class="badge badge-neutral" th:text="${statusLabel}">Borrador</span></p>
+<p class="mb-6">
+    <span th:text="${course.stats().moduleCount()}">2</span> módulos ·
+    <span th:text="${course.stats().lessonCount()}">5</span> lecciones ·
+    Duración total: <span th:text="${course.stats().totalDuration()}">1h 30m</span>
+</p>
+
+<div th:if="${structureAlert}" class="mb-4">
+    <div th:replace="~{fragments/components :: alert(${structureAlertKind}, ${structureAlert})}"></div>
+</div>
+<div th:if="${modules.isEmpty()}" class="mb-4">
+    <div th:replace="~{fragments/components :: alert('info', 'Este curso todavía no tiene módulos.')}"></div>
+</div>
+
+<h2 class="mb-4">Módulos</h2>
+
+<ol th:unless="${modules.isEmpty()}" class="mb-6 list-none space-y-4 p-0">
+    <li class="card" th:each="module, position : ${modules}">
+        <div class="flex flex-wrap items-center gap-2">
+            <h3 th:text="${module.title()}">Pasos básicos</h3>
+            <span class="badge badge-neutral" th:if="${module.preview()}">Vista previa</span>
+        </div>
+
+        <p class="mt-3" th:if="${module.lessons().isEmpty()}">Este módulo todavía no tiene lecciones.</p>
+        <ul class="mt-3 list-disc pl-6" th:unless="${module.lessons().isEmpty()}">
+            <li th:each="lesson : ${module.lessons()}">
+                <span class="font-medium" th:text="${lesson.title()}">Primer paso</span>:
+                <span th:text="|${lesson.durationMinutes()} min|">10 min</span> ·
+                <span th:text="${lesson.free()} ? 'Gratuita' : 'Con suscripción'">Gratuita</span> ·
+                <span th:text="${lesson.videoId() != null} ? 'Con video' : 'Sin video'">Con video</span>
+            </li>
+        </ul>
+
+        <div class="mt-4 flex flex-wrap items-center gap-4">
+            <a th:href="@{/gestion/cursos-virtuales/{id}/modulos/{module}/editar(id=${course.courseId()},module=${module.moduleId()})}">Editar módulo<span class="sr-only" th:text="| ${module.title()}|"> Pasos básicos</span></a>
+            <form th:unless="${position.first}" method="post"
+                  th:action="@{/gestion/cursos-virtuales/{id}/modulos/{module}/subir(id=${course.courseId()},module=${module.moduleId()})}">
+                <button type="submit" class="btn btn-secondary">Subir<span class="sr-only" th:text="| el módulo ${module.title()}|"> el módulo Pasos básicos</span></button>
+            </form>
+            <form th:unless="${position.last}" method="post"
+                  th:action="@{/gestion/cursos-virtuales/{id}/modulos/{module}/bajar(id=${course.courseId()},module=${module.moduleId()})}">
+                <button type="submit" class="btn btn-secondary">Bajar<span class="sr-only" th:text="| el módulo ${module.title()}|"> el módulo Pasos básicos</span></button>
+            </form>
+        </div>
+    </li>
+</ol>
+
+<p><a class="btn btn-primary" th:href="@{/gestion/cursos-virtuales/{id}/modulos/nuevo(id=${course.courseId()})}">Agregar módulo</a></p>
+</th:block>
+</body>
+</html>

@@ -208,6 +208,12 @@ tecnología asistiva), **Media**, **Baja**.
   `aria-describedby`; `optionalSelectField` deja el `<select>` sin `required` para que "Yo (administrador)" sea una
   opción válida. En la lista, cada "Editar" lleva el título del curso en un texto `sr-only`. Cubierto por
   `ManagementVirtualCourseFormIntegrationTest`; sin probar con lector de pantalla ni en navegador.
+- **Estructura y módulos de cursos virtuales** (`/gestion/cursos-virtuales/{id}/estructura` y `/modulos/**`, #367):
+  encabezados `h1` (curso) > `h2` (Módulos) > `h3` (cada módulo), módulos en `<ol>` y lecciones en `<ul>`; el estado
+  y la gratuidad van como texto, no solo color. Los enlaces y botones "Editar módulo", "Subir" y "Bajar" llevan el título
+  del módulo en un texto `sr-only`; "Subir" y "Bajar" son botones de formulario (sin JavaScript) y no se renderizan
+  deshabilitados en el borde. El formulario del módulo usa `errorSummary`, `field` y `checkboxField`. Cubierto por
+  `ManagementVirtualModuleIntegrationTest`; **no cubierto** por axe ni probado con lector de pantalla ni en navegador.
 - **Imágenes/SVG**: hay fotos (`<img>` con `alt`, tamaño y `srcset`), un logo
   decorativo (`alt=""` junto al nombre visible), íconos SVG con `aria-hidden="true"`
   y un `<video>` decorativo (ver hallazgos 19 y 22).

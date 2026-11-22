@@ -43,8 +43,10 @@
                 <span class="badge badge-neutral" th:text="${row.statusLabel()}">Borrador</span>
             </td>
             <td class="p-3" th:text="${row.premium()} ? 'Premium' : 'Gratuito'">Gratuito</td>
-            <td class="p-3">
+            <td class="p-3 whitespace-nowrap">
                 <a th:href="@{/gestion/cursos-virtuales/{id}/editar(id=${row.courseId()})}">Editar<span class="sr-only" th:text="| el curso ${row.title()}|"> el curso Tango base</span></a>
+                ·
+                <a th:href="@{/gestion/cursos-virtuales/{id}/estructura(id=${row.courseId()})}">Estructura<span class="sr-only" th:text="| del curso ${row.title()}|"> del curso Tango base</span></a>
             </td>
         </tr>
         </tbody>

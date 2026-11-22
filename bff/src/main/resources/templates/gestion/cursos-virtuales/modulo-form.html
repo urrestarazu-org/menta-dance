@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/management :: page(${editing} ? 'Editar módulo' : 'Nuevo módulo', 'cursos-virtuales', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<div class="max-w-xl">
+    <h1 class="mb-6" th:text="${editing} ? 'Editar módulo' : 'Nuevo módulo'">Nuevo módulo</h1>
+
+    <div th:if="${formError}" class="mb-4">
+        <div th:replace="~{fragments/components :: alert('error', ${formError})}"></div>
+    </div>
+
+    <form th:action="${editing} ? @{/gestion/cursos-virtuales/{id}/modulos/{module}/editar(id=${courseId},module=${moduleId})} : @{/gestion/cursos-virtuales/{id}/modulos(id=${courseId})}"
+          th:object="${form}" method="post" novalidate class="card space-y-4">
+        <div th:replace="~{fragments/components :: errorSummary(${ {'title':'title'} })}"></div>
+
+        <div th:replace="~{fragments/components :: field('title', 'Título', 'text', 'title', 'off', *{title}, null, ${!#fields.hasErrors('*')}, ${#fields.errors('title')})}"></div>
+        <div th:replace="~{fragments/components :: checkboxField('preview', 'Vista previa gratuita: las lecciones de este módulo se pueden ver sin suscripción', 'preview', *{preview}, null, null)}"></div>
+
+        <div class="flex items-center gap-4">
+            <button type="submit" class="btn btn-primary" th:text="${editing} ? 'Guardar cambios' : 'Crear módulo'">Crear módulo</button>
+            <a th:href="@{/gestion/cursos-virtuales/{id}/estructura(id=${courseId})}">Cancelar</a>
+        </div>
+    </form>
+</div>
+</th:block>
+</body>
+</html>
