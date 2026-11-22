@@ -3,7 +3,9 @@ package com.menta.auth.domain.model;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EmptySource;
@@ -116,28 +118,94 @@ class UserProfileTest {
     }
 
     @Test
-    void rejects_a_birth_date_of_today() {
-        LocalDate today = LocalDate.now();
+    void the_canonical_constructor_does_not_compare_the_birth_date_with_the_current_day() {
+        // It also hydrates persisted data, which must never be re-checked against today's date.
+        LocalDate farFuture = LocalDate.of(2999, 12, 31);
 
-        assertThatThrownBy(() -> new UserProfile("Ada", "Lovelace", PHONE, today))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("Birth date");
+        assertThat(new UserProfile("Ada", "Lovelace", PHONE, farFuture).birthDate()).isEqualTo(farFuture);
     }
 
-    @Test
-    void rejects_a_future_birth_date() {
-        LocalDate future = LocalDate.now().plusDays(1);
+    @Nested
+    class Of {
 
-        assertThatThrownBy(() -> new UserProfile("Ada", "Lovelace", PHONE, future))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("Birth date");
-    }
+        private static final Instant NOW = Instant.parse("2030-06-15T12:00:00Z");
 
-    @Test
-    void accepts_yesterday_as_birth_date() {
-        LocalDate yesterday = LocalDate.now().minusDays(1);
+        @Test
+        void keeps_the_given_values_and_trims_the_names() {
+            LocalDate birthDate = LocalDate.of(1990, 5, 17);
 
-        assertThat(new UserProfile("Ada", "Lovelace", PHONE, yesterday).birthDate()).isEqualTo(yesterday);
+            UserProfile profile = UserProfile.of("  Ada ", "\tLovelace  ", PHONE, birthDate, NOW);
+
+            assertThat(profile).isEqualTo(new UserProfile("Ada", "Lovelace", PHONE, birthDate));
+        }
+
+        @Test
+        void accepts_a_missing_birth_date() {
+            assertThat(UserProfile.of("Ada", "Lovelace", PHONE, null, NOW).birthDate()).isNull();
+        }
+
+        @Test
+        void rejects_a_birth_date_of_today_in_utc() {
+            LocalDate today = LocalDate.of(2030, 6, 15);
+
+            assertThatThrownBy(() -> UserProfile.of("Ada", "Lovelace", PHONE, today, NOW))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Birth date must be in the past");
+        }
+
+        @Test
+        void rejects_a_future_birth_date() {
+            LocalDate tomorrow = LocalDate.of(2030, 6, 16);
+
+            assertThatThrownBy(() -> UserProfile.of("Ada", "Lovelace", PHONE, tomorrow, NOW))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Birth date must be in the past");
+        }
+
+        @Test
+        void accepts_yesterday_as_birth_date() {
+            LocalDate yesterday = LocalDate.of(2030, 6, 14);
+
+            assertThat(UserProfile.of("Ada", "Lovelace", PHONE, yesterday, NOW).birthDate())
+                .isEqualTo(yesterday);
+        }
+
+        @Test
+        void early_in_the_utc_day_a_zone_behind_utc_still_sees_the_previous_day_but_utc_decides() {
+            // 2030-01-01T00:30Z is still 2029-12-31 in Buenos Aires (UTC-3). A check against a JVM-zone
+            // "today" there would reject 2029-12-31; the UTC day (2030-01-01) accepts it.
+            Instant earlyUtc = Instant.parse("2030-01-01T00:30:00Z");
+
+            assertThatThrownBy(() ->
+                UserProfile.of("Ada", "Lovelace", PHONE, LocalDate.of(2030, 1, 1), earlyUtc))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Birth date must be in the past");
+            assertThat(UserProfile.of("Ada", "Lovelace", PHONE, LocalDate.of(2029, 12, 31), earlyUtc).birthDate())
+                .isEqualTo(LocalDate.of(2029, 12, 31));
+        }
+
+        @Test
+        void late_in_the_utc_day_a_zone_ahead_of_utc_sees_the_next_day_but_utc_decides() {
+            // 2029-12-31T23:30Z is already 2030-01-01 in Tokyo (UTC+9): UTC still says it is 2029-12-31.
+            Instant lateUtc = Instant.parse("2029-12-31T23:30:00Z");
+
+            assertThatThrownBy(() ->
+                UserProfile.of("Ada", "Lovelace", PHONE, LocalDate.of(2029, 12, 31), lateUtc))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Birth date must be in the past");
+            assertThat(UserProfile.of("Ada", "Lovelace", PHONE, LocalDate.of(2029, 12, 30), lateUtc).birthDate())
+                .isEqualTo(LocalDate.of(2029, 12, 30));
+        }
+
+        @Test
+        void keeps_the_name_and_phone_validation_of_the_canonical_constructor() {
+            assertThatThrownBy(() -> UserProfile.of(" ", "Lovelace", PHONE, null, NOW))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("First name");
+            assertThatThrownBy(() -> UserProfile.of("Ada", "Lovelace", "5491100000000", null, NOW))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Phone");
+        }
     }
 
     @Test

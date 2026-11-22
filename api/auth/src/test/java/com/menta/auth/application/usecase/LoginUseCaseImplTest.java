@@ -15,6 +15,7 @@ import com.menta.auth.application.dto.LoginCommand;
 import com.menta.auth.application.dto.TokenPair;
 import com.menta.auth.application.port.out.AccessTokenIssuer;
 import com.menta.auth.application.port.out.AuthDegradedGuard;
+import com.menta.auth.application.port.out.Clock;
 import com.menta.auth.application.port.out.IssuedAccessToken;
 import com.menta.auth.application.port.out.LoginAttemptAuditPort;
 import com.menta.auth.application.port.out.LoginAttemptOutcome;
@@ -47,6 +48,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -78,6 +80,7 @@ class LoginUseCaseImplTest {
     private static final String REFRESH_HASH = "fresh-raw-token-hash-".repeat(4).substring(0, 64);
     private static final String CLIENT_FP = "c".repeat(64);
     private static final String EMAIL_FP = Sha256Hex.hash(EMAIL.getValue());
+    private static final Instant FIXED_NOW = Instant.parse("2030-03-15T12:00:00Z");
 
     @Mock private UserRepository userRepository;
     @Mock private PasswordEncoderPort passwordEncoder;
@@ -87,6 +90,7 @@ class LoginUseCaseImplTest {
     @Mock private AuthDegradedGuard authDegradedGuard;
     @Mock private LoginRateLimitPort loginRateLimitPort;
     @Mock private LoginAttemptAuditPort loginAttemptAuditPort;
+    @Mock private Clock clock;
 
     private LoginUseCaseImpl useCase;
 
@@ -95,6 +99,7 @@ class LoginUseCaseImplTest {
         // Default: healthy reconciler. Per-test overrides when needed.
         lenient().when(authDegradedGuard.isDegraded()).thenReturn(false);
         lenient().when(accessTokenIssuer.ttl()).thenReturn(ACCESS_TTL);
+        lenient().when(clock.now()).thenReturn(FIXED_NOW);
         // Default: failure budget still open. Per-test overrides when needed.
         lenient().when(loginRateLimitPort.check(anyString(), anyString()))
             .thenReturn(RateLimitDecision.allowed());
@@ -107,7 +112,8 @@ class LoginUseCaseImplTest {
             refreshTokenRepository,
             authDegradedGuard,
             loginRateLimitPort,
-            loginAttemptAuditPort
+            loginAttemptAuditPort,
+            clock
         );
     }
 
@@ -136,7 +142,14 @@ class LoginUseCaseImplTest {
             assertThat(result.refreshToken()).isNotEmpty();
 
             // Refresh persisted in ACTIVE state with token_version matching user.
-            verify(refreshTokenRepository).save(any(RefreshToken.class));
+            ArgumentCaptor<RefreshToken> saved = ArgumentCaptor.forClass(RefreshToken.class);
+            verify(refreshTokenRepository).save(saved.capture());
+            RefreshToken refresh = saved.getValue();
+            assertThat(refresh.getStatus()).isEqualTo(com.menta.auth.domain.model.RefreshTokenStatus.ACTIVE);
+            assertThat(refresh.getCreatedAt()).isEqualTo(FIXED_NOW);
+            assertThat(refresh.getExpiresAt()).isEqualTo(FIXED_NOW.plus(REFRESH_TTL));
+            assertThat(refresh.getTokenVersion()).isEqualTo(user.getTokenVersion());
+            verify(clock, times(1)).now();
             // #672: no auth.AuthUserLoggedIn outbox row any more — LoginUseCaseImpl does not
             // even receive an OutboxAppender. Integration coverage lives in
             // TransactionalAuthIntegrationTest.

@@ -15,7 +15,7 @@ class RefreshTokenTest {
     private static final String TOKEN_HASH = "a".repeat(64);
 
     private static RefreshToken active() {
-        return RefreshToken.newFamily(USER_ID, TOKEN_HASH, 1L, NOW.plus(Duration.ofDays(7)));
+        return RefreshToken.newFamily(USER_ID, TOKEN_HASH, 1L, NOW.plus(Duration.ofDays(7)), NOW);
     }
 
     private static RefreshToken reconstitute(
@@ -71,44 +71,74 @@ class RefreshTokenTest {
     }
 
     @Test
-    void mark_used_transitions_active_to_used_and_stamps_rotated_at() {
+    void new_family_stamps_created_at_from_the_given_instant() {
         RefreshToken token = active();
 
-        token.markUsed();
+        assertThat(token.getCreatedAt()).isEqualTo(NOW);
+        assertThat(token.getExpiresAt()).isEqualTo(NOW.plus(Duration.ofDays(7)));
+        assertThat(token.getStatus()).isEqualTo(RefreshTokenStatus.ACTIVE);
+        assertThat(token.getRotatedAt()).isNull();
+        assertThat(token.getRevokedAt()).isNull();
+    }
+
+    @Test
+    void rotate_mints_an_active_token_in_the_same_family_stamped_with_the_given_instant() {
+        UUID familyId = UUID.randomUUID();
+        Instant expiresAt = NOW.plus(Duration.ofDays(7));
+
+        RefreshToken token = RefreshToken.rotate(USER_ID, familyId, TOKEN_HASH, 2L, expiresAt, NOW);
+
+        assertThat(token.getFamilyId()).isEqualTo(familyId);
+        assertThat(token.getStatus()).isEqualTo(RefreshTokenStatus.ACTIVE);
+        assertThat(token.getTokenVersion()).isEqualTo(2L);
+        assertThat(token.getCreatedAt()).isEqualTo(NOW);
+        assertThat(token.getExpiresAt()).isEqualTo(expiresAt);
+        assertThat(token.getRotatedAt()).isNull();
+        assertThat(token.getRevokedAt()).isNull();
+    }
+
+    @Test
+    void mark_used_transitions_active_to_used_and_stamps_rotated_at_with_the_given_instant() {
+        RefreshToken token = active();
+        Instant usedAt = NOW.plusSeconds(90);
+
+        token.markUsed(usedAt);
 
         assertThat(token.getStatus()).isEqualTo(RefreshTokenStatus.USED);
-        assertThat(token.getRotatedAt()).isNotNull();
+        assertThat(token.getRotatedAt()).isEqualTo(usedAt);
         assertThat(token.isCompromised()).isTrue();
     }
 
     @Test
     void mark_used_rejects_a_token_that_is_not_active() {
         RefreshToken token = active();
-        token.markUsed();
+        token.markUsed(NOW);
 
-        assertThatThrownBy(token::markUsed)
+        assertThatThrownBy(() -> token.markUsed(NOW.plusSeconds(1)))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("ACTIVE");
+        assertThat(token.getRotatedAt()).isEqualTo(NOW);
     }
 
     @Test
-    void mark_revoked_transitions_to_revoked_and_stamps_revoked_at() {
+    void mark_revoked_transitions_to_revoked_and_stamps_revoked_at_with_the_given_instant() {
         RefreshToken token = active();
+        Instant revokedAt = NOW.plusSeconds(120);
 
-        token.markRevoked();
+        token.markRevoked(revokedAt);
 
         assertThat(token.isRevoked()).isTrue();
-        assertThat(token.getRevokedAt()).isNotNull();
+        assertThat(token.getRevokedAt()).isEqualTo(revokedAt);
         assertThat(token.isCompromised()).isTrue();
     }
 
     @Test
-    void mark_revoked_is_idempotent() {
+    void mark_revoked_is_idempotent_and_keeps_the_original_revoked_at() {
         RefreshToken token = active();
-        token.markRevoked();
-        Instant firstRevokedAt = token.getRevokedAt();
+        Instant firstRevokedAt = NOW.plusSeconds(120);
+        token.markRevoked(firstRevokedAt);
 
-        token.markRevoked();
+        token.markRevoked(NOW.plusSeconds(600));
 
         assertThat(token.getRevokedAt()).isEqualTo(firstRevokedAt);
     }
@@ -116,9 +146,12 @@ class RefreshTokenTest {
     @Test
     void is_expired_reflects_the_expiry_instant() {
         RefreshToken token = active();
+        Instant expiresAt = token.getExpiresAt();
 
         assertThat(token.isExpired(NOW)).isFalse();
-        assertThat(token.isExpired(NOW.plus(Duration.ofDays(8)))).isTrue();
+        assertThat(token.isExpired(expiresAt.minusMillis(1))).isFalse();
+        assertThat(token.isExpired(expiresAt)).isTrue();
+        assertThat(token.isExpired(expiresAt.plusMillis(1))).isTrue();
     }
 
     @Test

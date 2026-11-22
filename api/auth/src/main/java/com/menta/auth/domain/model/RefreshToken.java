@@ -69,14 +69,17 @@ public class RefreshToken {
     /**
      * Factory: brand new refresh in a NEW family. Invariant: status=ACTIVE,
      * rotatedAt=null, revokedAt=null. Used on initial login.
+     *
+     * @param now the instant stamped as {@code createdAt}; the domain has no clock, callers take it from the
+     *     application {@code Clock} port
      */
     public static RefreshToken newFamily(
         UserId userId,
         String tokenHash,
         long tokenVersion,
-        Instant expiresAt
+        Instant expiresAt,
+        Instant now
     ) {
-        Instant now = Instant.now();
         return new RefreshToken(
             UUID.randomUUID(),
             UUID.randomUUID(),
@@ -95,15 +98,17 @@ public class RefreshToken {
      * Factory: rotate within an existing family. Invariant: status=ACTIVE,
      * rotatedAt=null, revokedAt=null. Used by RefreshTokenUseCase on
      * successful rotation.
+     *
+     * @param now the instant stamped as {@code createdAt}, taken from the application {@code Clock} port
      */
     public static RefreshToken rotate(
         UserId userId,
         UUID familyId,
         String tokenHash,
         long tokenVersion,
-        Instant expiresAt
+        Instant expiresAt,
+        Instant now
     ) {
-        Instant now = Instant.now();
         return new RefreshToken(
             UUID.randomUUID(),
             familyId,
@@ -149,27 +154,31 @@ public class RefreshToken {
      * Behavior: ACTIVE -> USED. Idempotent guard: only succeeds from ACTIVE.
      * After this call the token is compromised-tokens-present; any future
      * presentation triggers family revocation.
+     *
+     * @param now the instant stamped as {@code rotatedAt}, taken from the application {@code Clock} port
      */
-    public void markUsed() {
+    public void markUsed(Instant now) {
         if (this.status != RefreshTokenStatus.ACTIVE) {
             throw new IllegalStateException(
                 "RefreshToken can only be marked USED from ACTIVE; current=" + this.status
             );
         }
         this.status = RefreshTokenStatus.USED;
-        this.rotatedAt = Instant.now();
+        this.rotatedAt = now;
     }
 
     /**
      * Behavior: mark REVOKED. Idempotent — calling repeatedly is safe and
      * preserves the original revokedAt timestamp.
+     *
+     * @param now the instant stamped as {@code revokedAt} on the first revocation; ignored when already revoked
      */
-    public void markRevoked() {
+    public void markRevoked(Instant now) {
         if (this.status == RefreshTokenStatus.REVOKED) {
             return;
         }
         this.status = RefreshTokenStatus.REVOKED;
-        this.revokedAt = Instant.now();
+        this.revokedAt = now;
     }
 
     public boolean isRevoked() {

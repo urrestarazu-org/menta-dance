@@ -2,7 +2,7 @@
 
 **Estado:** Aceptado
 **Fecha:** 2026-11-12
-**Actualizado:** 2026-11-21 (#795): `auth` guarda y expone `createdAt`/`updatedAt` de los usuarios como `Instant` (ISO-8601 con `Z`) y el "ahora" de `User` y `DemoUserFixture` sale del puerto `Clock`. Antes, 2026-11-20 (#794): `physical` toma el "ahora" siempre del puerto `Clock`. Antes, 2026-11-13 (#729): decisión sobre la recurrencia de los cursos y lecturas de `physical` en UTC
+**Actualizado:** 2026-11-22 (#806): en `auth`, `UserProfile`, los refresh tokens y el JWT toman el "ahora" del puerto `Clock`. Antes, 2026-11-21 (#795): `auth` guarda y expone `createdAt`/`updatedAt` de los usuarios como `Instant` (ISO-8601 con `Z`) y el "ahora" de `User` y `DemoUserFixture` sale del puerto `Clock`. Antes, 2026-11-20 (#794): `physical` toma el "ahora" siempre del puerto `Clock`. Antes, 2026-11-13 (#729): decisión sobre la recurrencia de los cursos y lecturas de `physical` en UTC
 **Decisores:** Dueño del proyecto / Arquitectura
 
 ## Contexto y Problema
@@ -187,14 +187,14 @@ corrige de forma gradual y cada punto necesita su propio cambio:
 * Las sesiones ya creadas con la convención anterior (hora local guardada como UTC) y las bases
   demo sembradas antes de #729 conservan sus horarios viejos: el sembrado de la demo no migra
   filas existentes, hay que recrear la base demo. La aplicación todavía no está en producción.
-* `UserProfile` valida la fecha de nacimiento con `LocalDate.now()`. Es lo único de `auth` que usa
-  `LocalDate.now()` o `LocalDateTime.now()` (la regla 5 pide usar el día UTC del `Clock`); se
-  resuelve en un cambio aparte.
-* En `auth`, el "ahora" de los refresh tokens y del JWT todavía sale de `Instant.now()` y no del
-  `Clock` (`LoginUseCaseImpl`, `RefreshTokenUseCaseImpl`, `RefreshToken`, `JwtService`,
-  `RefreshTokenRepositoryAdapter`, `RandomUlidGenerator`, `SystemOutboxClock`). No depende de la
-  zona de la JVM, pero impide fijar la hora en los tests; se resuelve en un cambio aparte.
-* El módulo `billing` no se auditó para este ADR.
+* Siguen usando `Instant.now()` en `main`, fuera del puerto `Clock` de su módulo, y se corrigen
+  módulo por módulo en cambios aparte: `billing` (`PaymentAuditRepositoryAdapter`,
+  `MercadoPagoPaymentPreferenceAdapter`, `PaymentAdminController`, `PaymentProofController`,
+  `WebhookInboxReconciler`, `WebhookVerificationWorker`, `LocalWebhookPreparationService` y
+  `E2eMercadoPagoBillingFixture`), `virtual` (`LessonProgressRepositoryAdapter`,
+  `VirtualCourseRepositoryAdapter`, `VirtualCourseAuditRepositoryAdapter`, `DemoVirtualCatalogFixture` y
+  `E2eBunnyNetVirtualFixture`) y `app` (`OutboxBlacklistReconciler` y `OutboxReconciliationWorker`, que
+  concilian el outbox de `auth`). El módulo `billing` no se auditó más allá de esa búsqueda de texto.
 
 En `physical`, el "ahora" de `main` sale siempre del puerto `Clock` (#794): ya no queda ningún
 `Instant.now()` en `api/physical/src/main`. Los casos de uso `ListManagedPhysicalSessionsUseCaseImpl`
@@ -215,10 +215,23 @@ desde la zona de la JVM (se comprobó el binder con una JVM en Buenos Aires: el 
 `Timestamp` con calendario UTC), así que las filas existentes ya están en UTC y el `Instant` las lee
 igual. Lo que dependía de la zona de la JVM era el valor que el dominio estampaba, no lo guardado.
 
-La regla **todavía no se verifica de forma automática**. Una regla de ArchUnit que prohíba
-`ZoneId`, `LocalDateTime.now()` y `LocalDate.now()` en `main` es el paso siguiente, pero solo
-puede activarse cuando la deuda anterior esté saldada (hoy queda `UserProfile`), para no dejar CI en
-rojo.
+En `auth`, el "ahora" de `main` sale siempre del puerto `Clock` (#806), salvo el borde del sistema que se
+deja a propósito: `SystemClock` (la implementación del puerto), `SystemOutboxClock` (el reloj del outbox
+de `auth`) y `RandomUlidGenerator` (la marca de tiempo del ULID es parte del generador de ids, en el límite
+del sistema). Los dos últimos ya son un reloj y un generador inyectables; no hace falta moverlos detrás de
+`Clock`. El dominio recibe el `Instant now` por parámetro (`RefreshToken.newFamily`, `rotate`, `markUsed`,
+`markRevoked`) y los casos de uso, `JwtService` y `RefreshTokenRepositoryAdapter` toman el `Clock` por
+constructor; `JwtService` también usa el `Clock` para decidir si un token venció al leerlo. `UserProfile`
+no puede conocer el día de hoy: su constructor canónico (que también hidrata datos guardados y arma el
+fixture de la demo) ya no compara la fecha de nacimiento, y la fábrica `UserProfile.of(..., now)` exige que
+sea anterior al día UTC de `now`, como pide la regla 5. Los tests fijan la hora y cubren la expiración, la
+rotación y la revocación del refresh token.
+
+La regla **todavía no se verifica de forma automática**. Una regla de ArchUnit que prohíba `ZoneId`,
+`LocalDateTime.now()`, `LocalDate.now()` e `Instant.now()` fuera de las clases de borde del sistema es el
+paso siguiente, pero solo puede activarse cuando la deuda anterior esté saldada (hoy quedan `billing`,
+`virtual` y `app`, listados arriba), para no dejar CI en rojo. `auth` ya cumple y podría llevar su propia
+regla antes, con las tres clases de borde como excepción explícita.
 
 ### Implicaciones de Costos
 

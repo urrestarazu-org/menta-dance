@@ -62,8 +62,9 @@ public class RegisterUserUseCaseImpl implements RegisterUserUseCase {
         requirePhone(command.phone());
         Role role = publicRole(command.role());
         Email email = Email.of(command.email());
-        UserProfile profile = new UserProfile(
-            command.firstName(), command.lastName(), command.phone(), command.birthDate()
+        Instant now = clock.now();
+        UserProfile profile = UserProfile.of(
+            command.firstName(), command.lastName(), command.phone(), command.birthDate(), now
         );
         Password password = Password.of(command.password());
 
@@ -79,7 +80,6 @@ public class RegisterUserUseCaseImpl implements RegisterUserUseCase {
         }
 
         String passwordHash = passwordEncoder.encode(password.value());
-        Instant now = clock.now();
         User user = User.register(email, passwordHash, role, profile, now);
         User savedUser = userRepository.save(user);
 
