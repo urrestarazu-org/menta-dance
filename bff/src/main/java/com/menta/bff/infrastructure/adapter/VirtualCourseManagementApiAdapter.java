@@ -2,7 +2,11 @@ package com.menta.bff.infrastructure.adapter;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.menta.bff.application.dto.CreateVirtualCourseCommand;
+import com.menta.bff.application.dto.CreateVirtualLessonCommand;
+import com.menta.bff.application.dto.CreateVirtualModuleCommand;
 import com.menta.bff.application.dto.ManagedVirtualCourse;
+import com.menta.bff.application.dto.ManagedVirtualLesson;
+import com.menta.bff.application.dto.ManagedVirtualModule;
 import com.menta.bff.application.dto.VirtualCourseChanges;
 import com.menta.bff.application.dto.VirtualCourseDetail;
 import com.menta.bff.application.dto.VirtualCourseDetail.VirtualCourseStats;
@@ -10,6 +14,8 @@ import com.menta.bff.application.dto.VirtualCourseDetail.VirtualLessonDetail;
 import com.menta.bff.application.dto.VirtualCourseDetail.VirtualModuleDetail;
 import com.menta.bff.application.dto.VirtualCourseLevel;
 import com.menta.bff.application.dto.VirtualCourseStatus;
+import com.menta.bff.application.dto.VirtualLessonChanges;
+import com.menta.bff.application.dto.VirtualModuleChanges;
 import com.menta.bff.application.port.out.VirtualCourseManagementApiClient;
 import com.menta.bff.infrastructure.config.VirtualApiProperties;
 import java.util.List;
@@ -24,7 +30,8 @@ import reactor.core.publisher.Mono;
 
 /**
  * WebClient adapter for the management of virtual courses (#367): the calls of the Virtual API under
- * {@code /api/v1/admin/virtual/courses}, as {@code virtual-v1.yaml} describes them.
+ * {@code /api/v1/admin/virtual/courses}, and the modules and lessons of a course under {@code /modules} and
+ * {@code /lessons}, as {@code virtual-v1.yaml} describes them.
  *
  * <p>The token only ever travels in the {@code Authorization} header; it, identifiers, titles and response bodies
  * never reach a log or an exception message. A refusal with one of the expected codes (400, 403, 404 or 409)
@@ -47,6 +54,11 @@ public class VirtualCourseManagementApiAdapter implements VirtualCourseManagemen
     private static final String COURSE_ENDPOINT = COURSES_ENDPOINT + "/{courseId}";
     private static final String PUBLISH_ENDPOINT = COURSE_ENDPOINT + "/publish";
     private static final String UNPUBLISH_ENDPOINT = COURSE_ENDPOINT + "/unpublish";
+    private static final String MODULES_ENDPOINT = COURSE_ENDPOINT + "/modules";
+    private static final String REORDER_ENDPOINT = MODULES_ENDPOINT + "/reorder";
+    private static final String MODULE_ENDPOINT = "/api/v1/admin/virtual/modules/{moduleId}";
+    private static final String LESSONS_ENDPOINT = MODULE_ENDPOINT + "/lessons";
+    private static final String LESSON_ENDPOINT = "/api/v1/admin/virtual/lessons/{lessonId}";
     private static final Set<Integer> REFUSAL_STATUSES = Set.of(400, 403, 404, 409);
     static final int MAX_PUBLISH_DETAIL = 300;
 
@@ -103,6 +115,47 @@ public class VirtualCourseManagementApiAdapter implements VirtualCourseManagemen
     @Override
     public void deleteCourse(String accessToken, String courseId) {
         call("delete course", webClient.delete().uri(COURSE_ENDPOINT, courseId), accessToken, 204, Void.class);
+    }
+
+    @Override
+    public ManagedVirtualModule createModule(String accessToken, String courseId, CreateVirtualModuleCommand command) {
+        ModuleWriteWire body = new ModuleWriteWire(command.title(), command.preview(), command.order());
+        return toManagedModule(call("create module", webClient.post().uri(MODULES_ENDPOINT, courseId).bodyValue(body),
+                accessToken, 201, ManagedModuleWire.class));
+    }
+
+    @Override
+    public ManagedVirtualModule updateModule(String accessToken, String moduleId, VirtualModuleChanges changes) {
+        ModuleWriteWire body = new ModuleWriteWire(changes.title(), changes.preview(), changes.order());
+        return toManagedModule(call("update module", webClient.put().uri(MODULE_ENDPOINT, moduleId).bodyValue(body),
+                accessToken, 200, ManagedModuleWire.class));
+    }
+
+    @Override
+    public List<ManagedVirtualModule> reorderModules(String accessToken, String courseId, List<String> moduleIds) {
+        ModulesWire wire = call("reorder modules",
+                webClient.put().uri(REORDER_ENDPOINT, courseId).bodyValue(new ReorderWire(moduleIds)), accessToken,
+                200, ModulesWire.class);
+        if (wire.modules() == null) {
+            throw unavailable("modules list is incomplete");
+        }
+        return wire.modules().stream().map(VirtualCourseManagementApiAdapter::toManagedModule).toList();
+    }
+
+    @Override
+    public ManagedVirtualLesson createLesson(String accessToken, String moduleId, CreateVirtualLessonCommand command) {
+        LessonWriteWire body = new LessonWriteWire(command.title(), command.description(), command.videoId(),
+                command.durationMinutes(), command.free(), command.order());
+        return toManagedLesson(call("create lesson", webClient.post().uri(LESSONS_ENDPOINT, moduleId).bodyValue(body),
+                accessToken, 201, ManagedLessonWire.class));
+    }
+
+    @Override
+    public ManagedVirtualLesson updateLesson(String accessToken, String lessonId, VirtualLessonChanges changes) {
+        LessonWriteWire body = new LessonWriteWire(changes.title(), changes.description(), changes.videoId(),
+                changes.durationMinutes(), changes.free(), changes.order());
+        return toManagedLesson(call("update lesson", webClient.put().uri(LESSON_ENDPOINT, lessonId).bodyValue(body),
+                accessToken, 200, ManagedLessonWire.class));
     }
 
     /**
@@ -222,6 +275,24 @@ public class VirtualCourseManagementApiAdapter implements VirtualCourseManagemen
                 item.isFree(), item.order(), item.videoId());
     }
 
+    private static ManagedVirtualModule toManagedModule(ManagedModuleWire item) {
+        if (item == null || item.moduleId() == null || item.courseId() == null || item.title() == null
+                || item.preview() == null || item.order() == null) {
+            throw unavailable("managed module is incomplete");
+        }
+        return new ManagedVirtualModule(item.moduleId(), item.courseId(), item.title(), item.preview(), item.order());
+    }
+
+    private static ManagedVirtualLesson toManagedLesson(ManagedLessonWire item) {
+        if (item.lessonId() == null || item.moduleId() == null || item.courseId() == null || item.title() == null
+                || item.description() == null || item.durationMinutes() == null || item.free() == null
+                || item.order() == null) {
+            throw unavailable("managed lesson is incomplete");
+        }
+        return new ManagedVirtualLesson(item.lessonId(), item.moduleId(), item.courseId(), item.title(),
+                item.description(), item.videoId(), item.durationMinutes(), item.free(), item.order());
+    }
+
     private static ServiceUnavailableException unavailable(String reason) {
         return new ServiceUnavailableException("Virtual API unavailable: " + reason);
     }
@@ -260,6 +331,35 @@ public class VirtualCourseManagementApiAdapter implements VirtualCourseManagemen
     private record CourseWriteWire(
             String title, String shortDescription, String description, String imageUrl, String category,
             String level, Boolean premium, String professorId) {
+    }
+
+    /** {@code VirtualModuleManagementResponse}. */
+    private record ManagedModuleWire(
+            String moduleId, String courseId, String title, Boolean preview, Integer order) {
+    }
+
+    /** Response of the reorder: the modules in their new order. */
+    private record ModulesWire(List<ManagedModuleWire> modules) {
+    }
+
+    /** {@code VirtualLessonManagementResponse}; {@code videoId} is nullable. */
+    private record ManagedLessonWire(
+            String lessonId, String moduleId, String courseId, String title, String description, String videoId,
+            Integer durationMinutes, Boolean free, Integer order) {
+    }
+
+    /** Create and update bodies of a module; fields that are {@code null} are not sent. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private record ModuleWriteWire(String title, Boolean preview, Integer order) {
+    }
+
+    /** Create and update bodies of a lesson; fields that are {@code null} are not sent. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private record LessonWriteWire(
+            String title, String description, String videoId, Integer durationMinutes, Boolean free, Integer order) {
+    }
+
+    private record ReorderWire(List<String> moduleIds) {
     }
 
     /** The only fields read from an error body. */

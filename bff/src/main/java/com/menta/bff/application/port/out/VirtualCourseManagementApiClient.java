@@ -1,14 +1,21 @@
 package com.menta.bff.application.port.out;
 
 import com.menta.bff.application.dto.CreateVirtualCourseCommand;
+import com.menta.bff.application.dto.CreateVirtualLessonCommand;
+import com.menta.bff.application.dto.CreateVirtualModuleCommand;
 import com.menta.bff.application.dto.ManagedVirtualCourse;
+import com.menta.bff.application.dto.ManagedVirtualLesson;
+import com.menta.bff.application.dto.ManagedVirtualModule;
 import com.menta.bff.application.dto.VirtualCourseChanges;
 import com.menta.bff.application.dto.VirtualCourseDetail;
+import com.menta.bff.application.dto.VirtualLessonChanges;
+import com.menta.bff.application.dto.VirtualModuleChanges;
 import java.util.List;
 
 /**
  * Port for the management of virtual courses (#367): the calls of the Virtual API under
- * {@code /api/v1/admin/virtual/courses}. The catalog the students read is {@link VirtualApiClient}'s.
+ * {@code /api/v1/admin/virtual/courses}, and the structure of a course: its modules and lessons, under
+ * {@code /modules} and {@code /lessons}. The catalog the students read is {@link VirtualApiClient}'s.
  *
  * <p>The access token only ever travels in the {@code Authorization} header: it is never logged nor put in an
  * exception message, and neither are identifiers, titles or any response body. Every method throws
@@ -41,6 +48,26 @@ public interface VirtualCourseManagementApiClient {
     /** Deletes a draft course. */
     void deleteCourse(String accessToken, String courseId);
 
+    /** Creates a module in a course; without an order it goes last. */
+    ManagedVirtualModule createModule(String accessToken, String courseId, CreateVirtualModuleCommand command);
+
+    /** Changes a module; the {@code null} fields of {@code changes} stay as they are. */
+    ManagedVirtualModule updateModule(String accessToken, String moduleId, VirtualModuleChanges changes);
+
+    /**
+     * Reorders the modules of a course: {@code moduleIds} must be exactly the current modules, in the new order,
+     * or the API refuses with {@code MODULE_REORDER_MISMATCH}.
+     *
+     * @return the modules in their new order
+     */
+    List<ManagedVirtualModule> reorderModules(String accessToken, String courseId, List<String> moduleIds);
+
+    /** Creates a lesson in a module; without an order it goes last. */
+    ManagedVirtualLesson createLesson(String accessToken, String moduleId, CreateVirtualLessonCommand command);
+
+    /** Changes a lesson; the {@code null} fields of {@code changes} stay as they are. */
+    ManagedVirtualLesson updateLesson(String accessToken, String lessonId, VirtualLessonChanges changes);
+
     /**
      * The API refused the request with a code the screens word: 400, 403, 404 or 409 with one of the
      * {@link Code}s. Its message is for logs only.
@@ -58,7 +85,11 @@ public interface VirtualCourseManagementApiClient {
             /** Only a draft course can be deleted. */
             COURSE_NOT_DRAFT,
             /** The course is not ready to publish; see {@link #getPublishDetail()}. */
-            COURSE_NOT_PUBLISHABLE
+            COURSE_NOT_PUBLISHABLE,
+            MODULE_NOT_FOUND,
+            LESSON_NOT_FOUND,
+            /** The ids to reorder are not exactly the modules of the course. */
+            MODULE_REORDER_MISMATCH
         }
 
         private final Code code;
