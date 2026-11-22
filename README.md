@@ -161,6 +161,9 @@ Esto levanta:
 - **API**: Spring Boot en puerto `8081`
 - **BFF**: Frontend web en puerto `8080`
 
+La API y el BFF corren desde copias de sus jars en `.dev-run/`, así que recompilar con Gradle no
+afecta a los servicios levantados. Después de cambiar código, ejecutá `./scripts/dev.sh restart`.
+
 Verificar estado:
 ```bash
 ./scripts/dev.sh status

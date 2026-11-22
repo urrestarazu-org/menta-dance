@@ -62,9 +62,10 @@ jobs:
           } >> .env
 
       - name: Warm up Gradle build
-        # Compiles API and BFF (and builds the Tailwind CSS) first, so the health
-        # timeouts of dev.sh only have to cover the Spring Boot startup.
-        run: ./gradlew --no-daemon :api:app:classes :bff:classes
+        # Builds the API and BFF boot jars (and the Tailwind CSS) first, so dev.sh's
+        # own bootJar step is up to date and its health timeout only has to cover
+        # the Spring Boot startup.
+        run: ./gradlew --no-daemon :api:app:bootJar :bff:bootJar
 
       - name: Start stack (infra + API + BFF, demo profile)
         env:
