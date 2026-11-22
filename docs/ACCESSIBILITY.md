@@ -190,6 +190,9 @@ tecnología asistiva), **Media**, **Baja**.
 - **Landmarks**: un único `<main>`; `header` y `footer` únicos, por lo que no
   requieren nombre; los `nav` (principal, principal móvil, pie de página e
   información legal) están todos nombrados.
+- **Enlace "Gestión"** (#828): solo ADMIN, INSTRUCTOR y RECEPTIONIST lo ven (menú de escritorio y móvil, pie de
+  página y botón del panel); su nombre accesible es el texto visible y comparte estilo, foco y contraste con
+  "Ir a mi panel". Cubierto por `StaffManagementLinkIntegrationTest`; sin probar con axe ni lector de pantalla.
 - **Regiones vivas**: `alert` usa `role="alert"` para errores y `role="status"`
   para el resto; cada mensaje aparece una sola vez. En `/login` el error de
   credenciales se muestra en una única región `role="alert"`.
