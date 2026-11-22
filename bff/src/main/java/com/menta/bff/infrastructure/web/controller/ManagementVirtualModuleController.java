@@ -72,7 +72,7 @@ public class ManagementVirtualModuleController {
     static final String MODULE_NOT_FOUND = "No encontramos el módulo.";
     static final String NOT_OWNED = "No podés gestionar este curso.";
 
-    private static final String COURSE = "/gestion/cursos-virtuales/{courseId}";
+    static final String COURSE = "/gestion/cursos-virtuales/{courseId}";
     private static final String STRUCTURE_VIEW = "gestion/cursos-virtuales/estructura";
     private static final String FORM_VIEW = "gestion/cursos-virtuales/modulo-form";
     private static final String PROBLEM_VIEW = "gestion/cursos-virtuales/problem";
@@ -235,11 +235,11 @@ public class ManagementVirtualModuleController {
 
     // ---- helpers ----
 
-    private static String accessToken(HttpServletRequest request) {
+    static String accessToken(HttpServletRequest request) {
         return (String) request.getAttribute(TokenRefreshFilter.ACCESS_TOKEN_ATTRIBUTE);
     }
 
-    private static List<VirtualModuleDetail> inOrder(VirtualCourseDetail course) {
+    static List<VirtualModuleDetail> inOrder(VirtualCourseDetail course) {
         return course.modules().stream().sorted(Comparator.comparingInt(VirtualModuleDetail::order)).toList();
     }
 
@@ -258,17 +258,17 @@ public class ManagementVirtualModuleController {
         };
     }
 
-    private static String done(String message, RedirectAttributes redirectAttributes) {
+    static String done(String message, RedirectAttributes redirectAttributes) {
         return done(message, "success", redirectAttributes);
     }
 
-    private static String done(String message, String kind, RedirectAttributes redirectAttributes) {
+    static String done(String message, String kind, RedirectAttributes redirectAttributes) {
         redirectAttributes.addFlashAttribute("structureAlert", message);
         redirectAttributes.addFlashAttribute("structureAlertKind", kind);
         return BACK_TO_STRUCTURE;
     }
 
-    private static String unavailable(ServiceUnavailableException e, Supplier<String> page) {
+    static String unavailable(ServiceUnavailableException e, Supplier<String> page) {
         log.warn("Virtual course unavailable, rendering the notice: {}", e.getMessage());
         return page.get();
     }
@@ -283,7 +283,7 @@ public class ManagementVirtualModuleController {
     }
 
     /** The refusals every screen words alike; any other code is not the user's to fix and goes to {@code otherwise}. */
-    private static String refused(Code code, Model model, HttpServletResponse response, Supplier<String> otherwise) {
+    static String refused(Code code, Model model, HttpServletResponse response, Supplier<String> otherwise) {
         return switch (code) {
             case COURSE_NOT_OWNED -> problem(model, response, HttpStatus.FORBIDDEN, "Sin permiso", NOT_OWNED);
             case COURSE_NOT_FOUND -> notFound(model, response, "Curso no encontrado", COURSE_NOT_FOUND);
@@ -292,11 +292,11 @@ public class ManagementVirtualModuleController {
         };
     }
 
-    private static String notFound(Model model, HttpServletResponse response, String title, String message) {
+    static String notFound(Model model, HttpServletResponse response, String title, String message) {
         return problem(model, response, HttpStatus.NOT_FOUND, title, message);
     }
 
-    private static String loadFailed(Model model, HttpServletResponse response) {
+    static String loadFailed(Model model, HttpServletResponse response) {
         return problem(model, response, HttpStatus.SERVICE_UNAVAILABLE, "Cursos virtuales", LOAD_FAILED);
     }
 
@@ -304,7 +304,7 @@ public class ManagementVirtualModuleController {
         return problem(model, response, HttpStatus.SERVICE_UNAVAILABLE, "Cursos virtuales", MOVE_FAILED);
     }
 
-    private static String problem(
+    static String problem(
             Model model, HttpServletResponse response, HttpStatus status, String title, String message) {
         response.setStatus(status.value());
         model.addAttribute("problemTitle", title);
@@ -312,7 +312,7 @@ public class ManagementVirtualModuleController {
         return PROBLEM_VIEW;
     }
 
-    private static String formError(String message, HttpStatus status, Model model, HttpServletResponse response) {
+    static String formError(String message, HttpStatus status, Model model, HttpServletResponse response) {
         model.addAttribute("formError", message);
         response.setStatus(status.value());
         return FORM_VIEW;
