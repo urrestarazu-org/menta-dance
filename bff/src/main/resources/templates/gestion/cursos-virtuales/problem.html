@@ -3,7 +3,7 @@
       th:replace="~{fragments/management :: page(${problemTitle}, 'cursos-virtuales', ~{::main-content})}">
 <body>
 <th:block th:fragment="main-content">
-<div class="max-w-xl">
+<div>
     <div th:replace="~{fragments/components :: notice(${problemTitle}, ${problemMessage})}"></div>
     <p class="mt-6"><a th:href="@{/gestion/cursos-virtuales}">Volver a los cursos virtuales</a></p>
 </div>

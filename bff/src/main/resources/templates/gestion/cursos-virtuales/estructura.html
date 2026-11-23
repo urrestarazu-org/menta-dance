@@ -2,71 +2,154 @@
 <html xmlns:th="http://www.thymeleaf.org"
       th:replace="~{fragments/management :: page('Estructura del curso', 'cursos-virtuales', ~{::main-content})}">
 <body>
+<!--
+  Structure of a virtual course (#367, restyled in #849): header card, module list on the left and the detail of
+  the selected module on the right (one column on small screens). The selected module comes from the server
+  (?modulo=, the first one by default): no JavaScript. Every action keeps its route, its CSRF token and its
+  accessible name (the sr-only texts).
+-->
 <th:block th:fragment="main-content">
-<p class="mb-4"><a th:href="@{/gestion/cursos-virtuales}">Volver a los cursos virtuales</a></p>
+<div class="mb-4">
+    <th:block th:replace="~{fragments/admin :: backLink(@{/gestion/cursos-virtuales}, 'Volver a los cursos virtuales')}"></th:block>
+</div>
 
-<h1 class="mb-2" th:text="${course.title()}">Tango base</h1>
-<p class="mb-2">Estado: <span class="badge badge-neutral" th:text="${statusLabel}">Borrador</span></p>
-<p class="mb-6">
-    <span th:text="${course.stats().moduleCount()}">2</span> módulos ·
-    <span th:text="${course.stats().lessonCount()}">5</span> lecciones ·
-    Duración total: <span th:text="${course.stats().totalDuration()}">1h 30m</span>
-</p>
+<div class="card mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
+     th:with="statusKind=${course.status().name() == 'PUBLISHED' ? 'success' : (course.status().name() == 'ARCHIVED' ? 'warning' : 'neutral')}">
+    <div class="min-w-0">
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <h1 class="break-words" th:text="${course.title()}">Tango base</h1>
+            <span class="sr-only">Estado: </span>
+            <th:block th:replace="~{fragments/admin :: dotBadge(${statusKind}, ${statusLabel})}"></th:block>
+        </div>
+        <ul class="m-0 mt-3 flex list-none flex-wrap gap-x-5 gap-y-2 p-0 text-muted">
+            <li class="flex items-center gap-2">
+                <th:block th:replace="~{fragments/icons :: icon('modules', 'h-5 w-5')}"></th:block>
+                <span><span th:text="${course.stats().moduleCount()}">2</span> módulos</span>
+            </li>
+            <li class="flex items-center gap-2">
+                <th:block th:replace="~{fragments/icons :: icon('lessons', 'h-5 w-5')}"></th:block>
+                <span><span th:text="${course.stats().lessonCount()}">5</span> lecciones</span>
+            </li>
+            <li class="flex items-center gap-2">
+                <th:block th:replace="~{fragments/icons :: icon('clock', 'h-5 w-5')}"></th:block>
+                <span>Duración total: <span class="font-semibold text-brand-deep" th:text="${course.stats().totalDuration()}">1h 30m</span></span>
+            </li>
+        </ul>
+    </div>
+    <a class="btn btn-primary shrink-0 gap-2" th:href="@{/gestion/cursos-virtuales/{id}/modulos/nuevo(id=${course.courseId()})}">
+        <th:block th:replace="~{fragments/icons :: icon('plus', 'h-5 w-5')}"></th:block>Agregar módulo</a>
+</div>
 
-<div th:if="${structureAlert}" class="mb-4">
+<div th:if="${structureAlert}" class="mb-6">
     <div th:replace="~{fragments/components :: alert(${structureAlertKind}, ${structureAlert})}"></div>
 </div>
-<div th:if="${modules.isEmpty()}" class="mb-4">
+<div th:if="${modules.isEmpty()}" class="mb-6">
     <div th:replace="~{fragments/components :: alert('info', 'Este curso todavía no tiene módulos.')}"></div>
 </div>
 
-<h2 class="mb-4">Módulos</h2>
+<div class="mb-6 border-b border-brand-deep/20 pb-4">
+    <h2>Módulos</h2>
+    <p class="text-muted">Organizá las lecciones y reordená los módulos</p>
+</div>
 
-<ol th:unless="${modules.isEmpty()}" class="mb-6 list-none space-y-4 p-0">
-    <li class="card" th:each="module, position : ${modules}">
-        <div class="flex flex-wrap items-center gap-2">
-            <h3 th:text="${module.title()}">Pasos básicos</h3>
-            <span class="badge badge-neutral" th:if="${module.preview()}">Vista previa</span>
-        </div>
-
-        <p class="mt-3" th:if="${module.lessons().isEmpty()}">Este módulo todavía no tiene lecciones.</p>
-        <ul class="mt-3 list-disc space-y-3 pl-6" th:unless="${module.lessons().isEmpty()}">
-            <li th:each="lesson, lessonPosition : ${module.lessons()}">
-                <a class="font-medium" th:href="@{/gestion/cursos-virtuales/{id}/modulos/{module}/lecciones/{lesson}/editar(id=${course.courseId()},module=${module.moduleId()},lesson=${lesson.lessonId()})}"><th:block th:text="${lesson.title()}">Primer paso</th:block><span class="sr-only" th:text="|, lección del módulo ${module.title()}|">, lección del módulo Pasos básicos</span></a>:
-                <span th:text="|${lesson.durationMinutes()} min|">10 min</span> ·
-                <span th:text="${lesson.free()} ? 'Gratuita' : 'Con suscripción'">Gratuita</span> ·
-                <span th:text="${lesson.videoId() != null} ? 'Con video' : 'Sin video'">Con video</span> ·
-                <a th:href="@{/gestion/cursos-virtuales/{id}/modulos/{module}/lecciones/{lesson}/editar(id=${course.courseId()},module=${module.moduleId()},lesson=${lesson.lessonId()})}">Editar<span class="sr-only" th:text="| lección ${lesson.title()}|"> lección Primer paso</span></a> ·
-                <a th:href="@{/gestion/cursos-virtuales/{id}/modulos/{module}/lecciones/{lesson}/borrar(id=${course.courseId()},module=${module.moduleId()},lesson=${lesson.lessonId()})}">Borrar<span class="sr-only" th:text="| lección ${lesson.title()}|"> lección Primer paso</span></a>
-                <div class="mt-2 flex flex-wrap items-center gap-2">
-                    <form th:unless="${lessonPosition.first}" method="post"
-                          th:action="@{/gestion/cursos-virtuales/{id}/modulos/{module}/lecciones/{lesson}/subir(id=${course.courseId()},module=${module.moduleId()},lesson=${lesson.lessonId()})}">
-                        <button type="submit" class="btn btn-secondary">Subir<span class="sr-only" th:text="| la lección ${lesson.title()}|"> la lección Primer paso</span></button>
+<div th:unless="${modules.isEmpty()}" class="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:items-start">
+    <div class="space-y-4">
+        <ol class="m-0 list-none space-y-4 p-0">
+            <li class="card-item" th:each="module, position : ${modules}"
+                th:with="current=${module.moduleId() == selectedModule.moduleId()}"
+                th:classappend="${current} ? 'card-item-selected'">
+                <div class="flex items-start gap-3">
+                    <span class="module-number" th:classappend="${current} ? 'module-number-active'" th:text="${position.count}">1</span>
+                    <div class="min-w-0 flex-1">
+                        <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <h3 class="break-words text-lg"><a class="link-title" th:href="@{/gestion/cursos-virtuales/{id}/estructura(id=${course.courseId()},modulo=${module.moduleId()})}" th:aria-current="${current} ? 'true'" th:text="${module.title()}">Pasos básicos</a></h3>
+                            <span class="badge badge-neutral" th:if="${module.preview()}">Vista previa</span>
+                            <span class="ml-auto" th:if="${current}">
+                                <th:block th:replace="~{fragments/admin :: iconBadge('success', 'check-circle', 'Seleccionado')}"></th:block>
+                            </span>
+                        </div>
+                        <th:block th:replace="~{fragments/admin :: lessonSummary(${module.lessons()})}"></th:block>
+                    </div>
+                </div>
+                <div class="mt-3 flex flex-wrap items-center gap-2 border-t border-brand-deep/10 pt-3">
+                    <form th:unless="${position.first}" method="post"
+                          th:action="@{/gestion/cursos-virtuales/{id}/modulos/{module}/subir(id=${course.courseId()},module=${module.moduleId()})}">
+                        <button type="submit" class="btn btn-secondary btn-sm gap-1">
+                            <th:block th:replace="~{fragments/icons :: icon('arrow-up', 'h-4 w-4')}"></th:block>Subir<span class="sr-only" th:text="| el módulo ${module.title()}|"> el módulo Pasos básicos</span></button>
                     </form>
-                    <form th:unless="${lessonPosition.last}" method="post"
-                          th:action="@{/gestion/cursos-virtuales/{id}/modulos/{module}/lecciones/{lesson}/bajar(id=${course.courseId()},module=${module.moduleId()},lesson=${lesson.lessonId()})}">
-                        <button type="submit" class="btn btn-secondary">Bajar<span class="sr-only" th:text="| la lección ${lesson.title()}|"> la lección Primer paso</span></button>
+                    <form th:unless="${position.last}" method="post"
+                          th:action="@{/gestion/cursos-virtuales/{id}/modulos/{module}/bajar(id=${course.courseId()},module=${module.moduleId()})}">
+                        <button type="submit" class="btn btn-secondary btn-sm gap-1">
+                            <th:block th:replace="~{fragments/icons :: icon('arrow-down', 'h-4 w-4')}"></th:block>Bajar<span class="sr-only" th:text="| el módulo ${module.title()}|"> el módulo Pasos básicos</span></button>
                     </form>
+                    <a class="btn btn-secondary btn-sm" th:href="@{/gestion/cursos-virtuales/{id}/modulos/{module}/editar(id=${course.courseId()},module=${module.moduleId()})}">Editar módulo<span class="sr-only" th:text="| ${module.title()}|"> Pasos básicos</span></a>
                 </div>
             </li>
-        </ul>
+        </ol>
+        <a class="btn btn-dashed gap-2 py-3" th:href="@{/gestion/cursos-virtuales/{id}/modulos/nuevo(id=${course.courseId()})}">
+            <th:block th:replace="~{fragments/icons :: icon('plus', 'h-5 w-5')}"></th:block>Crear nuevo módulo</a>
+    </div>
 
-        <div class="mt-4 flex flex-wrap items-center gap-4">
-            <a th:href="@{/gestion/cursos-virtuales/{id}/modulos/{module}/lecciones/nueva(id=${course.courseId()},module=${module.moduleId()})}">Agregar lección<span class="sr-only" th:text="| al módulo ${module.title()}|"> al módulo Pasos básicos</span></a>
-            <a th:href="@{/gestion/cursos-virtuales/{id}/modulos/{module}/editar(id=${course.courseId()},module=${module.moduleId()})}">Editar módulo<span class="sr-only" th:text="| ${module.title()}|"> Pasos básicos</span></a>
-            <form th:unless="${position.first}" method="post"
-                  th:action="@{/gestion/cursos-virtuales/{id}/modulos/{module}/subir(id=${course.courseId()},module=${module.moduleId()})}">
-                <button type="submit" class="btn btn-secondary">Subir<span class="sr-only" th:text="| el módulo ${module.title()}|"> el módulo Pasos básicos</span></button>
-            </form>
-            <form th:unless="${position.last}" method="post"
-                  th:action="@{/gestion/cursos-virtuales/{id}/modulos/{module}/bajar(id=${course.courseId()},module=${module.moduleId()})}">
-                <button type="submit" class="btn btn-secondary">Bajar<span class="sr-only" th:text="| el módulo ${module.title()}|"> el módulo Pasos básicos</span></button>
-            </form>
+    <section class="card overflow-hidden p-0" aria-labelledby="module-detail-title">
+        <div class="flex items-start gap-3 border-b border-brand-deep/10 p-6">
+            <span class="module-number module-number-active" th:text="${modules.indexOf(selectedModule) + 1}">1</span>
+            <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <h3 id="module-detail-title" class="break-words" th:text="${selectedModule.title()}">Pasos básicos</h3>
+                    <span class="badge badge-neutral" th:if="${selectedModule.preview()}">Vista previa</span>
+                </div>
+                <th:block th:replace="~{fragments/admin :: lessonSummary(${selectedModule.lessons()})}"></th:block>
+            </div>
         </div>
-    </li>
-</ol>
 
-<p><a class="btn btn-primary" th:href="@{/gestion/cursos-virtuales/{id}/modulos/nuevo(id=${course.courseId()})}">Agregar módulo</a></p>
+        <div class="p-6">
+            <p th:if="${selectedModule.lessons().isEmpty()}">Este módulo todavía no tiene lecciones.</p>
+            <ul th:unless="${selectedModule.lessons().isEmpty()}" class="m-0 list-none space-y-3 p-0">
+                <li class="card-item flex flex-wrap items-center gap-3" th:each="lesson, lessonPosition : ${selectedModule.lessons()}">
+                    <span class="icon-tile" th:classappend="${lesson.videoId() == null} ? 'icon-tile-warning'">
+                        <th:block th:replace="~{fragments/icons :: icon(${lesson.videoId() != null ? 'lessons' : 'video'}, 'h-5 w-5')}"></th:block>
+                    </span>
+                    <div class="min-w-[15rem] flex-1">
+                        <h4 class="break-words text-base font-semibold"><a class="link-title" th:href="@{/gestion/cursos-virtuales/{id}/modulos/{module}/lecciones/{lesson}/editar(id=${course.courseId()},module=${selectedModule.moduleId()},lesson=${lesson.lessonId()})}"><th:block th:text="${lesson.title()}">Primer paso</th:block><span class="sr-only" th:text="|, lección del módulo ${selectedModule.title()}|">, lección del módulo Pasos básicos</span></a></h4>
+                        <div class="mt-1 flex flex-wrap items-center gap-2">
+                            <span class="badge" th:classappend="${lesson.free()} ? 'badge-success' : 'badge-neutral'" th:text="${lesson.free()} ? 'Gratuita' : 'Con suscripción'">Gratuita</span>
+                            <th:block th:if="${lesson.videoId() != null}">
+                                <th:block th:replace="~{fragments/admin :: dotBadge('success', 'Con video')}"></th:block>
+                            </th:block>
+                            <th:block th:unless="${lesson.videoId() != null}">
+                                <th:block th:replace="~{fragments/admin :: iconBadge('warning', 'warning', 'Sin video')}"></th:block>
+                            </th:block>
+                        </div>
+                        <p class="mt-1 flex items-center gap-1 text-sm text-muted">
+                            <th:block th:replace="~{fragments/icons :: icon('clock', 'h-4 w-4')}"></th:block>
+                            <span th:text="|${lesson.durationMinutes()} min|">10 min</span>
+                        </p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-1">
+                        <form th:unless="${lessonPosition.first}" method="post"
+                              th:action="@{/gestion/cursos-virtuales/{id}/modulos/{module}/lecciones/{lesson}/subir(id=${course.courseId()},module=${selectedModule.moduleId()},lesson=${lesson.lessonId()})}">
+                            <button type="submit" class="btn btn-secondary btn-sm gap-1">
+                                <th:block th:replace="~{fragments/icons :: icon('arrow-up', 'h-4 w-4')}"></th:block>Subir<span class="sr-only" th:text="| la lección ${lesson.title()}|"> la lección Primer paso</span></button>
+                        </form>
+                        <form th:unless="${lessonPosition.last}" method="post"
+                              th:action="@{/gestion/cursos-virtuales/{id}/modulos/{module}/lecciones/{lesson}/bajar(id=${course.courseId()},module=${selectedModule.moduleId()},lesson=${lesson.lessonId()})}">
+                            <button type="submit" class="btn btn-secondary btn-sm gap-1">
+                                <th:block th:replace="~{fragments/icons :: icon('arrow-down', 'h-4 w-4')}"></th:block>Bajar<span class="sr-only" th:text="| la lección ${lesson.title()}|"> la lección Primer paso</span></button>
+                        </form>
+                        <a class="btn btn-ghost btn-sm" th:href="@{/gestion/cursos-virtuales/{id}/modulos/{module}/lecciones/{lesson}/editar(id=${course.courseId()},module=${selectedModule.moduleId()},lesson=${lesson.lessonId()})}">Editar<span class="sr-only" th:text="| lección ${lesson.title()}|"> lección Primer paso</span></a>
+                        <a class="btn btn-ghost-danger btn-sm" th:href="@{/gestion/cursos-virtuales/{id}/modulos/{module}/lecciones/{lesson}/borrar(id=${course.courseId()},module=${selectedModule.moduleId()},lesson=${lesson.lessonId()})}">Borrar<span class="sr-only" th:text="| lección ${lesson.title()}|"> lección Primer paso</span></a>
+                    </div>
+                </li>
+            </ul>
+        </div>
+
+        <div class="flex flex-wrap items-center justify-between gap-3 border-t border-brand-deep/10 bg-brand-surface/50 px-6 py-4">
+            <a class="btn btn-light gap-2" th:href="@{/gestion/cursos-virtuales/{id}/modulos/{module}/lecciones/nueva(id=${course.courseId()},module=${selectedModule.moduleId()})}">
+                <th:block th:replace="~{fragments/icons :: icon('plus', 'h-5 w-5')}"></th:block>Agregar lección<span class="sr-only" th:text="| al módulo ${selectedModule.title()}|"> al módulo Pasos básicos</span></a>
+            <a class="btn btn-ghost" th:href="@{/gestion/cursos-virtuales/{id}/modulos/{module}/editar(id=${course.courseId()},module=${selectedModule.moduleId()})}">Editar módulo<span class="sr-only" th:text="| ${selectedModule.title()}|"> Pasos básicos</span></a>
+        </div>
+    </section>
+</div>
 </th:block>
 </body>
 </html>

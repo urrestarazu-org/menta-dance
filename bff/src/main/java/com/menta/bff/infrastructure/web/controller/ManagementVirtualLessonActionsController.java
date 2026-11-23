@@ -2,7 +2,7 @@ package com.menta.bff.infrastructure.web.controller;
 
 import static com.menta.bff.infrastructure.web.controller.ManagementVirtualModuleController.COURSE;
 import static com.menta.bff.infrastructure.web.controller.ManagementVirtualModuleController.accessToken;
-import static com.menta.bff.infrastructure.web.controller.ManagementVirtualModuleController.done;
+import static com.menta.bff.infrastructure.web.controller.ManagementVirtualModuleController.doneIn;
 import static com.menta.bff.infrastructure.web.controller.ManagementVirtualModuleController.inOrder;
 import static com.menta.bff.infrastructure.web.controller.ManagementVirtualModuleController.loadFailed;
 import static com.menta.bff.infrastructure.web.controller.ManagementVirtualModuleController.problem;
@@ -96,7 +96,7 @@ public class ManagementVirtualLessonActionsController {
             int from = indexOf(lessons, lessonId);
             int to = from + step;
             if (from < 0 || to < 0 || to >= lessons.size()) {
-                return done(from < 0 ? GONE : NOT_MOVED, "info", redirectAttributes);
+                return doneIn(moduleId, from < 0 ? GONE : NOT_MOVED, "info", redirectAttributes);
             }
             swapUseCase.execute(token, position(lessons.get(from)), position(lessons.get(to)));
         } catch (VirtualCourseManagementException e) {
@@ -106,7 +106,7 @@ public class ManagementVirtualLessonActionsController {
             return unavailable(e,
                     () -> problem(model, response, HttpStatus.SERVICE_UNAVAILABLE, VIRTUAL_COURSES, MOVE_FAILED));
         }
-        return done(MOVED, redirectAttributes);
+        return doneIn(moduleId, MOVED, "success", redirectAttributes);
     }
 
     /** The lessons of the module in order; a module that is not in the course has none. */
@@ -162,7 +162,7 @@ public class ManagementVirtualLessonActionsController {
         } catch (ServiceUnavailableException e) {
             return unavailable(e, () -> failed(courseId, moduleId, lessonId, token, model, response));
         }
-        return done(DELETED, redirectAttributes);
+        return doneIn(moduleId, DELETED, "success", redirectAttributes);
     }
 
     /** Shows the confirmation again with the failure, or a notice page if the lesson cannot be read now. */

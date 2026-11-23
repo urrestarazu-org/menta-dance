@@ -190,6 +190,35 @@ class StylesheetContrastTest {
                 .isGreaterThanOrEqualTo(NON_TEXT_MINIMUM);
     }
 
+    @ParameterizedTest(name = "{0}: {1} sobre {2} llega a 4,5:1")
+    @CsvSource({
+        ".text-muted, color, white",
+        ".text-muted, color, brand-surface",
+        ".admin-tab-active, color, brand-deep",
+        ".module-number-active, color, brand-deep",
+        ".btn-ghost-danger, color, white",
+        ".btn-dashed, color, brand-surface",
+        ".icon-tile, color, feedback-success-surface",
+        ".icon-tile-warning, color, feedback-warning-surface"
+    })
+    @DisplayName("los componentes de las pantallas de administración (#849) llegan a 4,5:1")
+    void adminComponentsReachAa(String selector, String property, String background) {
+        int[] backdrop = token(background);
+        // The text sits on the component's own fill when it paints one, else on the named surface.
+        int[] fill = declarations(selector).orElse("").contains("background-color:rgb(")
+                ? colorOf(selector, "background-color", backdrop) : backdrop;
+
+        assertThat(contrast(colorOf(selector, property, fill), fill)).isGreaterThanOrEqualTo(TEXT_MINIMUM);
+    }
+
+    @Test
+    @DisplayName("el módulo seleccionado se distingue con un borde oscuro de 3:1 sobre la tarjeta blanca")
+    void selectedCardBorderIsVisible() {
+        int[] border = colorOf(".card-item-selected", "border-color", token("white"));
+
+        assertThat(contrast(border, token("white"))).isGreaterThanOrEqualTo(NON_TEXT_MINIMUM);
+    }
+
     @Test
     @DisplayName("el enlace para saltar al contenido dibuja su foco en blanco sobre la cabecera oscura")
     void skipLinkFocusRingIsWhite() {

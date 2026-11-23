@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Pieces of the administration screens (#849), made for the structure of a virtual course and meant to be applied
+  to the other management pages. Classes live in input.css (@layer components); see docs/31-BFF-TAILWIND.md.
+
+  backLink(href, label)
+    "Back to the list" link with an arrow. `href` is already resolved (@{...}); `label` is the visible text.
+
+  dotBadge(kind, text)
+    State label with a coloured dot. `kind` is success | warning | danger | neutral. The text always carries the
+    meaning; the dot only reinforces it. Put an sr-only prefix ("Estado: ") before it when it needs context.
+
+  iconBadge(kind, icon, text)
+    Same label with one of the icons of fragments/icons instead of the dot (e.g. a warning for "Sin video").
+
+  lessonSummary(lessons)
+    "N lecciones · X min de duración" line of a module: the count of its lessons and the sum of their minutes.
+-->
+<a th:fragment="backLink(href, label)" class="link-back" th:href="${href}">
+    <th:block th:replace="~{fragments/icons :: icon('arrow-left', 'h-5 w-5')}"></th:block>
+    <span th:text="${label}">Volver</span>
+</a>
+
+<span th:fragment="dotBadge(kind, text)" th:class="'badge badge-dot badge-' + ${kind}" th:text="${text}">Publicado</span>
+
+<span th:fragment="iconBadge(kind, icon, text)" th:class="'badge badge-icon badge-' + ${kind}">
+    <th:block th:replace="~{fragments/icons :: icon(${icon}, 'h-4 w-4')}"></th:block>
+    <th:block th:text="${text}">Sin video</th:block>
+</span>
+
+<p th:fragment="lessonSummary(lessons)" class="text-sm text-muted" th:with="count=${lessons.size()}"
+   th:text="|${count} ${count == 1 ? 'lección' : 'lecciones'} · ${#aggregates.sum(lessons.![durationMinutes()]) ?: 0} min de duración|">2 lecciones · 25 min de duración</p>
+</body>
+</html>
