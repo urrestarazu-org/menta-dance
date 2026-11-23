@@ -16,6 +16,10 @@ docs {
   this shape and never carries `sessions`. A PHYSICAL id answers the physical
   detail instead (#107): see "Get Course - Physical".
 
+  Only lessons with a video are listed, and a module left without lessons is hidden (#851);
+  stats.moduleCount, stats.lessonCount and stats.totalDuration count only those. The admin
+  detail (virtual/admin/Get Managed Course) keeps showing every lesson.
+
   Prerequisite: set the runtime-only `courseId` variable to an id returned
   by "List Courses" (VIRTUAL modality).
 

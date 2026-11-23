@@ -342,6 +342,20 @@ class VirtualOpenApiContractTest {
     }
 
     @Test
+    void the_routes_that_address_a_lesson_by_id_document_that_a_lesson_without_video_is_a_404_lesson_not_found() {
+        // #851: a lesson without video does not exist for students; there is no dedicated error code.
+        for (String route : List.of("GET " + LESSON, "GET " + LESSON + "/stream")) {
+            Map<String, Object> notFound = resolveResponse(map(map(operation(route), "responses"), "404"));
+            assertThat(String.valueOf(notFound.get("description"))).as(route).contains("sin video");
+            Map<String, Object> examples = map(map(map(notFound, "content"), "application/problem+json"), "examples");
+            assertThat(examples.values()).extracting(example -> map(example, "value").get("code"))
+                .as(route).containsExactly("LESSON_NOT_FOUND");
+        }
+        assertThat(String.valueOf(map(map(spec, "components"), "responses").get("LessonNotFound")))
+            .contains("sin video");
+    }
+
+    @Test
     void only_the_two_public_lesson_reads_make_the_token_optional() {
         assertThat(list(spec.get("security"))).isEqualTo(List.of(Map.of("bearerAuth", List.of())));
         for (String route : List.of("GET " + LESSON, "GET " + LESSON + "/stream")) {

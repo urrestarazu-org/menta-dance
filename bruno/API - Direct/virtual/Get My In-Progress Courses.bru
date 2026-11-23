@@ -57,4 +57,7 @@ docs {
   200 []; no token returns 401.
 
   Authenticate as a student with progress (e.g. after Save Lesson Progress).
+
+  totalLessons, completedLessons and percentage count only lessons with a video (#851): lessons without
+  one do not exist for students, so percentage can reach 100.
 }

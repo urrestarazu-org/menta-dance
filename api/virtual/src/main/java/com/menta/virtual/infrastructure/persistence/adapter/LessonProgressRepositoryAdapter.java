@@ -64,7 +64,7 @@ public class LessonProgressRepositoryAdapter implements LessonProgressRepository
     @Override
     @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
     public long countLessonsByCourseId(UUID courseId) {
-        return lessonJpaRepository.countByCourseId(courseId);
+        return lessonJpaRepository.countWithVideoByCourseId(courseId);
     }
 
     @Override
@@ -73,14 +73,17 @@ public class LessonProgressRepositoryAdapter implements LessonProgressRepository
         return jpaRepository.findRowsForUserInCoursesWithStatus(userId, CourseStatus.PUBLISHED);
     }
 
-    /** Reuses the grouped lesson aggregate of the catalog, skipping the query when there is no course. */
+    /**
+     * Reuses the grouped lesson aggregate of the catalog (lessons with video only), skipping the query when
+     * there is no course.
+     */
     @Override
     @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
     public Map<UUID, Long> countLessonsByCourseIds(Collection<UUID> courseIds) {
         if (courseIds.isEmpty()) {
             return Map.of();
         }
-        return lessonJpaRepository.aggregateByCourseIdIn(List.copyOf(courseIds)).stream()
+        return lessonJpaRepository.aggregateWithVideoByCourseIdIn(List.copyOf(courseIds)).stream()
             .collect(Collectors.toMap(
                 LessonAggregateProjection::getCourseId, LessonAggregateProjection::getLessonCount
             ));

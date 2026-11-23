@@ -30,9 +30,12 @@ import org.springframework.stereotype.Component;
  *
  * <h2>Outcome map</h2>
  * <ul>
- *   <li>missing / malformed / unpublished-parent id → throws
- *       {@link LessonNotFoundException} (anti-enumeration combines all
- *       three on the public surface, see
+ *   <li>missing / malformed / unpublished-parent id, or a lesson without a
+ *       video yet ({@code videoId} null or blank, #851) → throws
+ *       {@link LessonNotFoundException} (anti-enumeration combines all of
+ *       them on the public surface; a lesson without video does not exist
+ *       for students, and the check goes BEFORE the access decision so it is
+ *       never revealed by an {@code AccessDenied}; see
  *       {@link com.menta.virtual.application.usecase.GetPublicLessonUseCaseImpl}).</li>
  *   <li>Authorized for any caller (free OR premium-with-entitlement) →
  *       {@link PublicLessonStreamResult.Authorized}.</li>
@@ -120,6 +123,7 @@ public class GetPublicLessonStreamUseCaseImpl implements GetPublicLessonStreamUs
             throw new LessonNotFoundException();
         }
         VirtualLesson lesson = lessonRepository.findById(parsed)
+            .filter(VirtualLesson::isComplete)
             .orElseThrow(LessonNotFoundException::new);
         VirtualModule module = moduleRepository.findById(lesson.getModuleId())
             .orElseThrow(LessonNotFoundException::new);

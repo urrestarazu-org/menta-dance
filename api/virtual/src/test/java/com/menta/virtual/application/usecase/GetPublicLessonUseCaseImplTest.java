@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.menta.shared.billing.CourseAccessSnapshot;
@@ -33,6 +34,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * Coverage for {@link GetPublicLessonUseCaseImpl}. Distinct from the
@@ -270,6 +274,61 @@ class GetPublicLessonUseCaseImplTest {
         assertThatThrownBy(() -> useCase.get(lessonId.toString(), null))
             .isInstanceOf(ForbiddenLessonAccessException.class);
         verify(entitlementPort).resolveCourseAccess(null, courseId.getValue().toString());
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"", "   ", "\t\n"})
+    void a_lesson_without_video_collapses_to_empty_before_any_other_lookup_or_access_decision(String noVideo) {
+        CourseId courseId = CourseId.generate();
+        ModuleId moduleId = ModuleId.generate();
+        LessonId lessonId = LessonId.generate();
+        when(lessonRepository.findById(lessonId)).thenReturn(Optional.of(
+            lesson(lessonId, moduleId, courseId, "Borrador", noVideo, 10, true, 1)
+        ));
+
+        Optional<PublicLessonView> view = useCase.get(lessonId.toString(), null);
+
+        assertThat(view).isEmpty();
+        verifyNoInteractions(moduleRepository, courseRepository, entitlementPort);
+    }
+
+    @Test
+    void a_premium_lesson_without_video_is_empty_not_forbidden_for_a_caller_without_subscription() {
+        CourseId courseId = CourseId.generate();
+        ModuleId moduleId = ModuleId.generate();
+        LessonId lessonId = LessonId.generate();
+        when(lessonRepository.findById(lessonId)).thenReturn(Optional.of(
+            lesson(lessonId, moduleId, courseId, "Borrador", null, 10, false, 1)
+        ));
+        when(moduleRepository.findById(moduleId)).thenReturn(Optional.of(module(courseId, moduleId, "Postura", 1)));
+        when(courseRepository.findPublishedById(courseId)).thenReturn(Optional.of(publishedCourse(courseId)));
+
+        assertThat(useCase.get(lessonId.toString(), UUID.randomUUID())).isEmpty();
+        verifyNoInteractions(entitlementPort);
+    }
+
+    @Test
+    void navigation_skips_the_sibling_lessons_without_video() {
+        CourseId courseId = CourseId.generate();
+        ModuleId moduleId = ModuleId.generate();
+        LessonId lessonId = LessonId.generate();
+        VirtualLesson target = lesson(lessonId, moduleId, courseId, "Caminada", "vid-target", 10, true, 2);
+        when(lessonRepository.findById(lessonId)).thenReturn(Optional.of(target));
+        when(moduleRepository.findById(moduleId)).thenReturn(Optional.of(module(courseId, moduleId, "Postura", 1)));
+        when(courseRepository.findPublishedById(courseId)).thenReturn(Optional.of(publishedCourse(courseId)));
+        when(lessonRepository.findByModuleId(moduleId)).thenReturn(List.of(
+            lesson(LessonId.generate(), moduleId, courseId, "Intro", "vid-intro", 5, true, 0),
+            lesson(LessonId.generate(), moduleId, courseId, "Borrador previo", null, 5, true, 1),
+            target,
+            lesson(LessonId.generate(), moduleId, courseId, "Borrador siguiente", "  ", 5, true, 3),
+            lesson(LessonId.generate(), moduleId, courseId, "Salida", "vid-salida", 5, true, 4)
+        ));
+
+        PublicLessonFreeView free = (PublicLessonFreeView) useCase.get(lessonId.toString(), null).orElseThrow();
+
+        assertThat(free.navigation().previousLesson().title()).isEqualTo("Intro");
+        assertThat(free.navigation().nextLesson().title()).isEqualTo("Salida");
     }
 
     @Test

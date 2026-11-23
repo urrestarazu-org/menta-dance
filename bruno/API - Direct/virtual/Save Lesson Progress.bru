@@ -48,4 +48,6 @@ docs {
 
   Position is validated (0 <= position <= durationMinutes*60): out-of-range
   returns 400 INVALID_LESSON_POSITION.
+
+  A lesson without video (videoId null or blank, #851) does not exist for students: 404 LESSON_NOT_FOUND.
 }

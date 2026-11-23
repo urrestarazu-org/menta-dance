@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.menta.shared.billing.CourseAccessSnapshot;
@@ -25,6 +26,9 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class CompleteLessonUseCaseImplTest {
 
@@ -49,8 +53,27 @@ class CompleteLessonUseCaseImplTest {
         return new VirtualModule(id, courseId, "M1", false, 0);
     }
 
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"", "   "})
+    void a_lesson_without_video_does_not_exist_for_the_student_and_no_access_or_progress_is_touched(String noVideo) {
+        LessonId lessonId = LessonId.generate();
+        ModuleId moduleId = ModuleId.generate();
+        CourseId courseId = CourseId.generate();
+        UUID userId = UUID.randomUUID();
+        when(lessonRepository.findById(lessonId)).thenReturn(Optional.of(
+            new VirtualLesson(lessonId, moduleId, courseId, "L1", "d", noVideo, 10, true, 0)
+        ));
+        when(moduleRepository.findById(moduleId))
+            .thenReturn(Optional.of(new VirtualModule(moduleId, courseId, "M1", false, 0)));
+
+        assertThatThrownBy(() -> useCase.complete(lessonId.toString(), userId))
+            .isInstanceOf(LessonNotFoundException.class);
+        verifyNoInteractions(entitlementPort, progressRepository);
+    }
+
     @Test
-    void completing_does_not_move_the_saved_position() {
+        void completing_does_not_move_the_saved_position() {
         LessonId lessonId = LessonId.generate();
         ModuleId moduleId = ModuleId.generate();
         CourseId courseId = CourseId.generate();

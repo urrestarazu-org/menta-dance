@@ -45,7 +45,9 @@ public class SaveLessonProgressUseCaseImpl implements SaveLessonProgressUseCase 
     @Override
     public LessonProgressView save(String lessonId, UUID actingUserId, int positionSeconds) {
         LessonId id = LessonProgressAccess.parseLessonIdOrThrow(lessonId);
-        VirtualLesson lesson = lessonRepository.findById(id).orElseThrow(LessonNotFoundException::new);
+        VirtualLesson lesson = lessonRepository.findById(id)
+            .filter(VirtualLesson::isComplete)
+            .orElseThrow(LessonNotFoundException::new);
         VirtualModule module = moduleRepository.findById(lesson.getModuleId())
             .orElseThrow(LessonNotFoundException::new);
         if (accessPolicy.decide(lesson, module, actingUserId) == LessonAccessDecision.SUBSCRIPTION_REQUIRED) {

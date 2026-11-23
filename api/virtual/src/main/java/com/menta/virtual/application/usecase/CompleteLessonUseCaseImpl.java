@@ -42,7 +42,9 @@ public class CompleteLessonUseCaseImpl implements CompleteLessonUseCase {
     @Override
     public LessonProgressView complete(String lessonId, UUID actingUserId) {
         LessonId id = LessonProgressAccess.parseLessonIdOrThrow(lessonId);
-        VirtualLesson lesson = lessonRepository.findById(id).orElseThrow(LessonNotFoundException::new);
+        VirtualLesson lesson = lessonRepository.findById(id)
+            .filter(VirtualLesson::isComplete)
+            .orElseThrow(LessonNotFoundException::new);
         VirtualModule module = moduleRepository.findById(lesson.getModuleId())
             .orElseThrow(LessonNotFoundException::new);
         if (accessPolicy.decide(lesson, module, actingUserId) == LessonAccessDecision.SUBSCRIPTION_REQUIRED) {

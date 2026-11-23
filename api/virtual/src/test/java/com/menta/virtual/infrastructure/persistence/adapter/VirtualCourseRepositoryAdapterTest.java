@@ -68,13 +68,13 @@ class VirtualCourseRepositoryAdapterTest {
         ModuleCountProjection moduleCount = mock(ModuleCountProjection.class);
         when(moduleCount.getCourseId()).thenReturn(withAggregates);
         when(moduleCount.getModuleCount()).thenReturn(2L);
-        when(moduleRepository.countByCourseIdIn(anyList())).thenReturn(List.of(moduleCount));
+        when(lessonRepository.countModulesWithVideoByCourseIdIn(anyList())).thenReturn(List.of(moduleCount));
 
         LessonAggregateProjection lessonAggregate = mock(LessonAggregateProjection.class);
         when(lessonAggregate.getCourseId()).thenReturn(withAggregates);
         when(lessonAggregate.getLessonCount()).thenReturn(5L);
         when(lessonAggregate.getTotalDurationMinutes()).thenReturn(75L);
-        when(lessonRepository.aggregateByCourseIdIn(anyList())).thenReturn(List.of(lessonAggregate));
+        when(lessonRepository.aggregateWithVideoByCourseIdIn(anyList())).thenReturn(List.of(lessonAggregate));
 
         List<VirtualCourse> result = adapter.findPublished(CourseId.generate(), 10);
 
@@ -99,13 +99,13 @@ class VirtualCourseRepositoryAdapterTest {
         ModuleCountProjection moduleCount = mock(ModuleCountProjection.class);
         when(moduleCount.getCourseId()).thenReturn(id);
         when(moduleCount.getModuleCount()).thenReturn(3L);
-        when(moduleRepository.countByCourseIdIn(List.of(id))).thenReturn(List.of(moduleCount));
+        when(lessonRepository.countModulesWithVideoByCourseIdIn(List.of(id))).thenReturn(List.of(moduleCount));
 
         LessonAggregateProjection lessonAggregate = mock(LessonAggregateProjection.class);
         when(lessonAggregate.getCourseId()).thenReturn(id);
         when(lessonAggregate.getLessonCount()).thenReturn(9L);
         when(lessonAggregate.getTotalDurationMinutes()).thenReturn(120L);
-        when(lessonRepository.aggregateByCourseIdIn(List.of(id))).thenReturn(List.of(lessonAggregate));
+        when(lessonRepository.aggregateWithVideoByCourseIdIn(List.of(id))).thenReturn(List.of(lessonAggregate));
 
         Optional<VirtualCourse> result = adapter.findPublishedById(CourseId.of(id));
 
@@ -304,13 +304,13 @@ class VirtualCourseRepositoryAdapterTest {
         ModuleCountProjection moduleCount = mock(ModuleCountProjection.class);
         when(moduleCount.getCourseId()).thenReturn(first);
         when(moduleCount.getModuleCount()).thenReturn(2L);
-        when(moduleRepository.countByCourseIdIn(anyList())).thenReturn(List.of(moduleCount));
+        when(lessonRepository.countModulesWithVideoByCourseIdIn(anyList())).thenReturn(List.of(moduleCount));
 
         LessonAggregateProjection lessonAggregate = mock(LessonAggregateProjection.class);
         when(lessonAggregate.getCourseId()).thenReturn(first);
         when(lessonAggregate.getLessonCount()).thenReturn(5L);
         when(lessonAggregate.getTotalDurationMinutes()).thenReturn(75L);
-        when(lessonRepository.aggregateByCourseIdIn(anyList()))
+        when(lessonRepository.aggregateWithVideoByCourseIdIn(anyList()))
             .thenReturn(List.of(lessonAggregate));
 
         List<VirtualCourse> result = adapter.findPublishedByIds(
@@ -331,8 +331,8 @@ class VirtualCourseRepositoryAdapterTest {
         verify(courseRepository)
             .findByIdInAndStatus(requested.capture(), eq(CourseStatus.PUBLISHED));
         assertThat(requested.getValue()).containsExactlyInAnyOrder(first, second, unknown);
-        verify(moduleRepository).countByCourseIdIn(List.of(first, second));
-        verify(lessonRepository).aggregateByCourseIdIn(List.of(first, second));
+        verify(lessonRepository).countModulesWithVideoByCourseIdIn(List.of(first, second));
+        verify(lessonRepository).aggregateWithVideoByCourseIdIn(List.of(first, second));
         verify(courseRepository, never()).findById(any());
     }
 

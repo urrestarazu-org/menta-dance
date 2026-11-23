@@ -45,7 +45,7 @@ public class GetLessonProgressUseCaseImpl implements GetLessonProgressUseCase {
             return Optional.empty();
         }
         VirtualLesson lesson = lessonRepository.findById(id).orElse(null);
-        if (lesson == null) {
+        if (lesson == null || !lesson.isComplete()) {
             return Optional.empty();
         }
         VirtualModule module = moduleRepository.findById(lesson.getModuleId()).orElse(null);

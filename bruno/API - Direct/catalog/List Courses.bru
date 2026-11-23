@@ -14,6 +14,9 @@ docs {
   Public, unauthenticated composed catalog of Physical and Virtual courses
   (#95). Empty array (not 404) when neither module has any course.
 
+  virtual.moduleCount / lessonCount / totalDurationMinutes count only lessons with a video and the
+  modules that have at least one (#851).
+
   Success contract:
     body → { "courses": [ { courseId, modality, title, level,
               physical | virtual } ] }

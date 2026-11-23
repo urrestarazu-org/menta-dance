@@ -108,11 +108,13 @@ public class VirtualCourseCatalogPortImpl implements VirtualCourseCatalogPort {
      *       projecting each {@link VirtualLesson} to a
      *       {@link VirtualLessonSummary} WITHOUT {@code videoId};</li>
      *   <li>carry the aggregate's pre-computed counts through to
-     *       {@link VirtualCourseStats} — no recomputation.</li>
+     *       {@link VirtualCourseStats} — no recomputation (the repository
+     *       already counts only lessons with a video and the modules that
+     *       have at least one, matching what is listed here).</li>
      * </ol>
-     * {@link VirtualLesson#isComplete()} is NOT used here: completion is
-     * management logic (US-VIRTUAL-006 escenario 6), irrelevant to the public
-     * detail read.
+     * Lessons without a video ({@link VirtualLesson#isComplete()} false) are
+     * not listed and a module left without lessons is hidden (#851): they do
+     * not exist for students. The admin detail keeps listing everything.
      */
     @Override
     public Optional<VirtualCourseDetailView> findPublishedDetailById(String courseId) {
@@ -209,6 +211,10 @@ public class VirtualCourseCatalogPortImpl implements VirtualCourseCatalogPort {
         );
     }
 
+    /**
+     * Public modules of a course: only lessons with a video are listed (#851) and a module left without
+     * lessons is hidden, so a student never sees a stub lesson nor an empty module.
+     */
     private List<VirtualModuleDetail> modulesOf(CourseId courseId) {
         List<VirtualModule> modules = moduleRepository.findByCourseId(courseId);
         return modules.stream()
@@ -217,9 +223,11 @@ public class VirtualCourseCatalogPortImpl implements VirtualCourseCatalogPort {
                 module.getTitle(),
                 module.getOrder(),
                 lessonRepository.findByModuleId(module.getId()).stream()
+                    .filter(VirtualLesson::isComplete)
                     .map(VirtualCourseCatalogPortImpl::toLessonSummary)
                     .toList()
             ))
+            .filter(module -> !module.lessons().isEmpty())
             .toList();
     }
 

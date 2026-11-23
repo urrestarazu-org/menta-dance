@@ -113,7 +113,9 @@ public class GetPublicLessonUseCaseImpl implements GetPublicLessonUseCase {
         }
 
         VirtualLesson lesson = lessonRepository.findById(id).orElse(null);
-        if (lesson == null) {
+        if (lesson == null || !lesson.isComplete()) {
+            // A lesson without a video yet does not exist for students (#851): same 404 as a missing id,
+            // decided before any other lookup or the access decision.
             return Optional.empty();
         }
 
@@ -135,7 +137,10 @@ public class GetPublicLessonUseCaseImpl implements GetPublicLessonUseCase {
             return Optional.empty();
         }
 
-        PublicLessonNavigation navigation = navigationOf(lesson, lessonRepository.findByModuleId(module.getId()));
+        List<VirtualLesson> playableSiblings = lessonRepository.findByModuleId(module.getId()).stream()
+            .filter(VirtualLesson::isComplete)
+            .toList();
+        PublicLessonNavigation navigation = navigationOf(lesson, playableSiblings);
         PublicCourseRef courseRef = PublicCourseRef.of(course.getId(), course.getTitle());
         PublicModuleRef moduleRef = PublicModuleRef.of(module.getId(), module.getTitle());
         String thumbnailUrl = course.getImageUrl();

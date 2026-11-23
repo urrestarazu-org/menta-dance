@@ -178,4 +178,55 @@ class VirtualCourseCatalogPortImplDetailTest {
         assertThat(result.get().modules()).isNotNull().isEmpty();
         verify(lessonRepository, never()).findByModuleId(any());
     }
+
+    @Test
+    void find_published_detail_by_id_lists_only_lessons_with_video_and_hides_modules_left_without_lessons() {
+        // #851: a lesson without video does not exist for students, so it is not listed, and a module
+        // with nothing left to show disappears (also an empty one). Stats are the repository's aggregate,
+        // already computed over lessons with video only (see VirtualCourseRepositoryAdapter).
+        CourseId courseId = CourseId.generate();
+        ModuleId visible = ModuleId.generate();
+        ModuleId onlyStubs = ModuleId.generate();
+        ModuleId empty = ModuleId.generate();
+
+        when(courseRepository.findPublishedById(courseId)).thenReturn(Optional.of(course(courseId)));
+        when(moduleRepository.findByCourseId(courseId)).thenReturn(List.of(
+            module(courseId, visible, "Introducción", 1),
+            module(courseId, onlyStubs, "Borrador", 2),
+            module(courseId, empty, "Vacío", 3)
+        ));
+        when(lessonRepository.findByModuleId(visible)).thenReturn(List.of(
+            lesson(LessonId.generate(), visible, courseId, "Con video", "vid-a", 30, true, 1),
+            lesson(LessonId.generate(), visible, courseId, "Sin video", null, 10, true, 2),
+            lesson(LessonId.generate(), visible, courseId, "Video en blanco", "  ", 10, false, 3),
+            lesson(LessonId.generate(), visible, courseId, "Otra con video", "vid-b", 15, false, 4)
+        ));
+        when(lessonRepository.findByModuleId(onlyStubs)).thenReturn(List.of(
+            lesson(LessonId.generate(), onlyStubs, courseId, "Pendiente", null, 10, true, 1)
+        ));
+        when(lessonRepository.findByModuleId(empty)).thenReturn(List.of());
+
+        VirtualCourseDetailView view = port.findPublishedDetailById(courseId.toString()).orElseThrow();
+
+        assertThat(view.modules()).extracting(VirtualModuleDetail::title).containsExactly("Introducción");
+        assertThat(view.modules().get(0).lessons()).extracting(VirtualLessonSummary::title)
+            .containsExactly("Con video", "Otra con video");
+        assertThat(view.stats().lessonCount()).isEqualTo(4);
+    }
+
+    @Test
+    void find_by_id_for_admin_keeps_listing_the_lessons_without_video() {
+        CourseId courseId = CourseId.generate();
+        ModuleId moduleId = ModuleId.generate();
+        when(courseRepository.findByIdAnyStatus(courseId)).thenReturn(Optional.of(course(courseId)));
+        when(moduleRepository.findByCourseId(courseId)).thenReturn(List.of(module(courseId, moduleId, "Borrador", 1)));
+        when(lessonRepository.findByModuleId(moduleId)).thenReturn(List.of(
+            lesson(LessonId.generate(), moduleId, courseId, "Sin video", null, 10, true, 1)
+        ));
+
+        var admin = port.findByIdForAdmin(courseId.toString()).orElseThrow();
+
+        assertThat(admin.modules()).hasSize(1);
+        assertThat(admin.modules().get(0).lessons()).extracting(l -> l.title()).containsExactly("Sin video");
+    }
 }
