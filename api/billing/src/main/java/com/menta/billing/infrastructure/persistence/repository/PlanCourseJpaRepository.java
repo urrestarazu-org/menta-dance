@@ -18,4 +18,7 @@ public interface PlanCourseJpaRepository extends JpaRepository<PlanCourseJpaEnti
 
     /** Lists the course rows of several plans in one query, which avoids one lookup per plan when listing plans. */
     List<PlanCourseJpaEntity> findByPlanIdIn(List<UUID> planIds);
+
+    /** Whether any plan, whatever its status, includes the course (#856). */
+    boolean existsByCourseId(String courseId);
 }

@@ -179,4 +179,13 @@ class PlanRepositoryAdapterTest {
         verify(planCourseJpaRepository).saveAll(courses.capture());
         assertThat(courses.getValue()).extracting(PlanCourseJpaEntity::getCourseId).containsExactly("course-1");
     }
+
+    @Test
+    void existsByCourseId_delegates_to_the_plan_course_rows_whatever_the_status_of_the_plan() {
+        when(planCourseJpaRepository.existsByCourseId("course-1")).thenReturn(true);
+        when(planCourseJpaRepository.existsByCourseId("course-2")).thenReturn(false);
+
+        assertThat(adapter.existsByCourseId("course-1")).isTrue();
+        assertThat(adapter.existsByCourseId("course-2")).isFalse();
+    }
 }

@@ -44,6 +44,7 @@ public class ManagementVirtualCourseStatusController {
 
     static final String ACTION_FAILED = "No pudimos completar la acción. Intentá de nuevo.";
     static final String HAS_PROGRESS = "No se puede borrar el curso porque ya tiene progreso de alumnos.";
+    static final String IN_USE = "No se puede borrar el curso porque está incluido en un plan o en una suscripción.";
     static final String NOT_PUBLISHABLE = "El curso todavía no cumple las condiciones para publicarse.";
 
     private static final String BASE = "/gestion/cursos-virtuales/{courseId}/";
@@ -201,6 +202,9 @@ public class ManagementVirtualCourseStatusController {
             // Only deleting is refused for progress; on any other action the code means nothing here.
             case COURSE_HAS_PROGRESS -> action == Action.DELETE
                     ? new Refusal(HttpStatus.CONFLICT, HAS_PROGRESS, false) : FAILED;
+            // Same: only deleting is refused for Billing references.
+            case COURSE_IN_USE -> action == Action.DELETE
+                    ? new Refusal(HttpStatus.CONFLICT, IN_USE, false) : FAILED;
             default -> FAILED;
         };
     }

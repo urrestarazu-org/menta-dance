@@ -1,6 +1,7 @@
 package com.menta.virtual.infrastructure.web.controller;
 
 import com.menta.virtual.domain.exception.CourseHasProgressException;
+import com.menta.virtual.domain.exception.CourseInUseException;
 import com.menta.virtual.domain.exception.CourseNotDraftException;
 import com.menta.virtual.domain.exception.CourseNotFoundException;
 import com.menta.virtual.domain.exception.CourseNotOwnedException;
@@ -55,6 +56,14 @@ public class VirtualCourseExceptionHandler {
     ResponseEntity<ProblemDetail> courseHasProgress(CourseHasProgressException exception) {
         return ProblemDetails.response(
             HttpStatus.CONFLICT, "El curso no se puede borrar porque ya tiene progreso de alumnos.",
+            exception.getErrorCode()
+        );
+    }
+
+    @ExceptionHandler(CourseInUseException.class)
+    ResponseEntity<ProblemDetail> courseInUse(CourseInUseException exception) {
+        return ProblemDetails.response(
+            HttpStatus.CONFLICT, "El curso no se puede borrar porque está incluido en un plan o en una suscripción.",
             exception.getErrorCode()
         );
     }

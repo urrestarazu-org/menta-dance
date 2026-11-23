@@ -178,6 +178,12 @@ public class SubscriptionRepositoryAdapter implements SubscriptionRepository {
             .toList();
     }
 
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public boolean existsByCourseId(String courseId) {
+        return courseJpaRepository.existsByCourseId(courseId);
+    }
+
     /**
      * Flushes the delete before queuing the inserts. Without it, Hibernate's action queue can
      * flush insertions before deletions regardless of call order, and a save that repeats an

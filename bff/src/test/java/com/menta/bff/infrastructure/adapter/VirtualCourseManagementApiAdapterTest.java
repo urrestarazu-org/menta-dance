@@ -224,7 +224,7 @@ class VirtualCourseManagementApiAdapterTest {
             case INVALID_REQUEST, PROFESSOR_MISMATCH, COURSE_NOT_PUBLISHABLE, MODULE_REORDER_MISMATCH -> 400;
             case COURSE_NOT_OWNED -> 403;
             case COURSE_NOT_FOUND, MODULE_NOT_FOUND, LESSON_NOT_FOUND -> 404;
-            case COURSE_NOT_DRAFT, COURSE_HAS_PROGRESS -> 409;
+            case COURSE_NOT_DRAFT, COURSE_HAS_PROGRESS, COURSE_IN_USE -> 409;
         };
         stub(operation.method(), operation.path(), status, problem(code.name(), DETAIL_TEXT));
 
