@@ -119,7 +119,7 @@ class VirtualConfigurationTest {
     @Test
     void wires_the_delete_course_use_case_bean_transactionally() {
         DeleteVirtualCourseUseCase useCase = configuration.deleteVirtualCourseUseCase(
-            courseRepository, moduleRepository, lessonRepository, auditRepository
+            courseRepository, moduleRepository, lessonRepository, mock(LessonProgressRepository.class), auditRepository
         );
 
         assertThat(useCase).isInstanceOf(TransactionalDeleteVirtualCourseUseCase.class);

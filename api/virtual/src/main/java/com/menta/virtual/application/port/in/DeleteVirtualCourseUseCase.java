@@ -10,7 +10,8 @@ public interface DeleteVirtualCourseUseCase {
      * DELETE_COURSE} audit row holding the old snapshot.
      *
      * <p>A course in any other status fails with {@code CourseNotDraftException}, after the
-     * existence and ownership checks.
+     * existence and ownership checks. A {@code DRAFT} course whose students already have progress fails
+     * with {@code CourseHasProgressException} (#834) and nothing is deleted nor audited.
      */
     void delete(String courseId, UUID actingUserId, boolean actingAsAdmin);
 }

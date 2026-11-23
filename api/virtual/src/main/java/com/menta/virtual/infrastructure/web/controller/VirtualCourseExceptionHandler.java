@@ -1,5 +1,6 @@
 package com.menta.virtual.infrastructure.web.controller;
 
+import com.menta.virtual.domain.exception.CourseHasProgressException;
 import com.menta.virtual.domain.exception.CourseNotDraftException;
 import com.menta.virtual.domain.exception.CourseNotFoundException;
 import com.menta.virtual.domain.exception.CourseNotOwnedException;
@@ -47,6 +48,14 @@ public class VirtualCourseExceptionHandler {
     ResponseEntity<ProblemDetail> courseNotDraft(CourseNotDraftException exception) {
         return ProblemDetails.response(
             HttpStatus.CONFLICT, "Only a DRAFT course can be deleted.", exception.getErrorCode()
+        );
+    }
+
+    @ExceptionHandler(CourseHasProgressException.class)
+    ResponseEntity<ProblemDetail> courseHasProgress(CourseHasProgressException exception) {
+        return ProblemDetails.response(
+            HttpStatus.CONFLICT, "El curso no se puede borrar porque ya tiene progreso de alumnos.",
+            exception.getErrorCode()
         );
     }
 

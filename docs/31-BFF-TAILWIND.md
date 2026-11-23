@@ -744,7 +744,9 @@ token de la sesión. `ManagementVirtualModuleController` atiende la estructura y
 - **Errores, por `code`**: `COURSE_NOT_PUBLISHABLE` vuelve a mostrar la confirmación (`400`) con el motivo que dio la
   API, en español y escapado (es el único `detail` que llega al navegador; si no vino, "El curso todavía no cumple las
   condiciones para publicarse.") y el enlace "Revisar la estructura"; `COURSE_NOT_DRAFT` (`409`) dice "Solo se puede
-  borrar un curso en borrador. Despublicalo primero." (o "...publicar...") en la misma página; `COURSE_NOT_OWNED` →
+  borrar un curso en borrador. Despublicalo primero." (o "...publicar...") en la misma página; `COURSE_HAS_PROGRESS`
+  (`409`, #834) solo al borrar: "No se puede borrar el curso porque ya tiene progreso de alumnos." en la misma página
+  (sin el `detail` ni el código; al publicar o despublicar no significa nada y es el aviso genérico); `COURSE_NOT_OWNED` →
   `403`, `COURSE_NOT_FOUND` o un id que no es UUID → `404` (sin llamar a la API); `INVALID_REQUEST`, caídas y demás
   códigos → `503` "No pudimos completar la acción. Intentá de nuevo." sobre la confirmación (o como aviso si el curso
   tampoco se puede leer). Al abrir la página, un fallo de lectura es un aviso `503`. Todo `no-store` y con CSRF.

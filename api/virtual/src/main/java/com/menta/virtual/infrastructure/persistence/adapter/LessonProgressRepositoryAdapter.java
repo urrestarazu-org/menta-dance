@@ -94,4 +94,10 @@ public class LessonProgressRepositoryAdapter implements LessonProgressRepository
     public long deleteByLessonId(LessonId lessonId) {
         return jpaRepository.deleteByLessonId(lessonId.getValue());
     }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public boolean existsByCourseId(UUID courseId) {
+        return jpaRepository.existsByCourseId(courseId);
+    }
 }

@@ -288,11 +288,12 @@ public class VirtualConfiguration {
     @Bean
     public DeleteVirtualCourseUseCase deleteVirtualCourseUseCase(
         VirtualCourseRepository courseRepository, VirtualModuleRepository moduleRepository,
-        VirtualLessonRepository lessonRepository, VirtualCourseAuditRepository auditRepository
+        VirtualLessonRepository lessonRepository, LessonProgressRepository progressRepository,
+        VirtualCourseAuditRepository auditRepository
     ) {
-        return new TransactionalDeleteVirtualCourseUseCase(
-            new DeleteVirtualCourseUseCaseImpl(courseRepository, moduleRepository, lessonRepository, auditRepository)
-        );
+        return new TransactionalDeleteVirtualCourseUseCase(new DeleteVirtualCourseUseCaseImpl(
+            courseRepository, moduleRepository, lessonRepository, progressRepository, auditRepository
+        ));
     }
 
     @Bean

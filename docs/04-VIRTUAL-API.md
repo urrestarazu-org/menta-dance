@@ -108,3 +108,12 @@ en un curso publicado (sólo borrar un curso entero exige `DRAFT`). En la misma
 transacción borra el progreso de todos los alumnos en esa lección, renumera las
 lecciones restantes del módulo de forma contigua (`order` 0..n-1) y deja una fila de
 auditoría `DELETE_LESSON`.
+
+`DELETE /api/v1/admin/virtual/courses/{courseId}` responde `204` sólo si el curso está en
+`DRAFT` y ningún alumno tiene progreso en sus lecciones (#834). Un curso publicado puede
+volver a borrador al despublicarlo, así que el estado no alcanza: con progreso responde
+`409 COURSE_HAS_PROGRESS`, no borra nada (ni el curso, ni sus módulos y lecciones, ni el
+progreso) y no escribe auditoría. Primero se comprueba que exista (`404`), que sea del
+usuario (`403`) y que esté en borrador (`409 COURSE_NOT_DRAFT`); el progreso se mira
+después. Las referencias de Billing al curso son por valor, sin clave foránea, así que
+no bloquean este borrado.

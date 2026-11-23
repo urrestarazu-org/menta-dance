@@ -3,13 +3,17 @@ package com.menta.virtual.application.usecase;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.menta.virtual.application.port.out.LessonProgressRepository;
 import com.menta.virtual.application.port.out.VirtualCourseAuditRepository;
 import com.menta.virtual.application.port.out.VirtualCourseRepository;
 import com.menta.virtual.application.port.out.VirtualLessonRepository;
 import com.menta.virtual.application.port.out.VirtualModuleRepository;
+import com.menta.virtual.domain.exception.CourseHasProgressException;
 import com.menta.virtual.domain.exception.CourseNotDraftException;
 import com.menta.virtual.domain.model.CourseCategory;
 import com.menta.virtual.domain.model.CourseId;
@@ -27,9 +31,11 @@ class DeleteVirtualCourseUseCaseImplTest {
     private final VirtualCourseRepository courseRepository = mock(VirtualCourseRepository.class);
     private final VirtualModuleRepository moduleRepository = mock(VirtualModuleRepository.class);
     private final VirtualLessonRepository lessonRepository = mock(VirtualLessonRepository.class);
+    private final LessonProgressRepository progressRepository = mock(LessonProgressRepository.class);
     private final VirtualCourseAuditRepository auditRepository = mock(VirtualCourseAuditRepository.class);
-    private final DeleteVirtualCourseUseCaseImpl useCase =
-        new DeleteVirtualCourseUseCaseImpl(courseRepository, moduleRepository, lessonRepository, auditRepository);
+    private final DeleteVirtualCourseUseCaseImpl useCase = new DeleteVirtualCourseUseCaseImpl(
+        courseRepository, moduleRepository, lessonRepository, progressRepository, auditRepository
+    );
 
     private static VirtualCourse course(CourseId id, UUID professorId, CourseStatus status) {
         return new VirtualCourse(
@@ -76,5 +82,34 @@ class DeleteVirtualCourseUseCaseImplTest {
 
         assertThatThrownBy(() -> useCase.delete(id.toString(), ownerId, false))
             .isInstanceOf(CourseNotDraftException.class);
+    }
+
+    @Test
+    void rejects_deleting_a_draft_course_with_student_progress_and_deletes_nothing() {
+        CourseId id = CourseId.generate();
+        UUID ownerId = UUID.randomUUID();
+        when(courseRepository.findById(id)).thenReturn(Optional.of(course(id, ownerId, CourseStatus.DRAFT)));
+        when(progressRepository.existsByCourseId(id.getValue())).thenReturn(true);
+
+        assertThatThrownBy(() -> useCase.delete(id.toString(), ownerId, false))
+            .isInstanceOf(CourseHasProgressException.class);
+
+        verify(lessonRepository, never()).deleteByCourseId(id);
+        verify(moduleRepository, never()).deleteByCourseId(id);
+        verify(courseRepository, never()).delete(id);
+        verifyNoInteractions(auditRepository);
+    }
+
+    @Test
+    void a_published_course_keeps_answering_not_draft_without_looking_at_the_progress() {
+        CourseId id = CourseId.generate();
+        UUID ownerId = UUID.randomUUID();
+        when(courseRepository.findById(id)).thenReturn(Optional.of(course(id, ownerId, CourseStatus.PUBLISHED)));
+        when(progressRepository.existsByCourseId(id.getValue())).thenReturn(true);
+
+        assertThatThrownBy(() -> useCase.delete(id.toString(), ownerId, false))
+            .isInstanceOf(CourseNotDraftException.class);
+
+        verifyNoInteractions(progressRepository);
     }
 }

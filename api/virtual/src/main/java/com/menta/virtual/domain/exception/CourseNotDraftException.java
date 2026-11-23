@@ -4,10 +4,9 @@ import com.menta.shared.domain.exceptions.BusinessException;
 
 /**
  * Thrown when deleting a course that is not {@code DRAFT} (US-VIRTUAL-006:
- * "Eliminar curso (solo draft)"). A course that was never published cannot
- * have any subscriber by construction, so this restriction alone already
- * satisfies "no eliminar cursos con suscriptores activos" — no separate
- * cross-module check against Billing is needed.
+ * "Eliminar curso (solo draft)"). The status alone does not rule out student
+ * history, because a published course can go back to {@code DRAFT}: see
+ * {@link CourseHasProgressException}.
  */
 public class CourseNotDraftException extends BusinessException {
 

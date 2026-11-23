@@ -14,14 +14,17 @@ auth:bearer {
 }
 
 docs {
-  US-VIRTUAL-006. Only a DRAFT course can be deleted — a course that was
-  never published cannot have any subscriber by construction.
+  US-VIRTUAL-006. Only a DRAFT course can be deleted. A published course can go
+  back to DRAFT (unpublish), so the status alone is not enough: a course whose
+  students already have lesson progress is not deleted either (#834).
 
   Success contract: 204 No Content.
   Error contract:
     403 COURSE_NOT_OWNED → INSTRUCTOR is not the course's professor
     404 COURSE_NOT_FOUND → courseId does not exist
     409 COURSE_NOT_DRAFT → course is PUBLISHED or ARCHIVED
+    409 COURSE_HAS_PROGRESS → a student has progress in a lesson of the course;
+        nothing is deleted and no audit row is written
 }
 
 assert {

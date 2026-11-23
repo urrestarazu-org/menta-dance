@@ -244,6 +244,10 @@ class ManagementVirtualCourseStatusIntegrationTest extends BaseIntegrationTest {
                 Arguments.of(Route.PUBLISH, 409, "COURSE_NOT_DRAFT", 409,
                         "Solo se puede publicar un curso en borrador."),
                 Arguments.of(Route.UNPUBLISH, 409, "COURSE_NOT_DRAFT", 503, GENERIC),
+                Arguments.of(Route.DELETE, 409, "COURSE_HAS_PROGRESS", 409,
+                        "No se puede borrar el curso porque ya tiene progreso de alumnos."),
+                Arguments.of(Route.PUBLISH, 409, "COURSE_HAS_PROGRESS", 503, GENERIC),
+                Arguments.of(Route.UNPUBLISH, 409, "COURSE_HAS_PROGRESS", 503, GENERIC),
                 Arguments.of(Route.PUBLISH, 400, "INVALID_REQUEST", 503, GENERIC),
                 Arguments.of(Route.UNPUBLISH, 500, "OTHER", 503, GENERIC),
                 Arguments.of(Route.DELETE, 500, "OTHER", 503, GENERIC));
@@ -262,6 +266,20 @@ class ManagementVirtualCourseStatusIntegrationTest extends BaseIntegrationTest {
         assertThat(response.getStatus()).isEqualTo(pageStatus);
         assertThat(main).containsPattern("<div[^>]*role=\"alert\"[^>]*>\\s*<p>" + message)
                 .contains(route.button).doesNotContain("Revisar la estructura");
+    }
+
+    @Test
+    @DisplayName("a course with student progress cannot be deleted: the page says so and never shows the code")
+    void deleteRefusedForProgress() throws Exception {
+        stubCourse(Route.DELETE);
+        stubProblem("DELETE", Route.DELETE.apiUrl(), 409, "COURSE_HAS_PROGRESS");
+
+        MockHttpServletResponse response =
+            mockMvc.perform(confirm(Route.DELETE, logIn("ADMIN"))).andReturn().getResponse();
+
+        assertThat(response.getStatus()).isEqualTo(409);
+        assertThat(render(response)).doesNotContain("COURSE_HAS_PROGRESS", "Despublicalo primero")
+            .contains(Route.DELETE.button);
     }
 
     static Stream<Arguments> notOwnedOrGone() {
