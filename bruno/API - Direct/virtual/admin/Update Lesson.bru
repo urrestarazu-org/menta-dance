@@ -25,8 +25,13 @@ docs {
   (/admin/virtual/lessons/**) — ownership resolves through the lesson's
   course_id, denormalized since #46 (never through the module first).
 
+  `videoId` omitted or null leaves the video as is; a blank value ("" or only
+  spaces) is rejected with 400 INVALID_REQUEST and the lesson is not modified:
+  a video cannot be removed once assigned, only replaced by another one (#845).
+
   Success contract: 200 with VirtualLessonManagementResponse.
   Error contract:
+    400 INVALID_REQUEST → invalid body, e.g. a blank videoId or a negative number
     403 COURSE_NOT_OWNED → INSTRUCTOR is not the parent course's professor
     404 LESSON_NOT_FOUND → lessonId does not exist
 }

@@ -485,6 +485,95 @@ class VirtualCourseManagementIntegrationTest {
         assertThat(stored.getDisplayOrder()).isEqualTo(3);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"", "   "})
+    void update_lesson_with_a_blank_video_id_is_400_invalid_request_and_keeps_the_video(String blank) {
+        UUID adminId = issueUser(Role.ADMIN);
+        UUID courseId = seedCourse(adminId, CourseStatus.PUBLISHED);
+        UUID moduleId = seedModule(courseId, 0);
+        UUID lessonId = UUID.randomUUID();
+        lessonRepository.save(new VirtualLessonJpaEntity(
+            lessonId, moduleId, courseId, "L1", "d", "bunny-123", 10, false, 0
+        ));
+
+        ResponseEntity<Map> response = http.exchange(
+            "/api/v1/admin/virtual/lessons/" + lessonId, HttpMethod.PUT,
+            new HttpEntity<>(Map.of("videoId", blank), headersFor(adminId, Role.ADMIN)), Map.class
+        );
+
+        assertGenericInvalidRequest(response);
+        assertThat(lessonRepository.findById(lessonId).orElseThrow().getVideoId()).isEqualTo("bunny-123");
+    }
+
+    @Test
+    void update_lesson_with_a_null_or_omitted_video_id_keeps_the_video() {
+        UUID adminId = issueUser(Role.ADMIN);
+        UUID courseId = seedCourse(adminId, CourseStatus.PUBLISHED);
+        UUID moduleId = seedModule(courseId, 0);
+        UUID lessonId = UUID.randomUUID();
+        lessonRepository.save(new VirtualLessonJpaEntity(
+            lessonId, moduleId, courseId, "L1", "d", "bunny-123", 10, false, 0
+        ));
+        Map<String, Object> withNull = new java.util.HashMap<>();
+        withNull.put("videoId", null);
+        withNull.put("free", true);
+
+        ResponseEntity<Map> explicitNull = http.exchange(
+            "/api/v1/admin/virtual/lessons/" + lessonId, HttpMethod.PUT,
+            new HttpEntity<>(withNull, headersFor(adminId, Role.ADMIN)), Map.class
+        );
+        ResponseEntity<Map> omitted = http.exchange(
+            "/api/v1/admin/virtual/lessons/" + lessonId, HttpMethod.PUT,
+            new HttpEntity<>(Map.of("durationMinutes", 20), headersFor(adminId, Role.ADMIN)), Map.class
+        );
+
+        assertThat(explicitNull.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(omitted.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(omitted.getBody().get("videoId")).isEqualTo("bunny-123");
+        assertThat(lessonRepository.findById(lessonId).orElseThrow().getVideoId()).isEqualTo("bunny-123");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "   "})
+    void create_lesson_with_a_blank_video_id_is_400_invalid_request_and_stores_nothing(String blank) {
+        UUID adminId = issueUser(Role.ADMIN);
+        UUID courseId = seedCourse(adminId, CourseStatus.DRAFT);
+        UUID moduleId = seedModule(courseId, 0);
+
+        ResponseEntity<Map> response = http.exchange(
+            "/api/v1/admin/virtual/modules/" + moduleId + "/lessons", HttpMethod.POST,
+            new HttpEntity<>(
+                Map.of("title", "L1", "description", "d", "videoId", blank, "durationMinutes", 10, "free", false),
+                headersFor(adminId, Role.ADMIN)
+            ),
+            Map.class
+        );
+
+        assertGenericInvalidRequest(response);
+        assertThat(lessonRepository.findByModuleIdOrderByDisplayOrderAsc(moduleId)).isEmpty();
+    }
+
+    @Test
+    void create_lesson_without_a_video_id_is_a_stub_lesson_with_no_video() {
+        UUID adminId = issueUser(Role.ADMIN);
+        UUID courseId = seedCourse(adminId, CourseStatus.DRAFT);
+        UUID moduleId = seedModule(courseId, 0);
+
+        ResponseEntity<Map> response = http.exchange(
+            "/api/v1/admin/virtual/modules/" + moduleId + "/lessons", HttpMethod.POST,
+            new HttpEntity<>(
+                Map.of("title", "L1", "description", "d", "durationMinutes", 10, "free", false),
+                headersFor(adminId, Role.ADMIN)
+            ),
+            Map.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(response.getBody().get("videoId")).isNull();
+        assertThat(lessonRepository.findByModuleIdOrderByDisplayOrderAsc(moduleId))
+            .extracting(VirtualLessonJpaEntity::getVideoId).containsExactly((String) null);
+    }
+
     private static void assertGenericInvalidRequest(ResponseEntity<Map> response) {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody().get("code")).isEqualTo("INVALID_REQUEST");

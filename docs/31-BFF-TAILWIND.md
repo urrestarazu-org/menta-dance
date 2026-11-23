@@ -662,8 +662,8 @@ token de la sesión. `ManagementVirtualModuleController` atiende la estructura y
   el tope es el del formulario de curso), identificador de video (opcional, 128, sin espacios; es el id opaco de un video ya
   existente, la subida no entra acá), duración en minutos (texto como los demás formularios numéricos: entero de 0 a
   9999, vacío es 0, un solo mensaje) y la casilla "Lección gratuita". No hay campo de orden: la lección nueva va al final.
-- **Video**: la API no permite quitar un video asignado, así que en la edición un identificador vacío significa "no
-  cambiar" y no se envía; en el alta vacío es "sin video". La edición se prefilla con el detalle del curso (la API no
+- **Video**: la API no permite quitar un video asignado (un `videoId` en blanco responde `400 INVALID_REQUEST`, #845),
+  así que en la edición un identificador vacío significa "no cambiar" y no se envía; en el alta vacío es "sin video". La edición se prefilla con el detalle del curso (la API no
   tiene lectura de una lección): `404` "No encontramos el módulo." o "No encontramos la lección." si no están.
 - **Acciones sobre cada lección en la estructura** (#831, `ManagementVirtualLessonActionsController`): el título de la
   lección es un enlace a `.../lecciones/{lessonId}/editar` (se conserva "Editar"), y cada lección tiene "Borrar" (enlace a

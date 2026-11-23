@@ -720,7 +720,9 @@ paths:
         `INT` desde #46. `videoId` es una referencia opaca a Bunny.net que
         el cliente ya conoce; Virtual sólo la guarda por valor. Es opcional:
         una lección puede crearse sin video (queda `videoId: null`), pero un
-        curso sólo se publica si tiene al menos una lección con video.
+        curso sólo se publica si tiene al menos una lección con video. Un
+        `videoId` en blanco (vacío o sólo espacios) no equivale a omitirlo y
+        responde `400 INVALID_REQUEST`.
       operationId: createVirtualLesson
       parameters:
         - $ref: '#/components/parameters/ModuleId'
@@ -750,6 +752,11 @@ paths:
     put:
       tags: [Gestión de lecciones]
       summary: Actualizar una lección (parcial)
+      description: |
+        Sólo se aplican los campos presentes. `videoId` omitido o `null` deja
+        el video como está; un `videoId` en blanco (vacío o sólo espacios) se
+        rechaza con `400 INVALID_REQUEST` y no modifica la lección, porque un
+        video no se puede quitar una vez asignado (sólo reemplazar por otro).
       operationId: updateVirtualLesson
       parameters:
         - $ref: '#/components/parameters/LessonId'
@@ -1407,7 +1414,10 @@ components:
         videoId:
           type: [string, 'null']
           example: bunny-video-id-123
-          description: Se omite o va `null` para crear la lección sin video todavía.
+          pattern: '\S'
+          description: >-
+            Se omite o va `null` para crear la lección sin video todavía. Un valor en blanco
+            (vacío o sólo espacios) se rechaza con `400 INVALID_REQUEST`.
         durationMinutes:
           type: integer
           minimum: 0
@@ -1428,7 +1438,13 @@ components:
         description:
           type: string
         videoId:
-          type: string
+          type: [string, 'null']
+          example: bunny-video-id-123
+          pattern: '\S'
+          description: >-
+            Se omite o va `null` para dejar el video como está. Un valor en blanco (vacío o sólo
+            espacios) se rechaza con `400 INVALID_REQUEST`: un video no se puede quitar una vez
+            asignado, sólo reemplazar.
         durationMinutes:
           type: integer
           minimum: 0

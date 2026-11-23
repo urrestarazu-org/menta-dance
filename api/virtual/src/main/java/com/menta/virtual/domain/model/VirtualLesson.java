@@ -45,12 +45,16 @@ public final class VirtualLesson {
 
     /**
      * Creates a lesson with a fresh {@link LessonId}; the constructor rules apply, so duration and
-     * order must not be negative.
+     * order must not be negative. A {@code null} video id creates a stub lesson with no video yet;
+     * a blank one is rejected (see {@link #withVideoId(String)}).
+     *
+     * @throws IllegalArgumentException if {@code videoId} is non-null and blank
      */
     public static VirtualLesson create(
         ModuleId moduleId, CourseId courseId, String title, String description, String videoId,
         int durationMinutes, boolean free, int order
     ) {
+        requireNotBlankWhenPresent(videoId);
         return new VirtualLesson(
             LessonId.generate(), moduleId, courseId, title, description, videoId, durationMinutes, free, order
         );
@@ -76,8 +80,16 @@ public final class VirtualLesson {
         return new VirtualLesson(id, moduleId, courseId, title, newDescription, videoId, durationMinutes, free, order);
     }
 
-    /** Returns a copy of this lesson with another video id; a {@code null} id leaves the lesson incomplete. */
+    /**
+     * Returns a copy of this lesson with another video id. A video cannot be cleared by blanking it
+     * (#845): a blank id is rejected instead of leaving the lesson incomplete. This guard lives here
+     * and in {@link #create}, not in the constructor, because the constructor also hydrates stored
+     * rows, and an existing row may already hold an empty id.
+     *
+     * @throws IllegalArgumentException if {@code newVideoId} is non-null and blank
+     */
     public VirtualLesson withVideoId(String newVideoId) {
+        requireNotBlankWhenPresent(newVideoId);
         return new VirtualLesson(id, moduleId, courseId, title, description, newVideoId, durationMinutes, free, order);
     }
 
@@ -94,6 +106,12 @@ public final class VirtualLesson {
     /** Returns a copy of this lesson with another display order, which must not be negative. */
     public VirtualLesson withOrder(int newOrder) {
         return new VirtualLesson(id, moduleId, courseId, title, description, videoId, durationMinutes, free, newOrder);
+    }
+
+    private static void requireNotBlankWhenPresent(String videoId) {
+        if (videoId != null && videoId.isBlank()) {
+            throw new IllegalArgumentException("videoId cannot be blank");
+        }
     }
 
     public LessonId getId() {
