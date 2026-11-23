@@ -190,6 +190,7 @@ class ManagementVirtualCourseFormIntegrationTest extends BaseIntegrationTest {
                 Arguments.of(400, "PROFESSOR_MISMATCH", 400, "Solo podés crear cursos a tu nombre."),
                 Arguments.of(409, "COURSE_NOT_DRAFT", 503, "No pudimos guardar el curso. Intentá de nuevo."),
                 Arguments.of(409, "COURSE_HAS_PROGRESS", 503, "No pudimos guardar el curso. Intentá de nuevo."),
+                Arguments.of(409, "COURSE_IN_USE", 503, "No pudimos guardar el curso. Intentá de nuevo."),
                 Arguments.of(500, "OTHER", 503, "No pudimos guardar el curso. Intentá de nuevo."));
     }
 

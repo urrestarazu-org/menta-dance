@@ -508,13 +508,20 @@ paths:
 
     delete:
       tags: [Gestión de cursos]
-      summary: Eliminar un curso (sólo DRAFT y sin progreso de alumnos)
+      summary: Eliminar un curso (sólo DRAFT, sin progreso de alumnos y sin referencias de Billing)
       description: |
         Sólo se puede eliminar un curso en `DRAFT`, pero un curso publicado puede volver a
         borrador al despublicarlo; por eso el estado no basta. Si algún alumno ya tiene progreso
         en una lección del curso se responde `409 COURSE_HAS_PROGRESS`, no se borra nada
         (curso, módulos, lecciones ni progreso) y no se escribe auditoría. Un curso publicado
         sigue respondiendo `409 COURSE_NOT_DRAFT`.
+
+        Billing referencia los cursos por valor, sin clave foránea, así que la base no impide el
+        borrado y dejaría planes y suscripciones apuntando a un curso inexistente. Por eso, si algún
+        plan (activo o no) o alguna suscripción (vigente, cancelada o vencida) incluye el curso, se
+        responde `409 COURSE_IN_USE`, no se borra nada y no se escribe auditoría. Cuentan también
+        las referencias históricas. Se comprueba al final: después de la existencia (`404`), la
+        propiedad (`403`), el estado (`COURSE_NOT_DRAFT`) y el progreso (`COURSE_HAS_PROGRESS`).
       operationId: deleteVirtualCourse
       parameters:
         - $ref: '#/components/parameters/CourseId'
@@ -531,8 +538,9 @@ paths:
           $ref: '#/components/responses/CourseNotFound'
         '409':
           description: >-
-            El curso no está en DRAFT (`COURSE_NOT_DRAFT`) o ya tiene progreso de alumnos
-            (`COURSE_HAS_PROGRESS`).
+            El curso no está en DRAFT (`COURSE_NOT_DRAFT`), ya tiene progreso de alumnos
+            (`COURSE_HAS_PROGRESS`) o Billing lo referencia en un plan o una suscripción
+            (`COURSE_IN_USE`).
           content:
             application/problem+json:
               schema:
@@ -552,6 +560,13 @@ paths:
                     status: 409
                     detail: El curso no se puede borrar porque ya tiene progreso de alumnos.
                     code: COURSE_HAS_PROGRESS
+                in_use:
+                  value:
+                    type: https://menta.dance/problems/course_in_use
+                    title: Conflict
+                    status: 409
+                    detail: El curso no se puede borrar porque está incluido en un plan o en una suscripción.
+                    code: COURSE_IN_USE
 
   /api/v1/admin/virtual/courses/{courseId}/publish:
     put:

@@ -94,6 +94,12 @@ public class PlanRepositoryAdapter implements PlanRepository {
         planCourseJpaRepository.saveAll(PlanJpaMapper.toCourseEntities(plan));
     }
 
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public boolean existsByCourseId(String courseId) {
+        return planCourseJpaRepository.existsByCourseId(courseId);
+    }
+
     private Plan toDomain(PlanJpaEntity entity) {
         return PlanJpaMapper.toDomain(
             entity,

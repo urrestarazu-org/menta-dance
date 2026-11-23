@@ -24,4 +24,7 @@ public interface SubscriptionCourseJpaRepository extends JpaRepository<Subscript
      * with {@code uq_billing_subscription_courses}.
      */
     void deleteBySubscriptionId(UUID subscriptionId);
+
+    /** Whether any subscription, whatever its status, froze the course in its snapshot (#856). */
+    boolean existsByCourseId(String courseId);
 }

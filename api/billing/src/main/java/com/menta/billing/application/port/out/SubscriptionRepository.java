@@ -158,4 +158,11 @@ public interface SubscriptionRepository {
      * hydrates the course snapshot for the callers that need it.</p>
      */
     java.util.List<SubscriptionHistoryEntry> findHistoryByUserId(UUID userId);
+
+    /**
+     * Whether the frozen course snapshot of any subscription includes the course, whatever the status
+     * of the subscription. Virtual asks it before deleting a course (#856): an expired subscription
+     * still references the course by value.
+     */
+    boolean existsByCourseId(String courseId);
 }

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import com.menta.virtual.domain.exception.CourseHasProgressException;
+import com.menta.virtual.domain.exception.CourseInUseException;
 import com.menta.virtual.domain.exception.CourseNotDraftException;
 import com.menta.virtual.domain.exception.CourseNotFoundException;
 import com.menta.virtual.domain.exception.CourseNotOwnedException;
@@ -61,6 +62,16 @@ class VirtualCourseExceptionHandlerTest {
         assertThat(response.getBody().getProperties().get("code")).isEqualTo("COURSE_HAS_PROGRESS");
         assertThat(response.getBody().getDetail())
             .isEqualTo("El curso no se puede borrar porque ya tiene progreso de alumnos.");
+    }
+
+    @Test
+    void maps_course_in_use_to_409_with_a_spanish_detail() {
+        ResponseEntity<ProblemDetail> response = handler.courseInUse(new CourseInUseException());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody().getProperties().get("code")).isEqualTo("COURSE_IN_USE");
+        assertThat(response.getBody().getDetail())
+            .isEqualTo("El curso no se puede borrar porque está incluido en un plan o en una suscripción.");
     }
 
     @Test

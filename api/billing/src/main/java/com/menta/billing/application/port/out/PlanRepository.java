@@ -35,4 +35,10 @@ public interface PlanRepository {
      * @param createdAt stamped as both the creation and the last-update instant of the plan row
      */
     void save(Plan plan, Instant createdAt);
+
+    /**
+     * Whether any plan includes the course, whatever the status of the plan. Virtual asks it before
+     * deleting a course (#856): an inactive plan still references the course by value.
+     */
+    boolean existsByCourseId(String courseId);
 }

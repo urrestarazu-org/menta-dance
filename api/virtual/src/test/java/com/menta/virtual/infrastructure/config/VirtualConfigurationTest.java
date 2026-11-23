@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 
 import ch.qos.logback.classic.Level;
 import com.menta.shared.billing.VirtualCourseEntitlementPort;
+import com.menta.shared.billing.VirtualCourseReferencePort;
 import com.menta.virtual.application.port.in.CompleteLessonUseCase;
 import com.menta.virtual.application.port.in.CreateVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.CreateVirtualLessonUseCase;
@@ -119,7 +120,8 @@ class VirtualConfigurationTest {
     @Test
     void wires_the_delete_course_use_case_bean_transactionally() {
         DeleteVirtualCourseUseCase useCase = configuration.deleteVirtualCourseUseCase(
-            courseRepository, moduleRepository, lessonRepository, mock(LessonProgressRepository.class), auditRepository
+            courseRepository, moduleRepository, lessonRepository, mock(LessonProgressRepository.class),
+            mock(VirtualCourseReferencePort.class), auditRepository
         );
 
         assertThat(useCase).isInstanceOf(TransactionalDeleteVirtualCourseUseCase.class);
@@ -652,6 +654,11 @@ class VirtualConfigurationTest {
             @Bean
             LessonProgressRepository lessonProgressRepository() {
                 return mock(LessonProgressRepository.class);
+            }
+
+            @Bean
+            VirtualCourseReferencePort virtualCourseReferencePort() {
+                return mock(VirtualCourseReferencePort.class);
             }
         }
     }

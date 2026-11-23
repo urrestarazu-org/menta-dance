@@ -1,6 +1,7 @@
 package com.menta.virtual.infrastructure.config;
 
 import com.menta.shared.billing.VirtualCourseEntitlementPort;
+import com.menta.shared.billing.VirtualCourseReferencePort;
 import com.menta.virtual.application.port.in.CompleteLessonUseCase;
 import com.menta.virtual.application.port.in.CreateVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.CreateVirtualLessonUseCase;
@@ -289,10 +290,11 @@ public class VirtualConfiguration {
     public DeleteVirtualCourseUseCase deleteVirtualCourseUseCase(
         VirtualCourseRepository courseRepository, VirtualModuleRepository moduleRepository,
         VirtualLessonRepository lessonRepository, LessonProgressRepository progressRepository,
-        VirtualCourseAuditRepository auditRepository
+        VirtualCourseReferencePort courseReferencePort, VirtualCourseAuditRepository auditRepository
     ) {
         return new TransactionalDeleteVirtualCourseUseCase(new DeleteVirtualCourseUseCaseImpl(
-            courseRepository, moduleRepository, lessonRepository, progressRepository, auditRepository
+            courseRepository, moduleRepository, lessonRepository, progressRepository, courseReferencePort,
+            auditRepository
         ));
     }
 

@@ -342,13 +342,13 @@ class VirtualOpenApiContractTest {
     }
 
     @Test
-    void the_course_delete_documents_both_409_problems_including_the_one_for_student_progress() {
+    void the_course_delete_documents_its_three_409_problems_including_student_progress_and_billing_references() {
         Map<String, Object> conflict = map(map(operation("DELETE " + COURSE), "responses"), "409");
         Map<String, Object> examples = map(map(map(conflict, "content"), "application/problem+json"), "examples");
 
         assertThat(examples.values()).extracting(example -> map(example, "value").get("code"))
-            .containsExactlyInAnyOrder("COURSE_NOT_DRAFT", "COURSE_HAS_PROGRESS");
-        assertThat(String.valueOf(conflict.get("description"))).contains("COURSE_HAS_PROGRESS");
+            .containsExactlyInAnyOrder("COURSE_NOT_DRAFT", "COURSE_HAS_PROGRESS", "COURSE_IN_USE");
+        assertThat(String.valueOf(conflict.get("description"))).contains("COURSE_HAS_PROGRESS", "COURSE_IN_USE");
     }
 
     @Test

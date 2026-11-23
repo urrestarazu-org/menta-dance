@@ -8,12 +8,14 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.menta.shared.billing.VirtualCourseReferencePort;
 import com.menta.virtual.application.port.out.LessonProgressRepository;
 import com.menta.virtual.application.port.out.VirtualCourseAuditRepository;
 import com.menta.virtual.application.port.out.VirtualCourseRepository;
 import com.menta.virtual.application.port.out.VirtualLessonRepository;
 import com.menta.virtual.application.port.out.VirtualModuleRepository;
 import com.menta.virtual.domain.exception.CourseHasProgressException;
+import com.menta.virtual.domain.exception.CourseInUseException;
 import com.menta.virtual.domain.exception.CourseNotDraftException;
 import com.menta.virtual.domain.model.CourseCategory;
 import com.menta.virtual.domain.model.CourseId;
@@ -32,9 +34,10 @@ class DeleteVirtualCourseUseCaseImplTest {
     private final VirtualModuleRepository moduleRepository = mock(VirtualModuleRepository.class);
     private final VirtualLessonRepository lessonRepository = mock(VirtualLessonRepository.class);
     private final LessonProgressRepository progressRepository = mock(LessonProgressRepository.class);
+    private final VirtualCourseReferencePort referencePort = mock(VirtualCourseReferencePort.class);
     private final VirtualCourseAuditRepository auditRepository = mock(VirtualCourseAuditRepository.class);
     private final DeleteVirtualCourseUseCaseImpl useCase = new DeleteVirtualCourseUseCaseImpl(
-        courseRepository, moduleRepository, lessonRepository, progressRepository, auditRepository
+        courseRepository, moduleRepository, lessonRepository, progressRepository, referencePort, auditRepository
     );
 
     private static VirtualCourse course(CourseId id, UUID professorId, CourseStatus status) {
@@ -111,5 +114,59 @@ class DeleteVirtualCourseUseCaseImplTest {
             .isInstanceOf(CourseNotDraftException.class);
 
         verifyNoInteractions(progressRepository);
+    }
+
+    @Test
+    void rejects_deleting_a_draft_course_that_billing_references_and_deletes_nothing() {
+        CourseId id = CourseId.generate();
+        UUID ownerId = UUID.randomUUID();
+        when(courseRepository.findById(id)).thenReturn(Optional.of(course(id, ownerId, CourseStatus.DRAFT)));
+        when(referencePort.isReferenced(id.toString())).thenReturn(true);
+
+        assertThatThrownBy(() -> useCase.delete(id.toString(), ownerId, false))
+            .isInstanceOf(CourseInUseException.class);
+
+        verify(lessonRepository, never()).deleteByCourseId(id);
+        verify(moduleRepository, never()).deleteByCourseId(id);
+        verify(courseRepository, never()).delete(id);
+        verifyNoInteractions(auditRepository);
+    }
+
+    @Test
+    void a_course_with_progress_answers_has_progress_before_asking_billing() {
+        CourseId id = CourseId.generate();
+        UUID ownerId = UUID.randomUUID();
+        when(courseRepository.findById(id)).thenReturn(Optional.of(course(id, ownerId, CourseStatus.DRAFT)));
+        when(progressRepository.existsByCourseId(id.getValue())).thenReturn(true);
+        when(referencePort.isReferenced(id.toString())).thenReturn(true);
+
+        assertThatThrownBy(() -> useCase.delete(id.toString(), ownerId, false))
+            .isInstanceOf(CourseHasProgressException.class);
+
+        verifyNoInteractions(referencePort);
+    }
+
+    @Test
+    void a_published_course_keeps_answering_not_draft_without_asking_billing() {
+        CourseId id = CourseId.generate();
+        UUID ownerId = UUID.randomUUID();
+        when(courseRepository.findById(id)).thenReturn(Optional.of(course(id, ownerId, CourseStatus.PUBLISHED)));
+        when(referencePort.isReferenced(id.toString())).thenReturn(true);
+
+        assertThatThrownBy(() -> useCase.delete(id.toString(), ownerId, false))
+            .isInstanceOf(CourseNotDraftException.class);
+
+        verifyNoInteractions(referencePort);
+    }
+
+    @Test
+    void asks_billing_with_the_course_id_as_billing_stores_it() {
+        CourseId id = CourseId.generate();
+        UUID ownerId = UUID.randomUUID();
+        when(courseRepository.findById(id)).thenReturn(Optional.of(course(id, ownerId, CourseStatus.DRAFT)));
+
+        useCase.delete(id.toString(), ownerId, false);
+
+        verify(referencePort).isReferenced(id.getValue().toString());
     }
 }

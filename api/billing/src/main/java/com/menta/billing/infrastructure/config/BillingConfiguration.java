@@ -79,6 +79,7 @@ import com.menta.billing.application.usecase.RoutingCreateSubscriptionCheckoutUs
 import com.menta.billing.application.usecase.SubmitPaymentProofUseCaseImpl;
 import com.menta.billing.application.usecase.UpdatePhysicalCoursePricingUseCaseImpl;
 import com.menta.billing.application.usecase.VirtualCourseEntitlementService;
+import com.menta.billing.application.usecase.VirtualCourseReferenceService;
 import com.menta.billing.domain.service.PaymentProofContentValidator;
 import com.menta.billing.infrastructure.security.RedisBankTransferRateLimitPort;
 import com.menta.billing.infrastructure.security.RedisBillingPlansRateLimitPort;
@@ -95,6 +96,7 @@ import com.menta.billing.infrastructure.transaction.TransactionalSubmitPaymentPr
 import com.menta.billing.infrastructure.transaction.TransactionalUpdatePhysicalCoursePricingUseCase;
 import com.menta.shared.auth.UserExistencePort;
 import com.menta.shared.billing.VirtualCourseEntitlementPort;
+import com.menta.shared.billing.VirtualCourseReferencePort;
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.util.Set;
@@ -221,6 +223,14 @@ public class BillingConfiguration {
         PlanRepository planRepository, SubscriptionRepository subscriptionRepository, Clock clock
     ) {
         return new VirtualCourseEntitlementService(planRepository, subscriptionRepository, clock);
+    }
+
+    /** #856: Virtual asks Billing whether a course is still referenced before deleting it. */
+    @Bean
+    public VirtualCourseReferencePort virtualCourseReferencePort(
+        PlanRepository planRepository, SubscriptionRepository subscriptionRepository
+    ) {
+        return new VirtualCourseReferenceService(planRepository, subscriptionRepository);
     }
 
     /**

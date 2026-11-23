@@ -366,4 +366,13 @@ class SubscriptionRepositoryAdapterTest {
 
         assertThat(adapter.findHistoryByUserId(USER_ID)).isEmpty();
     }
+
+    @Test
+    void existsByCourseId_delegates_to_the_frozen_course_rows_of_any_subscription() {
+        when(courseJpaRepository.existsByCourseId("course-1")).thenReturn(true);
+        when(courseJpaRepository.existsByCourseId("course-2")).thenReturn(false);
+
+        assertThat(adapter.existsByCourseId("course-1")).isTrue();
+        assertThat(adapter.existsByCourseId("course-2")).isFalse();
+    }
 }

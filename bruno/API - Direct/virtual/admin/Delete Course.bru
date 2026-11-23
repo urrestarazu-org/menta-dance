@@ -16,7 +16,9 @@ auth:bearer {
 docs {
   US-VIRTUAL-006. Only a DRAFT course can be deleted. A published course can go
   back to DRAFT (unpublish), so the status alone is not enough: a course whose
-  students already have lesson progress is not deleted either (#834).
+  students already have lesson progress is not deleted either (#834), nor is a
+  course that Billing references in any plan or subscription, active or
+  historical (#856): Billing points at courses by value, with no foreign key.
 
   Success contract: 204 No Content.
   Error contract:
@@ -25,6 +27,8 @@ docs {
     409 COURSE_NOT_DRAFT → course is PUBLISHED or ARCHIVED
     409 COURSE_HAS_PROGRESS → a student has progress in a lesson of the course;
         nothing is deleted and no audit row is written
+    409 COURSE_IN_USE → a plan (any status) or a subscription (any status)
+        includes the course; nothing is deleted and no audit row is written
 }
 
 assert {

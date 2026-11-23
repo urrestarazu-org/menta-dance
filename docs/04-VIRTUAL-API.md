@@ -115,5 +115,12 @@ volver a borrador al despublicarlo, así que el estado no alcanza: con progreso 
 `409 COURSE_HAS_PROGRESS`, no borra nada (ni el curso, ni sus módulos y lecciones, ni el
 progreso) y no escribe auditoría. Primero se comprueba que exista (`404`), que sea del
 usuario (`403`) y que esté en borrador (`409 COURSE_NOT_DRAFT`); el progreso se mira
-después. Las referencias de Billing al curso son por valor, sin clave foránea, así que
-no bloquean este borrado.
+después.
+
+Billing referencia los cursos por valor, sin clave foránea, así que la base no impide el
+borrado: lo impide `virtual`, que le pregunta a Billing por el puerto
+`VirtualCourseReferencePort` de `shared` (#856). Si algún plan (activo o no) o alguna
+suscripción (vigente, cancelada o vencida) incluye el curso, responde `409 COURSE_IN_USE`,
+no borra nada y no escribe auditoría; las referencias históricas también cuentan. Es la
+última comprobación, después de `COURSE_HAS_PROGRESS`. Un pago de suscripción virtual cita
+el plan y no el curso, así que lo cubre la consulta de planes y suscripciones.
