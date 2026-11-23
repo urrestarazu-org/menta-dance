@@ -140,6 +140,16 @@ class LessonProgressRepositoryAdapterTest {
     }
 
     @Test
+    void exists_by_course_id_delegates_to_the_jpa_repository() {
+        UUID courseId = UUID.randomUUID();
+        UUID otherCourseId = UUID.randomUUID();
+        when(jpaRepository.existsByCourseId(courseId)).thenReturn(true);
+
+        assertThat(adapter.existsByCourseId(courseId)).isTrue();
+        assertThat(adapter.existsByCourseId(otherCourseId)).isFalse();
+    }
+
+    @Test
     void count_lessons_by_course_ids_skips_the_query_for_no_course() {
         assertThat(adapter.countLessonsByCourseIds(Set.of())).isEmpty();
         verifyNoInteractions(lessonJpaRepository);

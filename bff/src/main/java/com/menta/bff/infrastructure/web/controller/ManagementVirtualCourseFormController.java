@@ -236,8 +236,8 @@ public class ManagementVirtualCourseFormController {
             case COURSE_NOT_OWNED -> notOwned(model, response);
             case COURSE_NOT_FOUND -> notFound(model, response);
             // The structure codes do not apply to the course form: same generic message as the lifecycle ones.
-            case COURSE_NOT_DRAFT, COURSE_NOT_PUBLISHABLE, MODULE_NOT_FOUND, LESSON_NOT_FOUND,
-                    MODULE_REORDER_MISMATCH -> saveFailed(model, response);
+            case COURSE_NOT_DRAFT, COURSE_HAS_PROGRESS, COURSE_NOT_PUBLISHABLE, MODULE_NOT_FOUND,
+                    LESSON_NOT_FOUND, MODULE_REORDER_MISMATCH -> saveFailed(model, response);
         };
     }
 

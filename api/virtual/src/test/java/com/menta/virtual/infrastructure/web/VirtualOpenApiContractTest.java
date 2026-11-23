@@ -342,6 +342,16 @@ class VirtualOpenApiContractTest {
     }
 
     @Test
+    void the_course_delete_documents_both_409_problems_including_the_one_for_student_progress() {
+        Map<String, Object> conflict = map(map(operation("DELETE " + COURSE), "responses"), "409");
+        Map<String, Object> examples = map(map(map(conflict, "content"), "application/problem+json"), "examples");
+
+        assertThat(examples.values()).extracting(example -> map(example, "value").get("code"))
+            .containsExactlyInAnyOrder("COURSE_NOT_DRAFT", "COURSE_HAS_PROGRESS");
+        assertThat(String.valueOf(conflict.get("description"))).contains("COURSE_HAS_PROGRESS");
+    }
+
+    @Test
     void the_routes_that_address_a_lesson_by_id_document_that_a_lesson_without_video_is_a_404_lesson_not_found() {
         // #851: a lesson without video does not exist for students; there is no dedicated error code.
         for (String route : List.of("GET " + LESSON, "GET " + LESSON + "/stream")) {

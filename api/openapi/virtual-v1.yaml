@@ -508,11 +508,13 @@ paths:
 
     delete:
       tags: [Gestión de cursos]
-      summary: Eliminar un curso (sólo DRAFT)
+      summary: Eliminar un curso (sólo DRAFT y sin progreso de alumnos)
       description: |
-        Un curso que nunca fue publicado no puede tener suscriptores por
-        construcción — esta restricción es suficiente sin consultar a
-        Billing.
+        Sólo se puede eliminar un curso en `DRAFT`, pero un curso publicado puede volver a
+        borrador al despublicarlo; por eso el estado no basta. Si algún alumno ya tiene progreso
+        en una lección del curso se responde `409 COURSE_HAS_PROGRESS`, no se borra nada
+        (curso, módulos, lecciones ni progreso) y no se escribe auditoría. Un curso publicado
+        sigue respondiendo `409 COURSE_NOT_DRAFT`.
       operationId: deleteVirtualCourse
       parameters:
         - $ref: '#/components/parameters/CourseId'
@@ -528,7 +530,9 @@ paths:
         '404':
           $ref: '#/components/responses/CourseNotFound'
         '409':
-          description: El curso no está en DRAFT.
+          description: >-
+            El curso no está en DRAFT (`COURSE_NOT_DRAFT`) o ya tiene progreso de alumnos
+            (`COURSE_HAS_PROGRESS`).
           content:
             application/problem+json:
               schema:
@@ -541,6 +545,13 @@ paths:
                     status: 409
                     detail: Only a DRAFT course can be deleted.
                     code: COURSE_NOT_DRAFT
+                has_progress:
+                  value:
+                    type: https://menta.dance/problems/course_has_progress
+                    title: Conflict
+                    status: 409
+                    detail: El curso no se puede borrar porque ya tiene progreso de alumnos.
+                    code: COURSE_HAS_PROGRESS
 
   /api/v1/admin/virtual/courses/{courseId}/publish:
     put:

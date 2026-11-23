@@ -214,6 +214,18 @@ class LessonProgressRepositoryAdapterProjectionTest {
         assertThat(lessonRepository.countModulesWithVideoByCourseIdIn(List.of(courseId))).isEmpty();
     }
 
+    @Test
+    void exists_by_course_id_is_true_only_for_the_course_that_has_progress() {
+        UUID withProgress = seedCourse("Con progreso", CourseStatus.DRAFT);
+        UUID withoutProgress = seedCourse("Sin progreso", CourseStatus.DRAFT);
+        UUID lessonId = seedLesson(withProgress, "Leccion", 0);
+        progressRepository.saveAndFlush(progress(UUID.randomUUID(), lessonId, withProgress, 30, false, null));
+
+        assertThat(progressRepository.existsByCourseId(withProgress)).isTrue();
+        assertThat(progressRepository.existsByCourseId(withoutProgress)).isFalse();
+        assertThat(progressRepository.existsByCourseId(UUID.randomUUID())).isFalse();
+    }
+
     private UUID seedModule(UUID courseId) {
         UUID moduleId = UUID.randomUUID();
         moduleRepository.saveAndFlush(new VirtualModuleJpaEntity(moduleId, courseId, "Modulo", false, 0));

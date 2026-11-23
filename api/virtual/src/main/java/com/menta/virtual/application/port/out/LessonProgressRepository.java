@@ -48,4 +48,10 @@ public interface LessonProgressRepository {
      * the lesson itself is deleted (#830).
      */
     long deleteByLessonId(LessonId lessonId);
+
+    /**
+     * Whether any student has progress in a lesson of the course; used to refuse deleting a course that
+     * keeps student history (#834).
+     */
+    boolean existsByCourseId(UUID courseId);
 }

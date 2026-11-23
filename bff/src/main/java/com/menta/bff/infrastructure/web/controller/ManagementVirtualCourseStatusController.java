@@ -43,6 +43,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 public class ManagementVirtualCourseStatusController {
 
     static final String ACTION_FAILED = "No pudimos completar la acción. Intentá de nuevo.";
+    static final String HAS_PROGRESS = "No se puede borrar el curso porque ya tiene progreso de alumnos.";
     static final String NOT_PUBLISHABLE = "El curso todavía no cumple las condiciones para publicarse.";
 
     private static final String BASE = "/gestion/cursos-virtuales/{courseId}/";
@@ -197,6 +198,9 @@ public class ManagementVirtualCourseStatusController {
                     e.getPublishDetail() == null ? NOT_PUBLISHABLE : e.getPublishDetail(), true);
             case COURSE_NOT_DRAFT -> action.notDraft == null
                     ? FAILED : new Refusal(HttpStatus.CONFLICT, action.notDraft, false);
+            // Only deleting is refused for progress; on any other action the code means nothing here.
+            case COURSE_HAS_PROGRESS -> action == Action.DELETE
+                    ? new Refusal(HttpStatus.CONFLICT, HAS_PROGRESS, false) : FAILED;
             default -> FAILED;
         };
     }

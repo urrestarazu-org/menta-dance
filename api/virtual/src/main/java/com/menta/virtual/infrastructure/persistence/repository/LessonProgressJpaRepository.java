@@ -77,4 +77,7 @@ public interface LessonProgressJpaRepository extends JpaRepository<LessonProgres
 
     /** Deletes the rows of every user in the lesson and returns how many it removed. */
     long deleteByLessonId(UUID lessonId);
+
+    /** Whether any row belongs to the course; served by the index MySQL keeps for the course foreign key. */
+    boolean existsByCourseId(UUID courseId);
 }

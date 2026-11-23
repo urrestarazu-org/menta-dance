@@ -87,6 +87,8 @@ public interface VirtualCourseManagementApiClient {
             COURSE_NOT_FOUND,
             /** Only a draft course can be deleted. */
             COURSE_NOT_DRAFT,
+            /** The course cannot be deleted because students already have progress in it. */
+            COURSE_HAS_PROGRESS,
             /** The course is not ready to publish; see {@link #getPublishDetail()}. */
             COURSE_NOT_PUBLISHABLE,
             MODULE_NOT_FOUND,

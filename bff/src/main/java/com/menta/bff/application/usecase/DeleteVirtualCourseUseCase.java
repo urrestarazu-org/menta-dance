@@ -3,8 +3,10 @@ package com.menta.bff.application.usecase;
 /**
  * Use case that deletes a draft virtual course (#367).
  *
- * <p>Part of Clean Architecture application layer. That only a draft can be deleted is the API's: it refuses
- * with {@code VirtualCourseManagementApiClient.VirtualCourseManagementException} ({@code COURSE_NOT_DRAFT}).
+ * <p>Part of Clean Architecture application layer. That only a draft can be deleted, and that a course with
+ * student progress cannot (#834), is the API's: it refuses with {@code
+ * VirtualCourseManagementApiClient.VirtualCourseManagementException} ({@code COURSE_NOT_DRAFT} or {@code
+ * COURSE_HAS_PROGRESS}).
  * </p>
  */
 public interface DeleteVirtualCourseUseCase {
