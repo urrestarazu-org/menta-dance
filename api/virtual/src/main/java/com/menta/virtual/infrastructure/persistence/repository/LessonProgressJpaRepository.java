@@ -11,7 +11,11 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-/** Spring Data repository of the stored lesson progress, with the joined query that feeds the course-progress read. */
+/**
+ * Spring Data repository of the stored lesson progress, with the joined query that feeds the course-progress read.
+ * The row queries skip the progress on lessons without a video (#851), so they never count toward the completed
+ * lessons nor pick a hidden lesson to resume; the progress denominator skips those lessons too.
+ */
 public interface LessonProgressJpaRepository extends JpaRepository<LessonProgressJpaEntity, UUID> {
 
     /** Finds the row of a user in a lesson; a unique constraint allows at most one per pair. */
@@ -40,7 +44,7 @@ public interface LessonProgressJpaRepository extends JpaRepository<LessonProgres
             + "FROM LessonProgressJpaEntity p "
             + "JOIN VirtualLessonJpaEntity l ON l.id = p.lessonId "
             + "JOIN VirtualModuleJpaEntity m ON m.id = l.moduleId "
-            + "WHERE p.userId = :userId AND p.courseId = :courseId "
+            + "WHERE p.userId = :userId AND p.courseId = :courseId AND " + LessonJpql.HAS_VIDEO + " "
             + "ORDER BY p.positionUpdatedAt DESC, m.displayOrder ASC, l.displayOrder ASC, p.lessonId ASC"
     )
     List<CourseProgressRowProjection> findRowsForUserAndCourse(
@@ -63,7 +67,7 @@ public interface LessonProgressJpaRepository extends JpaRepository<LessonProgres
             + "JOIN VirtualCourseJpaEntity c ON c.id = p.courseId "
             + "JOIN VirtualLessonJpaEntity l ON l.id = p.lessonId "
             + "JOIN VirtualModuleJpaEntity m ON m.id = l.moduleId "
-            + "WHERE p.userId = :userId AND c.status = :status "
+            + "WHERE p.userId = :userId AND c.status = :status AND " + LessonJpql.HAS_VIDEO + " "
             + "ORDER BY p.positionUpdatedAt DESC, p.courseId ASC, m.displayOrder ASC, l.displayOrder ASC, "
             + "p.lessonId ASC"
     )

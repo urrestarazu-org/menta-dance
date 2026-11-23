@@ -34,7 +34,10 @@ catálogo virtual y, si no hay un curso virtual publicado con ese id, contra
 Physical. La modalidad no se indica en la ruta.
 
 - **Id virtual:** detalle virtual (módulos, lecciones y estadísticas), sin
-  `sessions`. Su forma no cambia.
+  `sessions`. Su forma no cambia, pero sólo lista las lecciones con video: una
+  lección sin video (`videoId` nulo o en blanco) no existe para los alumnos, un
+  módulo que se queda sin lecciones se oculta y `moduleCount`, `lessonCount` y
+  la duración total (también en el listado) cuentan sólo lo que se lista.
 - **Id presencial activo:** `200` con `courseId`, `modality` (`PHYSICAL`),
   `title`, `level` y el bloque `physical` (`professorName`, `dayOfWeek`,
   `startTime`, `capacity`) más `sessions`, las próximas sesiones programadas.

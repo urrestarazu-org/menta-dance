@@ -10,6 +10,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.menta.shared.billing.CourseAccessSnapshot;
@@ -35,6 +36,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * Coverage for {@link GetPublicLessonStreamUseCaseImpl}. Pins {@code now}
@@ -216,6 +220,35 @@ class GetPublicLessonStreamUseCaseImplTest {
         assertThat(access.allowed()).isFalse();
         assertThat(access.reason()).isEqualTo("SUBSCRIPTION_REQUIRED");
         verify(signatureService, never()).generateSignedUrl(any(), anyLong());
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"", "   ", "\t\n"})
+    void a_lesson_without_video_does_not_exist_for_the_public_surface_and_nothing_else_is_consulted(String noVideo) {
+        LessonId lessonId = LessonId.generate();
+        when(lessonRepository.findById(lessonId)).thenReturn(
+            Optional.of(lesson(lessonId, CourseId.generate(), noVideo, true, 10))
+        );
+
+        assertThatThrownBy(() -> useCase.get(lessonId.toString(), UUID.randomUUID()))
+            .isInstanceOf(LessonNotFoundException.class);
+        verifyNoInteractions(entitlementPort, signatureService);
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"", "   "})
+    void a_premium_lesson_without_video_is_not_found_not_denied_for_a_caller_without_subscription(String noVideo) {
+        // Existence goes before the access decision: no AccessDenied that would reveal a hidden lesson.
+        LessonId lessonId = LessonId.generate();
+        when(lessonRepository.findById(lessonId)).thenReturn(
+            Optional.of(lesson(lessonId, CourseId.generate(), noVideo, false, 10))
+        );
+
+        assertThatThrownBy(() -> useCase.get(lessonId.toString(), null))
+            .isInstanceOf(LessonNotFoundException.class);
+        verifyNoInteractions(entitlementPort, signatureService);
     }
 
     @Test

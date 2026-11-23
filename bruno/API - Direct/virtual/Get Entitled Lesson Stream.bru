@@ -34,4 +34,8 @@ tests {
 docs {
   A current Billing entitlement is required for a protected stream. The URL is temporary.
   Set virtualEntitledLessonId and authenticate as the entitled student.
+
+  Lessons without a video (videoId null or blank, #851) do not exist for students: this request
+  answers 404 LESSON_NOT_FOUND for them, before the access decision (even a protected one), exactly
+  like a missing id.
 }

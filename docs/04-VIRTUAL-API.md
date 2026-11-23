@@ -41,6 +41,15 @@ origen del video. `GET /api/v1/virtual/lessons/{lessonId}` devuelve metadatos de
 protegida antes de solicitar el stream. Todos los errores usan
 `application/problem+json`.
 
+Una lección sin video (`videoId` nulo o en blanco, que un curso publicado puede
+tener porque sólo exige una lección completa) no existe para los alumnos ni para
+el público: el detalle del curso no la lista, no cuenta en los totales ni en el
+denominador del progreso (el porcentaje puede llegar a 100) y el detalle, el
+stream y el progreso de esa lección responden `404 LESSON_NOT_FOUND`, igual que
+un id inexistente. Esa comprobación va antes de la decisión de acceso, así que
+una lección protegida sin video responde `404` y nunca `403`. Los endpoints de
+gestión (`/api/v1/admin/virtual/**`) siguen mostrándola.
+
 ## Materiales descargables
 
 La metadata de una lección autorizada puede incluir materiales con una URL de

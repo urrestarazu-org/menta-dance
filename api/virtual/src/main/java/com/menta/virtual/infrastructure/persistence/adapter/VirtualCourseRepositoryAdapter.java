@@ -25,6 +25,9 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * JPA adapter for {@link VirtualCourseRepository}.
  *
+ * <p>The published reads (the student/public catalog) count only the lessons with a video and the modules
+ * that have at least one (#851); the any-status read, used by the management detail, counts everything.</p>
+ *
  * <p>Three flat queries (courses, then module counts, then lesson
  * aggregates), joined in memory — deliberately no JPA relationship between
  * courses/modules/lessons: it would tempt lazy loading and N+1 queries for
@@ -60,12 +63,12 @@ public class VirtualCourseRepositoryAdapter implements VirtualCourseRepository {
         }
 
         List<UUID> courseIds = courses.stream().map(VirtualCourseJpaEntity::getId).toList();
-        Map<UUID, Long> moduleCounts = moduleRepository.countByCourseIdIn(courseIds).stream()
+        Map<UUID, Long> moduleCounts = lessonRepository.countModulesWithVideoByCourseIdIn(courseIds).stream()
             .collect(java.util.stream.Collectors.toMap(
                 ModuleCountProjection::getCourseId, ModuleCountProjection::getModuleCount
             ));
         Map<UUID, LessonAggregateProjection> lessonAggregates = lessonRepository
-            .aggregateByCourseIdIn(courseIds).stream()
+            .aggregateWithVideoByCourseIdIn(courseIds).stream()
             .collect(java.util.stream.Collectors.toMap(LessonAggregateProjection::getCourseId, a -> a));
 
         return courses.stream()
@@ -94,12 +97,12 @@ public class VirtualCourseRepositoryAdapter implements VirtualCourseRepository {
         }
 
         List<UUID> hitIds = courses.stream().map(VirtualCourseJpaEntity::getId).toList();
-        Map<UUID, Long> moduleCounts = moduleRepository.countByCourseIdIn(hitIds).stream()
+        Map<UUID, Long> moduleCounts = lessonRepository.countModulesWithVideoByCourseIdIn(hitIds).stream()
             .collect(java.util.stream.Collectors.toMap(
                 ModuleCountProjection::getCourseId, ModuleCountProjection::getModuleCount
             ));
         Map<UUID, LessonAggregateProjection> lessonAggregates = lessonRepository
-            .aggregateByCourseIdIn(hitIds).stream()
+            .aggregateWithVideoByCourseIdIn(hitIds).stream()
             .collect(java.util.stream.Collectors.toMap(
                 LessonAggregateProjection::getCourseId, aggregate -> aggregate
             ));
@@ -130,12 +133,12 @@ public class VirtualCourseRepositoryAdapter implements VirtualCourseRepository {
         VirtualCourseJpaEntity course = entity.get();
         List<UUID> singleId = List.of(course.getId());
 
-        Map<UUID, Long> moduleCounts = moduleRepository.countByCourseIdIn(singleId).stream()
+        Map<UUID, Long> moduleCounts = lessonRepository.countModulesWithVideoByCourseIdIn(singleId).stream()
             .collect(java.util.stream.Collectors.toMap(
                 ModuleCountProjection::getCourseId, ModuleCountProjection::getModuleCount
             ));
         Map<UUID, LessonAggregateProjection> lessonAggregates = lessonRepository
-            .aggregateByCourseIdIn(singleId).stream()
+            .aggregateWithVideoByCourseIdIn(singleId).stream()
             .collect(java.util.stream.Collectors.toMap(LessonAggregateProjection::getCourseId, a -> a));
 
         return Optional.of(VirtualCourseJpaMapper.toDomain(

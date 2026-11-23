@@ -104,7 +104,7 @@ class LessonProgressRepositoryAdapterTest {
     @Test
     void count_lessons_by_course_id_delegates_to_the_lesson_jpa_repository() {
         UUID courseId = UUID.randomUUID();
-        when(lessonJpaRepository.countByCourseId(courseId)).thenReturn(3L);
+        when(lessonJpaRepository.countWithVideoByCourseId(courseId)).thenReturn(3L);
 
         assertThat(adapter.countLessonsByCourseId(courseId)).isEqualTo(3L);
     }
@@ -124,7 +124,7 @@ class LessonProgressRepositoryAdapterTest {
         UUID second = UUID.randomUUID();
         LessonAggregateProjection firstAggregate = aggregate(first, 4L);
         LessonAggregateProjection secondAggregate = aggregate(second, 1L);
-        when(lessonJpaRepository.aggregateByCourseIdIn(List.of(first, second)))
+        when(lessonJpaRepository.aggregateWithVideoByCourseIdIn(List.of(first, second)))
             .thenReturn(List.of(firstAggregate, secondAggregate));
 
         assertThat(adapter.countLessonsByCourseIds(List.of(first, second)))

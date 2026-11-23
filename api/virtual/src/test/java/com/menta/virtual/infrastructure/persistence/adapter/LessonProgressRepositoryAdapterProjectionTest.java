@@ -10,7 +10,9 @@ import com.menta.virtual.infrastructure.persistence.entity.LessonProgressJpaEnti
 import com.menta.virtual.infrastructure.persistence.entity.VirtualCourseJpaEntity;
 import com.menta.virtual.infrastructure.persistence.entity.VirtualLessonJpaEntity;
 import com.menta.virtual.infrastructure.persistence.entity.VirtualModuleJpaEntity;
+import com.menta.virtual.infrastructure.persistence.repository.LessonAggregateProjection;
 import com.menta.virtual.infrastructure.persistence.repository.LessonProgressJpaRepository;
+import com.menta.virtual.infrastructure.persistence.repository.ModuleCountProjection;
 import com.menta.virtual.infrastructure.persistence.repository.VirtualCourseJpaRepository;
 import com.menta.virtual.infrastructure.persistence.repository.VirtualLessonJpaRepository;
 import com.menta.virtual.infrastructure.persistence.repository.VirtualModuleJpaRepository;
@@ -161,6 +163,69 @@ class LessonProgressRepositoryAdapterProjectionTest {
         assertThat(rows.get(1).getCourseTitle()).isEqualTo("Tango Básico");
         assertThat(rows.get(2).isCompleted()).isTrue();
         assertThat(rows.get(2).getPositionUpdatedAt()).isNull();
+    }
+
+    /**
+     * #851: a lesson without video (null, empty or blank) does not exist for students, so the denominator,
+     * the catalog aggregate, the module count and the progress rows all ignore it, while the unfiltered
+     * aggregate used by the management view still counts it.
+     */
+    @Test
+    void lessons_without_video_are_left_out_of_the_student_counts_and_progress_rows() {
+        UUID userId = UUID.randomUUID();
+        UUID courseId = seedCourse("Tango", CourseStatus.PUBLISHED);
+        UUID withVideoModule = seedModule(courseId);
+        UUID onlyStubsModule = seedModule(courseId);
+        UUID played = seedLessonIn(courseId, withVideoModule, "v-1", 10, 0);
+        UUID playedToo = seedLessonIn(courseId, withVideoModule, "v-2", 20, 1);
+        UUID noVideo = seedLessonIn(courseId, withVideoModule, null, 40, 2);
+        UUID emptyVideo = seedLessonIn(courseId, onlyStubsModule, "", 80, 0);
+        UUID blankVideo = seedLessonIn(courseId, onlyStubsModule, "   ", 160, 1);
+        progressRepository.saveAllAndFlush(List.of(
+            progress(userId, played, courseId, 10, true, null),
+            progress(userId, playedToo, courseId, 5, false, Instant.parse("2026-01-05T10:00:00Z")),
+            progress(userId, noVideo, courseId, 7, false, Instant.parse("2026-01-06T10:00:00Z")),
+            progress(userId, emptyVideo, courseId, 7, false, Instant.parse("2026-01-07T10:00:00Z")),
+            progress(userId, blankVideo, courseId, 7, true, null)
+        ));
+
+        assertThat(lessonRepository.countWithVideoByCourseId(courseId)).isEqualTo(2L);
+        LessonAggregateProjection visible = lessonRepository.aggregateWithVideoByCourseIdIn(List.of(courseId)).get(0);
+        assertThat(visible.getLessonCount()).isEqualTo(2L);
+        assertThat(visible.getTotalDurationMinutes()).isEqualTo(30L);
+        List<ModuleCountProjection> modules = lessonRepository.countModulesWithVideoByCourseIdIn(List.of(courseId));
+        assertThat(modules).singleElement().extracting(ModuleCountProjection::getModuleCount).isEqualTo(1L);
+        LessonAggregateProjection all = lessonRepository.aggregateByCourseIdIn(List.of(courseId)).get(0);
+        assertThat(all.getLessonCount()).isEqualTo(5L);
+        assertThat(all.getTotalDurationMinutes()).isEqualTo(310L);
+        assertThat(progressRepository.findRowsForUserAndCourse(userId, courseId))
+            .extracting(CourseProgressRowProjection::getLessonId).containsExactlyInAnyOrder(played, playedToo);
+        assertThat(progressRepository.findRowsForUserInCoursesWithStatus(userId, CourseStatus.PUBLISHED))
+            .extracting(InProgressCourseRowProjection::getLessonId).containsExactlyInAnyOrder(played, playedToo);
+    }
+
+    @Test
+    void a_course_whose_lessons_all_lack_video_is_absent_from_the_student_aggregates() {
+        UUID courseId = seedCourse("Borrador", CourseStatus.PUBLISHED);
+        seedLessonIn(courseId, seedModule(courseId), null, 10, 0);
+
+        assertThat(lessonRepository.countWithVideoByCourseId(courseId)).isZero();
+        assertThat(lessonRepository.aggregateWithVideoByCourseIdIn(List.of(courseId))).isEmpty();
+        assertThat(lessonRepository.countModulesWithVideoByCourseIdIn(List.of(courseId))).isEmpty();
+    }
+
+    private UUID seedModule(UUID courseId) {
+        UUID moduleId = UUID.randomUUID();
+        moduleRepository.saveAndFlush(new VirtualModuleJpaEntity(moduleId, courseId, "Modulo", false, 0));
+        return moduleId;
+    }
+
+    private UUID seedLessonIn(UUID courseId, UUID moduleId, String videoId, int durationMinutes, int displayOrder) {
+        UUID lessonId = UUID.randomUUID();
+        lessonRepository.saveAndFlush(new VirtualLessonJpaEntity(
+            lessonId, moduleId, courseId, "Leccion", "d", videoId, durationMinutes, false, displayOrder
+        ));
+        return lessonId;
     }
 
     private UUID seedCourse(String title, CourseStatus status) {

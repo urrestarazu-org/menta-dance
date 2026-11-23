@@ -25,7 +25,10 @@ public interface LessonProgressRepository {
     /** Rows already ordered for resume selection — see {@link CourseProgressRowProjection}. */
     java.util.List<CourseProgressRowProjection> findRowsForUserAndCourse(UUID userId, UUID courseId);
 
-    /** Live denominator for the course-progress percentage (design.md decision 2). */
+    /**
+     * Live denominator for the course-progress percentage (design.md decision 2): only lessons with a video,
+     * the ones students can see and play (#851).
+     */
     long countLessonsByCourseId(UUID courseId);
 
     /**
@@ -35,7 +38,7 @@ public interface LessonProgressRepository {
     java.util.List<InProgressCourseRowProjection> findRowsForUserInPublishedCourses(UUID userId);
 
     /**
-     * Same denominator as {@link #countLessonsByCourseId} for several courses in one grouped
+     * Same denominator (lessons with video only) as {@link #countLessonsByCourseId} for several courses in one grouped
      * query (#765); a course without lessons is absent from the map.
      */
     java.util.Map<UUID, Long> countLessonsByCourseIds(java.util.Collection<UUID> courseIds);

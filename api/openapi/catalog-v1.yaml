@@ -29,6 +29,14 @@ info:
     miembro adicional `code` estable. Los clientes deben discriminar por
     `code`, no por `detail`.
 
+    ## Lecciones sin video
+
+    Una lección virtual sin video (`videoId` `null` o en blanco) no existe para
+    los alumnos: el detalle del curso no la lista (un módulo que se queda sin
+    lecciones tampoco) y `moduleCount`, `lessonCount` y la duración total cuentan
+    solo las lecciones con video. Los endpoints de gestión de Virtual siguen
+    mostrándolas todas.
+
     ## No enumeración
 
     `GET /courses/{courseId}` no distingue un curso inexistente de uno no
@@ -165,6 +173,9 @@ components:
           type: integer
     VirtualCatalogBlock:
       type: object
+      description: >-
+        `moduleCount`, `lessonCount` y `totalDurationMinutes` cuentan solo las lecciones con video y los módulos
+        que tienen al menos una (#851).
       required: [shortDescription, imageUrl, category, premium, moduleCount, lessonCount, totalDurationMinutes]
       properties:
         shortDescription:
@@ -185,7 +196,9 @@ components:
       type: object
       description: >-
         Detalle de un curso VIRTUAL publicado (#47). No lleva `modality`,
-        `physical` ni `sessions`; los lessons nunca exponen video.
+        `physical` ni `sessions`; los lessons nunca exponen video. Solo lista
+        las lecciones con video y los módulos que conservan al menos una;
+        `stats` cuenta solo esas lecciones y módulos (#851).
       properties:
         courseId:
           type: string

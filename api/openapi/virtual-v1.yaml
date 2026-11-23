@@ -48,6 +48,17 @@ info:
     usuario sale siempre del token. Las dos lecturas públicas de lecciones
     aceptan el token de forma opcional.
 
+    ## Lecciones sin video
+
+    Una lección sin video (`videoId` `null` o en blanco) no existe para los
+    alumnos ni para el público: no se lista en el detalle público del curso (un
+    módulo que se queda sin lecciones tampoco), no cuenta en los totales ni en
+    el denominador del progreso, y cualquier ruta pública o de progreso que la
+    direccione por id responde `404 LESSON_NOT_FOUND`, igual que un id
+    inexistente. Esa comprobación va antes de la decisión de acceso, así que una
+    lección protegida sin video responde `404` y nunca `403`. Los endpoints de
+    gestión (`/api/v1/admin/virtual/**`) siguen mostrando todas las lecciones.
+
     ## Fechas
 
     Los instantes (`expiresAt`, `completedAt`) van en UTC, ISO-8601 con `Z`.
@@ -84,7 +95,9 @@ paths:
         todavía no tiene video. `access.preview` es `true` sólo en la variante
         gratuita. El detalle nunca contiene una URL de streaming. Una lección
         protegida sin entitlement actual responde 403 RFC 9457 y no expone
-        `videoId`.
+        `videoId`. Una lección sin video no existe para el público: responde
+        `404 LESSON_NOT_FOUND` aunque sea protegida, y `navigation` nunca
+        apunta a lecciones sin video. Ver «Lecciones sin video».
       operationId: getPublicVirtualLesson
       security:
         - {}
@@ -101,7 +114,8 @@ paths:
         '403':
           $ref: '#/components/responses/LessonForbidden'
         '404':
-          description: Lección inexistente, inválida o cuyo curso no está publicado.
+          description: >-
+            Lección inexistente, inválida, sin video o cuyo curso no está publicado (no se distinguen).
           content:
             application/problem+json:
               schema:
@@ -122,7 +136,10 @@ paths:
       description: |
         Evalúa la misma política de acceso que el detalle. Sólo una respuesta
         200 contiene `stream.url`; los 403 son `application/problem+json` y
-        nunca contienen URL, `videoId` ni otra capacidad de media.
+        nunca contienen URL, `videoId` ni otra capacidad de media. Una lección
+        sin video no existe para el público: responde `404 LESSON_NOT_FOUND`
+        antes de la decisión de acceso, aunque sea protegida (ver «Lecciones sin
+        video»).
       operationId: getPublicVirtualLessonStream
       security:
         - {}
@@ -141,7 +158,7 @@ paths:
         '403':
           $ref: '#/components/responses/LessonForbidden'
         '404':
-          description: Lección inexistente, inválida o no publicada.
+          description: Lección inexistente, inválida, sin video o no publicada (no se distinguen).
           content:
             application/problem+json:
               schema:
@@ -174,7 +191,8 @@ paths:
         Orden: actividad más reciente primero (último guardado de posición en
         el curso; un curso con lecciones solo completadas y nunca reproducidas
         va al final). `percentage`, `completedLessons`, `totalLessons` y
-        `resumeLesson` tienen la misma definición que en el progreso por curso.
+        `resumeLesson` tienen la misma definición que en el progreso por curso
+        (solo lecciones con video).
       operationId: listMyInProgressVirtualCourses
       security:
         - bearerAuth: []
@@ -223,8 +241,10 @@ paths:
         Lecciones completadas sobre el total del curso, porcentaje y lección
         para continuar (la de posición guardada más reciente). El porcentaje se
         redondea hacia arriba desde la mitad y vale 100 solo si todas las
-        lecciones están completadas. Cualquier rol autenticado puede
-        consultarlo; requiere acceso vigente al curso.
+        lecciones están completadas. El total y las completadas cuentan solo las
+        lecciones con video (ver «Lecciones sin video»), así que el porcentaje
+        puede llegar a 100. Cualquier rol autenticado puede consultarlo; requiere
+        acceso vigente al curso.
       operationId: getMyVirtualCourseProgress
       security:
         - bearerAuth: []
@@ -1020,7 +1040,7 @@ components:
                 code: LESSON_FORBIDDEN_SUBSCRIPTION_REQUIRED
 
     LessonNotFound:
-      description: Lección inexistente o con id inválido (no se distinguen).
+      description: Lección inexistente, con id inválido o sin video (no se distinguen).
       content:
         application/problem+json:
           schema:
