@@ -3,7 +3,7 @@ package com.menta.bff.infrastructure.web.controller;
 import static com.menta.bff.infrastructure.web.controller.ManagementVirtualModuleController.COURSE;
 import static com.menta.bff.infrastructure.web.controller.ManagementVirtualModuleController.INVALID;
 import static com.menta.bff.infrastructure.web.controller.ManagementVirtualModuleController.accessToken;
-import static com.menta.bff.infrastructure.web.controller.ManagementVirtualModuleController.done;
+import static com.menta.bff.infrastructure.web.controller.ManagementVirtualModuleController.doneIn;
 import static com.menta.bff.infrastructure.web.controller.ManagementVirtualModuleController.inOrder;
 import static com.menta.bff.infrastructure.web.controller.ManagementVirtualModuleController.loadFailed;
 import static com.menta.bff.infrastructure.web.controller.ManagementVirtualModuleController.notFound;
@@ -99,7 +99,7 @@ public class ManagementVirtualLessonController {
         } catch (ServiceUnavailableException e) {
             return unavailable(e, model, response);
         }
-        return done(CREATED, redirectAttributes);
+        return doneIn(moduleId, CREATED, "success", redirectAttributes);
     }
 
     @GetMapping(LESSONS + "/{lessonId}/editar")
@@ -151,7 +151,7 @@ public class ManagementVirtualLessonController {
         } catch (ServiceUnavailableException e) {
             return unavailable(e, model, response);
         }
-        return done(UPDATED, redirectAttributes);
+        return doneIn(moduleId, UPDATED, "success", redirectAttributes);
     }
 
     private static void prepare(String courseId, String moduleId, String lessonId, Model model) {

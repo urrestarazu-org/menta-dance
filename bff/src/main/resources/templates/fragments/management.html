@@ -13,8 +13,8 @@
     </html>
 
   `active` is the key of the section the page belongs to (`home` for the area's home); that entry is marked
-  with aria-current="page". The sections come from the `managementNavigation` bean: disabled sections are
-  never listed, so there are no dead links.
+  with aria-current="page" and drawn as the active pill tab (.admin-tab-active). The sections come from the
+  `managementNavigation` bean: disabled sections are never listed, so there are no dead links.
 -->
 
 <th:block th:fragment="page(title, active, content)">
@@ -22,19 +22,19 @@
 </th:block>
 
 <th:block th:fragment="shell(body, active)">
-    <nav aria-label="Gestión" class="mb-8 border-b border-brand-deep/20 pb-4"
+    <nav aria-label="Gestión" class="admin-tabs"
          th:with="sections=${@managementNavigation.sectionsFor(#authentication?.authorities?.![authority])}">
-        <ul class="m-0 flex list-none flex-wrap gap-2 p-0">
+        <ul class="m-0 flex list-none flex-wrap gap-1 p-0">
             <li>
                 <a th:href="@{/gestion}" th:aria-current="${active == 'home'} ? 'page'"
-                   th:classappend="${active == 'home'} ? 'bg-brand-deep text-brand-surface no-underline'"
-                   class="inline-block rounded px-3 py-1 font-medium">Inicio</a>
+                   th:classappend="${active == 'home'} ? 'admin-tab-active'"
+                   class="admin-tab">Inicio</a>
             </li>
             <li th:each="section : ${sections}">
                 <a th:href="@{${section.path}}" th:text="${section.label}"
                    th:aria-current="${active == section.key} ? 'page'"
-                   th:classappend="${active == section.key} ? 'bg-brand-deep text-brand-surface no-underline'"
-                   class="inline-block rounded px-3 py-1 font-medium">Sección</a>
+                   th:classappend="${active == section.key} ? 'admin-tab-active'"
+                   class="admin-tab">Sección</a>
             </li>
         </ul>
     </nav>

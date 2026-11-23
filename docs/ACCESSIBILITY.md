@@ -306,6 +306,68 @@ código en línea), así que también cumple `script-src 'self'`. Como NGINX cac
 `*.js` 30 días como inmutable, el script se sirve con hash de contenido
 (`/js/error-summary-<hash>.js`), igual que la hoja de estilos.
 
+## Estructura del curso virtual y componentes de administración (#849)
+
+Rediseño de `/gestion/cursos-virtuales/{id}/estructura` y de las pestañas de gestión según la referencia de
+`docs/design/admin/estructura-curso/`. Sin colores nuevos: se usan los tokens de siempre, así que cada par se midió
+con la fórmula de WCAG 2.1 (script descartable; `StylesheetContrastTest` repite los pares clave sobre el CSS compilado).
+La referencia usa gris claro para textos secundarios y amarillo para advertencias, que no llegan a 4,5:1; se reemplazaron.
+
+### Texto (mínimo 4,5:1)
+
+| Par | Razón |
+|---|---|
+| Texto secundario `.text-muted` (`brand-deep` al 80 %) sobre blanco / sobre `#EEF2E3` (página) | 6,65 / 6,05 |
+| (descartado) `brand-deep` al 70 % sobre blanco / sobre `#EEF2E3` | 4,90 / 4,59 (justo; se subió a 80 %) |
+| Pestaña activa `.admin-tab-active`: `#EEF2E3` sobre `#043F2E`; pestaña inactiva y su hover: `#043F2E` sobre blanco / `#EEF2E3` | 10,51; 11,96 / 10,51 |
+| Número del módulo seleccionado: blanco sobre `#043F2E`; no seleccionado: `#043F2E` sobre `#EEF2E3` | 11,96; 10,51 |
+| "Borrar" `.btn-ghost-danger`: `#9B1C1C` sobre blanco; en hover, sobre `#FEF2F2` | 8,15; 7,45 |
+| "Editar" / "Editar módulo" `.btn-ghost`: `#043F2E` sobre blanco; hover (`brand-deep` al 10 %) / sobre el pie de la tarjeta de detalle | 11,96; 10,00 / 9,39 |
+| "Agregar lección" `.btn-light`: `#043F2E` sobre `#C8F169`; hover sobre `#78C51C` | 9,25; 5,58 |
+| "Crear nuevo módulo" `.btn-dashed`: `#2A6F2B` sobre `#EEF2E3`; hover sobre blanco | 5,41; 6,16 |
+| "Subir" / "Bajar" / "Editar módulo" `.btn-secondary`: `#043F2E` sobre blanco | 11,96 |
+| Etiqueta "Gratuita", "Con video", "Seleccionado" (`badge-success`) / "Sin video" (`badge-warning`) / "Con suscripción", "Vista previa" (`badge-neutral`) | 10,27 / 8,15 / 10,51 |
+| Ícono de lección con video `#2A6F2B` sobre `#E2F5BE` (ícono, texto no) / sin video `#78350F` sobre `#FEF3C7` | 5,29 / 8,15 |
+| Título enlazado `.link-title` `#043F2E` sobre blanco; hover `#2A6F2B` | 11,96; 6,16 |
+| Aviso con ícono: mismos pares que `alert-*` (éxito 10,27, error 7,45, info 11,96); el ícono usa el color del texto | 10,27 / 7,45 / 11,96 |
+
+### No textual (mínimo 3:1)
+
+| Par | Razón |
+|---|---|
+| Borde del módulo seleccionado (borde y anillo `#043F2E`) sobre la tarjeta blanca | 11,96 |
+| Borde punteado de "Crear nuevo módulo" `#2A6F2B` sobre `#EEF2E3` | 5,41 |
+| Foco global `#2A6F2B` sobre blanco / `#EEF2E3` (pestañas, botones y enlaces nuevos: ninguno está sobre fondo oscuro) | 6,16 / 5,41 |
+| Borde de las tarjetas (`brand-deep` al 20 %) y anillo del número del módulo (30 %), decorativos | 1,45 / 1,76 (no exigido: cada elemento se identifica por su texto) |
+
+### Revisión de código
+
+- El módulo seleccionado se marca con `aria-current="true"` en el enlace, borde marcado **y** el texto "Seleccionado".
+- "Sin video" es una etiqueta con ícono **y** texto; "Con video", "Gratuita" y el estado del curso llevan el texto,
+  y el estado tiene además el prefijo `sr-only` "Estado: ". El punto de color es decorativo.
+- Todos los SVG son `aria-hidden="true"` y `focusable="false"` (lo comprueba una prueba de integración) y ninguno es el
+  único contenido de un enlace o botón. Se conservan los textos `sr-only` de #831 ("Subir la lección X", "Editar
+  módulo X", ", lección del módulo Y", "Agregar lección al módulo X").
+- Jerarquía de encabezados: `h1` (curso), `h2` ("Módulos"), `h3` (módulos), `h4` (lecciones). Orden de lectura: vínculo
+  "Volver", cabecera, aviso, lista de módulos, detalle del seleccionado. La lista de módulos precede al detalle en el DOM.
+- Botones de acción de fila (`.btn-sm`): alto de 32 px (`py-1.5` más texto de 14 px), separados al menos 4 px.
+- Foco visible: el global `:focus-visible` (2 px `#2A6F2B`, con separación) cubre los elementos nuevos.
+- El selector de módulo funciona sin JavaScript (enlaces `?modulo=`).
+
+### Qué se verificó y qué no
+
+- **Verificado**: pruebas de integración (selección, marcas, nombres accesibles, SVG decorativos, escape de títulos,
+  sin `th:utext` ni `/api/v1`), cálculo de contraste de la tabla y `StylesheetContrastTest`. Además, una **corrida
+  local de axe-core 4.13.0** (tags `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`) y capturas en Chrome a 1280, 1024 y
+  390 px sobre el HTML que renderizan las pruebas con el CSS compilado (servido en un puerto aparte, sin levantar el
+  BFF ni la API): 0 violaciones y 0 *incomplete* en cinco variantes (módulo por defecto, `?modulo=`, módulo sin
+  lecciones, con aviso y curso vacío). **No es** el job `accessibility` de CI, que levanta el stack con `dev.sh`
+  (puertos 8080 y 8081) y no corre estas pantallas de gestión (sus recorridos no incluyen `/gestion`).
+- **No verificado**: lector de pantalla (VoiceOver, NVDA) sobre las pantallas nuevas, el orden de tabulación real con
+  teclado, zoom al 200 % y reflujo a 320 px, otros navegadores, el modo de alto contraste, y el recorrido manual como
+  administrador con la API y el BFF reales. Las pestañas de gestión restyleadas afectan a **todas** las pantallas de
+  gestión: solo se miró esta.
+
 ## Procedimiento de prueba manual
 
 Hacerlo antes de cada release que cambie plantillas o CSS.

@@ -35,13 +35,16 @@ import org.springframework.web.bind.annotation.InitBinder;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 /**
  * Virtual courses management (#367): the structure of a course, {@code /gestion/cursos-virtuales/{courseId}/estructura}
- * (its modules in order with their lessons, read only), and the modules: creation, edition and the move up and down
- * buttons (no JavaScript). For {@code ADMIN} and {@code INSTRUCTOR}; the Virtual API makes the real decision. Every
- * write is Post/Redirect/Get to the structure with a flash. A refusal of the API is worded from its {@code code}; its
+ * (its modules in order, read only, with the lessons of the selected one), and the modules: creation, edition and the
+ * move up and down buttons (no JavaScript). For {@code ADMIN} and {@code INSTRUCTOR}; the Virtual API makes the real
+ * decision. The selected module is chosen on the server by {@code ?modulo={moduleId}} (#849): the first one by
+ * default, also when the id is unknown. Every write is Post/Redirect/Get to the structure with a flash, and with the
+ * module that was worked on selected when there is one. A refusal of the API is worded from its {@code code}; its
  * body never reaches the browser. Pages are never cached.
  *
  * <p>The API has no read of a single module, so the edit form is prefilled from the course detail. A move reads the
@@ -77,6 +80,7 @@ public class ManagementVirtualModuleController {
     private static final String STRUCTURE_VIEW = "gestion/cursos-virtuales/estructura";
     private static final String FORM_VIEW = "gestion/cursos-virtuales/modulo-form";
     private static final String PROBLEM_VIEW = "gestion/cursos-virtuales/problem";
+    private static final String SELECTED_MODULE = "modulo";
     private static final String BACK_TO_STRUCTURE = "redirect:" + COURSE + "/estructura";
 
     private final GetManagedVirtualCourseUseCase getUseCase;
@@ -93,13 +97,16 @@ public class ManagementVirtualModuleController {
 
     @GetMapping(COURSE + "/estructura")
     public String structure(
-            @PathVariable String courseId, HttpServletRequest request, HttpServletResponse response, Model model) {
+            @PathVariable String courseId, @RequestParam(name = "modulo", required = false) String selectedModuleId,
+            HttpServletRequest request, HttpServletResponse response, Model model) {
         response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
         try {
             VirtualCourseDetail course = getUseCase.execute(accessToken(request), courseId);
+            List<VirtualModuleDetail> modules = inOrder(course);
             model.addAttribute("course", course);
             model.addAttribute("statusLabel", statusLabel(course.status()));
-            model.addAttribute("modules", inOrder(course));
+            model.addAttribute("modules", modules);
+            model.addAttribute("selectedModule", selected(modules, selectedModuleId));
             return STRUCTURE_VIEW;
         } catch (VirtualCourseManagementException e) {
             return refused(e.getCode(), model, response, () -> loadFailed(model, response));
@@ -188,7 +195,7 @@ public class ManagementVirtualModuleController {
         } catch (ServiceUnavailableException e) {
             return unavailable(e, () -> formError(SAVE_FAILED, HttpStatus.SERVICE_UNAVAILABLE, model, response));
         }
-        return done(UPDATED, redirectAttributes);
+        return doneIn(moduleId, UPDATED, "success", redirectAttributes);
     }
 
     // ---- move ----
@@ -219,19 +226,19 @@ public class ManagementVirtualModuleController {
             int from = ids.indexOf(moduleId);
             int to = from + step;
             if (from < 0 || to < 0 || to >= ids.size()) {
-                return done(from < 0 ? GONE : NOT_MOVED, "info", redirectAttributes);
+                return doneIn(moduleId, from < 0 ? GONE : NOT_MOVED, "info", redirectAttributes);
             }
             Collections.swap(ids, from, to);
             reorderUseCase.execute(token, courseId, ids);
         } catch (VirtualCourseManagementException e) {
             if (e.getCode() == Code.MODULE_REORDER_MISMATCH) {
-                return done(CHANGED, "error", redirectAttributes);
+                return doneIn(moduleId, CHANGED, "error", redirectAttributes);
             }
             return refused(e.getCode(), model, response, () -> moveFailed(model, response));
         } catch (ServiceUnavailableException e) {
             return unavailable(e, () -> moveFailed(model, response));
         }
-        return done(MOVED, redirectAttributes);
+        return doneIn(moduleId, MOVED, "success", redirectAttributes);
     }
 
     // ---- helpers ----
@@ -272,6 +279,18 @@ public class ManagementVirtualModuleController {
         redirectAttributes.addFlashAttribute("structureAlert", message);
         redirectAttributes.addFlashAttribute("structureAlertKind", kind);
         return BACK_TO_STRUCTURE;
+    }
+
+    /** Back to the structure with the module the user was working on selected ({@code ?modulo=}). */
+    static String doneIn(String moduleId, String message, String kind, RedirectAttributes redirectAttributes) {
+        redirectAttributes.addAttribute(SELECTED_MODULE, moduleId);
+        return done(message, kind, redirectAttributes);
+    }
+
+    /** The module with that id, or the first one when the id is missing or unknown; {@code null} without modules. */
+    static VirtualModuleDetail selected(List<VirtualModuleDetail> modules, String moduleId) {
+        return modules.stream().filter(module -> module.moduleId().equals(moduleId)).findFirst()
+                .orElseGet(() -> modules.isEmpty() ? null : modules.get(0));
     }
 
     static String unavailable(ServiceUnavailableException e, Supplier<String> page) {

@@ -3,7 +3,7 @@
       th:replace="~{fragments/management :: page(${confirmTitle}, 'cursos-virtuales', ~{::main-content})}">
 <body>
 <th:block th:fragment="main-content">
-<div class="max-w-xl">
+<div>
     <h1 class="mb-6" th:text="${confirmTitle}">Publicar curso</h1>
 
     <div th:if="${actionError}" class="mb-4">

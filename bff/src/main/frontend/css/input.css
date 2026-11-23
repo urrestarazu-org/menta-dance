@@ -493,3 +493,108 @@
     @apply transition-all duration-300 ease-out hover:-translate-y-0.5 hover:scale-[1.03] hover:shadow-lg active:translate-y-0 active:scale-95 motion-reduce:transition-none motion-reduce:hover:transform-none motion-reduce:active:transform-none;
   }
 }
+
+/*
+ * Administration screens (#849), after the Stitch reference in docs/design/admin/estructura-curso/: pill tabs,
+ * small and quiet buttons, state labels with a dot or an icon, item cards with a selected state, and the
+ * alert with an icon. Same tokens as the rest of the site (no new colour). Every text/background pair is
+ * measured in docs/ACCESSIBILITY.md; the ones that matter are also checked by StylesheetContrastTest.
+ */
+@layer components {
+  /* Secondary text: brand-deep at 80% (6.65:1 on white, 6.05:1 on the page); the reference's light grey fails. */
+  .text-muted {
+    @apply text-brand-deep/80;
+  }
+
+  /* Section tabs of the management shell, as pills. The current one is dark and also carries aria-current. */
+  .admin-tabs {
+    @apply mb-8 rounded-xl border border-brand-deep/20 bg-white p-2 shadow-sm;
+  }
+
+  .admin-tab {
+    @apply inline-block rounded-lg px-3 py-2 font-medium text-brand-deep no-underline hover:bg-brand-surface;
+  }
+
+  .admin-tab-active {
+    @apply bg-brand-deep text-brand-surface hover:bg-brand-deep;
+  }
+
+  /* "Back to the list" link: arrow and text, underlined like every other link (1.4.1). */
+  .link-back {
+    @apply inline-flex items-center gap-2 font-medium text-brand-deep hover:text-brand-action;
+  }
+
+  /* Title that is a link inside a card: dark and underlined, green on hover. */
+  .link-title {
+    @apply text-brand-deep hover:text-brand-action;
+  }
+
+  /* Button sizes and variants (use with .btn). */
+  .btn-sm {
+    @apply px-3 py-1.5 text-sm;
+  }
+
+  /* Quiet action: text only, a light fill on hover. */
+  .btn-ghost {
+    @apply bg-transparent text-brand-deep hover:bg-brand-deep/10;
+  }
+
+  .btn-ghost-danger {
+    @apply bg-transparent text-feedback-error hover:bg-feedback-error-surface;
+  }
+
+  /* Dashed "create" box. */
+  .btn-dashed {
+    @apply w-full border-2 border-dashed border-brand-action bg-transparent text-brand-action hover:bg-white;
+  }
+
+  /* State labels: a dot or an icon before the text (the text carries the meaning). */
+  .badge-dot {
+    @apply inline-flex items-center gap-1.5;
+  }
+
+  .badge-dot::before {
+    content: '';
+    @apply h-2 w-2 shrink-0 rounded-full bg-current;
+  }
+
+  .badge-icon {
+    @apply inline-flex items-center gap-1;
+  }
+
+  /* Item cards of a list; the selected one has a 2px dark border (ring) and a text label next to it. */
+  .card-item {
+    @apply rounded-xl border border-brand-deep/20 bg-white p-4 shadow-sm;
+  }
+
+  .card-item-selected {
+    @apply border-brand-deep ring-1 ring-brand-deep;
+  }
+
+  /* Position of a module, in a rounded square; dark when it is the selected one. */
+  .module-number {
+    @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-surface font-semibold text-brand-deep ring-1 ring-brand-deep/30;
+  }
+
+  .module-number-active {
+    @apply bg-brand-deep text-white ring-0;
+  }
+
+  /* Square with the icon of a lesson; the warning one is for a lesson without video. */
+  .icon-tile {
+    @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-feedback-success-surface text-brand-action;
+  }
+
+  .icon-tile-warning {
+    @apply bg-feedback-warning-surface text-feedback-warning;
+  }
+
+  /* Alert of fragments/components :: alert: text and icon, the icon is drawn first (the text stays first in the DOM). */
+  .alert-with-icon {
+    @apply flex items-start gap-3 rounded-xl p-4;
+  }
+
+  .alert-icon {
+    @apply order-first mt-0.5 h-5 w-5 shrink-0;
+  }
+}

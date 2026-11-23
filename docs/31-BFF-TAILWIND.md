@@ -145,6 +145,13 @@ que ninguna vista usa todavía.
 | `.container-page` | Ancho máximo y gutter horizontal de la página. |
 | `.alert` + `.alert-error` / `-success` / `-info` | Mensaje en bloque; `role="alert"` para errores, `role="status"` para el resto. |
 | `.error-summary` (+ `-title`, `-list`) | Resumen de errores de un formulario con errores de campo; se usa a través del fragmento `errorSummary`. Tiene `tabindex="-1"` y su propio contorno de foco. |
+| `.btn-sm`, `.btn-ghost`, `.btn-ghost-danger`, `.btn-dashed` | Tamaño chico y variantes de botón (#849), siempre junto a `.btn`: `btn-sm` para acciones de una fila, `btn-ghost` (solo texto, relleno suave al pasar el mouse), `btn-ghost-danger` (texto rojo `feedback-error`, para "Borrar") y `btn-dashed` (caja punteada "Crear ..."). El texto nombra la acción; el color solo la refuerza. |
+| `.badge-dot`, `.badge-icon` | Con `.badge` y un `badge-*`: un punto o un ícono antes del texto. Se usan a través de los fragmentos `dotBadge` e `iconBadge`. |
+| `.card-item`, `.card-item-selected` | Tarjeta de un elemento de lista (menos sombra y padding que `.card`). La seleccionada suma borde oscuro de 2 px (borde + anillo, sin mover el contenido) y **siempre** va con un texto ("Seleccionado") y `aria-current`. |
+| `.module-number`, `.module-number-active`, `.icon-tile`, `.icon-tile-warning` | Cuadrado redondeado con el número de un módulo (oscuro si es el seleccionado) y cuadrado con el ícono de una lección (de advertencia si no tiene video). |
+| `.admin-tabs`, `.admin-tab`, `.admin-tab-active` | Pestañas de gestión como píldoras (`fragments/management`): la actual va en verde oscuro con texto claro y conserva `aria-current="page"`. |
+| `.link-back`, `.link-title`, `.text-muted` | Vínculo "Volver" con flecha (subrayado), título enlazado dentro de una tarjeta y texto secundario (`brand-deep` al 80 %, 6,65:1 sobre blanco). |
+| `.alert-with-icon`, `.alert-icon` | Los pone el fragmento `alert`: ícono decorativo antes del texto. Los `.alert` escritos a mano en las plantillas no cambian. |
 
 Tokens de feedback (contraste AA sobre su superficie): `feedback-error`,
 `feedback-success`, `feedback-warning` y sus variantes `-surface`.
@@ -192,6 +199,12 @@ Tokens de feedback (contraste AA sobre su superficie): `feedback-error`,
 | `optionalSelectField` | `id, label, name, options, selected, placeholder, hint, errors` | Como `selectField`, pero el `<select>` no es `required`: la opción vacía (`placeholder`) es una respuesta válida (#367, "Yo (administrador)"). `selectField` y esta comparten `selectFieldBase(..., required)`. |
 | `checkboxField` | `id, label, name, checked, hint, errors` | Una casilla con su `<label for>`; `checked` es un booleano, `hint` y `errors` pueden ser `null` y se enlazan con `aria-describedby` (#367, "Curso premium"). |
 | `notice` | `heading, message` | Página informativa: `<h1>` más una `.card` con un párrafo ("revisá tu correo", "cuenta activada"). Los enlaces de salida van después, fuera del fragmento. |
+| `alert` (ícono) | `kind, message` | Desde #849 dibuja un ícono por tipo (éxito, error, info) delante del mensaje; el `<p>` sigue siendo el primer hijo (el ícono se ordena con CSS) y los `role` no cambian. |
+| `fragments/icons :: icon` | `name, cls` | Íconos SVG en línea (`arrow-left`, `arrow-up`, `arrow-down`, `plus`, `pencil`, `clock`, `modules`, `lessons`, `video`, `warning`, `check-circle`, `exclamation-circle`, `info-circle`). Siempre decorativos: `aria-hidden="true"` y `focusable="false"`; el texto de al lado da el significado. Nunca son el único contenido de un enlace o botón. |
+| `fragments/admin :: backLink` | `href, label` | Vínculo "Volver" con flecha. |
+| `fragments/admin :: dotBadge` | `kind, text` | Etiqueta de estado con punto (`kind`: `success`, `warning`, `danger`, `neutral`). |
+| `fragments/admin :: iconBadge` | `kind, icon, text` | Igual con un ícono (por ejemplo la advertencia "Sin video"). |
+| `fragments/admin :: lessonSummary` | `lessons` | "N lecciones · X min de duración" de un módulo. |
 
 ```html
 <div th:replace="~{fragments/components :: field('email', 'Email:', 'email', 'email', 'username', *{email}, null, true, ${#fields.errors('email')})}"></div>
@@ -239,7 +252,7 @@ con sesión) o a `/` (sin sesión). El resto de los errores sigue usando `error.
 
 `fragments/management.html :: page(title, active, content)` envuelve `fragments/layout :: page` (no duplica
 header ni footer) y agrega `<nav aria-label="Gestión">` con "Inicio" y las secciones del rol. `active` es la
-clave de la sección de la página (`home` para el inicio) y marca ese enlace con `aria-current="page"`.
+clave de la sección de la página (`home` para el inicio) y marca ese enlace con `aria-current="page"`. Desde #849 las pestañas son píldoras (`.admin-tabs`, `.admin-tab`; la activa, `.admin-tab-active`, en verde oscuro con texto claro).
 
 ```html
 <html xmlns:th="http://www.thymeleaf.org"
@@ -630,11 +643,33 @@ token de la sesión. `ManagementVirtualModuleController` atiende la estructura y
 #### Estructura y módulos (#367)
 
 - **`GET /gestion/cursos-virtuales/{courseId}/estructura`** (`estructura.html`, enlace "Estructura" en cada fila de la
-  lista): título y estado del curso (texto), estadísticas (módulos, lecciones, duración total) y la lista `<ol>` de
-  módulos ordenados por `order`, cada uno con sus lecciones, también por `order` (duración, "Gratuita"/"Con suscripción",
-  "Con video"/"Sin video"; el `videoId` no se muestra). Estado vacío "Este curso todavía no tiene módulos."; cada módulo tiene
-  "Agregar lección" y cada lección el título como enlace a su edición, "Editar", "Borrar", "Subir" y "Bajar" (ver
-  "Lecciones"); sin publicar ni borrar el curso. Un id que no es UUID es un `404` sin llamar a la API.
+  lista; rediseñada en #849 según `docs/design/admin/estructura-curso/`): vínculo "Volver", tarjeta de cabecera
+  (título, estado como etiqueta con punto, estadísticas con íconos y "Agregar módulo" como acción principal), aviso con
+  ícono y la sección "Módulos" en **dos columnas** desde `lg` (una columna en pantallas angostas). A la izquierda, los
+  módulos en un `<ol>` ordenados por `order` como tarjetas (número, título enlazado, "Vista previa", "N lecciones · X min
+  de duración", "Subir"/"Bajar", "Editar módulo") y la caja punteada "Crear nuevo módulo"; a la derecha, el detalle del
+  **módulo seleccionado**: sus lecciones, también por `order`, como tarjetas (título enlazado a su edición, "Gratuita" /
+  "Con suscripción", "Con video" / "Sin video" como advertencia con ícono y texto, duración, "Subir", "Bajar", "Editar",
+  "Borrar"; el `videoId` no se muestra), "Agregar lección" y "Editar módulo". Estado vacío "Este curso todavía no tiene
+  módulos." y, en un módulo sin lecciones, "Este módulo todavía no tiene lecciones."; sin publicar ni borrar el curso. Un
+  id que no es UUID es un `404` sin llamar a la API.
+- **Módulo seleccionado, sin JavaScript** (#849): parámetro opcional `?modulo={moduleId}`. Por defecto es el primero
+  (por `order`); un id desconocido o vacío vuelve al primero, sin error. Cada tarjeta de módulo es un enlace a
+  `?modulo=...`; la seleccionada lleva `aria-current="true"`, borde marcado y el texto "Seleccionado" (nunca solo color).
+  El controller (`ManagementVirtualModuleController.structure`) calcula el módulo y lo pasa a la vista como
+  `selectedModule`. Las acciones sobre un módulo o una lección vuelven a la estructura **con `?modulo=` del módulo
+  trabajado** (`doneIn`): mover, borrar, crear o editar una lección, editar o mover un módulo; crear un módulo vuelve
+  sin parámetro (el primero). Como el flash se entrega solo a la URL de destino, el aviso aparece en ese `?modulo=`.
+  Las tarjetas muestran solo lo que hay: la lección no tiene más datos que título, duración, gratuita, video y orden.
+- **Ancho de los formularios y confirmaciones de cursos virtuales** (#849): las seis plantillas de
+  `gestion/cursos-virtuales/` (curso, módulo y lección, borrar lección, confirmar y problema) ya no se limitan con
+  `max-w-xl`: ocupan todo el ancho del contenedor, alineadas con la barra de pestañas y con la estructura. Los campos
+  cortos (por ejemplo la duración) también se estiran; si molesta, se les puede acotar el ancho campo por campo. Las demás
+  pantallas de gestión (cursos presenciales, pagos, usuarios) conservan `max-w-xl`/`max-w-3xl` y se revisan aparte.
+- **Qué no se verificó (#849)**: ver "Estructura del curso: qué no se verificó" en `docs/ACCESSIBILITY.md`; en breve, la
+  corrida del job `accessibility` de CI, el recorrido manual con la API real, lector de pantalla y otros navegadores. Sí
+  se miró la página renderizada en Chrome (HTML generado por las pruebas y el CSS compilado) a 1280, 1024 y 390 px,
+  y axe-core sobre esos HTML no dio violaciones ni *incomplete*.
 - **Alta y edición de módulo**: `GET /{courseId}/modulos/nuevo`, `POST /{courseId}/modulos`,
   `GET`/`POST /{courseId}/modulos/{moduleId}/editar`, con `ModuleForm` (título obligatorio de hasta 255 caracteres y la
   casilla "Vista previa gratuita"). No hay campo de orden: el módulo nuevo va al final (el BFF no manda `order`). La API

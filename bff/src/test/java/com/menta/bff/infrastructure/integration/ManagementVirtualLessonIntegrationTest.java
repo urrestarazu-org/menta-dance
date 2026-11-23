@@ -149,12 +149,16 @@ class ManagementVirtualLessonIntegrationTest extends BaseIntegrationTest {
     void structureLinks() throws Exception {
         stubCourse();
 
-        String main = render(get(STRUCTURE).cookie(logIn("INSTRUCTOR")));
+        Cookie session = logIn("INSTRUCTOR");
+        String main = render(get(STRUCTURE).cookie(session));
+        String second = render(get(STRUCTURE + "?modulo=" + M2).cookie(session));
 
-        assertThat(main).containsPattern("<a[^>]*href=\"" + CREATE + "/nueva\">Agregar lección<span class=\"sr-only\">"
-                        + "\\s*al módulo Pasos básicos</span></a>")
-                .containsPattern("<a[^>]*href=\"/gestion/cursos-virtuales/" + ID + "/modulos/" + M2
-                        + "/lecciones/nueva\">Agregar lección<span class=\"sr-only\">\\s*al módulo Giros</span></a>")
+        // The detail shows the lessons of the selected module only (#849): the first one by default, then ?modulo=.
+        assertThat(second).containsPattern("<a[^>]*href=\"/gestion/cursos-virtuales/" + ID + "/modulos/" + M2
+                + "/lecciones/nueva\">[\\s\\S]*?</svg>Agregar lección<span class=\"sr-only\">"
+                + "\\s*al módulo Giros</span></a>");
+        assertThat(main).containsPattern("<a[^>]*href=\"" + CREATE + "/nueva\">[\\s\\S]*?</svg>Agregar lección"
+                        + "<span class=\"sr-only\">\\s*al módulo Pasos básicos</span></a>")
                 .containsPattern("<a[^>]*href=\"" + EDIT + "\">Editar<span class=\"sr-only\">\\s*lección Primer paso"
                         + "</span></a>")
                 .containsPattern("<a[^>]*href=\"" + CREATE + "/" + L2 + "/editar\">Editar<span class=\"sr-only\">"
@@ -198,7 +202,8 @@ class ManagementVirtualLessonIntegrationTest extends BaseIntegrationTest {
             request.param("free", free);
         }
 
-        mockMvc.perform(request).andExpect(status().is3xxRedirection()).andExpect(redirectedUrl(STRUCTURE))
+        mockMvc.perform(request).andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl(STRUCTURE + "?modulo=" + M1))
                 .andExpect(flash().attribute("structureAlert", "Lección creada."))
                 .andExpect(flash().attribute("structureAlertKind", "success"));
 
@@ -276,7 +281,7 @@ class ManagementVirtualLessonIntegrationTest extends BaseIntegrationTest {
         String sent = video.isEmpty() ? "" : "\"videoId\":\"" + video + "\",";
 
         mockMvc.perform(send(EDIT, logIn("ADMIN"), true, fields("videoId", video))
-                        .param("free", "on")).andExpect(redirectedUrl(STRUCTURE))
+                        .param("free", "on")).andExpect(redirectedUrl(STRUCTURE + "?modulo=" + M1))
                 .andExpect(flash().attribute("structureAlert", "Lección actualizada."));
 
         WIRE_MOCK_SERVER.verify(1, putRequestedFor(urlEqualTo(LESSON_API)).withRequestBody(equalToJson(

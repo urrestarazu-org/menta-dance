@@ -151,14 +151,17 @@ class ManagementVirtualLessonActionsIntegrationTest extends BaseIntegrationTest 
     void titleLinksToEdit() throws Exception {
         stubLessons();
 
-        String main = render(get(STRUCTURE).cookie(logIn("INSTRUCTOR")));
+        Cookie session = logIn("INSTRUCTOR");
+        String main = render(get(STRUCTURE).cookie(session));
+        String second = render(get(STRUCTURE + "?modulo=" + M2).cookie(session));
 
+        // The detail lists the lessons of the selected module only (#849): the first one by default, then ?modulo=.
+        assertThat(second).containsPattern("<a[^>]*href=\"" + lessonUrl(M2, L4, "editar") + "\">Giro único<span");
         assertThat(main).containsSubsequence("Primer paso", "Segundo paso", "Tercer paso")
                 .containsPattern("<a[^>]*href=\"" + lessonUrl(M1, L2, "editar")
                         + "\">Segundo paso<span class=\"sr-only\">\\s*, lección del módulo Pasos básicos</span></a>")
                 .containsPattern("<a[^>]*href=\"" + lessonUrl(M1, L2, "editar")
-                        + "\">Editar<span class=\"sr-only\">\\s*lección Segundo paso</span></a>")
-                .containsPattern("<a[^>]*href=\"" + lessonUrl(M2, L4, "editar") + "\">Giro único<span");
+                        + "\">Editar<span class=\"sr-only\">\\s*lección Segundo paso</span></a>");
     }
 
     static Stream<Arguments> positions() {
@@ -172,7 +175,7 @@ class ManagementVirtualLessonActionsIntegrationTest extends BaseIntegrationTest 
     void buttonsByPosition(String moduleId, String lessonId, boolean up, boolean down) throws Exception {
         stubLessons();
 
-        String main = render(get(STRUCTURE).cookie(logIn("ADMIN")));
+        String main = render(get(STRUCTURE + "?modulo=" + moduleId).cookie(logIn("ADMIN")));
 
         assertThat(main.contains(lessonUrl(moduleId, lessonId, "subir"))).isEqualTo(up);
         assertThat(main.contains(lessonUrl(moduleId, lessonId, "bajar"))).isEqualTo(down);
@@ -207,7 +210,8 @@ class ManagementVirtualLessonActionsIntegrationTest extends BaseIntegrationTest 
         stub("PUT", lessonApi(lessonId), 200, managed(lessonId, lessonOrder));
         stub("PUT", lessonApi(neighbourId), 200, managed(neighbourId, neighbourOrder));
 
-        mockMvc.perform(send(url, logIn("INSTRUCTOR"), true)).andExpect(redirectedUrl(STRUCTURE))
+        mockMvc.perform(send(url, logIn("INSTRUCTOR"), true))
+                .andExpect(redirectedUrl(STRUCTURE + "?modulo=" + M1))
                 .andExpect(flash().attribute("structureAlert", "Lección movida."))
                 .andExpect(flash().attribute("structureAlertKind", "success"));
 
@@ -228,7 +232,8 @@ class ManagementVirtualLessonActionsIntegrationTest extends BaseIntegrationTest 
     void moveNowhere(String url) throws Exception {
         stubLessons();
 
-        mockMvc.perform(send(url, logIn("ADMIN"), true)).andExpect(redirectedUrl(STRUCTURE))
+        mockMvc.perform(send(url, logIn("ADMIN"), true))
+                .andExpect(redirectedUrl(STRUCTURE + "?modulo=" + url.split("/")[5]))
                 .andExpect(flash().attribute("structureAlertKind", "info"));
 
         WIRE_MOCK_SERVER.verify(0, putRequestedFor(urlPathMatching("/api/v1/admin/.*")));
@@ -242,10 +247,11 @@ class ManagementVirtualLessonActionsIntegrationTest extends BaseIntegrationTest 
         stub("PUT", lessonApi(L2), 200, managed(L2, 0));
         Cookie session = logIn("ADMIN");
 
-        mockMvc.perform(send(lessonUrl(M1, L2, "subir"), session, true)).andExpect(redirectedUrl(STRUCTURE));
+        mockMvc.perform(send(lessonUrl(M1, L2, "subir"), session, true))
+                .andExpect(redirectedUrl(STRUCTURE + "?modulo=" + M1));
 
-        String first = render(get(STRUCTURE).cookie(session));
-        String second = render(get(STRUCTURE).cookie(session));
+        String first = render(get(STRUCTURE + "?modulo=" + M1).cookie(session));
+        String second = render(get(STRUCTURE + "?modulo=" + M1).cookie(session));
         assertThat(first).containsPattern("<[^>]*role=\"status\"[^>]*>\\s*<p>Lección movida\\.</p>");
         assertThat(second).doesNotContain("Lección movida.");
     }
@@ -293,15 +299,16 @@ class ManagementVirtualLessonActionsIntegrationTest extends BaseIntegrationTest 
         stub("DELETE", lessonApi(L2), 204, "");
         Cookie session = logIn("INSTRUCTOR");
 
-        mockMvc.perform(send(lessonUrl(M1, L2, "borrar"), session, true)).andExpect(redirectedUrl(STRUCTURE))
+        mockMvc.perform(send(lessonUrl(M1, L2, "borrar"), session, true))
+                .andExpect(redirectedUrl(STRUCTURE + "?modulo=" + M1))
                 .andExpect(flash().attribute("structureAlert", "Lección borrada."))
                 .andExpect(flash().attribute("structureAlertKind", "success"));
 
         WIRE_MOCK_SERVER.verify(1, deleteRequestedFor(urlEqualTo(lessonApi(L2)))
                 .withHeader("Authorization", equalTo("Bearer " + TestAccessTokens.withRole("INSTRUCTOR"))));
         stubLessons();
-        String first = render(get(STRUCTURE).cookie(session));
-        String second = render(get(STRUCTURE).cookie(session));
+        String first = render(get(STRUCTURE + "?modulo=" + M1).cookie(session));
+        String second = render(get(STRUCTURE + "?modulo=" + M1).cookie(session));
         assertThat(first).containsPattern("role=\"status\"[^>]*>\\s*<p>Lección borrada\\.</p>");
         assertThat(second).doesNotContain("Lección borrada.");
     }

@@ -150,13 +150,13 @@ class ManagementVirtualModuleIntegrationTest extends BaseIntegrationTest {
         String main = render(get(STRUCTURE).cookie(logIn("INSTRUCTOR")));
 
         assertThat(main).contains("Tango base", "Borrador", "3", "25m").containsSubsequence("Pasos básicos", "Giros",
-                "Cierre").containsSubsequence("Primer paso", "10 min", "Gratuita", "Con video", "Segundo paso",
-                "15 min", "Con suscripción", "Sin video").containsOnlyOnce("Vista previa")
-                .containsPattern("<a[^>]*href=\"/gestion/cursos-virtuales\">Volver")
+                "Cierre").containsSubsequence("Primer paso", "Gratuita", "Con video", "10 min", "Segundo paso",
+                "Con suscripción", "Sin video", "15 min").contains("Vista previa")
+                .containsPattern("<a[^>]*href=\"/gestion/cursos-virtuales\">[\\s\\S]*?Volver")
                 .containsPattern("<a[^>]*href=\"/gestion/cursos-virtuales/" + ID + "/modulos/" + M2
                         + "/editar\">Editar módulo<span class=\"sr-only\">\\s*Giros</span></a>")
                 .containsPattern("<a[^>]*href=\"/gestion/cursos-virtuales/" + ID
-                        + "/modulos/nuevo\">Agregar módulo</a>")
+                        + "/modulos/nuevo\">[\\s\\S]*?</svg>Agregar módulo</a>")
                 .doesNotContain("disabled").doesNotContain("Publicar").doesNotContain("Borrar curso");
     }
 
@@ -270,7 +270,8 @@ class ManagementVirtualModuleIntegrationTest extends BaseIntegrationTest {
     void editSends() throws Exception {
         stub("PUT", MODULE_API, 200, MODULE_JSON.formatted(M2));
 
-        mockMvc.perform(send(EDIT, logIn("ADMIN"), true, "title", " Giros ")).andExpect(redirectedUrl(STRUCTURE))
+        mockMvc.perform(send(EDIT, logIn("ADMIN"), true, "title", " Giros "))
+                .andExpect(redirectedUrl(STRUCTURE + "?modulo=" + M2))
                 .andExpect(flash().attribute("structureAlert", "Módulo actualizado."));
 
         WIRE_MOCK_SERVER.verify(1, putRequestedFor(urlEqualTo(MODULE_API))
@@ -278,6 +279,11 @@ class ManagementVirtualModuleIntegrationTest extends BaseIntegrationTest {
     }
 
     // ---- move ----
+
+    /** The module of {@code /gestion/cursos-virtuales/{course}/modulos/{module}/subir}: the one the user keeps open. */
+    private static String moduleIn(String url) {
+        return url.split("/")[5];
+    }
 
     static Stream<Arguments> moves() {
         return Stream.of(
@@ -294,7 +300,8 @@ class ManagementVirtualModuleIntegrationTest extends BaseIntegrationTest {
         stubThreeModules();
         stub("PUT", REORDER_API, 200, "{\"modules\":[]}");
 
-        mockMvc.perform(send(url, logIn("INSTRUCTOR"), true)).andExpect(redirectedUrl(STRUCTURE))
+        mockMvc.perform(send(url, logIn("INSTRUCTOR"), true))
+                .andExpect(redirectedUrl(STRUCTURE + "?modulo=" + moduleIn(url)))
                 .andExpect(flash().attribute("structureAlert", "Módulo movido."))
                 .andExpect(flash().attribute("structureAlertKind", "success"));
 
@@ -309,7 +316,8 @@ class ManagementVirtualModuleIntegrationTest extends BaseIntegrationTest {
     void moveNowhere(String url) throws Exception {
         stubThreeModules();
 
-        mockMvc.perform(send(url, logIn("ADMIN"), true)).andExpect(redirectedUrl(STRUCTURE))
+        mockMvc.perform(send(url, logIn("ADMIN"), true))
+                .andExpect(redirectedUrl(STRUCTURE + "?modulo=" + moduleIn(url)))
                 .andExpect(flash().attribute("structureAlertKind", "info"));
 
         WIRE_MOCK_SERVER.verify(0, putRequestedFor(urlPathMatching("/api/v1/admin/.*")));
@@ -322,12 +330,12 @@ class ManagementVirtualModuleIntegrationTest extends BaseIntegrationTest {
         stubProblem("PUT", REORDER_API, 409, "MODULE_REORDER_MISMATCH");
         Cookie session = logIn("ADMIN");
 
-        mockMvc.perform(send(UP, session, true)).andExpect(redirectedUrl(STRUCTURE))
+        mockMvc.perform(send(UP, session, true)).andExpect(redirectedUrl(STRUCTURE + "?modulo=" + M2))
                 .andExpect(flash().attribute("structureAlert", CHANGED))
                 .andExpect(flash().attribute("structureAlertKind", "error"));
 
-        String first = render(get(STRUCTURE).cookie(session));
-        String second = render(get(STRUCTURE).cookie(session));
+        String first = render(get(STRUCTURE + "?modulo=" + M2).cookie(session));
+        String second = render(get(STRUCTURE + "?modulo=" + M2).cookie(session));
         assertThat(first).containsPattern("<[^>]*role=\"alert\"[^>]*>\\s*<p>" + CHANGED + "</p>");
         assertThat(second).doesNotContain(CHANGED);
     }
