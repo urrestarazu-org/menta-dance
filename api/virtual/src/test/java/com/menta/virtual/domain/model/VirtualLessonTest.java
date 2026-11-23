@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class VirtualLessonTest {
 
@@ -25,12 +27,46 @@ class VirtualLessonTest {
         )).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("order");
     }
 
+    private static VirtualLesson hydrated(String videoId) {
+        return new VirtualLesson(
+            LessonId.generate(), ModuleId.generate(), CourseId.generate(), "t", "d", videoId, 10, false, 0
+        );
+    }
+
     @Test
     void is_complete_requires_a_non_blank_video_id() {
         assertThat(lesson("bunny-123").isComplete()).isTrue();
         assertThat(lesson(null).isComplete()).isFalse();
-        assertThat(lesson("").isComplete()).isFalse();
-        assertThat(lesson("   ").isComplete()).isFalse();
+        assertThat(hydrated("").isComplete()).isFalse();
+        assertThat(hydrated("   ").isComplete()).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "   ", "\t\n"})
+    void create_rejects_a_blank_video_id(String blank) {
+        assertThatThrownBy(() -> lesson(blank))
+            .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("videoId");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "   ", "\t\n"})
+    void with_video_id_rejects_a_blank_video_id_instead_of_clearing_the_video(String blank) {
+        VirtualLesson lesson = lesson("bunny-123");
+
+        assertThatThrownBy(() -> lesson.withVideoId(blank))
+            .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("videoId");
+        assertThat(lesson.getVideoId()).isEqualTo("bunny-123");
+    }
+
+    @Test
+    void a_stored_lesson_with_a_blank_or_missing_video_id_still_hydrates_and_can_be_edited() {
+        VirtualLesson blank = hydrated("");
+        VirtualLesson missing = hydrated(null);
+
+        assertThat(blank.getVideoId()).isEmpty();
+        assertThat(blank.withTitle("nuevo").getVideoId()).isEmpty();
+        assertThat(missing.withOrder(3).getVideoId()).isNull();
+        assertThat(blank.withVideoId("bunny-123").isComplete()).isTrue();
     }
 
     @Test
