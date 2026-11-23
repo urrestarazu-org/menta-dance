@@ -12,9 +12,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
 import com.github.tomakehurst.wiremock.client.WireMock;
+import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MvcResult;
 
 /**
  * Full-stack rendering coverage for the course-detail view (spec
@@ -537,5 +540,198 @@ class VirtualLearningViewIntegrationTest extends BaseIntegrationTest {
         assertThat(body).doesNotContain("application/problem+json");
         assertThat(body).doesNotContain("Service unavailable");
         assertThat(body).contains("Comenzar");
+    }
+
+    // --- Lessons without video, already hidden by the API (#852, after #851) ---------
+
+    private static String courseDetailBody(String stats, String... modules) {
+        return ("{\"courseId\":\"course-1\",\"title\":\"Ballet Básico\","
+                + "\"description\":\"Introducción al ballet clásico\",\"thumbnailUrl\":\"https://cdn/thumb.jpg\","
+                + "\"category\":\"ballet\",\"level\":\"beginner\",\"isPremium\":true,\"modules\":[%s],"
+                + "\"stats\":%s}").formatted(String.join(",", modules), stats);
+    }
+
+    private static String moduleJson(String moduleId, String title, int order, String... lessons) {
+        return "{\"moduleId\":\"%s\",\"title\":\"%s\",\"order\":%d,\"lessons\":[%s]}"
+                .formatted(moduleId, title, order, String.join(",", lessons));
+    }
+
+    private static String lessonJson(String lessonId, String title, int order) {
+        return "{\"lessonId\":\"%s\",\"title\":\"%s\",\"duration\":\"05:00\",\"isFree\":false,\"order\":%d}"
+                .formatted(lessonId, title, order);
+    }
+
+    private void stubCourseDetailBody(String body) {
+        WIRE_MOCK_SERVER.stubFor(WireMock.get(urlEqualTo(COURSE_DETAIL_URL))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(body)));
+    }
+
+    @Test
+    @DisplayName("course whose lessons the API already filtered: only those are listed, with the API's own counts")
+    void courseWithLessonsHiddenByTheApi_shouldRenderOnlyListedLessonsWithApiCounts() throws Exception {
+        // The API dropped "lesson-sin-video" and the module that was left empty ("module-vacio"): the BFF must
+        // neither know about them nor recount. The stats are deliberately not derivable from the lists.
+        stubCourseDetailBody(courseDetailBody(
+                "{\"moduleCount\":2,\"lessonCount\":3,\"totalDuration\":\"1h 17m\"}",
+                moduleJson("module-1", "Módulo 1", 1, lessonJson("lesson-1", "Postura básica", 1)),
+                moduleJson("module-3", "Módulo 3", 3, lessonJson("lesson-4", "Giro doble", 1),
+                        lessonJson("lesson-5", "Salto", 2))));
+
+        String body = mockMvc.perform(get("/courses/{courseId}", COURSE_ID))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(body).contains("Módulo 1", "Módulo 3", "Postura básica", "Giro doble", "Salto");
+        assertThat(body).contains("2 módulos", "3 lecciones", "1h 17m");
+        assertThat(body).doesNotContain("lesson-sin-video").doesNotContain("module-vacio");
+        assertThat(body).doesNotContain("/lessons/lesson-2").doesNotContain("/lessons/lesson-3");
+        assertThat(body).doesNotContain("/api/v1");
+    }
+
+    @Test
+    @DisplayName("course with a single visible lesson renders it, the counts and a working Continuar")
+    void courseWithSingleVisibleLesson_shouldRenderItAndContinuar() throws Exception {
+        Cookie sessionCookie = loginAndGetSessionCookie();
+        stubCourseDetailBody(courseDetailBody(
+                "{\"moduleCount\":1,\"lessonCount\":1,\"totalDuration\":\"5m\"}",
+                moduleJson("module-1", "Módulo 1", 1, lessonJson("lesson-1", "Postura básica", 1))));
+        WIRE_MOCK_SERVER.stubFor(WireMock.get(urlEqualTo(progressUrl(COURSE_ID)))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(
+                                """
+                                {
+                                  "courseId": "course-1",
+                                  "completedLessons": 0,
+                                  "totalLessons": 1,
+                                  "percentage": 0,
+                                  "resumeLesson": {
+                                    "lessonId": "lesson-1",
+                                    "moduleId": "module-1",
+                                    "positionSeconds": 12,
+                                    "completed": false
+                                  }
+                                }
+                                """)));
+
+        String body = mockMvc.perform(get("/courses/{courseId}", COURSE_ID).cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(body).contains("1 módulos", "1 lecciones", "Postura básica");
+        assertThat(body).contains("Continuar");
+        assertThat(body).contains("href=\"/courses/course-1/lessons/lesson-1\"");
+    }
+
+    @Test
+    @DisplayName("course left without modules renders without lesson links and offers Comenzar, never a crash")
+    void courseWithoutVisibleModules_shouldRenderWithoutLessonLinks() throws Exception {
+        Cookie sessionCookie = loginAndGetSessionCookie();
+        stubCourseDetailBody(courseDetailBody("{\"moduleCount\":0,\"lessonCount\":0,\"totalDuration\":\"0m\"}"));
+        WIRE_MOCK_SERVER.stubFor(WireMock.get(urlEqualTo(progressUrl(COURSE_ID)))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(
+                                """
+                                {
+                                  "courseId": "course-1",
+                                  "completedLessons": 0,
+                                  "totalLessons": 0,
+                                  "percentage": 0,
+                                  "resumeLesson": null
+                                }
+                                """)));
+
+        String body = mockMvc.perform(get("/courses/{courseId}", COURSE_ID).cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(view().name("course-detail"))
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(body).contains("Ballet Básico", "0 módulos", "0 lecciones", "Comenzar");
+        assertThat(body).doesNotContain("Continuar").doesNotContain("/lessons/");
+    }
+
+    @Test
+    @DisplayName("resume lesson the course list no longer carries: no Continuar and no link to it")
+    void resumeLessonAbsentFromTheListedLessons_shouldNotLinkToIt() throws Exception {
+        Cookie sessionCookie = loginAndGetSessionCookie();
+        stubCourseDetailBody(courseDetailBody(
+                "{\"moduleCount\":1,\"lessonCount\":1,\"totalDuration\":\"5m\"}",
+                moduleJson("module-1", "Módulo 1", 1, lessonJson("lesson-1", "Postura básica", 1))));
+        WIRE_MOCK_SERVER.stubFor(WireMock.get(urlEqualTo(progressUrl(COURSE_ID)))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(
+                                """
+                                {
+                                  "courseId": "course-1",
+                                  "completedLessons": 0,
+                                  "totalLessons": 1,
+                                  "percentage": 0,
+                                  "resumeLesson": {
+                                    "lessonId": "lesson-sin-video",
+                                    "moduleId": "module-1",
+                                    "positionSeconds": 0,
+                                    "completed": false
+                                  }
+                                }
+                                """)));
+
+        String body = mockMvc.perform(get("/courses/{courseId}", COURSE_ID).cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(body).doesNotContain("Continuar").doesNotContain("lesson-sin-video");
+        assertThat(body).contains("Comenzar", "Postura básica");
+    }
+
+    @Test
+    @DisplayName("lesson without video: the API's 404 LESSON_NOT_FOUND renders the 404 page, no stream call, no leaks")
+    void lessonWithoutVideo_shouldRenderTheNotFoundPageWithoutLeakingTheApiProblem() throws Exception {
+        Cookie sessionCookie = loginAndGetSessionCookie();
+        stubCourseDetail();
+        WIRE_MOCK_SERVER.stubFor(WireMock.get(urlEqualTo(lessonUrl("lesson-sin-video")))
+                .willReturn(aResponse()
+                        .withStatus(404)
+                        .withHeader("Content-Type", "application/problem+json")
+                        .withBody(
+                                """
+                                {
+                                  "type": "about:blank",
+                                  "title": "Not Found",
+                                  "status": 404,
+                                  "detail": "Lección no encontrada.",
+                                  "code": "LESSON_NOT_FOUND"
+                                }
+                                """)));
+
+        var anonymous = mockMvc.perform(get("/courses/{courseId}/lessons/{lessonId}", COURSE_ID, "lesson-sin-video"))
+                .andExpect(status().isNotFound())
+                .andReturn();
+        var authenticated = mockMvc.perform(get("/courses/{courseId}/lessons/{lessonId}", COURSE_ID,
+                        "lesson-sin-video").cookie(sessionCookie))
+                .andExpect(status().isNotFound())
+                .andReturn();
+
+        for (var result : new MvcResult[] {anonymous, authenticated}) {
+            // MockMvc does not run the container's error dispatch, so the /error page is requested with the
+            // status and the exception the real request ended with, exactly as the servlet container would.
+            assertThat(result.getResponse().getContentAsString()).isEmpty();
+            String body = mockMvc.perform(get("/error").accept(MediaType.TEXT_HTML)
+                            .requestAttr(RequestDispatcher.ERROR_STATUS_CODE, result.getResponse().getStatus())
+                            .requestAttr(RequestDispatcher.ERROR_EXCEPTION, result.getResolvedException()))
+                    .andReturn().getResponse().getContentAsString();
+            assertThat(body).contains("No encontramos la página que buscás", "Código: 404");
+            assertThat(body).doesNotContain("/api/v1").doesNotContain("Lección no encontrada")
+                    .doesNotContain("LESSON_NOT_FOUND").doesNotContain("about:blank")
+                    .doesNotContain("application/problem+json");
+        }
+        WIRE_MOCK_SERVER.verify(0, getRequestedFor(urlEqualTo(streamUrl("lesson-sin-video"))));
     }
 }
