@@ -35,6 +35,7 @@
 | [0046](0046-android-min-sdk-26.md) | Android exige API 26 (Android 8.0) como `minSdk` (reemplazado por 0047) |
 | [0047](0047-android-min-sdk-29.md) | Android exige API 29 (Android 10) como `minSdk` |
 | [0048](0048-fechas-del-backend-en-utc.md) | Todas las fechas del backend van en UTC; los clientes convierten a la zona del usuario |
+| [0049](0049-gestion-de-videos-bunny-stream.md) | La API gestiona los videos de las lecciones con la API de Bunny Stream; borrar solo ADMIN y solo si no está en uso |
 
 Los ADRs no listados fueron eliminados por contener decisiones incompatibles con
 el diseño vigente. Sus números no se reutilizan.
