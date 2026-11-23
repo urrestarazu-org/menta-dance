@@ -10,7 +10,9 @@ public interface UpdateVirtualLessonUseCase {
     /**
      * Applies a partial update to the lesson, authorized through its parent course, and appends an
      * {@code UPDATE_LESSON} audit row with the before and after snapshots. An unknown lesson fails
-     * with {@code LessonNotFoundException}.
+     * with {@code LessonNotFoundException}. An empty {@code videoId} leaves the video unchanged; a
+     * present but blank one is rejected with {@code IllegalArgumentException}, because a video cannot
+     * be removed once assigned (#845).
      */
     VirtualLessonManagementResult update(
         String lessonId, UpdateVirtualLessonCommand command, UUID actingUserId, boolean actingAsAdmin

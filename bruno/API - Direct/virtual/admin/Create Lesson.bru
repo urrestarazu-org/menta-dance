@@ -34,10 +34,13 @@ docs {
   US-VIRTUAL-006 escenario 3. `durationMinutes` is an integer (not the
   "mm:ss" string in the original draft) — virtual_lessons.duration_minutes
   has been an INT since #46. `videoId` is an opaque Bunny.net reference the
-  client already knows; Virtual only stores it by value.
+  client already knows; Virtual only stores it by value. Omit it (or send
+  null) to create a lesson without a video yet; a blank videoId ("" or only
+  spaces) is rejected with 400 INVALID_REQUEST (#845).
 
   Success contract: 201 with VirtualLessonManagementResponse.
   Error contract:
+    400 INVALID_REQUEST → invalid body, e.g. a blank title or videoId
     403 COURSE_NOT_OWNED → INSTRUCTOR is not the parent course's professor
     404 MODULE_NOT_FOUND → moduleId does not exist
 }

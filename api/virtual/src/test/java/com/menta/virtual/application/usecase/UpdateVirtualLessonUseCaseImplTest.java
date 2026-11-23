@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.menta.virtual.application.dto.UpdateVirtualLessonCommand;
@@ -89,5 +92,40 @@ class UpdateVirtualLessonUseCaseImplTest {
         assertThat(result.free()).isTrue();
         assertThat(result.order()).isEqualTo(3);
         assertThat(result.description()).isEqualTo("d");
+    }
+
+    @Test
+    void a_blank_video_id_is_rejected_without_saving_or_auditing_and_the_video_is_kept() {
+        CourseId courseId = CourseId.generate();
+        UUID ownerId = UUID.randomUUID();
+        VirtualLesson lesson = VirtualLesson.create(ModuleId.generate(), courseId, "L1", "d", "v", 10, false, 0);
+        when(lessonRepository.findById(lesson.getId())).thenReturn(Optional.of(lesson));
+        when(courseRepository.findById(courseId)).thenReturn(Optional.of(course(courseId, ownerId)));
+        UpdateVirtualLessonCommand command = new UpdateVirtualLessonCommand(
+            Optional.empty(), Optional.empty(), Optional.of(" "), Optional.empty(), Optional.empty(),
+            Optional.empty()
+        );
+
+        assertThatThrownBy(() -> useCase.update(lesson.getId().toString(), command, ownerId, false))
+            .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("videoId");
+
+        verify(lessonRepository, never()).save(any());
+        verifyNoInteractions(auditRepository);
+        assertThat(lesson.getVideoId()).isEqualTo("v");
+    }
+
+    @Test
+    void an_absent_video_id_keeps_the_video() {
+        CourseId courseId = CourseId.generate();
+        UUID ownerId = UUID.randomUUID();
+        VirtualLesson lesson = VirtualLesson.create(ModuleId.generate(), courseId, "L1", "d", "v", 10, false, 0);
+        when(lessonRepository.findById(lesson.getId())).thenReturn(Optional.of(lesson));
+        when(courseRepository.findById(courseId)).thenReturn(Optional.of(course(courseId, ownerId)));
+        when(lessonRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        VirtualLessonManagementResult result =
+            useCase.update(lesson.getId().toString(), emptyCommand(), ownerId, false);
+
+        assertThat(result.videoId()).isEqualTo("v");
     }
 }

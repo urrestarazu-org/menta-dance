@@ -13,11 +13,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
 
+import com.menta.virtual.application.dto.CreateVirtualLessonCommand;
 import com.menta.virtual.application.dto.LessonProgressView;
 import com.menta.virtual.application.dto.UpdateVirtualLessonCommand;
 import com.menta.virtual.application.dto.UpdateVirtualModuleCommand;
 import com.menta.virtual.application.dto.VirtualLessonManagementResult;
 import com.menta.virtual.application.dto.VirtualModuleManagementResult;
+import com.menta.virtual.application.port.in.CreateVirtualLessonUseCase;
 import com.menta.virtual.application.port.in.SaveLessonProgressUseCase;
 import com.menta.virtual.application.port.in.UpdateVirtualLessonUseCase;
 import com.menta.virtual.application.port.in.UpdateVirtualModuleUseCase;
@@ -37,6 +39,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.annotation.AnnotationConfigUtils;
@@ -108,7 +111,8 @@ class VirtualRequestErrorsWebTest {
         reset(
             context.getBean(SaveLessonProgressUseCase.class),
             context.getBean(UpdateVirtualModuleUseCase.class),
-            context.getBean(UpdateVirtualLessonUseCase.class)
+            context.getBean(UpdateVirtualLessonUseCase.class),
+            context.getBean(CreateVirtualLessonUseCase.class)
         );
     }
 
@@ -302,6 +306,85 @@ class VirtualRequestErrorsWebTest {
         assertThat(commands.getAllValues().get(1).durationMinutes()).isEmpty();
         assertThat(commands.getAllValues().get(1).order()).isEmpty();
         assertThat(commands.getAllValues().get(1).free()).isEqualTo(Optional.of(true));
+    }
+
+    private static final String LESSON_CREATE = "/api/v1/admin/virtual/modules/" + ID + "/lessons";
+
+    private static String createLessonBody(String videoField) {
+        return "{\"title\": \"L1\", \"description\": \"d\", \"durationMinutes\": 10" + videoField + "}";
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "   ", "\\t\\n"})
+    void a_blank_video_id_on_a_lesson_edit_answers_400_invalid_request_and_never_reaches_the_use_case(String blank)
+        throws Exception {
+        UpdateVirtualLessonUseCase useCase = context.getBean(UpdateVirtualLessonUseCase.class);
+        when(useCase.update(anyString(), any(), any(), anyBoolean()))
+            .thenReturn(new VirtualLessonManagementResult(ID, ID, ID, "L1", "d", "v", 0, false, 0));
+
+        MockHttpServletResponse response = mockMvc
+            .perform(json(HttpMethod.PUT, LESSON_EDIT, "{\"videoId\": \"" + blank + "\"}"))
+            .andReturn().getResponse();
+
+        assertInvalidRequestProblem(response);
+        verify(useCase, never()).update(anyString(), any(), any(), anyBoolean());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "   ", "\\t\\n"})
+    void a_blank_video_id_on_a_lesson_creation_answers_400_invalid_request_and_never_reaches_the_use_case(
+        String blank
+    ) throws Exception {
+        CreateVirtualLessonUseCase useCase = context.getBean(CreateVirtualLessonUseCase.class);
+        when(useCase.create(anyString(), any(), any(), anyBoolean()))
+            .thenReturn(new VirtualLessonManagementResult(ID, ID, ID, "L1", "d", "v", 10, false, 0));
+
+        MockHttpServletResponse response = mockMvc
+            .perform(json(HttpMethod.POST, LESSON_CREATE, createLessonBody(", \"videoId\": \"" + blank + "\"")))
+            .andReturn().getResponse();
+
+        assertInvalidRequestProblem(response);
+        verify(useCase, never()).create(anyString(), any(), any(), anyBoolean());
+    }
+
+    @Test
+    void a_null_or_omitted_video_id_on_a_lesson_edit_means_unchanged_and_answers_200() throws Exception {
+        UpdateVirtualLessonUseCase useCase = context.getBean(UpdateVirtualLessonUseCase.class);
+        when(useCase.update(anyString(), any(), any(), anyBoolean()))
+            .thenReturn(new VirtualLessonManagementResult(ID, ID, ID, "L1", "d", "v", 0, false, 0));
+
+        MockHttpServletResponse explicitNull = mockMvc
+            .perform(json(HttpMethod.PUT, LESSON_EDIT, "{\"videoId\": null, \"free\": true}"))
+            .andReturn().getResponse();
+        MockHttpServletResponse withVideo = mockMvc
+            .perform(json(HttpMethod.PUT, LESSON_EDIT, "{\"videoId\": \"bunny-1\"}"))
+            .andReturn().getResponse();
+
+        assertThat(explicitNull.getStatus()).isEqualTo(200);
+        assertThat(withVideo.getStatus()).isEqualTo(200);
+        ArgumentCaptor<UpdateVirtualLessonCommand> commands = ArgumentCaptor.forClass(UpdateVirtualLessonCommand.class);
+        verify(useCase, times(2)).update(anyString(), commands.capture(), any(), anyBoolean());
+        assertThat(commands.getAllValues().get(0).videoId()).isEmpty();
+        assertThat(commands.getAllValues().get(1).videoId()).contains("bunny-1");
+    }
+
+    @Test
+    void a_null_or_omitted_video_id_on_a_lesson_creation_means_a_stub_lesson_and_answers_201() throws Exception {
+        CreateVirtualLessonUseCase useCase = context.getBean(CreateVirtualLessonUseCase.class);
+        when(useCase.create(anyString(), any(), any(), anyBoolean()))
+            .thenReturn(new VirtualLessonManagementResult(ID, ID, ID, "L1", "d", null, 10, false, 0));
+
+        MockHttpServletResponse omitted = mockMvc.perform(json(HttpMethod.POST, LESSON_CREATE, createLessonBody("")))
+            .andReturn().getResponse();
+        MockHttpServletResponse explicitNull = mockMvc
+            .perform(json(HttpMethod.POST, LESSON_CREATE, createLessonBody(", \"videoId\": null")))
+            .andReturn().getResponse();
+
+        assertThat(omitted.getStatus()).isEqualTo(201);
+        assertThat(explicitNull.getStatus()).isEqualTo(201);
+        ArgumentCaptor<CreateVirtualLessonCommand> commands = ArgumentCaptor.forClass(CreateVirtualLessonCommand.class);
+        verify(useCase, times(2)).create(anyString(), commands.capture(), any(), anyBoolean());
+        assertThat(commands.getAllValues()).extracting(CreateVirtualLessonCommand::videoId).containsOnlyNulls();
     }
 
     @ParameterizedTest

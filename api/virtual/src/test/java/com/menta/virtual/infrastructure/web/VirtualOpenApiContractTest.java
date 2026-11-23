@@ -32,6 +32,7 @@ import com.menta.virtual.infrastructure.web.dto.VirtualCourseManagementResponse;
 import com.menta.virtual.infrastructure.web.dto.VirtualLessonManagementResponse;
 import com.menta.virtual.infrastructure.web.dto.VirtualModuleManagementListResponse;
 import com.menta.virtual.infrastructure.web.dto.VirtualModuleManagementResponse;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
 import java.io.IOException;
 import java.io.InputStream;
@@ -467,6 +468,37 @@ class VirtualOpenApiContractTest {
             }
         }
         assertThat(constrained).isEqualTo(6);
+        assertThat(drift).isEmpty();
+    }
+
+    @Test
+    void the_lesson_video_id_rejects_a_blank_value_in_the_schema_exactly_like_the_validation_does() {
+        // #845: null/omitted keeps the video (edit) or creates a stub (create); a blank value is a 400.
+        List<String> samples = List.of("", " ", "   ", "\t\n", "bunny-1", " bunny-1 ", "bunny-1\n");
+        List<Class<? extends Record>> requests =
+            List.of(CreateVirtualLessonRequest.class, UpdateVirtualLessonRequest.class);
+
+        List<String> drift = new ArrayList<>();
+        for (Class<? extends Record> type : requests) {
+            Pattern annotation = Arrays.stream(type.getRecordComponents())
+                .filter(component -> component.getName().equals("videoId"))
+                .findFirst().orElseThrow().getAccessor().getAnnotation(Pattern.class);
+            Map<String, Object> property = at(type.getSimpleName() + "/videoId");
+            if (annotation == null || !(property.get("pattern") instanceof String schemaPattern)) {
+                drift.add(type.getSimpleName() + ".videoId declares no pattern on one side");
+                continue;
+            }
+            if (!list(property.get("type")).contains("null")) {
+                drift.add(type.getSimpleName() + ".videoId must stay nullable");
+            }
+            for (String sample : samples) {
+                boolean validatedAsPresent = sample.matches(annotation.regexp());
+                boolean schemaAccepts = java.util.regex.Pattern.compile(schemaPattern).matcher(sample).find();
+                if (validatedAsPresent != schemaAccepts) {
+                    drift.add(type.getSimpleName() + ".videoId disagrees on length " + sample.length() + " sample");
+                }
+            }
+        }
         assertThat(drift).isEmpty();
     }
 
