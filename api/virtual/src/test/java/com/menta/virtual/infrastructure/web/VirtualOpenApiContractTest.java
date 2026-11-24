@@ -6,6 +6,7 @@ import com.menta.virtual.application.dto.LibraryVideoOrder;
 import com.menta.virtual.application.dto.LibraryVideoStatus;
 import com.menta.virtual.application.dto.VideoLibraryQuery;
 import com.menta.virtual.application.port.in.ListLibraryVideosUseCase;
+import com.menta.virtual.application.port.in.RenameLibraryVideoUseCase;
 import com.menta.virtual.domain.model.CourseLevel;
 import com.menta.virtual.domain.model.CourseStatus;
 import com.menta.virtual.infrastructure.web.dto.CourseProgressResponse;
@@ -25,6 +26,7 @@ import com.menta.virtual.infrastructure.web.dto.PublicLessonSubscriptionPromptDt
 import com.menta.virtual.infrastructure.web.dto.PublicLessonSummaryRefDto;
 import com.menta.virtual.infrastructure.web.dto.PublicModuleDto;
 import com.menta.virtual.infrastructure.web.dto.PublicStreamQualityDto;
+import com.menta.virtual.infrastructure.web.dto.RenameVirtualVideoRequest;
 import com.menta.virtual.infrastructure.web.dto.ReorderVirtualModulesRequest;
 import com.menta.virtual.infrastructure.web.dto.SaveLessonProgressRequest;
 import com.menta.virtual.infrastructure.web.dto.UpdateVirtualCourseRequest;
@@ -80,6 +82,7 @@ class VirtualOpenApiContractTest {
     private static final String ADMIN_LESSON = "/api/v1/admin/virtual/lessons/{lessonId}";
     private static final String LESSON = "/api/v1/virtual/lessons/{lessonId}";
     private static final String VIDEOS = "/api/v1/admin/virtual/videos";
+    private static final String VIDEO = VIDEOS + "/{videoId}";
     private static final Set<String> VALIDATION_REQUIRED = Set.of("NotNull", "NotBlank", "NotEmpty");
 
     private static Map<String, Object> spec;
@@ -285,6 +288,11 @@ class VirtualOpenApiContractTest {
         expected.put("DELETE " + ADMIN_LESSON, new TreeSet<>(Set.of("204", "400", "401", "403", "404")));
         // Video listing (#840): 400 from a bad page/size/orderBy, 503 when the video library cannot answer.
         expected.put("GET " + VIDEOS, new TreeSet<>(Set.of("200", "400", "401", "403", "503")));
+        // Video rename and delete (#841): 400 from a body that fails validation or an id that is not plain, 403
+        // VIDEO_NOT_OWNED (rename) or ACCESS_DENIED, 404 VIDEO_NOT_FOUND only on the rename (a delete of a video the
+        // library no longer has is a 204), 409 VIDEO_IN_USE only on the delete, 503 when the library cannot answer.
+        expected.put("PUT " + VIDEO, new TreeSet<>(Set.of("200", "400", "401", "403", "404", "503")));
+        expected.put("DELETE " + VIDEO, new TreeSet<>(Set.of("204", "400", "401", "403", "409", "503")));
         // Public reads: the token is optional, so there is no 401; a malformed id collapses into the 404.
         expected.put("GET " + LESSON, new TreeSet<>(Set.of("200", "403", "404")));
         expected.put("GET " + LESSON + "/stream", new TreeSet<>(Set.of("200", "403", "404")));
@@ -409,6 +417,10 @@ class VirtualOpenApiContractTest {
         responses.put("VirtualVideoPageResponse", new Object[] {VirtualVideoPageResponse.class});
         responses.put("VirtualVideoPageResponse/items/[]",
             new Object[] {VirtualVideoResponse.class, "title", "status", "durationSeconds", "thumbnailUrl"});
+        responses.put("VirtualVideoResponse",
+            new Object[] {VirtualVideoResponse.class, "title", "status", "durationSeconds", "thumbnailUrl"});
+        responses.put("VirtualVideoResponse/lessons/[]", new Object[] {VirtualVideoResponse.VideoLessonResponse.class});
+        responses.put("VideoInUseProblem/lessons/[]", new Object[] {VirtualVideoResponse.VideoLessonResponse.class});
         responses.put("VirtualVideoPageResponse/items/[]/lessons/[]",
             new Object[] {VirtualVideoResponse.VideoLessonResponse.class});
         responses.put("LessonProgressResponse", new Object[] {LessonProgressResponse.class, "completedAt"});
@@ -471,6 +483,7 @@ class VirtualOpenApiContractTest {
         requests.put("CreateVirtualLessonRequest", CreateVirtualLessonRequest.class);
         requests.put("UpdateVirtualLessonRequest", UpdateVirtualLessonRequest.class);
         requests.put("SaveLessonProgressRequest", SaveLessonProgressRequest.class);
+        requests.put("RenameVirtualVideoRequest", RenameVirtualVideoRequest.class);
 
         List<String> drift = new ArrayList<>();
         requests.forEach((name, type) -> {
@@ -575,6 +588,34 @@ class VirtualOpenApiContractTest {
             "#/components/parameters/VideoPage", "#/components/parameters/VideoPageSize",
             "#/components/parameters/VideoSearch", "#/components/parameters/VideoOrderBy"
         );
+    }
+
+    @Test
+    void the_video_rename_and_delete_document_their_problems_and_the_title_bounds() {
+        Map<String, Object> rename = map(operation("PUT " + VIDEO), "responses");
+        Map<String, Object> notOwned = map(map(map(map(rename, "403"), "content"), "application/problem+json"),
+            "examples");
+        assertThat(notOwned.values()).extracting(example -> map(example, "value").get("code"))
+            .containsExactly("VIDEO_NOT_OWNED");
+        Map<String, Object> notFound = map(map(map(resolveResponse(map(rename, "404")), "content"),
+            "application/problem+json"), "examples");
+        assertThat(notFound.values()).extracting(example -> map(example, "value").get("code"))
+            .containsExactly("VIDEO_NOT_FOUND");
+
+        Map<String, Object> delete = map(operation("DELETE " + VIDEO), "responses");
+        assertThat(map(delete, "204")).doesNotContainKey("content");
+        Map<String, Object> inUse = map(map(map(map(delete, "409"), "content"), "application/problem+json"),
+            "examples");
+        Map<String, Object> value = map(map(inUse, "video_en_uso"), "value");
+        assertThat(value.get("code")).isEqualTo("VIDEO_IN_USE");
+        assertThat(list(value.get("lessons"))).hasSize(1);
+        assertThat(asMap(list(value.get("lessons")).get(0)).keySet()).containsExactlyInAnyOrder(
+            Arrays.stream(VirtualVideoResponse.VideoLessonResponse.class.getRecordComponents())
+                .map(RecordComponent::getName).toArray(String[]::new));
+
+        Map<String, Object> title = at("RenameVirtualVideoRequest/title");
+        assertThat(title.get("maxLength")).isEqualTo(RenameLibraryVideoUseCase.MAX_TITLE_LENGTH);
+        assertThat(requiredNames(at("VideoInUseProblem"))).contains("lessons");
     }
 
     @Test

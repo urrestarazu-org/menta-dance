@@ -36,6 +36,7 @@ import com.menta.virtual.application.port.out.VirtualCourseAuditRepository;
 import com.menta.virtual.application.port.out.VirtualCourseRepository;
 import com.menta.virtual.application.port.out.VirtualLessonRepository;
 import com.menta.virtual.application.port.out.VirtualModuleRepository;
+import com.menta.virtual.application.port.out.VirtualVideoAuditRepository;
 import com.menta.virtual.application.usecase.CourseProgressAccessPolicy;
 import com.menta.virtual.application.usecase.GetCourseProgressUseCaseImpl;
 import com.menta.virtual.application.usecase.GetLessonProgressUseCaseImpl;
@@ -754,6 +755,11 @@ class VirtualConfigurationTest {
             @Bean
             VirtualCourseAuditRepository virtualCourseAuditRepository() {
                 return mock(VirtualCourseAuditRepository.class);
+            }
+
+            @Bean
+            VirtualVideoAuditRepository virtualVideoAuditRepository() {
+                return mock(VirtualVideoAuditRepository.class);
             }
 
             @Bean

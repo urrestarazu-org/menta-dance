@@ -1,0 +1,11 @@
+-- V33 (#841): index on virtual_lessons.video_id, for the "which lessons use this video" lookup.
+--
+-- V32 is the head migration this builds on.
+--
+-- Renaming a video (an instructor must own a lesson that uses it) and deleting one (no lesson of any course may
+-- use it) both start from "the lessons whose video_id is X". V11 added the column with no index, so that lookup
+-- would scan the whole virtual_lessons table on every rename and delete request. A plain B-tree index serves the
+-- equality filter: the column is VARCHAR(128) and mostly unique per lesson (a video is shared by a few lessons
+-- at most), so it is selective. Lessons without a video (NULL) are not looked up and cost the index one entry
+-- each. No data is touched, and the index is not unique: several lessons may share a video.
+CREATE INDEX idx_virtual_lessons_video_id ON virtual_lessons (video_id);

@@ -33,8 +33,10 @@ info:
     ## Autorización
 
     `/api/v1/admin/virtual/courses/**`, `/api/v1/admin/virtual/modules/**`,
-    `/api/v1/admin/virtual/lessons/**` y `/api/v1/admin/virtual/videos` aceptan tanto `ADMIN` como
-    `INSTRUCTOR` (rol interno de `PROFESOR`) — la coincidencia de rol se
+    `/api/v1/admin/virtual/lessons/**`, `GET /api/v1/admin/virtual/videos` y
+    `PUT /api/v1/admin/virtual/videos/{videoId}` aceptan tanto `ADMIN` como
+    `INSTRUCTOR` (rol interno de `PROFESOR`); `DELETE /api/v1/admin/virtual/videos/{videoId}` es sólo de `ADMIN`
+    (un `INSTRUCTOR` recibe siempre `403`) — la coincidencia de rol se
     verifica en el filtro de seguridad; la propiedad del curso dueño de un
     módulo o lección se verifica en el caso de uso (`403 COURSE_NOT_OWNED`).
     Ni un módulo ni una lección tienen `professorId` propio: la autorización
@@ -77,7 +79,8 @@ tags:
   - name: Gestión de lecciones
     description: Administración de lecciones de un módulo (ADMIN/PROFESOR).
   - name: Biblioteca de videos
-    description: Listado de los videos de la biblioteca de Bunny Stream (ADMIN/PROFESOR).
+    description: >-
+      Listado, renombrado (ADMIN/PROFESOR) y borrado (sólo ADMIN) de los videos de la biblioteca de Bunny Stream.
   - name: Lecciones públicas
     description: Detalle y streaming de lecciones con autorización de suscripción.
   - name: Progreso del alumno
@@ -867,6 +870,126 @@ paths:
                     detail: La biblioteca de videos no está disponible en este momento. Intentá de nuevo en unos minutos.
                     code: VIDEO_LIBRARY_UNAVAILABLE
 
+  /api/v1/admin/virtual/videos/{videoId}:
+    put:
+      tags: [Biblioteca de videos]
+      summary: Renombrar un video de la biblioteca
+      description: |
+        Cambia el título de un video en la biblioteca de Bunny Stream (ADR-0049, #841) y devuelve el video con su
+        nuevo título y las lecciones que lo usan.
+
+        - **ADMIN** renombra cualquier video de la biblioteca, lo use o no una lección.
+        - **PROFESOR** sólo los videos que usa alguna lección de sus propios cursos; en otro caso (también si
+          ninguna lección lo usa) responde `403 VIDEO_NOT_OWNED`. La pertenencia sale de los cursos, nunca de
+          la biblioteca, y en `lessons` sólo aparecen sus propias lecciones.
+        - `title` no puede estar en blanco ni superar 255 caracteres; los espacios de los extremos se quitan.
+          Un `videoId` que no es un identificador simple (letras, dígitos, `-` y `_`, hasta 128) responde
+          `400 INVALID_REQUEST`.
+        - Un video que la biblioteca no tiene responde `404 VIDEO_NOT_FOUND` (el ADMIN siempre; el PROFESOR sólo
+          si una lección suya lo usa).
+        - Si la biblioteca no responde responde `503 VIDEO_LIBRARY_UNAVAILABLE`; el detalle no incluye nada de lo
+          que dijo Bunny.
+        - Queda una fila de auditoría `RENAME_VIDEO` con el título anterior y el nuevo. Sólo cambia el título en
+          Bunny: las lecciones guardan el `videoId`, no el título.
+      operationId: renameVirtualVideo
+      parameters:
+        - $ref: '#/components/parameters/VideoId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenameVirtualVideoRequest'
+      responses:
+        '200':
+          description: El video con su nuevo título.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VirtualVideoResponse'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          description: >-
+            Un PROFESOR intenta renombrar un video que no usa ninguna lección de sus cursos
+            (`VIDEO_NOT_OWNED`), o el rol no puede gestionar videos (`ACCESS_DENIED`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                video_ajeno:
+                  value:
+                    type: https://menta.dance/problems/video_not_owned
+                    title: Forbidden
+                    status: 403
+                    detail: No tenés permiso sobre este video.
+                    code: VIDEO_NOT_OWNED
+        '404':
+          $ref: '#/components/responses/VideoNotFound'
+        '503':
+          $ref: '#/components/responses/VideoLibraryUnavailable'
+
+    delete:
+      tags: [Biblioteca de videos]
+      summary: Borrar un video de la biblioteca
+      description: |
+        Borra un video de la biblioteca de Bunny Stream (ADR-0049, #841). **Sólo ADMIN**: un PROFESOR recibe
+        siempre `403` (decisión de #832).
+
+        - Sólo se borra un video que **ninguna lección** usa, de ningún curso y en ningún estado (borrador o
+          publicado). Si alguna lo usa responde `409 VIDEO_IN_USE` con la lista `lessons` (curso, módulo y
+          lección de cada una, la misma forma que el listado); no se llama a Bunny, no queda auditoría y nunca se
+          desasocia el video de una lección: hay que cambiar el video de esas lecciones antes.
+        - Borrar un video que la biblioteca ya no tiene (o repetir el pedido) también responde `204`: para Bunny
+          un `404` al borrar significa "ya no existe". No está documentado por Bunny si borrar dos veces es
+          idempotente; este supuesto no se probó contra una biblioteca real (ver ADR-0049).
+        - Bunny oculta el video de sus consultas enseguida, pero la reproducción puede seguir un tiempo.
+        - Queda una fila de auditoría `DELETE_VIDEO` con el id y el título.
+        - Si la biblioteca no responde responde `503 VIDEO_LIBRARY_UNAVAILABLE`; el detalle no incluye nada de lo
+          que dijo Bunny.
+      operationId: deleteVirtualVideo
+      parameters:
+        - $ref: '#/components/parameters/VideoId'
+      responses:
+        '204':
+          description: Video borrado (o ya inexistente); sin cuerpo.
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '409':
+          description: >-
+            Alguna lección usa el video (`VIDEO_IN_USE`). `lessons` lista las lecciones que lo usan, en orden de
+            curso, módulo y lección; no incluye nada de lo que dijo Bunny.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/VideoInUseProblem'
+              examples:
+                video_en_uso:
+                  value:
+                    type: https://menta.dance/problems/video_in_use
+                    title: Conflict
+                    status: 409
+                    detail: >-
+                      El video no se puede borrar porque está en uso en una o más lecciones. Cambiá el video de
+                      esas lecciones antes de borrarlo.
+                    code: VIDEO_IN_USE
+                    lessons:
+                      - courseId: 6f1c0a52-8d0e-4c7e-9a43-0d6f6a1b2c01
+                        courseTitle: Tango desde cero
+                        moduleId: 0b9a7c1e-52a4-4e47-a0f8-4a2f5f3b6d02
+                        moduleTitle: Primeros pasos
+                        lessonId: 9d3e2f10-77a1-4b8c-8e55-1c0f2b7a3d03
+                        lessonTitle: El abrazo
+        '503':
+          $ref: '#/components/responses/VideoLibraryUnavailable'
+
   /api/v1/admin/virtual/lessons/{lessonId}:
     put:
       tags: [Gestión de lecciones]
@@ -1003,6 +1126,15 @@ components:
         type: string
         format: uuid
 
+    VideoId:
+      name: videoId
+      in: path
+      required: true
+      description: Identificador (guid) del video en la biblioteca; es el `videoId` de las lecciones.
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9_-]{1,128}$'
+        maxLength: 128
     VideoPage:
       name: page
       in: query
@@ -1037,6 +1169,34 @@ components:
         default: date
 
   responses:
+    VideoNotFound:
+      description: La biblioteca no tiene un video con ese id (`VIDEO_NOT_FOUND`).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            video_inexistente:
+              value:
+                type: https://menta.dance/problems/video_not_found
+                title: Not Found
+                status: 404
+                detail: El video no existe en la biblioteca.
+                code: VIDEO_NOT_FOUND
+    VideoLibraryUnavailable:
+      description: La biblioteca de videos no respondió (`VIDEO_LIBRARY_UNAVAILABLE`).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            biblioteca_no_disponible:
+              value:
+                type: https://menta.dance/problems/video_library_unavailable
+                title: Service Unavailable
+                status: 503
+                detail: La biblioteca de videos no está disponible en este momento. Intentá de nuevo en unos minutos.
+                code: VIDEO_LIBRARY_UNAVAILABLE
     InvalidRequest:
       description: >-
         Un id del path no es un UUID, un valor de enum (`level`) no existe, un número es negativo,
@@ -1632,6 +1792,61 @@ components:
         order:
           type: integer
 
+    VirtualVideoLesson:
+      type: object
+      description: Una lección que usa un video, con su curso y su módulo.
+      required: [courseId, courseTitle, moduleId, moduleTitle, lessonId, lessonTitle]
+      properties:
+        courseId:
+          type: string
+          format: uuid
+        courseTitle:
+          type: string
+        moduleId:
+          type: string
+          format: uuid
+        moduleTitle:
+          type: string
+        lessonId:
+          type: string
+          format: uuid
+        lessonTitle:
+          type: string
+
+    VirtualVideoResponse:
+      type: object
+      required: [videoId, title, status, durationSeconds, thumbnailUrl, hasMp4Fallback,
+                 availableResolutions, missingInLibrary, lessons]
+      properties:
+        videoId:
+          type: string
+          description: Identificador (guid) del video en la biblioteca; es el `videoId` de las lecciones.
+        title:
+          type: [string, 'null']
+        status:
+          type: [string, 'null']
+          enum: [CREATED, UPLOADED, PROCESSING, TRANSCODING, FINISHED, ERROR, UPLOAD_FAILED, JIT_SEGMENTING,
+                 JIT_PLAYLISTS_CREATED, UNKNOWN, null]
+        durationSeconds:
+          type: [integer, 'null']
+        thumbnailUrl:
+          type: [string, 'null']
+        hasMp4Fallback:
+          type: boolean
+          description: Sin MP4 de respaldo el video no se reproduce con la configuración actual del CDN.
+        availableResolutions:
+          type: array
+          items:
+            type: string
+          description: Etiquetas de resolución ya codificadas, por ejemplo `360p`.
+        missingInLibrary:
+          type: boolean
+          description: Una lección usa este `videoId` pero la biblioteca no tiene ese video.
+        lessons:
+          type: array
+          items:
+            $ref: '#/components/schemas/VirtualVideoLesson'
+
     VirtualVideoPageResponse:
       type: object
       required: [items, page, size, totalElements, totalPages]
@@ -1639,55 +1854,7 @@ components:
         items:
           type: array
           items:
-            type: object
-            required: [videoId, title, status, durationSeconds, thumbnailUrl, hasMp4Fallback,
-                       availableResolutions, missingInLibrary, lessons]
-            properties:
-              videoId:
-                type: string
-                description: Identificador (guid) del video en la biblioteca; es el `videoId` de las lecciones.
-              title:
-                type: [string, 'null']
-              status:
-                type: [string, 'null']
-                enum: [CREATED, UPLOADED, PROCESSING, TRANSCODING, FINISHED, ERROR, UPLOAD_FAILED, JIT_SEGMENTING,
-                       JIT_PLAYLISTS_CREATED, UNKNOWN, null]
-              durationSeconds:
-                type: [integer, 'null']
-              thumbnailUrl:
-                type: [string, 'null']
-              hasMp4Fallback:
-                type: boolean
-                description: Sin MP4 de respaldo el video no se reproduce con la configuración actual del CDN.
-              availableResolutions:
-                type: array
-                items:
-                  type: string
-                description: Etiquetas de resolución ya codificadas, por ejemplo `360p`.
-              missingInLibrary:
-                type: boolean
-                description: Una lección usa este `videoId` pero la biblioteca no tiene ese video.
-              lessons:
-                type: array
-                items:
-                  type: object
-                  required: [courseId, courseTitle, moduleId, moduleTitle, lessonId, lessonTitle]
-                  properties:
-                    courseId:
-                      type: string
-                      format: uuid
-                    courseTitle:
-                      type: string
-                    moduleId:
-                      type: string
-                      format: uuid
-                    moduleTitle:
-                      type: string
-                    lessonId:
-                      type: string
-                      format: uuid
-                    lessonTitle:
-                      type: string
+            $ref: '#/components/schemas/VirtualVideoResponse'
         page:
           type: integer
           description: Índice de página, desde 0.
@@ -1698,6 +1865,31 @@ components:
           format: int64
         totalPages:
           type: integer
+
+    RenameVirtualVideoRequest:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          pattern: '\S'
+          maxLength: 255
+          description: >-
+            Nuevo título. No puede estar en blanco ni superar 255 caracteres (`400 INVALID_REQUEST`); los
+            espacios de los extremos se quitan.
+
+    VideoInUseProblem:
+      description: >-
+        El problema `VIDEO_IN_USE`, un `Problem` con las lecciones que usan el video.
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required: [lessons]
+          properties:
+            lessons:
+              type: array
+              items:
+                $ref: '#/components/schemas/VirtualVideoLesson'
 
     SaveLessonProgressRequest:
       type: object

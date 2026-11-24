@@ -1,0 +1,50 @@
+meta {
+  name: Rename Library Video
+  type: http
+  seq: 15
+}
+
+put {
+  url: {{baseUrl}}/api/v1/admin/virtual/videos/{{virtualVideoId}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "title": "Tango básico - clase 1"
+  }
+}
+
+docs {
+  #841, ADR-0049. Renames a video in the Bunny Stream library (Bunny updates with POST; this API exposes PUT).
+  {{virtualVideoId}} is the guid of a video: run "List Library Videos" first (it stores the first one) or set it.
+
+  ADMIN renames any video of the library; INSTRUCTOR only a video used by a lesson of their own courses
+  (403 VIDEO_NOT_OWNED otherwise, also when no lesson uses it). title: not blank, at most 255 characters, trimmed.
+  Only the title changes in Bunny; lessons keep the videoId. A RENAME_VIDEO audit row is written.
+
+  Against a local API (demo / e2e profiles, or without APP_CDN_BUNNYNET_APIKEY) the library is the in-memory
+  double and starts empty, so a rename answers 404 until a video exists. Against a real library use a TEST
+  library, never production (see the ADR-0049 follow-up note).
+
+  Success contract: 200 with VirtualVideoResponse (the video with its new title and the lessons the actor may see).
+  Error contract:
+    400 INVALID_REQUEST           → blank, missing or too long title; videoId that is not a plain identifier
+    401 AUTHENTICATION_REQUIRED   → no token
+    403 VIDEO_NOT_OWNED           → INSTRUCTOR and no lesson of their own courses uses the video
+    403 ACCESS_DENIED             → neither ADMIN nor INSTRUCTOR
+    404 VIDEO_NOT_FOUND           → the library has no such video
+    503 VIDEO_LIBRARY_UNAVAILABLE → Bunny did not answer (timeout, error or rejected key)
+}
+
+assert {
+  res.status: eq 200
+  res.body.videoId: eq {{virtualVideoId}}
+  res.body.title: eq Tango básico - clase 1
+  res.body.lessons: isArray
+}

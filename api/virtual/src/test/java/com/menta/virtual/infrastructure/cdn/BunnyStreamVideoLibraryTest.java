@@ -36,6 +36,9 @@ class BunnyStreamVideoLibraryTest {
     private HttpServer server;
     private final List<String> requests = new CopyOnWriteArrayList<>();
     private final List<String> accessKeys = new CopyOnWriteArrayList<>();
+    private final List<String> methods = new CopyOnWriteArrayList<>();
+    private final List<String> bodies = new CopyOnWriteArrayList<>();
+    private final List<String> contentTypes = new CopyOnWriteArrayList<>();
 
     @AfterEach
     void tearDown() {
@@ -61,6 +64,9 @@ class BunnyStreamVideoLibraryTest {
             requests.add(exchange.getRequestURI().getRawPath()
                 + (exchange.getRequestURI().getRawQuery() == null ? "" : "?" + exchange.getRequestURI().getRawQuery()));
             accessKeys.add(String.valueOf(exchange.getRequestHeaders().getFirst("AccessKey")));
+            methods.add(exchange.getRequestMethod());
+            contentTypes.add(String.valueOf(exchange.getRequestHeaders().getFirst("Content-Type")));
+            bodies.add(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
             respond(exchange, status, body);
         });
         server.start();
@@ -201,6 +207,121 @@ class BunnyStreamVideoLibraryTest {
         BunnyStreamVideoLibrary library = libraryAnswering(200, "");
 
         assertThatThrownBy(() -> library.find("x")).isInstanceOf(VideoLibraryUnavailableException.class);
+    }
+
+    // --- rename -----------------------------------------------------------
+
+    @Test
+    void rename_posts_the_title_as_json_to_the_video_with_the_library_key() throws IOException {
+        BunnyStreamVideoLibrary library =
+            libraryAnswering(200, "{\"success\":true,\"message\":\"OK\",\"statusCode\":200}");
+
+        boolean renamed = library.rename("11111111-2222-3333-4444-555555555555", "Tango \"avanzado\" ñ");
+
+        assertThat(renamed).isTrue();
+        assertThat(methods).containsExactly("POST");
+        assertThat(requests).containsExactly("/library/4242/videos/11111111-2222-3333-4444-555555555555");
+        assertThat(accessKeys).containsExactly(API_KEY);
+        assertThat(contentTypes.get(0)).startsWith("application/json");
+        assertThat(bodies).containsExactly("{\"title\":\"Tango \\\"avanzado\\\" ñ\"}");
+    }
+
+    @Test
+    void rename_answers_false_when_the_library_has_no_such_video() throws IOException {
+        BunnyStreamVideoLibrary library = libraryAnswering(404, "{\"Message\":\"" + LEAKED_BODY + "\"}");
+
+        assertThat(library.rename("gone", "Nuevo")).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {400, 401, 403, 429, 500, 503})
+    void rename_maps_an_error_status_without_the_body_or_the_key(int status) throws IOException {
+        BunnyStreamVideoLibrary library = libraryAnswering(status, "{\"Message\":\"" + LEAKED_BODY + "\"}");
+
+        assertThatThrownBy(() -> library.rename("x", "Nuevo"))
+            .isInstanceOf(VideoLibraryUnavailableException.class)
+            .hasMessageContaining("rename").hasMessageContaining(String.valueOf(status))
+            .satisfies(failure -> assertThat(failure.getMessage()).doesNotContain(LEAKED_BODY).doesNotContain(API_KEY))
+            .satisfies(failure -> assertThat(String.valueOf(failure.getCause())).doesNotContain(LEAKED_BODY));
+    }
+
+    @Test
+    void rename_of_an_unreachable_library_is_reported_as_unavailable() throws IOException {
+        server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        int closedPort = server.getAddress().getPort();
+        server.stop(0);
+        server = null;
+        BunnyStreamVideoLibrary library = new BunnyStreamVideoLibrary(properties("http://localhost:" + closedPort));
+
+        assertThatThrownBy(() -> library.rename("x", "Nuevo")).isInstanceOf(VideoLibraryUnavailableException.class);
+        assertThatThrownBy(() -> library.delete("x")).isInstanceOf(VideoLibraryUnavailableException.class);
+    }
+
+    @Test
+    void rename_and_delete_are_cut_by_the_read_timeout() throws IOException {
+        server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        server.createContext("/", exchange -> {
+            try {
+                Thread.sleep(2000);
+                respond(exchange, 200, "{}");
+            } catch (InterruptedException | IOException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        server.start();
+        BunnyStreamVideoLibrary library =
+            new BunnyStreamVideoLibrary(properties("http://localhost:" + server.getAddress().getPort()));
+
+        long started = System.nanoTime();
+        assertThatThrownBy(() -> library.rename("x", "Nuevo")).isInstanceOf(VideoLibraryUnavailableException.class);
+        assertThatThrownBy(() -> library.delete("x")).isInstanceOf(VideoLibraryUnavailableException.class);
+        assertThat((System.nanoTime() - started) / 1_000_000).isLessThan(1900);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", " ", ".", "..", "a/b", "a b", "a?x=y", "a%2Fb"})
+    void rename_and_delete_refuse_an_id_that_is_not_a_plain_path_segment_without_calling_the_library(String id)
+        throws IOException {
+        BunnyStreamVideoLibrary library = libraryAnswering(200, "{}");
+
+        assertThatThrownBy(() -> library.rename(id, "Nuevo")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> library.delete(id)).isInstanceOf(IllegalArgumentException.class);
+        assertThat(requests).isEmpty();
+    }
+
+    // --- delete -----------------------------------------------------------
+
+    @Test
+    void delete_sends_a_delete_to_the_video_with_the_library_key() throws IOException {
+        BunnyStreamVideoLibrary library =
+            libraryAnswering(200, "{\"success\":true,\"message\":\"OK\",\"statusCode\":200}");
+
+        library.delete("11111111-2222-3333-4444-555555555555");
+
+        assertThat(methods).containsExactly("DELETE");
+        assertThat(requests).containsExactly("/library/4242/videos/11111111-2222-3333-4444-555555555555");
+        assertThat(accessKeys).containsExactly(API_KEY);
+    }
+
+    @Test
+    void delete_treats_a_404_as_already_gone() throws IOException {
+        BunnyStreamVideoLibrary library = libraryAnswering(404, "{\"Message\":\"" + LEAKED_BODY + "\"}");
+
+        library.delete("gone");
+
+        assertThat(methods).containsExactly("DELETE");
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {400, 401, 403, 429, 500, 503})
+    void delete_maps_an_error_status_without_the_body_or_the_key(int status) throws IOException {
+        BunnyStreamVideoLibrary library = libraryAnswering(status, "{\"Message\":\"" + LEAKED_BODY + "\"}");
+
+        assertThatThrownBy(() -> library.delete("x"))
+            .isInstanceOf(VideoLibraryUnavailableException.class)
+            .hasMessageContaining("delete").hasMessageContaining(String.valueOf(status))
+            .satisfies(failure -> assertThat(failure.getMessage()).doesNotContain(LEAKED_BODY).doesNotContain(API_KEY))
+            .satisfies(failure -> assertThat(String.valueOf(failure.getCause())).doesNotContain(LEAKED_BODY));
     }
 
     // --- errors -----------------------------------------------------------

@@ -98,8 +98,38 @@ class InMemoryVideoLibraryTest {
         assertThatThrownBy(() -> library.list(query(0, 10, null, null)))
             .isInstanceOf(VideoLibraryUnavailableException.class);
         assertThatThrownBy(() -> library.find("a")).isInstanceOf(VideoLibraryUnavailableException.class);
+        assertThatThrownBy(() -> library.rename("a", "B")).isInstanceOf(VideoLibraryUnavailableException.class);
+        assertThatThrownBy(() -> library.delete("a")).isInstanceOf(VideoLibraryUnavailableException.class);
 
         library.simulateOutage(false);
         assertThat(library.find("a")).isPresent();
+    }
+
+    @Test
+    void rename_changes_only_the_title_and_keeps_the_position() {
+        library.add(video("a", "A"));
+        library.add(video("b", "B"));
+
+        assertThat(library.rename("a", "Nuevo")).isTrue();
+
+        assertThat(library.find("a")).contains(video("a", "Nuevo"));
+        assertThat(library.list(query(0, 10, null, null)).items()).extracting(LibraryVideo::videoId)
+            .containsExactly("b", "a");
+    }
+
+    @Test
+    void rename_of_an_unknown_video_answers_false() {
+        assertThat(library.rename("nope", "Nuevo")).isFalse();
+        assertThat(library.find("nope")).isEmpty();
+    }
+
+    @Test
+    void delete_removes_the_video_and_deleting_twice_is_not_an_error() {
+        library.add(video("a", "A"));
+
+        library.delete("a");
+        library.delete("a");
+
+        assertThat(library.find("a")).isEmpty();
     }
 }

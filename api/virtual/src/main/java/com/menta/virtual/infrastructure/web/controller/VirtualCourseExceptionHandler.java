@@ -1,5 +1,6 @@
 package com.menta.virtual.infrastructure.web.controller;
 
+import com.menta.virtual.application.exception.VideoInUseException;
 import com.menta.virtual.domain.exception.CourseHasProgressException;
 import com.menta.virtual.domain.exception.CourseInUseException;
 import com.menta.virtual.domain.exception.CourseNotDraftException;
@@ -11,8 +12,12 @@ import com.menta.virtual.domain.exception.ModuleNotFoundException;
 import com.menta.virtual.domain.exception.ModuleReorderMismatchException;
 import com.menta.virtual.domain.exception.ProfessorMismatchException;
 import com.menta.virtual.domain.exception.VideoLibraryUnavailableException;
+import com.menta.virtual.domain.exception.VideoNotFoundException;
+import com.menta.virtual.domain.exception.VideoNotOwnedException;
 import com.menta.virtual.infrastructure.web.ProblemDetails;
+import com.menta.virtual.infrastructure.web.dto.VirtualVideoResponse.VideoLessonResponse;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -98,6 +103,37 @@ public class VirtualCourseExceptionHandler {
             "La biblioteca de videos no está disponible en este momento. Intentá de nuevo en unos minutos.",
             exception.getErrorCode()
         );
+    }
+
+    @ExceptionHandler(VideoNotFoundException.class)
+    ResponseEntity<ProblemDetail> videoNotFound(VideoNotFoundException exception) {
+        return ProblemDetails.response(
+            HttpStatus.NOT_FOUND, "El video no existe en la biblioteca.", exception.getErrorCode()
+        );
+    }
+
+    @ExceptionHandler(VideoNotOwnedException.class)
+    ResponseEntity<ProblemDetail> videoNotOwned(VideoNotOwnedException exception) {
+        return ProblemDetails.response(
+            HttpStatus.FORBIDDEN, "No tenés permiso sobre este video.", exception.getErrorCode()
+        );
+    }
+
+    /**
+     * A video that lessons still use cannot be deleted. The problem carries the lessons (course, module and lesson
+     * ids and titles) in a {@code lessons} member so a client can show them; nothing of the library's own answer is
+     * ever part of it.
+     */
+    @ExceptionHandler(VideoInUseException.class)
+    ResponseEntity<ProblemDetail> videoInUse(VideoInUseException exception) {
+        ProblemDetail problem = ProblemDetails.body(
+            HttpStatus.CONFLICT,
+            "El video no se puede borrar porque está en uso en una o más lecciones. "
+                + "Cambiá el video de esas lecciones antes de borrarlo.",
+            exception.getErrorCode()
+        );
+        problem.setProperty("lessons", exception.lessons().stream().map(VideoLessonResponse::from).toList());
+        return ResponseEntity.status(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_PROBLEM_JSON).body(problem);
     }
 
     /** A query parameter that is not of the expected type, such as {@code page=abc}. */

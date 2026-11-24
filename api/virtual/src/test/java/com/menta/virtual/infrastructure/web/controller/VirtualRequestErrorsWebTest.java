@@ -171,6 +171,7 @@ class VirtualRequestErrorsWebTest {
             Arguments.of(HttpMethod.PUT, "/api/v1/admin/virtual/modules/" + ID),
             Arguments.of(HttpMethod.POST, "/api/v1/admin/virtual/modules/" + ID + "/lessons"),
             Arguments.of(HttpMethod.PUT, "/api/v1/admin/virtual/lessons/" + ID),
+            Arguments.of(HttpMethod.PUT, "/api/v1/admin/virtual/videos/some-guid"),
             Arguments.of(HttpMethod.PUT, PROGRESS)
         );
     }
@@ -182,6 +183,7 @@ class VirtualRequestErrorsWebTest {
             Arguments.of(HttpMethod.POST, "/api/v1/admin/virtual/courses/" + ID + "/modules"),
             Arguments.of(HttpMethod.PUT, "/api/v1/admin/virtual/courses/" + ID + "/modules/reorder"),
             Arguments.of(HttpMethod.POST, "/api/v1/admin/virtual/modules/" + ID + "/lessons"),
+            Arguments.of(HttpMethod.PUT, "/api/v1/admin/virtual/videos/some-guid"),
             Arguments.of(HttpMethod.PUT, PROGRESS)
         );
     }

@@ -3,11 +3,14 @@ package com.menta.virtual.infrastructure.web.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -19,8 +22,13 @@ import com.menta.virtual.application.dto.ManagedVideo;
 import com.menta.virtual.application.dto.ManagedVideoPage;
 import com.menta.virtual.application.dto.VideoLessonUsage;
 import com.menta.virtual.application.dto.VideoLibraryQuery;
+import com.menta.virtual.application.exception.VideoInUseException;
+import com.menta.virtual.application.port.in.DeleteLibraryVideoUseCase;
 import com.menta.virtual.application.port.in.ListLibraryVideosUseCase;
+import com.menta.virtual.application.port.in.RenameLibraryVideoUseCase;
 import com.menta.virtual.domain.exception.VideoLibraryUnavailableException;
+import com.menta.virtual.domain.exception.VideoNotFoundException;
+import com.menta.virtual.domain.exception.VideoNotOwnedException;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,12 +46,17 @@ class VirtualVideoAdminControllerTest {
     private static final String URL = "/api/v1/admin/virtual/videos";
 
     private ListLibraryVideosUseCase useCase;
+    private RenameLibraryVideoUseCase renameUseCase;
+    private DeleteLibraryVideoUseCase deleteUseCase;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         useCase = mock(ListLibraryVideosUseCase.class);
-        mockMvc = MockMvcBuilders.standaloneSetup(new VirtualVideoAdminController(useCase))
+        renameUseCase = mock(RenameLibraryVideoUseCase.class);
+        deleteUseCase = mock(DeleteLibraryVideoUseCase.class);
+        mockMvc = MockMvcBuilders
+            .standaloneSetup(new VirtualVideoAdminController(useCase, renameUseCase, deleteUseCase))
             .setControllerAdvice(new VirtualRequestExceptionHandler(), new VirtualCourseExceptionHandler())
             .build();
     }
@@ -160,5 +173,164 @@ class VirtualVideoAdminControllerTest {
             .andExpect(jsonPath("$.code").value("VIDEO_LIBRARY_UNAVAILABLE"))
             .andExpect(jsonPath("$.detail")
                 .value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("401"))));
+    }
+
+    // --- rename (#841) ----------------------------------------------------
+
+    private static final String ONE = URL + "/guid-1";
+
+    @Test
+    void renames_a_video_and_answers_it_with_its_new_title_and_lessons() throws Exception {
+        UUID instructorId = UUID.randomUUID();
+        LibraryVideo renamed = new LibraryVideo("guid-1", "Nuevo", LibraryVideoStatus.FINISHED, 125,
+            "https://cdn/t.jpg", true, List.of("720p"));
+        VideoLessonUsage usage = new VideoLessonUsage("c-1", "Curso", "m-1", "Módulo", "l-1", "Lección");
+        when(renameUseCase.rename("guid-1", "Nuevo", instructorId, false))
+            .thenReturn(new ManagedVideo("guid-1", renamed, List.of(usage)));
+
+        mockMvc.perform(put(ONE).contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"Nuevo\"}")
+                .principal(authOf(instructorId, "INSTRUCTOR")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.videoId").value("guid-1"))
+            .andExpect(jsonPath("$.title").value("Nuevo"))
+            .andExpect(jsonPath("$.status").value("FINISHED"))
+            .andExpect(jsonPath("$.missingInLibrary").value(false))
+            .andExpect(jsonPath("$.lessons[0].lessonTitle").value("Lección"));
+    }
+
+    @Test
+    void the_admin_is_passed_as_an_admin_when_renaming() throws Exception {
+        UUID adminId = UUID.randomUUID();
+        LibraryVideo renamed =
+            new LibraryVideo("guid-1", "Nuevo", LibraryVideoStatus.FINISHED, 1, null, true, List.of());
+        when(renameUseCase.rename("guid-1", "Nuevo", adminId, true))
+            .thenReturn(new ManagedVideo("guid-1", renamed, List.of()));
+
+        mockMvc.perform(put(ONE).contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"Nuevo\"}")
+                .principal(authOf(adminId, "ADMIN")))
+            .andExpect(status().isOk());
+
+        verify(renameUseCase).rename("guid-1", "Nuevo", adminId, true);
+    }
+
+    @Test
+    void a_blank_missing_too_long_or_unreadable_title_is_a_400_invalid_request_and_the_use_case_is_not_called()
+        throws Exception {
+        String tooLong = "a".repeat(RenameLibraryVideoUseCase.MAX_TITLE_LENGTH + 1);
+        for (String body : new String[] {
+            "{\"title\":\"\"}", "{\"title\":\"   \"}", "{}", "{\"title\":null}",
+            "{\"title\":\"" + tooLong + "\"}", "not json", ""}) {
+            mockMvc.perform(put(ONE).contentType(MediaType.APPLICATION_JSON).content(body)
+                    .principal(authOf(UUID.randomUUID(), "ADMIN")))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        }
+        verifyNoInteractions(renameUseCase);
+    }
+
+    @Test
+    void renaming_with_an_invalid_id_answers_400_invalid_request() throws Exception {
+        when(renameUseCase.rename(any(), any(), any(), eq(true))).thenThrow(new IllegalArgumentException("id"));
+
+        mockMvc.perform(put(URL + "/a..b").contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"x\"}")
+                .principal(authOf(UUID.randomUUID(), "ADMIN")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    void renaming_an_unknown_video_answers_404_video_not_found() throws Exception {
+        when(renameUseCase.rename(any(), any(), any(), eq(true))).thenThrow(new VideoNotFoundException());
+
+        mockMvc.perform(put(ONE).contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"x\"}")
+                .principal(authOf(UUID.randomUUID(), "ADMIN")))
+            .andExpect(status().isNotFound())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.code").value("VIDEO_NOT_FOUND"));
+    }
+
+    @Test
+    void renaming_a_video_the_instructor_does_not_own_answers_403_video_not_owned() throws Exception {
+        when(renameUseCase.rename(any(), any(), any(), eq(false))).thenThrow(new VideoNotOwnedException());
+
+        mockMvc.perform(put(ONE).contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"x\"}")
+                .principal(authOf(UUID.randomUUID(), "INSTRUCTOR")))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("VIDEO_NOT_OWNED"));
+    }
+
+    @Test
+    void renaming_with_an_unavailable_library_answers_503_without_leaking_the_reason() throws Exception {
+        when(renameUseCase.rename(any(), any(), any(), eq(true)))
+            .thenThrow(new VideoLibraryUnavailableException("Bunny Stream library rename failed: status 401"));
+
+        mockMvc.perform(put(ONE).contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"x\"}")
+                .principal(authOf(UUID.randomUUID(), "ADMIN")))
+            .andExpect(status().isServiceUnavailable())
+            .andExpect(jsonPath("$.code").value("VIDEO_LIBRARY_UNAVAILABLE"))
+            .andExpect(jsonPath("$.detail")
+                .value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("401"))));
+    }
+
+    // --- delete (#841) ----------------------------------------------------
+
+    @Test
+    void deletes_a_video_with_204_and_no_body() throws Exception {
+        UUID adminId = UUID.randomUUID();
+
+        mockMvc.perform(delete(ONE).principal(authOf(adminId, "ADMIN")))
+            .andExpect(status().isNoContent())
+            .andExpect(content().string(""));
+
+        verify(deleteUseCase).delete("guid-1", adminId, true);
+    }
+
+    @Test
+    void deleting_a_video_a_lesson_uses_answers_409_video_in_use_with_the_lessons_and_nothing_else() throws Exception {
+        VideoLessonUsage first = new VideoLessonUsage("c-1", "Curso 1", "m-1", "Módulo 1", "l-1", "Lección 1");
+        VideoLessonUsage second = new VideoLessonUsage("c-2", "Curso 2", "m-2", "Módulo 2", "l-2", "Lección 2");
+        doThrow(new VideoInUseException(List.of(first, second))).when(deleteUseCase).delete(any(), any(), eq(true));
+
+        mockMvc.perform(delete(ONE).principal(authOf(UUID.randomUUID(), "ADMIN")))
+            .andExpect(status().isConflict())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.code").value("VIDEO_IN_USE"))
+            .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("lecciones")))
+            .andExpect(jsonPath("$.lessons.length()").value(2))
+            .andExpect(jsonPath("$.lessons[0].courseId").value("c-1"))
+            .andExpect(jsonPath("$.lessons[0].courseTitle").value("Curso 1"))
+            .andExpect(jsonPath("$.lessons[0].moduleId").value("m-1"))
+            .andExpect(jsonPath("$.lessons[0].moduleTitle").value("Módulo 1"))
+            .andExpect(jsonPath("$.lessons[0].lessonId").value("l-1"))
+            .andExpect(jsonPath("$.lessons[0].lessonTitle").value("Lección 1"))
+            .andExpect(jsonPath("$.lessons[1].lessonTitle").value("Lección 2"));
+    }
+
+    @Test
+    void deleting_as_an_instructor_answers_403_video_not_owned() throws Exception {
+        doThrow(new VideoNotOwnedException()).when(deleteUseCase).delete(any(), any(), eq(false));
+
+        mockMvc.perform(delete(ONE).principal(authOf(UUID.randomUUID(), "INSTRUCTOR")))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("VIDEO_NOT_OWNED"));
+    }
+
+    @Test
+    void deleting_with_an_invalid_id_answers_400_invalid_request() throws Exception {
+        doThrow(new IllegalArgumentException("id")).when(deleteUseCase).delete(any(), any(), eq(true));
+
+        mockMvc.perform(delete(URL + "/a..b").principal(authOf(UUID.randomUUID(), "ADMIN")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    void deleting_with_an_unavailable_library_answers_503() throws Exception {
+        doThrow(new VideoLibraryUnavailableException("down")).when(deleteUseCase).delete(any(), any(), eq(true));
+
+        mockMvc.perform(delete(ONE).principal(authOf(UUID.randomUUID(), "ADMIN")))
+            .andExpect(status().isServiceUnavailable())
+            .andExpect(jsonPath("$.code").value("VIDEO_LIBRARY_UNAVAILABLE"));
     }
 }

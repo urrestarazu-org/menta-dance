@@ -190,3 +190,28 @@ en `date`; `size`/`duration` pueden dar `400` si la biblioteca no los tiene, por
 
 Resultado de las pruebas: **pendiente** (queda a cargo de quien tenga la biblioteca de pruebas; anotar acá la
 fecha y el resultado de cada fila).
+
+## Nota de seguimiento de #841: renombrar y borrar, y los supuestos que usa
+
+Fecha: 2026-11-24. #841 agregó `PUT` y `DELETE /api/v1/admin/virtual/videos/{videoId}` (renombrar: `POST
+/library/{libraryId}/videos/{videoId}` con `{"title": ...}`; borrar: `DELETE` sobre la misma ruta). Igual que #840,
+se probó **sólo** contra un servidor HTTP falso y el doble en memoria; **ninguno de los supuestos siguientes se
+probó contra una biblioteca de pruebas de Bunny**, y hay que hacerlo (con videos de prueba, nunca en la biblioteca
+de producción) antes de dar #841 por validado.
+
+Decisiones que no estaban en el ADR: `virtual_video_audit` (V34) es una tabla propia y no `virtual_course_audit`,
+porque un video no pertenece a un curso y `course_id` es obligatorio ahí; se agregó el índice
+`idx_virtual_lessons_video_id` (V33) porque renombrar y borrar buscan "las lecciones de este `videoId`" y la
+columna no tenía índice; el instructor que intenta renombrar un video que no usa ninguna de sus lecciones recibe
+`403 VIDEO_NOT_OWNED`, exista o no el video, para no revelar qué hay en la biblioteca; el `videoId` de las rutas de
+escritura se limita a letras, dígitos, `-` y `_` (hasta 128) porque termina en la ruta de un pedido que modifica.
+
+| # | Supuesto | Qué se hizo con él | Cómo probarlo (biblioteca de pruebas) |
+|---|---|---|---|
+| 7 | **Un `DELETE` de un video que no existe responde `404`** (y por eso borrar dos veces no es un error). No está documentado si Bunny borra de forma idempotente. | El adaptador trata `404` al borrar como "ya no existe" y la API responde `204`, igual que si lo hubiera borrado. Cualquier otro estado distinto de `2xx` es `503 VIDEO_LIBRARY_UNAVAILABLE`: si Bunny respondiera `200` o `204` en el segundo borrado, anda igual; si respondiera `400`, `409` o `500`, el segundo borrado daría `503` en vez de `204`. | Crear un video de prueba, borrarlo dos veces seguidas y anotar el estado de cada respuesta. Probar también borrar un guid con formato válido que nunca existió. Si el segundo borrado no es `404` (ni `2xx`), ajustar el adaptador y esta tabla. |
+| 8 | **Un `POST` de renombrar a un video que no existe responde `404`.** | `404` al renombrar significa "no existe": la API responde `404 VIDEO_NOT_FOUND`. Antes de renombrar se pide el video (`GET`) para tener el título anterior y confirmar que existe; si desaparece entre los dos pedidos, el `404` del `POST` da el mismo resultado. | Renombrar un guid con formato válido que nunca existió y anotar el estado. |
+| 9 | **El cuerpo `{"title": "..."}` de `POST /videos/{id}` sólo cambia el título** (no borra `collectionId`, `chapters`, `moments` ni `metaTags`, que la documentación lista como campos del mismo `POST`) y acepta un título de hasta 255 caracteres con acentos. | Se manda sólo `title`. La API limita el título a 255 caracteres porque son los de los títulos de curso, módulo y lección; el límite de Bunny no está documentado. | Renombrar un video con colección, capítulos y `metaTags` y comprobar que siguen igual; probar un título de 255 caracteres con acentos y uno con comillas. |
+| 10 | **El renombrado se ve enseguida** en `GET /videos/{id}` y en el listado, y el `200` del `POST` no depende del cuerpo (la API no lo lee). | La respuesta de la API arma el video con el título nuevo sin volver a pedirlo a Bunny; el listado siguiente depende de lo que Bunny ya indexó (mismo supuesto 2). | Renombrar y, sin esperar, pedir el video y listar con `search` por el título nuevo. |
+| 11 | La clave de sólo lectura no sirve para escribir (supuesto 3 de #840). | #841 sigue usando la clave completa de la biblioteca, la misma que el listado. | Ver la fila 3 de la nota de #840. |
+
+Resultado de las pruebas: **pendiente** (anotar acá la fecha y el resultado de cada fila, como en la nota de #840).

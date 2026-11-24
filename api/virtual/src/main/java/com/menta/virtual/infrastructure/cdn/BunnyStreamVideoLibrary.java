@@ -12,9 +12,11 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Supplier;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatusCode;
+import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
@@ -22,8 +24,11 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 /**
- * Real {@link VideoLibraryPort}: reads the library through Bunny Stream's management API
- * ({@code GET /library/{libraryId}/videos} and {@code GET /library/{libraryId}/videos/{videoId}}, ADR-0049).
+ * Real {@link VideoLibraryPort}: talks to the library through Bunny Stream's management API (ADR-0049):
+ * {@code GET /library/{libraryId}/videos}, and per video {@code GET}, {@code POST} (rename, with a JSON
+ * {@code title}; Bunny updates with POST, not PUT) and {@code DELETE} on {@code /library/{libraryId}/videos/{videoId}}.
+ * A {@code 404} means "no such video": empty for {@code find}, {@code false} for {@code rename} and success for
+ * {@code delete} (the video is already gone; whether Bunny deletes idempotently is not documented, #841).
  *
  * <p>Connect and read timeouts come from {@link BunnyNetProperties} (same defaults as the Mercado Pago adapter) and
  * nothing retries: a failure surfaces as {@link VideoLibraryUnavailableException}. Its message names the operation
@@ -34,6 +39,12 @@ import org.springframework.web.client.RestClientResponseException;
 public class BunnyStreamVideoLibrary implements VideoLibraryPort {
 
     private static final Logger LOG = LoggerFactory.getLogger(BunnyStreamVideoLibrary.class);
+
+    /**
+     * What a video id may look like in a write: Bunny's ids are GUIDs. Anything else (a {@code .} or {@code ..}
+     * segment, a slash, an encoded one) is refused before a request that mutates is built from it.
+     */
+    private static final Pattern WRITABLE_ID = Pattern.compile("[A-Za-z0-9_-]{1,128}");
 
     private final RestClient restClient;
     private final String libraryId;
@@ -52,7 +63,7 @@ public class BunnyStreamVideoLibrary implements VideoLibraryPort {
 
     @Override
     public LibraryVideoPage list(VideoLibraryQuery query) {
-        BunnyPage response = call("list", () -> restClient.get()
+        BunnyPage response = call("list", false, () -> restClient.get()
             .uri(builder -> {
                 builder.path("/library/{libraryId}/videos")
                     .queryParam("page", query.page() + 1)
@@ -81,7 +92,7 @@ public class BunnyStreamVideoLibrary implements VideoLibraryPort {
             return Optional.empty();
         }
         try {
-            BunnyVideo response = call("find", () -> restClient.get()
+            BunnyVideo response = call("find", true, () -> restClient.get()
                 .uri("/library/{libraryId}/videos/{videoId}", libraryId, videoId)
                 .retrieve()
                 .body(BunnyVideo.class));
@@ -94,11 +105,50 @@ public class BunnyStreamVideoLibrary implements VideoLibraryPort {
         }
     }
 
-    private <T> T call(String operation, java.util.function.Supplier<T> request) {
+    @Override
+    public boolean rename(String videoId, String title) {
+        requireWritableId(videoId);
+        try {
+            call("rename", true, () -> restClient.post()
+                .uri("/library/{libraryId}/videos/{videoId}", libraryId, videoId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(new RenameRequest(title))
+                .retrieve()
+                .toBodilessEntity());
+            return true;
+        } catch (NotFoundInLibrary notFound) {
+            return false;
+        }
+    }
+
+    @Override
+    public void delete(String videoId) {
+        requireWritableId(videoId);
+        try {
+            call("delete", true, () -> restClient.delete()
+                .uri("/library/{libraryId}/videos/{videoId}", libraryId, videoId)
+                .retrieve()
+                .toBodilessEntity());
+        } catch (NotFoundInLibrary notFound) {
+            LOG.info("Bunny Stream library delete: the video was already gone (status 404)");
+        }
+    }
+
+    private static void requireWritableId(String videoId) {
+        if (videoId == null || !WRITABLE_ID.matcher(videoId).matches()) {
+            throw new IllegalArgumentException("Not a valid video id");
+        }
+    }
+
+    /**
+     * Runs one request. A {@code 404} is signalled as {@link NotFoundInLibrary} when {@code notFoundIsAbsence}
+     * (the operation targets one video), and is an ordinary failure otherwise.
+     */
+    private <T> T call(String operation, boolean notFoundIsAbsence, Supplier<T> request) {
         try {
             return request.get();
         } catch (HttpClientErrorException.NotFound e) {
-            if ("find".equals(operation)) {
+            if (notFoundIsAbsence) {
                 throw new NotFoundInLibrary();
             }
             throw unavailable(operation, "status 404", e);
@@ -123,6 +173,9 @@ public class BunnyStreamVideoLibrary implements VideoLibraryPort {
         NotFoundInLibrary() {
             super(null, null, false, false);
         }
+    }
+
+    private record RenameRequest(String title) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

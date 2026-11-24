@@ -97,4 +97,16 @@ class VirtualLessonRepositoryAdapterTest {
 
         assertThat(adapter.findAllWithVideo()).hasSize(1);
     }
+
+    @Test
+    void find_by_video_id_maps_every_lesson_that_uses_the_video() {
+        UUID moduleId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        when(jpaRepository.findByVideoId("v")).thenReturn(List.of(
+            entity(UUID.randomUUID(), moduleId, courseId), entity(UUID.randomUUID(), moduleId, courseId)
+        ));
+
+        assertThat(adapter.findByVideoId("v")).hasSize(2)
+            .allSatisfy(lesson -> assertThat(lesson.getVideoId()).isEqualTo("v"));
+    }
 }
