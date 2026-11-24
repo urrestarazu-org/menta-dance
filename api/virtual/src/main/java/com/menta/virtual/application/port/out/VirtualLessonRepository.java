@@ -22,6 +22,12 @@ public interface VirtualLessonRepository {
     /** Every lesson of every course that has a video (a non-blank {@code videoId}), in one query. */
     List<VirtualLesson> findAllWithVideo();
 
+    /**
+     * Every lesson, of any course in any status, whose {@code videoId} is the given one (#841). The comparison is
+     * the database's, so it may match ignoring case; callers that need an exact match check it themselves.
+     */
+    List<VirtualLesson> findByVideoId(String videoId);
+
     /** Counts the lessons of a module. */
     int countByModuleId(ModuleId moduleId);
 

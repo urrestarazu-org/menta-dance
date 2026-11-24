@@ -6,6 +6,7 @@ import com.menta.virtual.application.port.in.CompleteLessonUseCase;
 import com.menta.virtual.application.port.in.CreateVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.CreateVirtualLessonUseCase;
 import com.menta.virtual.application.port.in.CreateVirtualModuleUseCase;
+import com.menta.virtual.application.port.in.DeleteLibraryVideoUseCase;
 import com.menta.virtual.application.port.in.DeleteVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.DeleteVirtualLessonUseCase;
 import com.menta.virtual.application.port.in.GetCourseProgressUseCase;
@@ -17,6 +18,7 @@ import com.menta.virtual.application.port.in.ListInProgressCoursesUseCase;
 import com.menta.virtual.application.port.in.ListLibraryVideosUseCase;
 import com.menta.virtual.application.port.in.ListManagedVirtualCoursesUseCase;
 import com.menta.virtual.application.port.in.PublishVirtualCourseUseCase;
+import com.menta.virtual.application.port.in.RenameLibraryVideoUseCase;
 import com.menta.virtual.application.port.in.ReorderVirtualModulesUseCase;
 import com.menta.virtual.application.port.in.SaveLessonProgressUseCase;
 import com.menta.virtual.application.port.in.UnpublishVirtualCourseUseCase;
@@ -32,11 +34,13 @@ import com.menta.virtual.application.port.out.VirtualCourseAuditRepository;
 import com.menta.virtual.application.port.out.VirtualCourseRepository;
 import com.menta.virtual.application.port.out.VirtualLessonRepository;
 import com.menta.virtual.application.port.out.VirtualModuleRepository;
+import com.menta.virtual.application.port.out.VirtualVideoAuditRepository;
 import com.menta.virtual.application.usecase.CompleteLessonUseCaseImpl;
 import com.menta.virtual.application.usecase.CourseProgressAccessPolicy;
 import com.menta.virtual.application.usecase.CreateVirtualCourseUseCaseImpl;
 import com.menta.virtual.application.usecase.CreateVirtualLessonUseCaseImpl;
 import com.menta.virtual.application.usecase.CreateVirtualModuleUseCaseImpl;
+import com.menta.virtual.application.usecase.DeleteLibraryVideoUseCaseImpl;
 import com.menta.virtual.application.usecase.DeleteVirtualCourseUseCaseImpl;
 import com.menta.virtual.application.usecase.DeleteVirtualLessonUseCaseImpl;
 import com.menta.virtual.application.usecase.GetCourseProgressUseCaseImpl;
@@ -49,6 +53,7 @@ import com.menta.virtual.application.usecase.ListInProgressCoursesUseCaseImpl;
 import com.menta.virtual.application.usecase.ListLibraryVideosUseCaseImpl;
 import com.menta.virtual.application.usecase.ListManagedVirtualCoursesUseCaseImpl;
 import com.menta.virtual.application.usecase.PublishVirtualCourseUseCaseImpl;
+import com.menta.virtual.application.usecase.RenameLibraryVideoUseCaseImpl;
 import com.menta.virtual.application.usecase.ReorderVirtualModulesUseCaseImpl;
 import com.menta.virtual.application.usecase.SaveLessonProgressUseCaseImpl;
 import com.menta.virtual.application.usecase.UnpublishVirtualCourseUseCaseImpl;
@@ -232,6 +237,34 @@ public class VirtualConfiguration {
         VirtualModuleRepository moduleRepository, VirtualLessonRepository lessonRepository
     ) {
         return new ListLibraryVideosUseCaseImpl(videoLibraryPort, courseRepository, moduleRepository, lessonRepository);
+    }
+
+    /**
+     * ADR-0049 / #841. Not wrapped in a transactional decorator, on purpose: the use case calls the library over
+     * the network and a database transaction must not stay open across that call; each repository call is its own
+     * transaction.
+     */
+    @Bean
+    public RenameLibraryVideoUseCase renameLibraryVideoUseCase(
+        VideoLibraryPort videoLibraryPort, VirtualCourseRepository courseRepository,
+        VirtualModuleRepository moduleRepository, VirtualLessonRepository lessonRepository,
+        VirtualVideoAuditRepository videoAuditRepository
+    ) {
+        return new RenameLibraryVideoUseCaseImpl(
+            videoLibraryPort, courseRepository, moduleRepository, lessonRepository, videoAuditRepository
+        );
+    }
+
+    /** ADR-0049 / #841. Not transactional, for the same reason as {@link #renameLibraryVideoUseCase}. */
+    @Bean
+    public DeleteLibraryVideoUseCase deleteLibraryVideoUseCase(
+        VideoLibraryPort videoLibraryPort, VirtualCourseRepository courseRepository,
+        VirtualModuleRepository moduleRepository, VirtualLessonRepository lessonRepository,
+        VirtualVideoAuditRepository videoAuditRepository
+    ) {
+        return new DeleteLibraryVideoUseCaseImpl(
+            videoLibraryPort, courseRepository, moduleRepository, lessonRepository, videoAuditRepository
+        );
     }
 
     private static void failClosedIfProductionLike(Environment environment) {

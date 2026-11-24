@@ -17,6 +17,8 @@ PUT  /api/v1/admin/virtual/modules/{moduleId}
 PUT  /api/v1/admin/virtual/lessons/{lessonId}
 DELETE /api/v1/admin/virtual/lessons/{lessonId}
 GET  /api/v1/admin/virtual/videos
+PUT  /api/v1/admin/virtual/videos/{videoId}
+DELETE /api/v1/admin/virtual/videos/{videoId}
 GET  /api/v1/virtual/lessons/{lessonId}
 GET  /api/v1/virtual/lessons/{lessonId}/stream
 GET  /api/v1/virtual/materials/{materialId}
@@ -126,11 +128,12 @@ no borra nada y no escribe auditoría; las referencias históricas también cuen
 última comprobación, después de `COURSE_HAS_PROGRESS`. Un pago de suscripción virtual cita
 el plan y no el curso, así que lo cubre la consulta de planes y suscripciones.
 
-## Biblioteca de videos (#840, ADR-0049)
+## Biblioteca de videos (#840 y #841, ADR-0049)
 
 `GET /api/v1/admin/virtual/videos?page=&size=&search=&orderBy=` lista los videos de la biblioteca de
-Bunny Stream con las lecciones que los usan. Lo pueden llamar `ADMIN` e `INSTRUCTOR` (sólo `GET`; el resto
-del prefijo sigue siendo de `ADMIN`, ver #841).
+Bunny Stream con las lecciones que los usan. Lo pueden llamar `ADMIN` e `INSTRUCTOR`. Renombrar
+(`PUT .../videos/{videoId}`) también es de ambos; borrar (`DELETE .../videos/{videoId}`) es sólo de `ADMIN`
+(ver más abajo). Cualquier otro método o ruta del prefijo sigue siendo de `ADMIN`.
 
 - **Paginación:** `page` desde 0 (como `/admin/users`), `size` de 10 a 100 (20 por defecto; fuera de rango
   responde `400`, no se recorta; el mínimo 10 es el de Bunny). La respuesta trae `items`, `page`, `size`,
@@ -162,3 +165,43 @@ del prefijo sigue siendo de `ADMIN`, ver #841).
   perfil real. Nunca llega al BFF ni al navegador, ni se imprime en logs o `toString`. Con los perfiles
   `e2e-bunny-net`, `e2e-catalog-content`, `test` e `integration-test` (y con `demo` sin clave) se usa un doble en
   memoria sin red.
+
+### Renombrar y borrar (#841)
+
+`PUT /api/v1/admin/virtual/videos/{videoId}` con `{"title": "..."}` renombra el video en Bunny (que actualiza con
+`POST /library/{libraryId}/videos/{videoId}`; la API expone `PUT`) y responde `200` con el video (la misma forma
+que un ítem del listado, con el título nuevo). `DELETE /api/v1/admin/virtual/videos/{videoId}` lo borra y responde
+`204` sin cuerpo. Un `videoId` que no es un identificador simple (letras, dígitos, `-` y `_`, hasta 128) responde
+`400 INVALID_REQUEST` antes de llamar a Bunny: el id termina en la ruta de un pedido que modifica.
+
+- **Renombrar:** el `ADMIN` renombra cualquier video de la biblioteca, lo use o no una lección. El `INSTRUCTOR`
+  sólo un video que usa alguna lección de sus propios cursos (la pertenencia sale de los cursos en la base de
+  datos, nunca de Bunny, y se compara el id exacto): en otro caso, también si ninguna lección lo usa o si no existe,
+  `403 VIDEO_NOT_OWNED`. `title` no puede estar en blanco ni superar 255 caracteres (como los títulos de curso,
+  módulo y lección); los espacios de los extremos se quitan; si no, `400 INVALID_REQUEST`. Un video que la
+  biblioteca no tiene responde `404 VIDEO_NOT_FOUND` (el `ADMIN` siempre; el `INSTRUCTOR` sólo si una lección suya
+  lo usa). En `lessons` el `INSTRUCTOR` ve únicamente sus lecciones.
+- **Borrar:** sólo `ADMIN` (decisión de #832): un `INSTRUCTOR` recibe siempre `403`, aun para un video que ninguna
+  lección usa. Sólo se borra un video que **ninguna lección usa, de ningún curso y en ningún estado** (borrador o
+  publicado). Si alguna lo usa responde `409 VIDEO_IN_USE` con el miembro `lessons` (`courseId`, `courseTitle`,
+  `moduleId`, `moduleTitle`, `lessonId`, `lessonTitle` de cada una, la misma forma que el listado) para que el BFF
+  las muestre; no se llama a Bunny, no se audita nada y el video **nunca se desasocia solo**: hay que cambiar el
+  video de esas lecciones primero. La comprobación sale de `virtual_lessons.video_id` (índice
+  `idx_virtual_lessons_video_id`, V33), con la comparación de la base: en MySQL ignora mayúsculas, lo que sólo
+  puede hacer que se rechace un borrado, nunca que se permita uno indebido.
+- **Borrar es idempotente:** un `404` de Bunny al borrar (o repetir el pedido, o un video que ya no está) se trata
+  como "ya no existe" y responde `204`. Bunny oculta el video de sus consultas enseguida, pero la reproducción puede
+  seguir un tiempo. Que Bunny responda `404` en un segundo borrado **no está documentado ni se probó contra una
+  biblioteca real** (ver la nota de #841 en ADR-0049).
+- **Errores:** `401`/`403` los resuelve `SecurityConfig` (`403 ACCESS_DENIED` para otro rol); `400
+  INVALID_REQUEST`, `403 VIDEO_NOT_OWNED`, `404 VIDEO_NOT_FOUND` y `409 VIDEO_IN_USE` como arriba; `503
+  VIDEO_LIBRARY_UNAVAILABLE` si Bunny no responde, con los mismos timeouts que el listado. Nunca se devuelve ni se
+  loguea el cuerpo de Bunny ni la clave.
+- **Auditoría:** una fila por operación en `virtual_video_audit` (V34): `RENAME_VIDEO` (`title=<anterior>` y
+  `title=<nuevo>`) y `DELETE_VIDEO` (`videoId=<id>, title=<título>` o `missingInLibrary=true`; sin valor nuevo),
+  con el actor y el instante del puerto `Clock`. No se usa `virtual_course_audit` porque su `course_id` es
+  obligatorio y un video no pertenece a un curso. La fila se escribe **después** de la llamada a Bunny, que no va
+  dentro de una transacción de base de datos: si Bunny falla no queda fila de algo que no pasó; si falla sólo el
+  insert de la fila, el renombre o el borrado ya ocurrió (y repetir el pedido deja la fila).
+- **Carrera conocida:** entre la comprobación "ninguna lección lo usa" y el borrado en Bunny otra persona podría
+  asignar ese video a una lección; no hay un candado que abarque la base y Bunny, y la ventana es de milisegundos.

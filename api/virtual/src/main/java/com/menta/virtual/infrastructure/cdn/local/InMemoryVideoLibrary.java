@@ -19,8 +19,10 @@ import java.util.Optional;
  * (without an API key), {@code test} and {@code integration-test} profiles (ADR-0049, selected by
  * {@link com.menta.virtual.infrastructure.config.VirtualConfiguration} like the local signer). It starts empty;
  * tests and fixtures add the videos they need. It mimics the library's documented behaviour: {@code search} is a
- * case-insensitive substring of the title, {@code DATE} is newest first (the last added) and {@code TITLE} is A-Z.
- * It is deliberately NOT a model of anything undocumented (see the assumptions listed in ADR-0049's follow-up).
+ * case-insensitive substring of the title, {@code DATE} is newest first (the last added) and {@code TITLE} is A-Z;
+ * a rename keeps the video's position and deleting a video that is not there succeeds, as the port promises (what
+ * the real library does on a second delete is undocumented). It is deliberately NOT a model of anything
+ * undocumented (see the assumptions listed in ADR-0049's follow-up).
  */
 public final class InMemoryVideoLibrary implements VideoLibraryPort {
 
@@ -73,6 +75,27 @@ public final class InMemoryVideoLibrary implements VideoLibraryPort {
     public synchronized Optional<LibraryVideo> find(String videoId) {
         failIfOutage();
         return Optional.ofNullable(videos.get(videoId));
+    }
+
+    @Override
+    public synchronized boolean rename(String videoId, String title) {
+        failIfOutage();
+        LibraryVideo current = videos.get(videoId);
+        if (current == null) {
+            return false;
+        }
+        // put on an existing key keeps its position, so a rename does not make the video the newest.
+        videos.put(videoId, new LibraryVideo(
+            current.videoId(), title, current.status(), current.durationSeconds(), current.thumbnailUrl(),
+            current.hasMp4Fallback(), current.availableResolutions()
+        ));
+        return true;
+    }
+
+    @Override
+    public synchronized void delete(String videoId) {
+        failIfOutage();
+        videos.remove(videoId);
     }
 
     private void failIfOutage() {

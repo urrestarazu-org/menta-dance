@@ -319,12 +319,13 @@ class SecurityConfigTest {
     }
 
     /**
-     * #840. Only the {@code GET} listing is opened to INSTRUCTOR: any other method on the prefix (the rename and
-     * delete of #841) keeps the generic {@code /api/v1/admin/**} rule, ADMIN only, until it declares its own.
+     * #841. Of the video writes only the rename ({@code PUT /videos/{videoId}}) is opened to INSTRUCTOR (which videos
+     * they may rename is the use case's call). Any other method on the prefix keeps the generic
+     * {@code /api/v1/admin/**} rule, ADMIN only.
      */
     @ParameterizedTest
-    @ValueSource(strings = {"POST", "PUT", "PATCH", "DELETE"})
-    void an_instructor_write_to_the_video_routes_is_forbidden(String method) throws Exception {
+    @ValueSource(strings = {"POST", "PATCH"})
+    void an_instructor_other_write_to_the_video_routes_is_forbidden(String method) throws Exception {
         MockMvc mockMvc = buildSecurityFilterChainMockMvc();
 
         mockMvc.perform(request(HttpMethod.valueOf(method), VIDEO_LISTING_URL + "/some-guid")
@@ -333,6 +334,70 @@ class SecurityConfigTest {
         mockMvc.perform(request(HttpMethod.valueOf(method), VIDEO_LISTING_URL + "/some-guid")
                 .with(user("boss").roles("ADMIN")))
             .andExpect(status().isNotFound());
+    }
+
+    /** #841. The rename is not public: an anonymous caller gets {@code 401}. */
+    @Test
+    void an_unauthenticated_rename_of_a_video_is_rejected() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(put(VIDEO_LISTING_URL + "/some-guid")).andExpect(status().isUnauthorized());
+    }
+
+    /** #841. ADMIN and INSTRUCTOR reach the (unmapped) dispatcher for the rename. */
+    @ParameterizedTest
+    @ValueSource(strings = {"ADMIN", "INSTRUCTOR"})
+    void admin_and_instructor_rename_of_a_video_passes_the_security_layer(String role) throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(put(VIDEO_LISTING_URL + "/some-guid").with(user("staff").roles(role)))
+            .andExpect(status().isNotFound());
+    }
+
+    /** #841. Students and reception are not video managers: {@code 403} on the rename. */
+    @ParameterizedTest
+    @ValueSource(strings = {"STUDENT", "RECEPTIONIST"})
+    void other_roles_rename_of_a_video_is_forbidden(String role) throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(put(VIDEO_LISTING_URL + "/some-guid").with(user("other").roles(role)))
+            .andExpect(status().isForbidden());
+    }
+
+    /** #841. The delete is not public: an anonymous caller gets {@code 401}. */
+    @Test
+    void an_unauthenticated_delete_of_a_video_is_rejected() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(delete(VIDEO_LISTING_URL + "/some-guid")).andExpect(status().isUnauthorized());
+    }
+
+    /** #841. Only ADMIN deletes a video (decision of #832, option A): an INSTRUCTOR always gets {@code 403}. */
+    @Test
+    void admin_delete_of_a_video_passes_the_security_layer() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(delete(VIDEO_LISTING_URL + "/some-guid").with(user("boss").roles("ADMIN")))
+            .andExpect(status().isNotFound());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"INSTRUCTOR", "STUDENT", "RECEPTIONIST"})
+    void every_non_admin_delete_of_a_video_is_forbidden(String role) throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(delete(VIDEO_LISTING_URL + "/some-guid").with(user("other").roles(role)))
+            .andExpect(status().isForbidden());
+    }
+
+    /** #841. The instructor rule is exactly one segment: the collection itself and deeper paths stay ADMIN only. */
+    @ParameterizedTest
+    @ValueSource(strings = {"", "/a/b"})
+    void an_instructor_put_outside_the_single_video_route_is_forbidden(String suffix) throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(put(VIDEO_LISTING_URL + suffix).with(user("teacher").roles("INSTRUCTOR")))
+            .andExpect(status().isForbidden());
     }
 
     /** #355. The roster is not public: an anonymous caller gets {@code 401}. */

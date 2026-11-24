@@ -21,6 +21,12 @@ auth:bearer {
   token: {{authToken}}
 }
 
+script:post-response {
+  if (res.getStatus() === 200 && res.getBody().items.length > 0) {
+    bru.setVar("virtualVideoId", res.getBody().items[0].videoId);
+  }
+}
+
 docs {
   #840, ADR-0049. Lists the Bunny Stream library's videos with the lessons that use each one.
   ADMIN sees everything the database knows plus the whole library; INSTRUCTOR only the videos used by

@@ -54,6 +54,12 @@ public interface VirtualLessonJpaRepository extends JpaRepository<VirtualLessonJ
     @Query("SELECT l FROM VirtualLessonJpaEntity l WHERE " + LessonJpql.HAS_VIDEO)
     List<VirtualLessonJpaEntity> findAllWithVideo();
 
+    /**
+     * Every lesson that uses the video, of any course in any status (#841). Served by
+     * {@code idx_virtual_lessons_video_id} (V33); the column's collation decides whether case matters.
+     */
+    List<VirtualLessonJpaEntity> findByVideoId(String videoId);
+
     /** Counts the lessons of a module. */
     long countByModuleId(UUID moduleId);
 

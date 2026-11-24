@@ -27,7 +27,8 @@ public record VirtualVideoResponse(
         String courseId, String courseTitle, String moduleId, String moduleTitle, String lessonId, String lessonTitle
     ) {
 
-        static VideoLessonResponse from(VideoLessonUsage usage) {
+        /** Maps a usage into the lesson shape shared by the listing, the rename and the 409 problem. */
+        public static VideoLessonResponse from(VideoLessonUsage usage) {
             return new VideoLessonResponse(
                 usage.courseId(), usage.courseTitle(), usage.moduleId(), usage.moduleTitle(), usage.lessonId(),
                 usage.lessonTitle()

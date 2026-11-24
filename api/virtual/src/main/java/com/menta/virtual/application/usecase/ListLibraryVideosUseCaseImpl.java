@@ -18,7 +18,6 @@ import com.menta.virtual.domain.model.VirtualCourse;
 import com.menta.virtual.domain.model.VirtualLesson;
 import com.menta.virtual.domain.model.VirtualModule;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -81,7 +80,7 @@ public class ListLibraryVideosUseCaseImpl implements ListLibraryVideosUseCase {
             moduleRepository.findByIds(lessons.stream().map(VirtualLesson::getModuleId).distinct().toList())
                 .forEach(module -> modules.put(module.getId(), module));
         }
-        Map<String, List<VideoLessonUsage>> usages = assemble(lessons, courses, modules);
+        Map<String, List<VideoLessonUsage>> usages = VideoUsages.byVideo(lessons, courses, modules);
         return pageOf(query, usages, walk(query, null), true);
     }
 
@@ -99,7 +98,7 @@ public class ListLibraryVideosUseCaseImpl implements ListLibraryVideosUseCase {
                 .filter(VirtualLesson::isComplete)
                 .forEach(lessons::add);
         }
-        Map<String, List<VideoLessonUsage>> usages = assemble(lessons, courses, modules);
+        Map<String, List<VideoLessonUsage>> usages = VideoUsages.byVideo(lessons, courses, modules);
         if (usages.isEmpty()) {
             return new ManagedVideoPage(List.of(), query.page(), query.size(), 0);
         }
@@ -158,38 +157,5 @@ public class ListLibraryVideosUseCaseImpl implements ListLibraryVideosUseCase {
             }
         }
         throw new VideoLibraryUnavailableException("The video library is too large to be listed");
-    }
-
-    // --- shared -----------------------------------------------------------
-
-    private static Map<String, List<VideoLessonUsage>> assemble(
-        List<VirtualLesson> lessons, Map<CourseId, VirtualCourse> courses, Map<ModuleId, VirtualModule> modules
-    ) {
-        Comparator<VirtualLesson> display = Comparator
-            .comparing((VirtualLesson lesson) -> titleOf(courses.get(lesson.getCourseId())))
-            .thenComparingInt(lesson -> orderOf(modules.get(lesson.getModuleId())))
-            .thenComparingInt(VirtualLesson::getOrder)
-            .thenComparing(VirtualLesson::getTitle);
-        Map<String, List<VideoLessonUsage>> byVideo = new LinkedHashMap<>();
-        lessons.stream().sorted(display).forEach(lesson -> byVideo
-            .computeIfAbsent(lesson.getVideoId(), key -> new ArrayList<>())
-            .add(new VideoLessonUsage(
-                lesson.getCourseId().getValue().toString(), titleOf(courses.get(lesson.getCourseId())),
-                lesson.getModuleId().getValue().toString(), moduleTitleOf(modules.get(lesson.getModuleId())),
-                lesson.getId().getValue().toString(), lesson.getTitle()
-            )));
-        return byVideo;
-    }
-
-    private static String titleOf(VirtualCourse course) {
-        return course == null ? "" : course.getTitle();
-    }
-
-    private static String moduleTitleOf(VirtualModule module) {
-        return module == null ? "" : module.getTitle();
-    }
-
-    private static int orderOf(VirtualModule module) {
-        return module == null ? Integer.MAX_VALUE : module.getOrder();
     }
 }

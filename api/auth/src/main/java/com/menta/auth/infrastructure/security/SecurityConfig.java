@@ -178,8 +178,11 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *     specific course a module/lesson belongs to is checked in the use
  *     case, never here.)
  *   - GET /api/v1/admin/virtual/videos          → ADMIN or INSTRUCTOR
- *     (#840, ADR-0049; only the listing: the rest of the prefix stays ADMIN-only via /api/v1/admin/**.
- *     Which videos an INSTRUCTOR sees is decided in the use case.)
+ *   - PUT /api/v1/admin/virtual/videos/{videoId} → ADMIN or INSTRUCTOR
+ *     (#840 / #841, ADR-0049: the listing and the rename. Which videos an INSTRUCTOR sees or may rename is decided
+ *     in the use case.)
+ *   - DELETE /api/v1/admin/virtual/videos/{videoId} → ADMIN only (#841, decision of #832: an instructor never
+ *     deletes a video; the rest of the prefix stays ADMIN-only via /api/v1/admin/**.)
  *   - PUT /api/v1/billing/physical/courses/{courseId}/pricing → ADMIN or
  *     INSTRUCTOR (US-BILLING-009, #37; the GET permitAll rule above covers
  *     the same path for reads — Spring Security matches per-HTTP-method, so
@@ -379,10 +382,14 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/admin/virtual/courses/**").hasAnyRole("ADMIN", "INSTRUCTOR")
                 .requestMatchers("/api/v1/admin/virtual/modules/**").hasAnyRole("ADMIN", "INSTRUCTOR")
                 .requestMatchers("/api/v1/admin/virtual/lessons/**").hasAnyRole("ADMIN", "INSTRUCTOR")
-                // #840, ADR-0049: the video listing only. The exact GET path keeps the rest of the prefix (rename
-                // and delete, #841) under the generic /api/v1/admin/** ADMIN rule below; ownership of what an
-                // instructor sees is resolved in the use case, never here.
+                // #840 / #841, ADR-0049: the video listing and the rename are opened to INSTRUCTOR, each by its exact
+                // method and path; ownership of what an instructor sees or renames is resolved in the use case,
+                // never here. The delete is declared ADMIN-only on purpose (decision of #832), so that it stays
+                // so even if the generic rule below ever changes; any other method or path of the prefix falls
+                // under that generic /api/v1/admin/** ADMIN rule.
                 .requestMatchers(HttpMethod.GET, "/api/v1/admin/virtual/videos").hasAnyRole("ADMIN", "INSTRUCTOR")
+                .requestMatchers(HttpMethod.PUT, "/api/v1/admin/virtual/videos/*").hasAnyRole("ADMIN", "INSTRUCTOR")
+                .requestMatchers(HttpMethod.DELETE, "/api/v1/admin/virtual/videos/*").hasRole("ADMIN")
                 // US-BILLING-009, #37: PUT restricted to ADMIN/INSTRUCTOR; the GET rule
                 // above already covers this same path for reads (per-HTTP-method matching).
                 .requestMatchers(

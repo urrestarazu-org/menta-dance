@@ -1,0 +1,39 @@
+meta {
+  name: Delete Library Video
+  type: http
+  seq: 16
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/admin/virtual/videos/{{virtualVideoId}}
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  #841, ADR-0049. Deletes a video from the Bunny Stream library. ADMIN only: an INSTRUCTOR always gets 403.
+  {{virtualVideoId}} is the guid of a video: set it to a video of a TEST library (this is destructive and Bunny
+  cannot undo it).
+
+  Only a video that NO lesson uses (any course, draft or published) is deleted. If some lesson uses it the answer is
+  409 VIDEO_IN_USE with `lessons` (courseId, courseTitle, moduleId, moduleTitle, lessonId, lessonTitle of each one),
+  Bunny is not called, nothing is audited and the video is never un-assigned: change the video of those lessons first.
+  Deleting a video the library no longer has (or repeating the request) is also 204: Bunny's 404 on delete means
+  "already gone" (idempotency is undocumented by Bunny and untested against a real library, ADR-0049). Bunny hides
+  the video at once but may keep playing it for a while. A DELETE_VIDEO audit row is written.
+
+  Success contract: 204 No Content.
+  Error contract:
+    400 INVALID_REQUEST           → videoId is not a plain identifier
+    401 AUTHENTICATION_REQUIRED   → no token
+    403 ACCESS_DENIED             → not an ADMIN (an INSTRUCTOR included)
+    409 VIDEO_IN_USE              → a lesson uses the video; body.lessons lists them
+    503 VIDEO_LIBRARY_UNAVAILABLE → Bunny did not answer (timeout, error or rejected key)
+}
+
+assert {
+  res.status: eq 204
+}
