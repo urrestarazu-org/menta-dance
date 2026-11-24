@@ -162,3 +162,31 @@ exista una forma explícita de quitar un video de una lección; se aceptó que e
 * Documentación oficial de Bunny Stream consultada: https://bunny.net/docs/stream/ (HTTP API, autenticación, TUS,
   colecciones, webhooks, MP4 fallback) y su especificación OpenAPI
   https://video.bunnycdn.com/openapi/bunnynet-video-api.public.json.
+
+## Nota de seguimiento de #840: supuestos sobre Bunny que siguen sin probarse
+
+Fecha: 2026-11-23. #840 implementó el puerto `VideoLibraryPort`, el adaptador `BunnyStreamVideoLibrary`
+(`RestClient`, timeouts de 2 s y 3 s, errores sin el cuerpo de Bunny) y el listado
+`GET /api/v1/admin/virtual/videos`. Todo se probó contra un servidor HTTP falso y un doble en memoria; **ningún
+supuesto de esta lista se probó contra Bunny**. Hay que probarlos contra una **biblioteca de pruebas** (no la de
+producción: crear y borrar videos de prueba allí es seguro) antes de dar #840 por validado, y corregir este ADR si
+alguno falla.
+
+Lo que sí dice la especificación OpenAPI pública de Bunny (leída el 2026-11-23, `bunnynet-video-api.public.json`) y
+usa el adaptador: `page` desde 1, `itemsPerPage` recortado a 10-1000, `search` es un filtro por título "sin
+distinguir mayúsculas, subcadena", `orderBy` acepta `date`, `title`, `size` y `duration` (cualquier otro valor cae
+en `date`; `size`/`duration` pueden dar `400` si la biblioteca no los tiene, por eso la API sólo ofrece `date` y
+`title`), `status` es un entero 0 a 8, `availableResolutions` es un texto separado por comas, la lista trae
+`totalItems`, y un video inexistente responde `404`.
+
+| # | Supuesto | Qué se hizo con él | Cómo probarlo (biblioteca de pruebas) |
+|---|---|---|---|
+| 1 | **`search` junto con la paginación.** Se supone que `totalItems` cuenta sólo los videos que coinciden, que `page` e `itemsPerPage` se aplican después del filtro y que el orden se conserva entre páginas. | La API pide a Bunny páginas de 1000 con `search` y `orderBy` y pagina ella misma; depende de que `totalItems` y el orden entre páginas sean los supuestos (así corta el recorrido). | Subir 25 videos con títulos `prueba-01`..`prueba-25` y 5 con otro título. `GET .../videos?search=prueba&itemsPerPage=10&page=1..3`: la suma de las páginas debe dar 25 sin repetidos ni faltantes, `totalItems` debe ser 25, y la página 3 debe traer 5. Repetir con `orderBy=title` y con un `search` que no coincide con nada (`totalItems` 0, `items` vacío, no `404`). |
+| 2 | **Un video recién creado aparece enseguida en el listado.** No está documentado si el índice de listado tiene demora. | Nada lo espera ni lo reintenta: si hay demora, el video nuevo tarda en verse. Importa para #844 (subida) y para elegir un video recién subido en #843. | `POST /library/{id}/videos` con un título y, **sin esperar**, listar con `search` por ese título y pedir el video por guid. Medir cuántos segundos pasan hasta que aparece en cada uno; probar también que aparece con `status` 0 o 1 (creado/subido), sin `length` ni miniatura. |
+| 3 | **Qué permite la clave de sólo lectura.** El ADR no documenta su alcance. La API usa la *API key* de la biblioteca, que puede crear y borrar. | Se pidió la clave completa porque es la única que se sabe que sirve. Si la de sólo lectura alcanza para `GET /videos` y `GET /videos/{id}`, el listado podría usar la de sólo lectura y reducir el daño de una filtración. | Con la *Read-only API key* en el header `AccessKey`: listar, pedir un video, y comprobar que `POST` (crear/renombrar) y `DELETE` responden `401`/`403`. Anotar el resultado. Si el listado funciona, abrir un issue para usarla desde `app.cdn.bunny-net.api-key` en lugar de la clave completa (hoy sólo #841 y #844 necesitan escribir). |
+| 4 | Una clave inválida o de otra biblioteca responde `401` (y no, por ejemplo, una lista vacía). | Cualquier estado distinto de `2xx` se traduce a `503 VIDEO_LIBRARY_UNAVAILABLE`; `404` en `GET /videos/{id}` significa "el video no existe". | Pedir con una clave equivocada y con la clave de otra biblioteca; confirmar `401` y que el log de la API diga `status 401` sin la clave. |
+| 5 | El `guid` que se guarda en `virtual_lessons.video_id` coincide letra por letra con el `guid` del listado (mayúsculas y minúsculas incluidas). | Se compara con `equals`. Si Bunny devolviera otra capitalización, la lección se marcaría como `missingInLibrary` sin estarlo. | Comparar un `videoId` ya cargado en una lección con el `guid` que devuelve el listado. |
+| 6 | No hay límite de pedidos documentado. | Tanto el admin como el instructor recorren la biblioteca en cada listado (hasta 10 pedidos de 1000 videos; el instructor corta al encontrar todos sus videos, el admin lee hasta agotarla) y paginan en memoria. | Observar si Bunny responde `429` con listados repetidos; si pasa, agregar caché corta del listado. |
+
+Resultado de las pruebas: **pendiente** (queda a cargo de quien tenga la biblioteca de pruebas; anotar acá la
+fecha y el resultado de cada fila).

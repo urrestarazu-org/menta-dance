@@ -10,12 +10,14 @@ import com.menta.virtual.domain.exception.LessonNotFoundException;
 import com.menta.virtual.domain.exception.ModuleNotFoundException;
 import com.menta.virtual.domain.exception.ModuleReorderMismatchException;
 import com.menta.virtual.domain.exception.ProfessorMismatchException;
+import com.menta.virtual.domain.exception.VideoLibraryUnavailableException;
 import com.menta.virtual.infrastructure.web.ProblemDetails;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 /**
  * RFC 9457 Problem Details mapping for Virtual's management endpoints (US-VIRTUAL-006). Request
@@ -86,6 +88,22 @@ public class VirtualCourseExceptionHandler {
     @ExceptionHandler(ModuleReorderMismatchException.class)
     ResponseEntity<ProblemDetail> reorderMismatch(ModuleReorderMismatchException exception) {
         return ProblemDetails.response(HttpStatus.BAD_REQUEST, exception.getMessage(), exception.getErrorCode());
+    }
+
+    /** The video library cannot answer (unreachable, timeout, error or rejected key); the reason stays in the log. */
+    @ExceptionHandler(VideoLibraryUnavailableException.class)
+    ResponseEntity<ProblemDetail> videoLibraryUnavailable(VideoLibraryUnavailableException exception) {
+        return ProblemDetails.response(
+            HttpStatus.SERVICE_UNAVAILABLE,
+            "La biblioteca de videos no está disponible en este momento. Intentá de nuevo en unos minutos.",
+            exception.getErrorCode()
+        );
+    }
+
+    /** A query parameter that is not of the expected type, such as {@code page=abc}. */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    ResponseEntity<ProblemDetail> malformedParameter(MethodArgumentTypeMismatchException exception) {
+        return ProblemDetails.response(HttpStatus.BAD_REQUEST, "Malformed request.", "INVALID_REQUEST");
     }
 
     /**

@@ -77,4 +77,21 @@ class VirtualModuleRepositoryAdapterTest {
 
         verify(jpaRepository).saveAll(anyList());
     }
+
+    @Test
+    void find_by_ids_maps_the_modules_found_in_one_query() {
+        UUID id = UUID.randomUUID();
+        when(jpaRepository.findAllById(List.of(id)))
+            .thenReturn(List.of(new VirtualModuleJpaEntity(id, UUID.randomUUID(), "M1", 0)));
+
+        assertThat(adapter.findByIds(List.of(ModuleId.of(id)))).extracting(VirtualModule::getTitle)
+            .containsExactly("M1");
+    }
+
+    @Test
+    void find_by_ids_does_not_query_for_an_empty_collection() {
+        assertThat(adapter.findByIds(List.of())).isEmpty();
+
+        org.mockito.Mockito.verifyNoInteractions(jpaRepository);
+    }
 }

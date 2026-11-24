@@ -19,6 +19,9 @@ public interface VirtualLessonRepository {
     /** Every lesson of a course across all its modules — used for publish-completeness validation. */
     List<VirtualLesson> findByCourseId(CourseId courseId);
 
+    /** Every lesson of every course that has a video (a non-blank {@code videoId}), in one query. */
+    List<VirtualLesson> findAllWithVideo();
+
     /** Counts the lessons of a module. */
     int countByModuleId(ModuleId moduleId);
 

@@ -177,6 +177,9 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *     sessions, same first-match-wins ordering rationale. Ownership of the
  *     specific course a module/lesson belongs to is checked in the use
  *     case, never here.)
+ *   - GET /api/v1/admin/virtual/videos          → ADMIN or INSTRUCTOR
+ *     (#840, ADR-0049; only the listing: the rest of the prefix stays ADMIN-only via /api/v1/admin/**.
+ *     Which videos an INSTRUCTOR sees is decided in the use case.)
  *   - PUT /api/v1/billing/physical/courses/{courseId}/pricing → ADMIN or
  *     INSTRUCTOR (US-BILLING-009, #37; the GET permitAll rule above covers
  *     the same path for reads — Spring Security matches per-HTTP-method, so
@@ -376,6 +379,10 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/admin/virtual/courses/**").hasAnyRole("ADMIN", "INSTRUCTOR")
                 .requestMatchers("/api/v1/admin/virtual/modules/**").hasAnyRole("ADMIN", "INSTRUCTOR")
                 .requestMatchers("/api/v1/admin/virtual/lessons/**").hasAnyRole("ADMIN", "INSTRUCTOR")
+                // #840, ADR-0049: the video listing only. The exact GET path keeps the rest of the prefix (rename
+                // and delete, #841) under the generic /api/v1/admin/** ADMIN rule below; ownership of what an
+                // instructor sees is resolved in the use case, never here.
+                .requestMatchers(HttpMethod.GET, "/api/v1/admin/virtual/videos").hasAnyRole("ADMIN", "INSTRUCTOR")
                 // US-BILLING-009, #37: PUT restricted to ADMIN/INSTRUCTOR; the GET rule
                 // above already covers this same path for reads (per-HTTP-method matching).
                 .requestMatchers(

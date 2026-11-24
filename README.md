@@ -146,6 +146,8 @@ MP_PUBLIC_KEY=TEST-xxx
 APP_CDN_BUNNYNET_PULLZONEHOSTNAME=vz-example.b-cdn.net
 APP_CDN_BUNNYNET_VIDEOLIBRARYID=123456
 APP_CDN_BUNNYNET_SECURITYKEY=xxx
+# API key de la biblioteca (distinta de la anterior): solo para listar los videos en gestión; opcional con `demo`
+APP_CDN_BUNNYNET_APIKEY=yyy
 ```
 
 ### 3. Iniciar Servicios

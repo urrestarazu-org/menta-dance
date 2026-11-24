@@ -88,4 +88,13 @@ class VirtualLessonRepositoryAdapterTest {
 
         verify(jpaRepository).deleteById(id);
     }
+
+    @Test
+    void find_all_with_video_maps_every_lesson_that_has_a_video() {
+        UUID moduleId = UUID.randomUUID();
+        UUID courseId = UUID.randomUUID();
+        when(jpaRepository.findAllWithVideo()).thenReturn(List.of(entity(UUID.randomUUID(), moduleId, courseId)));
+
+        assertThat(adapter.findAllWithVideo()).hasSize(1);
+    }
 }

@@ -6,6 +6,7 @@ import com.menta.virtual.domain.model.ModuleId;
 import com.menta.virtual.domain.model.VirtualModule;
 import com.menta.virtual.infrastructure.persistence.mapper.VirtualModuleJpaMapper;
 import com.menta.virtual.infrastructure.persistence.repository.VirtualModuleJpaRepository;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
@@ -26,6 +27,17 @@ public class VirtualModuleRepositoryAdapter implements VirtualModuleRepository {
     @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
     public Optional<VirtualModule> findById(ModuleId moduleId) {
         return moduleRepository.findById(moduleId.getValue()).map(VirtualModuleJpaMapper::toDomain);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public List<VirtualModule> findByIds(Collection<ModuleId> moduleIds) {
+        if (moduleIds.isEmpty()) {
+            return List.of();
+        }
+        return moduleRepository.findAllById(moduleIds.stream().map(ModuleId::getValue).toList()).stream()
+            .map(VirtualModuleJpaMapper::toDomain)
+            .toList();
     }
 
     @Override

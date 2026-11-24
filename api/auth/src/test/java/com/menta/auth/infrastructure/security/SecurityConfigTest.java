@@ -288,6 +288,53 @@ class SecurityConfigTest {
             .andExpect(status().isForbidden());
     }
 
+    private static final String VIDEO_LISTING_URL = "/api/v1/admin/virtual/videos";
+
+    /** #840. The video listing is not public: an anonymous caller gets {@code 401}. */
+    @Test
+    void an_unauthenticated_get_of_the_video_listing_is_rejected() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get(VIDEO_LISTING_URL)).andExpect(status().isUnauthorized());
+    }
+
+    /** #840. ADMIN and INSTRUCTOR reach the (unmapped) dispatcher; which videos each sees is the use case's call. */
+    @ParameterizedTest
+    @ValueSource(strings = {"ADMIN", "INSTRUCTOR"})
+    void admin_and_instructor_get_of_the_video_listing_pass_the_security_layer(String role) throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get(VIDEO_LISTING_URL).with(user("staff").roles(role)))
+            .andExpect(status().isNotFound());
+    }
+
+    /** #840. Students and reception are authenticated but not video managers: {@code 403}. */
+    @ParameterizedTest
+    @ValueSource(strings = {"STUDENT", "RECEPTIONIST"})
+    void other_roles_get_of_the_video_listing_are_forbidden(String role) throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get(VIDEO_LISTING_URL).with(user("other").roles(role)))
+            .andExpect(status().isForbidden());
+    }
+
+    /**
+     * #840. Only the {@code GET} listing is opened to INSTRUCTOR: any other method on the prefix (the rename and
+     * delete of #841) keeps the generic {@code /api/v1/admin/**} rule, ADMIN only, until it declares its own.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"POST", "PUT", "PATCH", "DELETE"})
+    void an_instructor_write_to_the_video_routes_is_forbidden(String method) throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(request(HttpMethod.valueOf(method), VIDEO_LISTING_URL + "/some-guid")
+                .with(user("teacher").roles("INSTRUCTOR")))
+            .andExpect(status().isForbidden());
+        mockMvc.perform(request(HttpMethod.valueOf(method), VIDEO_LISTING_URL + "/some-guid")
+                .with(user("boss").roles("ADMIN")))
+            .andExpect(status().isNotFound());
+    }
+
     /** #355. The roster is not public: an anonymous caller gets {@code 401}. */
     @Test
     void an_unauthenticated_get_of_the_session_roster_route_is_rejected() throws Exception {

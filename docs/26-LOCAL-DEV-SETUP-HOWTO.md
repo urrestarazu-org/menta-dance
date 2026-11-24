@@ -365,6 +365,12 @@ escenarios de aceptación del issue #129:
   arranque falla si falta la clave o el host y la biblioteca siguen en el valor placeholder. El factory
   también falla el arranque si `e2e-bunny-net` o `demo` se combinan con `prod`/`production`/`staging`, antes
   de que el servidor acepte ningún request.
+- **La biblioteca de videos (#840, ADR-0049)** se elige igual con otro bean, `VideoLibraryPort`: con `e2e-bunny-net`,
+  `e2e-catalog-content`, `test` e `integration-test` siempre usa el doble en memoria (`InMemoryVideoLibrary`, vacío al
+  arrancar, nunca sale a Bunny aunque haya clave); con `demo` usa el cliente real (`BunnyStreamVideoLibrary`) solo si
+  `APP_CDN_BUNNYNET_APIKEY` tiene valor y, si no, el doble; en cualquier otro perfil usa el real y el arranque falla
+  si falta `APP_CDN_BUNNYNET_APIKEY` (o si es el mismo valor que la clave de firma), o si la biblioteca no es un
+  número. El doble en memoria también está prohibido junto a `prod`/`production`/`staging`.
 - La firma (`sig`) es SHA-256 de un salt público + `videoLibraryId` +
   `videoId` + `exp` — determinística, sin credencial real y sin uso posible
   contra la CDN de producción.
@@ -443,11 +449,18 @@ APP_CDN_BUNNYNET_SECURITYKEY=<tarjeta 'Token authentication key' de Security > G
 DEMO_VIRTUAL_FREE_LESSON_VIDEO_ID=<id del video en la biblioteca>
 # Opcional: nombre del MP4 si no existe play_720p.mp4 (por ejemplo play_480p.mp4)
 APP_CDN_BUNNYNET_FILENAME=play_720p.mp4
+# Opcional: clave de API de la biblioteca (página API), distinta de la anterior, para listar sus videos (#840)
+APP_CDN_BUNNYNET_APIKEY=<API key de la página API de la biblioteca>
 ```
 
 Después levantá la API y el BFF con el perfil `demo` (`SPRING_PROFILES_ACTIVE=demo`) y abrí la lección
 gratuita de "Bachata Sensual" o "Bachata Tradicional".
 
+- **Ver la biblioteca real en la pantalla de gestión (opcional, #840).** Con
+  `APP_CDN_BUNNYNET_APIKEY=<API key de la página API de la biblioteca>` la API lista los videos reales de la biblioteca en
+  `GET /api/v1/admin/virtual/videos`. Es una clave **distinta** de `APP_CDN_BUNNYNET_SECURITYKEY` (la de la tarjeta
+  *Token authentication key*) y **no** es la *Read-only API key*; puede crear y borrar videos, así que va solo en tu `.env`.
+  Probala contra una **biblioteca de pruebas**, no la de producción. Sin ella, `demo` usa el doble en memoria (lista vacía).
 - `APP_CDN_BUNNYNET_SECURITYKEY` es lo que activa el adaptador real en `demo`. Sin ella sigue el adaptador local
   y todo funciona como antes (los tests y el recorrido `e2e-bunny-net` no cambian).
 - Con la clave definida, el host y la biblioteca no pueden quedar en el valor placeholder: la API no arranca y

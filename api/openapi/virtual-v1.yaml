@@ -6,7 +6,7 @@ openapi: 3.1.0
 # physical-v1.yaml: el diff se revisa en el PR igual que la colección Bruno.
 #
 # Sólo describe endpoints IMPLEMENTADOS. Cubre todas las rutas de producción
-# de los controllers de virtual (20): gestión de cursos, módulos y lecciones
+# de los controllers de virtual (21): gestión de cursos, módulos y lecciones
 # (ADMIN/INSTRUCTOR), detalle y streaming público de lecciones con autorización
 # resuelta del lado del servidor (US-VIRTUAL-003/004/007) y progreso del alumno
 # (guardar, leer y completar una lección; progreso y cursos en progreso por
@@ -32,8 +32,8 @@ info:
 
     ## Autorización
 
-    `/api/v1/admin/virtual/courses/**`, `/api/v1/admin/virtual/modules/**` y
-    `/api/v1/admin/virtual/lessons/**` aceptan tanto `ADMIN` como
+    `/api/v1/admin/virtual/courses/**`, `/api/v1/admin/virtual/modules/**`,
+    `/api/v1/admin/virtual/lessons/**` y `/api/v1/admin/virtual/videos` aceptan tanto `ADMIN` como
     `INSTRUCTOR` (rol interno de `PROFESOR`) — la coincidencia de rol se
     verifica en el filtro de seguridad; la propiedad del curso dueño de un
     módulo o lección se verifica en el caso de uso (`403 COURSE_NOT_OWNED`).
@@ -76,6 +76,8 @@ tags:
     description: Administración de módulos de un curso virtual (ADMIN/PROFESOR).
   - name: Gestión de lecciones
     description: Administración de lecciones de un módulo (ADMIN/PROFESOR).
+  - name: Biblioteca de videos
+    description: Listado de los videos de la biblioteca de Bunny Stream (ADMIN/PROFESOR).
   - name: Lecciones públicas
     description: Detalle y streaming de lecciones con autorización de suscripción.
   - name: Progreso del alumno
@@ -794,6 +796,77 @@ paths:
         '404':
           $ref: '#/components/responses/ModuleNotFound'
 
+  /api/v1/admin/virtual/videos:
+    get:
+      tags: [Biblioteca de videos]
+      summary: Listar los videos de la biblioteca
+      description: |
+        Lista los videos de la biblioteca de Bunny Stream (ADR-0049, #840) con las lecciones que los usan.
+
+        - **ADMIN** ve todo lo que sabe la base de datos más toda la biblioteca: cada video de la biblioteca (con
+          o sin lecciones, en el orden de Bunny) y, al final, cada `videoId` que usa alguna lección de cualquier
+          curso y que la biblioteca ya no tiene. `search` y `orderBy` los resuelve la biblioteca; la paginación se
+          hace en memoria sobre esa unión.
+        - **PROFESOR** ve únicamente los videos que usan lecciones de sus propios cursos. La pertenencia sale de
+          los cursos del PROFESOR, nunca de la biblioteca, y en `lessons` sólo aparecen sus propias lecciones.
+        - Para los dos roles la API recorre las páginas de la biblioteca (a lo sumo 10 pedidos de 1000 videos; si
+          es más grande responde `503`) y pagina el resultado.
+        - Un `videoId` que una lección usa y la biblioteca ya no tiene se devuelve igual, con
+          `missingInLibrary: true` y sin datos del video, al final del listado, con las lecciones que lo usan, y
+          no rompe la respuesta. No se marca cuando hay un `search` activo (no coincidir no es lo mismo que no
+          existir).
+        - `status` es el estado de procesamiento de la biblioteca; un video sin `hasMp4Fallback` no se reproduce
+          con la configuración actual del CDN.
+        - Si la biblioteca no responde (no alcanzable, tiempo agotado, error o clave rechazada) responde
+          `503 VIDEO_LIBRARY_UNAVAILABLE`; el detalle no incluye nada de lo que dijo Bunny.
+      operationId: listVirtualVideos
+      parameters:
+        - $ref: '#/components/parameters/VideoPage'
+        - $ref: '#/components/parameters/VideoPageSize'
+        - $ref: '#/components/parameters/VideoSearch'
+        - $ref: '#/components/parameters/VideoOrderBy'
+      responses:
+        '200':
+          description: Una página de videos visibles para el actor autenticado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VirtualVideoPageResponse'
+        '400':
+          description: >-
+            `page` negativo o no numérico, `size` fuera de 10..100 o no numérico, `search` de más de 100
+            caracteres u `orderBy` que no es `date` ni `title`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                parametro_invalido:
+                  value:
+                    type: https://menta.dance/problems/invalid_request
+                    title: Bad Request
+                    status: 400
+                    detail: Malformed request.
+                    code: INVALID_REQUEST
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '503':
+          description: La biblioteca de videos no respondió.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                biblioteca_no_disponible:
+                  value:
+                    type: https://menta.dance/problems/video_library_unavailable
+                    title: Service Unavailable
+                    status: 503
+                    detail: La biblioteca de videos no está disponible en este momento. Intentá de nuevo en unos minutos.
+                    code: VIDEO_LIBRARY_UNAVAILABLE
+
   /api/v1/admin/virtual/lessons/{lessonId}:
     put:
       tags: [Gestión de lecciones]
@@ -929,6 +1002,39 @@ components:
       schema:
         type: string
         format: uuid
+
+    VideoPage:
+      name: page
+      in: query
+      description: Índice de página, desde 0.
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    VideoPageSize:
+      name: size
+      in: query
+      description: Tamaño de página; fuera de rango responde 400, no se recorta.
+      schema:
+        type: integer
+        minimum: 10
+        maximum: 100
+        default: 20
+    VideoSearch:
+      name: search
+      in: query
+      description: Texto que debe contener el título del video (sin distinguir mayúsculas); en blanco no filtra.
+      schema:
+        type: string
+        maxLength: 100
+    VideoOrderBy:
+      name: orderBy
+      in: query
+      description: '`date` (más nuevo primero, por defecto) o `title` (A-Z).'
+      schema:
+        type: string
+        enum: [date, title]
+        default: date
 
   responses:
     InvalidRequest:
@@ -1524,6 +1630,73 @@ components:
         free:
           type: boolean
         order:
+          type: integer
+
+    VirtualVideoPageResponse:
+      type: object
+      required: [items, page, size, totalElements, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [videoId, title, status, durationSeconds, thumbnailUrl, hasMp4Fallback,
+                       availableResolutions, missingInLibrary, lessons]
+            properties:
+              videoId:
+                type: string
+                description: Identificador (guid) del video en la biblioteca; es el `videoId` de las lecciones.
+              title:
+                type: [string, 'null']
+              status:
+                type: [string, 'null']
+                enum: [CREATED, UPLOADED, PROCESSING, TRANSCODING, FINISHED, ERROR, UPLOAD_FAILED, JIT_SEGMENTING,
+                       JIT_PLAYLISTS_CREATED, UNKNOWN, null]
+              durationSeconds:
+                type: [integer, 'null']
+              thumbnailUrl:
+                type: [string, 'null']
+              hasMp4Fallback:
+                type: boolean
+                description: Sin MP4 de respaldo el video no se reproduce con la configuración actual del CDN.
+              availableResolutions:
+                type: array
+                items:
+                  type: string
+                description: Etiquetas de resolución ya codificadas, por ejemplo `360p`.
+              missingInLibrary:
+                type: boolean
+                description: Una lección usa este `videoId` pero la biblioteca no tiene ese video.
+              lessons:
+                type: array
+                items:
+                  type: object
+                  required: [courseId, courseTitle, moduleId, moduleTitle, lessonId, lessonTitle]
+                  properties:
+                    courseId:
+                      type: string
+                      format: uuid
+                    courseTitle:
+                      type: string
+                    moduleId:
+                      type: string
+                      format: uuid
+                    moduleTitle:
+                      type: string
+                    lessonId:
+                      type: string
+                      format: uuid
+                    lessonTitle:
+                      type: string
+        page:
+          type: integer
+          description: Índice de página, desde 0.
+        size:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
           type: integer
 
     SaveLessonProgressRequest:

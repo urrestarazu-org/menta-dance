@@ -1,0 +1,52 @@
+meta {
+  name: List Library Videos
+  type: http
+  seq: 14
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admin/virtual/videos?page=0&size=20&orderBy=date
+  body: none
+  auth: bearer
+}
+
+params:query {
+  page: 0
+  size: 20
+  orderBy: date
+  ~search: tango
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  #840, ADR-0049. Lists the Bunny Stream library's videos with the lessons that use each one.
+  ADMIN sees everything the database knows plus the whole library; INSTRUCTOR only the videos used by
+  lessons of their own courses. A video a lesson uses but the library no longer has comes back at the end
+  with missingInLibrary: true and its lessons (no filter by search).
+
+  Paging: page is zero-based, size 10..100 (default 20), orderBy date (default) or title,
+  search filters by title. Anything else is 400 INVALID_REQUEST.
+
+  Against a local API (demo / e2e profiles, or without APP_CDN_BUNNYNET_APIKEY) the library is the
+  in-memory double and starts empty, so items is []. Against a real library use a TEST library,
+  never production (see the ADR-0049 follow-up note).
+
+  Success contract: 200 with VirtualVideoPageResponse.
+  Error contract:
+    400 INVALID_REQUEST           → bad page, size, search or orderBy
+    401 AUTHENTICATION_REQUIRED   → no token
+    403 ACCESS_DENIED             → neither ADMIN nor INSTRUCTOR
+    503 VIDEO_LIBRARY_UNAVAILABLE → Bunny did not answer (timeout, error or rejected key)
+}
+
+assert {
+  res.status: eq 200
+  res.body.items: isArray
+  res.body.page: eq 0
+  res.body.size: eq 20
+  res.body.totalElements: isNumber
+  res.body.totalPages: isNumber
+}

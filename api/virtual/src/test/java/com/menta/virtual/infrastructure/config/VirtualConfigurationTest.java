@@ -18,6 +18,7 @@ import com.menta.virtual.application.port.in.GetLessonProgressUseCase;
 import com.menta.virtual.application.port.in.GetPublicLessonStreamUseCase;
 import com.menta.virtual.application.port.in.GetPublicLessonUseCase;
 import com.menta.virtual.application.port.in.ListInProgressCoursesUseCase;
+import com.menta.virtual.application.port.in.ListLibraryVideosUseCase;
 import com.menta.virtual.application.port.in.ListManagedVirtualCoursesUseCase;
 import com.menta.virtual.application.port.in.PublishVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.ReorderVirtualModulesUseCase;
@@ -30,6 +31,7 @@ import com.menta.virtual.application.port.in.VirtualCourseCatalogPort;
 import com.menta.virtual.application.port.out.BunnyNetSignatureService;
 import com.menta.virtual.application.port.out.Clock;
 import com.menta.virtual.application.port.out.LessonProgressRepository;
+import com.menta.virtual.application.port.out.VideoLibraryPort;
 import com.menta.virtual.application.port.out.VirtualCourseAuditRepository;
 import com.menta.virtual.application.port.out.VirtualCourseRepository;
 import com.menta.virtual.application.port.out.VirtualLessonRepository;
@@ -41,11 +43,14 @@ import com.menta.virtual.application.usecase.GetPublicLessonStreamUseCaseImpl;
 import com.menta.virtual.application.usecase.GetPublicLessonUseCaseImpl;
 import com.menta.virtual.application.usecase.LessonAccessPolicy;
 import com.menta.virtual.application.usecase.ListInProgressCoursesUseCaseImpl;
+import com.menta.virtual.application.usecase.ListLibraryVideosUseCaseImpl;
 import com.menta.virtual.application.usecase.VirtualCourseCatalogPortImpl;
 import com.menta.virtual.infrastructure.cdn.BunnyNetProperties;
+import com.menta.virtual.infrastructure.cdn.BunnyStreamVideoLibrary;
 import com.menta.virtual.infrastructure.cdn.CapturedLogs;
 import com.menta.virtual.infrastructure.cdn.ProbingBunnyNetSignatureService;
 import com.menta.virtual.infrastructure.cdn.TokenAuthBunnyNetSignatureService;
+import com.menta.virtual.infrastructure.cdn.local.InMemoryVideoLibrary;
 import com.menta.virtual.infrastructure.cdn.local.LocalBunnyNetSignatureService;
 import com.menta.virtual.infrastructure.transaction.RetryOnDuplicateKeyCompleteLessonUseCase;
 import com.menta.virtual.infrastructure.transaction.RetryOnDuplicateKeySaveLessonProgressUseCase;
@@ -322,12 +327,14 @@ class VirtualConfigurationTest {
     class BunnyNetAdapterProfileSelection {
 
         private static final String SECURITY_KEY = "test-security-key";
+        private static final String API_KEY = "test-library-api-key";
 
         /** Fake, obviously non-real values; the real pull zone, library and key come from the local environment. */
         private static final Map<String, Object> REAL_CDN = Map.of(
             "app.cdn.bunny-net.pull-zone-hostname", "vz-example.b-cdn.net",
             "app.cdn.bunny-net.video-library-id", "123456",
-            "app.cdn.bunny-net.security-key", SECURITY_KEY
+            "app.cdn.bunny-net.security-key", SECURITY_KEY,
+            "app.cdn.bunny-net.api-key", API_KEY
         );
 
         private AnnotationConfigApplicationContext context;
@@ -604,6 +611,109 @@ class VirtualConfigurationTest {
             assertThatThrownBy(() -> bootContext("e2e-bunny-net", "staging"))
                 .isInstanceOf(BeanCreationException.class)
                 .hasStackTraceContaining("SECURITY");
+        }
+
+        // --- video library selection (ADR-0049, #840) ---------------------------------------------------
+
+        @ParameterizedTest
+        @ValueSource(strings = {"e2e-bunny-net", "e2e-catalog-content", "test", "integration-test"})
+        void the_in_memory_library_is_selected_by_the_e2e_and_test_profiles_even_with_an_api_key(String profile) {
+            context = bootContext(REAL_CDN, profile);
+
+            assertThat(context.getBeanNamesForType(VideoLibraryPort.class)).hasSize(1);
+            assertThat(context.getBean(VideoLibraryPort.class)).isInstanceOf(InMemoryVideoLibrary.class);
+        }
+
+        @Test
+        void demo_without_an_api_key_resolves_to_the_in_memory_library() {
+            context = bootContext("demo");
+
+            assertThat(context.getBean(VideoLibraryPort.class)).isInstanceOf(InMemoryVideoLibrary.class);
+        }
+
+        @Test
+        void demo_with_an_api_key_resolves_to_the_real_library_client() {
+            context = bootContext(REAL_CDN, "demo");
+
+            assertThat(context.getBean(VideoLibraryPort.class)).isInstanceOf(BunnyStreamVideoLibrary.class);
+        }
+
+        @Test
+        void default_profiles_resolve_to_the_real_library_client_when_configured() {
+            context = bootContext(REAL_CDN);
+
+            assertThat(context.getBean(VideoLibraryPort.class)).isInstanceOf(BunnyStreamVideoLibrary.class);
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"prod", "production", "staging"})
+        void production_like_profiles_resolve_to_the_real_library_client_when_configured(String profile) {
+            context = bootContext(REAL_CDN, profile);
+
+            assertThat(context.getBean(VideoLibraryPort.class)).isInstanceOf(BunnyStreamVideoLibrary.class);
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"prod", "production", "staging"})
+        void production_like_profiles_fail_closed_without_the_api_key_and_never_echo_any_secret(String profile) {
+            Map<String, Object> withoutApiKey = new HashMap<>(REAL_CDN);
+            withoutApiKey.remove("app.cdn.bunny-net.api-key");
+
+            assertThatThrownBy(() -> bootContext(withoutApiKey, profile))
+                .isInstanceOf(BeanCreationException.class)
+                .hasStackTraceContaining("app.cdn.bunny-net.api-key")
+                .hasStackTraceContaining("APP_CDN_BUNNYNET_APIKEY")
+                .satisfies(failure -> assertThat(stackTrace(failure)).doesNotContain(SECURITY_KEY));
+        }
+
+        @Test
+        void default_profiles_fail_closed_when_the_api_key_equals_the_security_key() {
+            Map<String, Object> reused = new HashMap<>(REAL_CDN);
+            reused.put("app.cdn.bunny-net.api-key", SECURITY_KEY);
+
+            assertThatThrownBy(() -> bootContext(reused))
+                .isInstanceOf(BeanCreationException.class)
+                .hasStackTraceContaining("app.cdn.bunny-net.api-key")
+                .satisfies(failure -> assertThat(stackTrace(failure)).doesNotContain(SECURITY_KEY + "\""));
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"prod", "staging"})
+        void the_in_memory_library_cannot_run_alongside_a_production_like_profile(String profile) {
+            assertThatThrownBy(() -> bootContext(REAL_CDN, "test", profile))
+                .isInstanceOf(BeanCreationException.class)
+                .hasStackTraceContaining("SECURITY");
+        }
+
+        @Test
+        void the_real_library_client_logs_a_summary_without_the_api_key() {
+            try (CapturedLogs logs = CapturedLogs.of(VirtualConfiguration.class)) {
+                context = bootContext(REAL_CDN);
+
+                assertThat(logs.messages(Level.INFO))
+                    .contains("Bunny.net video library adapter: management API (real library)")
+                    .anyMatch(message -> message.startsWith("Bunny.net library configuration:")
+                        && message.contains("apiKey=configured") && !message.contains(API_KEY));
+            }
+        }
+
+        @Test
+        void the_in_memory_library_logs_that_no_real_library_is_contacted() {
+            try (CapturedLogs logs = CapturedLogs.of(VirtualConfiguration.class)) {
+                context = bootContext("e2e-bunny-net");
+
+                assertThat(logs.messages(Level.INFO))
+                    .contains("Bunny.net video library adapter: in-memory (no real library is contacted)");
+            }
+        }
+
+        @Test
+        void wires_the_list_library_videos_use_case_bean() {
+            ListLibraryVideosUseCase useCase = configuration.listLibraryVideosUseCase(
+                new InMemoryVideoLibrary(), courseRepository, moduleRepository, lessonRepository
+            );
+
+            assertThat(useCase).isInstanceOf(ListLibraryVideosUseCaseImpl.class);
         }
 
         private static String stackTrace(Throwable failure) {
