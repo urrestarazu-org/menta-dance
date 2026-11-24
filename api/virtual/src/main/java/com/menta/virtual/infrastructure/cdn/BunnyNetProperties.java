@@ -31,6 +31,9 @@ public class BunnyNetProperties {
     /** Marker contained in every placeholder default (and in the production compose fallback). */
     static final String PLACEHOLDER_MARKER = "missing-config";
 
+    /** Base URL of Bunny Stream's management API. */
+    static final String DEFAULT_API_BASE_URL = "https://video.bunnycdn.com";
+
     /**
      * Hostname of the Bunny.net pull zone, with or without the {@code https://} scheme and a trailing slash
      * (e.g. {@code vz-abc123.b-cdn.net}). The signed URL is always built as {@code https://<hostname>/...}; see
@@ -55,6 +58,25 @@ public class BunnyNetProperties {
      */
     @ToString.Exclude
     private String securityKey = "";
+
+    /**
+     * The library's API key (header {@code AccessKey}) for the management API at {@link #apiBaseUrl}: the "API key"
+     * of the library's API page, NOT the {@link #securityKey} (the CDN token authentication key) and not the
+     * read-only key. It can create and delete videos, so it only lives on the server (env
+     * {@code APP_CDN_BUNNYNET_APIKEY}) and never reaches the BFF or a browser. Secret: never logged and excluded
+     * from {@link #toString()}. Blank by default; the in-memory library does not need it.
+     */
+    @ToString.Exclude
+    private String apiKey = "";
+
+    /** Base URL of the library's management API; only a test against a fake server changes it. Not a secret. */
+    private String apiBaseUrl = DEFAULT_API_BASE_URL;
+
+    /** Connect timeout of the management API calls, in milliseconds (same default as the Mercado Pago adapter). */
+    private int apiConnectTimeoutMs = 2000;
+
+    /** Read timeout of the management API calls, in milliseconds (same default as the Mercado Pago adapter). */
+    private int apiReadTimeoutMs = 3000;
 
     /**
      * Name of the MP4 file served under {@code /<videoId>/} by Bunny Stream. Requires "MP4 Fallback" to be
@@ -135,6 +157,40 @@ public class BunnyNetProperties {
         if (!problems.isEmpty()) {
             throw new IllegalStateException(
                 "Bunny.net CDN is not configured for token authentication: " + String.join("; ", problems));
+        }
+    }
+
+    /**
+     * Fail-closed check applied whenever the real video library client is selected. Reports every problem at once,
+     * naming only the property, never its value.
+     *
+     * @throws IllegalStateException if the API key is blank or equal to the security key, the library id is not
+     *     numeric, the base URL is not an absolute http(s) URL or a timeout is not positive
+     */
+    public void requireRealLibraryConfiguration() {
+        List<String> problems = new ArrayList<>();
+        if (isBlank(apiKey)) {
+            problems.add("app.cdn.bunny-net.api-key is missing (env APP_CDN_BUNNYNET_APIKEY)");
+        } else if (apiKey.equals(securityKey)) {
+            problems.add("app.cdn.bunny-net.api-key must not be the same value as app.cdn.bunny-net.security-key");
+        }
+        if (isBlank(videoLibraryId) || !videoLibraryId.strip().matches("\\d+")) {
+            problems.add("app.cdn.bunny-net.video-library-id must be the numeric id of the library "
+                + "(env APP_CDN_BUNNYNET_VIDEOLIBRARYID)");
+        }
+        if (isBlank(apiBaseUrl) || !isAbsoluteHttpUrl(apiBaseUrl.strip())) {
+            problems.add("app.cdn.bunny-net.api-base-url must be an absolute http(s) URL "
+                + "(env APP_CDN_BUNNYNET_APIBASEURL)");
+        }
+        if (apiConnectTimeoutMs <= 0) {
+            problems.add("app.cdn.bunny-net.api-connect-timeout-ms must be positive");
+        }
+        if (apiReadTimeoutMs <= 0) {
+            problems.add("app.cdn.bunny-net.api-read-timeout-ms must be positive");
+        }
+        if (!problems.isEmpty()) {
+            throw new IllegalStateException(
+                "Bunny.net video library is not configured for the management API: " + String.join("; ", problems));
         }
     }
 

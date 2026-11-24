@@ -3,6 +3,7 @@ package com.menta.virtual.application.port.out;
 import com.menta.virtual.domain.model.CourseId;
 import com.menta.virtual.domain.model.ModuleId;
 import com.menta.virtual.domain.model.VirtualModule;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -11,6 +12,9 @@ public interface VirtualModuleRepository {
 
     /** Finds a module by id. */
     Optional<VirtualModule> findById(ModuleId moduleId);
+
+    /** Batch lookup by id in one query; unknown ids are omitted and an empty collection performs no query. */
+    List<VirtualModule> findByIds(Collection<ModuleId> moduleIds);
 
     /** Every module of a course, ordered by {@code order} ascending. */
     List<VirtualModule> findByCourseId(CourseId courseId);

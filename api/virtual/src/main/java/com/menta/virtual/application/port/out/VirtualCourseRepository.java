@@ -77,6 +77,12 @@ public interface VirtualCourseRepository {
      */
     Optional<VirtualCourse> findByIdAnyStatus(CourseId courseId);
 
+    /**
+     * Batch lookup by id regardless of status, without the pre-aggregated counts, in one query; unknown ids are
+     * omitted and an empty collection performs no query.
+     */
+    List<VirtualCourse> findByIds(Collection<CourseId> courseIds);
+
     /** Every course regardless of status or owner — the ADMIN management view. */
     List<VirtualCourse> findAll();
 

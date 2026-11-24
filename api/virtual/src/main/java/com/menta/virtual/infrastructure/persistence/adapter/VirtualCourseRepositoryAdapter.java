@@ -183,6 +183,17 @@ public class VirtualCourseRepositoryAdapter implements VirtualCourseRepository {
 
     @Override
     @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public List<VirtualCourse> findByIds(Collection<CourseId> courseIds) {
+        if (courseIds.isEmpty()) {
+            return List.of();
+        }
+        return courseRepository.findAllById(courseIds.stream().map(CourseId::getValue).toList()).stream()
+            .map(VirtualCourseJpaMapper::toDomain)
+            .toList();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
     public List<VirtualCourse> findAll() {
         return courseRepository.findAll().stream().map(VirtualCourseJpaMapper::toDomain).toList();
     }

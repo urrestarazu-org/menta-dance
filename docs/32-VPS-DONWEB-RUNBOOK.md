@@ -409,6 +409,13 @@ Puntos a tener en cuenta:
 - **Qué no se comprobó:** que la variable llegue con valor prueba que está cargada, no que sea correcta. No se verificó el CBU ni el alias contra el banco, el pull zone y la librería de video contra Bunny.net, ni que las credenciales de SMTP autentiquen: no se envió ningún correo real. Esa prueba queda pendiente.
 - **Mercado Pago** no cambió en este paso: sigue con las credenciales de pruebas del 2026-10-20. Pasar a cobros reales y el webhook de producción se siguen en #641 y #647.
 
+**Antes del próximo despliegue (#840): clave de API de la biblioteca.** La API lista los videos de la biblioteca con la API de
+gestión de Bunny Stream y falla cerrado igual que con la clave de firma: sin `APP_CDN_BUNNYNET_APIKEY` (la *API key* de la
+página **API** de la biblioteca; **no** la *Read-only API key* ni la clave de firma, que deben ser valores distintos) **la API no
+arranca**. Cargarla en `/opt/menta/.env` (valor sin comillas) **antes** de desplegar una imagen con este cambio; el compose ya la
+pasa al contenedor. Solo vive en el servidor: nunca llega al BFF ni al navegador. Los supuestos sobre Bunny que siguen sin
+probarse están en [ADR-0049](adr/0049-gestion-de-videos-bunny-stream.md), nota de seguimiento de #840.
+
 **Antes del próximo despliegue (#751): clave de firma de Bunny.net.** Desde #751 la API firma las URLs de video con la
 *CDN token authentication* de la biblioteca Stream y falla cerrado: sin `APP_CDN_BUNNYNET_SECURITYKEY` (la tarjeta
 **Token authentication key** de **Security > General** de la biblioteca, rotulada *API key* ahí pero distinta de la API key
@@ -856,7 +863,7 @@ La demo pública **no usa el perfil `demo`**: corre sobre este mismo despliegue,
 **Requisitos previos.**
 
 1. **Una versión que traiga lo necesario.** El último tag publicado es `v0.3.0` y no incluye la migración V28 (`auth_users.demo`), las pantallas `/gestion/**` (#368, #373, #378) ni `GET /api/v1/users/me` (#749); están en `develop`. Hace falta desplegar un release que las incluya (`docs/16-CICD-PIPELINE.md`, "Release a producción"). Qué tag corre en el VPS no se verificó (ver la nota de 2.13). Para confirmar la migración, el `DESCRIBE auth_users` de 2.14 (paso 1) tiene que mostrar la columna `demo`.
-2. **Clave de Bunny.net.** `APP_CDN_BUNNYNET_SECURITYKEY` cargada en `/opt/menta/.env` **antes** de desplegar esa versión (2.9, "Antes del próximo despliegue (#751)"): sin ella la API no arranca.
+2. **Claves de Bunny.net.** `APP_CDN_BUNNYNET_SECURITYKEY` cargada en `/opt/menta/.env` **antes** de desplegar esa versión (2.9, "Antes del próximo despliegue (#751)"): sin ella la API no arranca. Desde #840 también hace falta `APP_CDN_BUNNYNET_APIKEY` (la *API key* de la página *API* de la biblioteca, otra clave distinta de la de firma; ver `production.env.example`) en el mismo archivo y con el mismo requisito: sin ella la API no arranca.
 3. **Mercado Pago de pruebas.** El token y la cuenta del vendedor de prueba ya están cargados (2.9, 2026-10-20). Para que una compra con Mercado Pago se confirme falta el webhook de "Modo productivo" (#647); mientras tanto, la compra se prueba por transferencia.
 4. **Un administrador real**, que ya existe (2.14), y un punto de retorno: anotar el nombre del backup que `deploy.sh` deja en `/opt/menta/backups/` al desplegar la versión del paso 1 (2.10), antes de cargar nada.
 

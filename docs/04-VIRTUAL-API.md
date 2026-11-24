@@ -16,6 +16,7 @@ POST /api/v1/admin/virtual/modules/{moduleId}/lessons
 PUT  /api/v1/admin/virtual/modules/{moduleId}
 PUT  /api/v1/admin/virtual/lessons/{lessonId}
 DELETE /api/v1/admin/virtual/lessons/{lessonId}
+GET  /api/v1/admin/virtual/videos
 GET  /api/v1/virtual/lessons/{lessonId}
 GET  /api/v1/virtual/lessons/{lessonId}/stream
 GET  /api/v1/virtual/materials/{materialId}
@@ -124,3 +125,40 @@ suscripción (vigente, cancelada o vencida) incluye el curso, responde `409 COUR
 no borra nada y no escribe auditoría; las referencias históricas también cuentan. Es la
 última comprobación, después de `COURSE_HAS_PROGRESS`. Un pago de suscripción virtual cita
 el plan y no el curso, así que lo cubre la consulta de planes y suscripciones.
+
+## Biblioteca de videos (#840, ADR-0049)
+
+`GET /api/v1/admin/virtual/videos?page=&size=&search=&orderBy=` lista los videos de la biblioteca de
+Bunny Stream con las lecciones que los usan. Lo pueden llamar `ADMIN` e `INSTRUCTOR` (sólo `GET`; el resto
+del prefijo sigue siendo de `ADMIN`, ver #841).
+
+- **Paginación:** `page` desde 0 (como `/admin/users`), `size` de 10 a 100 (20 por defecto; fuera de rango
+  responde `400`, no se recorta; el mínimo 10 es el de Bunny). La respuesta trae `items`, `page`, `size`,
+  `totalElements` y `totalPages`. `search` filtra por título (sin distinguir mayúsculas, hasta 100 caracteres);
+  `orderBy` es `date` (más nuevo primero, por defecto) o `title` (A-Z). Cualquier otro valor responde `400`.
+- **Ítem:** `videoId` (el `guid` de Bunny, el mismo que guardan las lecciones), `title`, `status`
+  (`CREATED`, `UPLOADED`, `PROCESSING`, `TRANSCODING`, `FINISHED`, `ERROR`, `UPLOAD_FAILED`, `JIT_SEGMENTING`,
+  `JIT_PLAYLISTS_CREATED`, `UNKNOWN`), `durationSeconds`, `thumbnailUrl`, `hasMp4Fallback` (sin MP4 de respaldo el
+  video no se reproduce con la configuración actual del CDN), `availableResolutions`, `missingInLibrary` y
+  `lessons` (curso, módulo y lección que lo usan, con sus ids y títulos).
+- **Visibilidad:** el `ADMIN` ve todo lo que sabe la base de datos más toda la biblioteca: cada video de la
+  biblioteca (con o sin lecciones, en el orden de Bunny) y, al final, cada `videoId` que usa alguna lección de
+  cualquier curso y que la biblioteca ya no tiene. El `INSTRUCTOR` ve sólo los videos que usan lecciones de sus
+  propios cursos: la pertenencia sale de `findByProfessorId` y de sus lecciones, nunca de Bunny, y en `lessons`
+  no aparecen las lecciones de otros cursos que compartan el video. Como Bunny no tiene una consulta "estos
+  ids", para los dos roles la API recorre la biblioteca (a lo sumo 10 pedidos de 1000 videos; el instructor corta
+  apenas encontró todos los suyos) y pagina el resultado en memoria, con `search` y `orderBy` pasados a Bunny.
+  Si la biblioteca es tan grande que no alcanza, responde `503` en vez de adivinar.
+- **Video que ya no existe:** si una lección apunta a un `videoId` que la biblioteca no tiene, el ítem se
+  devuelve igual, al final, con `missingInLibrary: true`, sin título, estado, duración ni miniatura y con las
+  lecciones que lo usan (curso, módulo y lección). No se marca cuando hay `search` (no coincidir no es no existir).
+- **Errores:** `401`/`403` los resuelve `SecurityConfig`; `400 INVALID_REQUEST` por un parámetro inválido;
+  `503 VIDEO_LIBRARY_UNAVAILABLE` si Bunny no responde, tarda más que los timeouts (2 s de conexión y 3 s de
+  lectura, como Mercado Pago, configurables con `app.cdn.bunny-net.api-connect-timeout-ms` y
+  `api-read-timeout-ms`), contesta con error o rechaza la clave. El detalle nunca incluye lo que dijo Bunny; la
+  causa (por ejemplo `status 401`) queda sólo en el log de la API, sin ningún secreto.
+- **Credencial:** `app.cdn.bunny-net.api-key` (`APP_CDN_BUNNYNET_APIKEY`), la clave de API de la biblioteca
+  (header `AccessKey`), distinta de la clave de firma de tokens (`security-key`). Falla el arranque si falta en un
+  perfil real. Nunca llega al BFF ni al navegador, ni se imprime en logs o `toString`. Con los perfiles
+  `e2e-bunny-net`, `e2e-catalog-content`, `test` e `integration-test` (y con `demo` sin clave) se usa un doble en
+  memoria sin red.

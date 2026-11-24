@@ -2,6 +2,10 @@ package com.menta.virtual.infrastructure.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.menta.virtual.application.dto.LibraryVideoOrder;
+import com.menta.virtual.application.dto.LibraryVideoStatus;
+import com.menta.virtual.application.dto.VideoLibraryQuery;
+import com.menta.virtual.application.port.in.ListLibraryVideosUseCase;
 import com.menta.virtual.domain.model.CourseLevel;
 import com.menta.virtual.domain.model.CourseStatus;
 import com.menta.virtual.infrastructure.web.dto.CourseProgressResponse;
@@ -32,6 +36,8 @@ import com.menta.virtual.infrastructure.web.dto.VirtualCourseManagementResponse;
 import com.menta.virtual.infrastructure.web.dto.VirtualLessonManagementResponse;
 import com.menta.virtual.infrastructure.web.dto.VirtualModuleManagementListResponse;
 import com.menta.virtual.infrastructure.web.dto.VirtualModuleManagementResponse;
+import com.menta.virtual.infrastructure.web.dto.VirtualVideoPageResponse;
+import com.menta.virtual.infrastructure.web.dto.VirtualVideoResponse;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
 import java.io.IOException;
@@ -73,6 +79,7 @@ class VirtualOpenApiContractTest {
     private static final String MODULE = "/api/v1/admin/virtual/modules/{moduleId}";
     private static final String ADMIN_LESSON = "/api/v1/admin/virtual/lessons/{lessonId}";
     private static final String LESSON = "/api/v1/virtual/lessons/{lessonId}";
+    private static final String VIDEOS = "/api/v1/admin/virtual/videos";
     private static final Set<String> VALIDATION_REQUIRED = Set.of("NotNull", "NotBlank", "NotEmpty");
 
     private static Map<String, Object> spec;
@@ -276,6 +283,8 @@ class VirtualOpenApiContractTest {
         expected.put("POST " + MODULE + "/lessons", new TreeSet<>(Set.of("201", "400", "401", "403", "404")));
         expected.put("PUT " + ADMIN_LESSON, new TreeSet<>(Set.of("200", "400", "401", "403", "404")));
         expected.put("DELETE " + ADMIN_LESSON, new TreeSet<>(Set.of("204", "400", "401", "403", "404")));
+        // Video listing (#840): 400 from a bad page/size/orderBy, 503 when the video library cannot answer.
+        expected.put("GET " + VIDEOS, new TreeSet<>(Set.of("200", "400", "401", "403", "503")));
         // Public reads: the token is optional, so there is no 401; a malformed id collapses into the 404.
         expected.put("GET " + LESSON, new TreeSet<>(Set.of("200", "403", "404")));
         expected.put("GET " + LESSON + "/stream", new TreeSet<>(Set.of("200", "403", "404")));
@@ -397,6 +406,11 @@ class VirtualOpenApiContractTest {
             new Object[] {VirtualCourseAdminDetailResponse.AdminLessonDetail.class, "videoId"});
         responses.put("VirtualCourseAdminDetailResponse/stats",
             new Object[] {VirtualCourseAdminDetailResponse.AdminStats.class});
+        responses.put("VirtualVideoPageResponse", new Object[] {VirtualVideoPageResponse.class});
+        responses.put("VirtualVideoPageResponse/items/[]",
+            new Object[] {VirtualVideoResponse.class, "title", "status", "durationSeconds", "thumbnailUrl"});
+        responses.put("VirtualVideoPageResponse/items/[]/lessons/[]",
+            new Object[] {VirtualVideoResponse.VideoLessonResponse.class});
         responses.put("LessonProgressResponse", new Object[] {LessonProgressResponse.class, "completedAt"});
         responses.put("CourseProgressResponse", new Object[] {CourseProgressResponse.class, "resumeLesson"});
         responses.put("CourseProgressResponse/resumeLesson",
@@ -536,6 +550,31 @@ class VirtualOpenApiContractTest {
             "VirtualCourseAdminDetailResponse/status")) {
             assertThat(at(path).get("enum")).as(path).isEqualTo(names(CourseStatus.class));
         }
+    }
+
+    @Test
+    void the_video_listing_documents_the_statuses_the_orders_and_the_size_bounds_the_code_accepts() {
+        List<Object> documentedStatuses =
+            new ArrayList<>(list(at("VirtualVideoPageResponse/items/[]/status").get("enum")));
+        assertThat(documentedStatuses.remove(null)).isTrue();
+        assertThat(documentedStatuses).isEqualTo(List.copyOf(names(LibraryVideoStatus.class)));
+
+        Map<String, Object> parameters = map(map(spec, "components"), "parameters");
+        assertThat(map(map(parameters, "VideoOrderBy"), "schema").get("enum"))
+            .isEqualTo(Arrays.stream(LibraryVideoOrder.values()).map(LibraryVideoOrder::wireValue).toList());
+        Map<String, Object> size = map(map(parameters, "VideoPageSize"), "schema");
+        assertThat(size.get("minimum")).isEqualTo(VideoLibraryQuery.MIN_PAGE_SIZE);
+        assertThat(size.get("maximum")).isEqualTo(ListLibraryVideosUseCase.MAX_PAGE_SIZE);
+        assertThat(size.get("default")).isEqualTo(ListLibraryVideosUseCase.DEFAULT_PAGE_SIZE);
+        assertThat(map(map(parameters, "VideoSearch"), "schema").get("maxLength"))
+            .isEqualTo(VideoLibraryQuery.MAX_SEARCH_LENGTH);
+        List<String> declared = list(operation("GET " + VIDEOS).get("parameters")).stream()
+            .map(parameter -> String.valueOf(asMap(parameter).get("$ref")))
+            .toList();
+        assertThat(declared).containsExactly(
+            "#/components/parameters/VideoPage", "#/components/parameters/VideoPageSize",
+            "#/components/parameters/VideoSearch", "#/components/parameters/VideoOrderBy"
+        );
     }
 
     @Test

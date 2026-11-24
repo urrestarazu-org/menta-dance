@@ -365,4 +365,21 @@ class VirtualCourseRepositoryAdapterTest {
     private static ArgumentCaptor<Collection<UUID>> uuidCollectionCaptor() {
         return ArgumentCaptor.forClass(Collection.class);
     }
+
+    @Test
+    void find_by_ids_returns_the_courses_of_any_status_without_querying_the_aggregates() {
+        UUID id = UUID.randomUUID();
+        when(courseRepository.findAllById(List.of(id))).thenReturn(List.of(courseEntity(id, CourseStatus.DRAFT)));
+
+        assertThat(adapter.findByIds(List.of(CourseId.of(id)))).extracting(VirtualCourse::getStatus)
+            .containsExactly(CourseStatus.DRAFT);
+        verifyNoInteractions(moduleRepository, lessonRepository);
+    }
+
+    @Test
+    void find_by_ids_does_not_query_for_an_empty_collection() {
+        assertThat(adapter.findByIds(List.of())).isEmpty();
+
+        verifyNoInteractions(courseRepository);
+    }
 }

@@ -47,6 +47,14 @@ public class VirtualLessonRepositoryAdapter implements VirtualLessonRepository {
 
     @Override
     @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public List<VirtualLesson> findAllWithVideo() {
+        return lessonRepository.findAllWithVideo().stream()
+            .map(VirtualLessonJpaMapper::toDomain)
+            .toList();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
     public int countByModuleId(ModuleId moduleId) {
         return (int) lessonRepository.countByModuleId(moduleId.getValue());
     }

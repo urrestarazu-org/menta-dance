@@ -50,6 +50,10 @@ public interface VirtualLessonJpaRepository extends JpaRepository<VirtualLessonJ
     /** Every lesson across a course's modules — used for publish-completeness validation. */
     List<VirtualLessonJpaEntity> findByCourseId(UUID courseId);
 
+    /** Every lesson that has a video (not null and not blank), across all courses. */
+    @Query("SELECT l FROM VirtualLessonJpaEntity l WHERE " + LessonJpql.HAS_VIDEO)
+    List<VirtualLessonJpaEntity> findAllWithVideo();
+
     /** Counts the lessons of a module. */
     long countByModuleId(UUID moduleId);
 

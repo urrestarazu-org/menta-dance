@@ -14,6 +14,7 @@ import com.menta.virtual.application.port.in.GetPublicLessonStreamUseCase;
 import com.menta.virtual.application.port.in.GetPublicLessonUseCase;
 import com.menta.virtual.application.port.in.GetVirtualCourseAdminDetailUseCase;
 import com.menta.virtual.application.port.in.ListInProgressCoursesUseCase;
+import com.menta.virtual.application.port.in.ListLibraryVideosUseCase;
 import com.menta.virtual.application.port.in.ListManagedVirtualCoursesUseCase;
 import com.menta.virtual.application.port.in.PublishVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.ReorderVirtualModulesUseCase;
@@ -26,6 +27,7 @@ import com.menta.virtual.application.port.in.VirtualCourseCatalogPort;
 import com.menta.virtual.application.port.out.BunnyNetSignatureService;
 import com.menta.virtual.application.port.out.Clock;
 import com.menta.virtual.application.port.out.LessonProgressRepository;
+import com.menta.virtual.application.port.out.VideoLibraryPort;
 import com.menta.virtual.application.port.out.VirtualCourseAuditRepository;
 import com.menta.virtual.application.port.out.VirtualCourseRepository;
 import com.menta.virtual.application.port.out.VirtualLessonRepository;
@@ -44,6 +46,7 @@ import com.menta.virtual.application.usecase.GetPublicLessonUseCaseImpl;
 import com.menta.virtual.application.usecase.GetVirtualCourseAdminDetailUseCaseImpl;
 import com.menta.virtual.application.usecase.LessonAccessPolicy;
 import com.menta.virtual.application.usecase.ListInProgressCoursesUseCaseImpl;
+import com.menta.virtual.application.usecase.ListLibraryVideosUseCaseImpl;
 import com.menta.virtual.application.usecase.ListManagedVirtualCoursesUseCaseImpl;
 import com.menta.virtual.application.usecase.PublishVirtualCourseUseCaseImpl;
 import com.menta.virtual.application.usecase.ReorderVirtualModulesUseCaseImpl;
@@ -54,8 +57,10 @@ import com.menta.virtual.application.usecase.UpdateVirtualLessonUseCaseImpl;
 import com.menta.virtual.application.usecase.UpdateVirtualModuleUseCaseImpl;
 import com.menta.virtual.application.usecase.VirtualCourseCatalogPortImpl;
 import com.menta.virtual.infrastructure.cdn.BunnyNetProperties;
+import com.menta.virtual.infrastructure.cdn.BunnyStreamVideoLibrary;
 import com.menta.virtual.infrastructure.cdn.ProbingBunnyNetSignatureService;
 import com.menta.virtual.infrastructure.cdn.TokenAuthBunnyNetSignatureService;
+import com.menta.virtual.infrastructure.cdn.local.InMemoryVideoLibrary;
 import com.menta.virtual.infrastructure.cdn.local.LocalBunnyNetSignatureService;
 import com.menta.virtual.infrastructure.transaction.RetryOnDuplicateKeyCompleteLessonUseCase;
 import com.menta.virtual.infrastructure.transaction.RetryOnDuplicateKeySaveLessonProgressUseCase;
@@ -72,6 +77,7 @@ import com.menta.virtual.infrastructure.transaction.TransactionalUnpublishVirtua
 import com.menta.virtual.infrastructure.transaction.TransactionalUpdateVirtualCourseUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalUpdateVirtualLessonUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalUpdateVirtualModuleUseCase;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import org.slf4j.Logger;
@@ -176,11 +182,64 @@ public class VirtualConfiguration {
         return properties.isDiagnosticProbe() ? new ProbingBunnyNetSignatureService(real, properties) : real;
     }
 
+    /** Profiles whose library is always the in-memory double: the e2e journey and the automated tests. */
+    private static final List<String> IN_MEMORY_LIBRARY_PROFILES = List.of(
+        "e2e-bunny-net", "e2e-catalog-content", "test", "integration-test"
+    );
+
+    /**
+     * ADR-0049 / #840. The single {@link VideoLibraryPort} bean. Selection, like the signer's and evaluated in this
+     * order:
+     * <ol>
+     *   <li>{@code e2e-bunny-net}, {@code e2e-catalog-content}, {@code test} or
+     *       {@code integration-test} active: {@link InMemoryVideoLibrary},
+     *       always (never reaches Bunny, even if an API key is present).</li>
+     *   <li>{@code demo} active: {@link BunnyStreamVideoLibrary} when {@code app.cdn.bunny-net.api-key} is
+     *       non-blank, otherwise {@link InMemoryVideoLibrary}.</li>
+     *   <li>Any other profile set: {@link BunnyStreamVideoLibrary}.</li>
+     * </ol>
+     * Whenever the real client is chosen, {@link BunnyNetProperties#requireRealLibraryConfiguration()} aborts the
+     * boot if the API key is missing (or equal to the token signing key). The in-memory double is guarded against
+     * production-like profiles. The library key is a different secret from the signing key and is never logged.
+     */
+    @Bean
+    public VideoLibraryPort videoLibraryPort(BunnyNetProperties properties, Environment environment) {
+        boolean inMemoryProfile = IN_MEMORY_LIBRARY_PROFILES.stream()
+            .anyMatch(profile -> environment.acceptsProfiles(Profiles.of(profile)));
+        boolean demo = environment.acceptsProfiles(Profiles.of("demo"));
+        boolean hasApiKey = properties.getApiKey() != null && !properties.getApiKey().isBlank();
+        if (inMemoryProfile || (demo && !hasApiKey)) {
+            failClosedIfProductionLike(environment);
+            LOG.info("Bunny.net video library adapter: in-memory (no real library is contacted)");
+            return new InMemoryVideoLibrary();
+        }
+        if (demo) {
+            failClosedIfProductionLike(environment);
+        }
+        properties.requireRealLibraryConfiguration();
+        LOG.info("Bunny.net video library adapter: management API (real library)");
+        LOG.info("Bunny.net library configuration: baseUrl={} libraryId={} apiKey=configured connectTimeoutMs={} "
+                + "readTimeoutMs={}",
+            properties.getApiBaseUrl(), properties.getVideoLibraryId(), properties.getApiConnectTimeoutMs(),
+            properties.getApiReadTimeoutMs());
+        return new BunnyStreamVideoLibrary(properties);
+    }
+
+    /** ADR-0049 / #840. Read-only, so it skips the transactional decorators, like the other listings. */
+    @Bean
+    public ListLibraryVideosUseCase listLibraryVideosUseCase(
+        VideoLibraryPort videoLibraryPort, VirtualCourseRepository courseRepository,
+        VirtualModuleRepository moduleRepository, VirtualLessonRepository lessonRepository
+    ) {
+        return new ListLibraryVideosUseCaseImpl(videoLibraryPort, courseRepository, moduleRepository, lessonRepository);
+    }
+
     private static void failClosedIfProductionLike(Environment environment) {
         for (String profile : environment.getActiveProfiles()) {
             if (PRODUCTION_LIKE_PROFILES.contains(profile.toLowerCase(Locale.ROOT))) {
                 throw new IllegalStateException(
-                    "SECURITY: local Bunny.net signature adapter or demo profile (profiles e2e-bunny-net, demo) "
+                    "SECURITY: local Bunny.net signature adapter, in-memory video library or demo profile "
+                        + "(profiles e2e-bunny-net, e2e-catalog-content, demo, test, integration-test) "
                         + "cannot run alongside a production-like profile. Active profiles: "
                         + String.join(", ", environment.getActiveProfiles())
                 );

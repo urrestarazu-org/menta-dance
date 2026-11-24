@@ -107,6 +107,10 @@ services:
       # página API; no resetearla). Sin ella (o con los valores de arriba en su default) la API
       # no arranca: el firmado de las URLs de video falla cerrado (#751).
       APP_CDN_BUNNYNET_SECURITYKEY: ${APP_CDN_BUNNYNET_SECURITYKEY:-}
+      # "API key" de la página API de la biblioteca Stream (header AccessKey de la API de gestión: listar videos,
+      # #840). Es OTRA clave distinta de la anterior: nunca la reutilices ni la mezcles. Puede crear y borrar videos:
+      # solo vive en el servidor. Sin ella la API no arranca (ADR-0049).
+      APP_CDN_BUNNYNET_APIKEY: ${APP_CDN_BUNNYNET_APIKEY:-}
 
       # El heap se calcula sobre el mem_limit del contenedor (1 GB), no sobre la RAM del servidor.
       JAVA_OPTS: ${API_JAVA_OPTS:--XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC}
