@@ -15,6 +15,11 @@
   iconBadge(kind, icon, text)
     Same label with one of the icons of fragments/icons instead of the dot (e.g. a warning for "Sin video").
 
+  previewNotice(kind, icon, message)
+    Box for the place where the picture of a video goes when there is none to show: `message` is the text that says
+    why (e.g. "Este video ya no existe en la biblioteca."), `kind` is danger | warning | neutral and `icon` one of
+    fragments/icons. Reusable wherever a preview would be and there is no video (#843).
+
   lessonSummary(lessons)
     "N lecciones · X min de duración" line of a module: the count of its lessons and the sum of their minutes.
 -->
@@ -29,6 +34,11 @@
     <th:block th:replace="~{fragments/icons :: icon(${icon}, 'h-4 w-4')}"></th:block>
     <th:block th:text="${text}">Sin video</th:block>
 </span>
+
+<div th:fragment="previewNotice(kind, icon, message)" th:class="'preview-box preview-box-' + ${kind}">
+    <th:block th:replace="~{fragments/icons :: icon(${icon}, 'h-5 w-5')}"></th:block>
+    <p th:text="${message}">Este video ya no existe en la biblioteca.</p>
+</div>
 
 <p th:fragment="lessonSummary(lessons)" class="text-sm text-muted" th:with="count=${lessons.size()}"
    th:text="|${count} ${count == 1 ? 'lección' : 'lecciones'} · ${#aggregates.sum(lessons.![durationMinutes()]) ?: 0} min de duración|">2 lecciones · 25 min de duración</p>

@@ -87,6 +87,9 @@ class ManagementAccessIntegrationTest extends BaseIntegrationTest {
         mockMvc.perform(get("/gestion/cursos-virtuales"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrlPattern("**/login"));
+        mockMvc.perform(get("/gestion/videos"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrlPattern("**/login"));
     }
 
     static Stream<Arguments> prefixMatrix() {
@@ -120,6 +123,19 @@ class ManagementAccessIntegrationTest extends BaseIntegrationTest {
                 Arguments.of("/gestion/cursos-virtuales/1/sin-pantalla", INSTRUCTOR, true),
                 Arguments.of("/gestion/cursos-virtuales/1/sin-pantalla", RECEPTIONIST, false),
                 Arguments.of("/gestion/cursos-virtuales/1/sin-pantalla", STUDENT, false),
+                // videos (#842): administrator and instructor, at any depth; only deleting is administrator only.
+                // The list, rename and delete screens are served (not a 404), so their allowed cases are covered by
+                // the video integration tests.
+                Arguments.of("/gestion/videos", RECEPTIONIST, false),
+                Arguments.of("/gestion/videos", STUDENT, false),
+                Arguments.of("/gestion/videos/1/sin-pantalla", ADMIN, true),
+                Arguments.of("/gestion/videos/1/sin-pantalla", INSTRUCTOR, true),
+                Arguments.of("/gestion/videos/1/sin-pantalla", RECEPTIONIST, false),
+                Arguments.of("/gestion/videos/1/sin-pantalla", STUDENT, false),
+                Arguments.of("/gestion/videos/1/borrar", INSTRUCTOR, false),
+                Arguments.of("/gestion/videos/1/borrar", RECEPTIONIST, false),
+                Arguments.of("/gestion/videos/1/borrar", STUDENT, false),
+                Arguments.of("/gestion/videos/1/otra/borrar", INSTRUCTOR, true),
                 // reception: receptionist and administrator. Their own access to the screens that exist is not
                 // a 404 (they are served), so it is covered by ManagementReceptionIntegrationTest.
                 Arguments.of("/gestion/recepcion", INSTRUCTOR, false),
@@ -185,7 +201,12 @@ class ManagementAccessIntegrationTest extends BaseIntegrationTest {
         "/gestion/cursos-virtuales/1/sin-pantalla, ADMIN, true",
         "/gestion/cursos-virtuales/1/sin-pantalla, INSTRUCTOR, true",
         "/gestion/cursos-virtuales/1/sin-pantalla, RECEPTIONIST, false",
-        "/gestion/cursos-virtuales/1/sin-pantalla, STUDENT, false"
+        "/gestion/cursos-virtuales/1/sin-pantalla, STUDENT, false",
+        "/gestion/videos/1/sin-pantalla, ADMIN, true",
+        "/gestion/videos/1/sin-pantalla, INSTRUCTOR, true",
+        "/gestion/videos/1/sin-pantalla, RECEPTIONIST, false",
+        "/gestion/videos/1/sin-pantalla, STUDENT, false",
+        "/gestion/videos/1/borrar, INSTRUCTOR, false"
     })
     @DisplayName("the courses rules apply to every verb: staff who manage them pass, the rest get a 403")
     void courseManagementRuleCoversEveryVerb(String path, String role, boolean allowed) throws Exception {

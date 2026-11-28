@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/management :: page('Renombrar video', 'videos', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<div>
+    <h1 class="mb-6">Renombrar video</h1>
+
+    <div th:if="${formError}" class="mb-4">
+        <div th:replace="~{fragments/components :: alert('error', ${formError})}"></div>
+    </div>
+
+    <form th:action="@{/gestion/videos/{id}/renombrar(id=${videoId})}" th:object="${form}" method="post" novalidate
+          class="card space-y-4">
+        <div th:replace="~{fragments/components :: errorSummary(${ {'title':'title'} })}"></div>
+
+        <div th:replace="~{fragments/components :: field('title', 'Título del video', 'text', 'title', 'off', *{title}, 'Hasta 255 caracteres. Solo cambia el nombre en la biblioteca: las lecciones siguen usando el mismo video.', ${!#fields.hasErrors('*')}, ${#fields.errors('title')})}"></div>
+
+        <div class="flex items-center gap-4">
+            <button type="submit" class="btn btn-primary">Guardar</button>
+            <a th:href="@{/gestion/videos}">Cancelar</a>
+        </div>
+    </form>
+</div>
+</th:block>
+</body>
+</html>

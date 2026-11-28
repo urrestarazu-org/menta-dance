@@ -597,4 +597,29 @@
   .alert-icon {
     @apply order-first mt-0.5 h-5 w-5 shrink-0;
   }
+
+  /*
+   * Where the picture of a video goes (#842): the thumbnail, or a text that says why there is none. The notice
+   * boxes carry their meaning in words; the colour and the icon only reinforce it. Reused by fragments/admin
+   * :: previewNotice.
+   */
+  .preview-image {
+    @apply aspect-video w-40 max-w-none rounded-lg border border-brand-deep/20 object-cover;
+  }
+
+  .preview-box {
+    @apply flex aspect-video w-40 flex-col items-center justify-center gap-1 rounded-lg border border-dashed p-2 text-center text-sm;
+  }
+
+  .preview-box-neutral {
+    @apply border-brand-deep/40 bg-brand-surface text-brand-deep;
+  }
+
+  .preview-box-warning {
+    @apply border-feedback-warning bg-feedback-warning-surface text-feedback-warning;
+  }
+
+  .preview-box-danger {
+    @apply border-solid border-feedback-error bg-feedback-error-surface text-feedback-error;
+  }
 }

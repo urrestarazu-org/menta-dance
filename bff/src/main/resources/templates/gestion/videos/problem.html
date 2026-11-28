@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/management :: page(${problemTitle}, 'videos', ~{::main-content})}">
+<body>
+<th:block th:fragment="main-content">
+<div>
+    <div th:replace="~{fragments/components :: notice(${problemTitle}, ${problemMessage})}"></div>
+    <p class="mt-6"><a th:href="@{/gestion/videos}">Volver a los videos</a></p>
+</div>
+</th:block>
+</body>
+</html>

@@ -16,6 +16,7 @@ import com.menta.bff.application.port.out.SessionTokenRepository;
 import com.menta.bff.application.port.out.SubscriptionApiClient;
 import com.menta.bff.application.port.out.VirtualApiClient;
 import com.menta.bff.application.port.out.VirtualCourseManagementApiClient;
+import com.menta.bff.application.port.out.VirtualVideoManagementApiClient;
 import com.menta.bff.application.usecase.AccountActivationUseCase;
 import com.menta.bff.application.usecase.AccountActivationUseCaseImpl;
 import com.menta.bff.application.usecase.ApprovePaymentUseCase;
@@ -40,6 +41,8 @@ import com.menta.bff.application.usecase.CreateVirtualLessonUseCase;
 import com.menta.bff.application.usecase.CreateVirtualLessonUseCaseImpl;
 import com.menta.bff.application.usecase.CreateVirtualModuleUseCase;
 import com.menta.bff.application.usecase.CreateVirtualModuleUseCaseImpl;
+import com.menta.bff.application.usecase.DeleteVideoUseCase;
+import com.menta.bff.application.usecase.DeleteVideoUseCaseImpl;
 import com.menta.bff.application.usecase.DeleteVirtualCourseUseCase;
 import com.menta.bff.application.usecase.DeleteVirtualCourseUseCaseImpl;
 import com.menta.bff.application.usecase.DeleteVirtualLessonUseCase;
@@ -96,6 +99,8 @@ import com.menta.bff.application.usecase.ListInstructorsUseCase;
 import com.menta.bff.application.usecase.ListInstructorsUseCaseImpl;
 import com.menta.bff.application.usecase.ListManagedCoursesUseCase;
 import com.menta.bff.application.usecase.ListManagedCoursesUseCaseImpl;
+import com.menta.bff.application.usecase.ListManagedVideosUseCase;
+import com.menta.bff.application.usecase.ListManagedVideosUseCaseImpl;
 import com.menta.bff.application.usecase.ListManagedVirtualCoursesUseCase;
 import com.menta.bff.application.usecase.ListManagedVirtualCoursesUseCaseImpl;
 import com.menta.bff.application.usecase.ListPendingPaymentsUseCase;
@@ -122,6 +127,8 @@ import com.menta.bff.application.usecase.RegisterManualCheckInUseCase;
 import com.menta.bff.application.usecase.RegisterManualCheckInUseCaseImpl;
 import com.menta.bff.application.usecase.RejectPaymentUseCase;
 import com.menta.bff.application.usecase.RejectPaymentUseCaseImpl;
+import com.menta.bff.application.usecase.RenameVideoUseCase;
+import com.menta.bff.application.usecase.RenameVideoUseCaseImpl;
 import com.menta.bff.application.usecase.ReorderVirtualModulesUseCase;
 import com.menta.bff.application.usecase.ReorderVirtualModulesUseCaseImpl;
 import com.menta.bff.application.usecase.RequestPasswordResetUseCase;
@@ -605,5 +612,21 @@ public class UseCaseConfig {
     public GetManagedVirtualLessonUseCase getManagedVirtualLessonUseCase(
             VirtualCourseManagementApiClient courseApiClient) {
         return new GetManagedVirtualLessonUseCaseImpl(courseApiClient);
+    }
+
+    /** The videos of the library (#842): list, rename and delete, always through the Virtual API. */
+    @Bean
+    public ListManagedVideosUseCase listManagedVideosUseCase(VirtualVideoManagementApiClient videoApiClient) {
+        return new ListManagedVideosUseCaseImpl(videoApiClient);
+    }
+
+    @Bean
+    public RenameVideoUseCase renameVideoUseCase(VirtualVideoManagementApiClient videoApiClient) {
+        return new RenameVideoUseCaseImpl(videoApiClient);
+    }
+
+    @Bean
+    public DeleteVideoUseCase deleteVideoUseCase(VirtualVideoManagementApiClient videoApiClient) {
+        return new DeleteVideoUseCaseImpl(videoApiClient);
     }
 }
