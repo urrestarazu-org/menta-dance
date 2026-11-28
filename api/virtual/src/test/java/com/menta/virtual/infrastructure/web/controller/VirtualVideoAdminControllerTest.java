@@ -18,21 +18,29 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.menta.virtual.application.dto.LibraryVideo;
 import com.menta.virtual.application.dto.LibraryVideoOrder;
 import com.menta.virtual.application.dto.LibraryVideoStatus;
+import com.menta.virtual.application.dto.LibraryVideoStreamView;
 import com.menta.virtual.application.dto.ManagedVideo;
 import com.menta.virtual.application.dto.ManagedVideoPage;
 import com.menta.virtual.application.dto.VideoLessonUsage;
 import com.menta.virtual.application.dto.VideoLibraryQuery;
 import com.menta.virtual.application.exception.VideoInUseException;
+import com.menta.virtual.application.exception.VideoNotPlayableException;
+import com.menta.virtual.application.exception.VideoNotPlayableException.Reason;
 import com.menta.virtual.application.port.in.DeleteLibraryVideoUseCase;
+import com.menta.virtual.application.port.in.GetLibraryVideoStreamUseCase;
 import com.menta.virtual.application.port.in.ListLibraryVideosUseCase;
 import com.menta.virtual.application.port.in.RenameLibraryVideoUseCase;
 import com.menta.virtual.domain.exception.VideoLibraryUnavailableException;
 import com.menta.virtual.domain.exception.VideoNotFoundException;
 import com.menta.virtual.domain.exception.VideoNotOwnedException;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -48,6 +56,7 @@ class VirtualVideoAdminControllerTest {
     private ListLibraryVideosUseCase useCase;
     private RenameLibraryVideoUseCase renameUseCase;
     private DeleteLibraryVideoUseCase deleteUseCase;
+    private GetLibraryVideoStreamUseCase streamUseCase;
     private MockMvc mockMvc;
 
     @BeforeEach
@@ -55,8 +64,9 @@ class VirtualVideoAdminControllerTest {
         useCase = mock(ListLibraryVideosUseCase.class);
         renameUseCase = mock(RenameLibraryVideoUseCase.class);
         deleteUseCase = mock(DeleteLibraryVideoUseCase.class);
+        streamUseCase = mock(GetLibraryVideoStreamUseCase.class);
         mockMvc = MockMvcBuilders
-            .standaloneSetup(new VirtualVideoAdminController(useCase, renameUseCase, deleteUseCase))
+            .standaloneSetup(new VirtualVideoAdminController(useCase, renameUseCase, deleteUseCase, streamUseCase))
             .setControllerAdvice(new VirtualRequestExceptionHandler(), new VirtualCourseExceptionHandler())
             .build();
     }
@@ -332,5 +342,109 @@ class VirtualVideoAdminControllerTest {
         mockMvc.perform(delete(ONE).principal(authOf(UUID.randomUUID(), "ADMIN")))
             .andExpect(status().isServiceUnavailable())
             .andExpect(jsonPath("$.code").value("VIDEO_LIBRARY_UNAVAILABLE"));
+    }
+
+    // --- preview stream (#864) ---------------------------------------------
+
+    private static final String STREAM_URL = ONE + "/stream";
+    private static final Instant EXPIRES_AT = Instant.parse("2026-11-28T16:00:00Z");
+
+    private static LibraryVideoStreamView streamView() {
+        return new LibraryVideoStreamView(
+            "guid-1", "Tango básico", "https://cdn.example/guid-1/play_720p.mp4?token=T&expires=1", "HLS", EXPIRES_AT
+        );
+    }
+
+    @Test
+    @DisplayName("el admin obtiene la URL firmada con la forma del streaming público")
+    void the_admin_gets_the_signed_url_with_the_shape_of_the_public_stream() throws Exception {
+        when(streamUseCase.get("guid-1")).thenReturn(streamView());
+
+        mockMvc.perform(get(STREAM_URL).principal(authOf(UUID.randomUUID(), "ADMIN")))
+            .andExpect(status().isOk())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+            .andExpect(jsonPath("$.stream.url").value("https://cdn.example/guid-1/play_720p.mp4?token=T&expires=1"))
+            .andExpect(jsonPath("$.stream.type").value("HLS"))
+            // The instant's wire format (ISO-8601) comes from Spring Boot's Jackson setup: the integration test
+            // pins it.
+            .andExpect(jsonPath("$.stream.expiresAt").exists())
+            .andExpect(jsonPath("$.video.videoId").value("guid-1"))
+            .andExpect(jsonPath("$.video.title").value("Tango básico"));
+    }
+
+    @Test
+    @DisplayName("el instructor obtiene la URL de cualquier video, sin pasar su identidad al caso de uso")
+    void the_instructor_gets_the_url_of_any_video_and_no_identity_is_needed() throws Exception {
+        when(streamUseCase.get("guid-1")).thenReturn(streamView());
+
+        mockMvc.perform(get(STREAM_URL).principal(authOf(UUID.randomUUID(), "INSTRUCTOR")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.stream.url").isNotEmpty());
+
+        verify(streamUseCase).get("guid-1");
+    }
+
+    @Test
+    @DisplayName("un video inexistente responde 404 VIDEO_NOT_FOUND")
+    void previewing_an_unknown_video_answers_404_video_not_found() throws Exception {
+        when(streamUseCase.get("guid-1")).thenThrow(new VideoNotFoundException());
+
+        mockMvc.perform(get(STREAM_URL).principal(authOf(UUID.randomUUID(), "ADMIN")))
+            .andExpect(status().isNotFound())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.code").value("VIDEO_NOT_FOUND"));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @EnumSource(Reason.class)
+    @DisplayName("un video que no se puede reproducir responde 409 VIDEO_NOT_PLAYABLE con el motivo en español")
+    void previewing_a_video_that_cannot_play_answers_409_video_not_playable_with_a_plain_reason(Reason reason)
+        throws Exception {
+        when(streamUseCase.get("guid-1")).thenThrow(new VideoNotPlayableException(reason));
+
+        mockMvc.perform(get(STREAM_URL).principal(authOf(UUID.randomUUID(), "ADMIN")))
+            .andExpect(status().isConflict())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.code").value("VIDEO_NOT_PLAYABLE"))
+            .andExpect(jsonPath("$.status").value(409))
+            .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.startsWith("El video ")))
+            .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.not(
+                org.hamcrest.Matchers.containsString(reason.name()))));
+    }
+
+    @Test
+    @DisplayName("cada motivo de no reproducción tiene un texto distinto")
+    void every_reason_has_its_own_detail() throws Exception {
+        java.util.Set<String> details = new java.util.HashSet<>();
+        for (Reason reason : Reason.values()) {
+            doThrow(new VideoNotPlayableException(reason)).when(streamUseCase).get("guid-1");
+            String body = mockMvc.perform(get(STREAM_URL).principal(authOf(UUID.randomUUID(), "ADMIN")))
+                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+            details.add(body);
+        }
+        assertThat(details).hasSameSizeAs(Reason.values());
+    }
+
+    @Test
+    @DisplayName("una biblioteca caída responde 503 sin filtrar el motivo")
+    void previewing_with_an_unavailable_library_answers_503_without_leaking_the_reason() throws Exception {
+        when(streamUseCase.get("guid-1"))
+            .thenThrow(new VideoLibraryUnavailableException("Bunny Stream library find failed: status 401"));
+
+        mockMvc.perform(get(STREAM_URL).principal(authOf(UUID.randomUUID(), "ADMIN")))
+            .andExpect(status().isServiceUnavailable())
+            .andExpect(jsonPath("$.code").value("VIDEO_LIBRARY_UNAVAILABLE"))
+            .andExpect(jsonPath("$.detail")
+                .value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("401"))));
+    }
+
+    @Test
+    @DisplayName("un id inválido responde 400 INVALID_REQUEST")
+    void previewing_with_an_invalid_id_answers_400_invalid_request() throws Exception {
+        when(streamUseCase.get("a..b")).thenThrow(new IllegalArgumentException("id"));
+
+        mockMvc.perform(get(URL + "/a..b/stream").principal(authOf(UUID.randomUUID(), "ADMIN")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
     }
 }

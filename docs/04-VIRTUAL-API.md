@@ -19,6 +19,7 @@ DELETE /api/v1/admin/virtual/lessons/{lessonId}
 GET  /api/v1/admin/virtual/videos
 PUT  /api/v1/admin/virtual/videos/{videoId}
 DELETE /api/v1/admin/virtual/videos/{videoId}
+GET  /api/v1/admin/virtual/videos/{videoId}/stream
 GET  /api/v1/virtual/lessons/{lessonId}
 GET  /api/v1/virtual/lessons/{lessonId}/stream
 GET  /api/v1/virtual/materials/{materialId}
@@ -128,12 +129,13 @@ no borra nada y no escribe auditoría; las referencias históricas también cuen
 última comprobación, después de `COURSE_HAS_PROGRESS`. Un pago de suscripción virtual cita
 el plan y no el curso, así que lo cubre la consulta de planes y suscripciones.
 
-## Biblioteca de videos (#840 y #841, ADR-0049)
+## Biblioteca de videos (#840, #841 y #864, ADR-0049)
 
 `GET /api/v1/admin/virtual/videos?page=&size=&search=&orderBy=` lista los videos de la biblioteca de
 Bunny Stream con las lecciones que los usan. Lo pueden llamar `ADMIN` e `INSTRUCTOR`. Renombrar
-(`PUT .../videos/{videoId}`) también es de ambos; borrar (`DELETE .../videos/{videoId}`) es sólo de `ADMIN`
-(ver más abajo). Cualquier otro método o ruta del prefijo sigue siendo de `ADMIN`.
+(`PUT .../videos/{videoId}`) y la vista previa (`GET .../videos/{videoId}/stream`, ver más abajo) también son de
+ambos; borrar (`DELETE .../videos/{videoId}`) es sólo de `ADMIN` (ver más abajo). Cualquier otro método o ruta del
+prefijo sigue siendo de `ADMIN`.
 
 - **Paginación:** `page` desde 0 (como `/admin/users`), `size` de 10 a 100 (20 por defecto; fuera de rango
   responde `400`, no se recorta; el mínimo 10 es el de Bunny). La respuesta trae `items`, `page`, `size`,
@@ -167,6 +169,38 @@ Bunny Stream con las lecciones que los usan. Lo pueden llamar `ADMIN` e `INSTRUC
   perfil real. Nunca llega al BFF ni al navegador, ni se imprime en logs o `toString`. Con los perfiles
   `e2e-bunny-net`, `e2e-catalog-content`, `test` e `integration-test` (y con `demo` sin clave) se usa un doble en
   memoria sin red.
+
+### Vista previa de un video (#864)
+
+`GET /api/v1/admin/virtual/videos/{videoId}/stream` devuelve una URL firmada y temporal para que el personal vea un
+video de la biblioteca antes de asignarlo a una lección. Lo pueden llamar `ADMIN` e `INSTRUCTOR`, y sirve para
+**cualquier** video de la biblioteca: no hace falta que una lección lo use ni importa de quién es (desde #861 el
+instructor ve toda la biblioteca, así que no hay comprobación de pertenencia).
+
+- **Respuesta `200`:** `{"stream": {"url", "type", "expiresAt"}, "video": {"videoId", "title"}}`. El bloque `stream`
+  es el del streaming del alumno (`GET /lessons/{lessonId}/stream`): la URL la firma el mismo `BunnyNetSignatureService`
+  (hoy un MP4 con token de la CDN), vence a las **4 horas** como la del alumno (`now` sale del puerto `Clock`, en
+  UTC; `expiresAt` es ISO-8601 con `Z`) y `type` conserva la constante `HLS` por compatibilidad. No lleva
+  `qualities` (es la escalera fija del reproductor del alumno, que una vista previa no usa).
+- **Cuándo se reproduce:** sólo un video que Bunny terminó de procesar (`status: FINISHED`) y que tiene copia MP4
+  (`hasMp4Fallback`, decisión 8 del ADR-0049: el CDN sirve el MP4). Es la misma regla con la que la pantalla de
+  gestión marca si un video se reproduce.
+- **Errores:** `401`/`403` los resuelve `SecurityConfig` (`403 ACCESS_DENIED` para otro rol); `400 INVALID_REQUEST`
+  si el `videoId` no es un identificador simple (letras, dígitos, `-` y `_`, hasta 128, la misma regla que renombrar
+  y borrar); `404 VIDEO_NOT_FOUND` si la biblioteca no lo tiene; `409 VIDEO_NOT_PLAYABLE` si lo tiene pero no se
+  puede reproducir ahora, con un `detail` en palabras simples según el motivo (todavía se procesa, todavía no tiene
+  archivo, falló la subida o el procesamiento, no tiene copia MP4, o un estado que no se reconoce; los clientes
+  discriminan por `code`, no por el texto); `503 VIDEO_LIBRARY_UNAVAILABLE` si Bunny no responde, con los mismos
+  timeouts que el listado. Ningún error incluye lo que dijo Bunny.
+- **La URL no se registra ni se guarda:** lleva el token de la CDN, así que ningún log de la API la imprime (ni el
+  caso de uso, ni el adaptador de firma, que sólo registra `videoId`, host, nombre de archivo y vencimiento) y
+  `LibraryVideoStreamView` / el bloque `stream` de la respuesta ocultan la URL en su `toString`. Hay pruebas que
+  capturan la salida del servidor y comprueban que ni la URL ni el token aparecen.
+- **Sin auditoría:** emitir la URL es una lectura y no deja fila en `virtual_video_audit` (renombrar y borrar sí).
+  Decisión de #864.
+- **Sin red en pruebas y en local:** con el doble en memoria de la biblioteca y el firmador local del perfil
+  `e2e-bunny-net` (y de `demo` sin claves) el endpoint funciona sin salir a internet: el doble empieza vacío, así que
+  hay que agregarle un video terminado y con MP4 para obtener una URL.
 
 ### Renombrar y borrar (#841)
 

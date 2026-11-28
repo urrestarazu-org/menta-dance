@@ -1,6 +1,7 @@
 package com.menta.virtual.infrastructure.web.controller;
 
 import com.menta.virtual.application.exception.VideoInUseException;
+import com.menta.virtual.application.exception.VideoNotPlayableException;
 import com.menta.virtual.domain.exception.CourseHasProgressException;
 import com.menta.virtual.domain.exception.CourseInUseException;
 import com.menta.virtual.domain.exception.CourseNotDraftException;
@@ -134,6 +135,23 @@ public class VirtualCourseExceptionHandler {
         );
         problem.setProperty("lessons", exception.lessons().stream().map(VideoLessonResponse::from).toList());
         return ResponseEntity.status(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_PROBLEM_JSON).body(problem);
+    }
+
+    /**
+     * The video exists but cannot be previewed yet (#864). The detail says why in plain words, one text per reason;
+     * nothing of the library's own answer is part of it.
+     */
+    @ExceptionHandler(VideoNotPlayableException.class)
+    ResponseEntity<ProblemDetail> videoNotPlayable(VideoNotPlayableException exception) {
+        String detail = switch (exception.reason()) {
+            case PROCESSING -> "El video todavía se está procesando. Probá de nuevo en unos minutos.";
+            case WAITING_FOR_FILE -> "El video todavía no tiene un archivo subido.";
+            case FAILED -> "El video falló al subirse o al procesarse y no se puede reproducir.";
+            case NO_MP4_COPY -> "El video no tiene copia MP4, que es la que sirve el CDN: no se puede reproducir "
+                + "con la configuración actual.";
+            case UNKNOWN_STATE -> "El video está en un estado que no se reconoce y no se puede reproducir ahora.";
+        };
+        return ProblemDetails.response(HttpStatus.CONFLICT, detail, exception.getErrorCode());
     }
 
     /** A query parameter that is not of the expected type, such as {@code page=abc}. */

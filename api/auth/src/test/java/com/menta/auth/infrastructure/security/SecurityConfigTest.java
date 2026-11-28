@@ -336,6 +336,47 @@ class SecurityConfigTest {
             .andExpect(status().isNotFound());
     }
 
+    private static final String VIDEO_PREVIEW_URL = VIDEO_LISTING_URL + "/some-guid/stream";
+
+    /** #864. The preview URL of a video is not public: an anonymous caller gets {@code 401}. */
+    @Test
+    void an_unauthenticated_get_of_the_video_preview_is_rejected() throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get(VIDEO_PREVIEW_URL)).andExpect(status().isUnauthorized());
+    }
+
+    /** #864. ADMIN and INSTRUCTOR reach the (unmapped) dispatcher; the preview applies to any video of the library. */
+    @ParameterizedTest
+    @ValueSource(strings = {"ADMIN", "INSTRUCTOR"})
+    void admin_and_instructor_get_of_the_video_preview_pass_the_security_layer(String role) throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get(VIDEO_PREVIEW_URL).with(user("staff").roles(role)))
+            .andExpect(status().isNotFound());
+    }
+
+    /** #864. Students and reception are not video managers: {@code 403} on the preview. */
+    @ParameterizedTest
+    @ValueSource(strings = {"STUDENT", "RECEPTIONIST"})
+    void other_roles_get_of_the_video_preview_are_forbidden(String role) throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(get(VIDEO_PREVIEW_URL).with(user("other").roles(role)))
+            .andExpect(status().isForbidden());
+    }
+
+    /** #864. Only the GET of the preview is opened to INSTRUCTOR: any other method on that path stays ADMIN-only. */
+    @ParameterizedTest
+    @ValueSource(strings = {"POST", "PUT", "DELETE"})
+    void an_instructor_other_methods_on_the_video_preview_path_are_forbidden(String method) throws Exception {
+        MockMvc mockMvc = buildSecurityFilterChainMockMvc();
+
+        mockMvc.perform(request(HttpMethod.valueOf(method), VIDEO_PREVIEW_URL)
+                .with(user("teacher").roles("INSTRUCTOR")))
+            .andExpect(status().isForbidden());
+    }
+
     /** #841. The rename is not public: an anonymous caller gets {@code 401}. */
     @Test
     void an_unauthenticated_rename_of_a_video_is_rejected() throws Exception {

@@ -11,6 +11,7 @@ import com.menta.virtual.application.port.in.DeleteVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.DeleteVirtualLessonUseCase;
 import com.menta.virtual.application.port.in.GetCourseProgressUseCase;
 import com.menta.virtual.application.port.in.GetLessonProgressUseCase;
+import com.menta.virtual.application.port.in.GetLibraryVideoStreamUseCase;
 import com.menta.virtual.application.port.in.GetPublicLessonStreamUseCase;
 import com.menta.virtual.application.port.in.GetPublicLessonUseCase;
 import com.menta.virtual.application.port.in.GetVirtualCourseAdminDetailUseCase;
@@ -45,6 +46,7 @@ import com.menta.virtual.application.usecase.DeleteVirtualCourseUseCaseImpl;
 import com.menta.virtual.application.usecase.DeleteVirtualLessonUseCaseImpl;
 import com.menta.virtual.application.usecase.GetCourseProgressUseCaseImpl;
 import com.menta.virtual.application.usecase.GetLessonProgressUseCaseImpl;
+import com.menta.virtual.application.usecase.GetLibraryVideoStreamUseCaseImpl;
 import com.menta.virtual.application.usecase.GetPublicLessonStreamUseCaseImpl;
 import com.menta.virtual.application.usecase.GetPublicLessonUseCaseImpl;
 import com.menta.virtual.application.usecase.GetVirtualCourseAdminDetailUseCaseImpl;
@@ -265,6 +267,17 @@ public class VirtualConfiguration {
         return new DeleteLibraryVideoUseCaseImpl(
             videoLibraryPort, courseRepository, moduleRepository, lessonRepository, videoAuditRepository
         );
+    }
+
+    /**
+     * ADR-0049 / #864. A plain read (one library call, one local signature), so it skips the transactional
+     * decorators; it reuses the same signer and clock as the student stream.
+     */
+    @Bean
+    public GetLibraryVideoStreamUseCase getLibraryVideoStreamUseCase(
+        VideoLibraryPort videoLibraryPort, BunnyNetSignatureService bunnyNetSignatureService, Clock clock
+    ) {
+        return new GetLibraryVideoStreamUseCaseImpl(videoLibraryPort, bunnyNetSignatureService, clock);
     }
 
     private static void failClosedIfProductionLike(Environment environment) {
