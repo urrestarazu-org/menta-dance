@@ -233,7 +233,7 @@ Sin sesión, el navegador va a `/login`; con sesión pero sin el rol, recibe un 
 | `/gestion/cursos-presenciales/**` | `ADMIN`, `INSTRUCTOR` (#368; la API limita al instructor a sus cursos) |
 | `/gestion/cursos-virtuales/**` | `ADMIN`, `INSTRUCTOR` (#367; la API limita al instructor a sus cursos) |
 | `/gestion/videos/*/borrar` | `ADMIN` (#842; borrar videos es solo del administrador, el instructor recibe 403 sin que se llame a la API) |
-| `/gestion/videos/**` | `ADMIN`, `INSTRUCTOR` (#842; la API limita al instructor a los videos de sus lecciones) |
+| `/gestion/videos/**` | `ADMIN`, `INSTRUCTOR` (#842; la API le muestra al instructor toda la biblioteca, pero solo con las lecciones de sus propios cursos, #861) |
 | `/gestion/recepcion/**` | `RECEPTIONIST`, `ADMIN` |
 | `/gestion/billing/**`, `/gestion/dispositivos/**`, `/gestion/usuarios/**` | `ADMIN` |
 | Cualquier otra ruta bajo `/gestion/**` | `ADMIN` (cierra por defecto: un prefijo no previsto no queda abierto al resto del personal) |
@@ -772,7 +772,8 @@ cursos), adaptador `VirtualVideoManagementApiAdapter`, casos de uso `ListManaged
   ("Videos (N en total)"), columnas vista previa, título, estado, duración, lecciones que lo usan y acciones, y paginación
   como la de usuarios (los enlaces conservan `q`). `q` se recorta a 100 caracteres; una `page` que no es número responde
   400. El administrador ve la biblioteca entera y los `videoId` que usan lecciones y la biblioteca ya no tiene; el
-  instructor, los videos de sus lecciones: el BFF no filtra, muestra lo que devuelve la API.
+  instructor también ve la biblioteca entera (#861), pero solo con las lecciones de sus propios cursos: el BFF no
+  filtra, muestra lo que devuelve la API.
 - **Estado, siempre texto** (`VideoRow`), con la etiqueta de color (`dotBadge`) solo como refuerzo: "Con MP4"; "Sin MP4" más
   "No se va a reproducir con la configuración actual del CDN."; "Procesando" (`UPLOADED`, `PROCESSING`, `TRANSCODING`,
   `JIT_*`); "Con error" (`ERROR`, `UPLOAD_FAILED`); "Ya no existe" (`missingInLibrary`); "Sin dato" (estado que el BFF no

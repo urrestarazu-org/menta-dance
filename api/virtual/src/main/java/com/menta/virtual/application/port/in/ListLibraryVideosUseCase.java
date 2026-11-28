@@ -11,9 +11,10 @@ public interface ListLibraryVideosUseCase {
     int MAX_PAGE_SIZE = 100;
 
     /**
-     * Lists the videos for an admin, and only the videos used by lessons of the actor's own courses otherwise.
-     * The admin gets everything: the whole library plus the video ids that lessons of any course use and the
-     * library no longer has, flagged as missing. Ownership comes from the courses, never from the library.
+     * Lists the whole library, flagging as missing the video ids that lessons use and the library no longer has.
+     * What differs by role is the lessons attached to each video: an admin gets those of any course, anyone else
+     * only those of the actor's own courses (a video used only by someone else's lessons has none). Ownership
+     * comes from the courses, never from the library.
      *
      * @throws IllegalArgumentException if the page size exceeds {@value #MAX_PAGE_SIZE}
      * @throws com.menta.virtual.domain.exception.VideoLibraryUnavailableException if the library cannot answer

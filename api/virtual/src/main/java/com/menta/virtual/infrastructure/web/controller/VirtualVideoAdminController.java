@@ -26,8 +26,9 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * HTTP adapter for the video library management (ADR-0049): the listing (#840) and the rename and delete (#841).
  * {@code SecurityConfig} grants the listing and the rename to ADMIN and INSTRUCTOR and the delete to ADMIN only;
- * which videos each one sees and may rename is decided by the use cases (an instructor only has the videos used by
- * lessons of their own courses). The library key never appears in a request or a response.
+ * which lessons each one sees on a video and which videos may be renamed is decided by the use cases (an instructor
+ * lists the whole library but only sees the lessons of their own courses, and renames only the videos those use).
+ * The library key never appears in a request or a response.
  */
 @RestController
 @RequestMapping("/api/v1/admin/virtual/videos")

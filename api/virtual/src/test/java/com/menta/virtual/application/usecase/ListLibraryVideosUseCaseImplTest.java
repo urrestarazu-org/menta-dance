@@ -254,7 +254,7 @@ class ListLibraryVideosUseCaseImplTest {
     }
 
     @Test
-    void the_instructor_only_sees_the_videos_used_by_lessons_of_their_own_courses() {
+    void the_instructor_sees_the_whole_library_but_only_their_own_lessons_in_each_video() {
         seedInstructor("Tango", "mine-1", "mine-2");
         when(library.list(any())).thenReturn(
             libraryPage(0, 1000, 3, video("other", "Ajeno"), video("mine-2", "Dos"), video("mine-1", "Uno"))
@@ -262,12 +262,46 @@ class ListLibraryVideosUseCaseImplTest {
 
         ManagedVideoPage page = useCase.list(query(0, 20, null), instructorId, false);
 
-        assertThat(page.items()).extracting(ManagedVideo::videoId).containsExactly("mine-2", "mine-1");
-        assertThat(page.totalItems()).isEqualTo(2);
-        assertThat(page.items().get(0).lessons()).extracting(VideoLessonUsage::lessonTitle)
+        assertThat(page.items()).extracting(ManagedVideo::videoId).containsExactly("other", "mine-2", "mine-1");
+        assertThat(page.totalItems()).isEqualTo(3);
+        assertThat(page.items().get(0).lessons()).isEmpty();
+        assertThat(page.items().get(1).lessons()).extracting(VideoLessonUsage::lessonTitle)
             .containsExactly("Lección 1");
+        assertThat(page.items().get(2).lessons()).extracting(VideoLessonUsage::lessonTitle)
+            .containsExactly("Lección 0");
         verify(lessonRepository, never()).findAllWithVideo();
         verify(courseRepository, never()).findAll();
+    }
+
+    @Test
+    void the_instructor_sees_a_library_video_that_no_lesson_uses() {
+        seedInstructor("Tango", "mine");
+        when(library.list(any())).thenReturn(libraryPage(0, 1000, 2, video("free", "Suelto"), video("mine", "Mío")));
+
+        ManagedVideoPage page = useCase.list(query(0, 20, null), instructorId, false);
+
+        assertThat(page.items()).extracting(ManagedVideo::videoId).containsExactly("free", "mine");
+        assertThat(page.items().get(0).lessons()).isEmpty();
+        assertThat(page.items().get(0).missingInLibrary()).isFalse();
+    }
+
+    @Test
+    void a_video_used_only_by_another_instructor_appears_without_lessons_and_leaks_no_title() {
+        seedInstructor("Tango", "mine");
+        when(library.list(any())).thenReturn(
+            libraryPage(0, 1000, 2, video("theirs", "Del otro"), video("mine", "Mío"))
+        );
+
+        ManagedVideoPage page = useCase.list(query(0, 20, null), instructorId, false);
+
+        ManagedVideo theirs = page.items().get(0);
+        assertThat(theirs.videoId()).isEqualTo("theirs");
+        assertThat(theirs.lessons()).isEmpty();
+        assertThat(page.items()).flatExtracting(ManagedVideo::lessons)
+            .extracting(VideoLessonUsage::courseTitle).containsOnly("Tango");
+        verify(lessonRepository, never()).findAllWithVideo();
+        verify(courseRepository, never()).findByIds(any());
+        verify(moduleRepository, never()).findByIds(any());
     }
 
     @Test
@@ -284,33 +318,46 @@ class ListLibraryVideosUseCaseImplTest {
     @Test
     void a_lesson_pointing_at_a_video_that_is_not_in_the_library_is_flagged_not_dropped() {
         seedInstructor("Tango", "gone", "here");
+        when(library.list(any())).thenReturn(libraryPage(0, 1000, 2, video("here", "Acá"), video("free", "Suelto")));
+
+        ManagedVideoPage page = useCase.list(query(0, 20, null), instructorId, false);
+
+        assertThat(page.items()).extracting(ManagedVideo::videoId).containsExactly("here", "free", "gone");
+        ManagedVideo missing = page.items().get(2);
+        assertThat(missing.missingInLibrary()).isTrue();
+        assertThat(missing.video()).isNull();
+        assertThat(missing.lessons()).extracting(VideoLessonUsage::lessonTitle).containsExactly("Lección 0");
+        assertThat(page.totalItems()).isEqualTo(3);
+    }
+
+    @Test
+    void a_video_missing_from_the_library_is_only_reported_for_the_own_lessons() {
+        seedInstructor("Tango", "here");
         when(library.list(any())).thenReturn(libraryPage(0, 1000, 1, video("here", "Acá")));
 
         ManagedVideoPage page = useCase.list(query(0, 20, null), instructorId, false);
 
-        assertThat(page.items()).extracting(ManagedVideo::videoId).containsExactly("here", "gone");
-        ManagedVideo missing = page.items().get(1);
-        assertThat(missing.missingInLibrary()).isTrue();
-        assertThat(missing.video()).isNull();
-        assertThat(missing.lessons()).extracting(VideoLessonUsage::lessonTitle).containsExactly("Lección 0");
-        assertThat(page.totalItems()).isEqualTo(2);
+        assertThat(page.items()).extracting(ManagedVideo::videoId).containsExactly("here");
+        assertThat(page.items()).noneMatch(ManagedVideo::missingInLibrary);
+        verify(lessonRepository, never()).findAllWithVideo();
     }
 
     @Test
-    void a_search_does_not_flag_the_own_videos_that_merely_do_not_match() {
+    void a_search_lists_the_matching_library_videos_without_flagging_the_own_ones_that_do_not_match() {
         seedInstructor("Tango", "a", "b");
-        when(library.list(any())).thenReturn(libraryPage(0, 1000, 1, video("a", "Salsa")));
+        when(library.list(any())).thenReturn(libraryPage(0, 1000, 2, video("a", "Salsa"), video("c", "Salsa 2")));
 
         ManagedVideoPage page = useCase.list(query(0, 20, "salsa"), instructorId, false);
 
-        assertThat(page.items()).extracting(ManagedVideo::videoId).containsExactly("a");
-        assertThat(page.items().get(0).missingInLibrary()).isFalse();
+        assertThat(page.items()).extracting(ManagedVideo::videoId).containsExactly("a", "c");
+        assertThat(page.items()).noneMatch(ManagedVideo::missingInLibrary);
+        assertThat(page.items().get(1).lessons()).isEmpty();
         verify(library).list(new VideoLibraryQuery(0, 1000, "salsa", LibraryVideoOrder.DATE));
     }
 
     @Test
     void the_instructor_listing_passes_the_order_through_and_pages_in_memory() {
-        seedInstructor("Tango", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12");
+        seedInstructor("Tango", "v1");
         List<LibraryVideo> all = new ArrayList<>();
         for (int i = 1; i <= 12; i++) {
             all.add(video("v" + i, "T" + i));
@@ -321,6 +368,7 @@ class ListLibraryVideosUseCaseImplTest {
         ManagedVideoPage page = useCase.list(second, instructorId, false);
 
         assertThat(page.items()).extracting(ManagedVideo::videoId).containsExactly("v11", "v12");
+        assertThat(page.items()).allMatch(item -> item.lessons().isEmpty());
         assertThat(page.page()).isEqualTo(1);
         assertThat(page.size()).isEqualTo(10);
         assertThat(page.totalItems()).isEqualTo(12);
@@ -339,52 +387,56 @@ class ListLibraryVideosUseCaseImplTest {
     }
 
     @Test
-    void an_instructor_without_videos_gets_an_empty_page_without_asking_the_library() {
+    void an_instructor_without_courses_still_sees_the_whole_library_without_lessons() {
         when(courseRepository.findByProfessorId(instructorId)).thenReturn(List.of());
+        when(library.list(any())).thenReturn(libraryPage(0, 1000, 2, video("v-1", "Uno"), video("v-2", "Dos")));
 
         ManagedVideoPage page = useCase.list(query(0, 20, null), instructorId, false);
 
-        assertThat(page.items()).isEmpty();
-        assertThat(page.totalItems()).isZero();
-        verifyNoInteractions(library);
+        assertThat(page.items()).extracting(ManagedVideo::videoId).containsExactly("v-1", "v-2");
+        assertThat(page.items()).allMatch(item -> item.lessons().isEmpty());
+        assertThat(page.totalItems()).isEqualTo(2);
+        verifyNoInteractions(moduleRepository, lessonRepository);
     }
 
     @Test
-    void lessons_without_a_video_do_not_count_as_used_videos() {
+    void lessons_without_a_video_do_not_count_as_used_videos_but_the_library_is_still_listed() {
         VirtualCourse course = course(instructorId, "Tango");
         VirtualModule module = VirtualModule.create(course.getId(), "M", 0);
         VirtualLesson stub = VirtualLesson.create(module.getId(), course.getId(), "Sin video", "d", null, 0, false, 0);
         when(courseRepository.findByProfessorId(instructorId)).thenReturn(List.of(course));
         when(moduleRepository.findByCourseId(course.getId())).thenReturn(List.of(module));
         when(lessonRepository.findByCourseId(course.getId())).thenReturn(List.of(stub));
+        when(library.list(any())).thenReturn(libraryPage(0, 1000, 1, video("v-1", "Uno")));
 
         ManagedVideoPage page = useCase.list(query(0, 20, null), instructorId, false);
 
-        assertThat(page.items()).isEmpty();
-        verifyNoInteractions(library);
+        assertThat(page.items()).extracting(ManagedVideo::videoId).containsExactly("v-1");
+        assertThat(page.items().get(0).lessons()).isEmpty();
     }
 
     @Test
-    void the_instructor_listing_walks_the_library_pages_until_every_own_video_is_found() {
-        seedInstructor("Tango", "a", "z");
+    void the_instructor_listing_walks_every_library_page_like_the_admin() {
+        seedInstructor("Tango", "a");
         List<LibraryVideo> firstChunk = new ArrayList<>();
         firstChunk.add(video("a", "A"));
         for (int i = 0; i < 999; i++) {
             firstChunk.add(video("filler-" + i, "F"));
         }
         when(library.list(new VideoLibraryQuery(0, 1000, null, LibraryVideoOrder.DATE)))
-            .thenReturn(new LibraryVideoPage(firstChunk, 0, 1000, 1500));
+            .thenReturn(new LibraryVideoPage(firstChunk, 0, 1000, 1001));
         when(library.list(new VideoLibraryQuery(1, 1000, null, LibraryVideoOrder.DATE)))
-            .thenReturn(libraryPage(1, 1000, 1500, video("z", "Z")));
+            .thenReturn(libraryPage(1, 1000, 1001, video("z", "Z")));
 
-        ManagedVideoPage page = useCase.list(query(0, 20, null), instructorId, false);
+        ManagedVideoPage page = useCase.list(query(100, 20, null), instructorId, false);
 
-        assertThat(page.items()).extracting(ManagedVideo::videoId).containsExactly("a", "z");
+        assertThat(page.totalItems()).isEqualTo(1001);
+        verify(library, org.mockito.Mockito.times(2)).list(any());
         verify(library, never()).list(new VideoLibraryQuery(2, 1000, null, LibraryVideoOrder.DATE));
     }
 
     @Test
-    void a_library_too_large_to_walk_is_reported_as_unavailable_instead_of_guessing_what_is_missing() {
+    void a_library_too_large_to_walk_is_reported_as_unavailable_instead_of_guessing() {
         seedInstructor("Tango", "never-found");
         List<LibraryVideo> chunk = new ArrayList<>();
         for (int i = 0; i < 1000; i++) {
