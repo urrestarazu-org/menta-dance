@@ -181,6 +181,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *   - PUT /api/v1/admin/virtual/videos/{videoId} → ADMIN or INSTRUCTOR
  *     (#840 / #841, ADR-0049: the listing and the rename. Which videos an INSTRUCTOR sees or may rename is decided
  *     in the use case.)
+ *   - GET /api/v1/admin/virtual/videos/{videoId}/stream → ADMIN or INSTRUCTOR (#864: the signed preview URL of any
+ *     video of the library; no ownership check, since an instructor sees the whole library since #861.)
  *   - DELETE /api/v1/admin/virtual/videos/{videoId} → ADMIN only (#841, decision of #832: an instructor never
  *     deletes a video; the rest of the prefix stays ADMIN-only via /api/v1/admin/**.)
  *   - PUT /api/v1/billing/physical/courses/{courseId}/pricing → ADMIN or
@@ -389,6 +391,10 @@ public class SecurityConfig {
                 // under that generic /api/v1/admin/** ADMIN rule.
                 .requestMatchers(HttpMethod.GET, "/api/v1/admin/virtual/videos").hasAnyRole("ADMIN", "INSTRUCTOR")
                 .requestMatchers(HttpMethod.PUT, "/api/v1/admin/virtual/videos/*").hasAnyRole("ADMIN", "INSTRUCTOR")
+                // #864: the preview URL of any video of the library (GET only), for both roles; nothing of the
+                // lessons or their owners takes part, so there is no ownership check behind it.
+                .requestMatchers(HttpMethod.GET, "/api/v1/admin/virtual/videos/*/stream")
+                    .hasAnyRole("ADMIN", "INSTRUCTOR")
                 .requestMatchers(HttpMethod.DELETE, "/api/v1/admin/virtual/videos/*").hasRole("ADMIN")
                 // US-BILLING-009, #37: PUT restricted to ADMIN/INSTRUCTOR; the GET rule
                 // above already covers this same path for reads (per-HTTP-method matching).

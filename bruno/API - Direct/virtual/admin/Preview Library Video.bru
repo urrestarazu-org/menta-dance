@@ -1,0 +1,49 @@
+meta {
+  name: Preview Library Video
+  type: http
+  seq: 17
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admin/virtual/videos/{{virtualVideoId}}/stream
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  #864, ADR-0049. Returns a short-lived signed playback URL for ANY video of the Bunny Stream library, so staff can
+  watch it before assigning it to a lesson. ADMIN and INSTRUCTOR may both call it: no lesson has to use the video
+  and it does not matter who owns the lessons that do (since #861 an INSTRUCTOR sees the whole library).
+  {{virtualVideoId}} is the guid of a video: run "List Library Videos" first (it stores the first one) or set it.
+
+  The signed URL carries the CDN token: do not paste it in tickets or logs (this API never logs it, and issuing it
+  writes no audit row). It is signed like the student stream (GET /api/v1/virtual/lessons/{lessonId}/stream) and
+  expires after the same 4 hours (stream.expiresAt, ISO-8601 UTC). stream.type keeps the constant "HLS" for contract
+  compatibility; today the URL points to an MP4. Only a video the library finished (status FINISHED) AND that has
+  an MP4 copy (hasMp4Fallback) plays.
+
+  Against a local API (demo / e2e profiles, or without APP_CDN_BUNNYNET_APIKEY / SECURITYKEY) the library is the
+  in-memory double and starts empty, so this answers 404 until a video exists, and the URL is the local placeholder
+  shape. Against a real library use a TEST library, never production (see the ADR-0049 follow-up notes).
+
+  Success contract: 200 with LibraryVideoStreamResponse: { stream: { url, type, expiresAt }, video: { videoId, title } }.
+  Error contract:
+    400 INVALID_REQUEST           → videoId is not a plain identifier
+    401 AUTHENTICATION_REQUIRED   → no token
+    403 ACCESS_DENIED             → neither ADMIN nor INSTRUCTOR
+    404 VIDEO_NOT_FOUND           → the library has no such video
+    409 VIDEO_NOT_PLAYABLE        → still processing, no file yet, failed, no MP4 copy or unknown state (see detail)
+    503 VIDEO_LIBRARY_UNAVAILABLE → Bunny did not answer (timeout, error or rejected key)
+}
+
+assert {
+  res.status: eq 200
+  res.body.stream.url: isString
+  res.body.stream.type: eq HLS
+  res.body.stream.expiresAt: isString
+  res.body.video.videoId: eq {{virtualVideoId}}
+}

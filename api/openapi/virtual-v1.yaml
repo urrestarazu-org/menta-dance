@@ -33,7 +33,8 @@ info:
     ## Autorización
 
     `/api/v1/admin/virtual/courses/**`, `/api/v1/admin/virtual/modules/**`,
-    `/api/v1/admin/virtual/lessons/**`, `GET /api/v1/admin/virtual/videos` y
+    `/api/v1/admin/virtual/lessons/**`, `GET /api/v1/admin/virtual/videos`,
+    `GET /api/v1/admin/virtual/videos/{videoId}/stream` y
     `PUT /api/v1/admin/virtual/videos/{videoId}` aceptan tanto `ADMIN` como
     `INSTRUCTOR` (rol interno de `PROFESOR`); `DELETE /api/v1/admin/virtual/videos/{videoId}` es sólo de `ADMIN`
     (un `INSTRUCTOR` recibe siempre `403`) — la coincidencia de rol se
@@ -993,6 +994,97 @@ paths:
         '503':
           $ref: '#/components/responses/VideoLibraryUnavailable'
 
+  /api/v1/admin/virtual/videos/{videoId}/stream:
+    get:
+      tags: [Biblioteca de videos]
+      summary: Emitir una URL temporal de reproducción de un video de la biblioteca (vista previa)
+      description: |
+        Para que el personal vea un video antes de asignarlo a una lección (ADR-0049, #864). Devuelve una URL
+        firmada con el mismo servicio de firma y la misma vida útil (4 horas) que el streaming del alumno
+        (`GET /api/v1/virtual/lessons/{lessonId}/stream`); hoy apunta a un archivo MP4.
+
+        - **ADMIN** y **PROFESOR** pueden previsualizar **cualquier** video de la biblioteca: no hace falta que
+          una lección lo use ni importa de quién es (desde #861 el PROFESOR ve toda la biblioteca).
+        - Un `videoId` que no es un identificador simple (letras, dígitos, `-` y `_`, hasta 128) responde
+          `400 INVALID_REQUEST`. Un video que la biblioteca no tiene responde `404 VIDEO_NOT_FOUND`.
+        - Sólo se reproduce un video que la biblioteca terminó de procesar (`status: FINISHED`) **y** que tiene
+          copia MP4 (`hasMp4Fallback`, decisión 8 del ADR-0049). Si no, responde `409 VIDEO_NOT_PLAYABLE`
+          y el `detail` dice en palabras simples por qué (procesando, sin archivo, con error, sin MP4 o estado
+          desconocido); nunca incluye nada de lo que dijo Bunny. Cuando el motivo es transitorio (procesando) el
+          cliente puede reintentar más tarde.
+        - Si la biblioteca no responde responde `503 VIDEO_LIBRARY_UNAVAILABLE`; el detalle no incluye nada de lo
+          que dijo Bunny.
+        - La URL lleva el token de la CDN: no se registra en logs ni se guarda. Emitirla no deja fila de
+          auditoría (es una lectura; renombrar y borrar sí se auditan).
+      operationId: getVirtualVideoPreviewStream
+      parameters:
+        - $ref: '#/components/parameters/VideoId'
+      responses:
+        '200':
+          description: >-
+            URL firmada temporalmente (Token Authentication de la CDN). Mismo bloque `stream` que el del alumno
+            (`stream.type` conserva el valor constante `HLS` por compatibilidad del contrato), sin `qualities`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryVideoStreamResponse'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/VideoNotFound'
+        '409':
+          description: >-
+            La biblioteca tiene el video pero hoy no se puede reproducir (`VIDEO_NOT_PLAYABLE`). El `detail` explica
+            el motivo; los clientes deben discriminar por `code`, no por el texto.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                procesando:
+                  value:
+                    type: https://menta.dance/problems/video_not_playable
+                    title: Conflict
+                    status: 409
+                    detail: El video todavía se está procesando. Probá de nuevo en unos minutos.
+                    code: VIDEO_NOT_PLAYABLE
+                sin_archivo:
+                  value:
+                    type: https://menta.dance/problems/video_not_playable
+                    title: Conflict
+                    status: 409
+                    detail: El video todavía no tiene un archivo subido.
+                    code: VIDEO_NOT_PLAYABLE
+                con_error:
+                  value:
+                    type: https://menta.dance/problems/video_not_playable
+                    title: Conflict
+                    status: 409
+                    detail: El video falló al subirse o al procesarse y no se puede reproducir.
+                    code: VIDEO_NOT_PLAYABLE
+                sin_mp4:
+                  value:
+                    type: https://menta.dance/problems/video_not_playable
+                    title: Conflict
+                    status: 409
+                    detail: >-
+                      El video no tiene copia MP4, que es la que sirve el CDN: no se puede reproducir con la
+                      configuración actual.
+                    code: VIDEO_NOT_PLAYABLE
+                estado_desconocido:
+                  value:
+                    type: https://menta.dance/problems/video_not_playable
+                    title: Conflict
+                    status: 409
+                    detail: El video está en un estado que no se reconoce y no se puede reproducir ahora.
+                    code: VIDEO_NOT_PLAYABLE
+        '503':
+          $ref: '#/components/responses/VideoLibraryUnavailable'
+
   /api/v1/admin/virtual/lessons/{lessonId}:
     put:
       tags: [Gestión de lecciones]
@@ -1570,6 +1662,35 @@ components:
             title:
               type: string
             duration:
+              type: string
+
+    LibraryVideoStreamResponse:
+      type: object
+      description: >-
+        URL de vista previa de un video de la biblioteca (#864). El bloque `stream` es el del alumno
+        (`PublicLessonStreamResponse`) sin `qualities`; `video` identifica el video en lugar de la lección.
+      required: [stream, video]
+      properties:
+        stream:
+          type: object
+          required: [url, type, expiresAt]
+          properties:
+            url:
+              type: string
+              format: uri
+            type:
+              type: string
+              enum: [HLS]
+            expiresAt:
+              type: string
+              format: date-time
+        video:
+          type: object
+          required: [videoId, title]
+          properties:
+            videoId:
+              type: string
+            title:
               type: string
 
     CreateVirtualCourseRequest:

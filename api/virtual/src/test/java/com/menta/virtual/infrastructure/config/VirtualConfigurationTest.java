@@ -7,6 +7,8 @@ import static org.mockito.Mockito.mock;
 import ch.qos.logback.classic.Level;
 import com.menta.shared.billing.VirtualCourseEntitlementPort;
 import com.menta.shared.billing.VirtualCourseReferencePort;
+import com.menta.virtual.application.dto.LibraryVideo;
+import com.menta.virtual.application.dto.LibraryVideoStatus;
 import com.menta.virtual.application.port.in.CompleteLessonUseCase;
 import com.menta.virtual.application.port.in.CreateVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.CreateVirtualLessonUseCase;
@@ -15,6 +17,7 @@ import com.menta.virtual.application.port.in.DeleteVirtualCourseUseCase;
 import com.menta.virtual.application.port.in.DeleteVirtualLessonUseCase;
 import com.menta.virtual.application.port.in.GetCourseProgressUseCase;
 import com.menta.virtual.application.port.in.GetLessonProgressUseCase;
+import com.menta.virtual.application.port.in.GetLibraryVideoStreamUseCase;
 import com.menta.virtual.application.port.in.GetPublicLessonStreamUseCase;
 import com.menta.virtual.application.port.in.GetPublicLessonUseCase;
 import com.menta.virtual.application.port.in.ListInProgressCoursesUseCase;
@@ -40,6 +43,7 @@ import com.menta.virtual.application.port.out.VirtualVideoAuditRepository;
 import com.menta.virtual.application.usecase.CourseProgressAccessPolicy;
 import com.menta.virtual.application.usecase.GetCourseProgressUseCaseImpl;
 import com.menta.virtual.application.usecase.GetLessonProgressUseCaseImpl;
+import com.menta.virtual.application.usecase.GetLibraryVideoStreamUseCaseImpl;
 import com.menta.virtual.application.usecase.GetPublicLessonStreamUseCaseImpl;
 import com.menta.virtual.application.usecase.GetPublicLessonUseCaseImpl;
 import com.menta.virtual.application.usecase.LessonAccessPolicy;
@@ -66,7 +70,9 @@ import com.menta.virtual.infrastructure.transaction.TransactionalUnpublishVirtua
 import com.menta.virtual.infrastructure.transaction.TransactionalUpdateVirtualCourseUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalUpdateVirtualLessonUseCase;
 import com.menta.virtual.infrastructure.transaction.TransactionalUpdateVirtualModuleUseCase;
+import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Nested;
@@ -243,6 +249,20 @@ class VirtualConfigurationTest {
         assertThat(signatureService).isInstanceOf(TokenAuthBunnyNetSignatureService.class);
         assertThat(signatureService.generateSignedUrl("vid", 1_700_000_000L))
             .startsWith("https://vz-test.b-cdn.net/vid/play_720p.mp4?token=HS256-");
+    }
+
+    /** #864: the preview bean is a plain read: the library, the signer and the clock, no transactional decorator. */
+    @Test
+    void wires_the_get_library_video_stream_use_case_bean_without_a_transactional_decorator() {
+        InMemoryVideoLibrary library = new InMemoryVideoLibrary();
+        library.add(new LibraryVideo("v-1", "Tango", LibraryVideoStatus.FINISHED, 10, null, true, List.of()));
+
+        GetLibraryVideoStreamUseCase useCase = configuration.getLibraryVideoStreamUseCase(
+            library, (videoId, expires) -> "https://cdn/" + videoId + "?expires=" + expires, () -> Instant.EPOCH
+        );
+
+        assertThat(useCase).isInstanceOf(GetLibraryVideoStreamUseCaseImpl.class);
+        assertThat(useCase.get("v-1").streamUrl()).isEqualTo("https://cdn/v-1?expires=14400");
     }
 
     @Test

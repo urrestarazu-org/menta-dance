@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.menta.virtual.application.dto.LibraryVideoOrder;
 import com.menta.virtual.application.dto.LibraryVideoStatus;
 import com.menta.virtual.application.dto.VideoLibraryQuery;
+import com.menta.virtual.application.exception.VideoNotPlayableException;
 import com.menta.virtual.application.port.in.ListLibraryVideosUseCase;
 import com.menta.virtual.application.port.in.RenameLibraryVideoUseCase;
 import com.menta.virtual.domain.model.CourseLevel;
@@ -15,6 +16,7 @@ import com.menta.virtual.infrastructure.web.dto.CreateVirtualLessonRequest;
 import com.menta.virtual.infrastructure.web.dto.CreateVirtualModuleRequest;
 import com.menta.virtual.infrastructure.web.dto.InProgressCourseResponse;
 import com.menta.virtual.infrastructure.web.dto.LessonProgressResponse;
+import com.menta.virtual.infrastructure.web.dto.LibraryVideoStreamResponse;
 import com.menta.virtual.infrastructure.web.dto.PublicCourseDto;
 import com.menta.virtual.infrastructure.web.dto.PublicLessonAccessMetadataDto;
 import com.menta.virtual.infrastructure.web.dto.PublicLessonDetailDto;
@@ -293,6 +295,10 @@ class VirtualOpenApiContractTest {
         // library no longer has is a 204), 409 VIDEO_IN_USE only on the delete, 503 when the library cannot answer.
         expected.put("PUT " + VIDEO, new TreeSet<>(Set.of("200", "400", "401", "403", "404", "503")));
         expected.put("DELETE " + VIDEO, new TreeSet<>(Set.of("204", "400", "401", "403", "409", "503")));
+        // Video preview (#864): 400 from an id that is not plain, 404 VIDEO_NOT_FOUND, 409 VIDEO_NOT_PLAYABLE, 503
+        // when the library cannot answer; 401/403 from SecurityConfig (ADMIN or INSTRUCTOR).
+        expected.put("GET " + VIDEO + "/stream",
+            new TreeSet<>(Set.of("200", "400", "401", "403", "404", "409", "503")));
         // Public reads: the token is optional, so there is no 401; a malformed id collapses into the 404.
         expected.put("GET " + LESSON, new TreeSet<>(Set.of("200", "403", "404")));
         expected.put("GET " + LESSON + "/stream", new TreeSet<>(Set.of("200", "403", "404")));
@@ -445,6 +451,9 @@ class VirtualOpenApiContractTest {
         responses.put("PublicLessonEntitledResponse/navigation/nextLesson",
             new Object[] {PublicLessonSummaryRefDto.class});
         responses.put("PublicLessonEntitledResponse/access", new Object[] {PublicLessonAccessMetadataDto.class});
+        responses.put("LibraryVideoStreamResponse", new Object[] {LibraryVideoStreamResponse.class});
+        responses.put("LibraryVideoStreamResponse/stream", new Object[] {LibraryVideoStreamResponse.StreamBlock.class});
+        responses.put("LibraryVideoStreamResponse/video", new Object[] {LibraryVideoStreamResponse.VideoRef.class});
         responses.put("PublicLessonStreamResponse", new Object[] {PublicLessonStreamResponse.class});
         responses.put("PublicLessonStreamResponse/stream", new Object[] {PublicLessonStreamResponse.StreamBlock.class});
         responses.put("PublicLessonStreamResponse/stream/qualities/[]", new Object[] {PublicStreamQualityDto.class});
@@ -588,6 +597,30 @@ class VirtualOpenApiContractTest {
             "#/components/parameters/VideoPage", "#/components/parameters/VideoPageSize",
             "#/components/parameters/VideoSearch", "#/components/parameters/VideoOrderBy"
         );
+    }
+
+    @Test
+    void the_video_preview_documents_the_stream_of_the_student_player_and_the_not_playable_problem() {
+        Map<String, Object> responses = map(operation("GET " + VIDEO + "/stream"), "responses");
+        assertThat(map(map(map(map(responses, "200"), "content"), "application/json"), "schema").get("$ref"))
+            .isEqualTo("#/components/schemas/LibraryVideoStreamResponse");
+
+        // Same stream block as the student player (minus the qualities ladder, which a preview does not use).
+        Map<String, Object> preview = map(at("LibraryVideoStreamResponse/stream"), "properties");
+        Map<String, Object> student = map(at("PublicLessonStreamResponse/stream"), "properties");
+        assertThat(preview.keySet()).containsExactlyInAnyOrder("url", "type", "expiresAt");
+        assertThat(student.keySet()).containsAll(preview.keySet());
+        preview.forEach((name, definition) -> assertThat(definition).as(name).isEqualTo(student.get(name)));
+
+        Map<String, Object> notPlayable = map(map(map(map(responses, "409"), "content"), "application/problem+json"),
+            "examples");
+        assertThat(notPlayable.values()).extracting(example -> map(example, "value").get("code"))
+            .containsOnly("VIDEO_NOT_PLAYABLE")
+            .hasSize(VideoNotPlayableException.Reason.values().length);
+        assertThat(notPlayable.values()).extracting(example -> map(example, "value").get("status"))
+            .containsOnly(409);
+        assertThat(resolveResponse(map(responses, "404")).toString()).contains("VIDEO_NOT_FOUND");
+        assertThat(resolveResponse(map(responses, "503")).toString()).contains("VIDEO_LIBRARY_UNAVAILABLE");
     }
 
     @Test

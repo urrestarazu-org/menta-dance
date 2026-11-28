@@ -3,8 +3,10 @@ package com.menta.virtual.infrastructure.web.controller;
 import com.menta.virtual.application.dto.LibraryVideoOrder;
 import com.menta.virtual.application.dto.VideoLibraryQuery;
 import com.menta.virtual.application.port.in.DeleteLibraryVideoUseCase;
+import com.menta.virtual.application.port.in.GetLibraryVideoStreamUseCase;
 import com.menta.virtual.application.port.in.ListLibraryVideosUseCase;
 import com.menta.virtual.application.port.in.RenameLibraryVideoUseCase;
+import com.menta.virtual.infrastructure.web.dto.LibraryVideoStreamResponse;
 import com.menta.virtual.infrastructure.web.dto.RenameVirtualVideoRequest;
 import com.menta.virtual.infrastructure.web.dto.VirtualVideoPageResponse;
 import com.menta.virtual.infrastructure.web.dto.VirtualVideoResponse;
@@ -24,8 +26,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * HTTP adapter for the video library management (ADR-0049): the listing (#840) and the rename and delete (#841).
- * {@code SecurityConfig} grants the listing and the rename to ADMIN and INSTRUCTOR and the delete to ADMIN only;
+ * HTTP adapter for the video library management (ADR-0049): the listing (#840), the rename and delete (#841) and the
+ * preview URL (#864). {@code SecurityConfig} grants the listing, the rename and the preview to ADMIN and INSTRUCTOR and
+ * the delete to ADMIN only;
  * which lessons each one sees on a video and which videos may be renamed is decided by the use cases (an instructor
  * lists the whole library but only sees the lessons of their own courses, and renames only the videos those use).
  * The library key never appears in a request or a response.
@@ -39,6 +42,7 @@ public class VirtualVideoAdminController {
     private final ListLibraryVideosUseCase listLibraryVideosUseCase;
     private final RenameLibraryVideoUseCase renameLibraryVideoUseCase;
     private final DeleteLibraryVideoUseCase deleteLibraryVideoUseCase;
+    private final GetLibraryVideoStreamUseCase getLibraryVideoStreamUseCase;
 
     /**
      * Lists the videos, {@code page} zero-based. {@code size} is between 10 and 100, never clamped; {@code orderBy}
@@ -76,6 +80,15 @@ public class VirtualVideoAdminController {
             videoId, UUID.fromString(authentication.getName()), isAdmin(authentication)
         );
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * A signed playback URL to preview a video (#864), ADMIN and INSTRUCTOR. Any video the library has and can play
+     * now, whether or not a lesson uses it. The response carries the CDN token, so it must never be logged.
+     */
+    @GetMapping("/{videoId}/stream")
+    public ResponseEntity<LibraryVideoStreamResponse> stream(@PathVariable String videoId) {
+        return ResponseEntity.ok(LibraryVideoStreamResponse.from(getLibraryVideoStreamUseCase.get(videoId)));
     }
 
     private static boolean isAdmin(Authentication authentication) {

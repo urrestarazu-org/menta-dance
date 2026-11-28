@@ -17,13 +17,18 @@ public final class CapturedLogs extends AppenderBase<ILoggingEvent> implements A
     private final List<ILoggingEvent> events = new CopyOnWriteArrayList<>();
     private final Logger logger;
 
-    private CapturedLogs(Class<?> source) {
-        this.logger = (Logger) LoggerFactory.getLogger(source);
+    private CapturedLogs(String loggerName) {
+        this.logger = (Logger) LoggerFactory.getLogger(loggerName);
     }
 
     /** Starts capturing {@code source}'s logger at DEBUG until {@link #close()}. */
     public static CapturedLogs of(Class<?> source) {
-        CapturedLogs captured = new CapturedLogs(source);
+        return of(source.getName());
+    }
+
+    /** Starts capturing the logger called {@code loggerName} (and, by inheritance, its children) at DEBUG. */
+    public static CapturedLogs of(String loggerName) {
+        CapturedLogs captured = new CapturedLogs(loggerName);
         captured.logger.setLevel(Level.DEBUG);
         captured.start();
         captured.logger.addAppender(captured);

@@ -238,3 +238,40 @@ videos que usa alguna lección propia (si no, `403 VIDEO_NOT_OWNED`); **borrar**
 VIDEO_IN_USE` si alguna lección lo usa). La restricción por instructor del listado (que cada uno vea solo lo suyo)
 queda **diferida**: se retomará más adelante, probablemente junto con la subida de videos y el dueño por colección
 (#844). Hasta entonces, cualquier instructor ve los títulos de toda la biblioteca.
+
+## Nota de seguimiento de #864: vista previa de un video de la biblioteca
+
+Fecha: 2026-11-28. Qué: `GET /api/v1/admin/virtual/videos/{videoId}/stream` (ADMIN e INSTRUCTOR) devuelve una URL
+firmada y temporal de reproducción de cualquier video de la biblioteca. Por qué: el dueño del proyecto pidió poder
+previsualizar los videos desde el listado para decidir cuál va en cada lección; hasta ahora la única forma de ver un
+video era la lección del alumno (`GET /lessons/{lessonId}/stream`), que exige que la lección exista, esté publicada
+y autorizada, así que el personal no podía ver un video todavía no asignado. Lo usa #865 (vista previa en el BFF).
+
+Decisiones:
+
+- **Quién:** ADMIN e INSTRUCTOR, sobre **cualquier** video de la biblioteca, sin mirar lecciones ni dueños: desde #861
+  el instructor ve toda la biblioteca, y la restricción por instructor diferida (decisión 3) no cambia nada acá.
+  `SecurityConfig` abre sólo el `GET` de esa ruta a los dos roles (el resto del prefijo sigue siendo de ADMIN).
+- **Cuándo se reproduce (regla de "reproducible"):** el video existe, la biblioteca lo terminó de procesar
+  (`FINISHED`) **y** tiene copia MP4 (`hasMp4Fallback`), que es lo que sirve el CDN (decisión 8). Es la regla con la
+  que la pantalla de gestión ya marca si un video se reproduce. Si no, `409 VIDEO_NOT_PLAYABLE` con un `detail` en
+  español que dice por qué (procesando, sin archivo, con error, sin MP4 o estado desconocido). Un video que la
+  biblioteca no tiene es `404 VIDEO_NOT_FOUND` y una biblioteca caída es `503 VIDEO_LIBRARY_UNAVAILABLE`; nada de lo
+  que dijo Bunny llega a la respuesta.
+- **Misma firma y misma vida que la del alumno:** `BunnyNetSignatureService` y el mismo TTL de 4 horas
+  (`GetPublicLessonStreamUseCaseImpl.SIGNED_URL_TTL`); el "ahora" sale del puerto `Clock` (ADR-0048). La respuesta
+  reutiliza el bloque `stream` del alumno (`url`, `type` constante `HLS`, `expiresAt`), sin `qualities`, y agrega
+  `video` (`videoId`, `title`) en lugar de `lesson`.
+- **Sin auditoría:** emitir la URL es una lectura y no deja fila en `virtual_video_audit`; renombrar y borrar, que
+  modifican la biblioteca, sí se auditan. Si más adelante hace falta saber quién previsualizó qué, se agrega.
+- **La URL no se registra ni se guarda:** lleva el token de la CDN. Ni el caso de uso ni el adaptador de firma la
+  loguean (éste sólo registra `videoId`, host, archivo y vencimiento), y la vista y el bloque `stream` de la
+  respuesta la ocultan en su `toString`. Hay pruebas que capturan los logs del servidor y comprueban que no aparece.
+  Quien agregue un filtro de logging de cuerpos de respuesta tiene que excluir esta ruta.
+- **Sin red:** el doble en memoria y el firmador local (perfiles `e2e-bunny-net` y `demo` sin claves) alcanzan para
+  probar y para trabajar en local; el adaptador real se prueba contra un servidor HTTP falso.
+
+Sin supuestos nuevos sobre Bunny: usa el mismo `GET /library/{id}/videos/{videoId}` y los mismos campos (`status`,
+`hasMP4Fallback`) de las notas de #840 y #841. Sigue pendiente probar contra una biblioteca de pruebas que un video
+`FINISHED` con `hasMP4Fallback` realmente sirva `play_720p.mp4` con el token (el firmador ya se probó contra el vector
+publicado por Bunny, #751), y que `status` pase a `FINISHED` recién cuando termina la copia MP4.
