@@ -368,6 +368,56 @@ La referencia usa gris claro para textos secundarios y amarillo para advertencia
   administrador con la API y el BFF reales. Las pestañas de gestión restyleadas afectan a **todas** las pantallas de
   gestión: solo se miró esta.
 
+## Videos de la biblioteca (#842)
+
+Pantallas `/gestion/videos` (listado con búsqueda, renombrar y borrar). Sin colores nuevos: los recuadros de la vista
+previa usan pares ya medidos (ver más arriba), y la etiqueta de estado es la de siempre (`dotBadge`).
+
+### Texto (mínimo 4,5:1)
+
+| Par | Razón |
+|---|---|
+| Recuadro neutro "Sin miniatura" `.preview-box-neutral`: `#043F2E` sobre `#EEF2E3` | 10,51 |
+| Recuadro de advertencia `.preview-box-warning`: `#78350F` sobre `#FEF3C7` (reservado para #843; hoy no se usa en #842) | 8,15 |
+| Recuadro "Este video ya no existe en la biblioteca." `.preview-box-danger`: `#9B1C1C` sobre `#FEF2F2` | 7,45 |
+| Estado: "Con MP4" (`badge-success`) / "Sin MP4", "Procesando" (`badge-warning`) / "Con error", "Ya no existe" (`badge-danger`) / "Esperando el archivo", "Sin dato" (`badge-neutral`) | 10,27 / 8,15 / 7,45 / 10,51 |
+| Enlace "Borrar" `text-feedback-error` sobre blanco | 8,15 |
+
+Son los valores de las tablas de #849; no se volvieron a medir con un script para esta pantalla.
+
+### No textual (mínimo 3:1)
+
+El borde punteado de los recuadros es decorativo (cada recuadro se entiende por su texto), igual que el de las tarjetas.
+La imagen de la miniatura no lleva información que no esté en el texto de la fila: `alt=""`.
+
+### Revisión de código
+
+- El estado es siempre texto ("Con MP4", "Sin MP4" con la nota "No se va a reproducir con la configuración actual del CDN.",
+  "Procesando", "Con error", "Ya no existe", "Esperando el archivo", "Sin dato"); el punto de color solo lo refuerza.
+- Un video que ya no existe lleva un aviso de texto en el lugar de la miniatura, el estado "Ya no existe", su
+  identificador en texto y las lecciones que lo usan como enlaces; un video sin miniatura, el texto "Sin miniatura". Ningún
+  recuadro vacío.
+- Tabla con `<caption>`, `<th scope="col">`, título como `<th scope="row">`, contenedor con `role="region"`, `aria-label`
+  y `tabindex="0"` (para el desplazamiento horizontal con teclado). Los enlaces "Renombrar" y "Borrar" llevan el título
+  del video en un texto `sr-only`; los de las lecciones dicen "Curso › Módulo › Lección".
+- Búsqueda con `role="search"`, etiqueta visible y botón; paginación en `<nav aria-label>` con `aria-current` en la página
+  actual y "Anterior"/"Siguiente" deshabilitados con `aria-disabled`. Los avisos usan `role="status"` (éxito) y
+  `role="alert"` (error). El formulario de renombrar usa el resumen de errores y `aria-invalid`/`aria-describedby` de
+  `fragments/components`.
+- Los SVG son decorativos (`aria-hidden`, `focusable="false"`) y ninguno es el único contenido de un enlace o botón.
+- Foco visible: el global `:focus-visible`.
+
+### Qué se verificó y qué no
+
+- **Verificado**: pruebas de integración (MockMvc y WireMock) de que el HTML trae el texto de cada estado, la estructura de
+  la tabla, los enlaces con nombre accesible, el aviso de "ya no existe", el recuadro "Sin miniatura", que solo se renderiza
+  una miniatura `https`, el escape de todo texto de la API, y que no aparece `/api/v1` ni el `detail` de la API.
+- **No verificado**: axe (ni local ni el job `accessibility` de CI, que no recorre `/gestion`), lector de pantalla
+  (VoiceOver, NVDA), orden de tabulación real, zoom al 200 % y reflujo a 320 px, otros navegadores, alto contraste, que
+  los recuadros nuevos se vean bien (no se miró la pantalla renderizada ni el CSS compilado de `.preview-*`), el contraste
+  medido con script sobre este CSS (se tomaron los valores de #849), y el recorrido manual como administrador con la API y el
+  BFF reales.
+
 ## Procedimiento de prueba manual
 
 Hacerlo antes de cada release que cambie plantillas o CSS.

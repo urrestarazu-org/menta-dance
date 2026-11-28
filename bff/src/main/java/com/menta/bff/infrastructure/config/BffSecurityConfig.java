@@ -152,6 +152,11 @@ public class BffSecurityConfig {
                         // Virtual courses (#367): the administrator sees all of them, an instructor the own ones
                         // (the API tells them apart). Without this rule the fail-closed one would refuse them.
                         .requestMatchers("/gestion/cursos-virtuales/**").hasAnyRole("ADMIN", "INSTRUCTOR")
+                        // Videos of the library (#842): the administrator sees all of them, an instructor those of
+                        // the own courses (the API tells them apart). Deleting is administrator only, so an
+                        // instructor gets a 403 before any controller or API call; the rule comes first.
+                        .requestMatchers("/gestion/videos/*/borrar").hasRole("ADMIN")
+                        .requestMatchers("/gestion/videos/**").hasAnyRole("ADMIN", "INSTRUCTOR")
                         .requestMatchers("/gestion/recepcion/**").hasAnyRole("RECEPTIONIST", "ADMIN")
                         .requestMatchers("/gestion/billing/**", "/gestion/dispositivos/**", "/gestion/usuarios/**")
                         .hasRole("ADMIN")

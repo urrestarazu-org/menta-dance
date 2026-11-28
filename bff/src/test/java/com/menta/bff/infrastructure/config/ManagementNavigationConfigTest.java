@@ -24,12 +24,13 @@ class ManagementNavigationConfigTest {
     }
 
     @Test
-    @DisplayName("only sections with a screen are offered (courses to admin and instructor, Recepción to reception "
-            + "and admin, Pagos, Compras con excepción and Usuarios to admin)")
+    @DisplayName("only sections with a screen are offered (courses and Videos to admin and instructor, Recepción to "
+            + "reception and admin, Pagos, Compras con excepción and Usuarios to admin)")
     void onlySectionsWithAScreenAreOffered() {
-        assertThat(keysFor("ADMIN")).containsExactlyInAnyOrder("cursos-presenciales", "cursos-virtuales", "reception",
-                "payments", "exception-purchases", "users");
-        assertThat(keysFor("INSTRUCTOR")).containsExactlyInAnyOrder("cursos-presenciales", "cursos-virtuales");
+        assertThat(keysFor("ADMIN")).containsExactlyInAnyOrder("cursos-presenciales", "cursos-virtuales", "videos",
+                "reception", "payments", "exception-purchases", "users");
+        assertThat(keysFor("INSTRUCTOR")).containsExactlyInAnyOrder("cursos-presenciales", "cursos-virtuales",
+                "videos");
         assertThat(keysFor("RECEPTIONIST")).containsExactly("reception");
         assertThat(keysFor("STUDENT")).isEmpty();
     }
@@ -56,6 +57,18 @@ class ManagementNavigationConfigTest {
         assertThat(courses.path()).isEqualTo("/gestion/cursos-virtuales");
         assertThat(courses.roles()).containsExactlyInAnyOrder("ADMIN", "INSTRUCTOR");
         assertThat(keysFor("ADMIN")).doesNotContain("content");
+    }
+
+    @Test
+    @DisplayName("the Videos section points at the screen the controller serves, for admin and instructor, right "
+            + "after Cursos virtuales")
+    void videosSectionPoints() {
+        ManagementSection videos = sectionFor("INSTRUCTOR", "videos");
+
+        assertThat(videos.label()).isEqualTo("Videos");
+        assertThat(videos.path()).isEqualTo("/gestion/videos");
+        assertThat(videos.roles()).containsExactlyInAnyOrder("ADMIN", "INSTRUCTOR");
+        assertThat(keysFor("ADMIN").indexOf("videos")).isEqualTo(keysFor("ADMIN").indexOf("cursos-virtuales") + 1);
     }
 
     @Test

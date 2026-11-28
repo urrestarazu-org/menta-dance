@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/management :: page('Videos', 'videos', ~{::main-content})}">
+<body>
+<!--
+  Videos of the library (#842). The API tells what the caller sees: an administrator everything, an instructor the
+  videos of the own lessons. Nothing is hidden: a video that a lesson uses and the library no longer has is listed,
+  with a text notice where its thumbnail would be and the lessons that point to it. The state is always text. Renaming
+  and deleting are links to their own pages; deleting is only offered to the administrator.
+-->
+<th:block th:fragment="main-content">
+<div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+    <h1>Videos</h1>
+</div>
+
+<div th:if="${videoSaved}" class="mb-4">
+    <div th:replace="~{fragments/components :: alert('success', ${videoSaved})}"></div>
+</div>
+
+<form th:action="@{/gestion/videos}" method="get" role="search" aria-label="Buscar videos"
+      class="card mb-6 grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
+    <div class="field">
+        <label class="field-label" for="q">Buscar por título</label>
+        <input class="field-input" id="q" type="search" name="q" maxlength="100" autocomplete="off"
+               th:value="${videos.search()}"/>
+    </div>
+    <div class="flex items-center gap-4">
+        <button type="submit" class="btn btn-primary">Buscar</button>
+        <a th:href="@{/gestion/videos}">Limpiar</a>
+    </div>
+</form>
+
+<div th:if="${videos.unavailable()}" class="mb-4">
+    <div th:replace="~{fragments/components :: alert('error', ${unavailableMessage})}"></div>
+</div>
+<div th:if="${videos.empty()}" class="mb-4">
+    <div th:replace="~{fragments/components :: alert('info', ${videos.search() != null} ? 'No hay videos que coincidan con la búsqueda.' : 'Todavía no hay videos.')}"></div>
+</div>
+
+<div th:unless="${videos.rows().isEmpty()}" class="overflow-x-auto" role="region" aria-label="Listado de videos" tabindex="0">
+    <table class="w-full text-left">
+        <caption class="mb-2 text-left font-semibold">
+            Videos (<span th:text="${videos.totalElements()}">0</span> en total)
+        </caption>
+        <thead>
+        <tr class="border-b border-brand-deep/30">
+            <th scope="col" class="p-3 font-semibold">Vista previa</th>
+            <th scope="col" class="p-3 font-semibold">Título</th>
+            <th scope="col" class="p-3 font-semibold">Estado</th>
+            <th scope="col" class="p-3 font-semibold">Duración</th>
+            <th scope="col" class="p-3 font-semibold">Lecciones que lo usan</th>
+            <th scope="col" class="p-3 font-semibold">Acciones</th>
+        </tr>
+        </thead>
+        <tbody class="divide-y divide-brand-deep/15">
+        <tr th:each="row : ${videos.rows()}">
+            <td class="p-3">
+                <img th:if="${row.hasThumbnail()}" class="preview-image" th:src="${row.thumbnailUrl()}" alt=""
+                     width="160" height="90" loading="lazy"/>
+                <th:block th:if="${row.missingInLibrary()}">
+                    <div th:replace="~{fragments/admin :: previewNotice('danger', 'warning', 'Este video ya no existe en la biblioteca.')}"></div>
+                </th:block>
+                <th:block th:if="${!row.hasThumbnail() and !row.missingInLibrary()}">
+                    <div th:replace="~{fragments/admin :: previewNotice('neutral', 'video', 'Sin miniatura')}"></div>
+                </th:block>
+            </td>
+            <th scope="row" class="p-3 font-medium break-words"><th:block th:text="${row.title()}">Abrazo</th:block><span th:if="${row.missingInLibrary()}" class="mt-1 block text-sm font-normal text-muted">Identificador: <code class="break-all" th:text="${row.videoId()}">3f2a9c1e</code></span></th>
+            <td class="p-3">
+                <th:block th:replace="~{fragments/admin :: dotBadge(${row.statusKind()}, ${row.statusLabel()})}"></th:block>
+                <p th:if="${row.statusNote()}" class="mt-1 text-sm" th:text="${row.statusNote()}">Nota</p>
+            </td>
+            <td class="p-3 whitespace-nowrap" th:text="${row.durationLabel()}">1:05</td>
+            <td class="p-3">
+                <p th:unless="${row.inUse()}" class="text-sm">Ninguna lección lo usa.</p>
+                <ul th:if="${row.inUse()}" class="m-0 list-none space-y-1 p-0">
+                    <li th:each="lesson : ${row.lessons()}">
+                        <a th:href="@{/gestion/cursos-virtuales/{course}/modulos/{module}/lecciones/{lesson}/editar(course=${lesson.courseId()},module=${lesson.moduleId()},lesson=${lesson.lessonId()})}"
+                           th:text="|${lesson.courseTitle()} › ${lesson.moduleTitle()} › ${lesson.lessonTitle()}|">Tango › Base › Abrazo</a>
+                    </li>
+                </ul>
+            </td>
+            <td class="p-3 whitespace-nowrap">
+                <th:block th:if="${row.manageable()}">
+                    <a th:href="${row.untitled()} ? @{/gestion/videos/{id}/renombrar(id=${row.videoId()})} : @{/gestion/videos/{id}/renombrar(id=${row.videoId()},titulo=${row.title()})}">Renombrar<span class="sr-only" th:text="| el video ${row.title()}|"> el video Abrazo</span></a>
+                    <th:block th:if="${canDelete}">
+                        ·
+                        <a class="font-medium text-feedback-error" th:href="${row.untitled()} ? @{/gestion/videos/{id}/borrar(id=${row.videoId()})} : @{/gestion/videos/{id}/borrar(id=${row.videoId()},titulo=${row.title()})}">Borrar<span class="sr-only" th:text="| el video ${row.title()}|"> el video Abrazo</span></a>
+                    </th:block>
+                </th:block>
+                <span th:unless="${row.manageable()}" class="text-sm">Cambiá el video desde la lección.</span>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+</div>
+
+<nav th:if="${videos.paginated()}" aria-label="Paginación de videos" class="mt-6">
+    <ul class="m-0 flex list-none flex-wrap items-center gap-6 p-0">
+        <li>
+            <a th:if="${videos.hasPrevious()}" rel="prev"
+               th:href="@{/gestion/videos(q=${videos.search()},page=${videos.previousPage()})}">Anterior</a>
+            <a th:unless="${videos.hasPrevious()}" role="link" aria-disabled="true"
+               class="cursor-not-allowed text-brand-deep/70 no-underline">Anterior</a>
+        </li>
+        <li><span aria-current="page" th:text="|Página ${videos.pageNumber()} de ${videos.totalPages()}|">Página 1 de 3</span></li>
+        <li>
+            <a th:if="${videos.hasNext()}" rel="next"
+               th:href="@{/gestion/videos(q=${videos.search()},page=${videos.nextPage()})}">Siguiente</a>
+            <a th:unless="${videos.hasNext()}" role="link" aria-disabled="true"
+               class="cursor-not-allowed text-brand-deep/70 no-underline">Siguiente</a>
+        </li>
+    </ul>
+</nav>
+</th:block>
+</body>
+</html>

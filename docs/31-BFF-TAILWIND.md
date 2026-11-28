@@ -218,7 +218,7 @@ Los tests que recorren enlaces ignoran los anchors internos (`#main`) del skip l
 Base del área web para el personal (issue #354). Pantallas hoy: el inicio `GET /gestion` y el listado de
 usuarios `GET /gestion/usuarios` con su alta `GET /gestion/usuarios/nuevo` y `POST /gestion/usuarios` y el cambio de
 rol `POST /gestion/usuarios/{id}/rol` (#378), y la recepción `GET /gestion/recepcion` con el roster de cada sesión y
-el check-in manual (#373), y los cursos presenciales `GET /gestion/cursos-presenciales` con sus sesiones y los alumnos de cada una (#368), y los pagos por transferencia `GET /gestion/pagos` las compras con excepción `GET /gestion/compras-con-excepcion` (#370) y el listado de cursos virtuales `GET /gestion/cursos-virtuales` (#367); el resto de las secciones se habilita a medida que llega cada pantalla. La autorización
+el check-in manual (#373), y los cursos presenciales `GET /gestion/cursos-presenciales` con sus sesiones y los alumnos de cada una (#368), y los pagos por transferencia `GET /gestion/pagos` las compras con excepción `GET /gestion/compras-con-excepcion` (#370) y el listado de cursos virtuales `GET /gestion/cursos-virtuales` (#367) y los videos de la biblioteca `GET /gestion/videos` (#842); el resto de las secciones se habilita a medida que llega cada pantalla. La autorización
 real la decide la API; el BFF solo evita mostrar pantallas que un rol no puede usar.
 
 ### Prefijos y roles
@@ -232,6 +232,8 @@ Sin sesión, el navegador va a `/login`; con sesión pero sin el rol, recibe un 
 | `/gestion/contenido/**`, `/gestion/sesiones/**` | `ADMIN`, `INSTRUCTOR` |
 | `/gestion/cursos-presenciales/**` | `ADMIN`, `INSTRUCTOR` (#368; la API limita al instructor a sus cursos) |
 | `/gestion/cursos-virtuales/**` | `ADMIN`, `INSTRUCTOR` (#367; la API limita al instructor a sus cursos) |
+| `/gestion/videos/*/borrar` | `ADMIN` (#842; borrar videos es solo del administrador, el instructor recibe 403 sin que se llame a la API) |
+| `/gestion/videos/**` | `ADMIN`, `INSTRUCTOR` (#842; la API limita al instructor a los videos de sus lecciones) |
 | `/gestion/recepcion/**` | `RECEPTIONIST`, `ADMIN` |
 | `/gestion/billing/**`, `/gestion/dispositivos/**`, `/gestion/usuarios/**` | `ADMIN` |
 | Cualquier otra ruta bajo `/gestion/**` | `ADMIN` (cierra por defecto: un prefijo no previsto no queda abierto al resto del personal) |
@@ -267,7 +269,7 @@ coinciden con los del usuario, en el orden declarado. Los roles se declaran sin 
 
 1. Agregar el controller de la pantalla bajo su prefijo (por ejemplo `/gestion/contenido`) y su vista con
    `fragments/management :: page(..., '<clave>', ...)`. La clave es la que declara la sección en
-   `ManagementNavigationConfig` (en inglés: `content`, `sessions`, `cursos-presenciales`, `cursos-virtuales`, `reception`, `payments`, `exception-purchases`, `devices`, `users`).
+   `ManagementNavigationConfig` (en inglés: `content`, `sessions`, `cursos-presenciales`, `cursos-virtuales`, `videos`, `reception`, `payments`, `exception-purchases`, `devices`, `users`).
 2. En `ManagementNavigationConfig`, pasar `enabled` de esa sección a `true` (así nunca hay un enlace sin pantalla).
 3. Si el prefijo es nuevo, agregarlo en `BffSecurityConfig` antes de `/gestion/**` y sumar sus casos de rol
    rechazado a `ManagementAccessIntegrationTest`. La matriz de ese test mide "permitido" como 404 (nada atiende
@@ -756,6 +758,67 @@ token de la sesión. `ManagementVirtualModuleController` atiende la estructura y
   lecciones, publicar, despublicar y borrar) está completa. El recorrido manual del issue (un profesor crea un curso
   con un módulo y dos lecciones, lo publica y lo ve en el catálogo público) **no se pudo verificar** en este
   desarrollo: solo hay pruebas de integración contra una API simulada.
+
+### Videos (`/gestion/videos`) (#842)
+
+`ADMIN` e `INSTRUCTOR` (sección `videos`, justo después de "Cursos virtuales"). El BFF solo habla con la API
+(`GET`/`PUT`/`DELETE /api/v1/admin/virtual/videos`, ADR-0049): no conoce a Bunny ni su clave, y no arma ninguna URL de
+la biblioteca (la miniatura es la que trae la API). Capas: puerto `VirtualVideoManagementApiClient` (propio, separado del de
+cursos), adaptador `VirtualVideoManagementApiAdapter`, casos de uso `ListManagedVideosUseCase`, `RenameVideoUseCase` y
+`DeleteVideoUseCase`, y tres controllers (`ManagementVideosController`, `ManagementVideoRenameController`,
+`ManagementVideoDeleteController`) con `VideoScreens` como ayudante común.
+
+- **`GET /gestion/videos`** (`q` = texto del título, `page` desde 0; tamaño fijo 20, sin exponer): tabla con `<caption>`
+  ("Videos (N en total)"), columnas vista previa, título, estado, duración, lecciones que lo usan y acciones, y paginación
+  como la de usuarios (los enlaces conservan `q`). `q` se recorta a 100 caracteres; una `page` que no es número responde
+  400. El administrador ve la biblioteca entera y los `videoId` que usan lecciones y la biblioteca ya no tiene; el
+  instructor, los videos de sus lecciones: el BFF no filtra, muestra lo que devuelve la API.
+- **Estado, siempre texto** (`VideoRow`), con la etiqueta de color (`dotBadge`) solo como refuerzo: "Con MP4"; "Sin MP4" más
+  "No se va a reproducir con la configuración actual del CDN."; "Procesando" (`UPLOADED`, `PROCESSING`, `TRANSCODING`,
+  `JIT_*`); "Con error" (`ERROR`, `UPLOAD_FAILED`); "Ya no existe" (`missingInLibrary`); "Sin dato" (estado que el BFF no
+  conoce). **Desvío del issue**: `CREATED` (creado, sin archivo todavía) se muestra aparte como "Esperando el archivo" en
+  vez de "Procesando", para no mostrar como en proceso a un video que nunca recibió el archivo. La duración es `m:ss` o
+  `h:mm:ss` ("Sin dato" si no hay).
+- **Dónde va la miniatura**: la imagen solo si la URL de la API es `https` absoluta con host (sin espacios ni comillas, hasta
+  2048 caracteres; se renderiza con `alt=""` porque el título está al lado); sin miniatura o con una URL que no es `https`,
+  un recuadro neutro con el texto "Sin miniatura"; con `missingInLibrary`, un recuadro de aviso con el texto "Este video ya
+  no existe en la biblioteca." (nunca una miniatura, aunque la API mande una). El aviso es el fragmento reutilizable
+  `fragments/admin :: previewNotice(kind, icon, message)` (`kind` = `danger`, `warning` o `neutral`; estilos
+  `.preview-box-*` en `input.css`): #843 lo usa para "esta lección no tiene video asociado por el momento".
+- **Lecciones que lo usan**: cada una es un enlace "Curso › Módulo › Lección" a la edición de la lección,
+  `/gestion/cursos-virtuales/{courseId}/modulos/{moduleId}/lecciones/{lessonId}/editar` (la ruta de `ManagementVirtualLessonController`),
+  con los tres ids que trae la API. Un video sin lecciones dice "Ninguna lección lo usa." Un video que ya no existe se
+  lista igual, con su identificador visible, sus lecciones enlazadas y sin acciones (se arregla cambiando el video desde la
+  lección). Con una búsqueda activa la API no marca `missingInLibrary` (no coincidir no es no existir): lo que diga la API.
+- **Renombrar** (`GET`/`POST /gestion/videos/{videoId}/renombrar`, `VideoRenameForm`): título obligatorio de hasta 255
+  caracteres con mensajes en español junto al campo y resumen de errores; el `POST` manda `PUT .../videos/{videoId}` con solo
+  `{"title": ...}` (recortado). Éxito: Post/Redirect/Get a `/gestion/videos` con "Video renombrado." una sola vez.
+- **Borrar** (`GET`/`POST /gestion/videos/{videoId}/borrar`, `borrar.html`, solo `ADMIN`): confirmación como la de borrar un
+  curso ("Sí, borrar el video", `.btn-danger`); éxito PRG con "Video borrado." (la API responde `204` también si ya no
+  existía). Si la API responde `409 VIDEO_IN_USE` la página vuelve con `409`, "No se puede borrar el video porque está en uso en
+  estas lecciones. Cambiá el video de esas lecciones antes de borrarlo.", la lista de lecciones enlazadas y sin botón de
+  confirmar. El instructor no ve "Borrar" y, si abre la URL, recibe `403` de las reglas de seguridad antes del controller:
+  la API no se llama.
+- **Sin lectura de un video**: la API no tiene `GET /videos/{id}`, así que, como la edición de módulos y lecciones usa el
+  detalle del curso, los enlaces de la lista llevan el título en `?titulo=` solo para prellenar el formulario y nombrar el
+  video en la confirmación (se recorta a 255, siempre se escapa y no se manda a la API como dato de confianza; el `POST`
+  de borrar lo repite en un campo oculto para volver a mostrarlo). Abrir estas páginas no llama a la API. Un `?titulo=`
+  armado a mano solo cambia el texto de la página, no qué video se renombra o borra (lo decide el id de la ruta).
+- **Errores, por `code`** (nunca el `detail` ni el cuerpo): `VIDEO_NOT_OWNED` → `403` "No podés gestionar este video.";
+  `ACCESS_DENIED` → `403` "No podés gestionar los videos."; `VIDEO_NOT_FOUND` o un id que no es un identificador simple
+  (letras, dígitos, `-`, `_`, hasta 128) → `404` "No encontramos el video." (sin llamar a la API si el id es inválido);
+  `VIDEO_LIBRARY_UNAVAILABLE` → `503` "La biblioteca de videos no está disponible en este momento..."; `INVALID_REQUEST`
+  al renombrar → `400` "Revisá los datos ingresados."; cualquier otra cosa o caída → `503` ("No pudimos guardar el
+  video. Intentá de nuevo." al renombrar, "No pudimos completar la acción. Intentá de nuevo." al borrar, y en el listado la
+  lista sin filas con "No pudimos cargar los videos en este momento..."). Todo `no-store` y todo `POST` con CSRF; RECEPTIONIST y
+  STUDENT reciben `403` sin llamar a la API y un anónimo va a `/login`.
+- **Limitaciones**: después de renombrar o borrar se vuelve a la lista sin la búsqueda ni la página de origen. El orden es el
+  de la API (`date`; `orderBy=title` no se expone). El BFF no filtra ni ordena nada: con miles de videos, el costo de
+  paginar está en la API (ADR-0049, supuesto 6).
+- **Qué no se verificó (#842)**: solo hay pruebas unitarias y de integración (MockMvc y WireMock, API simulada). No se
+  recorrió como administrador con la API y el BFF reales y una biblioteca de Bunny, ni se miró en un navegador, ni se
+  corrió axe ni un lector de pantalla; el CSS nuevo (`.preview-*`) no se vio renderizado. Ver "Videos de la biblioteca" en
+  `docs/ACCESSIBILITY.md`. Los supuestos sobre Bunny que usa la API siguen sin probarse (ADR-0049).
 
 ## Accesibilidad base
 

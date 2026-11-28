@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/management :: page('Borrar video', 'videos', ~{::main-content})}">
+<body>
+<!--
+  Confirmation to delete a video (#842), administrator only. When the API says that lessons use the video, they are
+  listed here with a link to each one's edit screen and there is nothing left to confirm.
+-->
+<th:block th:fragment="main-content">
+<div>
+    <h1 class="mb-6">Borrar video</h1>
+
+    <div th:if="${actionError}" class="mb-4">
+        <div th:replace="~{fragments/components :: alert('error', ${actionError})}"></div>
+    </div>
+
+    <section th:if="${inUse and !lessons.isEmpty()}" class="card mb-4" aria-labelledby="in-use-title">
+        <h2 id="in-use-title" class="mb-3">Lecciones que usan este video</h2>
+        <ul class="m-0 list-none space-y-1 p-0">
+            <li th:each="lesson : ${lessons}">
+                <a th:href="@{/gestion/cursos-virtuales/{course}/modulos/{module}/lecciones/{lesson}/editar(course=${lesson.courseId()},module=${lesson.moduleId()},lesson=${lesson.lessonId()})}"
+                   th:text="|${lesson.courseTitle()} › ${lesson.moduleTitle()} › ${lesson.lessonTitle()}|">Tango › Base › Abrazo</a>
+            </li>
+        </ul>
+    </section>
+
+    <p th:if="${inUse}"><a th:href="@{/gestion/videos}">Volver a los videos</a></p>
+
+    <form th:unless="${inUse}" th:action="@{/gestion/videos/{id}/borrar(id=${videoId})}" method="post"
+          class="card space-y-4">
+        <p>
+            ¿Borrar <th:block th:if="${videoTitle}">el video «<strong th:text="${videoTitle}">Abrazo</strong>»</th:block><th:block th:unless="${videoTitle}">este video</th:block>?
+            Se borra de la biblioteca. Esta acción no se puede deshacer.
+        </p>
+        <input th:if="${videoTitle}" type="hidden" name="titulo" th:value="${videoTitle}"/>
+        <div class="flex items-center gap-4">
+            <button type="submit" class="btn btn-danger">Sí, borrar el video</button>
+            <a th:href="@{/gestion/videos}">Volver</a>
+        </div>
+    </form>
+</div>
+</th:block>
+</body>
+</html>
