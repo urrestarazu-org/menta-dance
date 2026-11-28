@@ -218,7 +218,7 @@ class ManagementVideosIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("the instructor can rename but does not see the delete action")
+    @DisplayName("the instructor can rename a video an own lesson uses but does not see the delete action")
     void instructorActions() throws Exception {
         stubList(page(0, 1, 1, video(VIDEO_ID, "Abrazo", "FINISHED", 30, null, true, lesson())));
 
@@ -226,6 +226,32 @@ class ManagementVideosIntegrationTest extends BaseIntegrationTest {
 
         assertThat(main).contains("/gestion/videos/" + VIDEO_ID + "/renombrar")
                 .doesNotContain("/borrar").doesNotContain("Borrar");
+    }
+
+    @Test
+    @DisplayName("the instructor is not offered renaming on a video none of the own lessons uses, and is told why")
+    void instructorCannotRenameAForeignOrUnusedVideo() throws Exception {
+        String other = "other-video-0002";
+        stubList(page(0, 1, 2, video(VIDEO_ID, "Abrazo", "FINISHED", 30, null, true, lesson()),
+                video(other, "Ajeno", "FINISHED", 30, null, true)));
+
+        String main = render(open("INSTRUCTOR"));
+
+        assertThat(main).contains("/gestion/videos/" + VIDEO_ID + "/renombrar").contains("Ajeno")
+                .doesNotContain("/gestion/videos/" + other)
+                .contains("Ninguna lección tuya usa este video, así que no podés renombrarlo.");
+    }
+
+    @Test
+    @DisplayName("the administrator keeps renaming and deleting on a video no lesson uses")
+    void adminKeepsRenamingUnusedVideos() throws Exception {
+        stubList(page(0, 1, 1, video(VIDEO_ID, "Suelto", "FINISHED", 30, null, true)));
+
+        String main = render(open("ADMIN"));
+
+        assertThat(main).contains("/gestion/videos/" + VIDEO_ID + "/renombrar")
+                .contains("/gestion/videos/" + VIDEO_ID + "/borrar")
+                .doesNotContain("no podés renombrarlo");
     }
 
     @Test

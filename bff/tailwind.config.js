@@ -30,6 +30,14 @@ module.exports = {
     'alert-error',
     'alert-success',
     'alert-info',
+    // Built by concatenation in the templates (fragments/components :: alert, fragments/admin :: previewNotice), so
+    // Tailwind cannot find the names there (#843; the preview boxes of #842 were missing from the compiled sheet).
+    'alert-warning',
+    'preview-image',
+    'preview-box',
+    'preview-box-neutral',
+    'preview-box-warning',
+    'preview-box-danger',
     // Administration screens (#849): reusable across the management pages.
     'alert-with-icon',
     'alert-icon',

@@ -237,6 +237,11 @@
   .alert-info {
     @apply border-brand-deep/60 bg-white text-brand-deep;
   }
+
+  /* A problem that does not stop the user (#843): same tokens as .preview-box-warning, measured at 8.15:1. */
+  .alert-warning {
+    @apply border-feedback-warning bg-feedback-warning-surface text-feedback-warning;
+  }
 }
 
 /*

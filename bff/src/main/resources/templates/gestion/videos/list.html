@@ -3,10 +3,11 @@
       th:replace="~{fragments/management :: page('Videos', 'videos', ~{::main-content})}">
 <body>
 <!--
-  Videos of the library (#842). The API tells what the caller sees: an administrator everything, an instructor the
-  videos of the own lessons. Nothing is hidden: a video that a lesson uses and the library no longer has is listed,
-  with a text notice where its thumbnail would be and the lessons that point to it. The state is always text. Renaming
-  and deleting are links to their own pages; deleting is only offered to the administrator.
+  Videos of the library (#842). The API tells what the caller sees: the whole library for the administrator and, since
+  #861, for the instructor too, with only the lessons of the own courses on each video. Nothing is hidden: a video that
+  a lesson uses and the library no longer has is listed, with a text notice where its thumbnail would be and the lessons
+  that point to it. The state is always text. Renaming and deleting are links to their own pages; deleting is only
+  offered to the administrator, and renaming to the instructor only on a video that an own lesson uses (#843).
 -->
 <th:block th:fragment="main-content">
 <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
@@ -80,13 +81,14 @@
                 </ul>
             </td>
             <td class="p-3 whitespace-nowrap">
-                <th:block th:if="${row.manageable()}">
+                <th:block th:if="${row.renameableBy(administrator)}">
                     <a th:href="${row.untitled()} ? @{/gestion/videos/{id}/renombrar(id=${row.videoId()})} : @{/gestion/videos/{id}/renombrar(id=${row.videoId()},titulo=${row.title()})}">Renombrar<span class="sr-only" th:text="| el video ${row.title()}|"> el video Abrazo</span></a>
-                    <th:block th:if="${canDelete}">
-                        ·
-                        <a class="font-medium text-feedback-error" th:href="${row.untitled()} ? @{/gestion/videos/{id}/borrar(id=${row.videoId()})} : @{/gestion/videos/{id}/borrar(id=${row.videoId()},titulo=${row.title()})}">Borrar<span class="sr-only" th:text="| el video ${row.title()}|"> el video Abrazo</span></a>
-                    </th:block>
                 </th:block>
+                <th:block th:if="${row.manageable() and administrator}">
+                    <th:block th:if="${row.renameableBy(administrator)}">·</th:block>
+                    <a class="font-medium text-feedback-error" th:href="${row.untitled()} ? @{/gestion/videos/{id}/borrar(id=${row.videoId()})} : @{/gestion/videos/{id}/borrar(id=${row.videoId()},titulo=${row.title()})}">Borrar<span class="sr-only" th:text="| el video ${row.title()}|"> el video Abrazo</span></a>
+                </th:block>
+                <span th:if="${row.manageable() and !row.renameableBy(administrator)}" class="text-sm whitespace-normal">Ninguna lección tuya usa este video, así que no podés renombrarlo.</span>
                 <span th:unless="${row.manageable()}" class="text-sm">Cambiá el video desde la lección.</span>
             </td>
         </tr>

@@ -109,6 +109,8 @@ import com.menta.bff.application.usecase.ListTodaySessionsUseCase;
 import com.menta.bff.application.usecase.ListTodaySessionsUseCaseImpl;
 import com.menta.bff.application.usecase.ListUsersUseCase;
 import com.menta.bff.application.usecase.ListUsersUseCaseImpl;
+import com.menta.bff.application.usecase.ListVideoChoicesUseCase;
+import com.menta.bff.application.usecase.ListVideoChoicesUseCaseImpl;
 import com.menta.bff.application.usecase.LoginUseCase;
 import com.menta.bff.application.usecase.LoginUseCaseImpl;
 import com.menta.bff.application.usecase.LogoutUseCase;
@@ -618,6 +620,11 @@ public class UseCaseConfig {
     @Bean
     public ListManagedVideosUseCase listManagedVideosUseCase(VirtualVideoManagementApiClient videoApiClient) {
         return new ListManagedVideosUseCaseImpl(videoApiClient);
+    }
+
+    @Bean
+    public ListVideoChoicesUseCase listVideoChoicesUseCase(VirtualVideoManagementApiClient videoApiClient) {
+        return new ListVideoChoicesUseCaseImpl(videoApiClient);
     }
 
     @Bean

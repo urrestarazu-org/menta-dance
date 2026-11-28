@@ -55,6 +55,8 @@ class ManagementVirtualLessonIntegrationTest extends BaseIntegrationTest {
     private static final String COURSE_API = "/api/v1/admin/virtual/courses/" + ID;
     private static final String LESSONS_API = "/api/v1/admin/virtual/modules/" + M1 + "/lessons";
     private static final String LESSON_API = "/api/v1/admin/virtual/lessons/" + L1;
+    /** Whatever the form saves or reads of the course; the list of videos (#843) is a different API. */
+    private static final String COURSE_APIS = "/api/v1/admin/virtual/(courses|modules|lessons)/.*";
     private static final String SECRET = "secret-detail";
     private static final String VIDEO = "video-0001";
     private static final String READ_FAILED = "No pudimos cargar el curso en este momento. Intentá nuevamente en unos "
@@ -179,7 +181,7 @@ class ManagementVirtualLessonIntegrationTest extends BaseIntegrationTest {
                 .containsPattern("name=\"durationMinutes\"[^>]*value=\"0\"")
                 .containsPattern("<a[^>]*href=\"" + STRUCTURE + "\">Cancelar").doesNotContain("name=\"order\"")
                 .doesNotContain("Si lo dejás vacío");
-        WIRE_MOCK_SERVER.verify(0, anyRequestedFor(urlPathMatching("/api/v1/admin/.*")));
+        WIRE_MOCK_SERVER.verify(0, anyRequestedFor(urlPathMatching(COURSE_APIS)));
     }
 
     static Stream<Arguments> creations() {
@@ -226,7 +228,7 @@ class ManagementVirtualLessonIntegrationTest extends BaseIntegrationTest {
 
     @ParameterizedTest(name = "{0} = {2}")
     @MethodSource("invalidFields")
-    @DisplayName("an invalid field is reported in the summary and next to it, on both forms, without the API")
+    @DisplayName("an invalid field is reported in the summary and next to it, on both forms, without saving")
     void invalidField(String field, String value, String message) throws Exception {
         Cookie session = logIn("ADMIN");
 
@@ -234,7 +236,7 @@ class ManagementVirtualLessonIntegrationTest extends BaseIntegrationTest {
             assertThat(render(send(url, session, true, fields(field, value)))).contains(message,
                     "Hay 1 error en el formulario", "href=\"#" + field + "\"");
         }
-        WIRE_MOCK_SERVER.verify(0, anyRequestedFor(urlPathMatching("/api/v1/admin/.*")));
+        WIRE_MOCK_SERVER.verify(0, anyRequestedFor(urlPathMatching(COURSE_APIS)));
     }
 
     // ---- edit ----

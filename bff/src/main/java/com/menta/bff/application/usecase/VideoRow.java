@@ -55,6 +55,15 @@ public record VideoRow(
         return thumbnailUrl != null;
     }
 
+    /**
+     * Whether the screen offers to rename the video to that role (#843): the administrator any video the library
+     * still has, the instructor only one that at least one of the own lessons uses ({@code lessons} holds only those
+     * for an instructor). A hint for the screen: the API decides and answers {@code 403 VIDEO_NOT_OWNED}.
+     */
+    public boolean renameableBy(boolean administrator) {
+        return manageable && (administrator || inUse());
+    }
+
     /** Whether at least one lesson uses the video. */
     public boolean inUse() {
         return !lessons.isEmpty();
