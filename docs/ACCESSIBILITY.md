@@ -378,7 +378,7 @@ previa usan pares ya medidos (ver más arriba), y la etiqueta de estado es la de
 | Par | Razón |
 |---|---|
 | Recuadro neutro "Sin miniatura" `.preview-box-neutral`: `#043F2E` sobre `#EEF2E3` | 10,51 |
-| Recuadro de advertencia `.preview-box-warning`: `#78350F` sobre `#FEF3C7` (reservado para #843; hoy no se usa en #842) | 8,15 |
+| Recuadro de advertencia `.preview-box-warning`: `#78350F` sobre `#FEF3C7` (lo usa #843 para "Esta lección no tiene video asociado por el momento.") | 8,15 |
 | Recuadro "Este video ya no existe en la biblioteca." `.preview-box-danger`: `#9B1C1C` sobre `#FEF2F2` | 7,45 |
 | Estado: "Con MP4" (`badge-success`) / "Sin MP4", "Procesando" (`badge-warning`) / "Con error", "Ya no existe" (`badge-danger`) / "Esperando el archivo", "Sin dato" (`badge-neutral`) | 10,27 / 8,15 / 7,45 / 10,51 |
 | Enlace "Borrar" `text-feedback-error` sobre blanco | 8,15 |
@@ -417,6 +417,51 @@ La imagen de la miniatura no lleva información que no esté en el texto de la f
   los recuadros nuevos se vean bien (no se miró la pantalla renderizada ni el CSS compilado de `.preview-*`), el contraste
   medido con script sobre este CSS (se tomaron los valores de #849), y el recorrido manual como administrador con la API y el
   BFF reales.
+
+## Selector de video de la lección (#843)
+
+Formulario de alta y edición de lección (`leccion-form.html`): `<select>` con la biblioteca, vista previa, aviso y el
+identificador pegado en un `<details>`. Colores: `.alert-warning` usa el mismo par que `.preview-box-warning`.
+
+### Texto (mínimo 4,5:1) y no textual (3:1)
+
+| Par | Razón |
+|---|---|
+| Aviso `.alert-warning` y recuadro `.preview-box-warning`: `#78350F` sobre `#FEF3C7` | 8,15 |
+| Recuadro "Sin miniatura" `.preview-box-neutral` y "ya no existe" `.preview-box-danger` | 10,51 / 7,45 |
+
+`StylesheetContrastTest` ahora mide `.alert-warning` y los tres `.preview-box-*` sobre la hoja compilada (antes los recuadros
+de #842 no estaban en ella: faltaban en el `safelist` de Tailwind). Se usó la hoja compilada real en la captura de abajo.
+
+### Revisión de código
+
+- Etiqueta visible "Video de la lección (opcional)" ligada con `for`/`id` al `<select>`; el `<select>` apunta con
+  `aria-describedby` a su ayuda (`videoId-help`) y al panel de estado (`videoId-status`); `aria-invalid` si tiene error. El
+  campo pegado tiene su propia etiqueta, ayuda y errores (`fragments/components`), y su enlace en el resumen de errores.
+- El estado y si hay MP4 están **en el texto de cada opción** ("Listo, sin MP4 (no se va a reproducir)"): nunca solo color. Los
+  avisos son texto con ícono decorativo (`aria-hidden`) y `role="status"` (`alert('warning', ...)`); la miniatura lleva `alt=""`
+  porque el título está al lado; un video sin miniatura o inexistente dice el motivo en un recuadro con texto.
+- Si la biblioteca no responde, el aviso explica qué hacer ("pegá el identificador ... o dejalo vacío"), el `<select>` no se
+  renderiza y el `<details>` queda abierto, con el campo de texto prellenado en la edición.
+- "Pegar un identificador" es un `<details>/<summary>` nativo: funciona con teclado (Enter/Espacio) y sin JavaScript.
+- **Sin JavaScript**: todo el formulario guarda sin JavaScript y no se agregó ningún script. Consecuencia conocida: el panel de
+  vista previa y el aviso reflejan el video seleccionado **al cargar la página**, no cambian al elegir otra opción
+  (el texto de cada opción ya trae el estado).
+- Sin búsqueda por texto en el selector: un `<select>` nativo salta por la inicial al tipear. Más de 100 videos: el aviso del
+  formulario lo dice y queda el identificador pegado (ver `docs/31-BFF-TAILWIND.md`).
+- Foco visible: el global `:focus-visible`.
+
+### Qué se verificó y qué no
+
+- **Verificado**: pruebas de integración (MockMvc y WireMock) del HTML (opciones, avisos, `role="status"`, `aria-describedby`,
+  `<details>` cerrado/abierto, escape de títulos, sin `/api/v1`); medición de contraste de la hoja compilada; y una
+  **corrida local de axe-core 4.13.0** (`wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`) más una captura en Chrome (1280 px) sobre el
+  HTML renderizado por las pruebas con el CSS compilado, servido en un puerto aparte (sin levantar el BFF ni la API), en dos
+  variantes: edición con un video sin MP4 y edición con la API de videos caída: 0 violaciones y 0 *incomplete*.
+- **No verificado**: recorrido manual real como administrador e instructor con la API y el BFF levantados; lector de pantalla
+  (VoiceOver, NVDA) con el `<select>`, el panel de estado y el `<details>`; orden de tabulación real; zoom al 200 % y reflujo a
+  320 px; otros navegadores; alto contraste; el job `accessibility` de CI (no recorre `/gestion`); alta con errores, el aviso con
+  un video inexistente o con más de 100 videos en un navegador.
 
 ## Procedimiento de prueba manual
 

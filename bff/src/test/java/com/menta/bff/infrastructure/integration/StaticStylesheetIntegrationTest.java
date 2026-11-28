@@ -66,6 +66,26 @@ class StaticStylesheetIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("la hoja compilada incluye las clases que las plantillas arman por concatenación (#843)")
+    void compiledStylesheetContainsClassesBuiltByConcatenation() throws Exception {
+        String css = mockMvc.perform(get("/css/app.css"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        // fragments/components :: alert builds "alert-" + kind and fragments/admin :: previewNotice builds
+        // "preview-box-" + kind: Tailwind cannot see those names in the templates, so each one is safelisted.
+        assertThat(css)
+                .contains(".alert-warning")
+                .contains(".preview-box")
+                .contains(".preview-box-neutral")
+                .contains(".preview-box-warning")
+                .contains(".preview-box-danger")
+                .contains(".preview-image");
+    }
+
+    @Test
     @DisplayName("la hoja compilada incluye el realce al pasar el mouse y lo apaga con movimiento reducido")
     void compiledStylesheetContainsHoverFeedback() throws Exception {
         String css = mockMvc.perform(get("/css/app.css"))

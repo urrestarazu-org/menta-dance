@@ -136,6 +136,42 @@ class LessonFormTest {
         assertThat(form.toChanges().videoId()).isEqualTo("video-1");
     }
 
+    @ParameterizedTest(name = "pasted video id \"{0}\" is refused like a picked one")
+    @ValueSource(strings = {"two words", "tab\tinside"})
+    @DisplayName("an identifier pasted by hand has the same rules, reported on its own field")
+    void pastedVideoIdHasTheSameRules(String videoId) {
+        LessonForm form = valid();
+        form.setVideoIdManual(videoId);
+        LessonForm tooLong = valid();
+        tooLong.setVideoIdManual("x".repeat(129));
+
+        assertThat(errorsOf(form)).containsOnlyKeys("videoIdManual")
+                .containsEntry("videoIdManual", "El identificador del video no puede tener espacios.");
+        assertThat(errorsOf(tooLong)).containsOnlyKeys("videoIdManual")
+                .containsEntry("videoIdManual", "El identificador del video puede tener hasta 128 caracteres.");
+    }
+
+    @Test
+    @DisplayName("the pasted identifier wins over the picked one, and either is sent only when it is not empty")
+    void pastedVideoIdWins() {
+        LessonForm form = valid();
+        assertThat(form.resolvedVideoId()).isNull();
+
+        form.setVideoId("picked-1");
+        assertThat(form.resolvedVideoId()).isEqualTo("picked-1");
+        assertThat(form.toCommand().videoId()).isEqualTo("picked-1");
+
+        form.setVideoIdManual("pasted-2");
+        assertThat(form.resolvedVideoId()).isEqualTo("pasted-2");
+        assertThat(form.toCommand().videoId()).isEqualTo("pasted-2");
+        assertThat(form.toChanges().videoId()).isEqualTo("pasted-2");
+
+        form.setVideoIdManual("");
+        form.setVideoId("");
+        assertThat(form.resolvedVideoId()).isNull();
+        assertThat(form.toChanges().videoId()).isNull();
+    }
+
     @Test
     @DisplayName("is prefilled from the lesson, with its video id when there is one")
     void prefilled() {

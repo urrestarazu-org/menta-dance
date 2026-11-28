@@ -1,8 +1,9 @@
 package com.menta.bff.application.usecase;
 
 /**
- * Use case that lists the videos of the library the caller manages (#842): the whole library for an administrator,
- * the videos of the own courses' lessons for an instructor, as the API decides.
+ * Use case that lists the videos of the library the caller manages (#842): the whole library for an administrator
+ * and, since #861, for an instructor too; for an instructor the lessons of each video are only the ones of the own
+ * courses. Which videos and lessons come is the API's decision.
  *
  * <p>Part of Clean Architecture application layer. A failure of the API, of the library or a missing token reads as
  * {@link VideosListView#unavailableView(String, boolean)}; the one refusal that is not an outage,

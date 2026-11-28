@@ -15,6 +15,7 @@ import com.menta.bff.application.port.out.VirtualCourseManagementApiClient.Virtu
 import com.menta.bff.application.port.out.VirtualCourseManagementApiClient.VirtualCourseManagementException.Code;
 import com.menta.bff.application.usecase.CreateVirtualLessonUseCase;
 import com.menta.bff.application.usecase.GetManagedVirtualCourseUseCase;
+import com.menta.bff.application.usecase.ListVideoChoicesUseCase;
 import com.menta.bff.application.usecase.UpdateVirtualLessonUseCase;
 import com.menta.bff.infrastructure.web.dto.LessonForm;
 import jakarta.servlet.http.HttpServletRequest;
@@ -44,7 +45,12 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
  *
  * <p>The API has no read of a single lesson, so the edit form is prefilled from the course detail, looking the module
  * and then the lesson up by id. The write goes to the lesson id; the API decides ownership. A video cannot be cleared
- * once assigned, so on edit an empty video id is not sent. Part of Clean Architecture infrastructure layer.
+ * once assigned, so on edit an empty video id is not sent.
+ * </p>
+ *
+ * <p>The video is picked from the library list ({@code ListVideoChoicesUseCase}, #843) or pasted by hand; the list is
+ * read only to show the form (and to show it again after a refusal), and if it cannot be obtained the form still
+ * renders and saves. Part of Clean Architecture infrastructure layer.
  * </p>
  */
 @Controller
@@ -62,6 +68,7 @@ public class ManagementVirtualLessonController {
     private final GetManagedVirtualCourseUseCase getUseCase;
     private final CreateVirtualLessonUseCase createUseCase;
     private final UpdateVirtualLessonUseCase updateUseCase;
+    private final ListVideoChoicesUseCase videoChoicesUseCase;
 
     @InitBinder
     void trimTexts(WebDataBinder binder) {
@@ -70,11 +77,16 @@ public class ManagementVirtualLessonController {
 
     @GetMapping(LESSONS + "/nueva")
     public String newForm(
-            @PathVariable String courseId, @PathVariable String moduleId, HttpServletResponse response, Model model) {
+            @PathVariable String courseId,
+            @PathVariable String moduleId,
+            HttpServletRequest request,
+            HttpServletResponse response,
+            Model model) {
         response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
-        model.addAttribute("form", new LessonForm());
+        LessonForm form = new LessonForm();
+        model.addAttribute("form", form);
         prepare(courseId, moduleId, null, model);
-        return FORM_VIEW;
+        return formWithVideos(FORM_VIEW, request, form, model);
     }
 
     @PostMapping(LESSONS)
@@ -90,14 +102,14 @@ public class ManagementVirtualLessonController {
         response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
         prepare(courseId, moduleId, null, model);
         if (bindingResult.hasErrors()) {
-            return FORM_VIEW;
+            return formWithVideos(FORM_VIEW, request, form, model);
         }
         try {
             createUseCase.execute(accessToken(request), moduleId, form.toCommand());
         } catch (VirtualCourseManagementException e) {
-            return saveRefused(e.getCode(), model, response);
+            return formWithVideos(saveRefused(e.getCode(), model, response), request, form, model);
         } catch (ServiceUnavailableException e) {
-            return unavailable(e, model, response);
+            return formWithVideos(unavailable(e, model, response), request, form, model);
         }
         return doneIn(moduleId, CREATED, "success", redirectAttributes);
     }
@@ -118,9 +130,10 @@ public class ManagementVirtualLessonController {
             VirtualLessonDetail lesson = module.lessons().stream()
                     .filter(candidate -> candidate.lessonId().equals(lessonId)).findFirst()
                     .orElseThrow(() -> new VirtualCourseManagementException(Code.LESSON_NOT_FOUND));
-            model.addAttribute("form", LessonForm.from(lesson));
+            LessonForm form = LessonForm.from(lesson);
+            model.addAttribute("form", form);
             prepare(courseId, moduleId, lessonId, model);
-            return FORM_VIEW;
+            return formWithVideos(FORM_VIEW, request, form, model);
         } catch (VirtualCourseManagementException e) {
             return refused(e.getCode(), model, response, () -> loadFailed(model, response));
         } catch (ServiceUnavailableException e) {
@@ -142,16 +155,28 @@ public class ManagementVirtualLessonController {
         response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
         prepare(courseId, moduleId, lessonId, model);
         if (bindingResult.hasErrors()) {
-            return FORM_VIEW;
+            return formWithVideos(FORM_VIEW, request, form, model);
         }
         try {
             updateUseCase.execute(accessToken(request), lessonId, form.toChanges());
         } catch (VirtualCourseManagementException e) {
-            return saveRefused(e.getCode(), model, response);
+            return formWithVideos(saveRefused(e.getCode(), model, response), request, form, model);
         } catch (ServiceUnavailableException e) {
-            return unavailable(e, model, response);
+            return formWithVideos(unavailable(e, model, response), request, form, model);
         }
         return doneIn(moduleId, UPDATED, "success", redirectAttributes);
+    }
+
+    /**
+     * Adds the videos the selector lists when the view is the form (#843). The list is read only when the form is
+     * shown, never to save, and never fails the page: a list that cannot be obtained is an unavailable one, and the
+     * form is still saved with a pasted identifier.
+     */
+    private String formWithVideos(String view, HttpServletRequest request, LessonForm form, Model model) {
+        if (FORM_VIEW.equals(view)) {
+            model.addAttribute("videos", videoChoicesUseCase.execute(accessToken(request), form.resolvedVideoId()));
+        }
+        return view;
     }
 
     private static void prepare(String courseId, String moduleId, String lessonId, Model model) {

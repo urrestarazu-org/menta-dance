@@ -142,7 +142,7 @@
 </th:block>
 
 <!--
-  alert(kind, message): kind is error | success | info. Errors use
+  alert(kind, message): kind is error | success | info | warning. Errors use
   role="alert" (announced immediately); the rest use role="status". Each kind
   has a decorative icon (fragments/icons); the message stays the first child,
   the icon is drawn before it by CSS order.
@@ -151,7 +151,7 @@
      th:class="'alert alert-with-icon alert-' + ${kind}"
      th:attr="role=${kind == 'error'} ? 'alert' : 'status'">
     <p th:text="${message}">Message</p>
-    <th:block th:replace="~{fragments/icons :: icon(${kind == 'error' ? 'exclamation-circle' : (kind == 'success' ? 'check-circle' : 'info-circle')}, 'alert-icon')}"></th:block>
+    <th:block th:replace="~{fragments/icons :: icon(${kind == 'error' ? 'exclamation-circle' : (kind == 'success' ? 'check-circle' : (kind == 'warning' ? 'warning' : 'info-circle'))}, 'alert-icon')}"></th:block>
 </div>
 
 <!--

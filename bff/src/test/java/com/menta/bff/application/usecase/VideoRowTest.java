@@ -88,6 +88,22 @@ class VideoRowTest {
         assertThat(blank.title()).isEqualTo("Sin título");
     }
 
+    @Test
+    @DisplayName("the administrator may rename any video the library has; the instructor only one an own lesson uses")
+    void renameIsOfferedByRole() {
+        VideoRow used = VideoRow.of(video(VideoStatus.FINISHED, true, 5, null));
+        VideoRow unused = VideoRow.of(new ManagedVideo("v-2", "Suelto", VideoStatus.FINISHED, 5, null, true,
+                List.of(), false, List.of()));
+        VideoRow missing = VideoRow.of(new ManagedVideo("v-9", null, VideoStatus.UNKNOWN, null, null, false,
+                List.of(), true, List.of(LESSON)));
+
+        assertThat(used.renameableBy(false)).isTrue();
+        assertThat(unused.renameableBy(false)).isFalse();
+        assertThat(unused.renameableBy(true)).isTrue();
+        assertThat(missing.renameableBy(true)).isFalse();
+        assertThat(missing.renameableBy(false)).isFalse();
+    }
+
     static Stream<Arguments> durations() {
         return Stream.of(
                 Arguments.of(5, "0:05"),

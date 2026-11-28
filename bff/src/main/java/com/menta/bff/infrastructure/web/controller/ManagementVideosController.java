@@ -20,9 +20,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 /**
  * Videos management (#842): the paginated list with a title search, {@code GET /gestion/videos}. Access is
  * restricted to {@code ADMIN} and {@code INSTRUCTOR} in {@code BffSecurityConfig}; the Virtual API decides which
- * videos the caller sees (the whole library and the unknown ones for an administrator, those of the own lessons for an
- * instructor) and the BFF shows them as they come, including a video that a lesson uses and the library no longer
- * has. Only the administrator is offered the delete action; the API and the security rules refuse it to anyone else
+ * videos the caller sees (the whole library for both roles since #861; for an instructor the {@code lessons} of each
+ * video are only the ones of the own courses) and the BFF shows them as they come, including a video that a lesson
+ * uses and the library no longer has. Only the administrator is offered the delete action, and the instructor is
+ * offered the rename action only on a video that an own lesson uses; the API and the security rules refuse the rest
  * anyway.
  *
  * <p>When the API or the library fails, the page is rendered without rows and a notice, with a 503; the API's body
@@ -68,7 +69,7 @@ public class ManagementVideosController {
         }
         model.addAttribute("videos", view);
         model.addAttribute("unavailableMessage", view.libraryDown() ? LIBRARY_DOWN : UNAVAILABLE);
-        model.addAttribute("canDelete", ManagementRoles.normalize(authentication.getAuthorities().stream()
+        model.addAttribute("administrator", ManagementRoles.normalize(authentication.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority).collect(Collectors.toSet())).contains("ADMIN"));
         return LIST_VIEW;
     }

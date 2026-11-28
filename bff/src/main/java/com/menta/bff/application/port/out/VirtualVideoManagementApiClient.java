@@ -20,8 +20,9 @@ import java.util.List;
 public interface VirtualVideoManagementApiClient {
 
     /**
-     * Lists the videos the caller sees: the whole library and the unknown ones for an administrator, the ones of
-     * the own courses for an instructor.
+     * Lists the videos the caller sees: the whole library for an administrator and for an instructor alike
+     * (#861), plus the identifiers a lesson uses that the library no longer has; for an instructor the
+     * {@code lessons} of each video are only the ones of the own courses.
      *
      * @param accessToken caller's access token
      * @param query       normalized search and paging

@@ -166,6 +166,29 @@ class StylesheetContrastTest {
     }
 
     @Test
+    @DisplayName("alert-warning (#843): texto a 4,5:1 sobre su fondo y borde a 3:1 sobre la tarjeta")
+    void alertWarningReachesAa() {
+        int[] fill = colorOf(".alert-warning", "background-color", token("white"));
+        int[] text = colorOf(".alert-warning", "color", fill);
+        int[] border = colorOf(".alert-warning", "border-color", token("white"));
+
+        assertThat(contrast(text, fill)).as("warning text").isGreaterThanOrEqualTo(TEXT_MINIMUM);
+        assertThat(contrast(border, token("white"))).as("warning border against the white card")
+                .isGreaterThanOrEqualTo(NON_TEXT_MINIMUM);
+        assertThat(fill).as("a warning is not painted like an info alert").isNotEqualTo(token("white"));
+    }
+
+    @ParameterizedTest(name = "{0}: el texto llega a 4,5:1 sobre su fondo")
+    @CsvSource({".preview-box-neutral", ".preview-box-warning", ".preview-box-danger"})
+    @DisplayName("los recuadros de vista previa (#842, #843) son legibles: texto 4,5:1 sobre el fondo")
+    void previewBoxesAreReadable(String selector) {
+        int[] fill = colorOf(selector, "background-color", token("white"));
+        int[] text = colorOf(selector, "color", fill);
+
+        assertThat(contrast(text, fill)).isGreaterThanOrEqualTo(TEXT_MINIMUM);
+    }
+
+    @Test
     @DisplayName("el resumen de errores y sus enlaces llegan a 4,5:1 sobre su fondo y el borde a 3:1 sobre la tarjeta")
     void errorSummaryReachesAa() {
         int[] fill = colorOf(".error-summary", "background-color", token("white"));

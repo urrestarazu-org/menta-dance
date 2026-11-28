@@ -702,6 +702,47 @@ token de la sesión. `ManagementVirtualModuleController` atiende la estructura y
 - **Video**: la API no permite quitar un video asignado (un `videoId` en blanco responde `400 INVALID_REQUEST`, #845),
   así que en la edición un identificador vacío significa "no cambiar" y no se envía; en el alta vacío es "sin video". La edición se prefilla con el detalle del curso (la API no
   tiene lectura de una lección): `404` "No encontramos el módulo." o "No encontramos la lección." si no están.
+- **Selector de video (#843)**: el formulario de alta y de edición reemplaza el texto libre por un `<select>` con la
+  biblioteca (`ListVideoChoicesUseCase`, que pide al puerto de videos de #842 la primera página de **100**, el máximo de la
+  API, sin búsqueda y en el orden de la API: lo más reciente primero). Cada opción dice en texto el título, el estado y si
+  tiene MP4: "Abrazo básico — Listo, con MP4", "Giro — Listo, sin MP4 (no se va a reproducir)", "Giro nuevo — Procesando, sin
+  MP4 (todavía no se reproduce)", "Con error", "Esperando el archivo", "Estado desconocido" (`VideoOption`; la regla de
+  "se reproduce" es la de la decisión 8 del ADR-0049: solo un video terminado y con MP4). Ambos roles reciben la biblioteca
+  entera (#861) y el BFF no filtra. Un video que ya no existe no se ofrece como opción, salvo que sea el actual de la
+  lección. Si la biblioteca tiene más de 100 videos, el formulario lo dice ("Se muestran los 100 videos más recientes de los N
+  de la biblioteca...") y el resto se elige pegando el identificador.
+  - **Elección de diseño (búsqueda)**: es un `<select>` del servidor, sin JavaScript nuevo ni librerías: guardar funciona
+    sin JavaScript y con el teclado el `<select>` ya salta por la inicial del título. **No hay búsqueda por texto en el
+    servidor**: un botón "Buscar" dentro del mismo `<form>` se volvería el botón por defecto (Enter en el título buscaría en
+    vez de guardar), y uno fuera del `<form>` perdería lo tipeado. Para más de 100 videos queda el identificador pegado. Si
+    hace falta buscar de verdad, el siguiente paso sería un filtro progresivo en un archivo `/js/...` propio (como
+    `error-summary.js`, compatible con `script-src 'self'`), que no se hizo porque no hay forma de probar JavaScript en este
+    repo.
+  - **Vacío y "quitar video"**: en el alta, y en la edición de una lección sin video, la primera opción es "Sin video por
+    ahora". En la edición de una lección **con** video no hay opción vacía (no se ofrece quitar el video): el actual queda
+    preseleccionado, y un envío con el campo vacío sigue sin mandar `videoId` (no cambia el video). El video actual se
+    muestra seleccionado aunque no esté entre los 100 (no hay `GET` de un video): como opción "Video {id} — no está en la
+    lista (no sabemos si se reproduce)".
+  - **Avisos**: debajo del selector, un panel `#videoId-status` (referido por `aria-describedby`) con la miniatura `https` o
+    el recuadro "Sin miniatura" / "Este video ya no existe en la biblioteca.", el texto "Video elegido: ..." y, si no se va a
+    reproducir, un `alert('warning', ...)` con la razón (sin MP4, procesando, esperando el archivo, con error, estado
+    desconocido, ya no existe, no está en la lista). El panel lo arma el servidor para el video seleccionado **al mostrar la
+    página** (alta, edición o la página que vuelve de un error): sin JavaScript no cambia al elegir otra opción, por eso cada
+    opción ya lleva su estado en el texto. Una lección sin video muestra
+    `previewNotice('warning', 'video', 'Esta lección no tiene video asociado por el momento.')` donde iría la vista previa
+    (alta y edición, con o sin la biblioteca). La vista de la lección del alumno (`lesson.html`) no se tocó: no es una vista
+    previa de gestión, y la estructura del curso ya marca "Sin video".
+  - **Identificador pegado y API caída**: debajo, un `<details>` cerrado "Pegar un identificador" con el campo de texto
+    anterior (`videoIdManual`, mismas reglas: sin espacios, hasta 128; el pegado gana al elegido). Se abre solo si la
+    biblioteca no respondió, si hay un error en ese campo o si trae un valor. Si la API de videos falla (cualquier
+    `VideoManagementException`, timeout, 401, 429, 5xx...) el formulario se muestra igual con `200`, sin `<select>`, con el aviso
+    "No pudimos cargar la lista de videos. Podés guardar la lección igual: pegá el identificador del video en el campo de
+    abajo o dejalo vacío." (sin detalle de la API), y en la edición el campo trae el identificador actual para que guardar
+    lo conserve. La lista se pide solo para mostrar el formulario (también al volver de un error), nunca para guardar.
+  - **CSS**: `alert('warning', ...)` es nuevo (`.alert-warning`, mismos colores que `.preview-box-warning`) y
+    `previewNotice` arma `preview-box-{kind}` por concatenación, por lo que Tailwind no ve esos nombres: se agregaron al
+    `safelist` de `tailwind.config.js`. Los recuadros `.preview-box-neutral|danger` de #842 **no estaban en la hoja
+    compilada** (solo `.preview-box`): corregido, con pruebas en `StaticStylesheetIntegrationTest` y `StylesheetContrastTest`.
 - **Acciones sobre cada lección en la estructura** (#831, `ManagementVirtualLessonActionsController`): el título de la
   lección es un enlace a `.../lecciones/{lessonId}/editar` (se conserva "Editar"), y cada lección tiene "Borrar" (enlace a
   la confirmación) y los botones "Subir" y "Bajar" (formularios `POST` con CSRF, sin JavaScript; la primera lección del
@@ -774,6 +815,10 @@ cursos), adaptador `VirtualVideoManagementApiAdapter`, casos de uso `ListManaged
   400. El administrador ve la biblioteca entera y los `videoId` que usan lecciones y la biblioteca ya no tiene; el
   instructor también ve la biblioteca entera (#861), pero solo con las lecciones de sus propios cursos: el BFF no
   filtra, muestra lo que devuelve la API.
+  **Renombrar del instructor (#843)**: el enlace "Renombrar" solo se ofrece al instructor en un video que alguna lección
+  propia usa (`lessons` no vacío; `VideoRow.renameableBy`); en los demás la fila dice "Ninguna lección tuya usa este video,
+  así que no podés renombrarlo." (la API igual responde `403 VIDEO_NOT_OWNED`). El administrador conserva "Renombrar" en
+  todas las filas y "Borrar"; un video que ya no existe sigue sin acciones.
 - **Estado, siempre texto** (`VideoRow`), con la etiqueta de color (`dotBadge`) solo como refuerzo: "Con MP4"; "Sin MP4" más
   "No se va a reproducir con la configuración actual del CDN."; "Procesando" (`UPLOADED`, `PROCESSING`, `TRANSCODING`,
   `JIT_*`); "Con error" (`ERROR`, `UPLOAD_FAILED`); "Ya no existe" (`missingInLibrary`); "Sin dato" (estado que el BFF no
@@ -785,7 +830,8 @@ cursos), adaptador `VirtualVideoManagementApiAdapter`, casos de uso `ListManaged
   un recuadro neutro con el texto "Sin miniatura"; con `missingInLibrary`, un recuadro de aviso con el texto "Este video ya
   no existe en la biblioteca." (nunca una miniatura, aunque la API mande una). El aviso es el fragmento reutilizable
   `fragments/admin :: previewNotice(kind, icon, message)` (`kind` = `danger`, `warning` o `neutral`; estilos
-  `.preview-box-*` en `input.css`): #843 lo usa para "esta lección no tiene video asociado por el momento".
+  `.preview-box-*` en `input.css`): #843 lo usa para "esta lección no tiene video asociado por el momento" en el
+  formulario de lección.
 - **Lecciones que lo usan**: cada una es un enlace "Curso › Módulo › Lección" a la edición de la lección,
   `/gestion/cursos-virtuales/{courseId}/modulos/{moduleId}/lecciones/{lessonId}/editar` (la ruta de `ManagementVirtualLessonController`),
   con los tres ids que trae la API. Un video sin lecciones dice "Ninguna lección lo usa." Un video que ya no existe se
@@ -816,6 +862,11 @@ cursos), adaptador `VirtualVideoManagementApiAdapter`, casos de uso `ListManaged
 - **Limitaciones**: después de renombrar o borrar se vuelve a la lista sin la búsqueda ni la página de origen. El orden es el
   de la API (`date`; `orderBy=title` no se expone). El BFF no filtra ni ordena nada: con miles de videos, el costo de
   paginar está en la API (ADR-0049, supuesto 6).
+- **Qué no se verificó (#843)**: solo pruebas unitarias y de integración (MockMvc y WireMock, API simulada). Sí se miró el HTML
+  que renderizan las pruebas (edición con video sin MP4, y con la API de videos caída) con el CSS compilado en Chrome, y
+  axe-core 4.13.0 (wcag2a/2aa/21a/21aa) dio 0 violaciones y 0 *incomplete* en esas dos variantes. No se hizo el recorrido manual
+  como administrador con la API y el BFF reales (`./scripts/dev.sh restart`) ni con una biblioteca de Bunny, ni se probó con
+  lector de pantalla, ni en otros navegadores. Ver "Selector de video de la lección (#843)" en `docs/ACCESSIBILITY.md`.
 - **Qué no se verificó (#842)**: solo hay pruebas unitarias y de integración (MockMvc y WireMock, API simulada). No se
   recorrió como administrador con la API y el BFF reales y una biblioteca de Bunny, ni se miró en un navegador, ni se
   corrió axe ni un lector de pantalla; el CSS nuevo (`.preview-*`) no se vio renderizado. Ver "Videos de la biblioteca" en
