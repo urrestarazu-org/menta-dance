@@ -38,7 +38,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 /**
- * {@code GET /api/v1/admin/virtual/videos} (#840) against real MySQL, through the real {@code SecurityConfig}
+ * {@code GET /api/v1/admin/virtual/videos} (#840, #861) against real MySQL, through the real {@code SecurityConfig}
  * chain and the real use case. The {@code integration-test} profile selects the in-memory video library, so no
  * test reaches Bunny.
  */
@@ -183,11 +183,11 @@ class VirtualVideoListingIntegrationTest extends CatalogAccessMocksIntegrationTe
     }
 
     @Test
-    void the_instructor_only_sees_the_videos_of_their_own_lessons_and_a_vanished_video_is_flagged() {
+    void the_instructor_sees_the_whole_library_but_only_the_lessons_of_their_own_courses() {
         UUID instructorId = seedUser(Role.INSTRUCTOR);
         UUID otherInstructorId = seedUser(Role.INSTRUCTOR);
         seedCourse(instructorId, "Tango", "mine", "shared", "vanished");
-        seedCourse(otherInstructorId, "Salsa", "theirs", "shared");
+        seedCourse(otherInstructorId, "Salsa", "theirs", "shared", "their-vanished");
         library.add(video("mine", "Mío"));
         library.add(video("shared", "Compartido"));
         library.add(video("theirs", "Ajeno"));
@@ -197,15 +197,40 @@ class VirtualVideoListingIntegrationTest extends CatalogAccessMocksIntegrationTe
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(items(response)).extracting(item -> item.get("videoId"))
-            .containsExactly("shared", "mine", "vanished");
-        assertThat(response.getBody().get("totalElements")).isEqualTo(3);
-        Map<String, Object> vanished = items(response).get(2);
+            .containsExactly("unused", "theirs", "shared", "mine", "vanished");
+        assertThat(response.getBody().get("totalElements")).isEqualTo(5);
+        assertThat(items(response).get(0).get("lessons")).isEqualTo(List.of());
+        assertThat(items(response).get(1).get("lessons")).isEqualTo(List.of());
+        assertThat(items(response).get(1).get("title")).isEqualTo("Ajeno");
+        assertThat(lessonsOf(items(response).get(2))).extracting(lesson -> lesson.get("courseTitle"))
+            .containsExactly("Tango");
+        assertThat(lessonsOf(items(response).get(3))).extracting(lesson -> lesson.get("courseTitle"))
+            .containsExactly("Tango");
+        Map<String, Object> vanished = items(response).get(4);
         assertThat(vanished.get("missingInLibrary")).isEqualTo(true);
         assertThat(vanished.get("title")).isNull();
-        Map<String, Object> shared = items(response).get(0);
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> sharedLessons = (List<Map<String, Object>>) shared.get("lessons");
-        assertThat(sharedLessons).extracting(lesson -> lesson.get("courseTitle")).containsExactly("Tango");
+        assertThat(lessonsOf(vanished)).extracting(lesson -> lesson.get("courseTitle")).containsExactly("Tango");
+        assertThat(response.getBody().toString()).doesNotContain("Salsa").doesNotContain("their-vanished");
+    }
+
+    @Test
+    void an_instructor_without_courses_still_sees_the_whole_library_without_lessons() {
+        seedCourse(seedUser(Role.INSTRUCTOR), "Salsa", "theirs");
+        library.add(video("theirs", "Ajeno"));
+        library.add(video("unused", "Sin usar"));
+        UUID instructorId = seedUser(Role.INSTRUCTOR);
+
+        ResponseEntity<Map> response = get("", headersFor(instructorId, Role.INSTRUCTOR));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().get("totalElements")).isEqualTo(2);
+        assertThat(items(response)).extracting(item -> item.get("videoId")).containsExactly("unused", "theirs");
+        assertThat(items(response)).allMatch(item -> ((List<?>) item.get("lessons")).isEmpty());
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> lessonsOf(Map<String, Object> item) {
+        return (List<Map<String, Object>>) item.get("lessons");
     }
 
     @Test
@@ -222,7 +247,8 @@ class VirtualVideoListingIntegrationTest extends CatalogAccessMocksIntegrationTe
             get("?search=tango&orderBy=title", headersFor(instructorId, Role.INSTRUCTOR));
 
         assertThat(items(asAdmin)).extracting(item -> item.get("videoId")).containsExactly("c", "a");
-        assertThat(items(asInstructor)).extracting(item -> item.get("videoId")).containsExactly("a");
+        assertThat(items(asInstructor)).extracting(item -> item.get("videoId")).containsExactly("c", "a");
+        assertThat(lessonsOf(items(asInstructor).get(0))).isEmpty();
     }
 
     @Test
@@ -246,13 +272,14 @@ class VirtualVideoListingIntegrationTest extends CatalogAccessMocksIntegrationTe
     }
 
     @Test
-    void an_unavailable_library_answers_503_with_its_own_code() {
-        UUID adminId = seedUser(Role.ADMIN);
+    void an_unavailable_library_answers_503_with_its_own_code_for_both_roles() {
         library.simulateOutage(true);
 
-        ResponseEntity<Map> response = get("", headersFor(adminId, Role.ADMIN));
+        for (Role role : List.of(Role.ADMIN, Role.INSTRUCTOR)) {
+            ResponseEntity<Map> response = get("", headersFor(seedUser(role), role));
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
-        assertThat(response.getBody().get("code")).isEqualTo("VIDEO_LIBRARY_UNAVAILABLE");
+            assertThat(response.getStatusCode()).as(role.name()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+            assertThat(response.getBody().get("code")).as(role.name()).isEqualTo("VIDEO_LIBRARY_UNAVAILABLE");
+        }
     }
 }

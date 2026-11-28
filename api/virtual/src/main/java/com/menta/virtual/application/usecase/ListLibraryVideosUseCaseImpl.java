@@ -22,23 +22,22 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 /**
  * Default {@link ListLibraryVideosUseCase}; a plain read, registered without a transactional decorator.
  *
- * <p>Both roles are served from the same walk of the library's pages (at most {@value #MAX_WALK_PAGES} pages of
- * {@value #WALK_PAGE_SIZE}; a library too big for that is reported as unavailable instead of guessed). The library
- * has no "these ids" query, so there is nothing cheaper. Paging is then done in memory over the result.</p>
+ * <p>Both roles are served from the same walk of the whole library's pages (at most {@value #MAX_WALK_PAGES} pages
+ * of {@value #WALK_PAGE_SIZE}; a library too big for that is reported as unavailable instead of guessed). The
+ * library has no "these ids" query, so there is nothing cheaper. Paging is then done in memory over the result.</p>
  *
- * <p>An admin sees everything the database knows plus the whole library: every video of the library (in the
- * library's order, with or without lessons) followed by the video ids that lessons of any course use and the
- * library no longer has, flagged as missing. An instructor's set is derived from their courses
- * ({@code findByProfessorId}), so the library is only asked for the metadata of those videos, never who owns them;
- * the walk stops as soon as all of them are found and their lessons are the only ones listed. In both cases a
- * missing video is only reported when no text filter is active (then not matching is not the same as not
- * existing).</p>
+ * <p>Both roles see every video of the library (in the library's order, with or without lessons) followed by the
+ * video ids that the lessons in scope use and the library no longer has, flagged as missing. What differs is the
+ * scope of those lessons: an admin gets the lessons of any course, an instructor only the lessons of their own
+ * courses ({@code findByProfessorId}), so an instructor never sees the titles of another instructor's lessons or
+ * courses; a video used only by someone else's lessons is listed without lessons. This is a temporary decision
+ * (ADR-0049, #861): the per-instructor restriction of the listing will be revisited. In both cases a missing video
+ * is only reported when no text filter is active (then not matching is not the same as not existing).</p>
  */
 public class ListLibraryVideosUseCaseImpl implements ListLibraryVideosUseCase {
 
@@ -81,7 +80,7 @@ public class ListLibraryVideosUseCaseImpl implements ListLibraryVideosUseCase {
                 .forEach(module -> modules.put(module.getId(), module));
         }
         Map<String, List<VideoLessonUsage>> usages = VideoUsages.byVideo(lessons, courses, modules);
-        return pageOf(query, usages, walk(query, null), true);
+        return pageOf(query, usages, walk(query));
     }
 
     // --- INSTRUCTOR -------------------------------------------------------
@@ -99,30 +98,21 @@ public class ListLibraryVideosUseCaseImpl implements ListLibraryVideosUseCase {
                 .forEach(lessons::add);
         }
         Map<String, List<VideoLessonUsage>> usages = VideoUsages.byVideo(lessons, courses, modules);
-        if (usages.isEmpty()) {
-            return new ManagedVideoPage(List.of(), query.page(), query.size(), 0);
-        }
-        return pageOf(query, usages, walk(query, usages.keySet()), false);
+        return pageOf(query, usages, walk(query));
     }
 
     // --- walk and paging --------------------------------------------------
 
     /**
      * Joins the walked library videos with the lessons that use them, appends the used ids the library does not
-     * have (only without a text filter) and cuts the requested page.
-     *
-     * @param includeUnused whether library videos no lesson uses are listed (admin) or dropped (instructor)
+     * have (only without a text filter) and cuts the requested page. Every library video is listed, used or not.
      */
     private static ManagedVideoPage pageOf(
-        VideoLibraryQuery query, Map<String, List<VideoLessonUsage>> usages, Map<String, LibraryVideo> found,
-        boolean includeUnused
+        VideoLibraryQuery query, Map<String, List<VideoLessonUsage>> usages, Map<String, LibraryVideo> found
     ) {
         List<ManagedVideo> all = new ArrayList<>();
-        found.forEach((videoId, video) -> {
-            if (includeUnused || usages.containsKey(videoId)) {
-                all.add(new ManagedVideo(videoId, video, usages.getOrDefault(videoId, List.of())));
-            }
-        });
+        found.forEach((videoId, video) ->
+            all.add(new ManagedVideo(videoId, video, usages.getOrDefault(videoId, List.of()))));
         if (query.search() == null) {
             usages.keySet().stream()
                 .filter(videoId -> !found.containsKey(videoId))
@@ -135,24 +125,18 @@ public class ListLibraryVideosUseCaseImpl implements ListLibraryVideosUseCase {
         return new ManagedVideoPage(all.subList(start, end), query.page(), query.size(), all.size());
     }
 
-    /**
-     * Walks the library's pages in its order. With {@code wanted} it keeps only those ids and stops once all are
-     * found; with {@code null} (admin) it keeps every video and reads until the library is exhausted.
-     */
-    private Map<String, LibraryVideo> walk(VideoLibraryQuery query, Set<String> wanted) {
+    /** Walks the library's pages in its order, keeping every video, until the library is exhausted. */
+    private Map<String, LibraryVideo> walk(VideoLibraryQuery query) {
         Map<String, LibraryVideo> found = new LinkedHashMap<>();
         for (int index = 0; index < MAX_WALK_PAGES; index++) {
             LibraryVideoPage chunk =
                 library.list(new VideoLibraryQuery(index, WALK_PAGE_SIZE, query.search(), query.order()));
             for (LibraryVideo video : chunk.items()) {
-                if (wanted == null || wanted.contains(video.videoId())) {
-                    found.putIfAbsent(video.videoId(), video);
-                }
+                found.putIfAbsent(video.videoId(), video);
             }
-            boolean everyWantedFound = wanted != null && found.size() == wanted.size();
             boolean exhausted = chunk.items().size() < WALK_PAGE_SIZE
                 || (long) (index + 1) * WALK_PAGE_SIZE >= chunk.totalItems();
-            if (everyWantedFound || exhausted) {
+            if (exhausted) {
                 return found;
             }
         }

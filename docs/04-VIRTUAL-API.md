@@ -146,11 +146,13 @@ Bunny Stream con las lecciones que los usan. Lo pueden llamar `ADMIN` e `INSTRUC
   `lessons` (curso, módulo y lección que lo usan, con sus ids y títulos).
 - **Visibilidad:** el `ADMIN` ve todo lo que sabe la base de datos más toda la biblioteca: cada video de la
   biblioteca (con o sin lecciones, en el orden de Bunny) y, al final, cada `videoId` que usa alguna lección de
-  cualquier curso y que la biblioteca ya no tiene. El `INSTRUCTOR` ve sólo los videos que usan lecciones de sus
-  propios cursos: la pertenencia sale de `findByProfessorId` y de sus lecciones, nunca de Bunny, y en `lessons`
-  no aparecen las lecciones de otros cursos que compartan el video. Como Bunny no tiene una consulta "estos
-  ids", para los dos roles la API recorre la biblioteca (a lo sumo 10 pedidos de 1000 videos; el instructor corta
-  apenas encontró todos los suyos) y pagina el resultado en memoria, con `search` y `orderBy` pasados a Bunny.
+  cualquier curso y que la biblioteca ya no tiene. El `INSTRUCTOR` también ve toda la biblioteca (#861, decisión
+  transitoria: la restricción por instructor se revisará más adelante), pero en `lessons` sólo aparecen las
+  lecciones de sus propios cursos (salen de `findByProfessorId`, nunca de Bunny): un video que usan únicamente
+  cursos de otro instructor se lista con `lessons` vacío, sin títulos ajenos, y un `videoId` ausente de la
+  biblioteca sólo se marca si lo usa una lección suya. Como Bunny no tiene una consulta "estos ids", para los
+  dos roles la API recorre la biblioteca entera (a lo sumo 10 pedidos de 1000 videos) y pagina el resultado en
+  memoria, con `search` y `orderBy` pasados a Bunny.
   Si la biblioteca es tan grande que no alcanza, responde `503` en vez de adivinar.
 - **Video que ya no existe:** si una lección apunta a un `videoId` que la biblioteca no tiene, el ítem se
   devuelve igual, al final, con `missingInLibrary: true`, sin título, estado, duración ni miniatura y con las

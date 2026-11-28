@@ -810,13 +810,16 @@ paths:
           o sin lecciones, en el orden de Bunny) y, al final, cada `videoId` que usa alguna lección de cualquier
           curso y que la biblioteca ya no tiene. `search` y `orderBy` los resuelve la biblioteca; la paginación se
           hace en memoria sobre esa unión.
-        - **PROFESOR** ve únicamente los videos que usan lecciones de sus propios cursos. La pertenencia sale de
-          los cursos del PROFESOR, nunca de la biblioteca, y en `lessons` sólo aparecen sus propias lecciones.
+        - **PROFESOR** ve también toda la biblioteca (cada video, con o sin lecciones), pero en `lessons` sólo
+          aparecen las lecciones de sus propios cursos: un video que usan únicamente cursos de otro PROFESOR se
+          devuelve con `lessons` vacío, sin ningún título ajeno. Las lecciones salen de los cursos del PROFESOR,
+          nunca de la biblioteca. Es una decisión transitoria (#861): la restricción por PROFESOR se revisará más
+          adelante.
         - Para los dos roles la API recorre las páginas de la biblioteca (a lo sumo 10 pedidos de 1000 videos; si
           es más grande responde `503`) y pagina el resultado.
-        - Un `videoId` que una lección usa y la biblioteca ya no tiene se devuelve igual, con
-          `missingInLibrary: true` y sin datos del video, al final del listado, con las lecciones que lo usan, y
-          no rompe la respuesta. No se marca cuando hay un `search` activo (no coincidir no es lo mismo que no
+        - Un `videoId` que una lección (del ADMIN, cualquiera; del PROFESOR, una de sus propias lecciones) usa y la
+          biblioteca ya no tiene se devuelve igual, con `missingInLibrary: true` y sin datos del video, al final
+          del listado, con las lecciones que lo usan, y no rompe la respuesta. No se marca cuando hay un `search` activo (no coincidir no es lo mismo que no
           existir).
         - `status` es el estado de procesamiento de la biblioteca; un video sin `hasMp4Fallback` no se reproduce
           con la configuración actual del CDN.

@@ -29,9 +29,11 @@ script:post-response {
 
 docs {
   #840, ADR-0049. Lists the Bunny Stream library's videos with the lessons that use each one.
-  ADMIN sees everything the database knows plus the whole library; INSTRUCTOR only the videos used by
-  lessons of their own courses. A video a lesson uses but the library no longer has comes back at the end
-  with missingInLibrary: true and its lessons (no filter by search).
+  ADMIN sees everything the database knows plus the whole library; INSTRUCTOR also sees the whole library
+  (#861, temporary), but the lessons attached to each video are only those of their own courses: a video
+  used only by another instructor comes back with lessons: []. A video a lesson uses but the library no longer
+  has comes back at the end with missingInLibrary: true and its lessons (for INSTRUCTOR, only if one of their
+  own lessons uses it; no filter by search).
 
   Paging: page is zero-based, size 10..100 (default 20), orderBy date (default) or title,
   search filters by title. Anything else is 400 INVALID_REQUEST.

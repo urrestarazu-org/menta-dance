@@ -48,7 +48,8 @@ Lo que dice la documentación oficial de Bunny Stream (leída el 2026-11-23):
 ## Factores Clave (Decision Drivers)
 
 * La clave de la biblioteca es poderosa (crea y borra) y nunca debe llegar al BFF ni al navegador.
-* Un instructor solo debe ver lo suyo; Bunny no tiene dueño por video.
+* Un instructor no debe ver títulos de lecciones ni cursos ajenos; Bunny no tiene dueño por video. (Desde #861 ve
+  toda la biblioteca, pero solo con las lecciones propias.)
 * No dejar lecciones apuntando a videos que ya no existen.
 * Mantener Clean Architecture: puerto en `application`, adaptador en `infrastructure`, tests sin red.
 * Entregar valor en partes chicas (API y BFF en PRs separados) sin bloquear la pantalla de estructura.
@@ -89,11 +90,14 @@ Elegimos **la Opción 1**, con estas reglas:
    y e2e; el adaptador real se prueba contra un servidor HTTP falso.
 2. **Credencial nueva** `app.cdn.bunny-net.api-key`, **distinta** de la clave de firma de tokens, que no se reutiliza
    ni se resetea. Falla al arrancar si falta en un perfil real; nunca se imprime.
-3. **Visibilidad:** el ADMIN ve toda la biblioteca. El INSTRUCTOR ve solo los videos usados por lecciones de sus
-   cursos; esa pertenencia se deriva de `findByProfessorId` y no se consulta a Bunny.
+3. **Visibilidad:** el ADMIN ve toda la biblioteca. El INSTRUCTOR también ve toda la biblioteca, pero las
+   lecciones que se muestran en cada video son solo las de sus propios cursos (se derivan de `findByProfessorId` y
+   no se consulta a Bunny); un video que usan solo cursos de otro instructor aparece con `lessons` vacío. Esta es
+   una regla **transitoria** (ver la nota de #861): la restricción por instructor se revisará más adelante.
 4. **Renombrar:** ADMIN cualquier video; INSTRUCTOR solo los suyos (los que ve).
 5. **Borrar: solo ADMIN, y solo si ninguna lección usa el video.** Si alguna lo usa, `409 VIDEO_IN_USE`; nunca se
-   desasocia solo. Consecuencia consciente: como un instructor solo ve videos en uso, **no puede borrar videos**.
+   desasocia solo. Consecuencia consciente: el borrado es solo del ADMIN, así que el instructor **no puede borrar videos** aunque
+   desde #861 los vea todos.
 6. **No se agrega "quitar video" a la lección** por ahora (opción A de #832). La API debe rechazar un `videoId` en
    blanco al editar en vez de vaciar el video (#845). Para cambiar un video se elige otro.
 7. **Elegir en vez de tipear:** el formulario de lección usa un selector alimentado por el listado (#843).
@@ -123,7 +127,10 @@ exista una forma explícita de quitar un video de una lección; se aceptó que e
 
 * Una dependencia externa más en las pantallas de gestión: si Bunny no responde, el panel se degrada.
 * Un secreto nuevo (`APP_CDN_BUNNYNET_APIKEY`) en producción, a documentar y a rotar si se filtra.
-* El instructor no puede borrar videos ni liberarlos; hasta que exista la subida, quien sube es quien administra Bunny.
+* El instructor no puede borrar videos ni liberarlos (el borrado es solo del ADMIN, aunque lo vea todo); hasta que
+  exista la subida, quien sube es quien administra Bunny.
+* Desde #861 el instructor ve toda la biblioteca, incluidos los títulos de videos que usa otro instructor o que
+  nadie usa; solo se le ocultan las lecciones y cursos ajenos. La restricción por instructor queda diferida.
 * No hay un límite de pedidos documentado: el listado debe paginar y se evita pedir un video por cada fila sin
   acotarlo.
 
@@ -186,7 +193,7 @@ en `date`; `size`/`duration` pueden dar `400` si la biblioteca no los tiene, por
 | 3 | **Qué permite la clave de sólo lectura.** El ADR no documenta su alcance. La API usa la *API key* de la biblioteca, que puede crear y borrar. | Se pidió la clave completa porque es la única que se sabe que sirve. Si la de sólo lectura alcanza para `GET /videos` y `GET /videos/{id}`, el listado podría usar la de sólo lectura y reducir el daño de una filtración. | Con la *Read-only API key* en el header `AccessKey`: listar, pedir un video, y comprobar que `POST` (crear/renombrar) y `DELETE` responden `401`/`403`. Anotar el resultado. Si el listado funciona, abrir un issue para usarla desde `app.cdn.bunny-net.api-key` en lugar de la clave completa (hoy sólo #841 y #844 necesitan escribir). |
 | 4 | Una clave inválida o de otra biblioteca responde `401` (y no, por ejemplo, una lista vacía). | Cualquier estado distinto de `2xx` se traduce a `503 VIDEO_LIBRARY_UNAVAILABLE`; `404` en `GET /videos/{id}` significa "el video no existe". | Pedir con una clave equivocada y con la clave de otra biblioteca; confirmar `401` y que el log de la API diga `status 401` sin la clave. |
 | 5 | El `guid` que se guarda en `virtual_lessons.video_id` coincide letra por letra con el `guid` del listado (mayúsculas y minúsculas incluidas). | Se compara con `equals`. Si Bunny devolviera otra capitalización, la lección se marcaría como `missingInLibrary` sin estarlo. | Comparar un `videoId` ya cargado en una lección con el `guid` que devuelve el listado. |
-| 6 | No hay límite de pedidos documentado. | Tanto el admin como el instructor recorren la biblioteca en cada listado (hasta 10 pedidos de 1000 videos; el instructor corta al encontrar todos sus videos, el admin lee hasta agotarla) y paginan en memoria. | Observar si Bunny responde `429` con listados repetidos; si pasa, agregar caché corta del listado. |
+| 6 | No hay límite de pedidos documentado. | Tanto el admin como el instructor recorren la biblioteca entera en cada listado (hasta 10 pedidos de 1000 videos, hasta agotarla; desde #861 el instructor ya no corta al encontrar sus videos) y paginan en memoria. | Observar si Bunny responde `429` con listados repetidos; si pasa, agregar caché corta del listado. |
 
 Resultado de las pruebas: **pendiente** (queda a cargo de quien tenga la biblioteca de pruebas; anotar acá la
 fecha y el resultado de cada fila).
@@ -215,3 +222,19 @@ escritura se limita a letras, dígitos, `-` y `_` (hasta 128) porque termina en 
 | 11 | La clave de sólo lectura no sirve para escribir (supuesto 3 de #840). | #841 sigue usando la clave completa de la biblioteca, la misma que el listado. | Ver la fila 3 de la nota de #840. |
 
 Resultado de las pruebas: **pendiente** (anotar acá la fecha y el resultado de cada fila, como en la nota de #840).
+
+## Nota de seguimiento de #861: el instructor lista toda la biblioteca
+
+Fecha: 2026-11-28. La regla de la decisión 3 ("el instructor ve solo los videos usados por lecciones de sus
+cursos") resultó demasiado estricta: un instructor no podía elegir para una lección un video nuevo que todavía
+ninguna lección usa, y el selector de #843 lo necesita. Por decisión del dueño del proyecto, desde #861
+`GET /api/v1/admin/virtual/videos` le devuelve al instructor **toda la biblioteca**, igual que al ADMIN, con una
+sola diferencia: las `lessons` de cada video son solo las de sus propios cursos. Un video que usa únicamente otro
+instructor aparece con `lessons` vacío (sin títulos de lecciones ni cursos ajenos), y un `videoId` que la biblioteca
+ya no tiene solo se marca como `missingInLibrary` si lo usa una lección propia.
+
+Lo que se mantiene: la información de uso se limita a las lecciones propias; **renombrar** sigue siendo solo de los
+videos que usa alguna lección propia (si no, `403 VIDEO_NOT_OWNED`); **borrar** sigue siendo solo del ADMIN (`409
+VIDEO_IN_USE` si alguna lección lo usa). La restricción por instructor del listado (que cada uno vea solo lo suyo)
+queda **diferida**: se retomará más adelante, probablemente junto con la subida de videos y el dueño por colección
+(#844). Hasta entonces, cualquier instructor ve los títulos de toda la biblioteca.
